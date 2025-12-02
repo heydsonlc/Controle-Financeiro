@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Preferências - Controle Financeiro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/preferencias.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>⚙️ Preferências e Configurações Gerais</h1>
+            <nav class="breadcrumb">
+                <a href="/">Dashboard</a> / <a href="/configuracoes">Configurações</a> / <span>Preferências</span>
+            </nav>
+        </header>
+
+        <main>
+            <!-- Tabs de Navegação -->
+            <div class="tabs">
+                <button class="tab-button active" onclick="mostrarAba('dados-pessoais')">👤 Dados Pessoais</button>
+                <button class="tab-button" onclick="mostrarAba('comportamento')">⚙️ Comportamento</button>
+                <button class="tab-button" onclick="mostrarAba('aparencia')">🎨 Aparência</button>
+                <button class="tab-button" onclick="mostrarAba('backup')">💾 Backup</button>
+                <button class="tab-button" onclick="mostrarAba('ia')">🤖 IA e Automação</button>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- ABA 1: DADOS PESSOAIS                      -->
+            <!-- ========================================== -->
+            <div id="aba-dados-pessoais" class="tab-content active">
+                <div class="pref-section">
+                    <h2>Informações do Usuário</h2>
+                    <form class="pref-form">
+                        <div class="form-group">
+                            <label for="nome_usuario">Nome do Usuário</label>
+                            <input type="text" id="nome_usuario" placeholder="Digite seu nome">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="renda_principal">Renda Principal Mensal (opcional)</label>
+                            <input type="number" id="renda_principal" placeholder="R$ 0,00" step="0.01">
+                            <small>Este valor será exibido apenas para referência nos relatórios</small>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="mes_inicio_planejamento">Mês de Início do Planejamento</label>
+                                <select id="mes_inicio_planejamento">
+                                    <option value="1">Janeiro</option>
+                                    <option value="2">Fevereiro</option>
+                                    <option value="3">Março</option>
+                                    <option value="4">Abril</option>
+                                    <option value="5">Maio</option>
+                                    <option value="6">Junho</option>
+                                    <option value="7">Julho</option>
+                                    <option value="8">Agosto</option>
+                                    <option value="9">Setembro</option>
+                                    <option value="10">Outubro</option>
+                                    <option value="11">Novembro</option>
+                                    <option value="12">Dezembro</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="dia_fechamento_mes">Dia de Fechamento do Mês</label>
+                                <input type="number" id="dia_fechamento_mes" min="1" max="31" placeholder="1">
+                                <small>Dia usado para gerar relatórios mensais</small>
+                            </div>
+                        </div>
+
+                        <button type="button" class="btn btn-primary" onclick="salvarAba('dados-pessoais')">
+                            Salvar Dados Pessoais
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- ABA 2: COMPORTAMENTO DO SISTEMA            -->
+            <!-- ========================================== -->
+            <div id="aba-comportamento" class="tab-content">
+                <!-- Lançamentos e Pagamentos -->
+                <div class="pref-section">
+                    <h2>Lançamentos e Pagamentos</h2>
+                    <form class="pref-form">
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="ajustar_competencia_automatico">
+                                <span>Ajustar automaticamente a competência ao registrar pagamento</span>
+                            </label>
+                        </div>
+
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="exibir_aviso_despesa_vencida">
+                                <span>Exibir aviso ao pagar despesa vencida</span>
+                            </label>
+                        </div>
+
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="solicitar_confirmacao_exclusao">
+                                <span>Solicitar confirmação ao excluir registros</span>
+                            </label>
+                        </div>
+
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="vincular_pagamento_cartao_auto">
+                                <span>Vincular automaticamente pagamentos a cartões de crédito</span>
+                            </label>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Dashboard -->
+                <div class="pref-section">
+                    <h2>Dashboard</h2>
+                    <form class="pref-form">
+                        <div class="form-group">
+                            <label>Gráficos Visíveis no Dashboard</label>
+                            <div class="checkbox-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" class="grafico-check" value="categorias">
+                                    <span>Gráfico de Categorias (Pizza)</span>
+                                </label>
+                            </div>
+                            <div class="checkbox-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" class="grafico-check" value="evolucao">
+                                    <span>Evolução de Gastos (Barras)</span>
+                                </label>
+                            </div>
+                            <div class="checkbox-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" class="grafico-check" value="saldo">
+                                    <span>Evolução do Saldo (Linha)</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="insights_inteligentes_ativo">
+                                <span>Habilitar Insights Inteligentes</span>
+                            </label>
+                        </div>
+
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="mostrar_saldo_consolidado">
+                                <span>Mostrar saldo consolidado por padrão</span>
+                            </label>
+                        </div>
+
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="mostrar_evolucao_historica">
+                                <span>Mostrar evolução histórica por padrão</span>
+                            </label>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Cartões -->
+                <div class="pref-section">
+                    <h2>Cartões de Crédito</h2>
+                    <form class="pref-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="dia_inicio_fatura">Dia de Início da Fatura</label>
+                                <input type="number" id="dia_inicio_fatura" min="1" max="31" placeholder="1">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="dia_corte_fatura">Dia de Corte da Fatura</label>
+                                <input type="number" id="dia_corte_fatura" min="1" max="31" placeholder="1">
+                            </div>
+                        </div>
+
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="lancamentos_agrupados">
+                                <span>Mostrar lançamentos agrupados (ao invés de linha a linha)</span>
+                            </label>
+                        </div>
+
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="orcamento_por_categoria">
+                                <span>Habilitar acompanhamento de orçamento por categoria</span>
+                            </label>
+                        </div>
+                    </form>
+                </div>
+
+                <button type="button" class="btn btn-primary" onclick="salvarAba('comportamento')">
+                    Salvar Comportamento
+                </button>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- ABA 3: APARÊNCIA                           -->
+            <!-- ========================================== -->
+            <div id="aba-aparencia" class="tab-content">
+                <div class="pref-section">
+                    <h2>Tema do Sistema</h2>
+                    <form class="pref-form">
+                        <div class="form-group">
+                            <label>Escolha o Tema</label>
+                            <div class="radio-group">
+                                <label class="radio-label">
+                                    <input type="radio" name="tema_sistema" value="claro">
+                                    <span>☀️ Tema Claro</span>
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" name="tema_sistema" value="escuro">
+                                    <span>🌙 Tema Escuro</span>
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" name="tema_sistema" value="auto">
+                                    <span>🔄 Automático (Sistema)</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="cor_principal">Cor Principal do Sistema</label>
+                            <div class="color-picker-group">
+                                <input type="color" id="cor_principal" value="#3b82f6">
+                                <span class="color-preview" id="cor_preview">#3b82f6</span>
+                            </div>
+                        </div>
+
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="mostrar_icones_coloridos">
+                                <span>Mostrar ícones coloridos nas contas e categorias</span>
+                            </label>
+                        </div>
+
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="abreviar_valores">
+                                <span>Abreviar valores grandes (ex: R$ 1,2k ao invés de R$ 1.200,00)</span>
+                            </label>
+                        </div>
+
+                        <button type="button" class="btn btn-primary" onclick="salvarAba('aparencia')">
+                            Salvar Aparência
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- ABA 4: BACKUP E IMPORTAÇÃO                 -->
+            <!-- ========================================== -->
+            <div id="aba-backup" class="tab-content">
+                <div class="pref-section">
+                    <h2>Backup Automático</h2>
+                    <form class="pref-form">
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="backup_automatico">
+                                <span>Habilitar backup automático dos dados</span>
+                            </label>
+                        </div>
+
+                        <button type="button" class="btn btn-primary" onclick="salvarAba('backup')">
+                            Salvar Configurações de Backup
+                        </button>
+                    </form>
+                </div>
+
+                <div class="pref-section">
+                    <h2>Exportar / Importar Dados</h2>
+                    <div class="backup-actions">
+                        <button type="button" class="btn btn-secondary" onclick="exportarDados()">
+                            📥 Exportar Dados em JSON
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="importarDados()">
+                            📤 Importar Backup
+                        </button>
+                    </div>
+                    <p class="info-text">Funcionalidade de exportação/importação será implementada em breve.</p>
+                </div>
+
+                <div class="pref-section danger-zone">
+                    <h2>⚠️ Zona de Perigo</h2>
+                    <div class="backup-actions">
+                        <button type="button" class="btn btn-danger" onclick="resetarConfiguracoes()">
+                            Reset Parcial das Configurações
+                        </button>
+                        <button type="button" class="btn btn-danger" onclick="resetarCompleto()">
+                            🔴 Reset Completo (Apagar Tudo)
+                        </button>
+                    </div>
+                    <p class="warning-text">⚠️ Estas ações são irreversíveis! Use com cuidado.</p>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- ABA 5: IA E AUTOMAÇÃO                      -->
+            <!-- ========================================== -->
+            <div id="aba-ia" class="tab-content">
+                <div class="pref-section">
+                    <h2>Recursos Inteligentes</h2>
+                    <p class="info-text">Estes recursos utilizam inteligência artificial para otimizar seu controle financeiro.</p>
+
+                    <form class="pref-form">
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="modo_inteligente_ativo">
+                                <span><strong>Ativar Modo Inteligente</strong></span>
+                            </label>
+                            <small>Habilita todos os recursos de IA abaixo</small>
+                        </div>
+
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="sugestoes_economia">
+                                <span>Sugestões automáticas de economia</span>
+                            </label>
+                            <small>O sistema analisará seus gastos e sugerirá onde economizar</small>
+                        </div>
+
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="classificacao_automatica">
+                                <span>Classificação automática de despesas</span>
+                            </label>
+                            <small>Categoriza automaticamente novos lançamentos baseado em padrões</small>
+                        </div>
+
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="correcao_categorias">
+                                <span>Correção inteligente de categorias</span>
+                            </label>
+                            <small>Sugere recategorização quando detectar inconsistências</small>
+                        </div>
+
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="parcelas_recorrentes_auto">
+                                <span>Geração automática de parcelas recorrentes</span>
+                            </label>
+                            <small>Cria automaticamente lançamentos mensais fixos</small>
+                        </div>
+
+                        <button type="button" class="btn btn-primary" onclick="salvarAba('ia')">
+                            Salvar Configurações de IA
+                        </button>
+                    </form>
+
+                    <div class="ia-status">
+                        <p class="info-text">💡 Nota: Recursos de IA estarão disponíveis em uma atualização futura.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Espaço para bottom navigation -->
+            <div style="height: 30px;"></div>
+        </main>
+    </div>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <div class="bottom-nav-container">
+            <a href="/" class="nav-item">
+                <span class="icon">⌂</span>
+                <span class="label">Dashboard</span>
+            </a>
+            <a href="/lancamentos" class="nav-item">
+                <span class="icon">✎</span>
+                <span class="label">Lançamentos</span>
+            </a>
+            <a href="/despesas" class="nav-item">
+                <span class="icon">▬</span>
+                <span class="label">DESPESAS</span>
+            </a>
+            <a href="/cartoes" class="nav-item">
+                <span class="icon">▭</span>
+                <span class="label">Cartões</span>
+            </a>
+            <a href="/configuracoes" class="nav-item active">
+                <span class="icon">⚙</span>
+                <span class="label">Config</span>
+            </a>
+        </div>
+    </nav>
+
+    <!-- Botão Mobile -->
+    <div class="mobile-toggle">
+        <button onclick="toggleMobileView()" id="mobile-btn">📱 Ver em Mobile</button>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/preferencias.js') }}"></script>
+    <script>
+        function toggleMobileView() {
+            document.body.classList.toggle('mobile-view');
+            const btn = document.getElementById('mobile-btn');
+            btn.innerHTML = document.body.classList.contains('mobile-view') ? '💻 Ver em Desktop' : '📱 Ver em Mobile';
+        }
+    </script>
+</body>
+</html>
