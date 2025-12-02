@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contas Bancárias - Controle Financeiro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/contas_bancarias.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Contas Bancárias</h1>
+            <nav class="breadcrumb">
+                <a href="/">Dashboard</a> / <a href="/configuracoes">Configurações</a> / <span>Contas Bancárias</span>
+            </nav>
+        </header>
+
+        <main>
+            <!-- Actions Bar -->
+            <div class="actions-bar">
+                <div class="filters">
+                    <select id="filtro-status" onchange="carregarContas()">
+                        <option value="ATIVO">Contas Ativas</option>
+                        <option value="INATIVO">Contas Inativas</option>
+                        <option value="">Todas</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary" onclick="abrirModalNovaConta()">
+                    + Nova Conta
+                </button>
+            </div>
+
+            <!-- Cards de Resumo -->
+            <div class="cards-resumo">
+                <div class="card">
+                    <h3>Total em Contas</h3>
+                    <p class="valor" id="total-saldo">R$ 0,00</p>
+                </div>
+                <div class="card">
+                    <h3>Contas Ativas</h3>
+                    <p class="valor" id="total-contas">0</p>
+                </div>
+                <div class="card">
+                    <h3>Maior Saldo</h3>
+                    <p class="valor" id="maior-saldo">R$ 0,00</p>
+                </div>
+            </div>
+
+            <!-- Lista de Contas -->
+            <div class="contas-grid" id="contas-lista">
+                <p class="loading">Carregando contas...</p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal: Nova Conta / Editar Conta -->
+    <div id="modal-conta" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2 id="modal-titulo">Nova Conta Bancária</h2>
+                <span class="close" onclick="fecharModal('modal-conta')">&times;</span>
+            </div>
+            <form id="form-conta" onsubmit="salvarConta(event)">
+                <input type="hidden" id="conta-id">
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="conta-nome">Nome da Conta *</label>
+                        <input type="text" id="conta-nome" required
+                               placeholder="Ex: Conta Corrente CAIXA">
+                    </div>
+                    <div class="form-group">
+                        <label for="conta-instituicao">Instituição *</label>
+                        <select id="conta-instituicao" required>
+                            <option value="">Selecione...</option>
+                            <option value="CAIXA">CAIXA</option>
+                            <option value="Banco do Brasil">Banco do Brasil</option>
+                            <option value="Bradesco">Bradesco</option>
+                            <option value="Itaú">Itaú</option>
+                            <option value="Santander">Santander</option>
+                            <option value="Nubank">Nubank</option>
+                            <option value="Inter">Inter</option>
+                            <option value="C6 Bank">C6 Bank</option>
+                            <option value="PicPay">PicPay</option>
+                            <option value="Mercado Pago">Mercado Pago</option>
+                            <option value="Pagbank">Pagbank</option>
+                            <option value="Next">Next</option>
+                            <option value="Neon">Neon</option>
+                            <option value="Outro">Outro</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="conta-tipo">Tipo de Conta *</label>
+                        <select id="conta-tipo" required>
+                            <option value="">Selecione...</option>
+                            <option value="Conta Corrente">Conta Corrente</option>
+                            <option value="Conta Poupança">Conta Poupança</option>
+                            <option value="Carteira Digital">Carteira Digital</option>
+                            <option value="Conta Salário">Conta Salário</option>
+                            <option value="Conta Investimento">Conta Investimento</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="conta-agencia">Agência</label>
+                        <input type="text" id="conta-agencia"
+                               placeholder="Ex: 1234">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="conta-numero">Número da Conta</label>
+                        <input type="text" id="conta-numero"
+                               placeholder="Ex: 12345">
+                    </div>
+                    <div class="form-group">
+                        <label for="conta-digito">Dígito</label>
+                        <input type="text" id="conta-digito"
+                               placeholder="Ex: 6" maxlength="2">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="conta-saldo-inicial">Saldo Inicial</label>
+                        <input type="text" id="conta-saldo-inicial"
+                               placeholder="R$ 0,00" onkeyup="formatarMoeda(this)">
+                        <small class="form-help">Saldo da conta no momento do cadastro</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="conta-cor">Cor de Exibição</label>
+                        <input type="color" id="conta-cor" value="#3b82f6">
+                        <small class="form-help">Cor para identificação visual nos gráficos</small>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="fecharModal('modal-conta')">
+                        Cancelar
+                    </button>
+                    <div style="display: flex; gap: 10px;">
+                        <button type="button" id="btn-deletar-modal" class="btn btn-danger"
+                                onclick="inativarContaModal()" style="display: none;">
+                            Inativar
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            Salvar
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Confirmar Inativação -->
+    <div id="modal-confirmar" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Confirmar Inativação</h2>
+                <span class="close" onclick="fecharModal('modal-confirmar')">&times;</span>
+            </div>
+            <div style="padding: 20px;">
+                <p style="margin-bottom: 20px; color: rgba(255, 255, 255, 0.9);">
+                    Deseja realmente inativar esta conta? Os lançamentos anteriores serão mantidos.
+                </p>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="fecharModal('modal-confirmar')">
+                        Cancelar
+                    </button>
+                    <button type="button" class="btn btn-danger" onclick="confirmarInativacao()">
+                        Inativar Conta
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <div class="bottom-nav-container">
+            <a href="/" class="nav-item">
+                <span class="icon">⌂</span>
+                <span class="label">Dashboard</span>
+            </a>
+            <a href="/lancamentos" class="nav-item">
+                <span class="icon">✎</span>
+                <span class="label">Lançamentos</span>
+            </a>
+            <a href="/despesas" class="nav-item">
+                <span class="icon">▬</span>
+                <span class="label">DESPESAS</span>
+            </a>
+            <a href="/cartoes" class="nav-item">
+                <span class="icon">▭</span>
+                <span class="label">Cartões</span>
+            </a>
+            <a href="/configuracoes" class="nav-item">
+                <span class="icon">⚙</span>
+                <span class="label">Config</span>
+            </a>
+        </div>
+    </nav>
+
+    <!-- Botão para visualização mobile -->
+    <div class="mobile-toggle">
+        <button onclick="toggleMobileView()" id="mobile-btn">
+            📱 Ver em Mobile
+        </button>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/contas_bancarias.js') }}"></script>
+    <script>
+        function toggleMobileView() {
+            document.body.classList.toggle('mobile-view');
+            const btn = document.getElementById('mobile-btn');
+            if (document.body.classList.contains('mobile-view')) {
+                btn.innerHTML = '💻 Ver em Desktop';
+            } else {
+                btn.innerHTML = '📱 Ver em Mobile';
+            }
+        }
+    </script>
+</body>
+</html>

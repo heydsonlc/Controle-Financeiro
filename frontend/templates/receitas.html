@@ -12,7 +12,7 @@
         <header>
             <h1>Gerenciamento de Receitas</h1>
             <nav class="breadcrumb">
-                <a href="/">Dashboard</a> / <span>Receitas</span>
+                <a href="/">Dashboard</a> / <a href="/configuracoes">Configurações</a> / <span>Receitas</span>
             </nav>
         </header>
 
@@ -329,6 +329,50 @@
         </div>
     </div>
 
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <div class="bottom-nav-container">
+            <a href="/" class="nav-item">
+                <span class="icon">⌂</span>
+                <span class="label">Dashboard</span>
+            </a>
+            <a href="/lancamentos" class="nav-item">
+                <span class="icon">✎</span>
+                <span class="label">Lançamentos</span>
+            </a>
+            <a href="/despesas" class="nav-item">
+                <span class="icon">▬</span>
+                <span class="label">DESPESAS</span>
+            </a>
+            <a href="/cartoes" class="nav-item">
+                <span class="icon">▭</span>
+                <span class="label">Cartões</span>
+            </a>
+            <a href="/configuracoes" class="nav-item">
+                <span class="icon">⚙</span>
+                <span class="label">Config</span>
+            </a>
+        </div>
+    </nav>
+
+    <!-- Botão para visualização mobile -->
+    <div class="mobile-toggle">
+        <button onclick="toggleMobileView()" id="mobile-btn">
+            📱 Ver em Mobile
+        </button>
+    </div>
+
     <script src="{{ url_for('static', filename='js/receitas.js') }}"></script>
+    <script>
+        function toggleMobileView() {
+            document.body.classList.toggle('mobile-view');
+            const btn = document.getElementById('mobile-btn');
+            if (document.body.classList.contains('mobile-view')) {
+                btn.innerHTML = '💻 Ver em Desktop';
+            } else {
+                btn.innerHTML = '📱 Ver em Mobile';
+            }
+        }
+    </script>
 </body>
 </html>

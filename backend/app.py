@@ -105,6 +105,16 @@ def create_app(config_name=None):
         """Página de configurações do sistema"""
         return render_template('configuracoes.html')
 
+    @app.route('/contas-bancarias')
+    def contas_bancarias():
+        """Página de gerenciamento de contas bancárias"""
+        return render_template('contas_bancarias.html')
+
+    @app.route('/patrimonio')
+    def patrimonio():
+        """Página de gerenciamento de patrimônio (caixinhas)"""
+        return render_template('patrimonio.html')
+
     @app.route('/health')
     def health():
         """Health check para monitoramento"""
@@ -132,6 +142,8 @@ def register_blueprints(app):
         from backend.routes.consorcios import consorcios_bp
         from backend.routes.receitas import receitas_bp
         from backend.routes.financiamentos import financiamentos_bp
+        from backend.routes.contas_bancarias import contas_bancarias_bp
+        from backend.routes.patrimonio import patrimonio_bp
     except ImportError:
         from routes.categorias import categorias_bp
         from routes.despesas import despesas_bp
@@ -139,6 +151,8 @@ def register_blueprints(app):
         from routes.consorcios import consorcios_bp
         from routes.receitas import receitas_bp
         from routes.financiamentos import financiamentos_bp
+        from routes.contas_bancarias import contas_bancarias_bp
+        from routes.patrimonio import patrimonio_bp
 
     # Registrar blueprints
     app.register_blueprint(categorias_bp, url_prefix='/api/categorias')
@@ -147,11 +161,11 @@ def register_blueprints(app):
     app.register_blueprint(consorcios_bp, url_prefix='/api/consorcios')
     app.register_blueprint(receitas_bp, url_prefix='/api/receitas')
     app.register_blueprint(financiamentos_bp, url_prefix='/api/financiamentos')
+    app.register_blueprint(contas_bancarias_bp, url_prefix='/api/contas')
+    app.register_blueprint(patrimonio_bp, url_prefix='/api/patrimonio')
 
     # Futuros blueprints
-    # from routes.patrimonio import patrimonio_bp
     # from routes.dashboard import dashboard_bp
-    # app.register_blueprint(patrimonio_bp, url_prefix='/api/patrimonio')
     # app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
 
 

@@ -879,3 +879,46 @@ class IndexadorMensal(db.Model):
             'data_referencia': self.data_referencia.strftime('%Y-%m-%d'),
             'valor': float(self.valor)
         }
+
+
+class ContaBancaria(db.Model):
+    """
+    Contas bancárias do usuário (Conta Corrente, Poupança, Carteira Digital)
+    """
+    __tablename__ = 'conta_bancaria'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False)
+    instituicao = db.Column(db.String(100), nullable=False)
+    tipo = db.Column(db.String(50), nullable=False)  # Conta Corrente, Poupança, Carteira Digital
+    agencia = db.Column(db.String(20))
+    numero_conta = db.Column(db.String(50))
+    digito_conta = db.Column(db.String(10))
+    saldo_inicial = db.Column(db.Numeric(15, 2), default=0)
+    saldo_atual = db.Column(db.Numeric(15, 2), default=0)
+    cor_display = db.Column(db.String(7), default='#3b82f6')  # Código hexadecimal
+    icone = db.Column(db.String(50))  # Nome do ícone (opcional)
+    data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
+    data_atualizacao = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    status = db.Column(db.String(20), default='ATIVO')  # ATIVO ou INATIVO
+
+    def __repr__(self):
+        return f'<ContaBancaria {self.nome} - {self.instituicao}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'nome': self.nome,
+            'instituicao': self.instituicao,
+            'tipo': self.tipo,
+            'agencia': self.agencia,
+            'numero_conta': self.numero_conta,
+            'digito_conta': self.digito_conta,
+            'saldo_inicial': float(self.saldo_inicial) if self.saldo_inicial else 0,
+            'saldo_atual': float(self.saldo_atual) if self.saldo_atual else 0,
+            'cor_display': self.cor_display,
+            'icone': self.icone,
+            'data_criacao': self.data_criacao.strftime('%Y-%m-%d %H:%M:%S') if self.data_criacao else None,
+            'data_atualizacao': self.data_atualizacao.strftime('%Y-%m-%d %H:%M:%S') if self.data_atualizacao else None,
+            'status': self.status
+        }

@@ -27,6 +27,72 @@ O sistema implementa a lógica completa de controle financeiro com distinção e
 
 ## 🆕 Últimas Implementações
 
+### Módulo de Contas Bancárias Completo (Dezembro 2024)
+Implementação completa do sistema de contas bancárias para rastreamento de saldos e origem/destino de transações:
+
+**Backend:**
+- **Modelo `ContaBancaria`** com campos completos:
+  - Identificação: nome, instituição, tipo, agência, número da conta
+  - Controle financeiro: saldo_inicial, saldo_atual
+  - Personalização: cor_display, ícone
+  - Status e timestamps: status (ATIVO/INATIVO), data_criação, data_atualizacao
+- **API REST (6 endpoints):**
+  - `GET /api/contas` - Listar contas ativas/inativas
+  - `GET /api/contas/:id` - Buscar conta específica
+  - `POST /api/contas` - Criar nova conta
+  - `PUT /api/contas/:id` - Atualizar dados
+  - `DELETE /api/contas/:id` - Inativar conta (soft delete)
+  - `PUT /api/contas/:id/ativar` - Reativar conta
+
+**Frontend Completo:**
+- Página dedicada acessível via Configurações > Contas Bancárias
+- Grid responsivo de cards com barra colorida lateral
+- Cards de resumo: Total em Contas, Contas Ativas, Maior Saldo
+- Filtros por status (Ativo/Inativo/Todos)
+- Modal completo para criar/editar com seletor de cores
+- Suporte a 13 instituições pré-cadastradas (CAIXA, Nubank, Itaú, Inter, etc)
+- CSS e JavaScript otimizados
+
+**Funcionalidades:**
+- Soft delete (contas são inativadas, não deletadas)
+- Saldo inicial = saldo atual na criação
+- Ajuste automático de saldo ao editar saldo inicial
+- Preparado para integração com lançamentos, despesas e receitas
+
+### Módulo de Patrimônio Completo (Dezembro 2024)
+Sistema de "caixinhas" para alocação e gestão de patrimônio com transferências inteligentes:
+
+**Backend:**
+- **2 Modelos já implementados:**
+  - `ContaPatrimonio`: Caixinhas de alocação de patrimônio
+    - Campos: nome, tipo, saldo_inicial, saldo_atual, meta, cor
+    - Status ativo/inativo
+  - `Transferencia`: Movimentações entre caixinhas
+    - Campos: conta_origem_id, conta_destino_id, valor, data
+    - Atualização automática de saldos
+- **API REST (10 endpoints):**
+  - **Caixinhas:** GET/POST/PUT/DELETE /api/patrimonio/contas
+  - **Transferências:** GET/POST/DELETE /api/patrimonio/transferencias
+  - Cálculo automático do patrimônio total
+  - Validação de saldo suficiente antes de transferir
+  - Reversão automática de saldos ao deletar transferência
+
+**Frontend Completo:**
+- Sistema de abas: "📦 Caixinhas" | "🔄 Transferências"
+- Página dedicada via Configurações > Patrimônio (Caixinhas)
+- Grid de caixinhas com barra colorida e progresso de meta
+- Lista de transferências com indicação visual origem→destino
+- 2 modais especializados (caixinha e transferência)
+- CSS minificado e JavaScript otimizado
+
+**Funcionalidades Avançadas:**
+- Progresso visual de metas (% alcançado)
+- Validação: contas origem ≠ destino
+- Validação: saldo suficiente na origem
+- Soft delete para caixinhas
+- Hard delete para transferências (com reversão de saldos)
+- Cálculo em tempo real do patrimônio total
+
 ### Módulo de Financiamentos Completo (Dezembro 2024)
 Implementação completa do sistema de financiamentos com suporte aos sistemas SAC, PRICE e SIMPLES:
 
