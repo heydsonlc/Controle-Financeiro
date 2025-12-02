@@ -1,0 +1,37 @@
+Visão geral do trabalho
+O README define que o sistema deve replicar a lógica da planilha separando Projeção (orçamento) de Execução (real/pago) e cobrindo todo o ciclo financeiro (ganhar, planejar, executar, guardar), portanto o processo de implementação precisa garantir essa visão completa do fluxo mensal antes mesmo das contas serem pagas.
+
+Stack e preparação do ambiente
+Configure um projeto Python/Flask com SQLite em desenvolvimento e PostgreSQL em produção, usando Flask-SQLAlchemy para facilitar a troca de banco. O frontend será feito com HTML/CSS/JS servidos pelo próprio Flask. Siga o roteiro de configuração inicial criando o diretório, um ambiente virtual, instalando Flask/Flask-SQLAlchemy e criando os arquivos models.py e app.py; ao rodar python app.py, o SQLite (gastos.db) é criado automaticamente.
+
+Modelagem dos dados
+Implemente as 14 tabelas descritas (Categoria, ItemDespesa, ConfigAgregador, Orcamento, Conta, ItemAgregado, OrcamentoAgregado, LancamentoAgregado, ItemReceita, ReceitaOrcamento, ReceitaRealizada, ContratoConsorcio, ContaPatrimonio, Transferencia). Elas estão organizadas por módulos (Orçamento, Automação, Patrimônio) e traduzem diretamente para classes SQLAlchemy no models.py. Garanta que itens “Agregadores” de cartão tenham configuração de fechamento/vencimento, tetos de sub-itens e lançamentos que abatam esses tetos.
+
+Backend (API) passo a passo
+Exponha CRUDs básicos no app.py, priorizando primeiro Categoria e ItemDespesa, depois ItemReceita, em seguida as rotinas de lançamentos (Orçamento, Conta, Receita) e por fim os endpoints que consolidam o dashboard (comparando projeção x real).
+
+Implemente regras de negócio especiais:
+
+Lançamento em lote de orçamentos e receitas para múltiplos meses.
+
+Parcelamentos que atualizam orçamentos simples ou criam lançamentos parcelados para cartões.
+
+Cálculo automático do mês da fatura com base em data_compra, dia_fechamento e dia_vencimento.
+
+Guia de contas a pagar com status de pagamento e possibilidade de dar baixa.
+
+Classificação de receitas em fixa/eventual para facilitar análise do saldo.
+
+Automação de contratos de consórcio que geram contas futuras e receitas planejadas.
+
+Transferências entre “caixinhas” de patrimônio para não perder o saldo positivo.
+
+Frontend e integração
+Crie uma pasta templates com páginas como index.html, contas.html e cartao.html. Use Fetch API para consumir os endpoints do Flask e popular tabelas/quadros que mostrem projeção, realizado e saldo de cada item, além de telas para lançamentos em lote e parcelamentos. Isso permite validar rapidamente se o dashboard reflete a planilha.
+
+Testes locais e migração
+Após implementar as regras principais, preencha o sistema com dados reais para verificar se projeções, execuções e saldos batem com a planilha original.
+
+Quando estiver estável, altere a string SQLALCHEMY_DATABASE_URI para apontar para o PostgreSQL, instale psycopg2-binary e faça o deploy no servidor DigitalOcean, mantendo o mesmo código-base graças ao ORM.
+
+Seguindo esse roteiro sequencial você transforma o README em um guia prático para entregar a aplicação completa.

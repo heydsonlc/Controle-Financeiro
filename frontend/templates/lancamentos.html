@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lançamentos - Controle Financeiro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/lancamentos.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Lançamentos</h1>
+            <nav class="breadcrumb">
+                <a href="/">Dashboard</a> / <span>Lançamentos</span>
+            </nav>
+        </header>
+
+        <main>
+            <div class="actions-bar">
+                <button class="btn btn-primary" onclick="abrirModalLancamento()">
+                    Novo Lançamento
+                </button>
+            </div>
+
+        <!-- Filtros -->
+        <section class="filters-section">
+            <div class="filters-grid">
+                <div class="filter-item">
+                    <label for="filtro-mes">Mês</label>
+                    <input type="month" id="filtro-mes">
+                </div>
+                <div class="filter-item">
+                    <label for="filtro-cartao">Cartão</label>
+                    <select id="filtro-cartao">
+                        <option value="">Todos os cartões</option>
+                    </select>
+                </div>
+                <div class="filter-item">
+                    <label for="filtro-categoria">Categoria</label>
+                    <select id="filtro-categoria">
+                        <option value="">Todas as categorias</option>
+                    </select>
+                </div>
+            </div>
+        </section>
+
+        <!-- Lista de Lançamentos -->
+        <section class="lancamentos-section">
+            <div class="section-header">
+                <h2>Histórico de Lançamentos</h2>
+                <div class="resumo-mes">
+                    <span class="resumo-label">Total do mês:</span>
+                    <span class="resumo-valor" id="total-mes">R$ 0,00</span>
+                </div>
+            </div>
+
+            <div id="lista-lancamentos" class="lancamentos-grid">
+                <!-- Lançamentos serão renderizados aqui -->
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal: Novo Lançamento -->
+    <div id="modal-lancamento" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-lancamento-titulo">Novo Lançamento</h2>
+                <span class="close" onclick="fecharModal('modal-lancamento')">&times;</span>
+            </div>
+
+            <form id="form-lancamento" onsubmit="salvarLancamento(event)">
+                <input type="hidden" id="lancamento-id">
+
+                <div class="form-group">
+                    <label for="lancamento-tipo">Tipo de Lançamento *</label>
+                    <select id="lancamento-tipo" required onchange="alternarTipoLancamento()">
+                        <option value="">Selecione o tipo...</option>
+                        <option value="cartao">Cartão de Crédito</option>
+                        <option value="direto">Despesa Direta (Débito, Dinheiro, PIX)</option>
+                    </select>
+                </div>
+
+                <!-- Campos para Cartão de Crédito -->
+                <div id="campos-cartao" style="display: none;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="lancamento-cartao">Cartão de Crédito *</label>
+                            <select id="lancamento-cartao" onchange="carregarCategoriasPorCartao()">
+                                <option value="">Selecione um cartão...</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="lancamento-categoria-cartao">Categoria *</label>
+                            <select id="lancamento-categoria-cartao" disabled>
+                                <option value="">Selecione um cartão primeiro...</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Campos para Despesa Direta -->
+                <div id="campos-direto" style="display: none;">
+                    <div class="form-group">
+                        <label for="lancamento-categoria-geral">Categoria *</label>
+                        <select id="lancamento-categoria-geral">
+                            <option value="">Selecione uma categoria...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="lancamento-descricao">Descrição *</label>
+                    <input type="text" id="lancamento-descricao" required
+                           placeholder="Ex: Compras no supermercado">
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="lancamento-valor">Valor *</label>
+                        <input type="number" id="lancamento-valor" required
+                               step="0.01" min="0" placeholder="0,00">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="lancamento-data">Data da Compra *</label>
+                        <input type="date" id="lancamento-data" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="lancamento-parcelas">Parcelas</label>
+                        <input type="number" id="lancamento-parcelas"
+                               min="1" max="48" value="1" placeholder="1">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="lancamento-mes-fatura">Mês da Fatura *</label>
+                        <input type="month" id="lancamento-mes-fatura" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="lancamento-observacoes">Observações</label>
+                    <textarea id="lancamento-observacoes" rows="2"
+                              placeholder="Observações adicionais (opcional)"></textarea>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="fecharModal('modal-lancamento')">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        Salvar Lançamento
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+        </main>
+    </div>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <div class="bottom-nav-container">
+            <a href="/" class="nav-item">
+                <span class="icon">⌂</span>
+                <span class="label">Dashboard</span>
+            </a>
+            <a href="/lancamentos" class="nav-item active">
+                <span class="icon">✎</span>
+                <span class="label">Lançamentos</span>
+            </a>
+            <a href="/despesas" class="nav-item">
+                <span class="icon">▬</span>
+                <span class="label">Contas</span>
+            </a>
+            <a href="/cartoes" class="nav-item">
+                <span class="icon">▭</span>
+                <span class="label">Cartões</span>
+            </a>
+            <a href="#" class="nav-item">
+                <span class="icon">▯</span>
+                <span class="label">Receitas</span>
+            </a>
+            <a href="/configuracoes" class="nav-item">
+                <span class="icon">⚙</span>
+                <span class="label">Config</span>
+            </a>
+        </div>
+    </nav>
+
+    <script src="{{ url_for('static', filename='js/lancamentos.js') }}?v=2025010101"></script>
+</body>
+</html>

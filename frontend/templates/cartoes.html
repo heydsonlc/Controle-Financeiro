@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cartões de Crédito - Controle Financeiro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=2025010104">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/cartoes.css') }}?v=2025010104">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Cartões de Crédito</h1>
+            <nav class="breadcrumb">
+                <a href="/">Dashboard</a> / <a href="/configuracoes">Configurações</a> / <span>Cartões</span>
+            </nav>
+        </header>
+
+        <main>
+            <!-- Seletor de mês e botão novo cartão -->
+            <div class="actions-bar">
+                <div class="filters">
+                    <input type="text" id="filtro-mes" class="filter-input" placeholder="MM/AAAA" maxlength="7" oninput="mascaraMesAno(this)">
+                    <select id="filtro-cartao" class="filter-select">
+                        <option value="">Selecione um cartão...</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary" onclick="abrirModalCartao()">
+                    Novo Cartão
+                </button>
+            </div>
+
+            <!-- View: Lista de Cartões (inicial) -->
+            <div id="view-lista-cartoes" class="view-cartoes">
+                <h2>Meus Cartões</h2>
+                <div id="lista-cartoes" class="cartoes-grid">
+                    <p class="loading">Carregando cartões...</p>
+                </div>
+            </div>
+
+            <!-- View: Detalhes do Cartão -->
+            <div id="view-detalhes-cartao" class="view-detalhes" style="display: none;">
+                <!-- Cabeçalho do Cartão -->
+                <div class="cartao-header">
+                    <button class="btn-voltar" onclick="voltarListaCartoes()">← Voltar</button>
+                    <div class="cartao-info">
+                        <h2 id="cartao-nome-detalhe">Nome do Cartão</h2>
+                        <p id="cartao-descricao-detalhe"></p>
+                    </div>
+                    <button class="btn btn-secondary" onclick="abrirModalEditarCartao()">
+                        Editar Cartão
+                    </button>
+                </div>
+
+                <!-- Resumo Financeiro do Mês -->
+                <div class="resumo-cartao">
+                    <div class="resumo-card">
+                        <div class="resumo-label">Orçado</div>
+                        <div class="resumo-valor" id="total-orcado">R$ 0,00</div>
+                    </div>
+                    <div class="resumo-card gasto">
+                        <div class="resumo-label">Gasto</div>
+                        <div class="resumo-valor" id="total-gasto">R$ 0,00</div>
+                    </div>
+                    <div class="resumo-card saldo">
+                        <div class="resumo-label">Saldo</div>
+                        <div class="resumo-valor" id="saldo-disponivel">R$ 0,00</div>
+                    </div>
+                    <div class="resumo-card limite">
+                        <div class="resumo-label">Limite</div>
+                        <div class="resumo-valor" id="limite-credito">R$ 0,00</div>
+                    </div>
+                </div>
+
+                <!-- Tabs: Orçamento / Lançamentos / Categorias -->
+                <div class="tabs">
+                    <button class="tab-button active" onclick="trocarTab('orcamento')">Orçamento</button>
+                    <button class="tab-button" onclick="trocarTab('lancamentos')">Lançamentos</button>
+                    <button class="tab-button" onclick="trocarTab('categorias')">Categorias</button>
+                </div>
+
+                <!-- Tab: Orçamento -->
+                <div id="tab-orcamento" class="tab-content active">
+                    <div class="tab-header">
+                        <h3>Orçamento Mensal por Categoria</h3>
+                        <button class="btn btn-sm btn-primary" onclick="abrirModalOrcamento()">
+                            Adicionar Orçamento
+                        </button>
+                    </div>
+                    <div id="lista-orcamentos" class="orcamentos-lista">
+                        <p class="loading">Carregando orçamentos...</p>
+                    </div>
+                </div>
+
+                <!-- Tab: Lançamentos -->
+                <div id="tab-lancamentos" class="tab-content">
+                    <div class="tab-header">
+                        <h3>Gastos no Cartão</h3>
+                        <button class="btn btn-sm btn-primary" onclick="abrirModalLancamento()">
+                            Novo Gasto
+                        </button>
+                    </div>
+                    <div id="lista-lancamentos" class="lancamentos-lista">
+                        <p class="loading">Carregando lançamentos...</p>
+                    </div>
+                </div>
+
+                <!-- Tab: Categorias -->
+                <div id="tab-categorias" class="tab-content">
+                    <div class="tab-header">
+                        <h3>Categorias do Cartão</h3>
+                        <button class="btn btn-sm btn-primary" onclick="abrirModalItemAgregado()">
+                            Nova Categoria
+                        </button>
+                    </div>
+                    <div id="lista-itens-agregados" class="itens-lista">
+                        <p class="loading">Carregando categorias...</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal: Criar/Editar Cartão -->
+    <div id="modal-cartao" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-cartao-titulo">Novo Cartão de Crédito</h2>
+                <span class="close" onclick="fecharModal('modal-cartao')">&times;</span>
+            </div>
+
+            <form id="form-cartao" onsubmit="salvarCartao(event)">
+                <input type="hidden" id="cartao-id">
+
+                <div class="form-group">
+                    <label for="cartao-nome">Nome do Cartão *</label>
+                    <input type="text" id="cartao-nome" required
+                           placeholder="Ex: VISA Platinum, Mastercard Gold">
+                </div>
+
+                <div class="form-group">
+                    <label for="cartao-descricao">Descrição</label>
+                    <textarea id="cartao-descricao" rows="2"
+                              placeholder="Descrição opcional do cartão"></textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="cartao-dia-vencimento">Dia do Vencimento *</label>
+                        <input type="number" id="cartao-dia-vencimento" required
+                               min="1" max="31" placeholder="Ex: 15">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="cartao-limite">Limite de Crédito</label>
+                        <input type="number" id="cartao-limite"
+                               step="0.01" min="0" placeholder="0,00">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="cartao-numero">Número do Cartão</label>
+                        <input type="text" id="cartao-numero" maxlength="19"
+                               placeholder="1234 5678 9012 3456">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="cartao-data-validade">Data de Validade</label>
+                        <input type="text" id="cartao-data-validade" maxlength="7"
+                               placeholder="MM/AAAA" oninput="mascaraMesAno(this)">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="cartao-cvv">Código de Segurança (CVV)</label>
+                        <input type="password" id="cartao-cvv" maxlength="4"
+                               placeholder="***">
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="cartao-tem-codigo">
+                            Possui código de segurança
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="cartao-observacoes">Observações</label>
+                    <textarea id="cartao-observacoes" rows="2"
+                              placeholder="Observações adicionais"></textarea>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" onclick="fecharModal('modal-cartao')" style="padding: 12px 24px; background: rgba(255, 255, 255, 0.2); color: white; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 10px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">
+                        Cancelar
+                    </button>
+                    <button type="submit" style="padding: 12px 24px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; border-radius: 10px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);">
+                        Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Revelar Código de Segurança -->
+    <div id="modal-revelar-cvv" class="modal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2>Código de Segurança</h2>
+                <span class="close" onclick="fecharModal('modal-revelar-cvv')">&times;</span>
+            </div>
+
+            <form id="form-revelar-cvv" onsubmit="revelarCodigoSeguranca(event)">
+                <input type="hidden" id="cvv-cartao-id">
+
+                <div class="form-group">
+                    <label for="cvv-senha">Digite a senha para visualizar:</label>
+                    <input type="password" id="cvv-senha" required
+                           placeholder="Senha de proteção">
+                </div>
+
+                <div id="cvv-resultado" style="display: none; margin-top: 20px; padding: 20px; background: rgba(255, 255, 255, 0.1); border-radius: 10px; text-align: center;">
+                    <p style="color: rgba(255, 255, 255, 0.8); margin: 0 0 10px 0; font-size: 0.9em;">Código de Segurança:</p>
+                    <p id="cvv-codigo" style="color: white; font-size: 2em; font-weight: 700; margin: 0; letter-spacing: 5px;"></p>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" onclick="fecharModal('modal-revelar-cvv')" style="padding: 12px 24px; background: rgba(255, 255, 255, 0.2); color: white; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 10px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">
+                        Fechar
+                    </button>
+                    <button type="submit" id="btn-revelar" style="padding: 12px 24px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; border-radius: 10px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);">
+                        Revelar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Item Agregado (Categoria dentro do cartão) -->
+    <div id="modal-item-agregado" class="modal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2 id="modal-item-titulo">Nova Categoria</h2>
+                <span class="close" onclick="fecharModal('modal-item-agregado')">&times;</span>
+            </div>
+
+            <form id="form-item-agregado" onsubmit="salvarItemAgregado(event)">
+                <input type="hidden" id="item-id">
+
+                <div class="form-group">
+                    <label for="item-nome">Nome *</label>
+                    <input type="text" id="item-nome" required
+                           placeholder="Ex: Supermercado, Farmácia, Combustível">
+                </div>
+
+                <div class="form-group">
+                    <label for="item-descricao">Descrição</label>
+                    <textarea id="item-descricao" rows="2"
+                              placeholder="Descrição opcional"></textarea>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" onclick="fecharModal('modal-item-agregado')" style="padding: 12px 24px; background: rgba(255, 255, 255, 0.2); color: white; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 10px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">
+                        Cancelar
+                    </button>
+                    <button type="submit" style="padding: 12px 24px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; border-radius: 10px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);">
+                        Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Orçamento -->
+    <div id="modal-orcamento" class="modal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2 id="modal-orcamento-titulo">Definir Orçamento</h2>
+                <span class="close" onclick="fecharModal('modal-orcamento')">&times;</span>
+            </div>
+
+            <form id="form-orcamento" onsubmit="salvarOrcamento(event)">
+                <input type="hidden" id="orcamento-id">
+                <input type="hidden" id="orcamento-item-id">
+
+                <div class="form-group">
+                    <label for="orcamento-categoria">Categoria *</label>
+                    <select id="orcamento-categoria" required>
+                        <option value="">Selecione...</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="orcamento-mes">Mês de Referência *</label>
+                    <input type="text" id="orcamento-mes" placeholder="MM/AAAA" maxlength="7" oninput="mascaraMesAno(this)" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="orcamento-valor">Valor Orçado *</label>
+                    <input type="number" id="orcamento-valor" required
+                           step="0.01" min="0" placeholder="0,00">
+                </div>
+
+                <div class="form-group">
+                    <label for="orcamento-observacoes">Observações</label>
+                    <textarea id="orcamento-observacoes" rows="2"></textarea>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" onclick="fecharModal('modal-orcamento')" style="padding: 12px 24px; background: rgba(255, 255, 255, 0.2); color: white; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 10px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">
+                        Cancelar
+                    </button>
+                    <button type="submit" style="padding: 12px 24px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; border-radius: 10px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);">
+                        Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Lançamento (Gasto) -->
+    <div id="modal-lancamento" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-lancamento-titulo">Novo Gasto</h2>
+                <span class="close" onclick="fecharModal('modal-lancamento')">&times;</span>
+            </div>
+
+            <form id="form-lancamento" onsubmit="salvarLancamento(event)">
+                <input type="hidden" id="lancamento-id">
+                <input type="hidden" id="lancamento-item-id">
+
+                <div class="form-group">
+                    <label for="lancamento-categoria">Categoria *</label>
+                    <select id="lancamento-categoria" required>
+                        <option value="">Selecione...</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="lancamento-descricao">Descrição *</label>
+                    <input type="text" id="lancamento-descricao" required
+                           placeholder="Ex: Compras no supermercado ABC">
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="lancamento-valor">Valor *</label>
+                        <input type="number" id="lancamento-valor" required
+                               step="0.01" min="0" placeholder="0,00">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="lancamento-data">Data da Compra *</label>
+                        <input type="date" id="lancamento-data" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="lancamento-fatura">Mês da Fatura *</label>
+                    <input type="text" id="lancamento-fatura" placeholder="MM/AAAA" maxlength="7" oninput="mascaraMesAno(this)" required>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="lancamento-parcela">Parcela Atual</label>
+                        <input type="number" id="lancamento-parcela" min="1" value="1">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="lancamento-total-parcelas">Total de Parcelas</label>
+                        <input type="number" id="lancamento-total-parcelas" min="1" value="1">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="lancamento-observacoes">Observações</label>
+                    <textarea id="lancamento-observacoes" rows="2"></textarea>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" onclick="fecharModal('modal-lancamento')" style="padding: 12px 24px; background: rgba(255, 255, 255, 0.2); color: white; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 10px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">
+                        Cancelar
+                    </button>
+                    <button type="submit" style="padding: 12px 24px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; border-radius: 10px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);">
+                        Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <div class="bottom-nav-container">
+            <a href="/" class="nav-item">
+                <span class="icon">⌂</span>
+                <span class="label">Dashboard</span>
+            </a>
+            <a href="/lancamentos" class="nav-item">
+                <span class="icon">✎</span>
+                <span class="label">Lançamentos</span>
+            </a>
+            <a href="/despesas" class="nav-item">
+                <span class="icon">▬</span>
+                <span class="label">Contas</span>
+            </a>
+            <a href="/cartoes" class="nav-item active">
+                <span class="icon">▭</span>
+                <span class="label">Cartões</span>
+            </a>
+            <a href="#" class="nav-item">
+                <span class="icon">▯</span>
+                <span class="label">Receitas</span>
+            </a>
+            <a href="/configuracoes" class="nav-item">
+                <span class="icon">⚙</span>
+                <span class="label">Config</span>
+            </a>
+        </div>
+    </nav>
+
+    <!-- Botão para visualização mobile -->
+    <div class="mobile-toggle">
+        <button onclick="toggleMobileView()" id="mobile-btn">
+            Ver em Mobile
+        </button>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/cartoes.js') }}?v=2025010104"></script>
+    <script>
+        function toggleMobileView() {
+            document.body.classList.toggle('mobile-view');
+            const btn = document.getElementById('mobile-btn');
+            if (document.body.classList.contains('mobile-view')) {
+                btn.innerHTML = 'Ver em Desktop';
+            } else {
+                btn.innerHTML = 'Ver em Mobile';
+            }
+        }
+
+        // Trocar tabs
+        function trocarTab(tabName) {
+            // Remover active de todos
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+            // Adicionar active no selecionado
+            event.target.classList.add('active');
+            document.getElementById('tab-' + tabName).classList.add('active');
+        }
+    </script>
+</body>
+</html>

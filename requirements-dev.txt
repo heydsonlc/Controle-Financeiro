@@ -1,0 +1,25 @@
+# Dependências para desenvolvimento local (SQLite)
+# Use este arquivo durante o desenvolvimento
+# Para produção (PostgreSQL), use requirements.txt
+
+# Core Framework
+Flask==3.0.0
+Flask-SQLAlchemy==3.1.1
+Flask-Migrate==4.0.5
+Flask-CORS==4.0.0
+
+# Database
+SQLAlchemy>=2.0.35
+# psycopg2-binary - NÃO NECESSÁRIO para desenvolvimento local com SQLite
+
+# Security & Auth
+Flask-Login==0.6.3
+Flask-WTF==1.2.1
+python-dotenv==1.0.0
+
+# Utilities
+python-dateutil==2.8.2
+
+# Development
+pytest==7.4.3
+pytest-flask==1.3.0

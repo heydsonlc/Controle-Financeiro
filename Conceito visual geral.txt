@@ -1,0 +1,64 @@
+Conceito visual geral
+Dashboard consolidado com contraste entre Projeção x Real – abra a tela com um painel de cartões-resumo (“Receitas projetadas”, “Receitas realizadas”, “Despesas projetadas”, “Despesas pagas”, “Saldo projetado”) para destacar a lógica central de comparar orçamento versus execução antes das contas vencerem.
+
+Layout em três colunas responsivas –
+
+Coluna “Planejar” com widgets para lançar orçamentos e receitas em lote, alinhados ao fluxo “Ganhar → Planejar”.
+
+Coluna “Executar” mostrando listas de contas a pagar, faturas e status de baixa.
+
+Coluna “Guardar” para as caixinhas de patrimônio e transferências, reforçando o ciclo completo descrito no README.
+
+Componentes principais
+Header e navegação contextual
+
+Barra superior minimalista com o mês selecionado e filtros rápidos (“Todos”, “Moradia”, “Cartões”), deixando espaço para um seletor de período e um botão “Lançar em lote”.
+
+Uma timeline horizontal abaixo do header pode exibir o status do ciclo (Ganhar, Planejar, Executar, Guardar) com marcações de conclusão.
+
+Painel “Planejar (Projeções)”
+
+Tabela compacta listando categorias e itens simples com colunas Projeção, Real e Desvio; use chips coloridas (cinza para Projeção, verde/laranja para Real) e indicadores de tendência.
+
+Cartão especial para cada cartão de crédito exibindo barras empilhadas por sub-item (ex: Supermercado, Farmácia) mostrando teto definido (OrcamentoAgregado) versus gastos abatidos (LancamentoAgregado).
+
+Modal de Lançamento em lote com um formulário em passos (item, intervalo de meses, valor) para aplicar a regra descrita no README.
+
+Painel “Executar (Contas a pagar)”
+
+Lista Kanban ou tabela com estados (“Pendente”, “Pago”, “Débito automático”) usando ícones para status e vencimentos próximos, permitindo dar baixa diretamente; cada linha herda o valor da Conta e o data_vencimento.
+
+Widget de Parcelamentos mostrando a evolução das parcelas abertas (boletos e cartão) e qual mês da fatura receberá cada lançamento, baseado em dia_fechamento/dia_vencimento. Visualize como um gráfico de barras empilhadas por fatura.
+
+Painel “Ganhar (Receitas)”
+
+Cards separados para Fixas e Eventuais com linhas do tempo mostrando quando cada receita projetada deve cair (ReceitaOrcamento) e indicadores de recebimento real (ReceitaRealizada). Use badges “Fixa” e “Eventual” para reforçar a classificação.
+
+Indicador de confiabilidade: barra de progresso comparando receitas projetadas x realizadas no mês corrente.
+
+Painel “Guardar (Patrimônio)”
+
+Mapa de caixinhas (grid de cards) para ContaPatrimonio, cada uma com saldo atual, meta e um botão “Transferir”.
+
+Modal de transferência com visual estilo “conta de origem → conta destino” e um histórico lateral mostrando as últimas movimentações (Transferencia).
+
+Automação (Consórcios)
+
+Seção secundária com cartões expandíveis por contrato (ContratoConsorcio), destacando o cronograma gerado automaticamente: barras de progresso para parcelas pagas vs. pendentes e o impacto previsto em receitas (prêmio) e contas futuras. Um badge “Automação ativa” diferencia essa área.
+
+Estilo e identidade visual
+Paleta: tons sóbrios de cinza-azulado para o background, com cores de destaque verde (saldo positivo), laranja (pendente) e vermelho (atrasado), mantendo aspecto moderno sem imitar a planilha.
+
+Tipografia: use uma fonte geométrica (ex: Inter ou Poppins) com pesos variados para hierarquia.
+
+Feedback visual: microinterações (hover, skeletons, tooltips) para transmitir modernidade; gráficos de linhas e barras simplificados (Sparkline) nos cards para evolução mensal.
+
+Navegação e interação
+Menu lateral retrátil com ícones para “Dashboard”, “Cartões”, “Receitas”, “Patrimônio”, “Automação”, mantendo a aplicação compacta.
+
+Filtros globais (mês, carteira, cartão) que atualizam todos os painéis simultaneamente para reforçar a visão única do período.
+
+Com esse wireframe conceitual, você tem um visual moderno que ainda respeita a lógica de projeção x execução, os módulos (orçamento, automação, patrimônio) e o ciclo completo descrito no README.
+
+um ficou ótimo..
+Copiar

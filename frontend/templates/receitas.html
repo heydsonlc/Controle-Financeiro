@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Receitas - Controle Financeiro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/receitas.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Gerenciamento de Receitas</h1>
+            <nav class="breadcrumb">
+                <a href="/">Dashboard</a> / <span>Receitas</span>
+            </nav>
+        </header>
+
+        <main>
+            <!-- Filtros e Resumo -->
+            <div class="filters-section">
+                <div class="filter-group">
+                    <label for="filtro-ano">Ano:</label>
+                    <select id="filtro-ano" onchange="atualizarDados()">
+                        <!-- Será preenchido via JS -->
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="filtro-mes">Mês:</label>
+                    <select id="filtro-mes" onchange="atualizarDados()">
+                        <option value="">Todos</option>
+                        <option value="01">Janeiro</option>
+                        <option value="02">Fevereiro</option>
+                        <option value="03">Março</option>
+                        <option value="04">Abril</option>
+                        <option value="05">Maio</option>
+                        <option value="06">Junho</option>
+                        <option value="07">Julho</option>
+                        <option value="08">Agosto</option>
+                        <option value="09">Setembro</option>
+                        <option value="10">Outubro</option>
+                        <option value="11">Novembro</option>
+                        <option value="12">Dezembro</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="filtro-tipo">Tipo:</label>
+                    <select id="filtro-tipo" onchange="carregarFontesReceita()">
+                        <option value="">Todos</option>
+                        <option value="SALARIO_FIXO">Salário Fixo</option>
+                        <option value="GRATIFICACAO">Gratificação</option>
+                        <option value="RENDA_EXTRA">Renda Extra</option>
+                        <option value="ALUGUEL">Aluguel</option>
+                        <option value="RENDIMENTO_FINANCEIRO">Rendimento Financeiro</option>
+                        <option value="OUTROS">Outros</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Cards de Resumo -->
+            <div class="cards-resumo">
+                <div class="card">
+                    <h3>Previsto no Mês</h3>
+                    <p class="valor" id="total-previsto">R$ 0,00</p>
+                </div>
+                <div class="card">
+                    <h3>Realizado no Mês</h3>
+                    <p class="valor" id="total-realizado">R$ 0,00</p>
+                </div>
+                <div class="card">
+                    <h3>Diferença</h3>
+                    <p class="valor" id="diferenca">R$ 0,00</p>
+                </div>
+                <div class="card">
+                    <h3>Confiabilidade</h3>
+                    <p class="valor" id="confiabilidade">0%</p>
+                </div>
+            </div>
+
+            <!-- Abas de Navegação -->
+            <div class="tabs">
+                <button class="tab-button active" onclick="mudarAba('fontes')">Fontes de Receita</button>
+                <button class="tab-button" onclick="mudarAba('orcamento')">Orçamento</button>
+                <button class="tab-button" onclick="mudarAba('realizadas')">Receitas Recebidas</button>
+            </div>
+
+            <!-- Aba: Fontes de Receita -->
+            <div id="aba-fontes" class="tab-content active">
+                <div class="actions">
+                    <button class="btn btn-primary" onclick="abrirModalFonte()">
+                        + Nova Fonte de Receita
+                    </button>
+                </div>
+                <div class="lista" id="fontes-lista">
+                    <p class="loading">Carregando fontes de receita...</p>
+                </div>
+            </div>
+
+            <!-- Aba: Orçamento -->
+            <div id="aba-orcamento" class="tab-content">
+                <div class="actions">
+                    <button class="btn btn-primary" onclick="abrirModalOrcamento()">
+                        + Planejar Receita
+                    </button>
+                    <button class="btn btn-secondary" onclick="abrirModalRecorrente()">
+                        Gerar Projeções Futuras
+                    </button>
+                </div>
+                <div class="lista" id="orcamento-lista">
+                    <p class="loading">Carregando orçamentos...</p>
+                </div>
+            </div>
+
+            <!-- Aba: Receitas Realizadas -->
+            <div id="aba-realizadas" class="tab-content">
+                <div class="actions">
+                    <button class="btn btn-primary" onclick="abrirModalRealizada()">
+                        + Registrar Recebimento
+                    </button>
+                </div>
+                <div class="lista" id="realizadas-lista">
+                    <p class="loading">Carregando receitas recebidas...</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal: Nova Fonte de Receita -->
+    <div id="modal-fonte" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-fonte-titulo">Nova Fonte de Receita</h2>
+                <span class="close" onclick="fecharModal('modal-fonte')">&times;</span>
+            </div>
+            <form id="form-fonte" onsubmit="salvarFonte(event)">
+                <input type="hidden" id="fonte-id">
+
+                <div class="form-group">
+                    <label for="fonte-nome">Nome *</label>
+                    <input type="text" id="fonte-nome" required
+                           placeholder="Ex: Salário PMGO, Gratificação">
+                </div>
+
+                <div class="form-group">
+                    <label for="fonte-tipo">Tipo *</label>
+                    <select id="fonte-tipo" required>
+                        <option value="">Selecione...</option>
+                        <option value="SALARIO_FIXO">Salário Fixo</option>
+                        <option value="GRATIFICACAO">Gratificação</option>
+                        <option value="RENDA_EXTRA">Renda Extra</option>
+                        <option value="ALUGUEL">Aluguel</option>
+                        <option value="RENDIMENTO_FINANCEIRO">Rendimento Financeiro</option>
+                        <option value="OUTROS">Outros</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="fonte-descricao">Descrição</label>
+                    <textarea id="fonte-descricao" rows="2"
+                              placeholder="Descrição opcional"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="fonte-valor-base">Valor Base Mensal</label>
+                    <input type="number" id="fonte-valor-base" step="0.01" min="0"
+                           placeholder="Para receitas fixas">
+                </div>
+
+                <div class="form-group">
+                    <label for="fonte-dia-pagamento">Dia Previsto de Pagamento</label>
+                    <input type="number" id="fonte-dia-pagamento" min="1" max="31"
+                           placeholder="1-31">
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="fonte-ativo" checked>
+                        <span>Fonte ativa</span>
+                    </label>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="fecharModal('modal-fonte')">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Planejar Receita (Orçamento) -->
+    <div id="modal-orcamento" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Planejar Receita</h2>
+                <span class="close" onclick="fecharModal('modal-orcamento')">&times;</span>
+            </div>
+            <form id="form-orcamento" onsubmit="salvarOrcamento(event)">
+                <div class="form-group">
+                    <label for="orc-fonte">Fonte de Receita *</label>
+                    <select id="orc-fonte" required>
+                        <option value="">Selecione...</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="orc-ano-mes">Mês/Ano *</label>
+                    <input type="month" id="orc-ano-mes" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="orc-valor">Valor Previsto *</label>
+                    <input type="number" id="orc-valor" step="0.01" min="0" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="orc-periodicidade">Periodicidade</label>
+                    <select id="orc-periodicidade">
+                        <option value="MENSAL_FIXA">Mensal Fixa</option>
+                        <option value="EVENTUAL">Eventual</option>
+                        <option value="UNICA">Única</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="orc-observacoes">Observações</label>
+                    <textarea id="orc-observacoes" rows="2"></textarea>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="fecharModal('modal-orcamento')">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Gerar Projeções Recorrentes -->
+    <div id="modal-recorrente" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Gerar Projeções Futuras</h2>
+                <span class="close" onclick="fecharModal('modal-recorrente')">&times;</span>
+            </div>
+            <form id="form-recorrente" onsubmit="gerarRecorrente(event)">
+                <div class="form-group">
+                    <label for="rec-fonte">Fonte de Receita *</label>
+                    <select id="rec-fonte" required>
+                        <option value="">Selecione...</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="rec-inicio">Mês Inicial *</label>
+                    <input type="month" id="rec-inicio" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="rec-fim">Mês Final *</label>
+                    <input type="month" id="rec-fim" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="rec-valor">Valor Mensal *</label>
+                    <input type="number" id="rec-valor" step="0.01" min="0" required>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="fecharModal('modal-recorrente')">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">Gerar Projeções</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Registrar Receita Realizada -->
+    <div id="modal-realizada" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Registrar Recebimento</h2>
+                <span class="close" onclick="fecharModal('modal-realizada')">&times;</span>
+            </div>
+            <form id="form-realizada" onsubmit="salvarRealizada(event)">
+                <div class="form-group">
+                    <label for="real-fonte">Fonte de Receita *</label>
+                    <select id="real-fonte" required>
+                        <option value="">Selecione...</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="real-data-recebimento">Data de Recebimento *</label>
+                    <input type="date" id="real-data-recebimento" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="real-valor">Valor Recebido *</label>
+                    <input type="number" id="real-valor" step="0.01" min="0" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="real-competencia">Competência (Mês de Referência) *</label>
+                    <input type="month" id="real-competencia" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="real-descricao">Descrição</label>
+                    <input type="text" id="real-descricao"
+                           placeholder="Ex: Salário Maio/2025">
+                </div>
+
+                <div class="form-group">
+                    <label for="real-observacoes">Observações</label>
+                    <textarea id="real-observacoes" rows="2"></textarea>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="fecharModal('modal-realizada')">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/receitas.js') }}"></script>
+</body>
+</html>

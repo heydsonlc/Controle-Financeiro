@@ -1,0 +1,617 @@
+/**
+ * Sistema de Lançamentos - Controle Financeiro
+ * Permite registrar gastos centralizadamente
+ */
+
+// Estado global da aplicação
+const state = {
+    lancamentos: [],
+    cartoes: [],
+    categorias: {}, // Mapa: cartaoId -> [categorias]
+    filtros: {
+        mes: null,
+        cartao: null,
+        categoria: null
+    }
+};
+
+// ===================================
+// INICIALIZAÇÃO
+// ===================================
+
+document.addEventListener('DOMContentLoaded', () => {
+    inicializarFiltros();
+    carregarCartoes();
+    carregarCategoriasGerais();
+    carregarLancamentos();
+});
+
+function inicializarFiltros() {
+    const hoje = new Date();
+    const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+
+    document.getElementById('filtro-mes').value = mesAtual;
+    document.getElementById('lancamento-data').value = hoje.toISOString().split('T')[0];
+    document.getElementById('lancamento-mes-fatura').value = mesAtual;
+
+    state.filtros.mes = mesAtual;
+
+    // Listeners de filtros
+    document.getElementById('filtro-mes').addEventListener('change', aplicarFiltros);
+    document.getElementById('filtro-cartao').addEventListener('change', aplicarFiltros);
+    document.getElementById('filtro-categoria').addEventListener('change', aplicarFiltros);
+}
+
+// ===================================
+// CARREGAR DADOS
+// ===================================
+
+async function carregarCartoes() {
+    try {
+        const response = await fetch('/api/cartoes');
+        const cartoes = await response.json();
+
+        state.cartoes = cartoes;
+
+        // Popular selects de filtro
+        const selectFiltro = document.getElementById('filtro-cartao');
+        const selectLancamento = document.getElementById('lancamento-cartao');
+
+        [selectFiltro, selectLancamento].forEach(select => {
+            const placeholder = select.querySelector('option[value=""]');
+            select.innerHTML = '';
+            if (placeholder) select.appendChild(placeholder);
+
+            cartoes.forEach(cartao => {
+                const option = document.createElement('option');
+                option.value = cartao.id;
+                option.textContent = cartao.nome;
+                select.appendChild(option);
+            });
+        });
+
+        // Carregar todas as categorias de todos os cartões para o filtro
+        await carregarTodasCategorias();
+
+    } catch (error) {
+        console.error('Erro ao carregar cartões:', error);
+        mostrarErro('Erro ao carregar cartões');
+    }
+}
+
+async function carregarTodasCategorias() {
+    try {
+        const selectCategoria = document.getElementById('filtro-categoria');
+        const todasCategorias = [];
+
+        // Buscar categorias de todos os cartões
+        for (const cartao of state.cartoes) {
+            const response = await fetch(`/api/cartoes/${cartao.id}/itens`);
+            const categorias = await response.json();
+
+            categorias.forEach(cat => {
+                // Adicionar cartão_nome para identificação
+                todasCategorias.push({
+                    ...cat,
+                    cartao_id: cartao.id,
+                    cartao_nome: cartao.nome
+                });
+            });
+        }
+
+        // Popular select de categoria
+        selectCategoria.innerHTML = '<option value="">Todas as categorias</option>';
+        todasCategorias.forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat.id;
+            option.textContent = `${cat.nome} (${cat.cartao_nome})`;
+            selectCategoria.appendChild(option);
+        });
+
+    } catch (error) {
+        console.error('Erro ao carregar categorias:', error);
+    }
+}
+
+async function carregarCategoriasGerais() {
+    try {
+        const response = await fetch('/api/categorias');
+        const result = await response.json();
+        const categorias = result.data || result; // Suporta tanto { data: [] } quanto []
+
+        const selectCategoria = document.getElementById('lancamento-categoria-geral');
+        selectCategoria.innerHTML = '<option value="">Selecione uma categoria...</option>';
+
+        categorias.forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat.id;
+            option.textContent = cat.nome;
+            selectCategoria.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Erro ao carregar categorias gerais:', error);
+        mostrarErro('Erro ao carregar categorias gerais');
+    }
+}
+
+async function carregarCategoriasPorCartao() {
+    const cartaoId = document.getElementById('lancamento-cartao').value;
+    const selectCategoria = document.getElementById('lancamento-categoria-cartao');
+
+    if (!cartaoId) {
+        selectCategoria.disabled = true;
+        selectCategoria.innerHTML = '<option value="">Selecione um cartão primeiro...</option>';
+        return;
+    }
+
+    try {
+        // Verifica se já carregou as categorias deste cartão
+        if (!state.categorias[cartaoId]) {
+            const response = await fetch(`/api/cartoes/${cartaoId}/itens`);
+            const categorias = await response.json();
+            state.categorias[cartaoId] = categorias;
+        }
+
+        const categorias = state.categorias[cartaoId];
+
+        selectCategoria.disabled = false;
+        selectCategoria.innerHTML = '<option value="">Selecione uma categoria...</option>';
+
+        categorias.forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat.id;
+            option.textContent = cat.nome;
+            selectCategoria.appendChild(option);
+        });
+
+    } catch (error) {
+        console.error('Erro ao carregar categorias:', error);
+        mostrarErro('Erro ao carregar categorias');
+    }
+}
+
+async function carregarLancamentos() {
+    try {
+        const lancamentos = [];
+
+        // 1. Buscar lançamentos de cartões de crédito
+        for (const cartao of state.cartoes) {
+            const response = await fetch(`/api/cartoes/${cartao.id}/itens`);
+            const itens = await response.json();
+
+            for (const item of itens) {
+                const respLanc = await fetch(`/api/cartoes/itens/${item.id}/lancamentos`);
+                const lancsItem = await respLanc.json();
+
+                lancsItem.forEach(lanc => {
+                    lancamentos.push({
+                        ...lanc,
+                        tipo: 'cartao',
+                        cartao_id: cartao.id,
+                        cartao_nome: cartao.nome,
+                        categoria_id: item.id,
+                        categoria_nome: item.nome,
+                        data_compra: lanc.data_compra,
+                        mes_fatura: lanc.mes_fatura
+                    });
+                });
+            }
+        }
+
+        // 2. Buscar despesas diretas (tipo Simples)
+        const respDespesas = await fetch('/api/despesas/');
+        const resultDespesas = await respDespesas.json();
+        const despesas = resultDespesas.data || resultDespesas; // Suporta tanto { data: [] } quanto []
+
+        despesas.forEach(desp => {
+            if (desp.tipo === 'Simples' && desp.pago) {
+                lancamentos.push({
+                    id: desp.id,
+                    tipo: 'direto',
+                    descricao: desp.nome,
+                    valor: desp.valor,
+                    data_compra: desp.data_pagamento || desp.data_vencimento,
+                    mes_fatura: desp.mes_competencia,
+                    categoria_id: desp.categoria_id,
+                    categoria_nome: desp.categoria?.nome || 'Sem categoria',
+                    observacoes: desp.descricao,
+                    numero_parcela: 1,
+                    total_parcelas: 1
+                });
+            }
+        });
+
+        state.lancamentos = lancamentos.sort((a, b) =>
+            new Date(b.data_compra) - new Date(a.data_compra)
+        );
+
+        aplicarFiltros();
+
+    } catch (error) {
+        console.error('Erro ao carregar lançamentos:', error);
+        mostrarErro('Erro ao carregar lançamentos');
+    }
+}
+
+// ===================================
+// RENDERIZAÇÃO
+// ===================================
+
+function aplicarFiltros() {
+    const mesFiltro = document.getElementById('filtro-mes').value;
+    const cartaoFiltro = document.getElementById('filtro-cartao').value;
+    const categoriaFiltro = document.getElementById('filtro-categoria').value;
+
+    let lancamentosFiltrados = state.lancamentos;
+
+    // Filtrar por mês
+    if (mesFiltro) {
+        lancamentosFiltrados = lancamentosFiltrados.filter(l =>
+            l.mes_fatura && l.mes_fatura.startsWith(mesFiltro)
+        );
+    }
+
+    // Filtrar por cartão
+    if (cartaoFiltro) {
+        lancamentosFiltrados = lancamentosFiltrados.filter(l =>
+            l.cartao_id == cartaoFiltro
+        );
+    }
+
+    // Filtrar por categoria
+    if (categoriaFiltro) {
+        lancamentosFiltrados = lancamentosFiltrados.filter(l =>
+            l.categoria_id == categoriaFiltro
+        );
+    }
+
+    renderizarLancamentos(lancamentosFiltrados);
+    atualizarResumoMes(lancamentosFiltrados);
+}
+
+function renderizarLancamentos(lancamentos) {
+    const container = document.getElementById('lista-lancamentos');
+
+    if (lancamentos.length === 0) {
+        container.innerHTML = '<p class="empty-state">Nenhum lançamento encontrado para os filtros selecionados.</p>';
+        return;
+    }
+
+    container.innerHTML = lancamentos.map(lanc => {
+        const isCartao = lanc.tipo === 'cartao';
+        const tipoBadge = isCartao
+            ? `<span class="badge badge-tipo-cartao">💳 Cartão</span>`
+            : `<span class="badge badge-tipo-direto">💵 Direto</span>`;
+
+        return `
+        <div class="lancamento-card">
+            <div class="lancamento-header">
+                <div class="lancamento-info">
+                    <h3>${lanc.descricao}</h3>
+                    <div class="lancamento-meta">
+                        ${tipoBadge}
+                        ${isCartao ? `<span class="badge badge-cartao">${lanc.cartao_nome}</span>` : ''}
+                        <span class="badge badge-categoria">${lanc.categoria_nome}</span>
+                    </div>
+                </div>
+                <div class="lancamento-valor">
+                    R$ ${parseFloat(lanc.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                </div>
+            </div>
+            <div class="lancamento-body">
+                <div class="lancamento-detalhes">
+                    <span><strong>Data:</strong> ${formatarData(lanc.data_compra)}</span>
+                    ${isCartao ? `<span><strong>Fatura:</strong> ${formatarMes(lanc.mes_fatura)}</span>` : ''}
+                    ${lanc.total_parcelas > 1 ?
+                        `<span><strong>Parcela:</strong> ${lanc.numero_parcela}/${lanc.total_parcelas}</span>`
+                        : ''}
+                </div>
+                ${lanc.observacoes ? `<p class="lancamento-obs">${lanc.observacoes}</p>` : ''}
+            </div>
+            <div class="lancamento-actions">
+                <button class="btn-sm btn-secondary" onclick='editarLancamento(${JSON.stringify(lanc).replace(/'/g, "&#39;")})'>
+                    Editar
+                </button>
+                <button class="btn-sm btn-danger" onclick="excluirLancamento(${lanc.id}, '${lanc.tipo}')">
+                    Excluir
+                </button>
+            </div>
+        </div>
+        `;
+    }).join('');
+}
+
+function atualizarResumoMes(lancamentos) {
+    const total = lancamentos.reduce((sum, lanc) => sum + parseFloat(lanc.valor), 0);
+    document.getElementById('total-mes').textContent =
+        `R$ ${total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+}
+
+// ===================================
+// MODAL E FORMULÁRIO
+// ===================================
+
+function abrirModalLancamento() {
+    document.getElementById('modal-lancamento-titulo').textContent = 'Novo Lançamento';
+    document.getElementById('form-lancamento').reset();
+    document.getElementById('lancamento-id').value = '';
+
+    // Resetar visibilidade dos campos
+    document.getElementById('campos-cartao').style.display = 'none';
+    document.getElementById('campos-direto').style.display = 'none';
+
+    const hoje = new Date();
+    document.getElementById('lancamento-data').value = hoje.toISOString().split('T')[0];
+    document.getElementById('lancamento-mes-fatura').value = state.filtros.mes ||
+        `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+
+    abrirModal('modal-lancamento');
+}
+
+function alternarTipoLancamento() {
+    const tipo = document.getElementById('lancamento-tipo').value;
+    const camposCartao = document.getElementById('campos-cartao');
+    const camposDireto = document.getElementById('campos-direto');
+    const campoMesFatura = document.getElementById('lancamento-mes-fatura').parentElement.parentElement;
+    const campoParcelas = document.getElementById('lancamento-parcelas').parentElement;
+
+    if (tipo === 'cartao') {
+        camposCartao.style.display = 'block';
+        camposDireto.style.display = 'none';
+        campoMesFatura.style.display = 'grid';
+        campoParcelas.style.display = 'block';
+    } else if (tipo === 'direto') {
+        camposCartao.style.display = 'none';
+        camposDireto.style.display = 'block';
+        campoMesFatura.style.display = 'none';
+        campoParcelas.style.display = 'none';
+    } else {
+        camposCartao.style.display = 'none';
+        camposDireto.style.display = 'none';
+    }
+}
+
+async function salvarLancamento(event) {
+    event.preventDefault();
+
+    const tipo = document.getElementById('lancamento-tipo').value;
+
+    if (tipo === 'cartao') {
+        await salvarLancamentoCartao();
+    } else if (tipo === 'direto') {
+        await salvarLancamentoDireto();
+    } else {
+        mostrarErro('Selecione o tipo de lançamento');
+    }
+}
+
+async function salvarLancamentoCartao() {
+    const categoriaId = document.getElementById('lancamento-categoria-cartao').value;
+
+    if (!categoriaId) {
+        mostrarErro('Selecione uma categoria');
+        return;
+    }
+
+    const dados = {
+        descricao: document.getElementById('lancamento-descricao').value,
+        valor: parseFloat(document.getElementById('lancamento-valor').value),
+        data_compra: document.getElementById('lancamento-data').value,
+        mes_fatura: document.getElementById('lancamento-mes-fatura').value,
+        numero_parcela: 1,
+        total_parcelas: parseInt(document.getElementById('lancamento-parcelas').value) || 1,
+        observacoes: document.getElementById('lancamento-observacoes').value
+    };
+
+    try {
+        const url = `/api/cartoes/itens/${categoriaId}/lancamentos`;
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(dados)
+        });
+
+        if (!response.ok) throw new Error('Erro ao salvar lançamento');
+
+        fecharModal('modal-lancamento');
+        await carregarLancamentos();
+        mostrarSucesso('Lançamento em cartão salvo com sucesso!');
+
+    } catch (error) {
+        console.error('Erro ao salvar lançamento:', error);
+        mostrarErro('Erro ao salvar lançamento no cartão');
+    }
+}
+
+async function salvarLancamentoDireto() {
+    const categoriaId = document.getElementById('lancamento-categoria-geral').value;
+
+    if (!categoriaId) {
+        mostrarErro('Selecione uma categoria');
+        return;
+    }
+
+    const lancamentoId = document.getElementById('lancamento-id').value;
+    const isEdicao = lancamentoId && document.getElementById('lancamento-id').dataset.tipo === 'direto';
+
+    const dataCompra = document.getElementById('lancamento-data').value;
+    const dados = {
+        categoria_id: parseInt(categoriaId),
+        nome: document.getElementById('lancamento-descricao').value,
+        tipo: 'Simples',
+        descricao: document.getElementById('lancamento-observacoes').value || '',
+        valor: parseFloat(document.getElementById('lancamento-valor').value),
+        data_vencimento: dataCompra,
+        data_pagamento: dataCompra,
+        pago: true,
+        recorrente: false,
+        mes_competencia: dataCompra.substring(0, 7) + '-01'
+    };
+
+    try {
+        const url = isEdicao ? `/api/despesas/${lancamentoId}` : '/api/despesas/';
+        const method = isEdicao ? 'PUT' : 'POST';
+
+        const response = await fetch(url, {
+            method: method,
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(dados)
+        });
+
+        if (!response.ok) throw new Error('Erro ao salvar despesa');
+
+        fecharModal('modal-lancamento');
+        await carregarLancamentos();
+        mostrarSucesso(isEdicao ? 'Despesa direta atualizada com sucesso!' : 'Despesa direta salva com sucesso!');
+
+    } catch (error) {
+        console.error('Erro ao salvar despesa:', error);
+        mostrarErro('Erro ao salvar despesa direta');
+    }
+}
+
+function editarLancamento(lancamento) {
+    // Alterar título do modal
+    document.getElementById('modal-lancamento-titulo').textContent = 'Editar Lançamento';
+
+    // Limpar formulário
+    document.getElementById('form-lancamento').reset();
+
+    // Armazenar dados do lançamento para edição
+    document.getElementById('lancamento-id').value = lancamento.id;
+    document.getElementById('lancamento-id').dataset.tipo = lancamento.tipo;
+
+    // Preencher campos comuns
+    document.getElementById('lancamento-descricao').value = lancamento.descricao;
+    document.getElementById('lancamento-valor').value = lancamento.valor;
+    document.getElementById('lancamento-data').value = lancamento.data_compra;
+    document.getElementById('lancamento-observacoes').value = lancamento.observacoes || '';
+
+    // Configurar por tipo
+    if (lancamento.tipo === 'direto') {
+        // Despesa direta
+        document.getElementById('lancamento-tipo').value = 'direto';
+        alternarTipoLancamento();
+
+        // Aguardar um pouco para as categorias carregarem, depois selecionar
+        setTimeout(() => {
+            document.getElementById('lancamento-categoria-geral').value = lancamento.categoria_id;
+        }, 100);
+
+    } else if (lancamento.tipo === 'cartao') {
+        // Lançamento de cartão
+        document.getElementById('lancamento-tipo').value = 'cartao';
+        alternarTipoLancamento();
+
+        // Preencher campos específicos de cartão
+        document.getElementById('lancamento-parcelas').value = lancamento.total_parcelas;
+
+        if (lancamento.mes_fatura) {
+            const mesFatura = lancamento.mes_fatura.substring(0, 7);
+            document.getElementById('lancamento-mes-fatura').value = mesFatura;
+        }
+
+        // Aguardar um pouco, depois selecionar cartão e categoria
+        setTimeout(async () => {
+            document.getElementById('lancamento-cartao').value = lancamento.cartao_id;
+            await carregarCategoriasPorCartao();
+
+            setTimeout(() => {
+                document.getElementById('lancamento-categoria-cartao').value = lancamento.categoria_id;
+            }, 100);
+        }, 100);
+    }
+
+    abrirModal('modal-lancamento');
+}
+
+async function excluirLancamento(id, tipo) {
+    if (!confirm('Deseja realmente excluir este lançamento?')) return;
+
+    try {
+        let url;
+        if (tipo === 'cartao') {
+            url = `/api/cartoes/lancamentos/${id}`;
+        } else {
+            url = `/api/despesas/${id}`;
+        }
+
+        const response = await fetch(url, {
+            method: 'DELETE'
+        });
+
+        if (!response.ok) throw new Error('Erro ao excluir');
+
+        await carregarLancamentos();
+        mostrarSucesso('Lançamento excluído com sucesso!');
+
+    } catch (error) {
+        console.error('Erro ao excluir lançamento:', error);
+        mostrarErro('Erro ao excluir lançamento');
+    }
+}
+
+// ===================================
+// UTILITÁRIOS
+// ===================================
+
+function formatarData(data) {
+    return new Date(data + 'T00:00:00').toLocaleDateString('pt-BR');
+}
+
+function formatarMes(mes) {
+    const [ano, mesNum] = mes.split('-');
+    const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
+                   'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    return `${meses[parseInt(mesNum) - 1]}/${ano}`;
+}
+
+// Converter de ISO (YYYY-MM) para formato brasileiro (MM/AAAA)
+function converterISOparaMesAnoBR(mesISO) {
+    if (!mesISO) return '';
+    const [ano, mes] = mesISO.split('-');
+    return `${mes}/${ano}`;
+}
+
+// Converter de formato brasileiro (MM/AAAA) para ISO (YYYY-MM)
+function converterMesAnoBRparaISO(mesBR) {
+    if (!mesBR) return '';
+    const partes = mesBR.split('/');
+    if (partes.length !== 2) return '';
+    const [mes, ano] = partes;
+    return `${ano}-${mes.padStart(2, '0')}`;
+}
+
+// Máscara para input de mês/ano (MM/AAAA)
+function mascaraMesAno(input) {
+    let valor = input.value.replace(/\D/g, ''); // Remove não-dígitos
+
+    if (valor.length >= 2) {
+        valor = valor.substring(0, 2) + '/' + valor.substring(2, 6);
+    }
+
+    input.value = valor;
+}
+
+function abrirModal(id) {
+    document.getElementById(id).style.display = 'block';
+}
+
+function fecharModal(id) {
+    document.getElementById(id).style.display = 'none';
+}
+
+function mostrarSucesso(mensagem) {
+    alert(mensagem);
+}
+
+function mostrarErro(mensagem) {
+    alert('Erro: ' + mensagem);
+}
+
+// Fechar modal ao clicar fora
+window.onclick = function(event) {
+    if (event.target.classList.contains('modal')) {
+        event.target.style.display = 'none';
+    }
+}

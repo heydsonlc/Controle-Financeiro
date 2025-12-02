@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Despesas - Controle Financeiro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/despesas.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Gerenciamento de Despesas</h1>
+            <nav class="breadcrumb">
+                <a href="/">Dashboard</a> / <span>Despesas</span>
+            </nav>
+        </header>
+
+        <main>
+            <!-- Filtros e botão de nova despesa -->
+            <div class="actions-bar">
+                <div class="filters">
+                    <select id="filtro-categoria" class="filter-select">
+                        <option value="">Todas as categorias</option>
+                    </select>
+
+                    <select id="filtro-status" class="filter-select">
+                        <option value="">Todos os status</option>
+                        <option value="pendente">Pendentes</option>
+                        <option value="pago">Pagas</option>
+                    </select>
+
+                    <input type="text" id="filtro-mes" class="filter-input"
+                           placeholder="Vencimento (MM/AAAA)" maxlength="7"
+                           onkeyup="mascaraMesAno(this)" onchange="aplicarFiltros()">
+
+                    <input type="text" id="filtro-competencia" class="filter-input"
+                           placeholder="Competência (MM/AAAA)" maxlength="7"
+                           onkeyup="mascaraMesAno(this)" onchange="aplicarFiltros()"
+                           title="Filtrar por mês de competência">
+                </div>
+
+                <button class="btn btn-primary" onclick="abrirModal()">
+                    Nova Despesa
+                </button>
+            </div>
+
+            <!-- Resumo -->
+            <div class="resumo-cards">
+                <div class="resumo-card">
+                    <div class="resumo-label">Total</div>
+                    <div class="resumo-valor" id="total-geral">R$ 0,00</div>
+                </div>
+                <div class="resumo-card pendente">
+                    <div class="resumo-label">Pendentes</div>
+                    <div class="resumo-valor" id="total-pendentes">R$ 0,00</div>
+                </div>
+                <div class="resumo-card pago">
+                    <div class="resumo-label">Pagas</div>
+                    <div class="resumo-valor" id="total-pagas">R$ 0,00</div>
+                </div>
+            </div>
+
+            <!-- Lista de despesas -->
+            <div class="despesas-lista" id="despesas-lista">
+                <p class="loading">Carregando despesas...</p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal para adicionar/editar despesa -->
+    <div id="modal-despesa" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-titulo">Nova Despesa</h2>
+                <span class="close" onclick="fecharModal()">&times;</span>
+            </div>
+
+            <form id="form-despesa" onsubmit="salvarDespesa(event)">
+                <input type="hidden" id="despesa-id">
+
+                <div class="form-group">
+                    <label for="nome">Nome *</label>
+                    <input type="text" id="nome" name="nome" required
+                           placeholder="Ex: Conta de luz, Aluguel, Mercado">
+                </div>
+
+                <div class="form-group">
+                    <label for="descricao">Descrição</label>
+                    <textarea id="descricao" name="descricao" rows="2"
+                              placeholder="Descrição opcional da despesa"></textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="valor">Valor *</label>
+                        <input type="number" id="valor" name="valor" required
+                               step="0.01" min="0" placeholder="0,00" onchange="calcularValorPremio()">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="categoria_id">Categoria *</label>
+                        <select id="categoria_id" name="categoria_id" required>
+                            <option value="">Selecione...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="data_vencimento">Data de Vencimento</label>
+                        <input type="date" id="data_vencimento" name="data_vencimento">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="data_pagamento">Data de Pagamento</label>
+                        <input type="date" id="data_pagamento" name="data_pagamento">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="pago" name="pago">
+                        <span>Despesa já foi paga</span>
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="recorrente" name="recorrente">
+                        <span>Despesa recorrente</span>
+                    </label>
+                </div>
+
+                <div class="form-group" id="tipo-recorrencia-group" style="display: none;">
+                    <label for="tipo_recorrencia">Tipo de Recorrência</label>
+                    <select id="tipo_recorrencia" name="tipo_recorrencia" onchange="alternarCamposSemanal()">
+                        <option value="semanal">Semanal (por dia da semana)</option>
+                        <option value="mensal">Mensal</option>
+                        <option value="anual">Anual</option>
+                    </select>
+                </div>
+
+                <!-- Campos específicos para recorrência semanal -->
+                <div id="campos-semanal" style="display: none;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="dia_semana">Dia da Semana *</label>
+                            <select id="dia_semana" name="dia_semana">
+                                <option value="">Selecione...</option>
+                                <option value="0">Domingo</option>
+                                <option value="1">Segunda-feira</option>
+                                <option value="2">Terça-feira</option>
+                                <option value="3">Quarta-feira</option>
+                                <option value="4">Quinta-feira</option>
+                                <option value="5">Sexta-feira</option>
+                                <option value="6">Sábado</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="frequencia_semanas">Frequência (semanas)</label>
+                            <input type="number" id="frequencia_semanas" name="frequencia_semanas"
+                                   min="1" max="52" value="1" placeholder="1">
+                            <small style="color: rgba(255,255,255,0.7); font-size: 0.85em; display: block; margin-top: 5px;">
+                                1 = toda semana, 2 = a cada 2 semanas, etc.
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Checkbox para Consórcio -->
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="e_consorcio" name="e_consorcio" onchange="alternarCamposConsorcio()">
+                        <span>É um Consórcio</span>
+                    </label>
+                </div>
+
+                <!-- Campos específicos para Consórcio -->
+                <div id="campos-consorcio" style="display: none;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="numero_parcelas_consorcio">Número de Parcelas *</label>
+                            <input type="number" id="numero_parcelas_consorcio" name="numero_parcelas_consorcio"
+                                   min="1" placeholder="Ex: 60" onchange="calcularValorPremio()">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="mes_inicio_consorcio">Mês de Início *</label>
+                            <input type="text" id="mes_inicio_consorcio" name="mes_inicio_consorcio"
+                                   placeholder="MM/AAAA" maxlength="7"
+                                   onkeyup="mascaraMesAno(this)" onchange="calcularValorPremio()">
+                            <small style="color: #666; font-size: 0.85em; display: block; margin-top: 5px;">
+                                Formato: 05/2025
+                            </small>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="tipo_reajuste">Tipo de Reajuste</label>
+                            <select id="tipo_reajuste" name="tipo_reajuste" onchange="alternarCamposReajuste(); calcularValorPremio();">
+                                <option value="nenhum">Sem Reajuste</option>
+                                <option value="percentual">Percentual (%)</option>
+                                <option value="fixo">Valor Fixo (R$)</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group" id="campo-valor-reajuste" style="display: none;">
+                            <label for="valor_reajuste" id="label-valor-reajuste">Valor do Reajuste</label>
+                            <input type="number" id="valor_reajuste" name="valor_reajuste"
+                                   step="0.01" min="0" placeholder="0" onchange="calcularValorPremio()">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="mes_contemplacao">Mês de Contemplação</label>
+                            <input type="text" id="mes_contemplacao" name="mes_contemplacao"
+                                   placeholder="MM/AAAA" maxlength="7"
+                                   onkeyup="mascaraMesAno(this)" onchange="calcularValorPremio()">
+                            <small style="color: #666; font-size: 0.85em; display: block; margin-top: 5px;">
+                                Quando receberá o prêmio (Ex: 06/2027)
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="valor_premio">Valor do Prêmio (Calculado)</label>
+                            <input type="number" id="valor_premio" name="valor_premio"
+                                   step="0.01" min="0" placeholder="Será calculado automaticamente"
+                                   readonly style="background-color: #f0f0f0; cursor: not-allowed;">
+                            <small style="color: #666; font-size: 0.85em; display: block; margin-top: 5px;">
+                                Valor calculado automaticamente
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="mes_competencia">Mês de Competência</label>
+                    <input type="month" id="mes_competencia" name="mes_competencia"
+                           placeholder="Calculado automaticamente">
+                    <small style="color: #666; font-size: 0.85em; display: block; margin-top: 5px;">
+                        Mês do salário que pagará esta despesa (calculado automaticamente se houver data de vencimento)
+                    </small>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="fecharModal()">
+                        Cancelar
+                    </button>
+                    <div style="display: flex; gap: 10px;">
+                        <button type="button" id="btn-deletar-modal" class="btn btn-danger" onclick="deletarDespesaModal()" style="display: none;">
+                            Deletar
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            Salvar
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Confirmar Pagamento -->
+    <div id="modal-pagar" class="modal">
+        <div class="modal-content" style="max-width: 320px; padding: 18px; background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%); position: relative;">
+            <span class="close" onclick="fecharModalPagar()" style="position: absolute; top: 8px; right: 12px; color: rgba(255,255,255,0.7); font-size: 22px; cursor: pointer;">&times;</span>
+
+            <form id="form-pagar" onsubmit="confirmarPagamento(event)">
+                <input type="hidden" id="pagar-despesa-id">
+                <input type="hidden" id="pagar-valor-previsto">
+
+                <!-- Nome da despesa -->
+                <div id="pagar-nome-despesa" style="color: white; font-weight: 600; font-size: 1em; margin-bottom: 12px; padding-right: 18px;"></div>
+
+                <!-- Opções de valor -->
+                <div style="margin-bottom: 12px;">
+                    <label style="display: flex; align-items: center; gap: 8px; padding: 6px 0; cursor: pointer; margin-bottom: 6px;">
+                        <input type="radio" name="tipo-pagamento" value="total" checked onchange="alternarCampoValor()">
+                        <span style="color: white; font-size: 0.9em;">
+                            Valor Total: <strong id="pagar-valor-previsto-display"></strong>
+                        </span>
+                    </label>
+
+                    <label style="display: flex; align-items: center; gap: 8px; padding: 6px 0; cursor: pointer;">
+                        <input type="radio" name="tipo-pagamento" value="parcial" onchange="alternarCampoValor()">
+                        <span style="color: white; font-size: 0.9em;">Pagar outro Valor</span>
+                    </label>
+                </div>
+
+                <!-- Campo de valor (oculto por padrão) -->
+                <div id="campo-valor-custom" style="display: none; margin-bottom: 10px;">
+                    <input type="number" id="pagar-valor-pago" step="0.01" min="0"
+                           placeholder="Valor pago" style="width: 100%; padding: 8px; background: transparent; border: none; border-bottom: 1px solid rgba(255, 255, 255, 0.3); color: white; font-size: 14px;">
+                </div>
+
+                <!-- Data do pagamento -->
+                <div style="margin-bottom: 12px;">
+                    <input type="date" id="pagar-data" style="width: 100%; padding: 8px; background: transparent; border: none; border-bottom: 1px solid rgba(255, 255, 255, 0.3); color: white; font-size: 14px;">
+                </div>
+
+                <!-- Botões -->
+                <div style="display: flex; gap: 6px;">
+                    <button type="button" class="btn btn-secondary" onclick="fecharModalPagar()" style="flex: 1; padding: 8px; font-size: 0.9em;">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary" style="flex: 1; padding: 8px; font-size: 0.9em;">
+                        Pagar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Tipo de Edição de Consórcio -->
+    <div id="modal-tipo-edicao" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2>Editar Parcela de Consórcio</h2>
+                <span class="close" onclick="fecharModalTipoEdicao()">&times;</span>
+            </div>
+
+            <div style="padding: 20px;">
+                <p style="margin-bottom: 20px; color: #666;">
+                    Esta é uma parcela de consórcio. Como deseja editar?
+                </p>
+
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <button type="button" onclick="confirmarTipoEdicao('unica')" style="width: 100%; padding: 12px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: 500;">
+                        📝 Editar apenas esta parcela
+                    </button>
+
+                    <button type="button" onclick="confirmarTipoEdicao('futuras')" style="width: 100%; padding: 12px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: 500;">
+                        📋 Editar esta e as parcelas futuras
+                    </button>
+
+                    <button type="button" onclick="fecharModalTipoEdicao()" style="width: 100%; padding: 12px; background: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: 500;">
+                        Cancelar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Tipo de Exclusão de Consórcio/Recorrente -->
+    <div id="modal-tipo-exclusao" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2 id="modal-exclusao-titulo">Excluir Despesa</h2>
+                <span class="close" onclick="fecharModalTipoExclusao()">&times;</span>
+            </div>
+
+            <div style="padding: 20px;">
+                <p id="modal-exclusao-texto" style="margin-bottom: 20px; color: #666;">
+                    Como deseja excluir esta despesa?
+                </p>
+
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <button type="button" onclick="confirmarTipoExclusao('unica')" style="width: 100%; padding: 12px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: 500;">
+                        🗑️ Excluir apenas esta parcela
+                    </button>
+
+                    <button type="button" onclick="confirmarTipoExclusao('futuras')" style="width: 100%; padding: 12px; background: #dc2626; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: 500;">
+                        🗑️ Excluir esta e as parcelas futuras
+                    </button>
+
+                    <button type="button" onclick="fecharModalTipoExclusao()" style="width: 100%; padding: 12px; background: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: 500;">
+                        Cancelar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <div class="bottom-nav-container">
+            <a href="/" class="nav-item">
+                <span class="icon">⌂</span>
+                <span class="label">Dashboard</span>
+            </a>
+            <a href="/lancamentos" class="nav-item">
+                <span class="icon">✎</span>
+                <span class="label">Lançamentos</span>
+            </a>
+            <a href="/despesas" class="nav-item active">
+                <span class="icon">▬</span>
+                <span class="label">Contas</span>
+            </a>
+            <a href="/cartoes" class="nav-item">
+                <span class="icon">▭</span>
+                <span class="label">Cartões</span>
+            </a>
+            <a href="#" class="nav-item">
+                <span class="icon">▯</span>
+                <span class="label">Receitas</span>
+            </a>
+            <a href="/configuracoes" class="nav-item">
+                <span class="icon">⚙</span>
+                <span class="label">Config</span>
+            </a>
+        </div>
+    </nav>
+
+    <!-- Botão para visualização mobile -->
+    <div class="mobile-toggle">
+        <button onclick="toggleMobileView()" id="mobile-btn">
+            Ver em Mobile
+        </button>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/despesas.js') }}"></script>
+    <script>
+        function toggleMobileView() {
+            document.body.classList.toggle('mobile-view');
+            const btn = document.getElementById('mobile-btn');
+            if (document.body.classList.contains('mobile-view')) {
+                btn.innerHTML = 'Ver em Desktop';
+            } else {
+                btn.innerHTML = 'Ver em Mobile';
+            }
+        }
+
+        // Mostrar/esconder campo de tipo de recorrência
+        document.getElementById('recorrente').addEventListener('change', function() {
+            const tipoGroup = document.getElementById('tipo-recorrencia-group');
+            tipoGroup.style.display = this.checked ? 'block' : 'none';
+
+            // Se desmarcar, esconder campos semanais também
+            if (!this.checked) {
+                document.getElementById('campos-semanal').style.display = 'none';
+            } else {
+                // Se marcar, verificar se é semanal
+                alternarCamposSemanal();
+            }
+        });
+
+        // Mostrar/esconder campos específicos de recorrência semanal
+        function alternarCamposSemanal() {
+            const tipoRecorrencia = document.getElementById('tipo_recorrencia').value;
+            const camposSemanal = document.getElementById('campos-semanal');
+
+            if (tipoRecorrencia === 'semanal') {
+                camposSemanal.style.display = 'block';
+            } else {
+                camposSemanal.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>

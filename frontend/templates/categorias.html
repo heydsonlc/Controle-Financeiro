@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Categorias - Controle Financeiro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/categorias.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Gerenciamento de Categorias</h1>
+            <nav class="breadcrumb">
+                <a href="/">Dashboard</a> / <span>Categorias</span>
+            </nav>
+        </header>
+
+        <main>
+            <!-- Botão para adicionar nova categoria -->
+            <div class="actions">
+                <button class="btn btn-primary" onclick="abrirModal()">
+                    + Nova Categoria
+                </button>
+            </div>
+
+            <!-- Lista de categorias -->
+            <div class="categorias-lista" id="categorias-lista">
+                <p class="loading">Carregando categorias...</p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal para adicionar/editar categoria -->
+    <div id="modal-categoria" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-titulo">Nova Categoria</h2>
+                <span class="close" onclick="fecharModal()">&times;</span>
+            </div>
+
+            <form id="form-categoria" onsubmit="salvarCategoria(event)">
+                <input type="hidden" id="categoria-id">
+
+                <div class="form-group">
+                    <label for="nome">Nome *</label>
+                    <input type="text" id="nome" name="nome" required
+                           placeholder="Ex: Moradia, Transporte, Alimentação">
+                </div>
+
+                <div class="form-group">
+                    <label for="descricao">Descrição</label>
+                    <textarea id="descricao" name="descricao" rows="3"
+                              placeholder="Descrição opcional da categoria"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="cor">Cor</label>
+                    <div class="color-picker">
+                        <input type="color" id="cor" name="cor" value="#6c757d">
+                        <span id="cor-valor">#6c757d</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="ativo" name="ativo" checked>
+                        <span>Categoria ativa</span>
+                    </label>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="fecharModal()">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <div class="bottom-nav-container">
+            <a href="/" class="nav-item">
+                <span class="icon">⌂</span>
+                <span class="label">Dashboard</span>
+            </a>
+            <a href="/lancamentos" class="nav-item">
+                <span class="icon">✎</span>
+                <span class="label">Lançamentos</span>
+            </a>
+            <a href="/despesas" class="nav-item">
+                <span class="icon">▬</span>
+                <span class="label">Contas</span>
+            </a>
+            <a href="/cartoes" class="nav-item">
+                <span class="icon">▭</span>
+                <span class="label">Cartões</span>
+            </a>
+            <a href="#" class="nav-item">
+                <span class="icon">▯</span>
+                <span class="label">Receitas</span>
+            </a>
+            <a href="/configuracoes" class="nav-item">
+                <span class="icon">⚙</span>
+                <span class="label">Config</span>
+            </a>
+        </div>
+    </nav>
+
+    <!-- Botão para visualização mobile -->
+    <div class="mobile-toggle">
+        <button onclick="toggleMobileView()" id="mobile-btn">
+            📱 Ver em Mobile
+        </button>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/categorias.js') }}"></script>
+    <script>
+        function toggleMobileView() {
+            document.body.classList.toggle('mobile-view');
+            const btn = document.getElementById('mobile-btn');
+            if (document.body.classList.contains('mobile-view')) {
+                btn.innerHTML = '💻 Ver em Desktop';
+            } else {
+                btn.innerHTML = '📱 Ver em Mobile';
+            }
+        }
+    </script>
+</body>
+</html>

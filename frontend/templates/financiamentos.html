@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Financiamentos - Controle Financeiro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/financiamentos.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Gerenciamento de Financiamentos</h1>
+            <nav class="breadcrumb">
+                <a href="/">Dashboard</a> / <span>Financiamentos</span>
+            </nav>
+        </header>
+
+        <main>
+            <!-- Filtros -->
+            <div class="filters-section">
+                <div class="filter-group">
+                    <label for="filtro-status">Status:</label>
+                    <select id="filtro-status" onchange="carregarFinanciamentos()">
+                        <option value="">Todos</option>
+                        <option value="true" selected>Ativos</option>
+                        <option value="false">Inativos</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="filtro-sistema">Sistema:</label>
+                    <select id="filtro-sistema" onchange="carregarFinanciamentos()">
+                        <option value="">Todos</option>
+                        <option value="SAC">SAC</option>
+                        <option value="PRICE">PRICE</option>
+                        <option value="SIMPLES">SIMPLES</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Cards de Resumo -->
+            <div class="cards-resumo">
+                <div class="card">
+                    <h3>Total Financiado</h3>
+                    <p class="valor" id="total-financiado">R$ 0,00</p>
+                </div>
+                <div class="card">
+                    <h3>Saldo Devedor</h3>
+                    <p class="valor" id="saldo-devedor">R$ 0,00</p>
+                </div>
+                <div class="card">
+                    <h3>Parcelas Pagas</h3>
+                    <p class="valor" id="parcelas-pagas">0 / 0</p>
+                </div>
+                <div class="card">
+                    <h3>Contratos Ativos</h3>
+                    <p class="valor" id="contratos-ativos">0</p>
+                </div>
+            </div>
+
+            <!-- Lista de Financiamentos -->
+            <div class="actions">
+                <button class="btn btn-primary" onclick="abrirModalNovoFinanciamento()">
+                    + Novo Financiamento
+                </button>
+            </div>
+
+            <div class="lista" id="financiamentos-lista">
+                <p class="loading">Carregando financiamentos...</p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal: Novo Financiamento -->
+    <div id="modal-financiamento" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2>Novo Financiamento</h2>
+                <span class="close" onclick="fecharModal('modal-financiamento')">&times;</span>
+            </div>
+            <form id="form-financiamento" onsubmit="salvarFinanciamento(event)">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="fin-nome">Nome do Contrato *</label>
+                        <input type="text" id="fin-nome" required
+                               placeholder="Ex: Financiamento Imóvel - Caixa">
+                    </div>
+                    <div class="form-group">
+                        <label for="fin-produto">Produto</label>
+                        <input type="text" id="fin-produto"
+                               placeholder="Ex: Imóvel, Veículo, Empréstimo">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="fin-sistema">Sistema de Amortização *</label>
+                        <select id="fin-sistema" required onchange="atualizarInfoSistema()">
+                            <option value="">Selecione...</option>
+                            <option value="SAC">SAC - Sistema de Amortização Constante</option>
+                            <option value="PRICE">PRICE - Tabela Price (parcelas fixas)</option>
+                            <option value="SIMPLES">SIMPLES - Juros simples</option>
+                        </select>
+                        <small id="info-sistema" class="form-help"></small>
+                    </div>
+                    <div class="form-group">
+                        <label for="fin-indexador">Indexador do Saldo</label>
+                        <select id="fin-indexador">
+                            <option value="">Nenhum</option>
+                            <option value="TR">TR - Taxa Referencial</option>
+                            <option value="IPCA">IPCA - Índice de Preços</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="fin-valor">Valor Financiado *</label>
+                        <input type="text" id="fin-valor" required
+                               placeholder="R$ 0,00" onkeyup="formatarMoeda(this)">
+                    </div>
+                    <div class="form-group">
+                        <label for="fin-prazo">Prazo Total (meses) *</label>
+                        <input type="number" id="fin-prazo" required min="1"
+                               placeholder="360">
+                    </div>
+                    <div class="form-group">
+                        <label for="fin-taxa">Taxa de Juros Anual (%) *</label>
+                        <input type="text" id="fin-taxa" required
+                               placeholder="8.50" onkeyup="formatarPercentual(this)">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="fin-data-contrato">Data do Contrato *</label>
+                        <input type="date" id="fin-data-contrato" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="fin-data-primeira">Data 1ª Parcela *</label>
+                        <input type="date" id="fin-data-primeira" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="fin-seguro">Seguro Mensal</label>
+                        <input type="text" id="fin-seguro"
+                               placeholder="R$ 0,00" onkeyup="formatarMoeda(this)">
+                    </div>
+                    <div class="form-group">
+                        <label for="fin-taxa-adm">Taxa Administrativa Mensal</label>
+                        <input type="text" id="fin-taxa-adm"
+                               placeholder="R$ 0,00" onkeyup="formatarMoeda(this)">
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="fecharModal('modal-financiamento')">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        Criar e Gerar Parcelas
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Detalhes do Financiamento -->
+    <div id="modal-detalhes" class="modal">
+        <div class="modal-content modal-xlarge">
+            <div class="modal-header">
+                <h2 id="detalhes-titulo">Detalhes do Financiamento</h2>
+                <span class="close" onclick="fecharModal('modal-detalhes')">&times;</span>
+            </div>
+            <div id="detalhes-conteudo">
+                <!-- Será preenchido via JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Pagar Parcela -->
+    <div id="modal-pagar" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Registrar Pagamento de Parcela</h2>
+                <span class="close" onclick="fecharModal('modal-pagar')">&times;</span>
+            </div>
+            <form id="form-pagar" onsubmit="salvarPagamento(event)">
+                <input type="hidden" id="pagar-parcela-id">
+
+                <div id="pagar-info" class="info-box">
+                    <!-- Informações da parcela -->
+                </div>
+
+                <div class="form-group">
+                    <label for="pagar-data">Data do Pagamento *</label>
+                    <input type="date" id="pagar-data" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="pagar-valor">Valor Pago *</label>
+                    <input type="text" id="pagar-valor" required
+                           placeholder="R$ 0,00" onkeyup="formatarMoeda(this)">
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="fecharModal('modal-pagar')">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        Confirmar Pagamento
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Amortização Extra -->
+    <div id="modal-amortizacao" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Amortização Extraordinária</h2>
+                <span class="close" onclick="fecharModal('modal-amortizacao')">&times;</span>
+            </div>
+            <form id="form-amortizacao" onsubmit="salvarAmortizacao(event)">
+                <input type="hidden" id="amort-financiamento-id">
+
+                <div class="form-group">
+                    <label for="amort-data">Data *</label>
+                    <input type="date" id="amort-data" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="amort-valor">Valor da Amortização *</label>
+                    <input type="text" id="amort-valor" required
+                           placeholder="R$ 0,00" onkeyup="formatarMoeda(this)">
+                </div>
+
+                <div class="form-group">
+                    <label for="amort-tipo">Tipo de Redução *</label>
+                    <select id="amort-tipo" required onchange="atualizarInfoAmortizacao()">
+                        <option value="">Selecione...</option>
+                        <option value="reduzir_parcela">Reduzir valor da parcela (manter prazo)</option>
+                        <option value="reduzir_prazo">Reduzir prazo (manter valor da parcela)</option>
+                    </select>
+                    <small id="info-amortizacao" class="form-help"></small>
+                </div>
+
+                <div class="form-group">
+                    <label for="amort-obs">Observações</label>
+                    <textarea id="amort-obs" rows="3"
+                              placeholder="Ex: FGTS, Décimo terceiro, etc."></textarea>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="fecharModal('modal-amortizacao')">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        Registrar Amortização
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Demonstrativo Anual -->
+    <div id="modal-demonstrativo" class="modal">
+        <div class="modal-content modal-xlarge">
+            <div class="modal-header">
+                <h2 id="demo-titulo">Demonstrativo Anual</h2>
+                <span class="close" onclick="fecharModal('modal-demonstrativo')">&times;</span>
+            </div>
+            <div class="form-group" style="margin: 0 20px 20px 20px;">
+                <label for="demo-ano">Selecione o Ano:</label>
+                <select id="demo-ano" onchange="carregarDemonstrativo()">
+                    <!-- Será preenchido via JS -->
+                </select>
+            </div>
+            <div id="demonstrativo-conteudo">
+                <p class="loading">Carregando demonstrativo...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/financiamentos.js') }}"></script>
+</body>
+</html>

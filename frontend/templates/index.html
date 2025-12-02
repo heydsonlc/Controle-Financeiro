@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle Financeiro - Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>💰 Sistema de Controle Financeiro</h1>
+            <p class="subtitle">Gerenciamento completo de receitas, despesas e patrimônio</p>
+        </header>
+
+        <main>
+            <section class="dashboard">
+                <div class="card">
+                    <h2>🎯 Dashboard</h2>
+                    <p>Bem-vindo ao sistema de controle financeiro!</p>
+                    <p class="info">Backend inicializado com sucesso.</p>
+                </div>
+
+                <div class="card">
+                    <h3>📊 Módulos Disponíveis</h3>
+                    <ul style="list-style: none; padding: 0;">
+                        <li style="margin: 15px 0;">
+                            <a href="/lancamentos" style="display: block; padding: 15px; background: #f8f9fa; border-radius: 5px; text-decoration: none; color: #333; transition: all 0.3s;">
+                                <strong>✎ Lançamentos</strong><br>
+                                <small style="color: #666;">Registrar novos gastos</small>
+                            </a>
+                        </li>
+                        <li style="margin: 15px 0;">
+                            <a href="/despesas" style="display: block; padding: 15px; background: #f8f9fa; border-radius: 5px; text-decoration: none; color: #333; transition: all 0.3s;">
+                                <strong>💰 Despesas</strong><br>
+                                <small style="color: #666;">Visualizar resumo mensal</small>
+                            </a>
+                        </li>
+                        <li style="margin: 15px 0;">
+                            <a href="/cartoes" style="display: block; padding: 15px; background: #f8f9fa; border-radius: 5px; text-decoration: none; color: #333; transition: all 0.3s;">
+                                <strong>💳 Cartões de Crédito</strong><br>
+                                <small style="color: #666;">Gerenciar cartões e categorias</small>
+                            </a>
+                        </li>
+                        <li style="margin: 15px 0;">
+                            <a href="/categorias" style="display: block; padding: 15px; background: #f8f9fa; border-radius: 5px; text-decoration: none; color: #333; transition: all 0.3s;">
+                                <strong>📁 Categorias</strong><br>
+                                <small style="color: #666;">Gerenciar categorias de despesas</small>
+                            </a>
+                        </li>
+                        <li style="margin: 15px 0;">
+                            <a href="/receitas" style="display: block; padding: 15px; background: #f8f9fa; border-radius: 5px; text-decoration: none; color: #333; transition: all 0.3s;">
+                                <strong>💵 Receitas</strong><br>
+                                <small style="color: #666;">Gerenciar fontes de receita e orçamento</small>
+                            </a>
+                        </li>
+                        <li style="margin: 15px 0;">
+                            <a href="/financiamentos" style="display: block; padding: 15px; background: #f8f9fa; border-radius: 5px; text-decoration: none; color: #333; transition: all 0.3s;">
+                                <strong>🏠 Financiamentos</strong><br>
+                                <small style="color: #666;">Gerenciar financiamentos e amortizações (SAC, PRICE)</small>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="card">
+                    <h3>🚀 Status do Desenvolvimento</h3>
+                    <ul>
+                        <li>✅ Backend Flask: Ativo</li>
+                        <li>✅ Banco de dados SQLite: Configurado</li>
+                        <li>✅ API de Categorias: Funcionando</li>
+                        <li>✅ Cartões de Crédito: Implementado</li>
+                        <li>✅ Sistema de Lançamentos: Implementado</li>
+                        <li>✅ Gestão de Despesas: Implementado</li>
+                        <li>✅ Módulo de Receitas: Implementado (15 endpoints)</li>
+                        <li>✅ Módulo de Financiamentos: Implementado (11 endpoints, SAC/PRICE/SIMPLES)</li>
+                        <li>⏳ Patrimônio em desenvolvimento...</li>
+                    </ul>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>Sistema desenvolvido com Flask + SQLite</p>
+        </footer>
+    </div>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <div class="bottom-nav-container">
+            <a href="/" class="nav-item active">
+                <span class="icon">⌂</span>
+                <span class="label">Dashboard</span>
+            </a>
+            <a href="/lancamentos" class="nav-item">
+                <span class="icon">✎</span>
+                <span class="label">Lançamentos</span>
+            </a>
+            <a href="/despesas" class="nav-item">
+                <span class="icon">▬</span>
+                <span class="label">Contas</span>
+            </a>
+            <a href="/cartoes" class="nav-item">
+                <span class="icon">▭</span>
+                <span class="label">Cartões</span>
+            </a>
+            <a href="/receitas" class="nav-item">
+                <span class="icon">▯</span>
+                <span class="label">Receitas</span>
+            </a>
+            <a href="/financiamentos" class="nav-item">
+                <span class="icon">🏠</span>
+                <span class="label">Financ.</span>
+            </a>
+            <a href="/configuracoes" class="nav-item">
+                <span class="icon">⚙</span>
+                <span class="label">Config</span>
+            </a>
+        </div>
+    </nav>
+
+    <!-- Botão para visualização mobile -->
+    <div class="mobile-toggle">
+        <button onclick="toggleMobileView()" id="mobile-btn">
+            📱 Ver em Mobile
+        </button>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script>
+        function toggleMobileView() {
+            document.body.classList.toggle('mobile-view');
+            const btn = document.getElementById('mobile-btn');
+            if (document.body.classList.contains('mobile-view')) {
+                btn.innerHTML = '💻 Ver em Desktop';
+            } else {
+                btn.innerHTML = '📱 Ver em Mobile';
+            }
+        }
+    </script>
+</body>
+</html>
