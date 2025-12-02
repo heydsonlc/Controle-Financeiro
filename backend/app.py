@@ -115,6 +115,11 @@ def create_app(config_name=None):
         """Página de gerenciamento de patrimônio (caixinhas)"""
         return render_template('patrimonio.html')
 
+    @app.route('/preferencias')
+    def preferencias():
+        """Página de preferências e configurações gerais"""
+        return render_template('preferencias.html')
+
     @app.route('/health')
     def health():
         """Health check para monitoramento"""
@@ -145,6 +150,7 @@ def register_blueprints(app):
         from backend.routes.contas_bancarias import contas_bancarias_bp
         from backend.routes.patrimonio import patrimonio_bp
         from backend.routes.dashboard import dashboard_bp
+        from backend.routes.preferencias import preferencias_bp
     except ImportError:
         from routes.categorias import categorias_bp
         from routes.despesas import despesas_bp
@@ -155,6 +161,7 @@ def register_blueprints(app):
         from routes.contas_bancarias import contas_bancarias_bp
         from routes.patrimonio import patrimonio_bp
         from routes.dashboard import dashboard_bp
+        from routes.preferencias import preferencias_bp
 
     # Registrar blueprints
     app.register_blueprint(categorias_bp, url_prefix='/api/categorias')
@@ -166,6 +173,7 @@ def register_blueprints(app):
     app.register_blueprint(contas_bancarias_bp, url_prefix='/api/contas')
     app.register_blueprint(patrimonio_bp, url_prefix='/api/patrimonio')
     app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
+    app.register_blueprint(preferencias_bp, url_prefix='/api/preferencias')
 
 
 def register_error_handlers(app):
