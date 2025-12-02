@@ -27,6 +27,87 @@ O sistema implementa a lógica completa de controle financeiro com distinção e
 
 ## 🆕 Últimas Implementações
 
+### Módulo de Financiamentos Completo (Dezembro 2024)
+Implementação completa do sistema de financiamentos com suporte aos sistemas SAC, PRICE e SIMPLES:
+
+**Backend:**
+- **4 Novos Modelos de Dados:**
+  - `Financiamento`: Contratos de financiamento (imobiliário, veículo, empréstimo)
+    - Campos: valor_financiado, prazo_total_meses, taxa_juros_nominal_anual, sistema_amortizacao
+    - Suporte a indexadores: TR e IPCA para correção do saldo devedor
+  - `FinanciamentoParcela`: Estrutura detalhada inspirada nos demonstrativos da CAIXA
+    - **Seção A - Encargo Mensal:** amortizacao, juros, seguro, taxa_administrativa
+    - **Seção B - Descontos:** fgts_usado, subsidio
+    - **Seção C - Encargos de Atraso:** mora, multa, atualizacao_monetaria
+    - **Seção D - Totais:** encargo_total, valor_pago, DIF (diferença previsto vs pago)
+  - `FinanciamentoAmortizacaoExtra`: Amortizações extraordinárias
+    - Tipo `reduzir_parcela`: Mantém prazo, reduz valor das parcelas
+    - Tipo `reduzir_prazo`: Mantém valor, reduz número de parcelas
+  - `IndexadorMensal`: Valores históricos de TR/IPCA por mês de referência
+
+- **Service Layer Completo** ([financiamento_service.py](backend/services/financiamento_service.py)):
+  - **Sistema SAC (Amortização Constante):**
+    - Amortização fixa = valor_financiado / prazo
+    - Juros decrescentes sobre saldo devedor
+    - Aplicação de indexador (TR/IPCA) no saldo a cada mês
+  - **Sistema PRICE (Parcelas Fixas):**
+    - Cálculo via fórmula PMT: `PV * i * (1+i)^n / ((1+i)^n - 1)`
+    - Parcelas fixas, amortização crescente, juros decrescentes
+  - **Sistema SIMPLES (Juros Simples):**
+    - Juros fixos sobre principal: `valor_financiado * taxa_mensal`
+    - Amortização constante
+  - **Funcionalidades Avançadas:**
+    - Conversão de taxa anual para mensal: `(1 + taxa_anual)^(1/12) - 1`
+    - Integração com indexadores para correção monetária
+    - Registro de pagamentos com cálculo automático de DIF
+    - Recálculo automático de parcelas após amortização extra
+    - Demonstrativo anual consolidado (estilo CAIXA)
+    - Evolução mês a mês do saldo devedor
+
+**API REST (11 Endpoints):**
+1. **CRUD de Financiamentos:**
+   - `GET /api/financiamentos` - Listar todos
+   - `GET /api/financiamentos/:id` - Detalhes + parcelas
+   - `POST /api/financiamentos` - Criar + gerar parcelas automaticamente
+   - `PUT /api/financiamentos/:id` - Atualizar
+   - `DELETE /api/financiamentos/:id` - Soft delete (inativar)
+   - `POST /api/financiamentos/:id/regenerar-parcelas` - Regenerar cronograma
+
+2. **Gerenciamento de Parcelas:**
+   - `POST /api/financiamentos/parcelas/:id/pagar` - Registrar pagamento
+
+3. **Amortizações Extraordinárias:**
+   - `POST /api/financiamentos/:id/amortizacao-extra` - Registrar e recalcular
+
+4. **Relatórios:**
+   - `GET /api/financiamentos/:id/demonstrativo-anual?ano=2025` - Demonstrativo consolidado
+   - `GET /api/financiamentos/:id/evolucao-saldo` - Evolução mensal do saldo
+
+5. **Indexadores:**
+   - `GET /api/financiamentos/indexadores?nome=TR&ano=2024` - Consultar valores
+   - `POST /api/financiamentos/indexadores` - Cadastrar TR/IPCA
+
+**Frontend Completo:**
+- HTML responsivo com 5 modais especializados:
+  - Modal de criação de financiamento (com info contextual dos sistemas)
+  - Modal de detalhes com tabela completa de parcelas
+  - Modal de registro de pagamento
+  - Modal de amortização extraordinária
+  - Modal de demonstrativo anual (com seleção de ano)
+- CSS customizado com cards, badges de sistema (SAC/PRICE/SIMPLES) e tabelas detalhadas
+- JavaScript com funções para:
+  - CRUD completo, formatação de moeda/percentual
+  - Cálculo de demonstrativos e evolução
+  - Interface intuitiva com tooltips explicativos
+
+**Regras de Negócio:**
+- Geração automática de todas as parcelas na criação do contrato
+- Integração com módulo de contas a pagar via `conta_id`
+- Rastreamento de divergências (DIF) entre previsto e pago
+- Suporte a seguros e taxas administrativas mensais
+- Indexação automática do saldo devedor quando TR/IPCA está configurado
+- Recálculo inteligente após amortizações extras
+
 ### Módulo de Receitas Completo (Dezembro 2024)
 Implementação expandida do sistema de receitas com classificação detalhada e análises avançadas:
 
@@ -129,6 +210,24 @@ Permite identificar economias ou gastos extras em relação ao planejado, facili
   - Interface integrada no modal de despesas
   - Endpoint de regeneração de parcelas
 
+- ✅ **Sistema Completo de Financiamentos**
+  - Suporte a 3 sistemas de amortização: **SAC**, **PRICE** e **SIMPLES**
+  - Cadastro de financiamentos (imobiliário, veículo, empréstimo pessoal)
+  - **Geração Automática de Cronograma:**
+    - Cálculo matemático preciso de cada parcela
+    - Aplicação de indexadores (TR/IPCA) no saldo devedor
+    - Inclusão de seguros e taxas administrativas
+  - **Amortizações Extraordinárias:**
+    - Reduzir valor das parcelas (manter prazo)
+    - Reduzir prazo (manter valor das parcelas)
+    - Recálculo automático do cronograma
+  - **Relatórios Detalhados:**
+    - Demonstrativo anual estilo CAIXA
+    - Evolução do saldo devedor mês a mês
+    - Rastreamento de DIF (diferença previsto vs pago)
+  - Interface completa com modais especializados
+  - Integração com módulo de contas a pagar
+
 ### Módulo 3: Patrimônio
 - ✅ Caixinhas para alocação de patrimônio
 - ✅ Transferências entre contas
@@ -155,7 +254,7 @@ Permite identificar economias ou gastos extras em relação ao planejado, facili
 
 ### Estrutura do Banco de Dados
 
-**14 Tabelas organizadas em 3 módulos:**
+**18 Tabelas organizadas em 3 módulos:**
 
 **Orçamento (11 tabelas):**
 1. `categoria` - Agrupador de despesas
@@ -170,14 +269,25 @@ Permite identificar economias ou gastos extras em relação ao planejado, facili
 10. `receita_orcamento` - Plano mensal de receitas
 11. `receita_realizada` - Receitas efetivamente recebidas
 
-**Automação (1 tabela):**
+**Automação (5 tabelas):**
 12. `contrato_consorcio` - Contratos que geram lançamentos automáticos
     - Campos de reajuste: `tipo_reajuste` (nenhum/percentual/fixo), `valor_reajuste`
     - Geração automática de parcelas (ItemDespesa) e contemplação (ReceitaRealizada)
+13. `financiamento` - Contratos de financiamento (SAC/PRICE/SIMPLES)
+    - Campos: valor_financiado, prazo_total_meses, taxa_juros_nominal_anual, sistema_amortizacao
+    - Indexadores: TR/IPCA para correção do saldo devedor
+14. `financiamento_parcela` - Parcelas detalhadas estilo CAIXA
+    - Seção A: amortizacao, juros, seguro, taxa_administrativa
+    - Seção B: fgts_usado, subsidio
+    - Seção C: mora, multa, atualizacao_monetaria
+    - Seção D: encargo_total, valor_pago, DIF
+15. `financiamento_amortizacao_extra` - Amortizações extraordinárias
+    - Tipos: reduzir_parcela ou reduzir_prazo
+16. `indexador_mensal` - Valores de TR/IPCA por mês de referência
 
 **Patrimônio (2 tabelas):**
-13. `conta_patrimonio` - Caixinhas de patrimônio
-14. `transferencia` - Movimentações entre caixinhas
+17. `conta_patrimonio` - Caixinhas de patrimônio
+18. `transferencia` - Movimentações entre caixinhas
 
 ---
 
@@ -260,21 +370,24 @@ controle-financeiro/
 ├── backend/                    # Backend da aplicação
 │   ├── app.py                 # Aplicação Flask principal
 │   ├── config.py              # Configurações por ambiente
-│   ├── models.py              # Modelos do banco (14 tabelas)
+│   ├── models.py              # Modelos do banco (18 tabelas)
 │   ├── routes/                # Rotas da API
 │   │   ├── __init__.py
 │   │   ├── categorias.py     # ✅ CRUD de categorias
 │   │   ├── despesas.py       # ✅ CRUD de despesas
 │   │   ├── cartoes.py        # ✅ Gestão de cartões
 │   │   ├── consorcios.py     # ✅ Sistema de consórcios
-│   │   ├── receitas.py
+│   │   ├── receitas.py       # ✅ Sistema de receitas
+│   │   ├── financiamentos.py # ✅ Sistema de financiamentos
 │   │   ├── patrimonio.py
 │   │   └── dashboard.py
 │   ├── services/              # Lógica de negócio
 │   │   ├── __init__.py
 │   │   ├── orcamento_service.py
 │   │   ├── cartao_service.py
-│   │   └── consorcio_service.py
+│   │   ├── consorcio_service.py
+│   │   ├── receita_service.py       # ✅ Service de receitas
+│   │   └── financiamento_service.py # ✅ Service de financiamentos
 │   └── utils/                 # Utilitários
 │       └── __init__.py
 │
@@ -312,31 +425,35 @@ controle-financeiro/
 4. ✅ Rotas de Cartões de Crédito implementadas
 5. ✅ **Rotas de Consórcios implementadas**
 6. ✅ **Rotas de Receitas implementadas** (15 endpoints completos)
-7. ⏳ Implementar rotas de Patrimônio
+7. ✅ **Rotas de Financiamentos implementadas** (11 endpoints completos)
+8. ⏳ Implementar rotas de Patrimônio
 
 ### Fase 2: Lógica de Negócio 🔄
 1. ✅ **Sistema de Consórcios (geração automática de parcelas e contemplação)**
 2. ✅ **Rastreamento de Pagamentos (Previsto vs Realizado)**
 3. ✅ **Serviço de Receitas completo** (ItemReceita, Orçamento, Realizadas, KPIs)
-4. ⏳ Serviço de Orçamento (lançamento em lote)
-5. ⏳ Serviço de Cartão (ciclo de faturamento completo)
-6. ⏳ Serviço de Parcelamentos
-7. ⏳ Serviço de Dashboard (Projeção vs Real completo)
+4. ✅ **Serviço de Financiamentos completo** (SAC, PRICE, SIMPLES, amortizações, demonstrativos)
+5. ⏳ Serviço de Orçamento (lançamento em lote)
+6. ⏳ Serviço de Cartão (ciclo de faturamento completo)
+7. ⏳ Serviço de Parcelamentos
+8. ⏳ Serviço de Dashboard (Projeção vs Real completo)
 
 ### Fase 3: Frontend
 1. ✅ **Modal de Nova Despesa com suporte a Consórcios**
 2. ✅ **Modal minimalista de Rastreamento de Pagamentos**
-3. ⏳ Interface do Dashboard principal
-4. ⏳ Visualizações e gráficos de análise
-5. ⏳ Interface de gerenciamento de consórcios cadastrados
-6. ⏳ Tabelas interativas com filtros
+3. ✅ **Interface completa de Financiamentos** (5 modais especializados)
+4. ⏳ Interface do Dashboard principal
+5. ⏳ Visualizações e gráficos de análise
+6. ⏳ Interface de gerenciamento de consórcios cadastrados
+7. ⏳ Tabelas interativas com filtros
 
 ### Fase 4: Funcionalidades Avançadas
 1. ✅ **Automação de consórcios com reajuste inteligente**
-2. ⏳ Relatórios e exportações (PDF/Excel)
-3. ⏳ Gráficos de análise financeira
-4. ⏳ Notificações de vencimento
-5. ⏳ Comparativo mensal (tendências)
+2. ✅ **Sistema completo de financiamentos com 3 métodos de amortização**
+3. ⏳ Relatórios e exportações (PDF/Excel)
+4. ⏳ Gráficos de análise financeira
+5. ⏳ Notificações de vencimento
+6. ⏳ Comparativo mensal (tendências)
 
 ---
 
@@ -622,6 +739,78 @@ POST /api/receitas/realizadas
   "competencia": "2025-05-01",
   "descricao": "Salário Maio/2025",
   "conta_origem_id": 1
+}
+```
+
+### Financiamentos (Novo!)
+
+**CRUD de Financiamentos:**
+- `GET /api/financiamentos` - Listar todos os financiamentos
+- `GET /api/financiamentos/:id` - Obter detalhes + cronograma completo de parcelas
+- `POST /api/financiamentos` - Criar financiamento e gerar parcelas automaticamente
+- `PUT /api/financiamentos/:id` - Atualizar dados do contrato
+- `DELETE /api/financiamentos/:id` - Inativar contrato (soft delete)
+- `POST /api/financiamentos/:id/regenerar-parcelas` - Regenerar cronograma
+
+**Gerenciamento de Parcelas:**
+- `POST /api/financiamentos/parcelas/:id/pagar` - Registrar pagamento e calcular DIF
+
+**Amortizações Extraordinárias:**
+- `POST /api/financiamentos/:id/amortizacao-extra` - Registrar amortização e recalcular parcelas
+
+**Relatórios:**
+- `GET /api/financiamentos/:id/demonstrativo-anual?ano=2025` - Demonstrativo consolidado por mês
+- `GET /api/financiamentos/:id/evolucao-saldo` - Evolução mês a mês do saldo devedor
+
+**Indexadores (TR/IPCA):**
+- `GET /api/financiamentos/indexadores?nome=TR&ano=2024` - Consultar valores históricos
+- `POST /api/financiamentos/indexadores` - Cadastrar/atualizar valores de TR ou IPCA
+
+**Exemplo de criação de financiamento:**
+```json
+POST /api/financiamentos
+{
+  "nome": "Financiamento Imóvel - Caixa",
+  "produto": "Imóvel Residencial",
+  "sistema_amortizacao": "SAC",
+  "valor_financiado": 350000.00,
+  "prazo_total_meses": 360,
+  "taxa_juros_nominal_anual": 8.5,
+  "indexador_saldo": "TR",
+  "data_contrato": "2025-01-15",
+  "data_primeira_parcela": "2025-02-05",
+  "valor_seguro_mensal": 150.00,
+  "valor_taxa_adm_mensal": 25.00
+}
+```
+
+**Exemplo de registro de pagamento:**
+```json
+POST /api/financiamentos/parcelas/123/pagar
+{
+  "valor_pago": 2850.50,
+  "data_pagamento": "2025-02-05"
+}
+```
+
+**Exemplo de amortização extraordinária:**
+```json
+POST /api/financiamentos/1/amortizacao-extra
+{
+  "data": "2025-12-20",
+  "valor": 50000.00,
+  "tipo": "reduzir_prazo",
+  "observacoes": "FGTS + Décimo terceiro"
+}
+```
+
+**Exemplo de cadastro de indexador:**
+```json
+POST /api/financiamentos/indexadores
+{
+  "nome": "TR",
+  "data_referencia": "2025-01-01",
+  "valor_percentual": 0.0542
 }
 ```
 
