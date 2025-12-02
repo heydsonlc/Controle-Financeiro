@@ -922,3 +922,105 @@ class ContaBancaria(db.Model):
             'data_atualizacao': self.data_atualizacao.strftime('%Y-%m-%d %H:%M:%S') if self.data_atualizacao else None,
             'status': self.status
         }
+
+
+# ============================================================================
+# MÓDULO 4: PREFERÊNCIAS E CONFIGURAÇÕES GERAIS
+# ============================================================================
+
+class Preferencia(db.Model):
+    """
+    Armazena preferências e configurações gerais do sistema
+    Singleton - apenas um registro por usuário
+    """
+    __tablename__ = 'preferencia'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # ========== ABA 1: DADOS PESSOAIS ==========
+    nome_usuario = db.Column(db.String(100))
+    renda_principal = db.Column(db.Numeric(10, 2))  # Apenas exibição
+    mes_inicio_planejamento = db.Column(db.Integer, default=1)  # 1-12
+    dia_fechamento_mes = db.Column(db.Integer, default=1)  # 1-31
+
+    # ========== ABA 2: COMPORTAMENTO DO SISTEMA ==========
+    # Lançamentos e Pagamentos
+    ajustar_competencia_automatico = db.Column(db.Boolean, default=True)
+    exibir_aviso_despesa_vencida = db.Column(db.Boolean, default=True)
+    solicitar_confirmacao_exclusao = db.Column(db.Boolean, default=True)
+    vincular_pagamento_cartao_auto = db.Column(db.Boolean, default=True)
+
+    # Dashboard
+    graficos_visiveis = db.Column(db.String(200), default='categorias,evolucao,saldo')  # CSV
+    insights_inteligentes_ativo = db.Column(db.Boolean, default=True)
+    mostrar_saldo_consolidado = db.Column(db.Boolean, default=True)
+    mostrar_evolucao_historica = db.Column(db.Boolean, default=True)
+
+    # Cartões
+    dia_inicio_fatura = db.Column(db.Integer, default=1)  # 1-31
+    dia_corte_fatura = db.Column(db.Integer, default=1)  # 1-31
+    lancamentos_agrupados = db.Column(db.Boolean, default=False)  # False = linha a linha
+    orcamento_por_categoria = db.Column(db.Boolean, default=True)
+
+    # ========== ABA 3: APARÊNCIA ==========
+    tema_sistema = db.Column(db.String(20), default='escuro')  # 'claro', 'escuro', 'auto'
+    cor_principal = db.Column(db.String(7), default='#3b82f6')  # Hex color
+    mostrar_icones_coloridos = db.Column(db.Boolean, default=True)
+    abreviar_valores = db.Column(db.Boolean, default=False)  # R$ 1,2k
+
+    # ========== ABA 4: BACKUP E IMPORTAÇÃO ==========
+    ultimo_backup = db.Column(db.DateTime)
+    backup_automatico = db.Column(db.Boolean, default=False)
+
+    # ========== ABA 5: IA E AUTOMAÇÃO ==========
+    modo_inteligente_ativo = db.Column(db.Boolean, default=False)
+    sugestoes_economia = db.Column(db.Boolean, default=False)
+    classificacao_automatica = db.Column(db.Boolean, default=False)
+    correcao_categorias = db.Column(db.Boolean, default=False)
+    parcelas_recorrentes_auto = db.Column(db.Boolean, default=False)
+
+    # Metadata
+    data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
+    data_atualizacao = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<Preferencia ID:{self.id} Usuario:{self.nome_usuario}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            # Dados Pessoais
+            'nome_usuario': self.nome_usuario,
+            'renda_principal': float(self.renda_principal) if self.renda_principal else 0,
+            'mes_inicio_planejamento': self.mes_inicio_planejamento,
+            'dia_fechamento_mes': self.dia_fechamento_mes,
+            # Comportamento - Lançamentos
+            'ajustar_competencia_automatico': self.ajustar_competencia_automatico,
+            'exibir_aviso_despesa_vencida': self.exibir_aviso_despesa_vencida,
+            'solicitar_confirmacao_exclusao': self.solicitar_confirmacao_exclusao,
+            'vincular_pagamento_cartao_auto': self.vincular_pagamento_cartao_auto,
+            # Comportamento - Dashboard
+            'graficos_visiveis': self.graficos_visiveis,
+            'insights_inteligentes_ativo': self.insights_inteligentes_ativo,
+            'mostrar_saldo_consolidado': self.mostrar_saldo_consolidado,
+            'mostrar_evolucao_historica': self.mostrar_evolucao_historica,
+            # Comportamento - Cartões
+            'dia_inicio_fatura': self.dia_inicio_fatura,
+            'dia_corte_fatura': self.dia_corte_fatura,
+            'lancamentos_agrupados': self.lancamentos_agrupados,
+            'orcamento_por_categoria': self.orcamento_por_categoria,
+            # Aparência
+            'tema_sistema': self.tema_sistema,
+            'cor_principal': self.cor_principal,
+            'mostrar_icones_coloridos': self.mostrar_icones_coloridos,
+            'abreviar_valores': self.abreviar_valores,
+            # Backup
+            'ultimo_backup': self.ultimo_backup.strftime('%Y-%m-%d %H:%M:%S') if self.ultimo_backup else None,
+            'backup_automatico': self.backup_automatico,
+            # IA e Automação
+            'modo_inteligente_ativo': self.modo_inteligente_ativo,
+            'sugestoes_economia': self.sugestoes_economia,
+            'classificacao_automatica': self.classificacao_automatica,
+            'correcao_categorias': self.correcao_categorias,
+            'parcelas_recorrentes_auto': self.parcelas_recorrentes_auto
+        }
