@@ -352,6 +352,11 @@
     overflow-y: auto;
 }
 
+/* Padding para formulários dentro de modais */
+.modal-content form {
+    padding: 24px;
+}
+
 /* Form Row */
 .form-row {
     display: grid;
