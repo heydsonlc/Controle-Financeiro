@@ -198,6 +198,11 @@ class FinanciamentoService:
 
         financiamento.ativo = False
         db.session.commit()
+
+        # Criar contas (despesas) para as parcelas
+        if financiamento.item_despesa_id:
+            FinanciamentoService.sincronizar_contas(financiamento.id)
+
         return financiamento
 
     # ========================================================================
@@ -233,6 +238,10 @@ class FinanciamentoService:
             )
 
         db.session.commit()
+
+        # Criar contas (despesas) para as parcelas
+        if financiamento.item_despesa_id:
+            FinanciamentoService.sincronizar_contas(financiamento.id)
 
     @staticmethod
     def _gerar_parcelas_sac(financiamento, valor_seguro_mensal, valor_taxa_adm_mensal):
@@ -433,12 +442,23 @@ class FinanciamentoService:
         if not parcela:
             raise ValueError('Parcela não encontrada')
 
+        # Converter data se necessário
+        if isinstance(data_pagamento, str):
+            data_pagamento = datetime.strptime(data_pagamento, '%Y-%m-%d').date()
+
         # Atualizar valores
         parcela.valor_pago = Decimal(str(valor_pago))
+        parcela.data_pagamento = data_pagamento
         parcela.dif_apurada = parcela.valor_previsto_total - parcela.valor_pago
         parcela.status = 'pago'
 
         db.session.commit()
+
+        # Sincronizar com a Conta correspondente
+        financiamento = Financiamento.query.get(parcela.financiamento_id)
+        if financiamento and financiamento.item_despesa_id:
+            FinanciamentoService.sincronizar_contas(parcela.financiamento_id)
+
         return parcela
 
     # ========================================================================
@@ -584,6 +604,76 @@ class FinanciamentoService:
             'ano': ano,
             'resumo_mensal': {mes: {k: float(v) for k, v in dados.items()} for mes, dados in resumo_mensal.items()}
         }
+
+    @staticmethod
+    def sincronizar_contas(financiamento_id):
+        """
+        Cria/atualiza contas (despesas) a partir das parcelas do financiamento
+
+        Similar ao comportamento de consórcios, cria uma Conta para cada
+        FinanciamentoParcela para que apareçam na listagem de despesas
+
+        Args:
+            financiamento_id (int): ID do financiamento
+        """
+        from datetime import datetime
+        from dateutil.relativedelta import relativedelta
+
+        financiamento = Financiamento.query.get(financiamento_id)
+        if not financiamento:
+            raise ValueError('Financiamento não encontrado')
+
+        if not financiamento.item_despesa_id:
+            # Se não tem item_despesa vinculado, não criar contas
+            return
+
+        # Buscar todas as parcelas
+        parcelas = FinanciamentoParcela.query.filter_by(
+            financiamento_id=financiamento_id
+        ).order_by(FinanciamentoParcela.numero_parcela).all()
+
+        for parcela in parcelas:
+            # Verificar se já existe uma Conta para esta parcela
+            conta_existente = Conta.query.filter(
+                Conta.item_despesa_id == financiamento.item_despesa_id,
+                Conta.descricao.like(f'%{financiamento.nome}%Parcela {parcela.numero_parcela}/%')
+            ).first()
+
+            # Calcular mês de referência (mesma lógica do consórcio)
+            mes_referencia = parcela.data_vencimento.replace(day=1)
+
+            if conta_existente:
+                # Atualizar conta existente
+                conta_existente.valor = parcela.valor_previsto_total
+                conta_existente.data_vencimento = parcela.data_vencimento
+                conta_existente.mes_referencia = mes_referencia
+
+                # Sincronizar status de pagamento
+                if parcela.status == 'pago' and not conta_existente.data_pagamento:
+                    conta_existente.status_pagamento = 'Pago'
+                    conta_existente.data_pagamento = parcela.data_pagamento or parcela.data_vencimento
+                elif parcela.status == 'pendente':
+                    conta_existente.status_pagamento = 'Pendente'
+                    conta_existente.data_pagamento = None
+            else:
+                # Criar nova conta
+                nova_conta = Conta(
+                    item_despesa_id=financiamento.item_despesa_id,
+                    mes_referencia=mes_referencia,
+                    descricao=f'{financiamento.nome} - Parcela {parcela.numero_parcela}/{financiamento.prazo_total_meses}',
+                    valor=parcela.valor_previsto_total,
+                    data_vencimento=parcela.data_vencimento,
+                    data_pagamento=parcela.data_pagamento if parcela.status == 'pago' else None,
+                    status_pagamento='Pago' if parcela.status == 'pago' else 'Pendente',
+                    numero_parcela=parcela.numero_parcela,
+                    total_parcelas=financiamento.prazo_total_meses,
+                    observacoes=f'Financiamento {financiamento.sistema_amortizacao} - ' +
+                               f'Amortização: R$ {float(parcela.valor_amortizacao):.2f}, ' +
+                               f'Juros: R$ {float(parcela.valor_juros):.2f}'
+                )
+                db.session.add(nova_conta)
+
+        db.session.commit()
 
     @staticmethod
     def get_evolucao_saldo(financiamento_id):

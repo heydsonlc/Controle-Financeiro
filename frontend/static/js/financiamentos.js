@@ -115,6 +115,12 @@ function renderizarFinanciamentos(financiamentos) {
                 <button class="btn btn-info" onclick="abrirDemonstrativo(${fin.id})">
                     Demonstrativo Anual
                 </button>
+                <button class="btn btn-secondary" onclick="editarFinanciamento(${fin.id})">
+                    Editar
+                </button>
+                <button class="btn btn-danger" onclick="excluirFinanciamento(${fin.id}, '${fin.nome.replace(/'/g, "\\'")}')">
+                    Excluir
+                </button>
             </div>
         </div>
     `).join('');
@@ -136,13 +142,20 @@ function atualizarResumo(financiamentos) {
 // ============================================================================
 
 function abrirModalNovoFinanciamento() {
-    document.getElementById('form-financiamento').reset();
+    const form = document.getElementById('form-financiamento');
+    form.reset();
+    form.removeAttribute('data-editing-id');
+    document.querySelector('#modal-financiamento h2').textContent = 'Novo Financiamento';
     configurarDataAtual();
     abrirModal('modal-financiamento');
 }
 
 async function salvarFinanciamento(event) {
     event.preventDefault();
+
+    const form = document.getElementById('form-financiamento');
+    const editingId = form.getAttribute('data-editing-id');
+    const isEditing = !!editingId;
 
     const dados = {
         nome: document.getElementById('fin-nome').value,
@@ -159,8 +172,11 @@ async function salvarFinanciamento(event) {
     };
 
     try {
-        const response = await fetch('/api/financiamentos', {
-            method: 'POST',
+        const url = isEditing ? `/api/financiamentos/${editingId}` : '/api/financiamentos';
+        const method = isEditing ? 'PUT' : 'POST';
+
+        const response = await fetch(url, {
+            method: method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(dados)
         });
@@ -168,14 +184,15 @@ async function salvarFinanciamento(event) {
         const result = await response.json();
 
         if (result.success) {
-            mostrarSucesso('Financiamento criado e parcelas geradas com sucesso!');
+            mostrarSucesso(isEditing ? 'Financiamento atualizado com sucesso!' : 'Financiamento criado e parcelas geradas com sucesso!');
             fecharModal('modal-financiamento');
+            form.removeAttribute('data-editing-id');
             carregarFinanciamentos();
         } else {
-            mostrarErro('Erro ao criar financiamento: ' + result.error);
+            mostrarErro('Erro ao salvar financiamento: ' + result.error);
         }
     } catch (error) {
-        mostrarErro('Erro ao criar financiamento: ' + error.message);
+        mostrarErro('Erro ao salvar financiamento: ' + error.message);
     }
 }
 
@@ -566,13 +583,76 @@ window.onclick = function(event) {
 };
 
 // ============================================================================
+// EDITAR E EXCLUIR FINANCIAMENTO
+// ============================================================================
+
+async function editarFinanciamento(id) {
+    try {
+        // Buscar dados do financiamento
+        const response = await fetch(`${API_BASE}/${id}`);
+        const result = await response.json();
+
+        if (result.success) {
+            const fin = result.data;
+
+            // Preencher formulário (reutilizar o modal de novo financiamento)
+            document.getElementById('fin-nome').value = fin.nome;
+            document.getElementById('fin-produto').value = fin.produto || '';
+            document.getElementById('fin-sistema').value = fin.sistema_amortizacao;
+            document.getElementById('fin-valor').value = fin.valor_financiado;
+            document.getElementById('fin-prazo').value = fin.prazo_total_meses;
+            document.getElementById('fin-taxa-anual').value = fin.taxa_juros_nominal_anual;
+            document.getElementById('fin-indexador').value = fin.indexador_saldo || '';
+            document.getElementById('fin-data-contrato').value = fin.data_contrato;
+            document.getElementById('fin-data-primeira-parcela').value = fin.data_primeira_parcela;
+            document.getElementById('fin-item-despesa').value = fin.item_despesa_id || '';
+
+            // Alterar título do modal e adicionar ID para update
+            document.querySelector('#modal-financiamento h2').textContent = 'Editar Financiamento';
+            document.getElementById('form-financiamento').setAttribute('data-editing-id', id);
+
+            abrirModal('modal-financiamento');
+        } else {
+            mostrarErro('Erro ao carregar financiamento: ' + result.error);
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        mostrarErro('Erro ao carregar financiamento para edição');
+    }
+}
+
+async function excluirFinanciamento(id, nome) {
+    if (!confirm(`Tem certeza que deseja excluir o financiamento "${nome}"?\n\nEsta ação irá inativar o contrato.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/${id}`, {
+            method: 'DELETE'
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            mostrarSucesso('Financiamento inativado com sucesso!');
+            carregarFinanciamentos();
+        } else {
+            mostrarErro('Erro ao excluir: ' + result.error);
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        mostrarErro('Erro ao excluir financiamento');
+    }
+}
+
+// ============================================================================
 // MENSAGENS DE FEEDBACK
 // ============================================================================
 
 function mostrarSucesso(mensagem) {
-    alert('✓ ' + mensagem);
+    alert('OK ' + mensagem);
 }
 
 function mostrarErro(mensagem) {
-    alert('✗ ' + mensagem);
+    alert('ERRO ' + mensagem);
 }
