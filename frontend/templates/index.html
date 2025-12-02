@@ -3,86 +3,144 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Controle Financeiro - Dashboard</title>
+    <title>Dashboard - Controle Financeiro</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    <!-- Chart.js para gráficos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>💰 Sistema de Controle Financeiro</h1>
-            <p class="subtitle">Gerenciamento completo de receitas, despesas e patrimônio</p>
+            <h1>💰 Dashboard Financeiro</h1>
+            <p class="subtitle" id="mes-atual">Carregando...</p>
         </header>
 
         <main>
-            <section class="dashboard">
-                <div class="card">
-                    <h2>🎯 Dashboard</h2>
-                    <p>Bem-vindo ao sistema de controle financeiro!</p>
-                    <p class="info">Backend inicializado com sucesso.</p>
+            <!-- ========================================== -->
+            <!-- BLOCO 1: RESUMO FINANCEIRO DO MÊS         -->
+            <!-- ========================================== -->
+            <section class="resumo-mes">
+                <div class="resumo-card receitas" onclick="window.location.href='/receitas'">
+                    <div class="resumo-icon">📈</div>
+                    <div class="resumo-info">
+                        <h3>Receitas do Mês</h3>
+                        <p class="resumo-valor" id="receitas-mes">R$ 0,00</p>
+                    </div>
                 </div>
 
-                <div class="card">
-                    <h3>📊 Módulos Disponíveis</h3>
-                    <ul style="list-style: none; padding: 0;">
-                        <li style="margin: 15px 0;">
-                            <a href="/lancamentos" style="display: block; padding: 15px; background: #f8f9fa; border-radius: 5px; text-decoration: none; color: #333; transition: all 0.3s;">
-                                <strong>✎ Lançamentos</strong><br>
-                                <small style="color: #666;">Registrar novos gastos</small>
-                            </a>
-                        </li>
-                        <li style="margin: 15px 0;">
-                            <a href="/despesas" style="display: block; padding: 15px; background: #f8f9fa; border-radius: 5px; text-decoration: none; color: #333; transition: all 0.3s;">
-                                <strong>💰 Despesas</strong><br>
-                                <small style="color: #666;">Visualizar resumo mensal</small>
-                            </a>
-                        </li>
-                        <li style="margin: 15px 0;">
-                            <a href="/cartoes" style="display: block; padding: 15px; background: #f8f9fa; border-radius: 5px; text-decoration: none; color: #333; transition: all 0.3s;">
-                                <strong>💳 Cartões de Crédito</strong><br>
-                                <small style="color: #666;">Gerenciar cartões e categorias</small>
-                            </a>
-                        </li>
-                        <li style="margin: 15px 0;">
-                            <a href="/categorias" style="display: block; padding: 15px; background: #f8f9fa; border-radius: 5px; text-decoration: none; color: #333; transition: all 0.3s;">
-                                <strong>📁 Categorias</strong><br>
-                                <small style="color: #666;">Gerenciar categorias de despesas</small>
-                            </a>
-                        </li>
-                        <li style="margin: 15px 0;">
-                            <a href="/receitas" style="display: block; padding: 15px; background: #f8f9fa; border-radius: 5px; text-decoration: none; color: #333; transition: all 0.3s;">
-                                <strong>💵 Receitas</strong><br>
-                                <small style="color: #666;">Gerenciar fontes de receita e orçamento</small>
-                            </a>
-                        </li>
-                        <li style="margin: 15px 0;">
-                            <a href="/financiamentos" style="display: block; padding: 15px; background: #f8f9fa; border-radius: 5px; text-decoration: none; color: #333; transition: all 0.3s;">
-                                <strong>🏠 Financiamentos</strong><br>
-                                <small style="color: #666;">Gerenciar financiamentos e amortizações (SAC, PRICE)</small>
-                            </a>
-                        </li>
-                    </ul>
+                <div class="resumo-card despesas" onclick="window.location.href='/despesas'">
+                    <div class="resumo-icon">📉</div>
+                    <div class="resumo-info">
+                        <h3>Despesas do Mês</h3>
+                        <p class="resumo-valor" id="despesas-mes">R$ 0,00</p>
+                    </div>
                 </div>
 
-                <div class="card">
-                    <h3>🚀 Status do Desenvolvimento</h3>
-                    <ul>
-                        <li>✅ Backend Flask: Ativo</li>
-                        <li>✅ Banco de dados SQLite: Configurado</li>
-                        <li>✅ API de Categorias: Funcionando</li>
-                        <li>✅ Cartões de Crédito: Implementado</li>
-                        <li>✅ Sistema de Lançamentos: Implementado</li>
-                        <li>✅ Gestão de Despesas: Implementado</li>
-                        <li>✅ Módulo de Receitas: Implementado (15 endpoints)</li>
-                        <li>✅ Módulo de Financiamentos: Implementado (11 endpoints, SAC/PRICE/SIMPLES)</li>
-                        <li>⏳ Patrimônio em desenvolvimento...</li>
-                    </ul>
+                <div class="resumo-card saldo-liquido">
+                    <div class="resumo-icon">💵</div>
+                    <div class="resumo-info">
+                        <h3>Saldo Líquido</h3>
+                        <p class="resumo-valor" id="saldo-liquido">R$ 0,00</p>
+                    </div>
+                </div>
+
+                <div class="resumo-card contas-bancarias" onclick="window.location.href='/contas-bancarias'">
+                    <div class="resumo-icon">🏦</div>
+                    <div class="resumo-info">
+                        <h3>Saldo nas Contas</h3>
+                        <p class="resumo-valor" id="saldo-contas">R$ 0,00</p>
+                    </div>
                 </div>
             </section>
-        </main>
 
-        <footer>
-            <p>Sistema desenvolvido com Flask + SQLite</p>
-        </footer>
+            <!-- ========================================== -->
+            <!-- BLOCO 2: INDICADORES INTELIGENTES         -->
+            <!-- ========================================== -->
+            <section class="indicadores">
+                <h2 class="section-title">📊 Indicadores e Insights</h2>
+                <div class="indicadores-grid" id="indicadores-container">
+                    <div class="loading-indicator">Carregando indicadores...</div>
+                </div>
+            </section>
+
+            <!-- ========================================== -->
+            <!-- BLOCO 3: GRÁFICOS                         -->
+            <!-- ========================================== -->
+            <section class="graficos">
+                <h2 class="section-title">📈 Análise Visual</h2>
+
+                <div class="graficos-grid">
+                    <!-- Gráfico de Pizza: Despesas por Categoria -->
+                    <div class="grafico-card">
+                        <h3>Distribuição por Categoria</h3>
+                        <div class="grafico-wrapper">
+                            <canvas id="grafico-categorias"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Gráfico de Barras: Evolução de Gastos -->
+                    <div class="grafico-card">
+                        <h3>Evolução de Gastos (6 meses)</h3>
+                        <div class="grafico-wrapper">
+                            <canvas id="grafico-evolucao"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Gráfico de Linha: Saldo Bancário -->
+                    <div class="grafico-card wide">
+                        <h3>Evolução do Saldo Bancário</h3>
+                        <div class="grafico-wrapper">
+                            <canvas id="grafico-saldo"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ========================================== -->
+            <!-- BLOCO 4: ALERTAS E AGENDA FINANCEIRA      -->
+            <!-- ========================================== -->
+            <section class="alertas">
+                <h2 class="section-title">🔔 Alertas e Agenda Financeira</h2>
+
+                <div class="alertas-grid">
+                    <!-- Contas a Vencer -->
+                    <div class="alerta-card">
+                        <h3>📅 Contas a Vencer (7 dias)</h3>
+                        <div class="alerta-lista" id="contas-vencer">
+                            <p class="loading">Carregando...</p>
+                        </div>
+                    </div>
+
+                    <!-- Faturas de Cartão -->
+                    <div class="alerta-card">
+                        <h3>💳 Faturas de Cartão</h3>
+                        <div class="alerta-lista" id="cartoes-vencer">
+                            <p class="loading">Carregando...</p>
+                        </div>
+                    </div>
+
+                    <!-- Financiamentos -->
+                    <div class="alerta-card">
+                        <h3>🏠 Financiamentos Ativos</h3>
+                        <div class="alerta-lista" id="financiamentos-mes">
+                            <p class="loading">Carregando...</p>
+                        </div>
+                    </div>
+
+                    <!-- Receitas Previstas -->
+                    <div class="alerta-card">
+                        <h3>💰 Receitas Previstas</h3>
+                        <div class="alerta-lista" id="receitas-previstas">
+                            <p class="loading">Carregando...</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Espaço para bottom navigation -->
+            <div style="height: 30px;"></div>
+        </main>
     </div>
 
     <!-- Bottom Navigation -->
@@ -111,23 +169,17 @@
         </div>
     </nav>
 
-    <!-- Botão para visualização mobile -->
+    <!-- Botão Mobile -->
     <div class="mobile-toggle">
-        <button onclick="toggleMobileView()" id="mobile-btn">
-            📱 Ver em Mobile
-        </button>
+        <button onclick="toggleMobileView()" id="mobile-btn">📱 Ver em Mobile</button>
     </div>
 
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
     <script>
         function toggleMobileView() {
             document.body.classList.toggle('mobile-view');
             const btn = document.getElementById('mobile-btn');
-            if (document.body.classList.contains('mobile-view')) {
-                btn.innerHTML = '💻 Ver em Desktop';
-            } else {
-                btn.innerHTML = '📱 Ver em Mobile';
-            }
+            btn.innerHTML = document.body.classList.contains('mobile-view') ? '💻 Ver em Desktop' : '📱 Ver em Mobile';
         }
     </script>
 </body>

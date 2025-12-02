@@ -144,6 +144,7 @@ def register_blueprints(app):
         from backend.routes.financiamentos import financiamentos_bp
         from backend.routes.contas_bancarias import contas_bancarias_bp
         from backend.routes.patrimonio import patrimonio_bp
+        from backend.routes.dashboard import dashboard_bp
     except ImportError:
         from routes.categorias import categorias_bp
         from routes.despesas import despesas_bp
@@ -153,6 +154,7 @@ def register_blueprints(app):
         from routes.financiamentos import financiamentos_bp
         from routes.contas_bancarias import contas_bancarias_bp
         from routes.patrimonio import patrimonio_bp
+        from routes.dashboard import dashboard_bp
 
     # Registrar blueprints
     app.register_blueprint(categorias_bp, url_prefix='/api/categorias')
@@ -163,10 +165,7 @@ def register_blueprints(app):
     app.register_blueprint(financiamentos_bp, url_prefix='/api/financiamentos')
     app.register_blueprint(contas_bancarias_bp, url_prefix='/api/contas')
     app.register_blueprint(patrimonio_bp, url_prefix='/api/patrimonio')
-
-    # Futuros blueprints
-    # from routes.dashboard import dashboard_bp
-    # app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
+    app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
 
 
 def register_error_handlers(app):
