@@ -27,6 +27,105 @@ O sistema implementa a lógica completa de controle financeiro com distinção e
 
 ## 🆕 Últimas Implementações
 
+### Módulo de Dashboard e Preferências (Dezembro 2024)
+Sistema completo de visualização consolidada e configurações personalizáveis:
+
+**Dashboard Backend:**
+- **7 Endpoints REST** em [dashboard.py](backend/routes/dashboard.py):
+  - `GET /api/dashboard/resumo-mes` - Resumo financeiro do mês atual
+  - `GET /api/dashboard/indicadores` - Indicadores inteligentes e insights
+  - `GET /api/dashboard/grafico-categorias` - Dados para gráfico de pizza
+  - `GET /api/dashboard/grafico-evolucao` - Evolução dos últimos 6 meses
+  - `GET /api/dashboard/grafico-saldo` - Evolução do saldo consolidado
+  - `GET /api/dashboard/alertas` - Alertas e agenda financeira
+  - `GET /api/dashboard/contas-proximos-vencimentos` - Próximas contas
+- Queries otimizadas com agregação de dados:
+  - Total de receitas do mês (ReceitaRealizada)
+  - Total de despesas pagas (Conta com status "Pago")
+  - Saldo líquido mensal (receitas - despesas)
+  - Despesas por categoria para gráficos
+  - Evolução histórica de 6 meses
+
+**Preferências Backend:**
+- **Modelo Preferencia** (singleton) com 30+ configurações
+- **Sistema de 5 abas:**
+  1. **Dados Pessoais:** nome, renda, mês de início, dia de fechamento
+  2. **Comportamento:** Lançamentos, Dashboard, Cartões (12 configurações)
+  3. **Aparência:** Tema (claro/escuro/auto), cor principal, ícones
+  4. **Backup:** Backup automático, exportar/importar dados
+  5. **IA e Automação:** Modo inteligente, sugestões de economia, classificação automática
+- **2 Endpoints REST:**
+  - `GET /api/preferencias` - Buscar preferências (cria com padrões se não existir)
+  - `PUT /api/preferencias` - Atualizar qualquer combinação de campos
+
+**Frontend Completo:**
+- Dashboard responsivo com 4 blocos principais
+- Cards de resumo (receitas, despesas, saldo líquido, saldo bancário)
+- 3 gráficos interativos (Chart.js):
+  - Gráfico de pizza: despesas por categoria
+  - Gráfico de barras: evolução dos últimos 6 meses
+  - Gráfico de linha: evolução do saldo
+- Preferências com tabs animadas e formulários por aba
+- Color picker para personalização da cor principal
+- Validações client-side e server-side
+- Sistema de notificações (sucesso/erro)
+
+**Banco de Dados:**
+- Schema corrigido e sincronizado com os modelos
+- Tabela `receita_realizada` com coluna `valor_recebido`
+- Migração de constraints com nomes explícitos
+- Database criado via `db.create_all()` para desenvolvimento
+
+### Integração Financiamentos → Despesas (Dezembro 2024)
+Sincronização automática entre parcelas de financiamento e despesas:
+
+**Funcionalidades:**
+- **Método `sincronizar_contas()`** no FinanciamentoService
+- Cria automaticamente uma `Conta` para cada `FinanciamentoParcela`
+- Parcelas aparecem na listagem de DESPESAS (igual consórcios)
+- Sincronização bidirecional de status de pagamento:
+  - Pagar parcela → marca Conta como "Pago"
+  - Status atualizado em tempo real
+- Descrição detalhada nas contas:
+  - Nome do financiamento + número da parcela
+  - Observações com breakdown: Amortização + Juros
+- Execução automática:
+  - Na criação do financiamento
+  - Ao pagar uma parcela
+  - Ao atualizar dados do contrato
+
+**Frontend:**
+- Botões **Editar** e **Excluir** na listagem de financiamentos
+- Modal reutilizado para criação e edição
+- Função `editarFinanciamento()`: carrega dados e preenche formulário
+- Função `excluirFinanciamento()`: soft delete com confirmação
+- Atualização da função `salvarFinanciamento()`: detecta modo (criar/editar)
+- Integração perfeita com o fluxo existente
+
+### Reorganização da UI (Dezembro 2024)
+Separação clara entre despesas recorrentes e lançamentos pontuais:
+
+**Mudanças:**
+- **Configurações → Despesas Recorrentes** (novo card):
+  - Ícone 📋 "Despesas Recorrentes"
+  - Descrição: "Cadastre despesas fixas mensais e consórcios"
+  - Link para /despesas
+- **Página DESPESAS:**
+  - Removido botão "Nova Despesa" da barra de ações
+  - Adicionado texto informativo com link para Configurações
+  - Agora é apenas uma **listagem** de contas (visualização)
+- **Página LANÇAMENTOS:**
+  - Mantém "Novo Lançamento" para gastos pontuais
+  - Farmácia, combustível, compras parceladas no cartão
+  - Interface simplificada para dia a dia
+
+**Fluxo de Uso Atualizado:**
+- Despesa recorrente (aluguel, internet, psicólogo) → **Configurações → Despesas Recorrentes**
+- Consórcio → **Configurações → Despesas Recorrentes**
+- Compra pontual → **Lançamentos**
+- Compra parcelada no cartão → **Lançamentos**
+- Consultar todas as despesas → **DESPESAS** (menu inferior)
+
 ### Módulo de Contas Bancárias Completo (Dezembro 2024)
 Implementação completa do sistema de contas bancárias para rastreamento de saldos e origem/destino de transações:
 
