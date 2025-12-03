@@ -109,11 +109,11 @@ async function atualizarResumo() {
         const result = await response.json();
 
         if (result.success) {
-            // Se mês específico selecionado
-            if (estado.mesAtual) {
-                const mesNum = parseInt(estado.mesAtual);
-                const dados = result.data[mesNum];
+            // Determinar mês a mostrar (filtro ou mês atual)
+            const mesNum = estado.mesAtual ? parseInt(estado.mesAtual) : new Date().getMonth() + 1;
+            const dados = result.data[mesNum];
 
+            if (dados) {
                 document.getElementById('total-previsto').textContent =
                     formatarMoeda(dados.total_previsto);
                 document.getElementById('total-realizado').textContent =
@@ -128,10 +128,21 @@ async function atualizarResumo() {
                 const conf = dados.total_previsto > 0 ?
                     ((dados.total_realizado / dados.total_previsto) * 100).toFixed(1) : 0;
                 document.getElementById('confiabilidade').textContent = `${conf}%`;
+            } else {
+                // Dados não disponíveis para o mês
+                document.getElementById('total-previsto').textContent = formatarMoeda(0);
+                document.getElementById('total-realizado').textContent = formatarMoeda(0);
+                document.getElementById('diferenca').textContent = formatarMoeda(0);
+                document.getElementById('confiabilidade').textContent = '0%';
             }
         }
     } catch (error) {
         console.error('Erro ao atualizar resumo:', error);
+        // Mostrar valores zerados em caso de erro
+        document.getElementById('total-previsto').textContent = formatarMoeda(0);
+        document.getElementById('total-realizado').textContent = formatarMoeda(0);
+        document.getElementById('diferenca').textContent = formatarMoeda(0);
+        document.getElementById('confiabilidade').textContent = '0%';
     }
 }
 
