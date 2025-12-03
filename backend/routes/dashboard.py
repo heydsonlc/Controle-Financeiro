@@ -48,17 +48,22 @@ def resumo_mes():
         mes_atual = hoje.month
         ano_atual = hoje.year
 
-        # 1. RECEITAS DO MÊS (ReceitaRealizada)
-        receitas_mes = db.session.query(func.sum(ReceitaRealizada.valor_recebido)).filter(
-            extract('month', ReceitaRealizada.data_recebimento) == mes_atual,
-            extract('year', ReceitaRealizada.data_recebimento) == ano_atual
+        # 1. RECEITAS DO MÊS (Por mês de competência)
+        # Busca orçamentos de receitas do mês
+        # Se houver ReceitaRealizada correspondente, usa o valor recebido
+        # Senão, usa o valor esperado do orçamento
+        receitas_mes = db.session.query(func.sum(ReceitaOrcamento.valor_esperado)).filter(
+            extract('month', ReceitaOrcamento.mes_referencia) == mes_atual,
+            extract('year', ReceitaOrcamento.mes_referencia) == ano_atual
         ).scalar() or 0
 
-        # 2. DESPESAS DO MÊS (Contas pagas)
+        # 2. DESPESAS DO MÊS (Por mês de competência)
+        # Busca todas as contas do mês, independente do status
+        # Se pendente: conta o valor previsto
+        # Se paga: conta o valor pago (atualmente igual ao previsto)
         despesas_mes = db.session.query(func.sum(Conta.valor)).filter(
-            extract('month', Conta.data_pagamento) == mes_atual,
-            extract('year', Conta.data_pagamento) == ano_atual,
-            Conta.status_pagamento == 'Pago'
+            extract('month', Conta.mes_referencia) == mes_atual,
+            extract('year', Conta.mes_referencia) == ano_atual
         ).scalar() or 0
 
         # 3. SALDO LÍQUIDO
@@ -105,20 +110,18 @@ def indicadores():
         mes_atual = hoje.month
         ano_atual = hoje.year
 
-        # 1. MÉDIA HISTÓRICA DE DESPESAS (últimos 3 meses)
-        tres_meses_atras = hoje - timedelta(days=90)
+        # 1. MÉDIA HISTÓRICA DE DESPESAS (últimos 3 meses, por competência)
+        tres_meses_atras = date(ano_atual, mes_atual, 1) - timedelta(days=90)
         primeiro_dia_mes = date(ano_atual, mes_atual, 1)
 
         media_historica = db.session.query(func.avg(Conta.valor)).filter(
-            Conta.data_pagamento >= tres_meses_atras,
-            Conta.data_pagamento < primeiro_dia_mes,
-            Conta.status_pagamento == 'Pago'
+            Conta.mes_referencia >= tres_meses_atras,
+            Conta.mes_referencia < primeiro_dia_mes
         ).scalar() or 0
 
         despesas_mes_atual = db.session.query(func.sum(Conta.valor)).filter(
-            extract('month', Conta.data_pagamento) == mes_atual,
-            extract('year', Conta.data_pagamento) == ano_atual,
-            Conta.status_pagamento == 'Pago'
+            extract('month', Conta.mes_referencia) == mes_atual,
+            extract('year', Conta.mes_referencia) == ano_atual
         ).scalar() or 0
 
         acima_media = decimal_to_float(despesas_mes_atual) > (decimal_to_float(media_historica) * 1.1)
@@ -136,9 +139,9 @@ def indicadores():
         ).scalar() or 0
 
         # 4. PORCENTAGEM POUPADA
-        receitas_mes = db.session.query(func.sum(ReceitaRealizada.valor_recebido)).filter(
-            extract('month', ReceitaRealizada.data_recebimento) == mes_atual,
-            extract('year', ReceitaRealizada.data_recebimento) == ano_atual
+        receitas_mes = db.session.query(func.sum(ReceitaOrcamento.valor_esperado)).filter(
+            extract('month', ReceitaOrcamento.mes_referencia) == mes_atual,
+            extract('year', ReceitaOrcamento.mes_referencia) == ano_atual
         ).scalar() or 0
 
         despesas_totais = decimal_to_float(despesas_mes_atual)
@@ -182,7 +185,7 @@ def grafico_categorias():
         mes_atual = hoje.month
         ano_atual = hoje.year
 
-        # Agrupar despesas por categoria via ItemDespesa
+        # Agrupar despesas por categoria via ItemDespesa (por mês de competência)
         resultado = db.session.query(
             Categoria.nome,
             Categoria.cor,
@@ -192,9 +195,8 @@ def grafico_categorias():
         ).join(
             Categoria, ItemDespesa.categoria_id == Categoria.id
         ).filter(
-            extract('month', Conta.data_pagamento) == mes_atual,
-            extract('year', Conta.data_pagamento) == ano_atual,
-            Conta.status_pagamento == 'Pago'
+            extract('month', Conta.mes_referencia) == mes_atual,
+            extract('year', Conta.mes_referencia) == ano_atual
         ).group_by(
             Categoria.id, Categoria.nome, Categoria.cor
         ).order_by(
@@ -247,9 +249,8 @@ def grafico_evolucao():
                 ano -= 1
 
             total_mes = db.session.query(func.sum(Conta.valor)).filter(
-                extract('month', Conta.data_pagamento) == mes,
-                extract('year', Conta.data_pagamento) == ano,
-                Conta.status_pagamento == 'Pago'
+                extract('month', Conta.mes_referencia) == mes,
+                extract('year', Conta.mes_referencia) == ano
             ).scalar() or 0
 
             # Formato do mês
@@ -299,15 +300,14 @@ def grafico_saldo():
                 ano -= 1
 
             # Calcular diferencial de receitas - despesas desse mês
-            receitas_mes = db.session.query(func.sum(ReceitaRealizada.valor_recebido)).filter(
-                extract('month', ReceitaRealizada.data_recebimento) == mes,
-                extract('year', ReceitaRealizada.data_recebimento) == ano
+            receitas_mes = db.session.query(func.sum(ReceitaOrcamento.valor_esperado)).filter(
+                extract('month', ReceitaOrcamento.mes_referencia) == mes,
+                extract('year', ReceitaOrcamento.mes_referencia) == ano
             ).scalar() or 0
 
             despesas_mes = db.session.query(func.sum(Conta.valor)).filter(
-                extract('month', Conta.data_pagamento) == mes,
-                extract('year', Conta.data_pagamento) == ano,
-                Conta.status_pagamento == 'Pago'
+                extract('month', Conta.mes_referencia) == mes,
+                extract('year', Conta.mes_referencia) == ano
             ).scalar() or 0
 
             diferencial = decimal_to_float(receitas_mes) - decimal_to_float(despesas_mes)

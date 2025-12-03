@@ -275,6 +275,7 @@ async function salvarFonte(event) {
         descricao: document.getElementById('fonte-descricao').value,
         valor_base_mensal: document.getElementById('fonte-valor-base').value || null,
         dia_previsto_pagamento: document.getElementById('fonte-dia-pagamento').value || null,
+        recorrente: document.getElementById('fonte-recorrente').checked,
         ativo: document.getElementById('fonte-ativo').checked
     };
 

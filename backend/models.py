@@ -367,6 +367,7 @@ class ItemReceita(db.Model):
     valor_base_mensal = db.Column(db.Numeric(10, 2))  # Valor fixo mensal (para salários)
     dia_previsto_pagamento = db.Column(db.Integer)  # Dia do mês (1-31)
     conta_origem_id = db.Column(db.Integer, db.ForeignKey('conta_patrimonio.id'))  # Conta onde entra
+    recorrente = db.Column(db.Boolean, default=True)  # Se gera orçamentos automaticamente
 
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -387,7 +388,8 @@ class ItemReceita(db.Model):
             'ativo': self.ativo,
             'valor_base_mensal': float(self.valor_base_mensal) if self.valor_base_mensal else None,
             'dia_previsto_pagamento': self.dia_previsto_pagamento,
-            'conta_origem_id': self.conta_origem_id
+            'conta_origem_id': self.conta_origem_id,
+            'recorrente': self.recorrente
         }
 
 
@@ -404,8 +406,8 @@ class ReceitaOrcamento(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     item_receita_id = db.Column(db.Integer, db.ForeignKey('item_receita.id'), nullable=False)
-    ano_mes = db.Column(db.Date, nullable=False)  # Primeiro dia do mês (YYYY-MM-01)
-    valor_previsto = db.Column(db.Numeric(10, 2), nullable=False)
+    mes_referencia = db.Column(db.Date, nullable=False)  # Primeiro dia do mês (YYYY-MM-01)
+    valor_esperado = db.Column(db.Numeric(10, 2), nullable=False)
 
     # Periodicidade da receita
     periodicidade = db.Column(db.String(20), default='MENSAL_FIXA')
@@ -419,18 +421,18 @@ class ReceitaOrcamento(db.Model):
 
     # Índice composto
     __table_args__ = (
-        db.Index('idx_rec_orc_item_mes', 'item_receita_id', 'ano_mes'),
+        db.Index('idx_rec_orc_item_mes', 'item_receita_id', 'mes_referencia'),
     )
 
     def __repr__(self):
-        return f'<ReceitaOrcamento Item:{self.item_receita_id} Mês:{self.ano_mes} R${self.valor_previsto}>'
+        return f'<ReceitaOrcamento Item:{self.item_receita_id} Mês:{self.mes_referencia} R${self.valor_esperado}>'
 
     def to_dict(self):
         return {
             'id': self.id,
             'item_receita_id': self.item_receita_id,
-            'ano_mes': self.ano_mes.strftime('%Y-%m-%d'),
-            'valor_previsto': float(self.valor_previsto),
+            'mes_referencia': self.mes_referencia.strftime('%Y-%m-%d'),
+            'valor_esperado': float(self.valor_esperado),
             'periodicidade': self.periodicidade,
             'observacoes': self.observacoes
         }
