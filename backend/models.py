@@ -456,7 +456,7 @@ class ReceitaRealizada(db.Model):
     valor_recebido = db.Column(db.Numeric(10, 2), nullable=False)
 
     # Competência (mês de referência - ex: salário de Maio/2025 mesmo que pago em 06/06)
-    competencia = db.Column(db.Date, nullable=False)  # YYYY-MM-01
+    mes_referencia = db.Column(db.Date, nullable=False)  # YYYY-MM-01
 
     # Conta onde entrou o dinheiro
     conta_origem_id = db.Column(db.Integer, db.ForeignKey('conta_patrimonio.id'))
@@ -479,8 +479,8 @@ class ReceitaRealizada(db.Model):
     # Índices
     __table_args__ = (
         db.Index('idx_rec_real_data', 'data_recebimento'),
-        db.Index('idx_rec_real_competencia', 'competencia'),
-        db.Index('idx_rec_real_item_comp', 'item_receita_id', 'competencia'),
+        db.Index('idx_rec_real_competencia', 'mes_referencia'),
+        db.Index('idx_rec_real_item_comp', 'item_receita_id', 'mes_referencia'),
     )
 
     def __repr__(self):
@@ -492,7 +492,8 @@ class ReceitaRealizada(db.Model):
             'item_receita_id': self.item_receita_id,
             'data_recebimento': self.data_recebimento.strftime('%Y-%m-%d'),
             'valor_recebido': float(self.valor_recebido),
-            'competencia': self.competencia.strftime('%Y-%m-%d'),
+            'mes_referencia': self.mes_referencia.strftime('%Y-%m-%d'),
+            'competencia': self.mes_referencia.strftime('%Y-%m-%d'),  # Alias para compatibilidade
             'conta_origem_id': self.conta_origem_id,
             'descricao': self.descricao,
             'orcamento_id': self.orcamento_id,

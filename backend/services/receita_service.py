@@ -349,7 +349,7 @@ class ReceitaService:
             item_receita_id=dados_receita['item_receita_id'],
             data_recebimento=data_recebimento,
             valor_recebido=dados_receita['valor_recebido'],
-            competencia=competencia,
+            mes_referencia=competencia,
             conta_origem_id=dados_receita.get('conta_origem_id'),
             descricao=dados_receita.get('descricao', ''),
             orcamento_id=orcamento.id if orcamento else None,
@@ -379,7 +379,7 @@ class ReceitaService:
             if isinstance(ano_mes, str):
                 ano_mes = datetime.strptime(ano_mes[:10], '%Y-%m-%d').date()
             ano_mes = ano_mes.replace(day=1)
-            query = query.filter_by(competencia=ano_mes)
+            query = query.filter_by(mes_referencia=ano_mes)
 
         if item_receita_id:
             query = query.filter_by(item_receita_id=item_receita_id)
@@ -417,12 +417,12 @@ class ReceitaService:
 
         # Buscar realizadas
         realizadas = db.session.query(
-            extract('month', ReceitaRealizada.competencia).label('mes'),
+            extract('month', ReceitaRealizada.mes_referencia).label('mes'),
             ItemReceita.tipo,
             func.sum(ReceitaRealizada.valor_recebido).label('total_recebido')
         ).join(ItemReceita).filter(
-            ReceitaRealizada.competencia >= data_inicio,
-            ReceitaRealizada.competencia <= data_fim
+            ReceitaRealizada.mes_referencia >= data_inicio,
+            ReceitaRealizada.mes_referencia <= data_fim
         ).group_by('mes', ItemReceita.tipo).all()
 
         # Organizar dados
@@ -495,8 +495,8 @@ class ReceitaService:
             ReceitaRealizada.item_receita_id,
             func.sum(ReceitaRealizada.valor_recebido).label('total_recebido')
         ).filter(
-            ReceitaRealizada.competencia >= ano_mes_ini,
-            ReceitaRealizada.competencia <= ano_mes_fim
+            ReceitaRealizada.mes_referencia >= ano_mes_ini,
+            ReceitaRealizada.mes_referencia <= ano_mes_fim
         ).group_by(ReceitaRealizada.item_receita_id).all()
 
         # Mapear realizados
@@ -568,9 +568,9 @@ class ReceitaService:
         # Buscar realizadas
         realizadas = ReceitaRealizada.query.filter(
             ReceitaRealizada.item_receita_id == item_receita_id,
-            ReceitaRealizada.competencia >= data_inicio,
-            ReceitaRealizada.competencia <= data_fim
-        ).order_by(ReceitaRealizada.competencia, ReceitaRealizada.data_recebimento).all()
+            ReceitaRealizada.mes_referencia >= data_inicio,
+            ReceitaRealizada.mes_referencia <= data_fim
+        ).order_by(ReceitaRealizada.mes_referencia, ReceitaRealizada.data_recebimento).all()
 
         # Organizar por mês
         meses = {}
@@ -590,7 +590,7 @@ class ReceitaService:
 
         # Preencher realizados
         for real in realizadas:
-            mes = real.competencia.month
+            mes = real.mes_referencia.month
             valor = float(real.valor_recebido)
             meses[mes]['recebido'] += valor
             meses[mes]['receitas'].append({
