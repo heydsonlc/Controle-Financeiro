@@ -39,13 +39,21 @@
     background: #ffffff;
     color: #1d1d1f;
     font-size: 0.9em;
-    transition: all 0.2s ease;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.filter-select:hover, .filter-input:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    transform: translateY(-1px);
+    border-color: rgba(0, 122, 255, 0.3);
 }
 
 .filter-select:focus, .filter-input:focus {
     outline: none;
     border-color: #007aff;
-    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1), 0 4px 12px rgba(0, 0, 0, 0.12);
+    transform: translateY(-1px);
 }
 
 .filter-select option {

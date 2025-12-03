@@ -869,12 +869,20 @@ body.mobile-view .cartao-info-grid {
     font-size: 0.9em;
     transition: all 0.3s ease;
     min-width: 150px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.filter-select:hover, .filter-input:hover {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+    transform: translateY(-2px);
 }
 
 .filter-select:focus, .filter-input:focus {
     outline: none;
     border-color: #2563eb;
     background: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+    transform: translateY(-2px);
 }
 
 .filter-select option {
