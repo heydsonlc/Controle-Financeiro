@@ -121,6 +121,42 @@ def criar_item():
 
         item = ReceitaService.criar_item_receita(data)
 
+        # Se for receita recorrente, gerar orçamentos automaticamente
+        if item.recorrente and item.valor_base_mensal and item.valor_base_mensal > 0:
+            try:
+                from datetime import date
+                from dateutil.relativedelta import relativedelta
+
+                # Gerar orçamentos para os próximos 12 meses
+                hoje = date.today()
+                mes_referencia = date(hoje.year, hoje.month, 1)
+                orcamentos_criados = 0
+
+                for i in range(12):
+                    # Verificar se já existe
+                    orcamento_existente = ReceitaOrcamento.query.filter(
+                        ReceitaOrcamento.item_receita_id == item.id,
+                        ReceitaOrcamento.mes_referencia == mes_referencia
+                    ).first()
+
+                    if not orcamento_existente:
+                        novo_orcamento = ReceitaOrcamento(
+                            item_receita_id=item.id,
+                            mes_referencia=mes_referencia,
+                            valor_esperado=item.valor_base_mensal,
+                            periodicidade='MENSAL_FIXA',
+                            observacoes=f'Gerado automaticamente - {item.nome}'
+                        )
+                        db.session.add(novo_orcamento)
+                        orcamentos_criados += 1
+
+                    mes_referencia = mes_referencia + relativedelta(months=1)
+
+                db.session.commit()
+            except Exception as e:
+                # Se falhar a geração de orçamentos, não falha a criação do item
+                print(f'Aviso: Erro ao gerar orçamentos automáticos: {e}')
+
         return jsonify({
             'success': True,
             'message': 'Fonte de receita criada com sucesso',
@@ -164,6 +200,42 @@ def atualizar_item(id):
             }), 400
 
         item = ReceitaService.atualizar_item_receita(id, data)
+
+        # Se tornou recorrente ou valor base foi atualizado, gerar orçamentos
+        if item.recorrente and item.valor_base_mensal and item.valor_base_mensal > 0:
+            try:
+                from datetime import date
+                from dateutil.relativedelta import relativedelta
+
+                # Gerar orçamentos para os próximos 12 meses
+                hoje = date.today()
+                mes_referencia = date(hoje.year, hoje.month, 1)
+                orcamentos_criados = 0
+
+                for i in range(12):
+                    # Verificar se já existe
+                    orcamento_existente = ReceitaOrcamento.query.filter(
+                        ReceitaOrcamento.item_receita_id == item.id,
+                        ReceitaOrcamento.mes_referencia == mes_referencia
+                    ).first()
+
+                    if not orcamento_existente:
+                        novo_orcamento = ReceitaOrcamento(
+                            item_receita_id=item.id,
+                            mes_referencia=mes_referencia,
+                            valor_esperado=item.valor_base_mensal,
+                            periodicidade='MENSAL_FIXA',
+                            observacoes=f'Gerado automaticamente - {item.nome}'
+                        )
+                        db.session.add(novo_orcamento)
+                        orcamentos_criados += 1
+
+                    mes_referencia = mes_referencia + relativedelta(months=1)
+
+                db.session.commit()
+            except Exception as e:
+                # Se falhar a geração de orçamentos, não falha a atualização do item
+                print(f'Aviso: Erro ao gerar orçamentos automáticos: {e}')
 
         return jsonify({
             'success': True,

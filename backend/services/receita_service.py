@@ -206,12 +206,12 @@ class ReceitaService:
         # Verificar se já existe
         orcamento = ReceitaOrcamento.query.filter_by(
             item_receita_id=item_receita_id,
-            ano_mes=ano_mes
+            mes_referencia=ano_mes
         ).first()
 
         if orcamento:
             # Atualizar
-            orcamento.valor_previsto = valor_previsto
+            orcamento.valor_esperado = valor_previsto
             orcamento.periodicidade = periodicidade
             if observacoes:
                 orcamento.observacoes = observacoes
@@ -219,8 +219,8 @@ class ReceitaService:
             # Criar novo
             orcamento = ReceitaOrcamento(
                 item_receita_id=item_receita_id,
-                ano_mes=ano_mes,
-                valor_previsto=valor_previsto,
+                mes_referencia=ano_mes,
+                valor_esperado=valor_previsto,
                 periodicidade=periodicidade,
                 observacoes=observacoes
             )
@@ -288,9 +288,9 @@ class ReceitaService:
         data_fim = date(ano, 12, 31)
 
         return ReceitaOrcamento.query.filter(
-            ReceitaOrcamento.ano_mes >= data_inicio,
-            ReceitaOrcamento.ano_mes <= data_fim
-        ).order_by(ReceitaOrcamento.ano_mes, ReceitaOrcamento.item_receita_id).all()
+            ReceitaOrcamento.mes_referencia >= data_inicio,
+            ReceitaOrcamento.mes_referencia <= data_fim
+        ).order_by(ReceitaOrcamento.mes_referencia, ReceitaOrcamento.item_receita_id).all()
 
     # ========================================================================
     # REGISTRO DE RECEITAS REALIZADAS
@@ -341,7 +341,7 @@ class ReceitaService:
         # Procurar orçamento correspondente
         orcamento = ReceitaOrcamento.query.filter_by(
             item_receita_id=dados_receita['item_receita_id'],
-            ano_mes=competencia
+            mes_referencia=competencia
         ).first()
 
         # Criar receita realizada
@@ -407,12 +407,12 @@ class ReceitaService:
 
         # Buscar orçamentos
         orcamentos = db.session.query(
-            extract('month', ReceitaOrcamento.ano_mes).label('mes'),
+            extract('month', ReceitaOrcamento.mes_referencia).label('mes'),
             ItemReceita.tipo,
-            func.sum(ReceitaOrcamento.valor_previsto).label('total_previsto')
+            func.sum(ReceitaOrcamento.valor_esperado).label('total_previsto')
         ).join(ItemReceita).filter(
-            ReceitaOrcamento.ano_mes >= data_inicio,
-            ReceitaOrcamento.ano_mes <= data_fim
+            ReceitaOrcamento.mes_referencia >= data_inicio,
+            ReceitaOrcamento.mes_referencia <= data_fim
         ).group_by('mes', ItemReceita.tipo).all()
 
         # Buscar realizadas
@@ -481,10 +481,10 @@ class ReceitaService:
             ReceitaOrcamento.item_receita_id,
             ItemReceita.nome,
             ItemReceita.tipo,
-            func.sum(ReceitaOrcamento.valor_previsto).label('total_previsto')
+            func.sum(ReceitaOrcamento.valor_esperado).label('total_previsto')
         ).join(ItemReceita).filter(
-            ReceitaOrcamento.ano_mes >= ano_mes_ini,
-            ReceitaOrcamento.ano_mes <= ano_mes_fim
+            ReceitaOrcamento.mes_referencia >= ano_mes_ini,
+            ReceitaOrcamento.mes_referencia <= ano_mes_fim
         ).group_by(
             ReceitaOrcamento.item_receita_id,
             ItemReceita.nome,
@@ -561,9 +561,9 @@ class ReceitaService:
         # Buscar orçamentos
         orcamentos = ReceitaOrcamento.query.filter(
             ReceitaOrcamento.item_receita_id == item_receita_id,
-            ReceitaOrcamento.ano_mes >= data_inicio,
-            ReceitaOrcamento.ano_mes <= data_fim
-        ).order_by(ReceitaOrcamento.ano_mes).all()
+            ReceitaOrcamento.mes_referencia >= data_inicio,
+            ReceitaOrcamento.mes_referencia <= data_fim
+        ).order_by(ReceitaOrcamento.mes_referencia).all()
 
         # Buscar realizadas
         realizadas = ReceitaRealizada.query.filter(
@@ -585,8 +585,8 @@ class ReceitaService:
 
         # Preencher previstos
         for orc in orcamentos:
-            mes = orc.ano_mes.month
-            meses[mes]['previsto'] = float(orc.valor_previsto)
+            mes = orc.mes_referencia.month
+            meses[mes]['previsto'] = float(orc.valor_esperado)
 
         # Preencher realizados
         for real in realizadas:
