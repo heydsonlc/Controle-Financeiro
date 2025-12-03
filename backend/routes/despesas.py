@@ -50,9 +50,13 @@ def listar_despesas():
     try:
         resultado = []
 
-        # 1. Buscar despesas simples (boletos, despesas fixas, etc)
-        despesas_simples = ItemDespesa.query.filter_by(tipo='Simples', ativo=True).all()
-        for despesa in despesas_simples:
+        # 1. Buscar despesas que NÃO são cartões de crédito (Simples, Consorcio, etc)
+        # Todos os tipos EXCETO 'Agregador' aparecem individualmente
+        despesas_individuais = ItemDespesa.query.filter(
+            ItemDespesa.tipo != 'Agregador',
+            ItemDespesa.ativo == True
+        ).all()
+        for despesa in despesas_individuais:
             resultado.append(despesa.to_dict())
 
         # 2. Buscar cartões de crédito (tipo='Agregador')
