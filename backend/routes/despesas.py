@@ -4,11 +4,12 @@ Rotas para gerenciamento de Despesas (Itens de Despesa)
 from flask import Blueprint, request, jsonify
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
+from sqlalchemy import func
 
 try:
-    from backend.models import db, ItemDespesa, Categoria
+    from backend.models import db, ItemDespesa, Categoria, LancamentoAgregado, ItemAgregado
 except ImportError:
-    from models import db, ItemDespesa, Categoria
+    from models import db, ItemDespesa, Categoria, LancamentoAgregado, ItemAgregado
 
 despesas_bp = Blueprint('despesas', __name__, url_prefix='/api/despesas')
 
@@ -38,12 +39,81 @@ def calcular_competencia(data_vencimento):
 
 @despesas_bp.route('/', methods=['GET'])
 def listar_despesas():
-    """Lista todas as despesas"""
+    """
+    Lista todas as despesas, agrupando cartões de crédito por competência
+
+    Regra de agrupamento:
+    - Despesas tipo='Simples': aparecem individualmente
+    - Despesas tipo='Agregador' (cartões): são agrupadas por mes_competencia,
+      somando todos os lançamentos (LancamentoAgregado) daquele mês
+    """
     try:
-        despesas = ItemDespesa.query.order_by(ItemDespesa.data_vencimento.desc()).all()
+        resultado = []
+
+        # 1. Buscar despesas simples (boletos, despesas fixas, etc)
+        despesas_simples = ItemDespesa.query.filter_by(tipo='Simples', ativo=True).all()
+        for despesa in despesas_simples:
+            resultado.append(despesa.to_dict())
+
+        # 2. Buscar cartões de crédito (tipo='Agregador')
+        cartoes = ItemDespesa.query.filter_by(tipo='Agregador', ativo=True).all()
+
+        # Para cada cartão, agrupar lançamentos por mês de fatura
+        for cartao in cartoes:
+            # Buscar todos os itens agregados (categorias) deste cartão
+            itens_cartao = ItemAgregado.query.filter_by(
+                item_despesa_id=cartao.id,
+                ativo=True
+            ).all()
+
+            if not itens_cartao:
+                continue
+
+            # IDs dos itens agregados
+            ids_itens = [item.id for item in itens_cartao]
+
+            # Agrupar lançamentos por mes_fatura e somar valores
+            faturas = db.session.query(
+                LancamentoAgregado.mes_fatura,
+                func.sum(LancamentoAgregado.valor).label('total_fatura')
+            ).filter(
+                LancamentoAgregado.item_agregado_id.in_(ids_itens)
+            ).group_by(
+                LancamentoAgregado.mes_fatura
+            ).all()
+
+            # Criar uma "despesa virtual" para cada fatura do cartão
+            for fatura in faturas:
+                mes_fatura = fatura.mes_fatura
+                total = float(fatura.total_fatura)
+
+                # Calcular competência (mês anterior ao vencimento da fatura)
+                mes_competencia = calcular_competencia(mes_fatura)
+
+                # Criar dict representando a fatura agrupada
+                fatura_agrupada = {
+                    'id': f"cartao_{cartao.id}_{mes_fatura.strftime('%Y%m')}",  # ID único para frontend
+                    'nome': f"{cartao.nome} - Fatura {mes_fatura.strftime('%m/%Y')}",
+                    'tipo': 'Agregador',
+                    'valor': total,
+                    'categoria_id': cartao.categoria_id,
+                    'categoria': cartao.categoria.to_dict() if cartao.categoria else None,
+                    'mes_competencia': mes_competencia,
+                    'data_vencimento': mes_fatura.isoformat(),
+                    'pago': False,  # TODO: verificar se fatura foi paga
+                    'recorrente': False,
+                    'agrupado': True,  # Flag para indicar que é um item agrupado
+                    'cartao_id': cartao.id
+                }
+
+                resultado.append(fatura_agrupada)
+
+        # Ordenar por data de vencimento (mais recente primeiro)
+        resultado.sort(key=lambda x: x.get('data_vencimento', ''), reverse=True)
+
         return jsonify({
             'success': True,
-            'data': [despesa.to_dict() for despesa in despesas]
+            'data': resultado
         })
     except Exception as e:
         return jsonify({

@@ -173,6 +173,9 @@ function renderizarDespesas(despesasParaRenderizar) {
     }
 
     lista.innerHTML = despesasParaRenderizar.map(despesa => {
+        // Verificar se é despesa agrupada (fatura de cartão)
+        const isAgrupado = despesa.agrupado === true;
+
         const categoria = categorias.find(c => c.id === despesa.categoria_id);
         const statusClass = despesa.pago ? 'pago' : 'pendente';
         const statusTexto = despesa.pago ? 'Paga' : 'Pendente';
@@ -189,13 +192,30 @@ function renderizarDespesas(despesasParaRenderizar) {
             dataPagamento = data.toLocaleDateString('pt-BR');
         }
 
+        // Para despesas agrupadas, não mostrar botões de editar/pagar
+        const acoesHTML = isAgrupado ? '' : `
+            <div class="despesa-actions">
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-edit" onclick="editarDespesa(${despesa.id})">
+                        Editar
+                    </button>
+                    ${!despesa.pago ? `
+                        <button class="btn btn-success" onclick="marcarComoPago(${despesa.id})">
+                            Pagar
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+
         return `
-            <div class="despesa-card ${statusClass}">
+            <div class="despesa-card ${statusClass} ${isAgrupado ? 'agrupado' : ''}">
                 <div class="despesa-info">
                     <div class="despesa-header">
                         <div class="despesa-nome">
                             <span class="status-indicador status-indicador-${statusClass}"></span>
                             ${despesa.nome}
+                            ${isAgrupado ? '<span style="margin-left: 8px; font-size: 0.85em; opacity: 0.7;">(Fatura Agrupada)</span>' : ''}
                         </div>
                         <div class="despesa-valor">R$ ${parseFloat(despesa.valor).toFixed(2).replace('.', ',')}</div>
                         ${categoria ? `
@@ -212,22 +232,11 @@ function renderizarDespesas(despesasParaRenderizar) {
                         ${dataVencimento ? `<span>📅 Venc: ${dataVencimento}</span>` : ''}
                         ${dataPagamento ? `<span>✓ Pago: ${dataPagamento}</span>` : ''}
                         ${despesa.mes_competencia ? `<span>💼 Competência: ${formatarCompetencia(despesa.mes_competencia)}</span>` : ''}
-                        ${despesa.recorrente ? `<span>🔄 ${formatarTipoRecorrencia(despesa.tipo_recorrencia)}</span>` : ''}
+                        ${despesa.recorrente && !isAgrupado ? `<span>🔄 ${formatarTipoRecorrencia(despesa.tipo_recorrencia)}</span>` : ''}
                     </div>
                 </div>
 
-                <div class="despesa-actions">
-                    <div style="display: flex; gap: 8px;">
-                        <button class="btn btn-edit" onclick="editarDespesa(${despesa.id})">
-                            Editar
-                        </button>
-                        ${!despesa.pago ? `
-                            <button class="btn btn-success" onclick="marcarComoPago(${despesa.id})">
-                                Pagar
-                            </button>
-                        ` : ''}
-                    </div>
-                </div>
+                ${acoesHTML}
             </div>
         `;
     }).join('');

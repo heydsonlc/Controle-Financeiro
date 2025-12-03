@@ -197,6 +197,16 @@
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
 
+/* Estilo para despesas agrupadas (faturas de cartão) */
+.despesa-card.agrupado {
+    border-left-color: #007aff;
+    background: linear-gradient(to right, rgba(0, 122, 255, 0.03) 0%, #ffffff 3px);
+}
+
+.despesa-card.agrupado .despesa-nome {
+    font-weight: 700;
+}
+
 .despesa-info {
     display: flex;
     flex-direction: column;
