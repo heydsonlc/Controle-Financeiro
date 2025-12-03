@@ -6,6 +6,7 @@
     <title>Despesas - Controle Financeiro</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/despesas.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme-light.css') }}">
 </head>
 <body>
     <div class="container">
@@ -40,9 +41,10 @@
                            title="Filtrar por mês de competência">
                 </div>
 
-                <div class="info-text">
-                    Para cadastrar despesas recorrentes, acesse <a href="/configuracoes" style="color: white; text-decoration: underline;">Configurações → Despesas Recorrentes</a>
-                </div>
+            </div>
+
+            <div class="info-text" style="background: #f5f5f7; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 0.9em; color: #6e6e73; border-left: 3px solid #007aff;">
+                💡 <strong style="color: #1d1d1f;">Dica:</strong> Esta página lista todas as despesas registradas. Para cadastrar novas despesas recorrentes, acesse Configurações → Despesas Recorrentes.
             </div>
 
             <!-- Resumo -->
@@ -444,6 +446,20 @@
                 camposSemanal.style.display = 'none';
             }
         }
+
+        // Abrir modal automaticamente se a URL contém #nova-despesa
+        window.addEventListener('load', function() {
+            if (window.location.hash === '#nova-despesa') {
+                // Aguardar um pouco para garantir que o DOM está completamente carregado
+                setTimeout(function() {
+                    if (typeof abrirModal === 'function') {
+                        abrirModal();
+                        // Limpar o hash da URL
+                        history.replaceState(null, null, ' ');
+                    }
+                }, 300);
+            }
+        });
     </script>
 </body>
 </html>

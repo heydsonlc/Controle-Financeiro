@@ -1,0 +1,350 @@
+/**
+ * Tema Claro Minimalista - Global Override
+ * Inspirado no design da Apple
+ */
+
+/* ============================================================================
+   MODAIS
+   ============================================================================ */
+
+.modal {
+    background-color: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(10px);
+}
+
+.modal-content {
+    background: #ffffff;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+.modal-header {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.modal-header h2 {
+    color: #1d1d1f;
+    font-weight: 600;
+    text-shadow: none;
+    letter-spacing: -0.02em;
+}
+
+.close {
+    color: #6e6e73;
+}
+
+.close:hover {
+    color: #1d1d1f;
+}
+
+/* ============================================================================
+   FORMULÁRIOS
+   ============================================================================ */
+
+.form-group label {
+    color: #1d1d1f;
+    font-weight: 500;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    background: #ffffff;
+    color: #1d1d1f;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    border-color: #007aff;
+    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+}
+
+.form-group input::placeholder,
+.form-group select::placeholder,
+.form-group textarea::placeholder {
+    color: #6e6e73;
+}
+
+.form-group select option {
+    background: #ffffff;
+    color: #1d1d1f;
+}
+
+.form-group small {
+    color: #6e6e73;
+}
+
+/* ============================================================================
+   BOTÕES
+   ============================================================================ */
+
+.form-actions {
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.btn {
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.btn-primary {
+    background: #007aff;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #0051d5;
+}
+
+.btn-secondary {
+    background: #f5f5f7;
+    color: #1d1d1f;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.btn-secondary:hover {
+    background: #e8e8ea;
+}
+
+.btn-success {
+    background: #34c759;
+    color: white;
+}
+
+.btn-success:hover {
+    background: #30b350;
+}
+
+.btn-danger {
+    background: #ff3b30;
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #d70015;
+}
+
+.btn-edit {
+    background: #ff9500;
+    color: white;
+}
+
+.btn-edit:hover {
+    background: #e08600;
+}
+
+/* ============================================================================
+   BREADCRUMB
+   ============================================================================ */
+
+.breadcrumb {
+    color: #6e6e73;
+}
+
+.breadcrumb a {
+    color: #007aff;
+}
+
+.breadcrumb a:hover {
+    opacity: 0.7;
+}
+
+/* ============================================================================
+   CARDS
+   ============================================================================ */
+
+.cartao-card,
+.categoria-card,
+.receita-card,
+.financiamento-card,
+.conta-card,
+.patrimonio-card {
+    background: #ffffff;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.cartao-card:hover,
+.categoria-card:hover,
+.receita-card:hover,
+.financiamento-card:hover,
+.conta-card:hover,
+.patrimonio-card:hover {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+}
+
+/* Títulos e textos dos cards */
+.cartao-nome,
+.categoria-nome,
+.receita-nome,
+.financiamento-nome,
+.conta-nome,
+.patrimonio-nome {
+    color: #1d1d1f;
+    text-shadow: none;
+}
+
+.cartao-info,
+.categoria-info,
+.receita-info,
+.financiamento-info,
+.conta-info,
+.patrimonio-info {
+    color: #6e6e73;
+}
+
+/* Badges e labels */
+.badge,
+.status-badge {
+    background: #f5f5f7;
+    color: #1d1d1f;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.badge.ativo {
+    background: rgba(52, 199, 89, 0.1);
+    color: #34c759;
+    border-color: rgba(52, 199, 89, 0.2);
+}
+
+.badge.inativo {
+    background: rgba(255, 59, 48, 0.1);
+    color: #ff3b30;
+    border-color: rgba(255, 59, 48, 0.2);
+}
+
+/* ============================================================================
+   LISTAS E TABELAS
+   ============================================================================ */
+
+.lista-vazia,
+.loading {
+    color: #6e6e73;
+}
+
+table {
+    background: #ffffff;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+table th {
+    background: #f5f5f7;
+    color: #1d1d1f;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+table td {
+    color: #1d1d1f;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+table tr:hover {
+    background: #f5f5f7;
+}
+
+/* ============================================================================
+   ALERTAS E MENSAGENS
+   ============================================================================ */
+
+.alert,
+.info-text,
+.warning-text {
+    background: #f5f5f7;
+    color: #1d1d1f;
+    border-left: 3px solid #007aff;
+}
+
+.alert.success {
+    background: rgba(52, 199, 89, 0.1);
+    color: #1d1d1f;
+    border-left-color: #34c759;
+}
+
+.alert.error {
+    background: rgba(255, 59, 48, 0.1);
+    color: #1d1d1f;
+    border-left-color: #ff3b30;
+}
+
+.alert.warning {
+    background: rgba(255, 149, 0, 0.1);
+    color: #1d1d1f;
+    border-left-color: #ff9500;
+}
+
+/* ============================================================================
+   TABS
+   ============================================================================ */
+
+.tabs {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.tab {
+    color: #6e6e73;
+    border-bottom: 2px solid transparent;
+}
+
+.tab:hover {
+    color: #1d1d1f;
+}
+
+.tab.active {
+    color: #007aff;
+    border-bottom-color: #007aff;
+}
+
+/* ============================================================================
+   INPUTS ESPECÍFICOS
+   ============================================================================ */
+
+input[type="color"] {
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    background: #ffffff;
+}
+
+input[type="checkbox"] {
+    accent-color: #007aff;
+}
+
+/* ============================================================================
+   SEÇÕES E CONTAINERS
+   ============================================================================ */
+
+.section-title {
+    color: #1d1d1f;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+
+.section-subtitle {
+    color: #6e6e73;
+}
+
+/* ============================================================================
+   PROGRESS BARS
+   ============================================================================ */
+
+.progress-bar {
+    background: #e8e8ea;
+}
+
+.progress-fill {
+    background: #007aff;
+}
+
+/* ============================================================================
+   OVERRIDE DE CORES ESPECÍFICAS
+   ============================================================================ */
+
+/* Remove text-shadow de todos os elementos */
+* {
+    text-shadow: none !important;
+}
+
+/* Garante que todo texto seja visível */
+h1, h2, h3, h4, h5, h6, p, span, div, label, a {
+    color: inherit;
+}

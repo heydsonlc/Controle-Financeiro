@@ -7,42 +7,43 @@
 }
 
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #3b82f6 100%);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    background: linear-gradient(180deg, #f5f5f7 0%, #e8e8ea 100%);
     min-height: 100vh;
     padding: 20px;
     padding-bottom: 90px; /* Espaço para bottom navigation */
-    color: #333;
+    color: #1d1d1f;
 }
 
 .container {
     max-width: 1200px;
     margin: 0 auto;
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(10px);
-    border-radius: 20px;
-    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 2px 16px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(0, 0, 0, 0.06);
     overflow: hidden;
 }
 
 header {
-    background: rgba(30, 58, 138, 0.3);
-    backdrop-filter: blur(10px);
-    color: white;
-    padding: 40px;
-    text-align: center;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+    background: #ffffff;
+    color: #1d1d1f;
+    padding: 32px 40px;
+    text-align: left;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 header h1 {
-    font-size: 2.5em;
-    margin-bottom: 10px;
+    font-size: 2em;
+    margin-bottom: 4px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
 }
 
 .subtitle {
-    font-size: 1.1em;
-    opacity: 0.9;
+    font-size: 0.95em;
+    color: #6e6e73;
+    font-weight: 400;
 }
 
 main {
@@ -56,45 +57,45 @@ main {
 }
 
 .card {
-    background: rgba(255, 255, 255, 0.15);
-    backdrop-filter: blur(10px);
-    border-radius: 15px;
-    padding: 25px;
-    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.3);
-    background: rgba(255, 255, 255, 0.2);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
 }
 
 .card h2 {
-    color: white;
-    margin-bottom: 15px;
-    font-size: 1.5em;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    color: #1d1d1f;
+    margin-bottom: 12px;
+    font-size: 1.4em;
+    font-weight: 600;
+    letter-spacing: -0.02em;
 }
 
 .card h3 {
-    color: white;
-    margin-bottom: 15px;
-    font-size: 1.2em;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    color: #1d1d1f;
+    margin-bottom: 12px;
+    font-size: 1.15em;
+    font-weight: 600;
+    letter-spacing: -0.01em;
 }
 
 .card p {
     margin-bottom: 10px;
     line-height: 1.6;
-    color: rgba(255, 255, 255, 0.9);
+    color: #1d1d1f;
 }
 
 .card ul, .card ol {
     margin-left: 20px;
     line-height: 1.8;
-    color: rgba(255, 255, 255, 0.9);
+    color: #1d1d1f;
 }
 
 .card li {
@@ -102,31 +103,33 @@ main {
 }
 
 .card a {
-    color: white;
+    color: #007aff;
     text-decoration: none;
 }
 
+.card a:hover {
+    opacity: 0.7;
+}
+
 .card small {
-    color: rgba(255, 255, 255, 0.8);
+    color: #6e6e73;
 }
 
 .info {
-    background: rgba(212, 237, 218, 0.3);
-    color: rgba(255, 255, 255, 0.95);
-    padding: 10px;
+    background: #e8f5e9;
+    color: #1d1d1f;
+    padding: 12px;
     border-radius: 8px;
-    border-left: 4px solid rgba(40, 167, 69, 0.8);
-    backdrop-filter: blur(5px);
+    border-left: 3px solid #34c759;
 }
 
 footer {
-    background: rgba(30, 58, 138, 0.3);
-    backdrop-filter: blur(10px);
-    color: white;
+    background: #ffffff;
+    color: #6e6e73;
     text-align: center;
     padding: 20px;
-    font-size: 0.9em;
-    border-top: 1px solid rgba(255, 255, 255, 0.18);
+    font-size: 0.85em;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 /* Botão toggle mobile view */
@@ -213,11 +216,12 @@ body.mobile-view .mobile-toggle button {
     bottom: 0;
     left: 0;
     right: 0;
-    background: rgba(30, 58, 138, 0.95);
-    backdrop-filter: blur(20px);
-    border-top: 1px solid rgba(255, 255, 255, 0.18);
-    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.2);
-    padding: 10px 0;
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    box-shadow: 0 -1px 10px rgba(0, 0, 0, 0.04);
+    padding: 8px 0;
     z-index: 1000;
 }
 
@@ -233,33 +237,33 @@ body.mobile-view .mobile-toggle button {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 5px;
-    color: rgba(255, 255, 255, 0.7);
+    gap: 4px;
+    color: #6e6e73;
     text-decoration: none;
-    font-size: 0.75em;
-    transition: all 0.3s ease;
-    padding: 5px 15px;
-    border-radius: 10px;
-    min-width: 70px;
+    font-size: 0.7em;
+    transition: all 0.2s ease;
+    padding: 8px 12px;
+    border-radius: 8px;
+    min-width: 60px;
 }
 
 .nav-item:hover {
-    color: white;
-    background: rgba(255, 255, 255, 0.1);
+    color: #1d1d1f;
+    background: rgba(0, 0, 0, 0.04);
 }
 
 .nav-item.active {
-    color: white;
-    background: rgba(255, 255, 255, 0.15);
+    color: #007aff;
+    background: rgba(0, 122, 255, 0.08);
 }
 
 .nav-item .icon {
-    font-size: 1.8em;
+    font-size: 1.5em;
 }
 
 .nav-item .label {
     font-size: 0.85em;
-    font-weight: 500;
+    font-weight: 400;
 }
 
 /* Estilos de Modal Globais */

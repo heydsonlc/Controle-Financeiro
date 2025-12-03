@@ -5,87 +5,80 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Configurações - Controle Financeiro</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme-light.css') }}">
     <style>
         main {
             padding: 40px;
         }
 
         .breadcrumb {
-            margin-bottom: 30px;
-            font-size: 0.9em;
-            opacity: 0.9;
-            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 24px;
+            font-size: 0.85em;
+            color: #6e6e73;
         }
 
         .breadcrumb a {
-            color: white;
+            color: #007aff;
             text-decoration: none;
-            transition: all 0.3s ease;
+            transition: opacity 0.2s ease;
         }
 
         .breadcrumb a:hover {
-            text-decoration: underline;
+            opacity: 0.7;
         }
 
         .config-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 20px;
-            margin-top: 30px;
+            gap: 12px;
+            margin-top: 24px;
         }
 
         .config-card {
-            background: rgba(255, 255, 255, 0.15);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 30px;
-            border: 1px solid rgba(255, 255, 255, 0.18);
-            transition: all 0.3s ease;
-            text-align: center;
+            background: #f5f5f7;
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             text-decoration: none;
             display: flex;
             flex-direction: column;
-            align-items: center;
-            gap: 15px;
+            align-items: flex-start;
+            gap: 6px;
         }
 
         .config-card:hover {
-            transform: translateY(-5px);
-            background: rgba(255, 255, 255, 0.25);
-            box-shadow: 0 12px 40px rgba(31, 38, 135, 0.4);
+            background: #e8e8ea;
+            border-color: rgba(0, 0, 0, 0.1);
+            transform: translateY(-1px);
+        }
+
+        .config-card:active {
+            transform: scale(0.99);
         }
 
         .config-icon {
-            font-size: 3em;
-            filter: grayscale(30%);
+            font-size: 1.5em;
+            opacity: 0.9;
+            margin-bottom: 4px;
         }
 
         .config-title {
-            font-size: 1.3em;
+            font-size: 1.05em;
             font-weight: 600;
-            color: white;
-            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            color: #1d1d1f;
+            letter-spacing: -0.01em;
         }
 
         .config-description {
-            font-size: 0.9em;
-            color: rgba(255, 255, 255, 0.8);
-            line-height: 1.5;
+            font-size: 0.85em;
+            color: #6e6e73;
+            line-height: 1.4;
+            font-weight: 400;
         }
 
         .config-badge {
-            background: rgba(255, 193, 7, 0.3);
-            color: rgba(255, 255, 255, 0.95);
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 0.75em;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .config-badge.active {
-            background: rgba(76, 175, 80, 0.3);
+            display: none; /* Remove badges for cleaner look */
         }
     </style>
 </head>
@@ -102,82 +95,66 @@
             <div class="config-grid">
                 <!-- Categorias -->
                 <a href="/categorias" class="config-card">
-                    <div class="config-icon">▦</div>
                     <div class="config-title">Categorias</div>
                     <div class="config-description">
                         Gerencie as categorias para organizar suas despesas
                     </div>
-                    <div class="config-badge active">ATIVO</div>
                 </a>
 
                 <!-- Despesas Recorrentes -->
-                <a href="/despesas" class="config-card">
-                    <div class="config-icon">📋</div>
+                <a href="/despesas#nova-despesa" class="config-card">
                     <div class="config-title">Despesas Recorrentes</div>
                     <div class="config-description">
                         Cadastre despesas fixas mensais e consórcios
                     </div>
-                    <div class="config-badge active">ATIVO</div>
                 </a>
 
                 <!-- Cartões de Crédito -->
                 <a href="/cartoes" class="config-card">
-                    <div class="config-icon">▭</div>
                     <div class="config-title">Cartões de Crédito</div>
                     <div class="config-description">
                         Configure seus cartões e defina limites
                     </div>
-                    <div class="config-badge active">ATIVO</div>
                 </a>
 
                 <!-- Financiamentos -->
                 <a href="/financiamentos" class="config-card">
-                    <div class="config-icon">🏠</div>
                     <div class="config-title">Financiamentos</div>
                     <div class="config-description">
-                        Gerencie financiamentos e amortizações (SAC, PRICE)
+                        Gerencie financiamentos e amortizações SAC e PRICE
                     </div>
-                    <div class="config-badge active">ATIVO</div>
                 </a>
 
                 <!-- Contas Bancárias -->
                 <a href="/contas-bancarias" class="config-card">
-                    <div class="config-icon">▬</div>
                     <div class="config-title">Contas Bancárias</div>
                     <div class="config-description">
-                        Gerencie suas contas correntes, poupança e carteiras digitais
+                        Gerencie suas contas e carteiras digitais
                     </div>
-                    <div class="config-badge active">ATIVO</div>
                 </a>
 
                 <!-- Receitas -->
                 <a href="/receitas" class="config-card">
-                    <div class="config-icon">▯</div>
                     <div class="config-title">Receitas</div>
                     <div class="config-description">
                         Gerencie fontes de receita e orçamento mensal
                     </div>
-                    <div class="config-badge active">ATIVO</div>
                 </a>
 
                 <!-- Contas Patrimônio -->
                 <a href="/patrimonio" class="config-card">
-                    <div class="config-icon">▢</div>
-                    <div class="config-title">Patrimônio (Caixinhas)</div>
+                    <div class="config-title">Patrimônio</div>
                     <div class="config-description">
-                        Gerencie suas caixinhas e transferências entre contas
+                        Gerencie suas caixinhas e transferências
                     </div>
-                    <div class="config-badge active">ATIVO</div>
                 </a>
 
                 <!-- Preferências do Sistema -->
                 <a href="/preferencias" class="config-card">
-                    <div class="config-icon">⚙</div>
-                    <div class="config-title">Preferências & Ajustes Gerais</div>
+                    <div class="config-title">Preferências</div>
                     <div class="config-description">
-                        Configure comportamento do sistema, aparência, backup e IA
+                        Configure comportamento, aparência e backup
                     </div>
-                    <div class="config-badge active">ATIVO</div>
                 </a>
             </div>
         </main>

@@ -1,8 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(./venv/Scripts/python.exe:*)",
-      "Bash(python:*)"
+      "Bash(del \"migrations\\versions\\b60e2da6e02c_expandir_módulo_de_receitas_com_novos_.py\")",
+      "Bash(git push:*)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []
