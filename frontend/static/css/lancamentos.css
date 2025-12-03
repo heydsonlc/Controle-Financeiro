@@ -35,6 +35,14 @@
     border-radius: 10px;
     color: white;
     font-size: 14px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transition: all 0.3s ease;
+}
+
+.filter-item select:hover,
+.filter-item input[type="month"]:hover {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+    transform: translateY(-2px);
 }
 
 .filter-item select:focus,
@@ -42,6 +50,8 @@
     outline: none;
     border-color: rgba(255, 255, 255, 0.5);
     background: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+    transform: translateY(-2px);
 }
 
 /* Seção de Lançamentos */
