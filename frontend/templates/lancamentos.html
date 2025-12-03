@@ -46,6 +46,18 @@
             </div>
         </section>
 
+        <!-- Receitas Pendentes -->
+        <section class="receitas-pendentes-section">
+            <div class="section-header">
+                <h2>Receitas Pendentes de Confirmação</h2>
+                <p class="section-subtitle">Confirme o recebimento das receitas previstas para este mês</p>
+            </div>
+
+            <div id="lista-receitas-pendentes" class="receitas-pendentes-grid">
+                <!-- Receitas pendentes serão renderizadas aqui -->
+            </div>
+        </section>
+
         <!-- Lista de Lançamentos -->
         <section class="lancamentos-section">
             <div class="section-header">
@@ -155,6 +167,57 @@
                     </button>
                     <button type="submit" class="btn btn-primary">
                         Salvar Lançamento
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Confirmar Recebimento de Receita -->
+    <div id="modal-confirmar-receita" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Confirmar Recebimento de Receita</h2>
+                <span class="close" onclick="fecharModal('modal-confirmar-receita')">&times;</span>
+            </div>
+
+            <form id="form-confirmar-receita" onsubmit="confirmarRecebimento(event)">
+                <input type="hidden" id="receita-item-id">
+                <input type="hidden" id="receita-orcamento-id">
+
+                <div class="form-group">
+                    <label for="receita-nome">Fonte de Receita</label>
+                    <input type="text" id="receita-nome" disabled class="input-readonly">
+                </div>
+
+                <div class="form-group">
+                    <label for="receita-valor-previsto">Valor Previsto</label>
+                    <input type="text" id="receita-valor-previsto" disabled class="input-readonly">
+                </div>
+
+                <div class="form-group">
+                    <label for="receita-data-recebimento">Data de Recebimento *</label>
+                    <input type="date" id="receita-data-recebimento" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="receita-valor-recebido">Valor Recebido *</label>
+                    <input type="number" id="receita-valor-recebido" required
+                           step="0.01" min="0" placeholder="0,00">
+                </div>
+
+                <div class="form-group">
+                    <label for="receita-observacoes">Observações</label>
+                    <textarea id="receita-observacoes" rows="2"
+                              placeholder="Observações sobre o recebimento (opcional)"></textarea>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="fecharModal('modal-confirmar-receita')">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        Confirmar Recebimento
                     </button>
                 </div>
             </form>

@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     carregarCartoes();
     carregarCategoriasGerais();
     carregarLancamentos();
+    carregarReceitasPendentes(); // Carregar receitas pendentes
 });
 
 function inicializarFiltros() {
@@ -607,6 +608,191 @@ function mostrarSucesso(mensagem) {
 
 function mostrarErro(mensagem) {
     alert('Erro: ' + mensagem);
+}
+
+// ===================================
+// RECEITAS PENDENTES
+// ===================================
+
+async function carregarReceitasPendentes() {
+    const container = document.getElementById('lista-receitas-pendentes');
+    container.innerHTML = '<p class="loading">Carregando receitas pendentes...</p>';
+
+    try {
+        // Pegar mês atual
+        const hoje = new Date();
+        const ano = hoje.getFullYear();
+        const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+        const anoMes = `${ano}-${mes}-01`;
+
+        // Buscar orçamentos do mês
+        const responseOrc = await fetch(`/api/receitas/orcamento?ano=${ano}`);
+        const resultOrc = await responseOrc.json();
+
+        if (!resultOrc.success) {
+            container.innerHTML = '<p class="error">Erro ao carregar orçamentos</p>';
+            return;
+        }
+
+        // Filtrar orçamentos do mês atual
+        const orcamentosMes = resultOrc.data.filter(orc =>
+            orc.mes_referencia === anoMes
+        );
+
+        if (orcamentosMes.length === 0) {
+            container.innerHTML = '<p class="empty">Nenhuma receita prevista para este mês</p>';
+            return;
+        }
+
+        // Buscar receitas já realizadas do mês
+        const responseReal = await fetch(`/api/receitas/realizadas?ano_mes=${anoMes}`);
+        const resultReal = await responseReal.json();
+
+        // Criar set de item_receita_ids já realizados
+        const recebidos = new Set();
+        if (resultReal.success && resultReal.data) {
+            resultReal.data.forEach(r => recebidos.add(r.item_receita_id));
+        }
+
+        // Buscar dados das fontes de receita
+        const responseFontes = await fetch('/api/receitas/itens');
+        const resultFontes = await responseFontes.json();
+
+        if (!resultFontes.success) {
+            container.innerHTML = '<p class="error">Erro ao carregar fontes de receita</p>';
+            return;
+        }
+
+        // Criar mapa de fontes
+        const fontesMap = {};
+        resultFontes.data.forEach(f => fontesMap[f.id] = f);
+
+        // Filtrar apenas orçamentos ainda não recebidos
+        const pendentes = orcamentosMes.filter(orc => !recebidos.has(orc.item_receita_id));
+
+        if (pendentes.length === 0) {
+            container.innerHTML = '<p class="empty">✓ Todas as receitas do mês foram confirmadas</p>';
+            return;
+        }
+
+        // Renderizar receitas pendentes
+        container.innerHTML = pendentes.map(orc => {
+            const fonte = fontesMap[orc.item_receita_id];
+            if (!fonte) return '';
+
+            return `
+                <div class="receita-pendente-card">
+                    <div class="receita-header">
+                        <h3>${fonte.nome}</h3>
+                        <span class="badge badge-${fonte.tipo.toLowerCase()}">${formatarTipo(fonte.tipo)}</span>
+                    </div>
+                    <div class="receita-body">
+                        <p class="receita-valor">
+                            <span class="label">Valor Previsto:</span>
+                            <span class="valor">${formatarMoeda(orc.valor_esperado)}</span>
+                        </p>
+                        ${fonte.dia_previsto_pagamento ? `
+                            <p class="receita-dia">
+                                <span class="label">Dia Previsto:</span>
+                                <span>${fonte.dia_previsto_pagamento}</span>
+                            </p>
+                        ` : ''}
+                    </div>
+                    <div class="receita-actions">
+                        <button class="btn btn-success" onclick="abrirModalConfirmarReceita(${orc.item_receita_id}, ${orc.id}, '${fonte.nome}', ${orc.valor_esperado})">
+                            ✓ Confirmar Recebimento
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+    } catch (error) {
+        console.error('Erro ao carregar receitas pendentes:', error);
+        container.innerHTML = '<p class="error">Erro ao carregar receitas pendentes</p>';
+    }
+}
+
+function abrirModalConfirmarReceita(itemReceitaId, orcamentoId, nome, valorPrevisto) {
+    // Preencher campos do modal
+    document.getElementById('receita-item-id').value = itemReceitaId;
+    document.getElementById('receita-orcamento-id').value = orcamentoId;
+    document.getElementById('receita-nome').value = nome;
+    document.getElementById('receita-valor-previsto').value = formatarMoeda(valorPrevisto);
+
+    // Preencher data atual e valor previsto por padrão
+    const hoje = new Date().toISOString().split('T')[0];
+    document.getElementById('receita-data-recebimento').value = hoje;
+    document.getElementById('receita-valor-recebido').value = valorPrevisto;
+
+    // Limpar observações
+    document.getElementById('receita-observacoes').value = '';
+
+    // Abrir modal
+    document.getElementById('modal-confirmar-receita').style.display = 'block';
+}
+
+async function confirmarRecebimento(event) {
+    event.preventDefault();
+
+    const itemReceitaId = document.getElementById('receita-item-id').value;
+    const dataRecebimento = document.getElementById('receita-data-recebimento').value;
+    const valorRecebido = parseFloat(document.getElementById('receita-valor-recebido').value);
+    const observacoes = document.getElementById('receita-observacoes').value;
+
+    // Calcular competência (mês de referência)
+    const data = new Date(dataRecebimento);
+    const competencia = `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-01`;
+
+    const dados = {
+        item_receita_id: parseInt(itemReceitaId),
+        data_recebimento: dataRecebimento,
+        valor_recebido: valorRecebido,
+        competencia: competencia,
+        descricao: `Recebimento confirmado`,
+        observacoes: observacoes
+    };
+
+    try {
+        const response = await fetch('/api/receitas/realizadas', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dados)
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            mostrarSucesso('Recebimento confirmado com sucesso!');
+            fecharModal('modal-confirmar-receita');
+            carregarReceitasPendentes(); // Recarregar lista
+        } else {
+            mostrarErro(result.error || 'Erro ao confirmar recebimento');
+        }
+    } catch (error) {
+        console.error('Erro ao confirmar recebimento:', error);
+        mostrarErro('Erro ao confirmar recebimento');
+    }
+}
+
+function formatarTipo(tipo) {
+    const tipos = {
+        'SALARIO_FIXO': 'Salário',
+        'GRATIFICACAO': 'Gratificação',
+        'RENDA_EXTRA': 'Renda Extra',
+        'ALUGUEL': 'Aluguel',
+        'RENDIMENTO_FINANCEIRO': 'Rendimento',
+        'OUTROS': 'Outros'
+    };
+    return tipos[tipo] || tipo;
+}
+
+function formatarMoeda(valor) {
+    if (!valor) return 'R$ 0,00';
+    return new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+    }).format(valor);
 }
 
 // Fechar modal ao clicar fora

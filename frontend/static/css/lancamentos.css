@@ -444,3 +444,194 @@
         gap: 15px;
     }
 }
+
+/* ===================================
+   RECEITAS PENDENTES
+   =================================== */
+
+.receitas-pendentes-section {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border-radius: 15px;
+    padding: 25px;
+    margin-bottom: 30px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.receitas-pendentes-section .section-subtitle {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 14px;
+    margin-top: 8px;
+}
+
+.receitas-pendentes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.receita-pendente-card {
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transition: all 0.3s ease;
+}
+
+.receita-pendente-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+}
+
+.receita-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.receita-header h3 {
+    color: white;
+    font-size: 18px;
+    margin: 0;
+}
+
+.receita-body {
+    margin-bottom: 15px;
+}
+
+.receita-body p {
+    margin: 10px 0;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 14px;
+}
+
+.receita-valor {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.receita-valor .label {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.receita-valor .valor {
+    font-size: 20px;
+    font-weight: bold;
+    color: #4ade80;
+}
+
+.receita-dia {
+    display: flex;
+    justify-content: space-between;
+}
+
+.receita-dia .label {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.receita-actions {
+    margin-top: 15px;
+}
+
+.receita-actions .btn-success {
+    width: 100%;
+    background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(74, 222, 128, 0.3);
+}
+
+.receita-actions .btn-success:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(74, 222, 128, 0.4);
+}
+
+.receita-actions .btn-success:active {
+    transform: translateY(0);
+}
+
+/* Badge styles */
+.badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.badge-salario_fixo {
+    background: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.badge-gratificacao {
+    background: rgba(168, 85, 247, 0.2);
+    color: #c084fc;
+    border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.badge-renda_extra {
+    background: rgba(34, 197, 94, 0.2);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.badge-aluguel {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.badge-rendimento_financeiro {
+    background: rgba(6, 182, 212, 0.2);
+    color: #22d3ee;
+    border: 1px solid rgba(6, 182, 212, 0.3);
+}
+
+.badge-outros {
+    background: rgba(107, 114, 128, 0.2);
+    color: #9ca3af;
+    border: 1px solid rgba(107, 114, 128, 0.3);
+}
+
+/* Input readonly style */
+.input-readonly {
+    background: rgba(255, 255, 255, 0.05) !important;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+/* Empty and loading states */
+.receitas-pendentes-grid .empty {
+    text-align: center;
+    color: rgba(255, 255, 255, 0.7);
+    padding: 40px;
+    font-size: 16px;
+}
+
+.receitas-pendentes-grid .loading {
+    text-align: center;
+    color: rgba(255, 255, 255, 0.7);
+    padding: 40px;
+    font-size: 16px;
+}
+
+.receitas-pendentes-grid .error {
+    text-align: center;
+    color: #ef4444;
+    padding: 40px;
+    font-size: 16px;
+}
