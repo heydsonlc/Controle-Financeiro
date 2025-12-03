@@ -336,7 +336,7 @@ input[type="checkbox"] {
 }
 
 /* ============================================================================
-   OVERRIDE DE CORES ESPECÍFICAS
+   OVERRIDE DE CORES ESPECÍFICAS COM !IMPORTANT
    ============================================================================ */
 
 /* Remove text-shadow de todos os elementos */
@@ -344,7 +344,83 @@ input[type="checkbox"] {
     text-shadow: none !important;
 }
 
-/* Garante que todo texto seja visível */
-h1, h2, h3, h4, h5, h6, p, span, div, label, a {
+/* Garante que todo texto seja visível - FORCE OVERRIDE */
+body {
+    color: #1d1d1f !important;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color: #1d1d1f !important;
+}
+
+p, span, div, label {
+    color: #1d1d1f !important;
+}
+
+/* Links mantém a cor azul */
+a {
+    color: #007aff !important;
+}
+
+/* Textos secundários */
+.breadcrumb,
+.breadcrumb span,
+small,
+.subtitle,
+.section-subtitle {
+    color: #6e6e73 !important;
+}
+
+/* Override específico para elementos brancos antigos */
+.modal-header h2,
+.form-group label,
+.cartao-nome,
+.categoria-nome,
+.receita-nome,
+.financiamento-nome,
+.conta-nome,
+.patrimonio-nome,
+.cartao-info,
+.categoria-info,
+.receita-info,
+.financiamento-info,
+.conta-info,
+.patrimonio-info,
+.cartao-card,
+.categoria-card,
+.receita-card,
+.financiamento-card,
+.conta-card,
+.patrimonio-card,
+.cartao-header,
+.cartao-body,
+.cartao-footer,
+table td,
+table th,
+.lista-item,
+.item-nome,
+.item-valor,
+.item-descricao {
+    color: #1d1d1f !important;
+}
+
+/* Inputs e selects */
+input,
+select,
+textarea,
+.form-control {
+    color: #1d1d1f !important;
+    background: #ffffff !important;
+}
+
+input::placeholder,
+select::placeholder,
+textarea::placeholder {
+    color: #6e6e73 !important;
+}
+
+/* Botões mantém suas cores */
+.btn,
+button {
     color: inherit;
 }
