@@ -49,13 +49,37 @@ def resumo_mes():
         ano_atual = hoje.year
 
         # 1. RECEITAS DO MÊS (Por mês de competência)
-        # Busca orçamentos de receitas do mês
         # Se houver ReceitaRealizada correspondente, usa o valor recebido
         # Senão, usa o valor esperado do orçamento
-        receitas_mes = db.session.query(func.sum(ReceitaOrcamento.valor_esperado)).filter(
+
+        # Buscar IDs dos orçamentos que JÁ TÊM receita realizada no mês
+        orcamentos_com_realizacao = db.session.query(ReceitaRealizada.orcamento_id).filter(
+            extract('month', ReceitaRealizada.mes_referencia) == mes_atual,
+            extract('year', ReceitaRealizada.mes_referencia) == ano_atual,
+            ReceitaRealizada.orcamento_id.isnot(None)
+        ).distinct().all()
+
+        ids_orcamentos_realizados = [o[0] for o in orcamentos_com_realizacao]
+
+        # Somar receitas REALIZADAS (confirmadas)
+        receitas_realizadas = db.session.query(func.sum(ReceitaRealizada.valor_recebido)).filter(
+            extract('month', ReceitaRealizada.mes_referencia) == mes_atual,
+            extract('year', ReceitaRealizada.mes_referencia) == ano_atual
+        ).scalar() or 0
+
+        # Somar receitas PREVISTAS (apenas as que NÃO foram confirmadas)
+        query_previstas = db.session.query(func.sum(ReceitaOrcamento.valor_esperado)).filter(
             extract('month', ReceitaOrcamento.mes_referencia) == mes_atual,
             extract('year', ReceitaOrcamento.mes_referencia) == ano_atual
-        ).scalar() or 0
+        )
+
+        if ids_orcamentos_realizados:
+            query_previstas = query_previstas.filter(~ReceitaOrcamento.id.in_(ids_orcamentos_realizados))
+
+        receitas_previstas = query_previstas.scalar() or 0
+
+        # Total = Realizadas + Previstas (que não foram realizadas)
+        receitas_mes = decimal_to_float(receitas_realizadas) + decimal_to_float(receitas_previstas)
 
         # 2. DESPESAS DO MÊS (Por mês de competência)
         # Busca todas as contas do mês, independente do status
@@ -67,9 +91,8 @@ def resumo_mes():
         ).scalar() or 0
 
         # 3. SALDO LÍQUIDO
-        receitas_float = decimal_to_float(receitas_mes)
         despesas_float = decimal_to_float(despesas_mes)
-        saldo_liquido = receitas_float - despesas_float
+        saldo_liquido = receitas_mes - despesas_float
 
         # 4. SALDO NAS CONTAS BANCÁRIAS
         saldo_contas = db.session.query(func.sum(ContaBancaria.saldo_atual)).filter(
@@ -79,7 +102,7 @@ def resumo_mes():
         return jsonify({
             'success': True,
             'data': {
-                'receitas_mes': receitas_float,
+                'receitas_mes': receitas_mes,
                 'despesas_mes': despesas_float,
                 'saldo_liquido': saldo_liquido,
                 'saldo_contas_bancarias': decimal_to_float(saldo_contas),
@@ -139,13 +162,33 @@ def indicadores():
         ).scalar() or 0
 
         # 4. PORCENTAGEM POUPADA
-        receitas_mes = db.session.query(func.sum(ReceitaOrcamento.valor_esperado)).filter(
-            extract('month', ReceitaOrcamento.mes_referencia) == mes_atual,
-            extract('year', ReceitaOrcamento.mes_referencia) == ano_atual
+        # Usar mesma lógica do resumo-mes para calcular receitas (confirmadas + previstas não confirmadas)
+        orcamentos_com_realizacao = db.session.query(ReceitaRealizada.orcamento_id).filter(
+            extract('month', ReceitaRealizada.mes_referencia) == mes_atual,
+            extract('year', ReceitaRealizada.mes_referencia) == ano_atual,
+            ReceitaRealizada.orcamento_id.isnot(None)
+        ).distinct().all()
+
+        ids_orcamentos_realizados = [o[0] for o in orcamentos_com_realizacao]
+
+        receitas_realizadas = db.session.query(func.sum(ReceitaRealizada.valor_recebido)).filter(
+            extract('month', ReceitaRealizada.mes_referencia) == mes_atual,
+            extract('year', ReceitaRealizada.mes_referencia) == ano_atual
         ).scalar() or 0
 
+        query_previstas = db.session.query(func.sum(ReceitaOrcamento.valor_esperado)).filter(
+            extract('month', ReceitaOrcamento.mes_referencia) == mes_atual,
+            extract('year', ReceitaOrcamento.mes_referencia) == ano_atual
+        )
+
+        if ids_orcamentos_realizados:
+            query_previstas = query_previstas.filter(~ReceitaOrcamento.id.in_(ids_orcamentos_realizados))
+
+        receitas_previstas = query_previstas.scalar() or 0
+        receitas_mes = decimal_to_float(receitas_realizadas) + decimal_to_float(receitas_previstas)
+
         despesas_totais = decimal_to_float(despesas_mes_atual)
-        receitas_totais = decimal_to_float(receitas_mes)
+        receitas_totais = receitas_mes
         percentual_poupado = ((receitas_totais - despesas_totais) / receitas_totais * 100) if receitas_totais > 0 else 0
 
         # 5. RECEITAS EXTRAS (receitas acima da média ou variáveis)
@@ -300,17 +343,37 @@ def grafico_saldo():
                 ano -= 1
 
             # Calcular diferencial de receitas - despesas desse mês
-            receitas_mes = db.session.query(func.sum(ReceitaOrcamento.valor_esperado)).filter(
+            # Usar lógica condicional para receitas (confirmadas + previstas não confirmadas)
+            orcamentos_realizados = db.session.query(ReceitaRealizada.orcamento_id).filter(
+                extract('month', ReceitaRealizada.mes_referencia) == mes,
+                extract('year', ReceitaRealizada.mes_referencia) == ano,
+                ReceitaRealizada.orcamento_id.isnot(None)
+            ).distinct().all()
+
+            ids_realizados = [o[0] for o in orcamentos_realizados]
+
+            receitas_realizadas_mes = db.session.query(func.sum(ReceitaRealizada.valor_recebido)).filter(
+                extract('month', ReceitaRealizada.mes_referencia) == mes,
+                extract('year', ReceitaRealizada.mes_referencia) == ano
+            ).scalar() or 0
+
+            query_prev = db.session.query(func.sum(ReceitaOrcamento.valor_esperado)).filter(
                 extract('month', ReceitaOrcamento.mes_referencia) == mes,
                 extract('year', ReceitaOrcamento.mes_referencia) == ano
-            ).scalar() or 0
+            )
+
+            if ids_realizados:
+                query_prev = query_prev.filter(~ReceitaOrcamento.id.in_(ids_realizados))
+
+            receitas_previstas_mes = query_prev.scalar() or 0
+            receitas_mes = decimal_to_float(receitas_realizadas_mes) + decimal_to_float(receitas_previstas_mes)
 
             despesas_mes = db.session.query(func.sum(Conta.valor)).filter(
                 extract('month', Conta.mes_referencia) == mes,
                 extract('year', Conta.mes_referencia) == ano
             ).scalar() or 0
 
-            diferencial = decimal_to_float(receitas_mes) - decimal_to_float(despesas_mes)
+            diferencial = receitas_mes - decimal_to_float(despesas_mes)
 
             # Projetar saldo (aproximação)
             saldo_mes = saldo_atual_float - (diferencial * (i + 1))
@@ -402,7 +465,7 @@ def alertas():
         for fin in financiamentos_mes:
             financiamentos_lista.append({
                 'id': fin.id,
-                'descricao': fin.descricao,
+                'descricao': fin.nome,
                 'valor_parcela': decimal_to_float(fin.valor_parcela_inicial) if hasattr(fin, 'valor_parcela_inicial') and fin.valor_parcela_inicial else 0,
                 'parcela_atual': fin.parcelas_pagas if hasattr(fin, 'parcelas_pagas') else 0,
                 'total_parcelas': fin.prazo_total_meses,
@@ -414,7 +477,7 @@ def alertas():
             receitas_lista.append({
                 'id': orcamento.id,
                 'descricao': orcamento.item_receita.nome if orcamento.item_receita else 'Receita',
-                'valor': decimal_to_float(orcamento.valor_previsto),
+                'valor': decimal_to_float(orcamento.valor_esperado),
                 'data_recebimento': orcamento.mes_referencia.strftime('%d/%m/%Y'),
                 'fonte': orcamento.item_receita.tipo if orcamento.item_receita else 'Não definido',
                 'tipo': 'receita'
