@@ -27,6 +27,38 @@ O sistema implementa a lógica completa de controle financeiro com distinção e
 
 ## 🆕 Últimas Implementações
 
+### Sistema de Receitas com Lógica de Confirmação (Dezembro 2024)
+Implementação da lógica de priorização entre valores confirmados e previstos:
+
+**Arquitetura de Competência:**
+- Sistema baseado em **mês de competência** (não data de vencimento/pagamento)
+- Campo `mes_referencia` usado em todas as tabelas principais
+- Sincronização entre ReceitaOrcamento (previsto) e ReceitaRealizada (confirmado)
+
+**Lógica de Cálculo no Dashboard ([dashboard.py](backend/routes/dashboard.py) linhas 51-82):**
+1. **Buscar IDs de orçamentos já confirmados** no mês atual
+2. **Somar receitas realizadas** (confirmadas pelo usuário)
+3. **Somar receitas previstas** EXCLUINDO as já confirmadas
+4. **Total = Realizadas + Previstas não confirmadas**
+
+**Regra de Prioridade:**
+- Se ReceitaRealizada existe para um orçamento → usa `valor_recebido`
+- Se não existe → usa `valor_esperado` do ReceitaOrcamento
+- Garante que valores confirmados sobrescrevem previsões
+
+**Exemplo Prático:**
+```
+Orçamento de Salário: R$ 5.000,00
+Usuário confirma: R$ 5.000,03
+Dashboard exibe: R$ 5.000,03 (valor confirmado)
+```
+
+**Padrão Único de Dados:**
+- Tabela `Conta` é a **fonte única de verdade** para todas as despesas
+- Dashboard e página de despesas usam a mesma query base
+- Eliminação de divergências entre diferentes telas
+- Sem "remendos" ou lógicas divergentes
+
 ### Módulo de Dashboard e Preferências (Dezembro 2024)
 Sistema completo de visualização consolidada e configurações personalizáveis:
 
@@ -40,8 +72,8 @@ Sistema completo de visualização consolidada e configurações personalizávei
   - `GET /api/dashboard/alertas` - Alertas e agenda financeira
   - `GET /api/dashboard/contas-proximos-vencimentos` - Próximas contas
 - Queries otimizadas com agregação de dados:
-  - Total de receitas do mês (ReceitaRealizada)
-  - Total de despesas pagas (Conta com status "Pago")
+  - **Total de receitas do mês:** Lógica condicional (confirmadas + previstas não confirmadas)
+  - Total de despesas do mês (Conta table)
   - Saldo líquido mensal (receitas - despesas)
   - Despesas por categoria para gráficos
   - Evolução histórica de 6 meses
@@ -400,6 +432,36 @@ Permite identificar economias ou gastos extras em relação ao planejado, facili
 ---
 
 ## 🏗️ Arquitetura
+
+### Decisões Arquiteturais Críticas
+
+**1. Sistema de Competência (não Caixa):**
+- Todo o sistema funciona baseado em **mês de competência**
+- Campo `mes_referencia` é usado como padrão em todas as tabelas
+- Despesas e receitas são contabilizadas pelo mês de competência, não pela data de pagamento/recebimento
+- Importante: NÃO usar `data_vencimento` ou `data_pagamento` para agregações mensais
+
+**2. Fonte Única de Verdade:**
+- **Tabela `Conta`** é a fonte única para todas as despesas do sistema
+- Dashboard, página de despesas e relatórios DEVEM consultar a mesma tabela
+- Tabela `ItemDespesa` serve apenas como template/configuração
+- Princípio: Sem lógicas divergentes, sem "remendos"
+
+**3. Priorização de Dados Confirmados:**
+- Valores confirmados (ReceitaRealizada, Conta paga) SEMPRE prevalecem sobre previsões
+- Dashboard implementa lógica condicional para priorizar dados reais
+- Garante que o usuário vê a realidade financeira, não apenas projeções
+
+**4. Campos de Banco de Dados:**
+- ReceitaRealizada: usa `mes_referencia` (NÃO `competencia`)
+- Conta: tem campo `valor` (NÃO `valor_pago`)
+- ItemDespesa: tem campo `tipo` que diferencia despesas simples de agregadores (cartões)
+
+**5. Agrupamento de Cartões de Crédito:**
+- Despesas de cartão aparecem AGRUPADAS por mês na listagem
+- Não exibir transações individuais na página de despesas
+- Transações individuais aparecem apenas na tela específica de cartão de crédito
+- Filtro: `ItemDespesa.tipo != 'Agregador'` para despesas individuais
 
 ### Stack Tecnológica
 
@@ -978,6 +1040,49 @@ POST /api/financiamentos/indexadores
   "valor_percentual": 0.0542
 }
 ```
+
+---
+
+## 🐛 Troubleshooting e Erros Comuns
+
+### Erro: "No attribute 'competencia'"
+**Problema:** Tentando acessar campo `competencia` em ReceitaRealizada
+**Solução:** Usar `mes_referencia` em vez de `competencia`
+
+### Erro: "No attribute 'valor_pago'"
+**Problema:** Tentando acessar campo `valor_pago` na tabela Conta
+**Solução:** Usar apenas o campo `valor` (Conta não tem campo valor_pago)
+
+### Dashboard zerado (R$ 0,00 em todos os cards)
+**Problema:** Query incorreta ou campo inexistente
+**Solução:**
+1. Verificar logs do backend para erros SQL
+2. Confirmar uso de `mes_referencia` e não `competencia`
+3. Reverter mudanças com `git checkout` se necessário
+
+### Divergência entre Dashboard e Página de Despesas
+**Problema:** Dashboards mostram valor X mas página de despesas mostra valor Y
+**Causa:** Queries consultando tabelas diferentes (Conta vs ItemDespesa)
+**Solução:** SEMPRE usar tabela `Conta` como fonte única de verdade
+
+### Despesas de Cartão Aparecem Duplicadas
+**Problema:** Transações individuais e agregado mensal aparecem juntos
+**Solução:** Filtrar `ItemDespesa.tipo != 'Agregador'` para remover agregadores da lista
+
+### Commits com Hooks Falhando
+**Problema:** Pre-commit hooks modificam arquivos após commit
+**Solução:**
+1. Verificar se commit em HEAD é seu: `git log -1 --format='[%h] (%an <%ae>) %s'`
+2. Verificar que branch está ahead: `git status`
+3. Se ambos verdadeiros: usar `git commit --amend`
+4. Senão: criar novo commit
+
+### Receitas Confirmadas Não Aparecem
+**Problema:** Dashboard mostra valor previsto ao invés do confirmado
+**Solução:**
+1. Verificar se ReceitaRealizada tem `orcamento_id` preenchido
+2. Confirmar query condicional em dashboard.py linhas 51-82
+3. Usar lógica: Realizadas + (Previstas EXCLUINDO confirmadas)
 
 ---
 
