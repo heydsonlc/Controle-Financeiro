@@ -3,6 +3,7 @@
  */
 
 const API_URL = '/api/despesas';
+const API_CONTAS_URL = '/api/despesas/contas';  // Endpoint para contas a pagar (execução)
 const CATEGORIAS_URL = '/api/categorias';
 let despesaEditando = null;
 let despesas = [];
@@ -10,6 +11,13 @@ let categorias = [];
 
 // Carregar dados ao iniciar a página
 document.addEventListener('DOMContentLoaded', () => {
+    // Definir mês atual no filtro de competência
+    const hoje = new Date();
+    const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+    const ano = hoje.getFullYear();
+    const mesAtual = `${mes}/${ano}`;
+    document.getElementById('filtro-competencia').value = mesAtual;
+
     carregarCategorias();
     carregarDespesas();
 
@@ -176,7 +184,8 @@ function renderizarDespesas(despesasParaRenderizar) {
         // Verificar se é despesa agrupada (fatura de cartão)
         const isAgrupado = despesa.agrupado === true;
 
-        const categoria = categorias.find(c => c.id === despesa.categoria_id);
+        // Usar a categoria que vem do backend (já completa) ou buscar no array local
+        const categoria = despesa.categoria || (despesa.categoria_id ? categorias.find(c => c.id === despesa.categoria_id) : null);
         const statusClass = despesa.pago ? 'pago' : 'pendente';
         const statusTexto = despesa.pago ? 'Paga' : 'Pendente';
 
@@ -195,16 +204,16 @@ function renderizarDespesas(despesasParaRenderizar) {
         // Para despesas agrupadas, não mostrar botões de editar/pagar
         const acoesHTML = isAgrupado ? '' : `
             <div class="despesa-actions">
-                <div style="display: flex; gap: 8px;">
-                    <button class="btn btn-edit" onclick="editarDespesa(${despesa.id})">
-                        Editar
+                <button class="btn-icon" onclick="editarDespesa(${despesa.id})" title="Editar">
+                    ✏️
+                </button>
+                ${!despesa.pago ? `
+                    <button class="btn-icon btn-pagar" onclick="marcarComoPago(${despesa.id})" title="Marcar como pago">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
                     </button>
-                    ${!despesa.pago ? `
-                        <button class="btn btn-success" onclick="marcarComoPago(${despesa.id})">
-                            Pagar
-                        </button>
-                    ` : ''}
-                </div>
+                ` : ''}
             </div>
         `;
 
@@ -738,10 +747,16 @@ function formatarCompetencia(competencia) {
  * Formata tipo de recorrência para exibição
  */
 function formatarTipoRecorrencia(tipo) {
+    // Se não tem tipo, retornar texto padrão
+    if (!tipo) {
+        return 'Recorrente';
+    }
+
     // Formato antigo (compatibilidade)
     const tiposAntigos = {
         'a_cada_2_semanas': 'A cada 2 semanas',
         'mensal': 'Mensal',
+        'semanal': 'Semanal',
         'anual': 'Anual'
     };
 
@@ -750,7 +765,7 @@ function formatarTipoRecorrencia(tipo) {
     }
 
     // Novo formato semanal: "semanal_freq_dia" (ex: "semanal_1_1" = toda semana, segunda-feira)
-    if (tipo && tipo.startsWith('semanal_')) {
+    if (tipo.startsWith('semanal_')) {
         const partes = tipo.split('_');
         if (partes.length === 3) {
             const freq = parseInt(partes[1]);
@@ -762,12 +777,13 @@ function formatarTipoRecorrencia(tipo) {
             if (freq === 1) {
                 return `Toda ${diaNome.toLowerCase()}`;
             } else {
-                return `A cada ${freq} ${diaNome.toLowerCase()}s`;
+                return `A cada ${freq} semanas (${diaNome.toLowerCase()})`;
             }
         }
     }
 
-    return tipo;
+    // Se não reconheceu o formato, retornar o próprio tipo ou "Recorrente"
+    return tipo || 'Recorrente';
 }
 
 /**

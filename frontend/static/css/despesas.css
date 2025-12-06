@@ -341,17 +341,16 @@
     background: rgba(0, 0, 0, 0.05);
 }
 
-/* Botão de marcar como pago - sempre visível */
-.btn-icon.btn-success {
+/* Botão de marcar como pago - simples e visível */
+.btn-icon.btn-pagar {
     color: #34c759;
+    background: transparent;
     opacity: 1;
-    font-size: 20px;
-    font-weight: 600;
 }
 
-.btn-icon.btn-success:hover {
+.btn-icon.btn-pagar:hover {
     background: rgba(52, 199, 89, 0.1);
-    transform: scale(1.1);
+    opacity: 1;
 }
 
 .btn-icon.btn-danger {
