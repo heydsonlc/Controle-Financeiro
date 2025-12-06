@@ -253,8 +253,13 @@
                         Cancelar
                     </button>
                     <div style="display: flex; gap: 10px;">
-                        <button type="button" id="btn-deletar-modal" class="btn btn-danger" onclick="deletarDespesaModal()" style="display: none;">
-                            Deletar
+                        <button type="button" id="btn-deletar-modal" class="btn-icon btn-danger" onclick="deletarDespesaModal()" style="display: none;" title="Excluir">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                <line x1="10" y1="11" x2="10" y2="17"></line>
+                                <line x1="14" y1="11" x2="14" y2="17"></line>
+                            </svg>
                         </button>
                         <button type="submit" class="btn btn-primary">
                             Salvar
@@ -267,48 +272,47 @@
 
     <!-- Modal: Confirmar Pagamento -->
     <div id="modal-pagar" class="modal">
-        <div class="modal-content" style="max-width: 320px; padding: 18px; background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%); position: relative;">
-            <span class="close" onclick="fecharModalPagar()" style="position: absolute; top: 8px; right: 12px; color: rgba(255,255,255,0.7); font-size: 22px; cursor: pointer;">&times;</span>
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2 id="pagar-nome-despesa"></h2>
+                <span class="close" onclick="fecharModalPagar()">&times;</span>
+            </div>
 
             <form id="form-pagar" onsubmit="confirmarPagamento(event)">
                 <input type="hidden" id="pagar-despesa-id">
                 <input type="hidden" id="pagar-valor-previsto">
 
-                <!-- Nome da despesa -->
-                <div id="pagar-nome-despesa" style="color: white; font-weight: 600; font-size: 1em; margin-bottom: 12px; padding-right: 18px;"></div>
-
                 <!-- Opções de valor -->
-                <div style="margin-bottom: 12px;">
-                    <label style="display: flex; align-items: center; gap: 8px; padding: 6px 0; cursor: pointer; margin-bottom: 6px;">
+                <div class="form-group">
+                    <label class="checkbox-label">
                         <input type="radio" name="tipo-pagamento" value="total" checked onchange="alternarCampoValor()">
-                        <span style="color: white; font-size: 0.9em;">
-                            Valor Total: <strong id="pagar-valor-previsto-display"></strong>
-                        </span>
+                        <span>Valor Total: <strong id="pagar-valor-previsto-display"></strong></span>
                     </label>
 
-                    <label style="display: flex; align-items: center; gap: 8px; padding: 6px 0; cursor: pointer;">
+                    <label class="checkbox-label">
                         <input type="radio" name="tipo-pagamento" value="parcial" onchange="alternarCampoValor()">
-                        <span style="color: white; font-size: 0.9em;">Pagar outro Valor</span>
+                        <span>Pagar outro Valor</span>
                     </label>
                 </div>
 
                 <!-- Campo de valor (oculto por padrão) -->
-                <div id="campo-valor-custom" style="display: none; margin-bottom: 10px;">
-                    <input type="number" id="pagar-valor-pago" step="0.01" min="0"
-                           placeholder="Valor pago" style="width: 100%; padding: 8px; background: transparent; border: none; border-bottom: 1px solid rgba(255, 255, 255, 0.3); color: white; font-size: 14px;">
+                <div id="campo-valor-custom" style="display: none;" class="form-group">
+                    <label>Valor Pago</label>
+                    <input type="number" id="pagar-valor-pago" step="0.01" min="0" placeholder="R$ 0,00">
                 </div>
 
                 <!-- Data do pagamento -->
-                <div style="margin-bottom: 12px;">
-                    <input type="date" id="pagar-data" style="width: 100%; padding: 8px; background: transparent; border: none; border-bottom: 1px solid rgba(255, 255, 255, 0.3); color: white; font-size: 14px;">
+                <div class="form-group">
+                    <label>Data do Pagamento</label>
+                    <input type="date" id="pagar-data">
                 </div>
 
                 <!-- Botões -->
-                <div style="display: flex; gap: 6px;">
-                    <button type="button" class="btn btn-secondary" onclick="fecharModalPagar()" style="flex: 1; padding: 8px; font-size: 0.9em;">
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="fecharModalPagar()">
                         Cancelar
                     </button>
-                    <button type="submit" class="btn btn-primary" style="flex: 1; padding: 8px; font-size: 0.9em;">
+                    <button type="submit" class="btn btn-primary">
                         Pagar
                     </button>
                 </div>
