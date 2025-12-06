@@ -280,42 +280,39 @@ function renderizarLancamentos(lancamentos) {
 
     container.innerHTML = lancamentos.map(lanc => {
         const isCartao = lanc.tipo === 'cartao';
-        const tipoBadge = isCartao
-            ? `<span class="badge badge-tipo-cartao">💳 Cartão</span>`
-            : `<span class="badge badge-tipo-direto">💵 Direto</span>`;
+        const tipoIcon = isCartao ? '💳' : '💵';
+        const tipoTexto = isCartao ? 'Cartão' : 'Direto';
 
         return `
         <div class="lancamento-card">
-            <div class="lancamento-header">
-                <div class="lancamento-info">
-                    <h3>${lanc.descricao}</h3>
-                    <div class="lancamento-meta">
-                        ${tipoBadge}
-                        ${isCartao ? `<span class="badge badge-cartao">${lanc.cartao_nome}</span>` : ''}
-                        <span class="badge badge-categoria">${lanc.categoria_nome}</span>
-                    </div>
+            <div class="lancamento-row-1">
+                <div class="lancamento-principal">
+                    <h3 class="lancamento-nome">${lanc.descricao}</h3>
+                    <span class="lancamento-data">${formatarData(lanc.data_compra)}</span>
+                </div>
+                <div class="lancamento-badges">
+                    <span class="badge badge-tipo-${lanc.tipo}">${tipoIcon} ${tipoTexto}</span>
+                    ${isCartao ? `<span class="badge badge-cartao">${lanc.cartao_nome}</span>` : ''}
+                    <span class="badge badge-categoria">${lanc.categoria_nome}</span>
                 </div>
                 <div class="lancamento-valor">
                     R$ ${parseFloat(lanc.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
                 </div>
             </div>
-            <div class="lancamento-body">
-                <div class="lancamento-detalhes">
-                    <span><strong>Data:</strong> ${formatarData(lanc.data_compra)}</span>
-                    ${isCartao ? `<span><strong>Fatura:</strong> ${formatarMes(lanc.mes_fatura)}</span>` : ''}
-                    ${lanc.total_parcelas > 1 ?
-                        `<span><strong>Parcela:</strong> ${lanc.numero_parcela}/${lanc.total_parcelas}</span>`
-                        : ''}
+            <div class="lancamento-row-2">
+                <div class="lancamento-info-extra">
+                    ${isCartao ? `<span class="info-item">Fatura: ${formatarMes(lanc.mes_fatura)}</span>` : ''}
+                    ${lanc.total_parcelas > 1 ? `<span class="info-item">Parcela ${lanc.numero_parcela}/${lanc.total_parcelas}</span>` : ''}
+                    ${lanc.observacoes ? `<span class="info-item obs">${lanc.observacoes}</span>` : ''}
                 </div>
-                ${lanc.observacoes ? `<p class="lancamento-obs">${lanc.observacoes}</p>` : ''}
-            </div>
-            <div class="lancamento-actions">
-                <button class="btn-sm btn-secondary" onclick='editarLancamento(${JSON.stringify(lanc).replace(/'/g, "&#39;")})'>
-                    Editar
-                </button>
-                <button class="btn-sm btn-danger" onclick="excluirLancamento(${lanc.id}, '${lanc.tipo}')">
-                    Excluir
-                </button>
+                <div class="lancamento-actions">
+                    <button class="btn-icon" onclick='editarLancamento(${JSON.stringify(lanc).replace(/'/g, "&#39;")})' title="Editar">
+                        ✏️
+                    </button>
+                    <button class="btn-icon btn-delete" onclick="excluirLancamento(${lanc.id}, '${lanc.tipo}')" title="Excluir">
+                        ×
+                    </button>
+                </div>
             </div>
         </div>
         `;

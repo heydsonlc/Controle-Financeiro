@@ -317,9 +317,53 @@
 
 .despesa-actions {
     display: flex;
-    flex-direction: column;
     gap: 8px;
-    align-items: flex-end;
+    align-items: center;
+}
+
+/* Botões de Ação - Estilo Minimalista (igual ao histórico de lançamentos) */
+.btn-icon {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
+    padding: 6px;
+    border-radius: 6px;
+    transition: all 0.2s;
+    opacity: 0.6;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-icon:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.05);
+}
+
+/* Botão de marcar como pago - sempre visível */
+.btn-icon.btn-success {
+    color: #34c759;
+    opacity: 1;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.btn-icon.btn-success:hover {
+    background: rgba(52, 199, 89, 0.1);
+    transform: scale(1.1);
+}
+
+.btn-icon.btn-danger {
+    color: #ff3b30;
+}
+
+.btn-icon.btn-danger:hover {
+    background: rgba(255, 59, 48, 0.1);
+}
+
+.btn-icon svg {
+    display: block;
 }
 
 .loading {
