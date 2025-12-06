@@ -519,14 +519,21 @@ form {
     cursor: pointer;
     color: #1d1d1f;
     font-size: 15px;
+    margin-bottom: 12px;
 }
 
-.checkbox-label input[type="checkbox"] {
+.checkbox-label:last-child {
+    margin-bottom: 0;
+}
+
+.checkbox-label input[type="checkbox"],
+.checkbox-label input[type="radio"] {
     width: 20px;
     height: 20px;
     margin-right: 10px;
     cursor: pointer;
     accent-color: #007aff;
+    flex-shrink: 0;
 }
 
 .form-actions {

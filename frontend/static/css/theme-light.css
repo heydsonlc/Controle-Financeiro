@@ -89,6 +89,16 @@
     color: #6e6e73;
 }
 
+.checkbox-label {
+    color: #1d1d1f !important;
+    margin-bottom: 12px;
+}
+
+.checkbox-label input[type="checkbox"],
+.checkbox-label input[type="radio"] {
+    accent-color: #007aff !important;
+}
+
 /* ============================================================================
    BOTÕES
    ============================================================================ */
