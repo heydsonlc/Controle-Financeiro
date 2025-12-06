@@ -19,7 +19,9 @@
 }
 
 .modal-header {
-    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    background: #ffffff !important;
+    border-bottom: 1px solid #e8e8ea !important;
+    border-radius: 12px 12px 0 0 !important;
 }
 
 .modal-header h2 {
@@ -30,11 +32,21 @@
 }
 
 .close {
-    color: #6e6e73;
+    color: #6e6e73 !important;
+    background: transparent !important;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 1.8em;
+    font-weight: 300;
 }
 
 .close:hover {
-    color: #1d1d1f;
+    color: #1d1d1f !important;
+    background: rgba(0, 0, 0, 0.05) !important;
 }
 
 /* ============================================================================
@@ -49,16 +61,17 @@
 .form-group input,
 .form-group select,
 .form-group textarea {
-    border: 1px solid rgba(0, 0, 0, 0.12);
-    background: #ffffff;
-    color: #1d1d1f;
+    border: 1px solid #d1d1d6 !important;
+    background: #ffffff !important;
+    color: #1d1d1f !important;
+    border-radius: 10px !important;
 }
 
 .form-group input:focus,
 .form-group select:focus,
 .form-group textarea:focus {
-    border-color: #007aff;
-    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+    border-color: #007aff !important;
+    box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.1) !important;
 }
 
 .form-group input::placeholder,
@@ -423,4 +436,133 @@ textarea::placeholder {
 .btn,
 button {
     color: inherit;
+}
+
+/* ============================================================================
+   ALERTAS E AGENDA FINANCEIRA (Estilo Apple Minimalista)
+   ============================================================================ */
+
+.alertas {
+    margin-top: 32px;
+}
+
+.section-title {
+    font-size: 22px;
+    font-weight: 600;
+    color: #1d1d1f !important;
+    margin-bottom: 20px;
+    letter-spacing: -0.02em;
+}
+
+.alertas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+/* Cards de Alerta */
+.alerta-card {
+    background: #ffffff;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    transition: all 0.2s ease;
+}
+
+.alerta-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    border-color: rgba(0, 0, 0, 0.12);
+}
+
+.alerta-card h3 {
+    font-size: 15px;
+    font-weight: 600;
+    color: #1d1d1f !important;
+    margin: 0 0 16px 0;
+    letter-spacing: -0.01em;
+}
+
+/* Lista de Alertas */
+.alerta-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.alerta-lista .loading,
+.alerta-lista .empty {
+    color: #6e6e73 !important;
+    font-size: 13px;
+    text-align: center;
+    padding: 20px;
+}
+
+/* Item Individual */
+.alerta-item {
+    background: #f5f5f7;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 8px;
+    padding: 12px 14px;
+    transition: all 0.2s ease;
+}
+
+.alerta-item:hover {
+    background: #ebebed;
+    border-color: rgba(0, 0, 0, 0.1);
+}
+
+.alerta-item .item-titulo {
+    font-size: 14px;
+    font-weight: 500;
+    color: #1d1d1f !important;
+    margin: 0 0 6px 0;
+    line-height: 1.3;
+}
+
+.alerta-item .item-detalhes {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+    color: #6e6e73 !important;
+}
+
+.alerta-item .item-valor {
+    font-weight: 600;
+    color: #1d1d1f !important;
+    white-space: nowrap;
+}
+
+/* Tipos específicos de alerta */
+.alerta-item.lancamento {
+    border-left: 3px solid #ff3b30;
+}
+
+.alerta-item.cartao {
+    border-left: 3px solid #ff9500;
+}
+
+.alerta-item.financiamento {
+    border-left: 3px solid #007aff;
+}
+
+.alerta-item.receita {
+    border-left: 3px solid #34c759;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+    .alertas-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .alerta-card {
+        padding: 16px;
+    }
+
+    .section-title {
+        font-size: 20px;
+    }
 }
