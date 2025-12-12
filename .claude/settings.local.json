@@ -5,7 +5,18 @@
       "Bash(git push:*)",
       "Bash(git add:*)",
       "Bash(git commit -m \"$(cat <<''EOF''\nImplementar tema claro minimalista inspirado no design da Apple\n\nTransformação completa do design para um estilo clean e profissional:\n\n- Criar theme-light.css global com 350+ linhas de override\n- Atualizar paleta de cores para tons neutros e sóbrios\n- Modificar style.css e despesas.css para tema claro\n- Adicionar theme-light.css em todas as 11 páginas HTML\n- Corrigir cores de fonte para ficarem visíveis no fundo claro\n- Implementar navegação automática para modal de despesas recorrentes\n- Remover emojis e elementos coloridos dos cards de configuração\n- Simplificar breadcrumbs e navegação inferior\n\nPaleta de cores:\n- Fundo: #f5f5f7 → #e8e8ea\n- Container: #ffffff\n- Texto principal: #1d1d1f\n- Texto secundário: #6e6e73\n- Azul iOS: #007aff\n- Verde: #34c759\n- Laranja: #ff9500\n- Vermelho: #ff3b30\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
-      "Bash(git commit -m \"$(cat <<''EOF''\nCorrigir cores de fonte em todas as páginas usando !important\n\nAdicionar regras CSS com !important para forçar a aplicação do tema\nclaro em todos os elementos que ainda exibiam texto branco:\n\n- Força cor #1d1d1f para body, headings, p, span, div, label\n- Override específico para cards de cartões, categorias, receitas, etc\n- Inputs e selects com fundo branco e texto preto\n- Placeholders em cinza (#6e6e73)\n- Links mantém azul iOS (#007aff)\n- Breadcrumbs e textos secundários em cinza\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
+      "Bash(git commit -m \"$(cat <<''EOF''\nCorrigir cores de fonte em todas as páginas usando !important\n\nAdicionar regras CSS com !important para forçar a aplicação do tema\nclaro em todos os elementos que ainda exibiam texto branco:\n\n- Força cor #1d1d1f para body, headings, p, span, div, label\n- Override específico para cards de cartões, categorias, receitas, etc\n- Inputs e selects com fundo branco e texto preto\n- Placeholders em cinza (#6e6e73)\n- Links mantém azul iOS (#007aff)\n- Breadcrumbs e textos secundários em cinza\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(python:*)",
+      "Bash(venvScriptsactivate)",
+      "Bash(.venvScriptspython.exe backend/app.py)",
+      "Bash(./venv/Scripts/python.exe:*)",
+      "Bash(git commit:*)",
+      "Bash(curl:*)",
+      "Bash(del backendfinanceiro.db)",
+      "Bash(echo:*)",
+      "Bash(..venvScriptspython.exe backend/app.py)",
+      "Bash(./.venv/Scripts/python.exe:*)",
+      "Bash(ls:*)"
     ],
     "deny": [],
     "ask": []

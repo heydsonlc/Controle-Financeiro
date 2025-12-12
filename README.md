@@ -59,6 +59,117 @@ Dashboard exibe: R$ 5.000,03 (valor confirmado)
 - Eliminação de divergências entre diferentes telas
 - Sem "remendos" ou lógicas divergentes
 
+### Lógica Completa de Despesas (Dezembro 2024)
+Sistema unificado de gerenciamento de despesas com geração automática de registros:
+
+**Arquitetura de Despesas:**
+- **Tabela `Conta`** é a fonte única de verdade para TODAS as despesas do sistema
+- **Tabela `ItemDespesa`** serve apenas como template/configuração
+- Todas as despesas aparecem por **competência** (`mes_referencia`), não por data de vencimento/pagamento
+- Princípio fundamental: **Uma despesa = Um registro na tabela Conta**
+
+**Tipos de Despesas e Geração de Contas:**
+
+1. **Despesas Simples** (tipo='Simples'):
+   - Criadas manualmente pelo usuário
+   - Gera 1 registro na tabela Conta
+   - Exemplo: Boleto de internet, conta de luz
+
+2. **Consórcios** (tipo='Consórcio'):
+   - Criados via modal de consórcios
+   - Gera automaticamente N parcelas como registros em Conta
+   - Cada parcela é um registro independente com `numero_parcela` e `total_parcelas`
+   - Aplicação de reajustes (percentual/fixo) calculada na geração
+
+3. **Financiamentos** (tipo='Financiamento'):
+   - Criados via módulo de financiamentos
+   - Gera automaticamente cronograma em `FinanciamentoParcela`
+   - Função `sincronizar_contas()` cria registros em Conta para cada parcela
+   - Integração bidirecional: pagar parcela → atualiza Conta
+   - Exemplo: Financiamento imobiliário SAC com 360 parcelas
+
+4. **Despesas Recorrentes** (recorrente=True):
+   - Cadastradas via Configurações → Despesas Recorrentes
+   - Função `gerar_contas_despesa_recorrente()` cria Contas automaticamente
+   - Suporta múltiplos tipos de recorrência:
+     - **'mensal'**: Gera 1 conta por mês (padrão: 12 meses à frente)
+     - **'semanal'**: Quinzenal (padrão a cada 2 semanas)
+     - **'semanal_X_Y'**: Personalizado onde X=intervalo de semanas, Y=dia da semana
+       - Exemplo: 'semanal_2_1' = a cada 2 semanas na terça-feira (1)
+       - Dias da semana: 0=Monday, 1=Tuesday, 2=Wednesday, 3=Thursday, 4=Friday, 5=Saturday, 6=Sunday
+   - Exemplos: Psicólogo (mensal), Diarista (semanal_2_1)
+
+**Exceção: Cartões de Crédito** (tipo='Agregador'):
+- Despesas de cartão NÃO aparecem como Contas individuais
+- São agrupadas por fatura mensal na tela de despesas
+- Transações individuais ficam em `LancamentoAgregado`
+- Filtro usado: `ItemDespesa.tipo != 'Agregador' OR Conta.numero_parcela IS NOT NULL`
+- Exceção dentro da exceção: Consórcios/Financiamentos vinculados incorretamente a Agregador ainda aparecem (se tiverem numero_parcela)
+
+**Endpoint de Listagem** ([despesas.py](backend/routes/despesas.py) linhas 62-73):
+```python
+# Buscar contas que:
+# - NÃO são de cartão (tipo != 'Agregador') OU
+# - SÃO de cartão MAS têm numero_parcela (consórcios/financiamentos)
+contas_nao_cartao = db.session.query(Conta).join(
+    ItemDespesa, Conta.item_despesa_id == ItemDespesa.id
+).filter(
+    or_(
+        ItemDespesa.tipo != 'Agregador',
+        Conta.numero_parcela.isnot(None)
+    )
+).order_by(Conta.data_vencimento.desc()).all()
+```
+
+**Função de Geração de Despesas Recorrentes** ([despesas.py](backend/routes/despesas.py) linhas 557-656):
+- Chamada automaticamente ao criar ItemDespesa com `recorrente=True`
+- Deleta Contas futuras pendentes antes de regenerar (evita duplicatas)
+- Para recorrência mensal: calcula próximos N meses a partir de `data_vencimento`
+- Para recorrência semanal: ajusta para dia da semana alvo e avança pelo intervalo
+- Cada Conta criada tem:
+  - `mes_referencia`: mês de competência (sempre dia 1)
+  - `data_vencimento`: data real de vencimento
+  - `descricao`: nome do item + data (para semanais)
+  - `status_pagamento`: 'Pendente' por padrão
+
+**Fluxo Completo:**
+```
+Usuário cria ItemDespesa recorrente
+    ↓
+Sistema chama gerar_contas_despesa_recorrente(item_id)
+    ↓
+Função gera N registros em Conta (12 meses padrão)
+    ↓
+Dashboard e página de despesas consultam Conta
+    ↓
+Usuário vê todas as ocorrências futuras
+```
+
+**Exemplo Prático - Diarista Quinzenal:**
+```
+ItemDespesa:
+  nome: "Diarista"
+  tipo: "Simples"
+  recorrente: True
+  tipo_recorrencia: "semanal_2_1"  (a cada 2 semanas, terça-feira)
+  data_vencimento: 2025-12-01
+  valor: R$ 240,00
+
+Contas geradas:
+  - 2025-12-16 (terça) - Competência: 2025-12-01
+  - 2025-12-30 (terça) - Competência: 2025-12-01
+  - 2026-01-13 (terça) - Competência: 2026-01-01
+  - 2026-01-27 (terça) - Competência: 2026-01-01
+  ...
+```
+
+**Resultado Final:**
+- Dashboard dezembro/2025: R$ 1.520,00 (2 consórcios + 2 despesas recorrentes + 2 diaristas)
+- Página de despesas dezembro/2025: R$ 1.520,00 (mesma fonte: tabela Conta)
+- ✅ Zero divergências entre telas
+- ✅ Todas as despesas aparecem por competência
+- ✅ Automação completa para consórcios, financiamentos e recorrentes
+
 ### Módulo de Dashboard e Preferências (Dezembro 2024)
 Sistema completo de visualização consolidada e configurações personalizáveis:
 
@@ -304,6 +415,82 @@ Implementação completa do sistema de financiamentos com suporte aos sistemas S
 - Suporte a seguros e taxas administrativas mensais
 - Indexação automática do saldo devedor quando TR/IPCA está configurado
 - Recálculo inteligente após amortizações extras
+
+### Sistema de Faturas Virtuais de Cartão de Crédito (Dezembro 2024)
+Reformulação completa do módulo de cartões com lógica **orçamento-primeiro** (planejado vs executado):
+
+**Problema Resolvido:**
+- **Antes (errado):** Fatura = soma das compras (bottom-up)
+- **Agora (correto):** Orçamento primeiro (top-down), fatura sempre existe
+
+**Conceito Fundamental:**
+- Orçamento é definido ANTES das compras (budget mensal recorrente)
+- Fatura virtual existe mesmo sem compras
+- Compras apenas consomem orçamento, não criam despesas individuais
+- Ao pagar: fatura muda de PLANEJADO → EXECUTADO (valor real gasto)
+
+**Backend Completo:**
+- **Modelo Conta** expandido com 5 novos campos:
+  - `is_fatura_cartao`: Identifica faturas virtuais
+  - `valor_planejado`: Soma dos orçamentos das categorias do cartão
+  - `valor_executado`: Soma real dos gastos
+  - `estouro_orcamento`: Flag de alerta
+  - `cartao_competencia`: Mês de referência (YYYY-MM-01)
+
+- **Modelo OrcamentoAgregado** com histórico de vigência:
+  - `vigencia_inicio`, `vigencia_fim`, `ativo`
+  - Permite rastrear mudanças de orçamento ao longo do tempo
+
+- **CartaoService Completo** ([cartao_service.py](backend/services/cartao_service.py)):
+  - `get_or_create_fatura()`: Cria fatura virtual automaticamente
+  - `calcular_planejado()`: Soma orçamentos das categorias
+  - `calcular_executado()`: Soma lançamentos reais
+  - `recalcular_fatura()`: Atualiza valores e detecta estouro
+  - `pagar_fatura()`: **Substitui planejado por executado**
+  - `adicionar_lancamento()`: Adiciona compra sem criar despesa separada
+  - `avaliar_alertas()`: Detecta estouros por categoria
+  - `gerar_faturas_mes_atual()`: Job mensal automático
+
+**Automação:**
+- **Scheduler APScheduler** integrado ao app.py
+- Job mensal: Gera faturas virtuais no 1º dia de cada mês (00:01)
+- Criação on-demand ao adicionar lançamentos
+
+**Frontend Completo:**
+- **Cards de Despesas** com visualização aprimorada:
+  - Badge "Fatura Virtual" azul iOS style
+  - Comparação lado a lado: Planejado vs Executado
+  - Indicador dinâmico: "(Planejado)" ou "(Executado)"
+  - Alerta pulsante de estouro com valor exato da diferença
+
+- **Modal de Pagamento Inteligente:**
+  - Interface especial para faturas de cartão
+  - Explicação clara da transição planejado → executado
+  - Aviso visual com comparação de valores
+  - Destaque de estouro se aplicável
+
+**Estilos CSS:**
+- Gradientes azuis sutis para faturas de cartão
+- Animações de pulso para alertas de estouro
+- Grid de comparação com destaque do valor ativo
+- Glow sutil em cards com estouro
+
+**Fluxo Completo:**
+```
+1. Usuário define orçamentos por categoria no cartão (ex: R$ 1.500 alimentação)
+2. Sistema gera fatura virtual automaticamente no mês
+3. Usuário adiciona compras (consomem orçamento)
+4. Fatura mostra PLANEJADO (R$ 2.800) vs EXECUTADO (R$ 2.915)
+5. Sistema alerta: "Orçamento ultrapassado em R$ 115"
+6. Ao pagar: fatura "congela" no valor EXECUTADO (R$ 2.915)
+```
+
+**Resultado:**
+- ✅ Controle preciso de orçamento por categoria
+- ✅ Visibilidade de estouros em tempo real
+- ✅ Histórico de planejado vs executado
+- ✅ Automação completa (faturas geradas sem intervenção)
+- ✅ Interface profissional com feedback visual claro
 
 ### Módulo de Receitas Completo (Dezembro 2024)
 Implementação expandida do sistema de receitas com classificação detalhada e análises avançadas:

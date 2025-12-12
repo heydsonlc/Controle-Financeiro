@@ -207,6 +207,15 @@ if __name__ == '__main__':
     with app.app_context():
         db.create_all()
         print("=> Tabelas do banco de dados criadas/verificadas com sucesso!")
+
+        # Iniciar scheduler de jobs automáticos (faturas mensais, etc.)
+        try:
+            from backend.scheduler import start_scheduler
+            start_scheduler()
+        except ImportError:
+            from scheduler import start_scheduler
+            start_scheduler()
+
         print("=> Servidor iniciando em http://localhost:5000")
         print("=> Pressione CTRL+C para parar")
 

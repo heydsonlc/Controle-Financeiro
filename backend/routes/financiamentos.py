@@ -127,8 +127,10 @@ def criar_financiamento():
             "indexador_saldo": "TR|IPCA|..." (opcional),
             "data_contrato": "YYYY-MM-DD" (obrigatório),
             "data_primeira_parcela": "YYYY-MM-DD" (obrigatório),
-            "valor_seguro_mensal": float (opcional),
-            "valor_taxa_adm_mensal": float (opcional),
+            "seguro_tipo": "fixo|percentual_saldo" (opcional, padrão: fixo),
+            "seguro_percentual": float (obrigatório se seguro_tipo=percentual_saldo),
+            "valor_seguro_mensal": float (obrigatório se seguro_tipo=fixo),
+            "taxa_administracao_fixa": float (opcional, padrão: 0),
             "item_despesa_id": int (opcional)
         }
 
@@ -143,6 +145,38 @@ def criar_financiamento():
                 'success': False,
                 'error': 'Dados não fornecidos'
             }), 400
+
+        # Validar tipo de seguro
+        seguro_tipo = data.get('seguro_tipo', 'fixo')
+
+        if seguro_tipo not in ['fixo', 'percentual_saldo']:
+            return jsonify({
+                'success': False,
+                'error': 'seguro_tipo deve ser "fixo" ou "percentual_saldo"'
+            }), 400
+
+        # Validar campos de seguro baseado no tipo
+        if seguro_tipo == 'percentual_saldo':
+            if 'seguro_percentual' not in data or data['seguro_percentual'] is None:
+                return jsonify({
+                    'success': False,
+                    'error': 'seguro_percentual é obrigatório quando seguro_tipo é "percentual_saldo"'
+                }), 400
+
+            # Validar range do percentual (0.01% a 1%)
+            percentual = float(data['seguro_percentual'])
+            if percentual < 0.0001 or percentual > 0.01:
+                return jsonify({
+                    'success': False,
+                    'error': 'seguro_percentual deve estar entre 0.0001 (0.01%) e 0.01 (1%)'
+                }), 400
+
+        elif seguro_tipo == 'fixo':
+            if 'valor_seguro_mensal' not in data or data['valor_seguro_mensal'] is None:
+                return jsonify({
+                    'success': False,
+                    'error': 'valor_seguro_mensal é obrigatório quando seguro_tipo é "fixo"'
+                }), 400
 
         financiamento = FinanciamentoService.criar_financiamento(data)
 
@@ -175,6 +209,17 @@ def atualizar_financiamento(id):
         id: ID do financiamento
 
     Body (JSON): Campos que deseja atualizar
+        Campos aceitos:
+        - nome, produto
+        - seguro_tipo: "fixo|percentual_saldo"
+        - seguro_percentual: float (se seguro_tipo=percentual_saldo)
+        - valor_seguro_mensal: float (se seguro_tipo=fixo)
+        - taxa_administracao_fixa: float
+        - item_despesa_id: int
+
+    Nota: Ao alterar seguro_tipo, seguro_percentual, valor_seguro_mensal ou
+          taxa_administracao_fixa, as parcelas futuras (status PENDENTE) serão
+          automaticamente recalculadas
 
     Returns:
         JSON com o financiamento atualizado
@@ -187,6 +232,39 @@ def atualizar_financiamento(id):
                 'success': False,
                 'error': 'Dados não fornecidos'
             }), 400
+
+        # Validar tipo de seguro se fornecido
+        if 'seguro_tipo' in data:
+            seguro_tipo = data['seguro_tipo']
+
+            if seguro_tipo not in ['fixo', 'percentual_saldo']:
+                return jsonify({
+                    'success': False,
+                    'error': 'seguro_tipo deve ser "fixo" ou "percentual_saldo"'
+                }), 400
+
+            # Validar campos de seguro baseado no tipo
+            if seguro_tipo == 'percentual_saldo':
+                if 'seguro_percentual' not in data or data['seguro_percentual'] is None:
+                    return jsonify({
+                        'success': False,
+                        'error': 'seguro_percentual é obrigatório quando seguro_tipo é "percentual_saldo"'
+                    }), 400
+
+                # Validar range do percentual (0.01% a 1%)
+                percentual = float(data['seguro_percentual'])
+                if percentual < 0.0001 or percentual > 0.01:
+                    return jsonify({
+                        'success': False,
+                        'error': 'seguro_percentual deve estar entre 0.0001 (0.01%) e 0.01 (1%)'
+                    }), 400
+
+            elif seguro_tipo == 'fixo':
+                if 'valor_seguro_mensal' not in data or data['valor_seguro_mensal'] is None:
+                    return jsonify({
+                        'success': False,
+                        'error': 'valor_seguro_mensal é obrigatório quando seguro_tipo é "fixo"'
+                    }), 400
 
         financiamento = FinanciamentoService.atualizar_financiamento(id, data)
 
@@ -270,13 +348,8 @@ def regenerar_parcelas(id):
                 'error': 'Financiamento não encontrado'
             }), 404
 
-        data = request.get_json() or {}
-
-        FinanciamentoService.gerar_parcelas(
-            financiamento,
-            valor_seguro_mensal=data.get('valor_seguro_mensal', 0),
-            valor_taxa_adm_mensal=data.get('valor_taxa_adm_mensal', 0)
-        )
+        # Regenerar parcelas usando as configurações do financiamento
+        FinanciamentoService.gerar_parcelas(financiamento)
 
         return jsonify({
             'success': True,

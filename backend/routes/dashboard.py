@@ -157,8 +157,10 @@ def indicadores():
         ).scalar() or 0
 
         # 3. FATURAS DE CARTÃO (simplificado - contar cartões ativos)
-        faturas_proximas = db.session.query(func.count(ConfigAgregador.id)).filter(
-            ConfigAgregador.ativo == True
+        faturas_proximas = db.session.query(func.count(ConfigAgregador.id)).join(
+            ItemDespesa, ConfigAgregador.item_despesa_id == ItemDespesa.id
+        ).filter(
+            ItemDespesa.ativo == True
         ).scalar() or 0
 
         # 4. PORCENTAGEM POUPADA
@@ -233,13 +235,14 @@ def grafico_categorias():
             Categoria.nome,
             Categoria.cor,
             func.sum(Conta.valor).label('total')
-        ).join(
+        ).outerjoin(
             ItemDespesa, Conta.item_despesa_id == ItemDespesa.id
-        ).join(
+        ).outerjoin(
             Categoria, ItemDespesa.categoria_id == Categoria.id
         ).filter(
             extract('month', Conta.mes_referencia) == mes_atual,
-            extract('year', Conta.mes_referencia) == ano_atual
+            extract('year', Conta.mes_referencia) == ano_atual,
+            Categoria.id.isnot(None)  # Apenas contas com categoria
         ).group_by(
             Categoria.id, Categoria.nome, Categoria.cor
         ).order_by(
@@ -413,28 +416,30 @@ def alertas():
         ano_atual = hoje.year
 
         # 1. CONTAS A VENCER (Contas pendentes)
-        contas_vencer = db.session.query(Conta).join(
-            ItemDespesa
-        ).join(
-            Categoria
+        contas_vencer = db.session.query(Conta).outerjoin(
+            ItemDespesa, Conta.item_despesa_id == ItemDespesa.id
+        ).outerjoin(
+            Categoria, ItemDespesa.categoria_id == Categoria.id
         ).filter(
             Conta.data_vencimento.between(hoje, proximos_7_dias),
             Conta.status_pagamento == 'Pendente'
         ).order_by(Conta.data_vencimento).limit(10).all()
 
         # 2. CARTÕES ATIVOS
-        cartoes_vencer = db.session.query(ConfigAgregador).filter(
-            ConfigAgregador.ativo == True
+        cartoes_vencer = db.session.query(ConfigAgregador).join(
+            ItemDespesa, ConfigAgregador.item_despesa_id == ItemDespesa.id
+        ).filter(
+            ItemDespesa.ativo == True
         ).limit(5).all()
 
         # 3. FINANCIAMENTOS ATIVOS
         financiamentos_mes = db.session.query(Financiamento).filter(
-            Financiamento.status == 'ATIVO'
+            Financiamento.ativo == True
         ).limit(5).all()
 
         # 4. RECEITAS PREVISTAS (via orçamento)
-        receitas_previstas = db.session.query(ReceitaOrcamento).join(
-            ItemReceita
+        receitas_previstas = db.session.query(ReceitaOrcamento).outerjoin(
+            ItemReceita, ReceitaOrcamento.item_receita_id == ItemReceita.id
         ).filter(
             extract('month', ReceitaOrcamento.mes_referencia) == mes_atual,
             extract('year', ReceitaOrcamento.mes_referencia) == ano_atual

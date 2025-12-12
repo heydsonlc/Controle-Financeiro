@@ -576,6 +576,101 @@ def criar_realizada():
         }), 500
 
 
+@receitas_bp.route('/realizadas/pontual', methods=['POST'])
+def criar_receita_pontual():
+    """
+    Registra uma receita pontual/eventual (sem vínculo com orçamento)
+    Útil para registrar entradas ocasionais como PIX recebido, venda de item, etc.
+
+    Body (JSON):
+        {
+            "conta_bancaria_id": int (obrigatório),
+            "descricao": "string" (obrigatório),
+            "valor_recebido": float (obrigatório),
+            "data_recebimento": "YYYY-MM-DD" (obrigatório),
+            "competencia": "YYYY-MM-01" (obrigatório),
+            "observacoes": "string" (opcional),
+            "tipo_entrada": "string" (opcional, ex: RECEITA_PONTUAL)
+        }
+
+    Returns:
+        JSON com a receita registrada
+    """
+    from decimal import Decimal
+
+    try:
+        from backend.models import ContaBancaria
+    except ImportError:
+        from models import ContaBancaria
+
+    try:
+        data = request.get_json()
+
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'Dados não fornecidos'
+            }), 400
+
+        # Validações
+        campos_obrigatorios = ['conta_bancaria_id', 'descricao', 'valor_recebido',
+                               'data_recebimento', 'competencia']
+        for campo in campos_obrigatorios:
+            if not data.get(campo):
+                return jsonify({
+                    'success': False,
+                    'error': f'{campo} é obrigatório'
+                }), 400
+
+        # Verificar se a conta bancária existe
+        conta = ContaBancaria.query.get(data['conta_bancaria_id'])
+        if not conta:
+            return jsonify({
+                'success': False,
+                'error': 'Conta bancária não encontrada'
+            }), 404
+
+        # Converter valor para Decimal
+        valor_recebido = Decimal(str(data['valor_recebido']))
+
+        # Criar receita realizada sem item_receita_id e orcamento_id
+        receita = ReceitaRealizada(
+            item_receita_id=None,  # Receita pontual não tem fonte fixa
+            orcamento_id=None,     # Não vinculada a orçamento
+            conta_origem_id=data['conta_bancaria_id'],  # Usar conta_origem_id
+            data_recebimento=datetime.strptime(data['data_recebimento'], '%Y-%m-%d').date(),
+            valor_recebido=valor_recebido,
+            mes_referencia=datetime.strptime(data['competencia'], '%Y-%m-%d').date(),  # Usar mes_referencia
+            descricao=data['descricao'],
+            observacoes=data.get('observacoes', '')
+        )
+
+        # Atualizar saldo da conta bancária (usando Decimal)
+        conta.saldo_atual = (conta.saldo_atual or Decimal('0')) + valor_recebido
+
+        db.session.add(receita)
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': 'Receita pontual registrada com sucesso',
+            'data': receita.to_dict()
+        }), 201
+
+    except ValueError as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 400
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @receitas_bp.route('/realizadas/<int:id>', methods=['DELETE'])
 def deletar_realizada(id):
     """
@@ -587,6 +682,13 @@ def deletar_realizada(id):
     Returns:
         JSON com confirmação
     """
+    from decimal import Decimal
+
+    try:
+        from backend.models import ContaBancaria
+    except ImportError:
+        from models import ContaBancaria
+
     try:
         receita = ReceitaRealizada.query.get(id)
 
@@ -595,6 +697,12 @@ def deletar_realizada(id):
                 'success': False,
                 'error': 'Receita não encontrada'
             }), 404
+
+        # Se for receita pontual, reverter o saldo da conta
+        if receita.conta_origem_id and not receita.orcamento_id:
+            conta = ContaBancaria.query.get(receita.conta_origem_id)
+            if conta:
+                conta.saldo_atual = (conta.saldo_atual or Decimal('0')) - receita.valor_recebido
 
         db.session.delete(receita)
         db.session.commit()

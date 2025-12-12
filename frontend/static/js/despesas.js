@@ -181,8 +181,9 @@ function renderizarDespesas(despesasParaRenderizar) {
     }
 
     lista.innerHTML = despesasParaRenderizar.map(despesa => {
-        // Verificar se é despesa agrupada (fatura de cartão)
-        const isAgrupado = despesa.agrupado === true;
+        // Verificar se é fatura de cartão (nova lógica)
+        const isFaturaCartao = despesa.is_fatura_cartao === true;
+        const isAgrupado = despesa.agrupado === true || isFaturaCartao;
 
         // Usar a categoria que vem do backend (já completa) ou buscar no array local
         const categoria = despesa.categoria || (despesa.categoria_id ? categorias.find(c => c.id === despesa.categoria_id) : null);
@@ -201,8 +202,51 @@ function renderizarDespesas(despesasParaRenderizar) {
             dataPagamento = data.toLocaleDateString('pt-BR');
         }
 
-        // Para despesas agrupadas, não mostrar botões de editar/pagar
-        const acoesHTML = isAgrupado ? '' : `
+        // Informações específicas de fatura de cartão
+        let infoFaturaCartao = '';
+        if (isFaturaCartao) {
+            const valorPlanejado = parseFloat(despesa.valor_planejado || 0);
+            const valorExecutado = parseFloat(despesa.valor_executado || 0);
+            const estouro = despesa.estouro_orcamento === true;
+
+            infoFaturaCartao = `
+                <div class="fatura-cartao-info">
+                    <div class="valores-comparacao">
+                        <div class="valor-item ${!despesa.pago ? 'valor-destaque' : ''}">
+                            <span class="valor-label">💰 Planejado:</span>
+                            <span class="valor-numero">R$ ${valorPlanejado.toFixed(2).replace('.', ',')}</span>
+                        </div>
+                        <div class="valor-item ${despesa.pago ? 'valor-destaque' : ''}">
+                            <span class="valor-label">💳 Executado:</span>
+                            <span class="valor-numero">R$ ${valorExecutado.toFixed(2).replace('.', ',')}</span>
+                        </div>
+                    </div>
+                    ${estouro ? `
+                        <div class="alerta-estouro">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                <line x1="12" y1="9" x2="12" y2="13"></line>
+                                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                            </svg>
+                            <span>Orçamento ultrapassado em R$ ${(valorExecutado - valorPlanejado).toFixed(2).replace('.', ',')}</span>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        // Para faturas de cartão, mostrar apenas botão de pagar (se pendente)
+        const acoesHTML = isFaturaCartao ? `
+            <div class="despesa-actions">
+                ${!despesa.pago ? `
+                    <button class="btn-icon btn-pagar" onclick="marcarComoPago(${despesa.id})" title="Pagar fatura">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                    </button>
+                ` : ''}
+            </div>
+        ` : (isAgrupado ? '' : `
             <div class="despesa-actions">
                 <button class="btn-icon" onclick="editarDespesa(${despesa.id})" title="Editar">
                     ✏️
@@ -215,18 +259,22 @@ function renderizarDespesas(despesasParaRenderizar) {
                     </button>
                 ` : ''}
             </div>
-        `;
+        `);
 
         return `
-            <div class="despesa-card ${statusClass} ${isAgrupado ? 'agrupado' : ''}">
+            <div class="despesa-card ${statusClass} ${isFaturaCartao ? 'fatura-cartao' : ''} ${isAgrupado ? 'agrupado' : ''} ${despesa.estouro_orcamento ? 'com-estouro' : ''}">
                 <div class="despesa-info">
                     <div class="despesa-header">
                         <div class="despesa-nome">
                             <span class="status-indicador status-indicador-${statusClass}"></span>
                             ${despesa.nome}
-                            ${isAgrupado ? '<span style="margin-left: 8px; font-size: 0.85em; opacity: 0.7;">(Fatura Agrupada)</span>' : ''}
+                            ${isFaturaCartao ? '<span class="badge-fatura">Fatura Virtual</span>' : ''}
                         </div>
-                        <div class="despesa-valor">R$ ${parseFloat(despesa.valor).toFixed(2).replace('.', ',')}</div>
+                        <div class="despesa-valor ${isFaturaCartao ? 'valor-fatura' : ''}">
+                            R$ ${parseFloat(despesa.valor).toFixed(2).replace('.', ',')}
+                            ${isFaturaCartao && !despesa.pago ? '<span class="valor-tipo">(Planejado)</span>' : ''}
+                            ${isFaturaCartao && despesa.pago ? '<span class="valor-tipo">(Executado)</span>' : ''}
+                        </div>
                         ${categoria ? `
                             <div class="despesa-categoria">
                                 <span class="categoria-cor" style="background-color: ${categoria.cor}"></span>
@@ -235,7 +283,9 @@ function renderizarDespesas(despesasParaRenderizar) {
                         ` : ''}
                     </div>
 
-                    ${despesa.descricao ? `<div style="color: rgba(255,255,255,0.8); font-size: 0.9em;">${despesa.descricao}</div>` : ''}
+                    ${infoFaturaCartao}
+
+                    ${despesa.descricao && !isFaturaCartao ? `<div style="color: rgba(255,255,255,0.8); font-size: 0.9em;">${despesa.descricao}</div>` : ''}
 
                     <div class="despesa-detalhes">
                         ${dataVencimento ? `<span>📅 Venc: ${dataVencimento}</span>` : ''}
@@ -553,15 +603,85 @@ function marcarComoPago(id) {
         return;
     }
 
-    const valorFormatado = `R$ ${parseFloat(despesa.valor).toFixed(2).replace('.', ',')}`;
+    const isFaturaCartao = despesa.is_fatura_cartao === true;
 
-    // Preencher dados do modal
+    // Guardar no modal se é fatura de cartão
     document.getElementById('pagar-despesa-id').value = id;
-    document.getElementById('pagar-valor-previsto').value = despesa.valor;
+    document.getElementById('pagar-despesa-id').dataset.isFaturaCartao = isFaturaCartao;
+
+    // Preencher dados básicos
     document.getElementById('pagar-nome-despesa').textContent = despesa.nome;
-    document.getElementById('pagar-valor-previsto-display').textContent = valorFormatado;
-    document.getElementById('pagar-valor-pago').value = despesa.valor;
     document.getElementById('pagar-data').value = new Date().toISOString().split('T')[0];
+
+    // Se for fatura de cartão, criar interface especial
+    if (isFaturaCartao) {
+        const valorPlanejado = parseFloat(despesa.valor_planejado || 0);
+        const valorExecutado = parseFloat(despesa.valor_executado || 0);
+        const estouro = despesa.estouro_orcamento === true;
+
+        const form = document.getElementById('form-pagar');
+
+        // Adicionar aviso especial ANTES das opções de pagamento
+        const avisoExistente = form.querySelector('.aviso-fatura-cartao');
+        if (!avisoExistente) {
+            const avisoHTML = `
+                <div class="aviso-fatura-cartao" style="background: linear-gradient(135deg, rgba(0, 122, 255, 0.1) 0%, rgba(0, 122, 255, 0.05) 100%); padding: 16px; border-radius: 10px; margin-bottom: 20px; border-left: 3px solid #007aff;">
+                    <h4 style="margin: 0 0 12px 0; color: #1d1d1f; font-size: 0.95em; font-weight: 600;">💳 Fatura de Cartão de Crédito</h4>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                        <div style="background: #ffffff; padding: 12px; border-radius: 8px; border: 1px solid rgba(0, 0, 0, 0.06);">
+                            <div style="font-size: 0.75em; color: #6e6e73; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">💰 Planejado (Orçamento)</div>
+                            <div style="font-size: 1.2em; font-weight: 600; color: #1d1d1f;">R$ ${valorPlanejado.toFixed(2).replace('.', ',')}</div>
+                        </div>
+                        <div style="background: #ffffff; padding: 12px; border-radius: 8px; border: 1px solid rgba(0, 0, 0, 0.06);">
+                            <div style="font-size: 0.75em; color: #6e6e73; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">💳 Executado (Gasto Real)</div>
+                            <div style="font-size: 1.2em; font-weight: 600; color: ${estouro ? '#ff3b30' : '#34c759'};">R$ ${valorExecutado.toFixed(2).replace('.', ',')}</div>
+                        </div>
+                    </div>
+
+                    ${estouro ? `
+                        <div style="background: rgba(255, 59, 48, 0.1); padding: 10px; border-radius: 6px; margin-bottom: 12px; border: 1px solid rgba(255, 59, 48, 0.2);">
+                            <span style="color: #ff3b30; font-size: 0.85em; font-weight: 500;">⚠️ Orçamento ultrapassado em R$ ${(valorExecutado - valorPlanejado).toFixed(2).replace('.', ',')}</span>
+                        </div>
+                    ` : ''}
+
+                    <div style="background: rgba(0, 122, 255, 0.08); padding: 10px; border-radius: 6px; font-size: 0.85em; color: #1d1d1f; line-height: 1.5;">
+                        <strong>O que acontece ao pagar:</strong><br>
+                        O valor da fatura mudará de <strong>Planejado</strong> (R$ ${valorPlanejado.toFixed(2).replace('.', ',')}) para <strong>Executado</strong> (R$ ${valorExecutado.toFixed(2).replace('.', ',')})
+                    </div>
+                </div>
+            `;
+
+            // Inserir no início do formulário
+            const primeiroElemento = form.querySelector('.form-group');
+            primeiroElemento.insertAdjacentHTML('beforebegin', avisoHTML);
+        }
+
+        // Configurar valor para executado
+        document.getElementById('pagar-valor-previsto').value = valorExecutado;
+        document.getElementById('pagar-valor-previsto-display').textContent = `R$ ${valorExecutado.toFixed(2).replace('.', ',')}`;
+        document.getElementById('pagar-valor-pago').value = valorExecutado;
+
+        // Trocar texto para "Valor Executado"
+        const labelTotal = document.querySelector('input[name="tipo-pagamento"][value="total"]').closest('label').querySelector('span');
+        labelTotal.innerHTML = `Valor Executado (Gasto Real): <strong>R$ ${valorExecutado.toFixed(2).replace('.', ',')}</strong>`;
+    } else {
+        // Remover aviso se existir
+        const avisoExistente = document.querySelector('.aviso-fatura-cartao');
+        if (avisoExistente) {
+            avisoExistente.remove();
+        }
+
+        // Despesa normal
+        const valorFormatado = `R$ ${parseFloat(despesa.valor).toFixed(2).replace('.', ',')}`;
+        document.getElementById('pagar-valor-previsto').value = despesa.valor;
+        document.getElementById('pagar-valor-previsto-display').textContent = valorFormatado;
+        document.getElementById('pagar-valor-pago').value = despesa.valor;
+
+        // Texto padrão
+        const labelTotal = document.querySelector('input[name="tipo-pagamento"][value="total"]').closest('label').querySelector('span');
+        labelTotal.innerHTML = `Valor Total: <strong>${valorFormatado}</strong>`;
+    }
 
     // Resetar para o estado inicial
     document.querySelector('input[name="tipo-pagamento"][value="total"]').checked = true;

@@ -3,6 +3,7 @@ Rotas para gerenciamento de Cartões de Crédito
 """
 from flask import Blueprint, request, jsonify
 from backend.models import db, ItemDespesa, ConfigAgregador, ItemAgregado, OrcamentoAgregado, LancamentoAgregado, Categoria
+from backend.services.cartao_service import CartaoService
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import func
@@ -379,32 +380,57 @@ def listar_lancamentos(item_id):
 
 @cartoes_bp.route('/itens/<int:item_id>/lancamentos', methods=['POST'])
 def criar_lancamento(item_id):
-    """Cria um lançamento (gasto) em um item agregado"""
+    """
+    Cria um lançamento (gasto) em um item agregado
+
+    IMPORTANTE: Não cria despesa individual, apenas consome orçamento
+    A fatura virtual é criada automaticamente se não existir
+    """
     try:
         dados = request.json
 
         # Converter datas
         data_compra = datetime.strptime(dados['data_compra'], '%Y-%m-%d').date()
-        mes_fatura = datetime.strptime(dados['mes_fatura'] + '-01', '%Y-%m-%d').date()
 
-        novo_lancamento = LancamentoAgregado(
-            item_agregado_id=item_id,
-            descricao=dados['descricao'],
-            valor=dados['valor'],
-            data_compra=data_compra,
-            mes_fatura=mes_fatura,
-            numero_parcela=dados.get('numero_parcela', 1),
-            total_parcelas=dados.get('total_parcelas', 1),
-            observacoes=dados.get('observacoes', '')
-        )
+        # Processar mes_fatura (pode vir como YYYY-MM ou YYYY-MM-DD)
+        mes_fatura_str = dados['mes_fatura']
+        if len(mes_fatura_str) == 7:  # Formato YYYY-MM
+            mes_fatura_str += '-01'
+        mes_fatura = datetime.strptime(mes_fatura_str, '%Y-%m-%d').date()
 
-        db.session.add(novo_lancamento)
-        db.session.commit()
+        # Preparar dados para o service
+        dados_lancamento = {
+            'item_agregado_id': item_id,
+            'descricao': dados['descricao'],
+            'valor': dados['valor'],
+            'data_compra': data_compra,
+            'mes_fatura': mes_fatura,
+            'categoria_id': dados.get('categoria_id'),
+            'numero_parcela': dados.get('numero_parcela', 1),
+            'total_parcelas': dados.get('total_parcelas', 1),
+            'observacoes': dados.get('observacoes', '')
+        }
 
-        return jsonify(novo_lancamento.to_dict()), 201
+        # Usar CartaoService para adicionar lançamento e garantir fatura
+        lancamento, fatura = CartaoService.adicionar_lancamento(dados_lancamento)
+
+        return jsonify({
+            'success': True,
+            'message': 'Lançamento criado com sucesso',
+            'lancamento': lancamento.to_dict(),
+            'fatura': {
+                'id': fatura.id,
+                'valor_planejado': float(fatura.valor_planejado),
+                'valor_executado': float(fatura.valor_executado),
+                'estouro_orcamento': fatura.estouro_orcamento
+            }
+        }), 201
+
+    except ValueError as e:
+        return jsonify({'success': False, 'erro': str(e)}), 400
     except Exception as e:
         db.session.rollback()
-        return jsonify({'erro': str(e)}), 500
+        return jsonify({'success': False, 'erro': str(e)}), 500
 
 
 @cartoes_bp.route('/lancamentos/<int:lancamento_id>', methods=['PUT'])

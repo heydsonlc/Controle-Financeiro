@@ -180,6 +180,13 @@
     border-color: rgba(255, 149, 0, 0.3);
 }
 
+.badge-tipo-credito {
+    background: rgba(52, 199, 89, 0.15);
+    color: #34c759;
+    border-color: rgba(52, 199, 89, 0.4);
+    font-weight: 600;
+}
+
 .badge-cartao {
     background: rgba(0, 122, 255, 0.1);
     color: #007aff;
@@ -198,6 +205,17 @@
     font-weight: 600;
     white-space: nowrap;
     text-align: right;
+}
+
+.valor-positivo {
+    color: #34c759 !important;
+    font-weight: 700;
+}
+
+/* Card de entrada/crédito com destaque verde sutil */
+.lancamento-credito {
+    border-left: 3px solid #34c759;
+    background: linear-gradient(135deg, rgba(52, 199, 89, 0.03) 0%, rgba(255, 255, 255, 1) 100%);
 }
 
 /* Linha 2: Info Extra | Ações */

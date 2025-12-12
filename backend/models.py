@@ -198,6 +198,14 @@ class Conta(db.Model):
     numero_parcela = db.Column(db.Integer)  # Ex: parcela 2 de 12
     total_parcelas = db.Column(db.Integer)
     observacoes = db.Column(db.Text)
+
+    # Campos para fatura de cartão (planejado vs executado)
+    is_fatura_cartao = db.Column(db.Boolean, default=False)  # Identifica se é fatura de cartão
+    valor_planejado = db.Column(db.Numeric(10, 2))  # Orçamento total do cartão (soma das categorias)
+    valor_executado = db.Column(db.Numeric(10, 2))  # Valor real gasto (soma dos lançamentos)
+    estouro_orcamento = db.Column(db.Boolean, default=False)  # Flag de alerta
+    cartao_competencia = db.Column(db.Date)  # Mês de competência (YYYY-MM-01)
+
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relacionamentos
@@ -226,7 +234,13 @@ class Conta(db.Model):
             'debito_automatico': self.debito_automatico,
             'numero_parcela': self.numero_parcela,
             'total_parcelas': self.total_parcelas,
-            'observacoes': self.observacoes
+            'observacoes': self.observacoes,
+            # Campos de fatura de cartão
+            'is_fatura_cartao': self.is_fatura_cartao,
+            'valor_planejado': float(self.valor_planejado) if self.valor_planejado else None,
+            'valor_executado': float(self.valor_executado) if self.valor_executado else None,
+            'estouro_orcamento': self.estouro_orcamento,
+            'cartao_competencia': self.cartao_competencia.strftime('%Y-%m-%d') if self.cartao_competencia else None
         }
 
 
@@ -272,6 +286,12 @@ class OrcamentoAgregado(db.Model):
     mes_referencia = db.Column(db.Date, nullable=False)
     valor_teto = db.Column(db.Numeric(10, 2), nullable=False)
     observacoes = db.Column(db.Text)
+
+    # Histórico de vigência do orçamento
+    vigencia_inicio = db.Column(db.Date, nullable=False, default=lambda: date.today().replace(day=1))  # Primeiro dia do mês
+    vigencia_fim = db.Column(db.Date)  # null = vigência atual/futura
+    ativo = db.Column(db.Boolean, default=True)  # Flag de ativo
+
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relacionamentos
@@ -291,7 +311,11 @@ class OrcamentoAgregado(db.Model):
             'item_agregado_id': self.item_agregado_id,
             'mes_referencia': self.mes_referencia.strftime('%Y-%m-%d'),
             'valor_teto': float(self.valor_teto),
-            'observacoes': self.observacoes
+            'observacoes': self.observacoes,
+            # Histórico de vigência
+            'vigencia_inicio': self.vigencia_inicio.strftime('%Y-%m-%d') if self.vigencia_inicio else None,
+            'vigencia_fim': self.vigencia_fim.strftime('%Y-%m-%d') if self.vigencia_fim else None,
+            'ativo': self.ativo
         }
 
 
@@ -443,11 +467,12 @@ class ReceitaRealizada(db.Model):
     Receita efetivamente recebida (baixa da receita)
 
     Registra cada recebimento real, permitindo comparar com o orçamento
+    Permite receitas pontuais sem vínculo com fonte fixa (item_receita_id = NULL)
     """
     __tablename__ = 'receita_realizada'
 
     id = db.Column(db.Integer, primary_key=True)
-    item_receita_id = db.Column(db.Integer, db.ForeignKey('item_receita.id'), nullable=False)
+    item_receita_id = db.Column(db.Integer, db.ForeignKey('item_receita.id'), nullable=True)  # Permitir NULL para receitas pontuais
 
     # Data efetiva do recebimento
     data_recebimento = db.Column(db.Date, nullable=False)
@@ -691,6 +716,14 @@ class Financiamento(db.Model):
     # Integração
     item_despesa_id = db.Column(db.Integer, db.ForeignKey('item_despesa.id'))
 
+    # Configuração de Seguro
+    seguro_tipo = db.Column(db.String(20), default='fixo')  # 'fixo' ou 'percentual_saldo'
+    seguro_percentual = db.Column(db.Numeric(8, 6), default=0.0006)  # 0,06% em decimal
+    valor_seguro_mensal = db.Column(db.Numeric(10, 2), default=0)  # Para tipo 'fixo'
+
+    # Taxa de Administração
+    taxa_administracao_fixa = db.Column(db.Numeric(10, 2), default=0)  # Valor fixo mensal
+
     # Controle
     ativo = db.Column(db.Boolean, default=True)
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
@@ -723,6 +756,10 @@ class Financiamento(db.Model):
             'data_contrato': self.data_contrato.strftime('%Y-%m-%d'),
             'data_primeira_parcela': self.data_primeira_parcela.strftime('%Y-%m-%d'),
             'item_despesa_id': self.item_despesa_id,
+            'seguro_tipo': self.seguro_tipo,
+            'seguro_percentual': float(self.seguro_percentual) if self.seguro_percentual else 0.0006,
+            'valor_seguro_mensal': float(self.valor_seguro_mensal) if self.valor_seguro_mensal else 0,
+            'taxa_administracao_fixa': float(self.taxa_administracao_fixa) if self.taxa_administracao_fixa else 0,
             'ativo': self.ativo
         }
 

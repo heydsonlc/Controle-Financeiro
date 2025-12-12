@@ -8,6 +8,7 @@ const state = {
     lancamentos: [],
     cartoes: [],
     categorias: {}, // Mapa: cartaoId -> [categorias]
+    contasBancarias: [],
     filtros: {
         mes: null,
         cartao: null,
@@ -23,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     inicializarFiltros();
     carregarCartoes();
     carregarCategoriasGerais();
+    carregarContasBancarias();
     carregarLancamentos();
     carregarReceitasPendentes(); // Carregar receitas pendentes
 });
@@ -135,6 +137,29 @@ async function carregarCategoriasGerais() {
     }
 }
 
+async function carregarContasBancarias() {
+    try {
+        const response = await fetch('/api/contas');
+        const result = await response.json();
+        const contas = result.data || result;
+
+        state.contasBancarias = contas;
+
+        const selectConta = document.getElementById('lancamento-conta-bancaria');
+        selectConta.innerHTML = '<option value="">Selecione uma conta...</option>';
+
+        contas.forEach(conta => {
+            const option = document.createElement('option');
+            option.value = conta.id;
+            option.textContent = `${conta.nome} - ${conta.banco}`;
+            selectConta.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Erro ao carregar contas bancárias:', error);
+        mostrarErro('Erro ao carregar contas bancárias');
+    }
+}
+
 async function carregarCategoriasPorCartao() {
     const cartaoId = document.getElementById('lancamento-cartao').value;
     const selectCategoria = document.getElementById('lancamento-categoria-cartao');
@@ -222,6 +247,31 @@ async function carregarLancamentos() {
             }
         });
 
+        // 3. Buscar receitas pontuais (créditos/entradas)
+        const respReceitas = await fetch('/api/receitas/realizadas');
+        const resultReceitas = await respReceitas.json();
+
+        if (resultReceitas.success && resultReceitas.data) {
+            resultReceitas.data.forEach(rec => {
+                // Apenas receitas pontuais (sem orcamento_id)
+                if (!rec.orcamento_id) {
+                    const conta = state.contasBancarias.find(c => c.id === rec.conta_origem_id);
+                    lancamentos.push({
+                        id: rec.id,
+                        tipo: 'credito',
+                        descricao: rec.descricao || 'Receita Pontual',
+                        valor: rec.valor_recebido,
+                        data_compra: rec.data_recebimento,
+                        mes_fatura: rec.mes_referencia,
+                        categoria_nome: conta ? conta.nome : 'Conta',
+                        observacoes: rec.observacoes,
+                        numero_parcela: 1,
+                        total_parcelas: 1
+                    });
+                }
+            });
+        }
+
         state.lancamentos = lancamentos.sort((a, b) =>
             new Date(b.data_compra) - new Date(a.data_compra)
         );
@@ -280,11 +330,22 @@ function renderizarLancamentos(lancamentos) {
 
     container.innerHTML = lancamentos.map(lanc => {
         const isCartao = lanc.tipo === 'cartao';
-        const tipoIcon = isCartao ? '💳' : '💵';
-        const tipoTexto = isCartao ? 'Cartão' : 'Direto';
+        const isCredito = lanc.tipo === 'credito';
+
+        let tipoIcon, tipoTexto;
+        if (isCartao) {
+            tipoIcon = '💳';
+            tipoTexto = 'Cartão';
+        } else if (isCredito) {
+            tipoIcon = '💰';
+            tipoTexto = 'Entrada';
+        } else {
+            tipoIcon = '💵';
+            tipoTexto = 'Direto';
+        }
 
         return `
-        <div class="lancamento-card">
+        <div class="lancamento-card ${isCredito ? 'lancamento-credito' : ''}">
             <div class="lancamento-row-1">
                 <div class="lancamento-principal">
                     <h3 class="lancamento-nome">${lanc.descricao}</h3>
@@ -295,8 +356,8 @@ function renderizarLancamentos(lancamentos) {
                     ${isCartao ? `<span class="badge badge-cartao">${lanc.cartao_nome}</span>` : ''}
                     <span class="badge badge-categoria">${lanc.categoria_nome}</span>
                 </div>
-                <div class="lancamento-valor">
-                    R$ ${parseFloat(lanc.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                <div class="lancamento-valor ${isCredito ? 'valor-positivo' : ''}">
+                    ${isCredito ? '+' : ''}R$ ${parseFloat(lanc.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
                 </div>
             </div>
             <div class="lancamento-row-2">
@@ -337,6 +398,7 @@ function abrirModalLancamento() {
     // Resetar visibilidade dos campos
     document.getElementById('campos-cartao').style.display = 'none';
     document.getElementById('campos-direto').style.display = 'none';
+    document.getElementById('campos-credito').style.display = 'none';
 
     const hoje = new Date();
     document.getElementById('lancamento-data').value = hoje.toISOString().split('T')[0];
@@ -350,22 +412,32 @@ function alternarTipoLancamento() {
     const tipo = document.getElementById('lancamento-tipo').value;
     const camposCartao = document.getElementById('campos-cartao');
     const camposDireto = document.getElementById('campos-direto');
+    const camposCredito = document.getElementById('campos-credito');
     const campoMesFatura = document.getElementById('lancamento-mes-fatura').parentElement.parentElement;
     const campoParcelas = document.getElementById('lancamento-parcelas').parentElement;
 
     if (tipo === 'cartao') {
         camposCartao.style.display = 'block';
         camposDireto.style.display = 'none';
+        camposCredito.style.display = 'none';
         campoMesFatura.style.display = 'grid';
         campoParcelas.style.display = 'block';
     } else if (tipo === 'direto') {
         camposCartao.style.display = 'none';
         camposDireto.style.display = 'block';
+        camposCredito.style.display = 'none';
+        campoMesFatura.style.display = 'none';
+        campoParcelas.style.display = 'none';
+    } else if (tipo === 'credito') {
+        camposCartao.style.display = 'none';
+        camposDireto.style.display = 'none';
+        camposCredito.style.display = 'block';
         campoMesFatura.style.display = 'none';
         campoParcelas.style.display = 'none';
     } else {
         camposCartao.style.display = 'none';
         camposDireto.style.display = 'none';
+        camposCredito.style.display = 'none';
     }
 }
 
@@ -378,6 +450,8 @@ async function salvarLancamento(event) {
         await salvarLancamentoCartao();
     } else if (tipo === 'direto') {
         await salvarLancamentoDireto();
+    } else if (tipo === 'credito') {
+        await salvarLancamentoCredito();
     } else {
         mostrarErro('Selecione o tipo de lançamento');
     }
@@ -468,6 +542,47 @@ async function salvarLancamentoDireto() {
     }
 }
 
+async function salvarLancamentoCredito() {
+    const contaBancariaId = document.getElementById('lancamento-conta-bancaria').value;
+
+    if (!contaBancariaId) {
+        mostrarErro('Selecione uma conta bancária');
+        return;
+    }
+
+    const dataRecebimento = document.getElementById('lancamento-data').value;
+    const dados = {
+        conta_bancaria_id: parseInt(contaBancariaId),
+        descricao: document.getElementById('lancamento-descricao').value,
+        valor_recebido: parseFloat(document.getElementById('lancamento-valor').value),
+        data_recebimento: dataRecebimento,
+        competencia: dataRecebimento.substring(0, 7) + '-01',
+        observacoes: document.getElementById('lancamento-observacoes').value || '',
+        tipo_entrada: 'RECEITA_PONTUAL'
+    };
+
+    try {
+        const response = await fetch('/api/receitas/realizadas/pontual', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(dados)
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Erro ao salvar entrada');
+        }
+
+        fecharModal('modal-lancamento');
+        await carregarLancamentos();
+        mostrarSucesso('Entrada/Crédito registrado com sucesso!');
+
+    } catch (error) {
+        console.error('Erro ao salvar entrada:', error);
+        mostrarErro(error.message || 'Erro ao salvar entrada');
+    }
+}
+
 function editarLancamento(lancamento) {
     // Alterar título do modal
     document.getElementById('modal-lancamento-titulo').textContent = 'Editar Lançamento';
@@ -530,6 +645,8 @@ async function excluirLancamento(id, tipo) {
         let url;
         if (tipo === 'cartao') {
             url = `/api/cartoes/lancamentos/${id}`;
+        } else if (tipo === 'credito') {
+            url = `/api/receitas/realizadas/${id}`;
         } else {
             url = `/api/despesas/${id}`;
         }

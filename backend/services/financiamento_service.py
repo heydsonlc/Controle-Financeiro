@@ -104,18 +104,20 @@ class FinanciamentoService:
             data_contrato=data_contrato,
             data_primeira_parcela=data_primeira_parcela,
             item_despesa_id=dados.get('item_despesa_id'),
+            # Configuração de seguro
+            seguro_tipo=dados.get('seguro_tipo', 'fixo'),
+            seguro_percentual=Decimal(str(dados.get('seguro_percentual', 0.0006))),
+            valor_seguro_mensal=Decimal(str(dados.get('valor_seguro_mensal', 0))),
+            # Taxa de administração
+            taxa_administracao_fixa=Decimal(str(dados.get('taxa_administracao_fixa', 0))),
             ativo=True
         )
 
         db.session.add(financiamento)
         db.session.flush()  # Para obter o ID
 
-        # Gerar parcelas
-        FinanciamentoService.gerar_parcelas(
-            financiamento,
-            valor_seguro_mensal=dados.get('valor_seguro_mensal', 0),
-            valor_taxa_adm_mensal=dados.get('valor_taxa_adm_mensal', 0)
-        )
+        # Gerar parcelas (agora usa configurações do próprio financiamento)
+        FinanciamentoService.gerar_parcelas(financiamento)
 
         db.session.commit()
         return financiamento
@@ -165,6 +167,8 @@ class FinanciamentoService:
 
         Returns:
             Financiamento: Financiamento atualizado
+
+        Nota: Ao alterar configurações de seguro, considere regenerar as parcelas
         """
         financiamento = Financiamento.query.get(financiamento_id)
         if not financiamento:
@@ -177,8 +181,31 @@ class FinanciamentoService:
             financiamento.produto = dados['produto']
         if 'ativo' in dados:
             financiamento.ativo = dados['ativo']
+        if 'item_despesa_id' in dados:
+            financiamento.item_despesa_id = dados['item_despesa_id']
+
+        # Atualizar configurações de seguro
+        if 'seguro_tipo' in dados:
+            financiamento.seguro_tipo = dados['seguro_tipo']
+        if 'seguro_percentual' in dados:
+            financiamento.seguro_percentual = Decimal(str(dados['seguro_percentual']))
+        if 'valor_seguro_mensal' in dados:
+            financiamento.valor_seguro_mensal = Decimal(str(dados['valor_seguro_mensal']))
+
+        # Atualizar taxa de administração
+        if 'taxa_administracao_fixa' in dados:
+            financiamento.taxa_administracao_fixa = Decimal(str(dados['taxa_administracao_fixa']))
+
+        # Identificar se houve mudança em encargos que requerem recálculo
+        campos_que_afetam_parcelas = ['seguro_tipo', 'seguro_percentual', 'valor_seguro_mensal', 'taxa_administracao_fixa']
+        requer_recalculo = any(campo in dados for campo in campos_que_afetam_parcelas)
 
         db.session.commit()
+
+        # Recalcular parcelas futuras se houve mudança em encargos
+        if requer_recalculo:
+            FinanciamentoService.recalcular_parcelas_futuras(financiamento.id)
+
         return financiamento
 
     @staticmethod
@@ -205,19 +232,110 @@ class FinanciamentoService:
 
         return financiamento
 
+    @staticmethod
+    def recalcular_parcelas_futuras(financiamento_id):
+        """
+        Recalcula APENAS as parcelas futuras (status PENDENTE) de um financiamento
+        Preserva parcelas já pagas
+
+        Args:
+            financiamento_id (int): ID do financiamento
+
+        Returns:
+            int: Número de parcelas recalculadas
+        """
+        financiamento = Financiamento.query.get(financiamento_id)
+        if not financiamento:
+            raise ValueError('Financiamento não encontrado')
+
+        # Buscar parcelas pendentes
+        parcelas_pendentes = FinanciamentoParcela.query.filter_by(
+            financiamento_id=financiamento_id,
+            status='pendente'
+        ).order_by(FinanciamentoParcela.numero_parcela).all()
+
+        if not parcelas_pendentes:
+            return 0  # Nenhuma parcela para recalcular
+
+        # Buscar última parcela paga para determinar saldo atual
+        ultima_paga = FinanciamentoParcela.query.filter_by(
+            financiamento_id=financiamento_id,
+            status='pago'
+        ).order_by(FinanciamentoParcela.numero_parcela.desc()).first()
+
+        # Determinar saldo devedor inicial
+        if ultima_paga:
+            saldo_devedor = ultima_paga.saldo_devedor_apos_pagamento
+        else:
+            saldo_devedor = financiamento.valor_financiado
+
+        # Taxa de juros mensal
+        taxa_mensal = financiamento.taxa_juros_mensal
+        sistema = financiamento.sistema_amortizacao
+
+        # Recalcular cada parcela pendente
+        for parcela in parcelas_pendentes:
+            # Calcular juros sobre saldo atual
+            juros = saldo_devedor * taxa_mensal
+
+            # Calcular amortização baseada no sistema
+            if sistema == 'SAC':
+                # Amortização constante = saldo / parcelas restantes
+                num_parcelas_restantes = len([p for p in parcelas_pendentes if p.numero_parcela >= parcela.numero_parcela])
+                amortizacao = saldo_devedor / Decimal(str(num_parcelas_restantes))
+            elif sistema == 'PRICE':
+                # Recalcular PMT com saldo e parcelas restantes
+                n = len([p for p in parcelas_pendentes if p.numero_parcela >= parcela.numero_parcela])
+                if taxa_mensal > 0:
+                    fator = (Decimal('1') + taxa_mensal) ** Decimal(str(n))
+                    pmt = saldo_devedor * taxa_mensal * fator / (fator - Decimal('1'))
+                else:
+                    pmt = saldo_devedor / Decimal(str(n))
+                amortizacao = pmt - juros
+            else:  # SIMPLES
+                num_parcelas_restantes = len([p for p in parcelas_pendentes if p.numero_parcela >= parcela.numero_parcela])
+                amortizacao = saldo_devedor / Decimal(str(num_parcelas_restantes))
+                # Juros simples fixos
+                juros = financiamento.valor_financiado * taxa_mensal
+
+            # Calcular seguro baseado no tipo
+            if financiamento.seguro_tipo == 'percentual_saldo':
+                valor_seguro = saldo_devedor * financiamento.seguro_percentual
+            else:  # fixo
+                valor_seguro = financiamento.valor_seguro_mensal
+
+            # Taxa administrativa (valor fixo)
+            valor_taxa_adm = financiamento.taxa_administracao_fixa
+
+            # Atualizar parcela
+            parcela.valor_amortizacao = amortizacao
+            parcela.valor_juros = juros
+            parcela.valor_seguro = valor_seguro
+            parcela.valor_taxa_adm = valor_taxa_adm
+            parcela.valor_previsto_total = amortizacao + juros + valor_seguro + valor_taxa_adm
+            parcela.saldo_devedor_apos_pagamento = saldo_devedor - amortizacao
+
+            # Atualizar saldo para próxima iteração
+            saldo_devedor = saldo_devedor - amortizacao
+
+        db.session.commit()
+        return len(parcelas_pendentes)
+
     # ========================================================================
     # GERAÇÃO DE PARCELAS
     # ========================================================================
 
     @staticmethod
-    def gerar_parcelas(financiamento, valor_seguro_mensal=0, valor_taxa_adm_mensal=0):
+    def gerar_parcelas(financiamento):
         """
-        Gera tabela de amortização completa
+        Gera tabela de amortização completa usando configurações do próprio financiamento
+
+        Calcula seguro de duas formas:
+        - Tipo 'fixo': valor_seguro_mensal constante
+        - Tipo 'percentual_saldo': saldo_devedor * seguro_percentual
 
         Args:
-            financiamento (Financiamento): Objeto do financiamento
-            valor_seguro_mensal (float): Valor fixo mensal do seguro
-            valor_taxa_adm_mensal (float): Valor fixo mensal da taxa administrativa
+            financiamento (Financiamento): Objeto do financiamento com todas configurações
         """
         # Deletar parcelas existentes
         FinanciamentoParcela.query.filter_by(financiamento_id=financiamento.id).delete()
@@ -225,17 +343,11 @@ class FinanciamentoService:
         sistema = financiamento.sistema_amortizacao
 
         if sistema == 'SAC':
-            FinanciamentoService._gerar_parcelas_sac(
-                financiamento, valor_seguro_mensal, valor_taxa_adm_mensal
-            )
+            FinanciamentoService._gerar_parcelas_sac(financiamento)
         elif sistema == 'PRICE':
-            FinanciamentoService._gerar_parcelas_price(
-                financiamento, valor_seguro_mensal, valor_taxa_adm_mensal
-            )
+            FinanciamentoService._gerar_parcelas_price(financiamento)
         elif sistema == 'SIMPLES':
-            FinanciamentoService._gerar_parcelas_simples(
-                financiamento, valor_seguro_mensal, valor_taxa_adm_mensal
-            )
+            FinanciamentoService._gerar_parcelas_simples(financiamento)
 
         db.session.commit()
 
@@ -244,12 +356,13 @@ class FinanciamentoService:
             FinanciamentoService.sincronizar_contas(financiamento.id)
 
     @staticmethod
-    def _gerar_parcelas_sac(financiamento, valor_seguro_mensal, valor_taxa_adm_mensal):
+    def _gerar_parcelas_sac(financiamento):
         """
         Sistema de Amortização Constante (SAC)
 
         Amortização fixa em todas as parcelas
         Juros decrescentes sobre saldo devedor
+        Seguro calculado conforme tipo (fixo ou percentual do saldo)
         Aplica TR/indexador se configurado
         """
         valor_financiado = financiamento.valor_financiado
@@ -274,8 +387,17 @@ class FinanciamentoService:
             # Calcular juros sobre saldo corrigido
             juros = saldo_corrigido * taxa_mensal
 
+            # Calcular seguro baseado no tipo
+            if financiamento.seguro_tipo == 'percentual_saldo':
+                valor_seguro_parcela = saldo_corrigido * financiamento.seguro_percentual
+            else:  # fixo
+                valor_seguro_parcela = financiamento.valor_seguro_mensal
+
+            # Taxa administrativa (valor fixo mensal)
+            valor_taxa_adm = financiamento.taxa_administracao_fixa
+
             # Compor parcela
-            valor_previsto_total = amortizacao + juros + Decimal(str(valor_seguro_mensal)) + Decimal(str(valor_taxa_adm_mensal))
+            valor_previsto_total = amortizacao + juros + valor_seguro_parcela + valor_taxa_adm
 
             # Calcular saldo após pagamento
             saldo_apos_pagamento = saldo_corrigido - amortizacao
@@ -287,8 +409,8 @@ class FinanciamentoService:
                 data_vencimento=data_vencimento,
                 valor_amortizacao=amortizacao,
                 valor_juros=juros,
-                valor_seguro=Decimal(str(valor_seguro_mensal)),
-                valor_taxa_adm=Decimal(str(valor_taxa_adm_mensal)),
+                valor_seguro=valor_seguro_parcela,
+                valor_taxa_adm=valor_taxa_adm,
                 valor_previsto_total=valor_previsto_total,
                 saldo_devedor_apos_pagamento=saldo_apos_pagamento if saldo_apos_pagamento > Decimal('0.01') else Decimal('0'),
                 status='pendente'
@@ -301,12 +423,13 @@ class FinanciamentoService:
             data_vencimento = data_vencimento + relativedelta(months=1)
 
     @staticmethod
-    def _gerar_parcelas_price(financiamento, valor_seguro_mensal, valor_taxa_adm_mensal):
+    def _gerar_parcelas_price(financiamento):
         """
         Tabela PRICE
 
         Parcela fixa (amortização + juros)
         Juros decrescentes, amortização crescente
+        Seguro calculado conforme tipo (fixo ou percentual do saldo)
         """
         valor_financiado = financiamento.valor_financiado
         prazo = financiamento.prazo_total_meses
@@ -330,8 +453,17 @@ class FinanciamentoService:
             # Amortização = PMT - Juros
             amortizacao = pmt - juros
 
+            # Calcular seguro baseado no tipo
+            if financiamento.seguro_tipo == 'percentual_saldo':
+                valor_seguro_parcela = saldo_devedor * financiamento.seguro_percentual
+            else:  # fixo
+                valor_seguro_parcela = financiamento.valor_seguro_mensal
+
+            # Taxa administrativa (valor fixo mensal)
+            valor_taxa_adm = financiamento.taxa_administracao_fixa
+
             # Valor total com seguros e taxas
-            valor_previsto_total = pmt + Decimal(str(valor_seguro_mensal)) + Decimal(str(valor_taxa_adm_mensal))
+            valor_previsto_total = pmt + valor_seguro_parcela + valor_taxa_adm
 
             # Saldo após pagamento
             saldo_apos_pagamento = saldo_devedor - amortizacao
@@ -343,8 +475,8 @@ class FinanciamentoService:
                 data_vencimento=data_vencimento,
                 valor_amortizacao=amortizacao,
                 valor_juros=juros,
-                valor_seguro=Decimal(str(valor_seguro_mensal)),
-                valor_taxa_adm=Decimal(str(valor_taxa_adm_mensal)),
+                valor_seguro=valor_seguro_parcela,
+                valor_taxa_adm=valor_taxa_adm,
                 valor_previsto_total=valor_previsto_total,
                 saldo_devedor_apos_pagamento=saldo_apos_pagamento if saldo_apos_pagamento > Decimal('0.01') else Decimal('0'),
                 status='pendente'
@@ -357,12 +489,13 @@ class FinanciamentoService:
             data_vencimento = data_vencimento + relativedelta(months=1)
 
     @staticmethod
-    def _gerar_parcelas_simples(financiamento, valor_seguro_mensal, valor_taxa_adm_mensal):
+    def _gerar_parcelas_simples(financiamento):
         """
         Juros Simples
 
         Juros fixos sobre valor inicial em todas as parcelas
         Amortização constante
+        Seguro calculado conforme tipo (fixo ou percentual do saldo)
         """
         valor_financiado = financiamento.valor_financiado
         prazo = financiamento.prazo_total_meses
@@ -378,7 +511,16 @@ class FinanciamentoService:
         data_vencimento = financiamento.data_primeira_parcela
 
         for num_parcela in range(1, prazo + 1):
-            valor_previsto_total = amortizacao + juros_mensais + Decimal(str(valor_seguro_mensal)) + Decimal(str(valor_taxa_adm_mensal))
+            # Calcular seguro baseado no tipo
+            if financiamento.seguro_tipo == 'percentual_saldo':
+                valor_seguro_parcela = saldo_devedor * financiamento.seguro_percentual
+            else:  # fixo
+                valor_seguro_parcela = financiamento.valor_seguro_mensal
+
+            # Taxa administrativa (valor fixo mensal)
+            valor_taxa_adm = financiamento.taxa_administracao_fixa
+
+            valor_previsto_total = amortizacao + juros_mensais + valor_seguro_parcela + valor_taxa_adm
 
             saldo_apos_pagamento = saldo_devedor - amortizacao
 
@@ -388,8 +530,8 @@ class FinanciamentoService:
                 data_vencimento=data_vencimento,
                 valor_amortizacao=amortizacao,
                 valor_juros=juros_mensais,
-                valor_seguro=Decimal(str(valor_seguro_mensal)),
-                valor_taxa_adm=Decimal(str(valor_taxa_adm_mensal)),
+                valor_seguro=valor_seguro_parcela,
+                valor_taxa_adm=valor_taxa_adm,
                 valor_previsto_total=valor_previsto_total,
                 saldo_devedor_apos_pagamento=saldo_apos_pagamento if saldo_apos_pagamento > Decimal('0.01') else Decimal('0'),
                 status='pendente'
@@ -533,21 +675,161 @@ class FinanciamentoService:
         if not parcelas_pendentes:
             return
 
-        # Calcular novo saldo devedor
-        primeira_parcela_pendente = parcelas_pendentes[0]
-        saldo_atual = primeira_parcela_pendente.saldo_devedor_apos_pagamento or financiamento.valor_financiado
+        # Buscar última parcela paga para pegar saldo correto
+        ultima_paga = FinanciamentoParcela.query.filter(
+            FinanciamentoParcela.financiamento_id == financiamento.id,
+            FinanciamentoParcela.status == 'pago'
+        ).order_by(FinanciamentoParcela.numero_parcela.desc()).first()
 
-        # Reduzir saldo
+        # Calcular saldo devedor atual (antes da amortização)
+        if ultima_paga:
+            saldo_atual = ultima_paga.saldo_devedor_apos_pagamento
+        else:
+            saldo_atual = financiamento.valor_financiado
+
+        # Reduzir saldo com a amortização
         novo_saldo = saldo_atual - valor_amortizado
 
+        if novo_saldo < 0:
+            raise ValueError('Valor da amortização maior que o saldo devedor')
+
+        # Taxa de juros mensal
+        taxa_anual = financiamento.taxa_juros_nominal_anual / Decimal('100')
+        taxa_mensal = (Decimal('1') + taxa_anual) ** (Decimal('1') / Decimal('12')) - Decimal('1')
+
         if tipo == 'reduzir_prazo':
-            # Reduz número de parcelas, mantém valor
-            # TODO: Implementar lógica completa
-            pass
+            FinanciamentoService._recalcular_reduzir_prazo(
+                financiamento, parcelas_pendentes, novo_saldo, taxa_mensal
+            )
         elif tipo == 'reduzir_parcela':
-            # Mantém prazo, reduz valor das parcelas
-            # TODO: Implementar lógica completa
-            pass
+            FinanciamentoService._recalcular_reduzir_parcela(
+                financiamento, parcelas_pendentes, novo_saldo, taxa_mensal
+            )
+
+    @staticmethod
+    def _recalcular_reduzir_parcela(financiamento, parcelas_pendentes, novo_saldo, taxa_mensal):
+        """
+        Mantém prazo, reduz valor das parcelas futuras
+
+        Recalcula juros e seguro baseados no novo saldo
+        Se seguro for percentual, será recalculado automaticamente
+        """
+        sistema = financiamento.sistema_amortizacao
+        saldo_devedor = novo_saldo
+
+        for parcela in parcelas_pendentes:
+            # Calcular juros sobre novo saldo
+            juros = saldo_devedor * taxa_mensal
+
+            # Calcular amortização baseada no sistema
+            if sistema == 'SAC':
+                # Amortização constante = saldo / parcelas restantes
+                num_parcelas_restantes = len([p for p in parcelas_pendentes if p.numero_parcela >= parcela.numero_parcela])
+                amortizacao = saldo_devedor / Decimal(str(num_parcelas_restantes))
+            elif sistema == 'PRICE':
+                # Recalcular PMT com novo saldo e parcelas restantes
+                n = len([p for p in parcelas_pendentes if p.numero_parcela >= parcela.numero_parcela])
+                if taxa_mensal > 0:
+                    pmt = saldo_devedor * (taxa_mensal * (1 + taxa_mensal) ** n) / ((1 + taxa_mensal) ** n - 1)
+                else:
+                    pmt = saldo_devedor / Decimal(str(n))
+                amortizacao = pmt - juros
+            else:  # SIMPLES
+                num_parcelas_restantes = len([p for p in parcelas_pendentes if p.numero_parcela >= parcela.numero_parcela])
+                amortizacao = saldo_devedor / Decimal(str(num_parcelas_restantes))
+
+            # Calcular seguro baseado no tipo
+            if financiamento.seguro_tipo == 'percentual_saldo':
+                valor_seguro = saldo_devedor * financiamento.seguro_percentual
+            else:  # fixo
+                valor_seguro = financiamento.valor_seguro_mensal
+
+            # Taxa administrativa (mantida)
+            valor_taxa_adm = parcela.valor_taxa_adm or Decimal('0')
+
+            # Atualizar parcela
+            parcela.valor_amortizacao = amortizacao
+            parcela.valor_juros = juros
+            parcela.valor_seguro = valor_seguro
+            parcela.valor_taxa_adm = valor_taxa_adm
+            parcela.valor_previsto_total = amortizacao + juros + valor_seguro + valor_taxa_adm
+            parcela.saldo_devedor_antes_pagamento = saldo_devedor
+            parcela.saldo_devedor_apos_pagamento = saldo_devedor - amortizacao
+
+            # Atualizar saldo para próxima iteração
+            saldo_devedor = saldo_devedor - amortizacao
+
+        db.session.flush()
+
+    @staticmethod
+    def _recalcular_reduzir_prazo(financiamento, parcelas_pendentes, novo_saldo, taxa_mensal):
+        """
+        Reduz número de parcelas, mantém valor das parcelas
+
+        Calcula quantas parcelas podem ser eliminadas
+        Recalcula as parcelas restantes com o novo saldo
+        """
+        sistema = financiamento.sistema_amortizacao
+
+        # Calcular valor da parcela (mantém o valor original de amortização + juros)
+        if parcelas_pendentes:
+            parcela_referencia = parcelas_pendentes[0]
+            valor_amortizacao_original = parcela_referencia.valor_amortizacao
+        else:
+            return
+
+        # Calcular quantas parcelas podem ser quitadas com o novo saldo
+        saldo_devedor = novo_saldo
+        parcelas_para_manter = []
+
+        for parcela in parcelas_pendentes:
+            # Calcular juros sobre saldo atual
+            juros = saldo_devedor * taxa_mensal
+
+            # Usar mesma amortização original
+            amortizacao = valor_amortizacao_original
+
+            # Se o saldo é menor que a amortização, essa é a última parcela
+            if saldo_devedor <= amortizacao:
+                amortizacao = saldo_devedor
+                juros = saldo_devedor * taxa_mensal
+
+            # Calcular seguro baseado no tipo
+            if financiamento.seguro_tipo == 'percentual_saldo':
+                valor_seguro = saldo_devedor * financiamento.seguro_percentual
+            else:  # fixo
+                valor_seguro = financiamento.valor_seguro_mensal
+
+            # Taxa administrativa (mantida)
+            valor_taxa_adm = parcela.valor_taxa_adm or Decimal('0')
+
+            # Atualizar parcela
+            parcela.valor_amortizacao = amortizacao
+            parcela.valor_juros = juros
+            parcela.valor_seguro = valor_seguro
+            parcela.valor_taxa_adm = valor_taxa_adm
+            parcela.valor_previsto_total = amortizacao + juros + valor_seguro + valor_taxa_adm
+            parcela.saldo_devedor_antes_pagamento = saldo_devedor
+            parcela.saldo_devedor_apos_pagamento = saldo_devedor - amortizacao
+
+            parcelas_para_manter.append(parcela)
+
+            # Atualizar saldo
+            saldo_devedor = saldo_devedor - amortizacao
+
+            # Se quitou tudo, para
+            if saldo_devedor <= Decimal('0.01'):
+                break
+
+        # Deletar parcelas excedentes
+        parcelas_para_deletar = [p for p in parcelas_pendentes if p not in parcelas_para_manter]
+        for parcela in parcelas_para_deletar:
+            db.session.delete(parcela)
+
+        # Atualizar prazo remanescente no financiamento
+        financiamento.prazo_remanescente_meses = len(parcelas_para_manter)
+
+        db.session.flush()
 
     # ========================================================================
     # RELATÓRIOS E DEMONSTRATIVOS

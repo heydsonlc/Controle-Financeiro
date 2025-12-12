@@ -7,6 +7,8 @@
 // VARIÁVEIS GLOBAIS
 // ============================================================================
 
+const API_BASE = '/api/financiamentos';
+
 let financiamentoAtual = null;
 let parcelaAtualPagamento = null;
 
@@ -157,6 +159,7 @@ async function salvarFinanciamento(event) {
     const editingId = form.getAttribute('data-editing-id');
     const isEditing = !!editingId;
 
+    // Coletar dados básicos
     const dados = {
         nome: document.getElementById('fin-nome').value,
         produto: document.getElementById('fin-produto').value,
@@ -167,9 +170,20 @@ async function salvarFinanciamento(event) {
         indexador_saldo: document.getElementById('fin-indexador').value || null,
         data_contrato: document.getElementById('fin-data-contrato').value,
         data_primeira_parcela: document.getElementById('fin-data-primeira').value,
-        valor_seguro_mensal: parseMoeda(document.getElementById('fin-seguro').value) || 0,
-        valor_taxa_adm_mensal: parseMoeda(document.getElementById('fin-taxa-adm').value) || 0
+        taxa_administracao_fixa: parseMoeda(document.getElementById('fin-taxa-adm').value) || 0
     };
+
+    // Adicionar dados de seguro baseado no tipo
+    const seguroTipo = document.getElementById('fin-seguro-tipo').value;
+    dados.seguro_tipo = seguroTipo;
+
+    if (seguroTipo === 'fixo') {
+        dados.valor_seguro_mensal = parseMoeda(document.getElementById('fin-seguro-valor').value) || 0;
+        dados.seguro_percentual = 0.0006; // valor padrão
+    } else { // percentual_saldo
+        dados.seguro_percentual = parseFloat(document.getElementById('fin-seguro-percentual').value) || 0.0006;
+        dados.valor_seguro_mensal = 0;
+    }
 
     try {
         const url = isEditing ? `/api/financiamentos/${editingId}` : '/api/financiamentos';
@@ -209,6 +223,26 @@ function atualizarInfoSistema() {
     infoDiv.textContent = infos[sistema] || '';
 }
 
+function atualizarCampoSeguro() {
+    const tipo = document.getElementById('fin-seguro-tipo').value;
+    const campoFixo = document.getElementById('campo-seguro-fixo');
+    const campoPercentual = document.getElementById('campo-seguro-percentual');
+
+    if (tipo === 'fixo') {
+        campoFixo.style.display = 'block';
+        campoPercentual.style.display = 'none';
+        // Tornar campo fixo obrigatório
+        document.getElementById('fin-seguro-valor').setAttribute('required', 'required');
+        document.getElementById('fin-seguro-percentual').removeAttribute('required');
+    } else { // percentual_saldo
+        campoFixo.style.display = 'none';
+        campoPercentual.style.display = 'block';
+        // Tornar campo percentual obrigatório
+        document.getElementById('fin-seguro-percentual').setAttribute('required', 'required');
+        document.getElementById('fin-seguro-valor').removeAttribute('required');
+    }
+}
+
 // ============================================================================
 // DETALHES DO FINANCIAMENTO
 // ============================================================================
@@ -234,6 +268,15 @@ function renderizarDetalhes(dados) {
     document.getElementById('detalhes-titulo').textContent = dados.nome;
 
     const conteudo = document.getElementById('detalhes-conteudo');
+
+    // Formatar informação de seguro
+    let seguroInfo = '';
+    if (dados.seguro_tipo === 'percentual_saldo') {
+        const percentual = (dados.seguro_percentual * 100).toFixed(2);
+        seguroInfo = `${percentual}% sobre saldo (variável)`;
+    } else {
+        seguroInfo = `${formatarMoedaDisplay(dados.valor_seguro_mensal)} (fixo)`;
+    }
 
     conteudo.innerHTML = `
         <div class="detalhes-header">
@@ -261,19 +304,29 @@ function renderizarDetalhes(dados) {
                 <label>Indexador</label>
                 <span>${dados.indexador_saldo || 'Nenhum'}</span>
             </div>
+            <div class="info-item">
+                <label>Seguro</label>
+                <span class="${dados.seguro_tipo === 'percentual_saldo' ? 'seguro-variavel' : ''}">${seguroInfo}</span>
+            </div>
+            <div class="info-item">
+                <label>Taxa Administrativa</label>
+                <span>${formatarMoedaDisplay(dados.taxa_administracao_fixa || 0)}/mês</span>
+            </div>
         </div>
 
         <div class="detalhes-section">
             <h3>Cronograma de Parcelas (${dados.total_parcelas} parcelas)</h3>
-            ${renderizarTabelaParcelas(dados.parcelas)}
+            ${renderizarTabelaParcelas(dados.parcelas, dados.seguro_tipo)}
         </div>
     `;
 }
 
-function renderizarTabelaParcelas(parcelas) {
+function renderizarTabelaParcelas(parcelas, seguroTipo) {
     if (!parcelas || parcelas.length === 0) {
         return '<p>Nenhuma parcela encontrada.</p>';
     }
+
+    const seguroClass = seguroTipo === 'percentual_saldo' ? 'seguro-variavel' : '';
 
     return `
         <table class="parcelas-tabela">
@@ -283,7 +336,7 @@ function renderizarTabelaParcelas(parcelas) {
                     <th>Vencimento</th>
                     <th>Amortização</th>
                     <th>Juros</th>
-                    <th>Seguro</th>
+                    <th class="${seguroClass}">Seguro ${seguroTipo === 'percentual_saldo' ? '📉' : ''}</th>
                     <th>Taxa Adm</th>
                     <th>Total</th>
                     <th>Saldo Após</th>
@@ -296,11 +349,11 @@ function renderizarTabelaParcelas(parcelas) {
                     <tr>
                         <td>${p.numero_parcela}</td>
                         <td>${formatarData(p.data_vencimento)}</td>
-                        <td>${formatarMoedaDisplay(p.amortizacao)}</td>
-                        <td>${formatarMoedaDisplay(p.juros)}</td>
-                        <td>${formatarMoedaDisplay(p.seguro || 0)}</td>
-                        <td>${formatarMoedaDisplay(p.taxa_administrativa || 0)}</td>
-                        <td><strong>${formatarMoedaDisplay(p.encargo_total)}</strong></td>
+                        <td>${formatarMoedaDisplay(p.valor_amortizacao || p.amortizacao)}</td>
+                        <td>${formatarMoedaDisplay(p.valor_juros || p.juros)}</td>
+                        <td class="${seguroClass}">${formatarMoedaDisplay(p.valor_seguro || p.seguro || 0)}</td>
+                        <td>${formatarMoedaDisplay(p.valor_taxa_adm || p.taxa_administrativa || 0)}</td>
+                        <td><strong>${formatarMoedaDisplay(p.valor_previsto_total || p.encargo_total)}</strong></td>
                         <td>${formatarMoedaDisplay(p.saldo_devedor_apos_pagamento || 0)}</td>
                         <td><span class="status-badge status-${p.status}">${p.status}</span></td>
                         <td>
@@ -599,13 +652,28 @@ async function editarFinanciamento(id) {
             document.getElementById('fin-nome').value = fin.nome;
             document.getElementById('fin-produto').value = fin.produto || '';
             document.getElementById('fin-sistema').value = fin.sistema_amortizacao;
-            document.getElementById('fin-valor').value = fin.valor_financiado;
+            document.getElementById('fin-valor').value = formatarMoedaDisplay(fin.valor_financiado);
             document.getElementById('fin-prazo').value = fin.prazo_total_meses;
-            document.getElementById('fin-taxa-anual').value = fin.taxa_juros_nominal_anual;
+            document.getElementById('fin-taxa').value = formatarPercentualDisplay(fin.taxa_juros_nominal_anual);
             document.getElementById('fin-indexador').value = fin.indexador_saldo || '';
             document.getElementById('fin-data-contrato').value = fin.data_contrato;
-            document.getElementById('fin-data-primeira-parcela').value = fin.data_primeira_parcela;
-            document.getElementById('fin-item-despesa').value = fin.item_despesa_id || '';
+            document.getElementById('fin-data-primeira').value = fin.data_primeira_parcela;
+
+            // Preencher campos de seguro
+            const seguroTipo = fin.seguro_tipo || 'fixo';
+            document.getElementById('fin-seguro-tipo').value = seguroTipo;
+
+            if (seguroTipo === 'fixo') {
+                document.getElementById('fin-seguro-valor').value = formatarMoedaDisplay(fin.valor_seguro_mensal || 0);
+            } else {
+                document.getElementById('fin-seguro-percentual').value = fin.seguro_percentual || 0.0006;
+            }
+
+            // Preencher taxa de administração
+            document.getElementById('fin-taxa-adm').value = formatarMoedaDisplay(fin.taxa_administracao_fixa || 0);
+
+            // Atualizar visualização dos campos de seguro
+            atualizarCampoSeguro();
 
             // Alterar título do modal e adicionar ID para update
             document.querySelector('#modal-financiamento h2').textContent = 'Editar Financiamento';

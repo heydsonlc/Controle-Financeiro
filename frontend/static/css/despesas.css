@@ -215,6 +215,143 @@
     font-weight: 700;
 }
 
+/* Estilo para faturas virtuais de cartão */
+.despesa-card.fatura-cartao {
+    border-left-color: #007aff;
+    background: linear-gradient(135deg, rgba(0, 122, 255, 0.03) 0%, #ffffff 10%);
+    border: 1px solid rgba(0, 122, 255, 0.15);
+}
+
+.despesa-card.fatura-cartao:hover {
+    box-shadow: 0 6px 20px rgba(0, 122, 255, 0.12);
+}
+
+/* Badge de fatura virtual */
+.badge-fatura {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    background: linear-gradient(135deg, #007aff 0%, #0051d5 100%);
+    color: white;
+    border-radius: 10px;
+    font-size: 0.7em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-left: 8px;
+    box-shadow: 0 2px 6px rgba(0, 122, 255, 0.25);
+}
+
+/* Valor com tipo (Planejado/Executado) */
+.valor-fatura {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.valor-tipo {
+    font-size: 0.65em;
+    font-weight: 500;
+    color: #6e6e73;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+    display: block;
+}
+
+/* Informações da fatura de cartão */
+.fatura-cartao-info {
+    background: linear-gradient(135deg, rgba(0, 122, 255, 0.05) 0%, rgba(0, 122, 255, 0.02) 100%);
+    padding: 14px;
+    border-radius: 10px;
+    margin-top: 12px;
+    border: 1px solid rgba(0, 122, 255, 0.1);
+}
+
+.valores-comparacao {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.valor-item {
+    background: #ffffff;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    transition: all 0.2s ease;
+}
+
+.valor-item.valor-destaque {
+    border-color: #007aff;
+    background: linear-gradient(135deg, rgba(0, 122, 255, 0.08) 0%, #ffffff 50%);
+    box-shadow: 0 2px 8px rgba(0, 122, 255, 0.15);
+}
+
+.valor-label {
+    display: block;
+    font-size: 0.75em;
+    color: #6e6e73;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 500;
+}
+
+.valor-numero {
+    display: block;
+    font-size: 1.1em;
+    font-weight: 600;
+    color: #1d1d1f;
+    letter-spacing: -0.02em;
+}
+
+/* Alerta de estouro de orçamento */
+.alerta-estouro {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 59, 48, 0.1);
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 59, 48, 0.2);
+    color: #ff3b30;
+    font-size: 0.85em;
+    font-weight: 500;
+    animation: pulse-warning 2s ease-in-out infinite;
+}
+
+.alerta-estouro svg {
+    flex-shrink: 0;
+    stroke: #ff3b30;
+}
+
+@keyframes pulse-warning {
+    0%, 100% {
+        background: rgba(255, 59, 48, 0.1);
+        box-shadow: 0 0 0 0 rgba(255, 59, 48, 0);
+    }
+    50% {
+        background: rgba(255, 59, 48, 0.15);
+        box-shadow: 0 0 0 4px rgba(255, 59, 48, 0.1);
+    }
+}
+
+/* Card com estouro */
+.despesa-card.com-estouro {
+    animation: subtle-warning-glow 3s ease-in-out infinite;
+}
+
+@keyframes subtle-warning-glow {
+    0%, 100% {
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    }
+    50% {
+        box-shadow: 0 4px 20px rgba(255, 59, 48, 0.15);
+    }
+}
+
 .despesa-info {
     display: flex;
     flex-direction: column;

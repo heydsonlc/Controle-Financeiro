@@ -89,8 +89,9 @@
                     <label for="lancamento-tipo">Tipo de Lançamento *</label>
                     <select id="lancamento-tipo" required onchange="alternarTipoLancamento()">
                         <option value="">Selecione o tipo...</option>
-                        <option value="cartao">Cartão de Crédito</option>
-                        <option value="direto">Despesa Direta (Débito, Dinheiro, PIX)</option>
+                        <option value="cartao">💳 Cartão de Crédito (Despesa)</option>
+                        <option value="direto">💸 Despesa Direta (Débito, Dinheiro, PIX)</option>
+                        <option value="credito">💰 Entrada/Crédito (Receita Pontual)</option>
                     </select>
                 </div>
 
@@ -119,6 +120,16 @@
                         <label for="lancamento-categoria-geral">Categoria *</label>
                         <select id="lancamento-categoria-geral">
                             <option value="">Selecione uma categoria...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Campos para Entrada/Crédito -->
+                <div id="campos-credito" style="display: none;">
+                    <div class="form-group">
+                        <label for="lancamento-conta-bancaria">Conta Bancária de Destino *</label>
+                        <select id="lancamento-conta-bancaria">
+                            <option value="">Selecione uma conta...</option>
                         </select>
                     </div>
                 </div>
