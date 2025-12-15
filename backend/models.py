@@ -1019,6 +1019,50 @@ class ContaBancaria(db.Model):
         }
 
 
+class MovimentoFinanceiro(db.Model):
+    """
+    Movimentações financeiras em contas bancárias
+
+    Registra débitos e créditos que impactam o saldo_atual das contas
+    """
+    __tablename__ = 'movimento_financeiro'
+
+    id = db.Column(db.Integer, primary_key=True)
+    conta_bancaria_id = db.Column(db.Integer, db.ForeignKey('conta_bancaria.id'), nullable=False)
+    tipo = db.Column(db.String(20), nullable=False)  # DEBITO ou CREDITO
+    valor = db.Column(db.Numeric(15, 2), nullable=False)
+    descricao = db.Column(db.String(200), nullable=False)
+    data_movimento = db.Column(db.Date, nullable=False)
+    fatura_id = db.Column(db.Integer, db.ForeignKey('conta.id'))  # Nullable - link para fatura de cartão
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relacionamentos
+    conta_bancaria = db.relationship('ContaBancaria', backref='movimentos')
+    fatura = db.relationship('Conta', foreign_keys=[fatura_id])
+
+    # Índices
+    __table_args__ = (
+        db.Index('idx_movimento_conta', 'conta_bancaria_id'),
+        db.Index('idx_movimento_data', 'data_movimento'),
+        db.Index('idx_movimento_fatura', 'fatura_id'),
+    )
+
+    def __repr__(self):
+        return f'<MovimentoFinanceiro {self.tipo} R${self.valor} {self.descricao}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'conta_bancaria_id': self.conta_bancaria_id,
+            'tipo': self.tipo,
+            'valor': float(self.valor),
+            'descricao': self.descricao,
+            'data_movimento': self.data_movimento.strftime('%Y-%m-%d'),
+            'fatura_id': self.fatura_id,
+            'criado_em': self.criado_em.strftime('%Y-%m-%d %H:%M:%S') if self.criado_em else None
+        }
+
+
 # ============================================================================
 # MÓDULO 4: PREFERÊNCIAS E CONFIGURAÇÕES GERAIS
 # ============================================================================

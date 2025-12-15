@@ -206,7 +206,7 @@ class CartaoService:
     # ========================================================================
 
     @staticmethod
-    def pagar_fatura(fatura_id, data_pagamento, valor_pago=None):
+    def pagar_fatura(fatura_id, data_pagamento, valor_pago=None, conta_bancaria_id=None):
         """
         Registra pagamento da fatura e substitui planejado por executado
 
@@ -214,10 +214,13 @@ class CartaoService:
             fatura_id (int): ID da fatura (Conta)
             data_pagamento (date ou str): Data do pagamento
             valor_pago (Decimal, opcional): Valor pago (se None, usa executado)
+            conta_bancaria_id (int, opcional): ID da conta para debitar
 
         Returns:
             Conta: Fatura atualizada
         """
+        from backend.models import ContaBancaria, MovimentoFinanceiro
+
         fatura = Conta.query.get(fatura_id)
         if not fatura:
             raise ValueError('Fatura não encontrada')
@@ -225,19 +228,54 @@ class CartaoService:
         if not fatura.is_fatura_cartao:
             raise ValueError('Esta conta não é uma fatura de cartão')
 
+        # Validar se já está paga
+        if fatura.status_pagamento == 'Pago':
+            raise ValueError('Fatura já foi paga anteriormente')
+
         # Converter data se necessário
         if isinstance(data_pagamento, str):
             data_pagamento = datetime.strptime(data_pagamento, '%Y-%m-%d').date()
 
         # Calcular valor executado final
-        valor_executado_final = CartaoService.calcular_executado(
-            fatura.item_despesa_id,
-            fatura.cartao_competencia
-        )
+        # Se a fatura já tem valor_executado, usa ele (evita recalcular desnecessariamente)
+        # Senão, calcula a partir dos lançamentos
+        if fatura.valor_executado and fatura.valor_executado > 0:
+            valor_executado_final = fatura.valor_executado
+        else:
+            valor_executado_final = CartaoService.calcular_executado(
+                fatura.item_despesa_id,
+                fatura.cartao_competencia
+            )
+
+        # Definir valor final do pagamento
+        valor_final_pagamento = valor_pago if valor_pago else valor_executado_final
+
+        # SE conta bancária informada: debitar saldo
+        if conta_bancaria_id:
+            conta = ContaBancaria.query.get(conta_bancaria_id)
+            if not conta:
+                raise ValueError('Conta bancária não encontrada')
+
+            if conta.status != 'ATIVO':
+                raise ValueError('Conta bancária está inativa')
+
+            # Criar movimento financeiro (débito)
+            movimento = MovimentoFinanceiro(
+                conta_bancaria_id=conta_bancaria_id,
+                tipo='DEBITO',
+                valor=valor_final_pagamento,
+                descricao=f'Pagamento fatura cartão - {fatura.descricao}',
+                data_movimento=data_pagamento,
+                fatura_id=fatura_id
+            )
+            db.session.add(movimento)
+
+            # Debitar saldo da conta
+            conta.saldo_atual = conta.saldo_atual - valor_final_pagamento
 
         # Atualizar fatura
         fatura.valor_executado = valor_executado_final
-        fatura.valor = valor_pago if valor_pago else valor_executado_final  # Substitui planejado por executado
+        fatura.valor = valor_final_pagamento  # Substitui planejado por executado
         fatura.data_pagamento = data_pagamento
         fatura.status_pagamento = 'Pago'
 

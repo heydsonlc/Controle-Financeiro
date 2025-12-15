@@ -649,7 +649,8 @@ def marcar_como_pago(id):
             conta = CartaoService.pagar_fatura(
                 fatura_id=id,
                 data_pagamento=data_pagamento,
-                valor_pago=valor_pago
+                valor_pago=valor_pago,
+                conta_bancaria_id=dados.get('conta_bancaria_id')
             )
 
             db.session.commit()
