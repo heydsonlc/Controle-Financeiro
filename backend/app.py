@@ -209,12 +209,13 @@ if __name__ == '__main__':
         print("=> Tabelas do banco de dados criadas/verificadas com sucesso!")
 
         # Iniciar scheduler de jobs automáticos (faturas mensais, etc.)
-        try:
-            from backend.scheduler import start_scheduler
-            start_scheduler()
-        except ImportError:
-            from scheduler import start_scheduler
-            start_scheduler()
+        # Comentado temporariamente - requer instalação do apscheduler
+        # try:
+        #     from backend.scheduler import start_scheduler
+        #     start_scheduler()
+        # except ImportError:
+        #     from scheduler import start_scheduler
+        #     start_scheduler()
 
         print("=> Servidor iniciando em http://localhost:5000")
         print("=> Pressione CTRL+C para parar")

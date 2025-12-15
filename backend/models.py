@@ -1,12 +1,12 @@
 """
 Modelos do banco de dados - Sistema de Controle Financeiro
 
-14 Tabelas organizadas em 3 módulos:
-- Módulo 1: Orçamento (Receitas e Despesas) - 11 tabelas
+15 Tabelas organizadas em 3 módulos:
+- Módulo 1: Orçamento (Receitas e Despesas) - 12 tabelas (incluindo GrupoAgregador)
 - Módulo 2: Automação (Consórcios) - 1 tabela
 - Módulo 3: Patrimônio (Caixinhas) - 2 tabelas
 """
-from datetime import datetime
+from datetime import datetime, date
 from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
@@ -244,9 +244,49 @@ class Conta(db.Model):
         }
 
 
+class GrupoAgregador(db.Model):
+    """
+    Grupo opcional para consolidação de categorias entre múltiplos cartões
+
+    Permite agrupar categorias com o mesmo nome de diferentes cartões para:
+    - Análise consolidada (ex: Farmácia do Cartão A + Farmácia do Cartão B)
+    - Alertas de limite total entre cartões
+    - Planejamento familiar/compartilhado
+
+    IMPORTANTE: Grupos NÃO possuem orçamento próprio, NÃO bloqueiam lançamentos.
+    São apenas para consolidação e análise.
+    """
+    __tablename__ = 'grupo_agregador'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False, unique=True)
+    descricao = db.Column(db.Text)  # Ex: "Farmácia compartilhada - Cartão João + Maria"
+    ativo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relacionamentos
+    categorias = db.relationship('ItemAgregado', back_populates='grupo', lazy='dynamic')
+
+    def __repr__(self):
+        return f'<GrupoAgregador {self.nome}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'nome': self.nome,
+            'descricao': self.descricao,
+            'ativo': self.ativo
+        }
+
+
 class ItemAgregado(db.Model):
     """
     Sub-itens de um item 'Agregador' (ex: Supermercado, Farmácia dentro do Cartão VISA)
+
+    Também conhecido como: Categoria Agregadora de Cartão
+    Representa uma categoria de gastos dentro de um cartão específico
+
+    Pode opcionalmente pertencer a um GrupoAgregador para consolidação entre cartões
     """
     __tablename__ = 'item_agregado'
 
@@ -255,24 +295,39 @@ class ItemAgregado(db.Model):
     nome = db.Column(db.String(100), nullable=False)
     descricao = db.Column(db.Text)
     ativo = db.Column(db.Boolean, default=True)
+
+    # Grupo opcional para consolidação entre cartões
+    grupo_agregador_id = db.Column(db.Integer, db.ForeignKey('grupo_agregador.id'), nullable=True)
+
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relacionamentos
     item_despesa_pai = db.relationship('ItemDespesa', back_populates='itens_agregados')
     orcamentos_agregados = db.relationship('OrcamentoAgregado', back_populates='item_agregado', lazy='dynamic')
     lancamentos_agregados = db.relationship('LancamentoAgregado', back_populates='item_agregado', lazy='dynamic')
+    grupo = db.relationship('GrupoAgregador', back_populates='categorias')
 
     def __repr__(self):
         return f'<ItemAgregado {self.nome}>'
 
     def to_dict(self):
-        return {
+        result = {
             'id': self.id,
             'item_despesa_id': self.item_despesa_id,
             'nome': self.nome,
             'descricao': self.descricao,
-            'ativo': self.ativo
+            'ativo': self.ativo,
+            'grupo_agregador_id': self.grupo_agregador_id
         }
+
+        # Incluir dados do grupo se existir
+        if self.grupo:
+            result['grupo'] = {
+                'id': self.grupo.id,
+                'nome': self.grupo.nome
+            }
+
+        return result
 
 
 class OrcamentoAgregado(db.Model):

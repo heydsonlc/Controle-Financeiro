@@ -492,6 +492,96 @@ Reformulação completa do módulo de cartões com lógica **orçamento-primeiro
 - ✅ Automação completa (faturas geradas sem intervenção)
 - ✅ Interface profissional com feedback visual claro
 
+### Grupos Agregadores para Categorias Compartilhadas (Dezembro 2024)
+Sistema de agrupamento opcional de categorias entre múltiplos cartões de crédito para casais e famílias:
+
+**Problema Resolvido:**
+- Permite consolidar gastos de categorias similares entre diferentes cartões
+- Exemplo: Cartão João (Farmácia R$ 200) + Cartão Maria (Farmácia R$ 200) = Total R$ 400
+- Facilita planejamento familiar e alertas compartilhados
+
+**Princípios Fundamentais:**
+1. **Cartões são donos do orçamento** - Cada cartão mantém seu orçamento individual
+2. **Grupos são opcionais** - Categorias podem ou não pertencer a um grupo
+3. **Grupos NÃO bloqueiam** - São apenas para análise e consolidação
+4. **Grupos NÃO possuem orçamento próprio** - Orçamento permanece no nível do cartão
+5. **Permite categorias com mesmo nome** - Múltiplos cartões podem ter "Farmácia", "Supermercado", etc.
+
+**Backend Implementado:**
+- **Modelo GrupoAgregador** ([models.py](backend/models.py)):
+  - `id`, `nome`, `descricao`, `ativo`, `criado_em`
+  - Representa agrupamento lógico de categorias
+  - Exemplo: Grupo "Farmácia Casal" agrupa Farmácia João + Farmácia Maria
+
+- **Modelo ItemAgregado** atualizado:
+  - Campo `grupo_agregador_id` (nullable FK)
+  - Relacionamento opcional com GrupoAgregador
+  - Categorias podem existir sem grupo (individual)
+
+**Arquitetura de Dados:**
+```
+GrupoAgregador (id=1, nome="Farmácia Casal")
+    ↓
+ItemAgregado (id=10, nome="Farmácia", item_despesa_id=5 [Cartão João], grupo_id=1)
+    → OrcamentoAgregado (valor_teto=R$ 200)
+    → LancamentoAgregado (compras realizadas)
+    ↓
+ItemAgregado (id=15, nome="Farmácia", item_despesa_id=8 [Cartão Maria], grupo_id=1)
+    → OrcamentoAgregado (valor_teto=R$ 200)
+    → LancamentoAgregado (compras realizadas)
+
+Total consolidado do grupo: R$ 400 (análise)
+Orçamentos individuais: Cada cartão possui seu teto próprio
+```
+
+**Regras de Negócio:**
+- Categorias sem `grupo_agregador_id` = individuais do cartão
+- Categorias com `grupo_agregador_id` = participam de consolidação
+- Grupo serve para:
+  - Análise consolidada de gastos
+  - Alertas futuros quando total do grupo ultrapassar limite
+  - Relatórios familiares/compartilhados
+- Grupo NÃO serve para:
+  - Bloquear lançamentos
+  - Distribuir orçamento automaticamente
+  - Criar ratios entre cartões
+
+**Migration:**
+- Script: [add_grupo_agregador.py](backend/migrations/add_grupo_agregador.py)
+- Cria tabela `grupo_agregador`
+- Adiciona coluna `grupo_agregador_id` em `item_agregado`
+- Compatível com dados existentes (campo nullable)
+
+**Casos de Uso:**
+1. **Casal com 2 cartões:**
+   - Cartão João: Farmácia (R$ 200), Mercado (R$ 800)
+   - Cartão Maria: Farmácia (R$ 200), Mercado (R$ 1.200)
+   - Grupo "Farmácia Casal": R$ 400 consolidado
+   - Grupo "Mercado Casal": R$ 2.000 consolidado
+
+2. **Planejamento familiar:**
+   - Definir limite total para categoria (ex: máximo R$ 500 em farmácia)
+   - Sistema alerta quando soma dos cartões ultrapassar
+   - Cada cartão mantém autonomia de gastos
+
+3. **Análise consolidada:**
+   - Relatórios mostrando gasto total por grupo
+   - Comparação entre meses de gasto familiar
+   - Insights sobre categorias compartilhadas
+
+**Implementação Futura (Frontend):**
+- Endpoints prontos para CRUD de grupos
+- API retorna dados de grupo em `ItemAgregado.to_dict()`
+- Estrutura preparada para tela de gestão de grupos
+- Sistema de alertas quando limite consolidado for excedido
+
+**Resultado:**
+- ✅ Suporte multi-cartão para casais/famílias
+- ✅ Consolidação opcional de categorias
+- ✅ Orçamento individual preservado (cartão é o dono)
+- ✅ Preparado para alertas e relatórios futuros
+- ✅ Sem impacto em funcionalidades existentes
+
 ### Módulo de Receitas Completo (Dezembro 2024)
 Implementação expandida do sistema de receitas com classificação detalhada e análises avançadas:
 

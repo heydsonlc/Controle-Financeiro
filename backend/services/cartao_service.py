@@ -155,11 +155,12 @@ class CartaoService:
             return Decimal('0')
 
         # Somar lançamentos do mês
+        # Usar STRFTIME para compatibilidade com SQLite
         total_executado = db.session.query(
             func.coalesce(func.sum(LancamentoAgregado.valor), 0)
         ).filter(
             LancamentoAgregado.item_agregado_id.in_(itens_agregados_ids),
-            func.date_trunc('month', LancamentoAgregado.mes_fatura) == comp_primeiro_dia
+            func.strftime('%Y-%m', LancamentoAgregado.mes_fatura) == comp_primeiro_dia.strftime('%Y-%m')
         ).scalar()
 
         return Decimal(str(total_executado or 0))
@@ -347,11 +348,12 @@ class CartaoService:
                 continue
 
             # Gasto da categoria
+            # Usar STRFTIME para compatibilidade com SQLite
             gasto = db.session.query(
                 func.coalesce(func.sum(LancamentoAgregado.valor), 0)
             ).filter(
                 LancamentoAgregado.item_agregado_id == item.id,
-                func.date_trunc('month', LancamentoAgregado.mes_fatura) == competencia
+                func.strftime('%Y-%m', LancamentoAgregado.mes_fatura) == competencia.strftime('%Y-%m')
             ).scalar()
 
             gasto_decimal = Decimal(str(gasto or 0))
