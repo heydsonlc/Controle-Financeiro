@@ -286,7 +286,6 @@ class CartaoService:
         # Criar lançamento (não cria despesa separada!)
         lancamento = LancamentoAgregado(
             item_agregado_id=dados_lancamento['item_agregado_id'],
-            categoria_id=dados_lancamento.get('categoria_id'),
             valor=Decimal(str(dados_lancamento['valor'])),
             descricao=dados_lancamento['descricao'],
             data_compra=dados_lancamento['data_compra'],

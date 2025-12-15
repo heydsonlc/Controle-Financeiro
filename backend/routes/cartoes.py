@@ -405,7 +405,6 @@ def criar_lancamento(item_id):
             'valor': dados['valor'],
             'data_compra': data_compra,
             'mes_fatura': mes_fatura,
-            'categoria_id': dados.get('categoria_id'),
             'numero_parcela': dados.get('numero_parcela', 1),
             'total_parcelas': dados.get('total_parcelas', 1),
             'observacoes': dados.get('observacoes', '')
