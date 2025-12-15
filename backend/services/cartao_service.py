@@ -402,3 +402,260 @@ class CartaoService:
                 continue
 
         return faturas_criadas
+
+    # ========================================================================
+    # SISTEMA DE ALERTAS (NÃO BLOQUEANTE)
+    # ========================================================================
+
+    @staticmethod
+    def calcular_alerta_local(item_agregado_id, competencia):
+        """
+        Calcula alerta LOCAL para um ItemAgregado específico
+
+        Verifica se o consumo real ultrapassou o orçamento da categoria
+
+        IMPORTANTE: Alertas NÃO bloqueiam lançamentos, são apenas informativos
+
+        Args:
+            item_agregado_id (int): ID do ItemAgregado (categoria do cartão)
+            competencia (date): Mês de referência
+
+        Returns:
+            dict ou None: Alerta estruturado ou None se não houver estouro
+        """
+        comp_primeiro_dia = competencia.replace(day=1)
+
+        # Buscar item agregado
+        item = ItemAgregado.query.get(item_agregado_id)
+        if not item or not item.ativo:
+            return None
+
+        # Buscar orçamento vigente
+        orcamento = OrcamentoAgregado.query.filter(
+            and_(
+                OrcamentoAgregado.item_agregado_id == item_agregado_id,
+                OrcamentoAgregado.ativo == True,
+                OrcamentoAgregado.vigencia_inicio <= comp_primeiro_dia,
+                (OrcamentoAgregado.vigencia_fim == None) |
+                (OrcamentoAgregado.vigencia_fim >= comp_primeiro_dia)
+            )
+        ).first()
+
+        if not orcamento:
+            return None
+
+        # Calcular consumo real (lançamentos do mês)
+        consumo = db.session.query(
+            func.coalesce(func.sum(LancamentoAgregado.valor), 0)
+        ).filter(
+            LancamentoAgregado.item_agregado_id == item_agregado_id,
+            func.strftime('%Y-%m', LancamentoAgregado.mes_fatura) == comp_primeiro_dia.strftime('%Y-%m')
+        ).scalar()
+
+        consumo_decimal = Decimal(str(consumo or 0))
+        orcado = orcamento.valor_teto
+
+        # Verificar estouro
+        if consumo_decimal > orcado:
+            excedente = consumo_decimal - orcado
+            percentual = (float(consumo_decimal) / float(orcado) * 100) if orcado > 0 else 0
+
+            # Determinar nível de alerta
+            if percentual >= 150:
+                nivel = 'CRITICO'
+            elif percentual >= 120:
+                nivel = 'ALTO'
+            else:
+                nivel = 'MODERADO'
+
+            return {
+                'tipo': 'LOCAL',
+                'cartao_id': item.item_despesa_id,
+                'item_agregado_id': item.id,
+                'nome': item.nome,
+                'valor_orcado': float(orcado),
+                'valor_executado': float(consumo_decimal),
+                'excedente': float(excedente),
+                'percentual': round(percentual, 2),
+                'nivel': nivel,
+                'competencia': comp_primeiro_dia.strftime('%Y-%m')
+            }
+
+        return None
+
+    @staticmethod
+    def calcular_alerta_global(grupo_agregador_id, competencia):
+        """
+        Calcula alerta GLOBAL para um GrupoAgregador
+
+        Verifica se a soma dos consumos de todas as categorias do grupo
+        (em diferentes cartões) ultrapassou a soma dos orçamentos
+
+        IMPORTANTE:
+        - Grupos NÃO possuem orçamento próprio
+        - O limite é a soma dos orçamentos dos itens vinculados
+        - Permite acompanhamento familiar/casal
+
+        Args:
+            grupo_agregador_id (int): ID do GrupoAgregador
+            competencia (date): Mês de referência
+
+        Returns:
+            dict ou None: Alerta estruturado ou None se não houver estouro
+        """
+        comp_primeiro_dia = competencia.replace(day=1)
+
+        # Buscar grupo
+        try:
+            from backend.models import GrupoAgregador
+        except ImportError:
+            from models import GrupoAgregador
+
+        grupo = GrupoAgregador.query.get(grupo_agregador_id)
+        if not grupo or not grupo.ativo:
+            return None
+
+        # Buscar todos os itens agregados do grupo (apenas ativos)
+        itens_do_grupo = ItemAgregado.query.filter_by(
+            grupo_agregador_id=grupo_agregador_id,
+            ativo=True
+        ).all()
+
+        if not itens_do_grupo:
+            return None
+
+        # Calcular soma dos orçamentos e consumos
+        total_orcado = Decimal('0')
+        total_consumo = Decimal('0')
+        detalhes_itens = []
+
+        for item in itens_do_grupo:
+            # Buscar orçamento vigente
+            orcamento = OrcamentoAgregado.query.filter(
+                and_(
+                    OrcamentoAgregado.item_agregado_id == item.id,
+                    OrcamentoAgregado.ativo == True,
+                    OrcamentoAgregado.vigencia_inicio <= comp_primeiro_dia,
+                    (OrcamentoAgregado.vigencia_fim == None) |
+                    (OrcamentoAgregado.vigencia_fim >= comp_primeiro_dia)
+                )
+            ).first()
+
+            if orcamento:
+                total_orcado += orcamento.valor_teto
+
+            # Buscar consumo real
+            consumo = db.session.query(
+                func.coalesce(func.sum(LancamentoAgregado.valor), 0)
+            ).filter(
+                LancamentoAgregado.item_agregado_id == item.id,
+                func.strftime('%Y-%m', LancamentoAgregado.mes_fatura) == comp_primeiro_dia.strftime('%Y-%m')
+            ).scalar()
+
+            consumo_decimal = Decimal(str(consumo or 0))
+            total_consumo += consumo_decimal
+
+            # Guardar detalhes do item
+            if orcamento:
+                detalhes_itens.append({
+                    'item_id': item.id,
+                    'cartao_id': item.item_despesa_id,
+                    'nome': item.nome,
+                    'orcado': float(orcamento.valor_teto),
+                    'consumo': float(consumo_decimal)
+                })
+
+        # Verificar estouro global
+        if total_consumo > total_orcado:
+            excedente = total_consumo - total_orcado
+            percentual = (float(total_consumo) / float(total_orcado) * 100) if total_orcado > 0 else 0
+
+            # Determinar nível de alerta
+            if percentual >= 150:
+                nivel = 'CRITICO'
+            elif percentual >= 120:
+                nivel = 'ALTO'
+            else:
+                nivel = 'MODERADO'
+
+            return {
+                'tipo': 'GLOBAL',
+                'grupo_agregador_id': grupo.id,
+                'nome': grupo.nome,
+                'descricao': grupo.descricao,
+                'valor_orcado_total': float(total_orcado),
+                'valor_executado_total': float(total_consumo),
+                'excedente': float(excedente),
+                'percentual': round(percentual, 2),
+                'nivel': nivel,
+                'competencia': comp_primeiro_dia.strftime('%Y-%m'),
+                'itens': detalhes_itens
+            }
+
+        return None
+
+    @staticmethod
+    def obter_todos_alertas(cartao_id=None, competencia=None):
+        """
+        Retorna todos os alertas (locais e globais) para um cartão ou mês
+
+        Args:
+            cartao_id (int, opcional): ID do cartão (se None, busca todos)
+            competencia (date, opcional): Mês de referência (se None, usa mês atual)
+
+        Returns:
+            dict: {
+                'locais': [lista de alertas locais],
+                'globais': [lista de alertas globais],
+                'total_alertas': int
+            }
+        """
+        if competencia is None:
+            competencia = date.today().replace(day=1)
+        else:
+            competencia = competencia.replace(day=1)
+
+        alertas_locais = []
+        alertas_globais = []
+
+        # Determinar quais itens agregados verificar
+        if cartao_id:
+            itens = ItemAgregado.query.filter_by(
+                item_despesa_id=cartao_id,
+                ativo=True
+            ).all()
+        else:
+            itens = ItemAgregado.query.filter_by(ativo=True).all()
+
+        # Calcular alertas locais
+        for item in itens:
+            alerta = CartaoService.calcular_alerta_local(item.id, competencia)
+            if alerta:
+                alertas_locais.append(alerta)
+
+        # Calcular alertas globais (buscar todos os grupos ativos)
+        try:
+            from backend.models import GrupoAgregador
+        except ImportError:
+            from models import GrupoAgregador
+
+        grupos = GrupoAgregador.query.filter_by(ativo=True).all()
+
+        for grupo in grupos:
+            alerta = CartaoService.calcular_alerta_global(grupo.id, competencia)
+            if alerta:
+                # Se cartao_id foi especificado, verificar se o grupo contém itens desse cartão
+                if cartao_id:
+                    tem_item_do_cartao = any(
+                        item['cartao_id'] == cartao_id for item in alerta.get('itens', [])
+                    )
+                    if tem_item_do_cartao:
+                        alertas_globais.append(alerta)
+                else:
+                    alertas_globais.append(alerta)
+
+        return {
+            'locais': alertas_locais,
+            'globais': alertas_globais,
+            'total_alertas': len(alertas_locais) + len(alertas_globais)
+        }

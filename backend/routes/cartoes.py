@@ -545,3 +545,83 @@ def obter_resumo_cartao(cartao_id):
         return jsonify(resultado), 200
     except Exception as e:
         return jsonify({'erro': str(e)}), 500
+
+
+# ============================================================================
+# ROTAS PARA ALERTAS (NÃO BLOQUEANTES)
+# ============================================================================
+
+@cartoes_bp.route('/alertas', methods=['GET'])
+def obter_alertas():
+    """
+    Retorna todos os alertas de orçamento (locais e globais)
+
+    Query params:
+        - cartao_id (opcional): ID do cartão para filtrar
+        - mes_referencia (opcional): Mês no formato YYYY-MM (padrão: mês atual)
+
+    IMPORTANTE: Alertas NÃO bloqueiam lançamentos, são apenas informativos
+    """
+    try:
+        cartao_id = request.args.get('cartao_id', type=int)
+        mes_referencia = request.args.get('mes_referencia')
+
+        # Converter mes_referencia para date
+        if mes_referencia:
+            competencia = datetime.strptime(mes_referencia + '-01', '%Y-%m-%d').date()
+        else:
+            competencia = None
+
+        # Buscar alertas
+        alertas = CartaoService.obter_todos_alertas(
+            cartao_id=cartao_id,
+            competencia=competencia
+        )
+
+        return jsonify({
+            'success': True,
+            'data': alertas
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'erro': str(e)
+        }), 500
+
+
+@cartoes_bp.route('/<int:cartao_id>/alertas', methods=['GET'])
+def obter_alertas_cartao(cartao_id):
+    """
+    Retorna alertas específicos de um cartão
+
+    Query params:
+        - mes_referencia (opcional): Mês no formato YYYY-MM (padrão: mês atual)
+    """
+    try:
+        mes_referencia = request.args.get('mes_referencia')
+
+        # Converter mes_referencia para date
+        if mes_referencia:
+            competencia = datetime.strptime(mes_referencia + '-01', '%Y-%m-%d').date()
+        else:
+            competencia = None
+
+        # Buscar alertas do cartão
+        alertas = CartaoService.obter_todos_alertas(
+            cartao_id=cartao_id,
+            competencia=competencia
+        )
+
+        return jsonify({
+            'success': True,
+            'cartao_id': cartao_id,
+            'data': alertas
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'erro': str(e)
+        }), 500
+
