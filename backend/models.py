@@ -377,11 +377,16 @@ class OrcamentoAgregado(db.Model):
 class LancamentoAgregado(db.Model):
     """
     Gasto real no cartão de crédito
+
+    IMPORTANTE: item_agregado_id é OPCIONAL
+    - Lançamentos COM categoria: consomem limite orçamentário
+    - Lançamentos SEM categoria: vão apenas para a fatura, sem controle de limite
     """
     __tablename__ = 'lancamento_agregado'
 
     id = db.Column(db.Integer, primary_key=True)
-    item_agregado_id = db.Column(db.Integer, db.ForeignKey('item_agregado.id'), nullable=False)
+    item_agregado_id = db.Column(db.Integer, db.ForeignKey('item_agregado.id'), nullable=True)
+    cartao_id = db.Column(db.Integer, db.ForeignKey('item_despesa.id'), nullable=False)  # Referência direta ao cartão
     descricao = db.Column(db.String(200), nullable=False)
     valor = db.Column(db.Numeric(10, 2), nullable=False)
     data_compra = db.Column(db.Date, nullable=False)

@@ -293,7 +293,8 @@ class CartaoService:
 
         Args:
             dados_lancamento (dict): Dados do lançamento
-                - item_agregado_id: ID da categoria (ItemAgregado)
+                - cartao_id: ID do cartão (obrigatório)
+                - item_agregado_id: ID da categoria (OPCIONAL - se None, não controla limite)
                 - valor: Valor do lançamento
                 - descricao: Descrição
                 - data_compra: Data da compra
@@ -304,13 +305,15 @@ class CartaoService:
         Returns:
             tuple: (LancamentoAgregado, Conta fatura)
         """
-        # Buscar item agregado
-        item_agregado = ItemAgregado.query.get(dados_lancamento['item_agregado_id'])
-        if not item_agregado:
-            raise ValueError('ItemAgregado não encontrado')
+        # ID do cartão (agora obrigatório nos dados)
+        cartao_id = dados_lancamento['cartao_id']
 
-        # ID do cartão
-        cartao_id = item_agregado.item_despesa_id
+        # Item agregado é OPCIONAL
+        item_agregado_id = dados_lancamento.get('item_agregado_id')
+        if item_agregado_id:
+            item_agregado = ItemAgregado.query.get(item_agregado_id)
+            if not item_agregado:
+                raise ValueError('ItemAgregado não encontrado')
 
         # Mês da fatura (competência)
         mes_fatura = dados_lancamento['mes_fatura']
@@ -323,7 +326,8 @@ class CartaoService:
 
         # Criar lançamento (não cria despesa separada!)
         lancamento = LancamentoAgregado(
-            item_agregado_id=dados_lancamento['item_agregado_id'],
+            cartao_id=cartao_id,
+            item_agregado_id=item_agregado_id,  # Pode ser None
             valor=Decimal(str(dados_lancamento['valor'])),
             descricao=dados_lancamento['descricao'],
             data_compra=dados_lancamento['data_compra'],

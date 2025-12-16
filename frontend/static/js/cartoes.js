@@ -347,17 +347,23 @@ function renderizarItensAgregados() {
 }
 
 function atualizarSelectsItensAgregados() {
-    const selects = [
-        document.getElementById('orcamento-categoria'),
-        document.getElementById('lancamento-categoria')
-    ];
-
-    selects.forEach(select => {
-        select.innerHTML = '<option value="">Selecione...</option>';
+    // Select de orçamento: categoria obrigatória
+    const selectOrcamento = document.getElementById('orcamento-categoria');
+    if (selectOrcamento) {
+        selectOrcamento.innerHTML = '<option value="">Selecione...</option>';
         state.itensAgregados.forEach(item => {
-            select.innerHTML += `<option value="${item.id}">${item.nome}</option>`;
+            selectOrcamento.innerHTML += `<option value="${item.id}">${item.nome}</option>`;
         });
-    });
+    }
+
+    // Select de lançamento: categoria opcional
+    const selectLancamento = document.getElementById('lancamento-categoria');
+    if (selectLancamento) {
+        selectLancamento.innerHTML = '<option value="">Sem categoria (não controla limite)</option>';
+        state.itensAgregados.forEach(item => {
+            selectLancamento.innerHTML += `<option value="${item.id}">${item.nome}</option>`;
+        });
+    }
 }
 
 // ============================================================================
@@ -786,10 +792,13 @@ async function editarLancamento(id) {
 async function salvarLancamento(event) {
     event.preventDefault();
 
+    if (!state.cartaoAtual) {
+        mostrarErro('Selecione um cartão primeiro');
+        return;
+    }
+
     const id = document.getElementById('lancamento-id').value;
-    const itemId = id
-        ? document.getElementById('lancamento-item-id').value
-        : document.getElementById('lancamento-categoria').value;
+    const itemAgregadoId = document.getElementById('lancamento-categoria').value;
 
     // Converter mês da fatura de MM/AAAA para ISO YYYY-MM
     const faturaBR = document.getElementById('lancamento-fatura').value;
@@ -810,10 +819,15 @@ async function salvarLancamento(event) {
         observacoes: document.getElementById('lancamento-observacoes').value
     };
 
-    try {
+    // Adicionar item_agregado_id apenas se selecionado (pode ser null)
+    if (itemAgregadoId) {
+        dados.item_agregado_id = parseInt(itemAgregadoId);
+    }
+
+    try:
         const url = id
             ? `/api/cartoes/lancamentos/${id}`
-            : `/api/cartoes/itens/${itemId}/lancamentos`;
+            : `/api/cartoes/${state.cartaoAtual.id}/lancamentos`;
         const method = id ? 'PUT' : 'POST';
 
         const response = await fetch(url, {

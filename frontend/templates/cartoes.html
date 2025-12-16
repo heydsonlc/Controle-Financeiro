@@ -374,10 +374,13 @@
                 <input type="hidden" id="lancamento-item-id">
 
                 <div class="form-group">
-                    <label for="lancamento-categoria">Categoria *</label>
-                    <select id="lancamento-categoria" required>
-                        <option value="">Selecione...</option>
+                    <label for="lancamento-categoria">Categoria do Cartão (opcional)</label>
+                    <select id="lancamento-categoria">
+                        <option value="">Sem categoria (não controla limite)</option>
                     </select>
+                    <small style="color: #6e6e73; font-size: 12px; display: block; margin-top: 5px;">
+                        Lançamentos sem categoria não afetam os limites mensais do cartão.
+                    </small>
                 </div>
 
                 <div class="form-group">

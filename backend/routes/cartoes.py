@@ -415,9 +415,70 @@ def criar_lancamento(item_id):
             mes_fatura_str += '-01'
         mes_fatura = datetime.strptime(mes_fatura_str, '%Y-%m-%d').date()
 
+        # Buscar item agregado para pegar o cartao_id
+        item_agregado = ItemAgregado.query.get(item_id)
+        if not item_agregado:
+            return jsonify({'erro': 'Item agregado não encontrado'}), 404
+
         # Preparar dados para o service
         dados_lancamento = {
+            'cartao_id': item_agregado.item_despesa_id,
             'item_agregado_id': item_id,
+            'descricao': dados['descricao'],
+            'valor': dados['valor'],
+            'data_compra': data_compra,
+            'mes_fatura': mes_fatura,
+            'numero_parcela': dados.get('numero_parcela', 1),
+            'total_parcelas': dados.get('total_parcelas', 1),
+            'observacoes': dados.get('observacoes', '')
+        }
+
+        # Usar CartaoService para adicionar lançamento e garantir fatura
+        lancamento, fatura = CartaoService.adicionar_lancamento(dados_lancamento)
+
+        return jsonify({
+            'success': True,
+            'message': 'Lançamento criado com sucesso',
+            'lancamento': lancamento.to_dict(),
+            'fatura': {
+                'id': fatura.id,
+                'valor_planejado': float(fatura.valor_planejado),
+                'valor_executado': float(fatura.valor_executado),
+                'estouro_orcamento': fatura.estouro_orcamento
+            }
+        }), 201
+
+    except ValueError as e:
+        return jsonify({'success': False, 'erro': str(e)}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'erro': str(e)}), 500
+
+
+@cartoes_bp.route('/<int:cartao_id>/lancamentos', methods=['POST'])
+def criar_lancamento_sem_categoria(cartao_id):
+    """
+    Cria um lançamento diretamente no cartão (sem categoria)
+
+    Este endpoint aceita lançamentos que NÃO consomem limite orçamentário.
+    O item_agregado_id é opcional - se fornecido, consome limite; se None, apenas vai para fatura.
+    """
+    try:
+        dados = request.json
+
+        # Converter datas
+        data_compra = datetime.strptime(dados['data_compra'], '%Y-%m-%d').date()
+
+        # Processar mes_fatura (pode vir como YYYY-MM ou YYYY-MM-DD)
+        mes_fatura_str = dados['mes_fatura']
+        if len(mes_fatura_str) == 7:  # Formato YYYY-MM
+            mes_fatura_str += '-01'
+        mes_fatura = datetime.strptime(mes_fatura_str, '%Y-%m-%d').date()
+
+        # Preparar dados para o service
+        dados_lancamento = {
+            'cartao_id': cartao_id,
+            'item_agregado_id': dados.get('item_agregado_id'),  # OPCIONAL (None se não informado)
             'descricao': dados['descricao'],
             'valor': dados['valor'],
             'data_compra': data_compra,
