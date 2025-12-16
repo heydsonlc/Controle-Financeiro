@@ -317,7 +317,6 @@ async function carregarItensAgregados(cartaoId) {
         if (!response.ok) throw new Error('Erro ao carregar itens');
 
         state.itensAgregados = await response.json();
-        renderizarItensAgregados();
         atualizarSelectsItensAgregados();
     } catch (error) {
         console.error('Erro ao carregar itens agregados:', error);
@@ -493,9 +492,9 @@ async function salvarItemAgregado(event) {
 
         fecharModal('modal-item-agregado');
 
-        // Recarregar itens agregados e orçamentos
+        // Recarregar itens agregados e resumo do cartão
         await carregarItensAgregados(state.cartaoAtual.id);
-        await carregarOrcamentos(state.cartaoAtual.id);
+        await carregarResumoCartao(state.cartaoAtual.id);
 
         mostrarSucesso(isEdicao ? 'Categoria atualizada!' : 'Categoria do cartão criada!');
 
@@ -533,9 +532,9 @@ async function excluirItemAgregado(itemId) {
             throw new Error(result.erro || result.message || 'Erro ao excluir categoria');
         }
 
-        // Recarregar itens agregados e orçamentos
+        // Recarregar itens agregados e resumo do cartão
         await carregarItensAgregados(state.cartaoAtual.id);
-        await carregarOrcamentos(state.cartaoAtual.id);
+        await carregarResumoCartao(state.cartaoAtual.id);
 
         mostrarSucesso('Categoria excluída com sucesso!');
 
