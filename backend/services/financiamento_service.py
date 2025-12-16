@@ -652,6 +652,11 @@ class FinanciamentoService:
         FinanciamentoService._recalcular_apos_amortizacao(financiamento, data_amort, valor, tipo)
 
         db.session.commit()
+
+        # Sincronizar despesas com os novos valores das parcelas
+        if financiamento.item_despesa_id:
+            FinanciamentoService.sincronizar_contas(financiamento_id)
+
         return amortizacao
 
     @staticmethod
