@@ -361,77 +361,6 @@ function atualizarSelectsItensAgregados() {
     });
 }
 
-function abrirModalItemAgregado() {
-    document.getElementById('modal-item-titulo').textContent = 'Nova Categoria';
-    document.getElementById('form-item-agregado').reset();
-    document.getElementById('item-id').value = '';
-    abrirModal('modal-item-agregado');
-}
-
-async function editarItemAgregado(id) {
-    const item = state.itensAgregados.find(i => i.id === id);
-    if (!item) return;
-
-    document.getElementById('modal-item-titulo').textContent = 'Editar Categoria';
-    document.getElementById('item-id').value = item.id;
-    document.getElementById('item-nome').value = item.nome;
-    document.getElementById('item-descricao').value = item.descricao || '';
-
-    abrirModal('modal-item-agregado');
-}
-
-async function salvarItemAgregado(event) {
-    event.preventDefault();
-
-    const id = document.getElementById('item-id').value;
-    const dados = {
-        nome: document.getElementById('item-nome').value,
-        descricao: document.getElementById('item-descricao').value
-    };
-
-    try {
-        const url = id
-            ? `/api/cartoes/itens/${id}`
-            : `/api/cartoes/${state.cartaoAtual.id}/itens`;
-        const method = id ? 'PUT' : 'POST';
-
-        const response = await fetch(url, {
-            method: method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(dados)
-        });
-
-        if (!response.ok) throw new Error('Erro ao salvar categoria');
-
-        fecharModal('modal-item-agregado');
-        await carregarItensAgregados(state.cartaoAtual.id);
-        await carregarResumoCartao(state.cartaoAtual.id);
-        mostrarSucesso(id ? 'Categoria atualizada!' : 'Categoria criada!');
-    } catch (error) {
-        console.error('Erro ao salvar item:', error);
-        mostrarErro('Erro ao salvar categoria');
-    }
-}
-
-async function excluirItemAgregado(id) {
-    if (!confirm('Tem certeza que deseja excluir esta categoria?')) return;
-
-    try {
-        const response = await fetch(`/api/cartoes/itens/${id}`, {
-            method: 'DELETE'
-        });
-
-        if (!response.ok) throw new Error('Erro ao excluir categoria');
-
-        await carregarItensAgregados(state.cartaoAtual.id);
-        await carregarResumoCartao(state.cartaoAtual.id);
-        mostrarSucesso('Categoria excluída!');
-    } catch (error) {
-        console.error('Erro ao excluir item:', error);
-        mostrarErro('Erro ao excluir categoria');
-    }
-}
-
 // ============================================================================
 // CRUD DE ORÇAMENTOS
 // ============================================================================
@@ -452,8 +381,17 @@ function renderizarOrcamentos(itens) {
             <div class="orcamento-card">
                 <div class="orcamento-header">
                     <h4>${item.nome}</h4>
-                    <span class="percentual" style="color: ${cor}">${percentual.toFixed(0)}%</span>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <span class="percentual" style="color: ${cor}">${percentual.toFixed(0)}%</span>
+                        <button class="btn-icon" onclick="editarItemAgregado(${item.id})" title="Editar categoria">
+                            ✏️
+                        </button>
+                        <button class="btn-icon" onclick="excluirItemAgregado(${item.id})" title="Excluir categoria">
+                            🗑️
+                        </button>
+                    </div>
                 </div>
+                ${item.descricao ? `<p style="color: #6e6e73; font-size: 13px; margin: 5px 0 10px 0;">${item.descricao}</p>` : ''}
                 <div class="orcamento-valores">
                     <div class="valor-item">
                         <span class="label">Limite Mensal:</span>
@@ -475,8 +413,8 @@ function renderizarOrcamentos(itens) {
                 </div>
                 ${item.orcamento_id ? `
                     <div class="orcamento-actions">
-                        <button class="btn-sm btn-secondary" onclick="editarOrcamento(${item.id}, ${item.orcamento_id})">Editar</button>
-                        <button class="btn-sm btn-danger" onclick="excluirOrcamento(${item.orcamento_id})">Excluir</button>
+                        <button class="btn-sm btn-secondary" onclick="editarOrcamento(${item.id}, ${item.orcamento_id})">Editar Limite</button>
+                        <button class="btn-sm btn-danger" onclick="excluirOrcamento(${item.orcamento_id})">Excluir Limite</button>
                     </div>
                 ` : ''}
             </div>
@@ -484,7 +422,142 @@ function renderizarOrcamentos(itens) {
     }).join('');
 }
 
+// ========== CRUD DE ITEMAGREGADO (CATEGORIA DO CARTÃO) ==========
+
+function abrirModalItemAgregado() {
+    if (!state.cartaoAtual) {
+        mostrarErro('Selecione um cartão primeiro');
+        return;
+    }
+
+    document.getElementById('modal-item-agregado-titulo').textContent = 'Nova Categoria do Cartão';
+    document.getElementById('form-item-agregado').reset();
+    document.getElementById('item-agregado-id').value = '';
+    abrirModal('modal-item-agregado');
+}
+
+async function editarItemAgregado(itemId) {
+    try {
+        const item = state.itensAgregados.find(i => i.id === itemId);
+        if (!item) throw new Error('Categoria não encontrada');
+
+        document.getElementById('modal-item-agregado-titulo').textContent = 'Editar Categoria do Cartão';
+        document.getElementById('item-agregado-id').value = item.id;
+        document.getElementById('item-agregado-nome').value = item.nome;
+        document.getElementById('item-agregado-descricao').value = item.descricao || '';
+
+        abrirModal('modal-item-agregado');
+    } catch (error) {
+        console.error('Erro ao editar categoria:', error);
+        mostrarErro(error.message);
+    }
+}
+
+async function salvarItemAgregado(event) {
+    event.preventDefault();
+
+    if (!state.cartaoAtual) {
+        mostrarErro('Selecione um cartão primeiro');
+        return;
+    }
+
+    const itemId = document.getElementById('item-agregado-id').value;
+    const nome = document.getElementById('item-agregado-nome').value;
+    const descricao = document.getElementById('item-agregado-descricao').value;
+
+    const dados = {
+        nome: nome.trim(),
+        descricao: descricao.trim() || null
+    };
+
+    const isEdicao = !!itemId;
+    const url = isEdicao
+        ? `/api/cartoes/itens/${itemId}`
+        : `/api/cartoes/${state.cartaoAtual.id}/itens`;
+    const method = isEdicao ? 'PUT' : 'POST';
+
+    mostrarLoading(isEdicao ? 'Atualizando categoria...' : 'Criando categoria...');
+
+    try {
+        const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dados)
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.erro || result.message || 'Erro ao salvar categoria');
+        }
+
+        fecharModal('modal-item-agregado');
+
+        // Recarregar itens agregados e orçamentos
+        await carregarItensAgregados(state.cartaoAtual.id);
+        await carregarOrcamentos(state.cartaoAtual.id);
+
+        mostrarSucesso(isEdicao ? 'Categoria atualizada!' : 'Categoria do cartão criada!');
+
+    } catch (error) {
+        console.error('Erro ao salvar categoria:', error);
+        mostrarErro(error.message);
+    } finally {
+        esconderLoading();
+    }
+}
+
+async function excluirItemAgregado(itemId) {
+    const item = state.itensAgregados.find(i => i.id === itemId);
+    if (!item) {
+        mostrarErro('Categoria não encontrada');
+        return;
+    }
+
+    // Confirmação
+    if (!confirm(`Tem certeza que deseja excluir a categoria "${item.nome}"?\n\nAtenção: Esta ação não pode ser desfeita.`)) {
+        return;
+    }
+
+    mostrarLoading('Excluindo categoria...');
+
+    try {
+        const response = await fetch(`/api/cartoes/itens/${itemId}`, {
+            method: 'DELETE'
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            // Backend retorna erro 400 se houver lançamentos
+            throw new Error(result.erro || result.message || 'Erro ao excluir categoria');
+        }
+
+        // Recarregar itens agregados e orçamentos
+        await carregarItensAgregados(state.cartaoAtual.id);
+        await carregarOrcamentos(state.cartaoAtual.id);
+
+        mostrarSucesso('Categoria excluída com sucesso!');
+
+    } catch (error) {
+        console.error('Erro ao excluir categoria:', error);
+        mostrarErro(error.message);
+    } finally {
+        esconderLoading();
+    }
+}
+
+// ========== ORÇAMENTO (LIMITE MENSAL) ==========
+
 function abrirModalOrcamento() {
+    // Validar se existem categorias cadastradas
+    if (!state.itensAgregados || state.itensAgregados.length === 0) {
+        if (confirm('Nenhuma categoria cadastrada.\n\nCrie uma nova categoria do cartão para continuar.\n\nDeseja criar agora?')) {
+            abrirModalItemAgregado();
+        }
+        return;
+    }
+
     document.getElementById('modal-orcamento-titulo').textContent = 'Definir Limite da Categoria';
     document.getElementById('form-orcamento').reset();
     document.getElementById('orcamento-id').value = '';

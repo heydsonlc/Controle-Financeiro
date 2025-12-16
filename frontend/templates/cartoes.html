@@ -84,9 +84,14 @@
                 <div id="tab-orcamento" class="tab-content active">
                     <div class="tab-header">
                         <h3>Categorias do Cartão</h3>
-                        <button class="btn btn-sm btn-primary" onclick="abrirModalOrcamento()">
-                            Nova Categoria
-                        </button>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn btn-sm btn-primary" onclick="abrirModalItemAgregado()">
+                                + Nova Categoria do Cartão
+                            </button>
+                            <button class="btn btn-sm btn-secondary" onclick="abrirModalOrcamento()">
+                                Definir Limite Mensal
+                            </button>
+                        </div>
                     </div>
                     <p style="color: #6e6e73; font-size: 14px; margin: 0 0 20px 0; line-height: 1.5;">
                         Defina aqui os limites de gasto mensais do cartão de crédito.
@@ -262,6 +267,39 @@
                     <label for="item-descricao">Descrição</label>
                     <textarea id="item-descricao" rows="2"
                               placeholder="Descrição opcional"></textarea>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" onclick="fecharModal('modal-item-agregado')" style="padding: 12px 24px; background: rgba(255, 255, 255, 0.2); color: white; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 10px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">
+                        Cancelar
+                    </button>
+                    <button type="submit" style="padding: 12px 24px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; border-radius: 10px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);">
+                        Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Nova Categoria do Cartão (ItemAgregado) -->
+    <div id="modal-item-agregado" class="modal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2 id="modal-item-agregado-titulo">Nova Categoria do Cartão</h2>
+                <span class="close" onclick="fecharModal('modal-item-agregado')">&times;</span>
+            </div>
+
+            <form id="form-item-agregado" onsubmit="salvarItemAgregado(event)">
+                <input type="hidden" id="item-agregado-id">
+
+                <div class="form-group">
+                    <label for="item-agregado-nome">Nome *</label>
+                    <input type="text" id="item-agregado-nome" required maxlength="100" placeholder="Ex: Supermercado">
+                </div>
+
+                <div class="form-group">
+                    <label for="item-agregado-descricao">Descrição (opcional)</label>
+                    <textarea id="item-agregado-descricao" rows="2" maxlength="255" placeholder="Ex: Compras de alimentos"></textarea>
                 </div>
 
                 <div class="form-actions">
