@@ -291,34 +291,38 @@ def atualizar_financiamento(id):
 @financiamentos_bp.route('/<int:id>', methods=['DELETE'])
 def deletar_financiamento(id):
     """
-    Inativa (soft delete) um financiamento
+    Exclui definitivamente um financiamento (hard delete)
+
+    Regras de negócio:
+    - Só pode excluir se nenhuma parcela estiver paga
+    - Só pode excluir se não houver amortizações extraordinárias
+    - Se não puder excluir, retorna erro orientando para inativação
 
     Args:
         id: ID do financiamento
 
     Returns:
-        JSON com confirmação
+        JSON com confirmação ou erro com orientação
     """
     try:
-        financiamento = FinanciamentoService.inativar_financiamento(id)
+        FinanciamentoService.excluir_financiamento(id)
 
         return jsonify({
             'success': True,
-            'message': 'Financiamento inativado com sucesso',
-            'data': financiamento.to_dict()
+            'message': 'Financiamento excluído com sucesso'
         }), 200
 
     except ValueError as e:
         return jsonify({
             'success': False,
-            'error': str(e)
-        }), 404
+            'message': str(e)
+        }), 400
 
     except Exception as e:
         db.session.rollback()
         return jsonify({
             'success': False,
-            'error': str(e)
+            'message': 'Erro interno ao excluir financiamento'
         }), 500
 
 

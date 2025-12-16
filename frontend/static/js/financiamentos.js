@@ -111,16 +111,18 @@ function renderizarFinanciamentos(financiamentos) {
                 <button class="btn btn-primary" onclick="verDetalhes(${fin.id})">
                     Ver Detalhes e Parcelas
                 </button>
-                <button class="btn btn-success" onclick="abrirModalAmortizacao(${fin.id})">
-                    Amortização Extra
-                </button>
+                ${fin.ativo ? `
+                    <button class="btn btn-success" onclick="abrirModalAmortizacao(${fin.id})">
+                        Amortização Extra
+                    </button>
+                ` : ''}
                 <button class="btn btn-info" onclick="abrirDemonstrativo(${fin.id})">
                     Demonstrativo Anual
                 </button>
                 <button class="btn btn-secondary" onclick="editarFinanciamento(${fin.id})">
                     Editar
                 </button>
-                <button class="btn btn-danger" onclick="excluirFinanciamento(${fin.id}, '${fin.nome.replace(/'/g, "\\'")}')">
+                <button class="btn btn-warning" onclick="tentarExcluirFinanciamento(${fin.id}, '${fin.nome.replace(/'/g, "\\'")}')">
                     Excluir
                 </button>
             </div>
@@ -689,10 +691,16 @@ async function editarFinanciamento(id) {
     }
 }
 
-async function excluirFinanciamento(id, nome) {
-    if (!confirm(`Tem certeza que deseja excluir o financiamento "${nome}"?\n\nEsta ação irá inativar o contrato.`)) {
+/**
+ * Tenta excluir financiamento (hard delete)
+ * Se não puder, oferece opção de inativar (soft delete)
+ */
+async function tentarExcluirFinanciamento(id, nome) {
+    if (!confirm(`Tem certeza que deseja excluir o financiamento "${nome}"?\n\nAtenção: Esta ação é irreversível e só é permitida se não houver histórico financeiro.`)) {
         return;
     }
+
+    mostrarLoading('Verificando se pode excluir...');
 
     try {
         const response = await fetch(`${API_BASE}/${id}`, {
@@ -701,15 +709,62 @@ async function excluirFinanciamento(id, nome) {
 
         const result = await response.json();
 
-        if (result.success) {
-            mostrarSucesso('Financiamento inativado com sucesso!');
+        if (response.ok && result.success) {
+            // Exclusão bem-sucedida
+            mostrarSucesso('Financiamento excluído com sucesso!');
             carregarFinanciamentos();
+        } else if (response.status === 400) {
+            // Não pode excluir - tem histórico
+            esconderLoading();
+
+            // Mostrar mensagem do backend
+            const mensagem = result.message || result.error || 'Não foi possível excluir este financiamento.';
+
+            // Perguntar se quer inativar
+            const inativar = confirm(
+                `❌ EXCLUSÃO BLOQUEADA\n\n${mensagem}\n\n` +
+                `Deseja INATIVAR este financiamento?\n` +
+                `(Inativar mantém o histórico mas oculta o contrato da lista de ativos)`
+            );
+
+            if (inativar) {
+                await inativarFinanciamento(id, nome);
+            }
         } else {
-            mostrarErro('Erro ao excluir: ' + result.error);
+            // Outro erro
+            mostrarErro(result.message || result.error || 'Erro ao excluir financiamento');
         }
     } catch (error) {
         console.error('Erro:', error);
-        mostrarErro('Erro ao excluir financiamento');
+        mostrarErro('Erro ao comunicar com o servidor');
+    }
+}
+
+/**
+ * Inativa um financiamento (soft delete)
+ */
+async function inativarFinanciamento(id, nome) {
+    mostrarLoading('Inativando financiamento...');
+
+    try {
+        // Como não temos endpoint de inativar direto, vamos usar o PUT para atualizar
+        const response = await fetch(`${API_BASE}/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ativo: false })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            mostrarSucesso(`Financiamento "${nome}" inativado com sucesso!`);
+            carregarFinanciamentos();
+        } else {
+            mostrarErro('Erro ao inativar: ' + (result.message || result.error));
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        mostrarErro('Erro ao inativar financiamento');
     }
 }
 
@@ -717,10 +772,132 @@ async function excluirFinanciamento(id, nome) {
 // MENSAGENS DE FEEDBACK
 // ============================================================================
 
+function mostrarLoading(mensagem = 'Carregando...') {
+    // Remover loading anterior se existir
+    esconderLoading();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'loading-overlay';
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 10000;
+    `;
+
+    const box = document.createElement('div');
+    box.style.cssText = `
+        background: white;
+        padding: 30px 40px;
+        border-radius: 8px;
+        text-align: center;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    `;
+
+    box.innerHTML = `
+        <div style="font-size: 32px; margin-bottom: 15px;">⏳</div>
+        <div style="font-size: 16px; color: #1d1d1f;">${mensagem}</div>
+    `;
+
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+}
+
+function esconderLoading() {
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) {
+        overlay.remove();
+    }
+}
+
 function mostrarSucesso(mensagem) {
-    alert('OK ' + mensagem);
+    esconderLoading();
+    mostrarNotificacao(mensagem, 'success');
 }
 
 function mostrarErro(mensagem) {
-    alert('ERRO ' + mensagem);
+    esconderLoading();
+    mostrarNotificacao(mensagem, 'error');
+}
+
+function mostrarNotificacao(mensagem, tipo = 'info') {
+    // Remover notificações anteriores
+    const existente = document.getElementById('notificacao-toast');
+    if (existente) existente.remove();
+
+    const cores = {
+        'success': { bg: '#34c759', icone: '✓' },
+        'error': { bg: '#ff3b30', icone: '✕' },
+        'info': { bg: '#007aff', icone: 'ℹ' }
+    };
+
+    const config = cores[tipo] || cores['info'];
+
+    const toast = document.createElement('div');
+    toast.id = 'notificacao-toast';
+    toast.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${config.bg};
+        color: white;
+        padding: 16px 24px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        z-index: 10001;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 15px;
+        max-width: 400px;
+        animation: slideIn 0.3s ease-out;
+    `;
+
+    toast.innerHTML = `
+        <span style="font-size: 20px; font-weight: bold;">${config.icone}</span>
+        <span>${mensagem}</span>
+    `;
+
+    document.body.appendChild(toast);
+
+    // Auto-remover após 4 segundos
+    setTimeout(() => {
+        toast.style.animation = 'slideOut 0.3s ease-out';
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
+}
+
+// Adicionar CSS das animações
+if (!document.getElementById('toast-animations')) {
+    const style = document.createElement('style');
+    style.id = 'toast-animations';
+    style.textContent = `
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+        }
+    `;
+    document.head.appendChild(style);
 }

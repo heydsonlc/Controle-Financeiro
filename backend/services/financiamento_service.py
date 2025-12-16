@@ -233,6 +233,87 @@ class FinanciamentoService:
         return financiamento
 
     @staticmethod
+    def pode_excluir_financiamento(financiamento_id: int) -> bool:
+        """
+        Verifica se um financiamento pode ser excluído definitivamente.
+
+        Um financiamento só pode ser excluído se:
+        - nenhuma parcela estiver paga
+        - não existir amortização extraordinária
+
+        Args:
+            financiamento_id (int): ID do financiamento
+
+        Returns:
+            bool: True se pode excluir, False caso contrário
+        """
+        # Verificar se existe alguma parcela paga
+        parcelas_pagas = FinanciamentoParcela.query.filter_by(
+            financiamento_id=financiamento_id,
+            status='pago'
+        ).count()
+
+        if parcelas_pagas > 0:
+            return False
+
+        # Verificar se existe alguma amortização extraordinária
+        amortizacoes = FinanciamentoAmortizacaoExtra.query.filter_by(
+            financiamento_id=financiamento_id
+        ).count()
+
+        if amortizacoes > 0:
+            return False
+
+        return True
+
+    @staticmethod
+    def excluir_financiamento(financiamento_id: int):
+        """
+        Exclusão definitiva de financiamento SEM impacto financeiro.
+
+        Regra:
+        - nenhuma parcela paga
+        - nenhuma amortização registrada
+
+        Args:
+            financiamento_id (int): ID do financiamento
+
+        Raises:
+            ValueError: Se financiamento não existe ou não pode ser excluído
+        """
+        financiamento = Financiamento.query.get(financiamento_id)
+
+        if not financiamento:
+            raise ValueError("Financiamento não encontrado")
+
+        if not FinanciamentoService.pode_excluir_financiamento(financiamento_id):
+            raise ValueError(
+                "Financiamento possui histórico financeiro e não pode ser excluído. "
+                "Utilize a opção de inativar."
+            )
+
+        try:
+            # Excluir despesas vinculadas (1 parcela = 1 despesa)
+            if financiamento.item_despesa_id:
+                Conta.query.filter(
+                    Conta.item_despesa_id == financiamento.item_despesa_id
+                ).delete(synchronize_session=False)
+
+            # Excluir parcelas
+            FinanciamentoParcela.query.filter_by(
+                financiamento_id=financiamento_id
+            ).delete(synchronize_session=False)
+
+            # Excluir financiamento
+            db.session.delete(financiamento)
+
+            db.session.commit()
+
+        except Exception:
+            db.session.rollback()
+            raise
+
+    @staticmethod
     def recalcular_parcelas_futuras(financiamento_id):
         """
         Recalcula APENAS as parcelas futuras (status PENDENTE) de um financiamento
