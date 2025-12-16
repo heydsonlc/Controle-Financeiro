@@ -246,16 +246,33 @@ def atualizar_item_agregado(item_id):
 
 @cartoes_bp.route('/itens/<int:item_id>', methods=['DELETE'])
 def excluir_item_agregado(item_id):
-    """Exclui uma categoria do cartão"""
+    """
+    Exclui (inativa) uma categoria do cartão
+
+    Regra: Só permite exclusão se não existirem lançamentos
+    """
     try:
         item = ItemAgregado.query.get(item_id)
         if not item:
             return jsonify({'erro': 'Item não encontrado'}), 404
 
+        # Verificar se existem lançamentos (Teste 5 do roteiro)
+        total_lancamentos = LancamentoAgregado.query.filter_by(
+            item_agregado_id=item_id
+        ).count()
+
+        if total_lancamentos > 0:
+            return jsonify({
+                'erro': f'Não é possível excluir esta categoria. '
+                        f'Existem {total_lancamentos} lançamento(s) vinculado(s).',
+                'total_lancamentos': total_lancamentos
+            }), 400
+
+        # Se não houver lançamentos, permitir inativação
         item.ativo = False
         db.session.commit()
 
-        return jsonify({'mensagem': 'Item excluído com sucesso'}), 200
+        return jsonify({'mensagem': 'Categoria excluída com sucesso'}), 200
     except Exception as e:
         db.session.rollback()
         return jsonify({'erro': str(e)}), 500
