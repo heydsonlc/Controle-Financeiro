@@ -825,12 +825,139 @@ function formatarData(data) {
     return d.toLocaleDateString('pt-BR');
 }
 
+// ============================================================================
+// MENSAGENS DE FEEDBACK (copiado de financiamentos.js)
+// ============================================================================
+
+function mostrarLoading(mensagem = 'Carregando...') {
+    // Remover loading anterior se existir
+    esconderLoading();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'loading-overlay';
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 10000;
+    `;
+
+    const box = document.createElement('div');
+    box.style.cssText = `
+        background: white;
+        padding: 30px 40px;
+        border-radius: 8px;
+        text-align: center;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    `;
+
+    box.innerHTML = `
+        <div style="font-size: 32px; margin-bottom: 15px;">⏳</div>
+        <div style="font-size: 16px; color: #1d1d1f;">${mensagem}</div>
+    `;
+
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+}
+
+function esconderLoading() {
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) {
+        overlay.remove();
+    }
+}
+
 function mostrarSucesso(mensagem) {
-    alert(mensagem); // Substituir por toast/notification futuramente
+    esconderLoading();
+    mostrarNotificacao(mensagem, 'success');
 }
 
 function mostrarErro(mensagem) {
-    alert('Erro: ' + mensagem); // Substituir por toast/notification futuramente
+    esconderLoading();
+    mostrarNotificacao(mensagem, 'error');
+}
+
+function mostrarNotificacao(mensagem, tipo = 'info') {
+    // Remover notificações anteriores
+    const existente = document.getElementById('notificacao-toast');
+    if (existente) existente.remove();
+
+    const cores = {
+        'success': { bg: '#34c759', icone: '✓' },
+        'error': { bg: '#ff3b30', icone: '✕' },
+        'info': { bg: '#007aff', icone: 'ℹ' },
+        'warning': { bg: '#ff9500', icone: '⚠' }
+    };
+
+    const config = cores[tipo] || cores['info'];
+
+    const toast = document.createElement('div');
+    toast.id = 'notificacao-toast';
+    toast.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${config.bg};
+        color: white;
+        padding: 16px 24px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        z-index: 10001;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 15px;
+        max-width: 400px;
+        animation: slideIn 0.3s ease-out;
+    `;
+
+    toast.innerHTML = `
+        <span style="font-size: 20px; font-weight: bold;">${config.icone}</span>
+        <span>${mensagem}</span>
+    `;
+
+    document.body.appendChild(toast);
+
+    // Auto-remover após 4 segundos
+    setTimeout(() => {
+        toast.style.animation = 'slideOut 0.3s ease-out';
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
+}
+
+// Adicionar CSS das animações
+if (!document.getElementById('toast-animations')) {
+    const style = document.createElement('style');
+    style.id = 'toast-animations';
+    style.textContent = `
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+        }
+    `;
+    document.head.appendChild(style);
 }
 
 // Fechar modal ao clicar fora
