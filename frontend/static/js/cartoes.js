@@ -824,7 +824,7 @@ async function salvarLancamento(event) {
         dados.item_agregado_id = parseInt(itemAgregadoId);
     }
 
-    try:
+    try {
         const url = id
             ? `/api/cartoes/lancamentos/${id}`
             : `/api/cartoes/${state.cartaoAtual.id}/lancamentos`;
