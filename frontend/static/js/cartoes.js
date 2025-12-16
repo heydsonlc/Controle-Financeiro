@@ -782,6 +782,182 @@ async function excluirLancamento(id) {
 }
 
 // ============================================================================
+// CRUD DE FATURAS
+// ============================================================================
+
+/**
+ * Carrega faturas do cartão
+ * Frontend não decide - apenas busca e exibe
+ */
+async function carregarFaturas(cartaoId) {
+    const container = document.getElementById('lista-faturas');
+
+    if (!cartaoId) {
+        container.innerHTML = '<p class="empty-state">Selecione um cartão para ver as faturas.</p>';
+        return;
+    }
+
+    mostrarLoading('Carregando faturas...');
+
+    try {
+        const response = await fetch(`/api/cartoes/${cartaoId}/faturas`);
+
+        if (!response.ok) {
+            throw new Error('Erro ao carregar faturas');
+        }
+
+        const faturas = await response.json();
+        renderizarFaturas(faturas);
+
+    } catch (error) {
+        console.error('Erro ao carregar faturas:', error);
+        container.innerHTML = '<p class="error">Erro ao carregar faturas</p>';
+        mostrarErro('Erro ao carregar faturas');
+    } finally {
+        esconderLoading();
+    }
+}
+
+/**
+ * Renderiza lista de faturas
+ * Não calcula nada - apenas exibe o que veio do backend
+ */
+function renderizarFaturas(faturas) {
+    const container = document.getElementById('lista-faturas');
+
+    if (!faturas || faturas.length === 0) {
+        container.innerHTML = '<p class="empty-state">Nenhuma fatura encontrada.</p>';
+        return;
+    }
+
+    // Criar tabela simples
+    container.innerHTML = `
+        <table class="tabela-faturas" style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: #f5f5f7; text-align: left;">
+                    <th style="padding: 12px; border-bottom: 2px solid #e8e8ea;">Competência</th>
+                    <th style="padding: 12px; border-bottom: 2px solid #e8e8ea;">Valor</th>
+                    <th style="padding: 12px; border-bottom: 2px solid #e8e8ea;">Status</th>
+                    <th style="padding: 12px; border-bottom: 2px solid #e8e8ea; text-align: center;">Ação</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${faturas.map(fatura => {
+                    const isPendente = fatura.status === 'PENDENTE';
+                    const statusCor = isPendente ? '#ff9500' : '#34c759';
+                    const statusTexto = isPendente ? 'Pendente' : 'Paga';
+
+                    return `
+                        <tr style="border-bottom: 1px solid #e8e8ea;">
+                            <td style="padding: 12px; color: #1d1d1f;">${fatura.competencia || '-'}</td>
+                            <td style="padding: 12px; color: #1d1d1f; font-weight: 600;">R$ ${formatarMoeda(fatura.valor_total || 0)}</td>
+                            <td style="padding: 12px;">
+                                <span style="
+                                    display: inline-block;
+                                    padding: 4px 12px;
+                                    background: ${statusCor}15;
+                                    color: ${statusCor};
+                                    border-radius: 12px;
+                                    font-size: 13px;
+                                    font-weight: 600;
+                                ">${statusTexto}</span>
+                            </td>
+                            <td style="padding: 12px; text-align: center;">
+                                ${isPendente ? `
+                                    <button
+                                        class="btn btn-sm btn-primary"
+                                        onclick="abrirModalPagarFatura(${fatura.despesa_id}, '${fatura.competencia}', ${fatura.valor_total})"
+                                        style="padding: 6px 16px; font-size: 14px;">
+                                        Pagar
+                                    </button>
+                                ` : `
+                                    <span style="color: #6e6e73; font-size: 13px;">
+                                        ${fatura.data_pagamento ? `Paga em ${formatarData(fatura.data_pagamento)}` : '-'}
+                                    </span>
+                                `}
+                            </td>
+                        </tr>
+                    `;
+                }).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+/**
+ * Abre modal para pagar fatura
+ */
+function abrirModalPagarFatura(despesaId, competencia, valor) {
+    document.getElementById('fatura-despesa-id').value = despesaId;
+    document.getElementById('fatura-data-pagamento').value = new Date().toISOString().slice(0, 10);
+
+    // Preencher info da fatura
+    document.getElementById('fatura-info').innerHTML = `
+        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+            <span style="color: #6e6e73;">Competência:</span>
+            <strong style="color: #1d1d1f;">${competencia}</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+            <span style="color: #6e6e73;">Valor:</span>
+            <strong style="color: #1d1d1f; font-size: 18px;">R$ ${formatarMoeda(valor)}</strong>
+        </div>
+    `;
+
+    abrirModal('modal-pagar-fatura');
+}
+
+/**
+ * Confirma pagamento da fatura
+ * Chama endpoint de despesas já existente
+ */
+async function pagarFatura(event) {
+    event.preventDefault();
+
+    const despesaId = document.getElementById('fatura-despesa-id').value;
+    const dataPagamento = document.getElementById('fatura-data-pagamento').value;
+    const contaBancariaId = document.getElementById('fatura-conta-bancaria').value;
+
+    const dados = {
+        data_pagamento: dataPagamento
+    };
+
+    // Conta bancária é opcional
+    if (contaBancariaId) {
+        dados.conta_bancaria_id = parseInt(contaBancariaId);
+    }
+
+    mostrarLoading('Processando pagamento...');
+
+    try {
+        const response = await fetch(`/api/despesas/${despesaId}/pagar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dados)
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.erro || result.message || 'Erro ao pagar fatura');
+        }
+
+        fecharModal('modal-pagar-fatura');
+
+        // Recarregar faturas e resumo
+        if (state.cartaoAtual) {
+            await carregarFaturas(state.cartaoAtual.id);
+            await carregarResumoCartao(state.cartaoAtual.id);
+        }
+
+        mostrarSucesso('Fatura paga com sucesso!');
+
+    } catch (error) {
+        console.error('Erro ao pagar fatura:', error);
+        mostrarErro(error.message);
+    }
+}
+
+// ============================================================================
 // CONTROLE DE TABS
 // ============================================================================
 
@@ -797,6 +973,10 @@ window.trocarTab = function(tabName) {
     // Carregar dados específicos da tab
     if (tabName === 'lancamentos') {
         carregarLancamentos();
+    } else if (tabName === 'faturas') {
+        if (state.cartaoAtual) {
+            carregarFaturas(state.cartaoAtual.id);
+        }
     }
 };
 

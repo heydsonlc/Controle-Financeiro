@@ -73,11 +73,12 @@
                     </div>
                 </div>
 
-                <!-- Tabs: Orçamento / Lançamentos / Categorias -->
+                <!-- Tabs: Orçamento / Lançamentos / Categorias / Faturas -->
                 <div class="tabs">
                     <button class="tab-button active" onclick="trocarTab('orcamento')">Orçamento</button>
                     <button class="tab-button" onclick="trocarTab('lancamentos')">Lançamentos</button>
                     <button class="tab-button" onclick="trocarTab('categorias')">Categorias</button>
+                    <button class="tab-button" onclick="trocarTab('faturas')">Faturas</button>
                 </div>
 
                 <!-- Tab: Orçamento -->
@@ -116,6 +117,16 @@
                     </div>
                     <div id="lista-itens-agregados" class="itens-lista">
                         <p class="loading">Carregando categorias...</p>
+                    </div>
+                </div>
+
+                <!-- Tab: Faturas -->
+                <div id="tab-faturas" class="tab-content">
+                    <div class="tab-header">
+                        <h3>Faturas do Cartão</h3>
+                    </div>
+                    <div id="lista-faturas" class="faturas-lista">
+                        <p class="loading">Carregando faturas...</p>
                     </div>
                 </div>
             </div>
@@ -388,6 +399,45 @@
                     </button>
                     <button type="submit" style="padding: 12px 24px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; border-radius: 10px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);">
                         Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Pagar Fatura -->
+    <div id="modal-pagar-fatura" class="modal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2>Pagar Fatura</h2>
+                <span class="close" onclick="fecharModal('modal-pagar-fatura')">&times;</span>
+            </div>
+
+            <form id="form-pagar-fatura" onsubmit="pagarFatura(event)">
+                <input type="hidden" id="fatura-despesa-id">
+
+                <div id="fatura-info" class="info-box" style="background: #f5f5f7; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <!-- Informações da fatura serão preenchidas aqui -->
+                </div>
+
+                <div class="form-group">
+                    <label for="fatura-data-pagamento">Data do Pagamento *</label>
+                    <input type="date" id="fatura-data-pagamento" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="fatura-conta-bancaria">Conta Bancária (opcional)</label>
+                    <select id="fatura-conta-bancaria">
+                        <option value="">Nenhuma</option>
+                    </select>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" onclick="fecharModal('modal-pagar-fatura')" style="padding: 12px 24px; background: rgba(255, 255, 255, 0.2); color: #1d1d1f; border: 1px solid rgba(0, 0, 0, 0.1); border-radius: 10px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">
+                        Cancelar
+                    </button>
+                    <button type="submit" style="padding: 12px 24px; background: linear-gradient(135deg, #34c759, #28a745); color: white; border: none; border-radius: 10px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(52, 199, 89, 0.4);">
+                        Confirmar Pagamento
                     </button>
                 </div>
             </form>
