@@ -73,24 +73,27 @@
                     </div>
                 </div>
 
-                <!-- Tabs: Orçamento / Lançamentos / Categorias / Faturas -->
+                <!-- Tabs: Categorias do Cartão / Lançamentos / Faturas -->
                 <div class="tabs">
-                    <button class="tab-button active" onclick="trocarTab('orcamento')">Orçamento</button>
+                    <button class="tab-button active" onclick="trocarTab('orcamento')">Categorias do Cartão</button>
                     <button class="tab-button" onclick="trocarTab('lancamentos')">Lançamentos</button>
-                    <button class="tab-button" onclick="trocarTab('categorias')">Categorias</button>
                     <button class="tab-button" onclick="trocarTab('faturas')">Faturas</button>
                 </div>
 
-                <!-- Tab: Orçamento -->
+                <!-- Tab: Categorias do Cartão (Orçamento) -->
                 <div id="tab-orcamento" class="tab-content active">
                     <div class="tab-header">
-                        <h3>Orçamento Mensal por Categoria</h3>
+                        <h3>Categorias do Cartão</h3>
                         <button class="btn btn-sm btn-primary" onclick="abrirModalOrcamento()">
-                            Adicionar Orçamento
+                            Nova Categoria
                         </button>
                     </div>
+                    <p style="color: #6e6e73; font-size: 14px; margin: 0 0 20px 0; line-height: 1.5;">
+                        Defina aqui os limites de gasto mensais do cartão de crédito.
+                        Essas categorias servem apenas para controle do cartão e não representam despesas individuais.
+                    </p>
                     <div id="lista-orcamentos" class="orcamentos-lista">
-                        <p class="loading">Carregando orçamentos...</p>
+                        <p class="loading">Carregando categorias...</p>
                     </div>
                 </div>
 
@@ -104,19 +107,6 @@
                     </div>
                     <div id="lista-lancamentos" class="lancamentos-lista">
                         <p class="loading">Carregando lançamentos...</p>
-                    </div>
-                </div>
-
-                <!-- Tab: Categorias -->
-                <div id="tab-categorias" class="tab-content">
-                    <div class="tab-header">
-                        <h3>Categorias do Cartão</h3>
-                        <button class="btn btn-sm btn-primary" onclick="abrirModalItemAgregado()">
-                            Nova Categoria
-                        </button>
-                    </div>
-                    <div id="lista-itens-agregados" class="itens-lista">
-                        <p class="loading">Carregando categorias...</p>
                     </div>
                 </div>
 

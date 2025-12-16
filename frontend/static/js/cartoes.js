@@ -440,7 +440,7 @@ function renderizarOrcamentos(itens) {
     const container = document.getElementById('lista-orcamentos');
 
     if (!itens || itens.length === 0) {
-        container.innerHTML = '<p class="empty-state">Nenhum orçamento definido para este mês.</p>';
+        container.innerHTML = '<p class="empty-state">Nenhuma categoria definida para este mês. Clique em "Nova Categoria" para começar.</p>';
         return;
     }
 
@@ -456,15 +456,15 @@ function renderizarOrcamentos(itens) {
                 </div>
                 <div class="orcamento-valores">
                     <div class="valor-item">
-                        <span class="label">Orçado:</span>
+                        <span class="label">Limite Mensal:</span>
                         <span class="value">R$ ${formatarMoeda(item.valor_orcado)}</span>
                     </div>
                     <div class="valor-item">
-                        <span class="label">Gasto:</span>
+                        <span class="label">Utilizado:</span>
                         <span class="value">R$ ${formatarMoeda(item.valor_gasto)}</span>
                     </div>
                     <div class="valor-item">
-                        <span class="label">Saldo:</span>
+                        <span class="label">Disponível:</span>
                         <span class="value" style="color: ${item.saldo >= 0 ? '#10b981' : '#ef4444'}">
                             R$ ${formatarMoeda(item.saldo)}
                         </span>
@@ -485,7 +485,7 @@ function renderizarOrcamentos(itens) {
 }
 
 function abrirModalOrcamento() {
-    document.getElementById('modal-orcamento-titulo').textContent = 'Definir Orçamento';
+    document.getElementById('modal-orcamento-titulo').textContent = 'Definir Limite da Categoria';
     document.getElementById('form-orcamento').reset();
     document.getElementById('orcamento-id').value = '';
     // Converter ISO YYYY-MM para MM/AAAA
@@ -503,7 +503,7 @@ async function editarOrcamento(itemId, orcamentoId) {
 
         if (!orcamento) throw new Error('Orçamento não encontrado');
 
-        document.getElementById('modal-orcamento-titulo').textContent = 'Editar Orçamento';
+        document.getElementById('modal-orcamento-titulo').textContent = 'Editar Limite da Categoria';
         document.getElementById('orcamento-id').value = orcamento.id;
         document.getElementById('orcamento-item-id').value = itemId;
         document.getElementById('orcamento-categoria').value = itemId;
@@ -561,7 +561,7 @@ async function salvarOrcamento(event) {
 
         fecharModal('modal-orcamento');
         await carregarResumoCartao(state.cartaoAtual.id);
-        mostrarSucesso(id ? 'Orçamento atualizado!' : 'Orçamento criado!');
+        mostrarSucesso(id ? 'Limite atualizado!' : 'Categoria criada!');
     } catch (error) {
         console.error('Erro ao salvar orçamento:', error);
         mostrarErro(error.message);
@@ -569,7 +569,7 @@ async function salvarOrcamento(event) {
 }
 
 async function excluirOrcamento(id) {
-    if (!confirm('Tem certeza que deseja excluir este orçamento?')) return;
+    if (!confirm('Tem certeza que deseja excluir o limite desta categoria?')) return;
 
     try {
         const response = await fetch(`/api/cartoes/orcamentos/${id}`, {
@@ -579,7 +579,7 @@ async function excluirOrcamento(id) {
         if (!response.ok) throw new Error('Erro ao excluir orçamento');
 
         await carregarResumoCartao(state.cartaoAtual.id);
-        mostrarSucesso('Orçamento excluído!');
+        mostrarSucesso('Limite excluído!');
     } catch (error) {
         console.error('Erro ao excluir orçamento:', error);
         mostrarErro('Erro ao excluir orçamento');
