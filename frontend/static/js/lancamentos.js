@@ -176,20 +176,24 @@ async function carregarCategoriasPorCartao() {
         if (!state.categoriasDespesa) {
             const response = await fetch('/api/categorias');
             const data = await response.json();
+            console.log('📊 Categorias recebidas:', data);
             // Garantir que seja um array
             state.categoriasDespesa = Array.isArray(data) ? data : (data.categorias || []);
+            console.log('📊 Categorias processadas:', state.categoriasDespesa);
         }
 
         selectCategoriaDespesa.innerHTML = '<option value="">Selecione uma categoria...</option>';
-        if (Array.isArray(state.categoriasDespesa)) {
+        if (Array.isArray(state.categoriasDespesa) && state.categoriasDespesa.length > 0) {
             state.categoriasDespesa.forEach(cat => {
-                if (cat.ativo) {
-                    const option = document.createElement('option');
-                    option.value = cat.id;
-                    option.textContent = cat.nome;
-                    selectCategoriaDespesa.appendChild(option);
-                }
+                // Remover filtro de ativo temporariamente para debug
+                const option = document.createElement('option');
+                option.value = cat.id;
+                option.textContent = `${cat.nome}${cat.ativo === false ? ' (inativa)' : ''}`;
+                selectCategoriaDespesa.appendChild(option);
+                console.log('✅ Adicionada categoria:', cat.nome);
             });
+        } else {
+            console.error('❌ Nenhuma categoria encontrada!', state.categoriasDespesa);
         }
 
         // 2. Carregar CATEGORIAS DO CARTÃO (ItemAgregado) - opcional
