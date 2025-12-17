@@ -97,20 +97,31 @@
 
                 <!-- Campos para Cartão de Crédito -->
                 <div id="campos-cartao" style="display: none;">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="lancamento-cartao">Cartão de Crédito *</label>
-                            <select id="lancamento-cartao" onchange="carregarCategoriasPorCartao()">
-                                <option value="">Selecione um cartão...</option>
-                            </select>
-                        </div>
+                    <div class="form-group">
+                        <label for="lancamento-cartao">Cartão de Crédito *</label>
+                        <select id="lancamento-cartao" onchange="carregarCategoriasPorCartao()">
+                            <option value="">Selecione um cartão...</option>
+                        </select>
+                    </div>
 
-                        <div class="form-group">
-                            <label for="lancamento-categoria-cartao">Categoria *</label>
-                            <select id="lancamento-categoria-cartao" disabled>
-                                <option value="">Selecione um cartão primeiro...</option>
-                            </select>
-                        </div>
+                    <div class="form-group">
+                        <label for="lancamento-categoria-despesa-cartao">Categoria da Despesa *</label>
+                        <select id="lancamento-categoria-despesa-cartao" required>
+                            <option value="">Selecione uma categoria...</option>
+                        </select>
+                        <small style="color: #6e6e73; font-size: 12px; display: block; margin-top: 5px;">
+                            Categoria para análise de gastos (Alimentação, Transporte, etc.)
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="lancamento-item-agregado">Categoria do Cartão (opcional)</label>
+                        <select id="lancamento-item-agregado" disabled>
+                            <option value="">Selecione um cartão primeiro...</option>
+                        </select>
+                        <small style="color: #6e6e73; font-size: 12px; display: block; margin-top: 5px;">
+                            Categoria para controle de limite do cartão (Supermercado, Farmácia, etc.)
+                        </small>
                     </div>
                 </div>
 

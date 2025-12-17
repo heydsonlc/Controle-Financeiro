@@ -162,32 +162,49 @@ async function carregarContasBancarias() {
 
 async function carregarCategoriasPorCartao() {
     const cartaoId = document.getElementById('lancamento-cartao').value;
-    const selectCategoria = document.getElementById('lancamento-categoria-cartao');
+    const selectCategoriaDespesa = document.getElementById('lancamento-categoria-despesa-cartao');
+    const selectItemAgregado = document.getElementById('lancamento-item-agregado');
 
     if (!cartaoId) {
-        selectCategoria.disabled = true;
-        selectCategoria.innerHTML = '<option value="">Selecione um cartão primeiro...</option>';
+        selectItemAgregado.disabled = true;
+        selectItemAgregado.innerHTML = '<option value="">Selecione um cartão primeiro...</option>';
         return;
     }
 
     try {
-        // Verifica se já carregou as categorias deste cartão
+        // 1. Carregar CATEGORIAS DE DESPESA (analíticas) - sempre disponíveis
+        if (!state.categoriasDespesa) {
+            const response = await fetch('/api/categorias');
+            state.categoriasDespesa = await response.json();
+        }
+
+        selectCategoriaDespesa.innerHTML = '<option value="">Selecione uma categoria...</option>';
+        state.categoriasDespesa.forEach(cat => {
+            if (cat.ativo) {
+                const option = document.createElement('option');
+                option.value = cat.id;
+                option.textContent = cat.nome;
+                selectCategoriaDespesa.appendChild(option);
+            }
+        });
+
+        // 2. Carregar CATEGORIAS DO CARTÃO (ItemAgregado) - opcional
         if (!state.categorias[cartaoId]) {
             const response = await fetch(`/api/cartoes/${cartaoId}/itens`);
             const categorias = await response.json();
             state.categorias[cartaoId] = categorias;
         }
 
-        const categorias = state.categorias[cartaoId];
+        const categoriasCartao = state.categorias[cartaoId];
 
-        selectCategoria.disabled = false;
-        selectCategoria.innerHTML = '<option value="">Selecione uma categoria...</option>';
+        selectItemAgregado.disabled = false;
+        selectItemAgregado.innerHTML = '<option value="">Sem categoria (não controla limite)</option>';
 
-        categorias.forEach(cat => {
+        categoriasCartao.forEach(cat => {
             const option = document.createElement('option');
             option.value = cat.id;
             option.textContent = cat.nome;
-            selectCategoria.appendChild(option);
+            selectItemAgregado.appendChild(option);
         });
 
     } catch (error) {
