@@ -140,7 +140,87 @@ item_agregado_id = nullable
 | categoria_id     | ✅ Obrigatório |
 | item_agregado_id | ❌ Opcional    |
 
-#### Regras:
+#### 4.3.1 Categoria da Despesa (Analítica) — OBRIGATÓRIA
+
+* **Campo:** `categoria_id`
+* **Origem:** tabela `categoria`
+* **Finalidade:** análise financeira, relatórios e dashboards
+
+**Regras:**
+* Todo lançamento DEVE possuir `categoria_id`
+* Frontend deve bloquear submit sem esse campo
+* Backend deve rejeitar lançamento sem `categoria_id`
+
+#### 4.3.2 Categoria do Cartão (Orçamentária) — OPCIONAL
+
+* **Campo:** `item_agregado_id`
+* **Origem:** tabela `item_agregado`
+* **Finalidade:** controle de limite do cartão
+
+**Regras:**
+* Pode ser `null`
+* Pode não existir no DOM
+* Nunca é obrigatória
+
+**Lançamentos sem `item_agregado_id`:**
+* Entram na fatura
+* **NÃO** consomem limite
+* **NÃO** disparam alertas
+
+#### 4.3.3 Regras de Frontend (OBRIGATÓRIAS)
+
+**O frontend NUNCA deve assumir que:**
+* O campo de categoria do cartão existe
+* O campo possui valor
+
+**Toda leitura deve ser null-safe:**
+
+```js
+// ✅ CORRETO
+const selectCategoriaCartao = document.getElementById('categoria-cartao');
+const itemAgregadoId = selectCategoriaCartao && selectCategoriaCartao.value
+    ? parseInt(selectCategoriaCartao.value)
+    : null;
+
+// ❌ ERRADO
+const itemAgregadoId = parseInt(document.getElementById('categoria-cartao').value);
+```
+
+**O payload:**
+* Só inclui `item_agregado_id` se houver seleção válida
+* **NUNCA** enviar `item_agregado_id: null` explicitamente
+
+```js
+// ✅ CORRETO
+const payload = {
+    cartao_id: cartaoId,
+    categoria_id: categoriaDespesaId, // OBRIGATÓRIA
+    descricao,
+    valor
+};
+
+if (itemAgregadoId !== null) {
+    payload.item_agregado_id = itemAgregadoId;
+}
+
+// ❌ ERRADO
+const payload = {
+    item_agregado_id: itemAgregadoId || null, // NÃO enviar null explícito
+    ...
+};
+```
+
+#### 4.3.4 Regras de Backend (Garantias)
+
+**Backend deve aceitar:**
+* Lançamentos com `item_agregado_id`
+* Lançamentos sem `item_agregado_id`
+
+**Backend NÃO deve:**
+* Rejeitar lançamento sem categoria do cartão
+* Criar despesa individual por lançamento
+
+#### Regras Gerais:
 
 * Lançamento **sempre** entra na fatura
 * Só consome limite se tiver `item_agregado_id`

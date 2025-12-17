@@ -483,14 +483,30 @@ async function salvarLancamento(event) {
 }
 
 async function salvarLancamentoCartao() {
-    const categoriaId = document.getElementById('lancamento-categoria-cartao').value;
+    // Validação de campos obrigatórios
+    const cartaoId = document.getElementById('lancamento-cartao').value;
+    const categoriaDespesaId = document.getElementById('lancamento-categoria-despesa-cartao').value;
 
-    if (!categoriaId) {
-        mostrarErro('Selecione uma categoria');
+    if (!cartaoId) {
+        mostrarErro('Selecione um cartão');
         return;
     }
 
+    if (!categoriaDespesaId) {
+        mostrarErro('Selecione uma categoria de despesa');
+        return;
+    }
+
+    // Leitura null-safe da categoria do cartão (opcional)
+    const selectItemAgregado = document.getElementById('lancamento-item-agregado');
+    const itemAgregadoId = selectItemAgregado && selectItemAgregado.value
+        ? parseInt(selectItemAgregado.value)
+        : null;
+
+    // Montar payload base (campos obrigatórios)
     const dados = {
+        cartao_id: parseInt(cartaoId),
+        categoria_id: parseInt(categoriaDespesaId),
         descricao: document.getElementById('lancamento-descricao').value,
         valor: parseFloat(document.getElementById('lancamento-valor').value),
         data_compra: document.getElementById('lancamento-data').value,
@@ -500,8 +516,13 @@ async function salvarLancamentoCartao() {
         observacoes: document.getElementById('lancamento-observacoes').value
     };
 
+    // Adicionar item_agregado_id APENAS se houver seleção válida
+    if (itemAgregadoId !== null) {
+        dados.item_agregado_id = itemAgregadoId;
+    }
+
     try {
-        const url = `/api/cartoes/itens/${categoriaId}/lancamentos`;
+        const url = `/api/cartoes/${cartaoId}/lancamentos`;
         const response = await fetch(url, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -649,13 +670,22 @@ function editarLancamento(lancamento) {
             document.getElementById('lancamento-mes-fatura').value = mesFatura;
         }
 
-        // Aguardar um pouco, depois selecionar cartão e categoria
+        // Aguardar um pouco, depois selecionar cartão e categorias
         setTimeout(async () => {
             document.getElementById('lancamento-cartao').value = lancamento.cartao_id;
             await carregarCategoriasPorCartao();
 
             setTimeout(() => {
-                document.getElementById('lancamento-categoria-cartao').value = lancamento.categoria_id;
+                // Categoria da DESPESA (obrigatória)
+                document.getElementById('lancamento-categoria-despesa-cartao').value = lancamento.categoria_id;
+
+                // Categoria do CARTÃO (opcional) - null-safe
+                if (lancamento.item_agregado_id) {
+                    const selectItemAgregado = document.getElementById('lancamento-item-agregado');
+                    if (selectItemAgregado) {
+                        selectItemAgregado.value = lancamento.item_agregado_id;
+                    }
+                }
             }, 100);
         }, 100);
     }

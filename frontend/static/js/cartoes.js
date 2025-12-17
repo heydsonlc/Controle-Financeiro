@@ -806,7 +806,12 @@ async function salvarLancamento(event) {
 
     const id = document.getElementById('lancamento-id').value;
     const categoriaDespesaId = document.getElementById('lancamento-categoria-despesa').value;
-    const itemAgregadoId = document.getElementById('lancamento-categoria-cartao').value;
+
+    // Leitura null-safe da categoria do cartão (opcional)
+    const selectCategoriaCartao = document.getElementById('lancamento-categoria-cartao');
+    const itemAgregadoId = selectCategoriaCartao && selectCategoriaCartao.value
+        ? selectCategoriaCartao.value
+        : null;
 
     // Converter mês da fatura de MM/AAAA para ISO YYYY-MM
     const faturaBR = document.getElementById('lancamento-fatura').value;
@@ -828,8 +833,8 @@ async function salvarLancamento(event) {
         categoria_id: parseInt(categoriaDespesaId)  // Categoria da DESPESA (obrigatória)
     };
 
-    // Adicionar item_agregado_id apenas se selecionado (pode ser null)
-    if (itemAgregadoId) {
+    // Adicionar item_agregado_id APENAS se houver seleção válida
+    if (itemAgregadoId !== null) {
         dados.item_agregado_id = parseInt(itemAgregadoId);
     }
 
