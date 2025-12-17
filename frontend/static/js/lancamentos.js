@@ -23,7 +23,8 @@ const state = {
 document.addEventListener('DOMContentLoaded', () => {
     inicializarFiltros();
     carregarCartoes();
-    carregarCategoriasGerais();
+    carregarCategoriasAnalíticas(); // Popular filtro de categoria
+    carregarCategoriasGerais(); // Popular modal de lançamento
     carregarContasBancarias();
     carregarLancamentos();
     carregarReceitasPendentes(); // Carregar receitas pendentes
@@ -49,9 +50,26 @@ function inicializarFiltros() {
     state.filtros.mes = mesAtual;
 
     // Listeners de filtros
+    document.getElementById('filtro-tipo').addEventListener('change', () => {
+        ajustarVisibilidadeFiltros();
+        aplicarFiltros();
+    });
     document.getElementById('filtro-mes').addEventListener('change', aplicarFiltros);
     document.getElementById('filtro-cartao').addEventListener('change', aplicarFiltros);
     document.getElementById('filtro-categoria').addEventListener('change', aplicarFiltros);
+}
+
+function ajustarVisibilidadeFiltros() {
+    const tipoFiltro = document.getElementById('filtro-tipo').value;
+    const filterCartaoContainer = document.getElementById('filter-cartao-container');
+
+    // Filtro de Cartão só aparece se Tipo = 'cartao' ou Tipo = '' (Todos)
+    if (tipoFiltro === 'direto' || tipoFiltro === 'credito') {
+        filterCartaoContainer.style.display = 'none';
+        document.getElementById('filtro-cartao').value = ''; // Limpar seleção
+    } else {
+        filterCartaoContainer.style.display = 'block';
+    }
 }
 
 // ===================================
@@ -65,7 +83,7 @@ async function carregarCartoes() {
 
         state.cartoes = cartoes;
 
-        // Popular selects de filtro
+        // Popular selects de filtro e modal
         const selectFiltro = document.getElementById('filtro-cartao');
         const selectLancamento = document.getElementById('lancamento-cartao');
 
@@ -82,46 +100,34 @@ async function carregarCartoes() {
             });
         });
 
-        // Carregar todas as categorias de todos os cartões para o filtro
-        await carregarTodasCategorias();
-
     } catch (error) {
         console.error('Erro ao carregar cartões:', error);
         mostrarErro('Erro ao carregar cartões');
     }
 }
 
-async function carregarTodasCategorias() {
+async function carregarCategoriasAnalíticas() {
     try {
-        const selectCategoria = document.getElementById('filtro-categoria');
-        const todasCategorias = [];
+        // Buscar CATEGORIAS ANALÍTICAS (tabela: categoria)
+        // NÃO buscar categorias do cartão (tabela: item_agregado)
+        const response = await fetch('/api/categorias');
+        const result = await response.json();
+        const categorias = result.data || result; // Suporta tanto { data: [] } quanto []
 
-        // Buscar categorias de todos os cartões
-        for (const cartao of state.cartoes) {
-            const response = await fetch(`/api/cartoes/${cartao.id}/itens`);
-            const categorias = await response.json();
+        // Popular select de filtro
+        const selectFiltro = document.getElementById('filtro-categoria');
+        selectFiltro.innerHTML = '<option value="">Todas as categorias</option>';
 
-            categorias.forEach(cat => {
-                // Adicionar cartão_nome para identificação
-                todasCategorias.push({
-                    ...cat,
-                    cartao_id: cartao.id,
-                    cartao_nome: cartao.nome
-                });
-            });
-        }
-
-        // Popular select de categoria
-        selectCategoria.innerHTML = '<option value="">Todas as categorias</option>';
-        todasCategorias.forEach(cat => {
+        categorias.forEach(cat => {
             const option = document.createElement('option');
             option.value = cat.id;
-            option.textContent = `${cat.nome} (${cat.cartao_nome})`;
-            selectCategoria.appendChild(option);
+            option.textContent = cat.nome; // Ex: Alimentação, Transporte, Moradia
+            selectFiltro.appendChild(option);
         });
 
     } catch (error) {
-        console.error('Erro ao carregar categorias:', error);
+        console.error('Erro ao carregar categorias analíticas:', error);
+        mostrarErro('Erro ao carregar categorias');
     }
 }
 
@@ -324,27 +330,35 @@ async function carregarLancamentos() {
 // ===================================
 
 function aplicarFiltros() {
+    const tipoFiltro = document.getElementById('filtro-tipo').value;
     const mesFiltro = document.getElementById('filtro-mes').value;
     const cartaoFiltro = document.getElementById('filtro-cartao').value;
     const categoriaFiltro = document.getElementById('filtro-categoria').value;
 
     let lancamentosFiltrados = state.lancamentos;
 
-    // Filtrar por mês
+    // 1. Filtrar por TIPO (eixo principal)
+    if (tipoFiltro) {
+        lancamentosFiltrados = lancamentosFiltrados.filter(l =>
+            l.tipo === tipoFiltro
+        );
+    }
+
+    // 2. Filtrar por mês
     if (mesFiltro) {
         lancamentosFiltrados = lancamentosFiltrados.filter(l =>
             l.mes_fatura && l.mes_fatura.startsWith(mesFiltro)
         );
     }
 
-    // Filtrar por cartão
-    if (cartaoFiltro) {
+    // 3. Filtrar por cartão (CONDICIONAL - só se tipo = cartao ou todos)
+    if (cartaoFiltro && (tipoFiltro === '' || tipoFiltro === 'cartao')) {
         lancamentosFiltrados = lancamentosFiltrados.filter(l =>
             l.cartao_id == cartaoFiltro
         );
     }
 
-    // Filtrar por categoria
+    // 4. Filtrar por categoria ANALÍTICA (categoria_id, não item_agregado_id)
     if (categoriaFiltro) {
         lancamentosFiltrados = lancamentosFiltrados.filter(l =>
             l.categoria_id == categoriaFiltro

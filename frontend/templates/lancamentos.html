@@ -28,10 +28,19 @@
         <section class="filters-section">
             <div class="filters-grid">
                 <div class="filter-item">
+                    <label for="filtro-tipo">Tipo de Lançamento</label>
+                    <select id="filtro-tipo">
+                        <option value="">Todos os tipos</option>
+                        <option value="cartao">💳 Cartão de Crédito</option>
+                        <option value="direto">💵 Despesa Direta</option>
+                        <option value="credito">💰 Entrada / Crédito</option>
+                    </select>
+                </div>
+                <div class="filter-item">
                     <label for="filtro-mes">Mês</label>
                     <input type="month" id="filtro-mes">
                 </div>
-                <div class="filter-item">
+                <div class="filter-item" id="filter-cartao-container">
                     <label for="filtro-cartao">Cartão</label>
                     <select id="filtro-cartao">
                         <option value="">Todos os cartões</option>
