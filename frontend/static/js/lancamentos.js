@@ -175,18 +175,22 @@ async function carregarCategoriasPorCartao() {
         // 1. Carregar CATEGORIAS DE DESPESA (analíticas) - sempre disponíveis
         if (!state.categoriasDespesa) {
             const response = await fetch('/api/categorias');
-            state.categoriasDespesa = await response.json();
+            const data = await response.json();
+            // Garantir que seja um array
+            state.categoriasDespesa = Array.isArray(data) ? data : (data.categorias || []);
         }
 
         selectCategoriaDespesa.innerHTML = '<option value="">Selecione uma categoria...</option>';
-        state.categoriasDespesa.forEach(cat => {
-            if (cat.ativo) {
-                const option = document.createElement('option');
-                option.value = cat.id;
-                option.textContent = cat.nome;
-                selectCategoriaDespesa.appendChild(option);
-            }
-        });
+        if (Array.isArray(state.categoriasDespesa)) {
+            state.categoriasDespesa.forEach(cat => {
+                if (cat.ativo) {
+                    const option = document.createElement('option');
+                    option.value = cat.id;
+                    option.textContent = cat.nome;
+                    selectCategoriaDespesa.appendChild(option);
+                }
+            });
+        }
 
         // 2. Carregar CATEGORIAS DO CARTÃO (ItemAgregado) - opcional
         if (!state.categorias[cartaoId]) {
