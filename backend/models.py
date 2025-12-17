@@ -387,6 +387,7 @@ class LancamentoAgregado(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     item_agregado_id = db.Column(db.Integer, db.ForeignKey('item_agregado.id'), nullable=True)
     cartao_id = db.Column(db.Integer, db.ForeignKey('item_despesa.id'), nullable=False)  # Referência direta ao cartão
+    categoria_id = db.Column(db.Integer, db.ForeignKey('categoria.id'), nullable=False)  # Categoria da DESPESA (analítica)
     descricao = db.Column(db.String(200), nullable=False)
     valor = db.Column(db.Numeric(10, 2), nullable=False)
     data_compra = db.Column(db.Date, nullable=False)
@@ -398,6 +399,7 @@ class LancamentoAgregado(db.Model):
 
     # Relacionamentos
     item_agregado = db.relationship('ItemAgregado', back_populates='lancamentos_agregados')
+    categoria = db.relationship('Categoria')
 
     # Índices
     __table_args__ = (

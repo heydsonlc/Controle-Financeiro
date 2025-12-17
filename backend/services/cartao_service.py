@@ -328,6 +328,7 @@ class CartaoService:
         lancamento = LancamentoAgregado(
             cartao_id=cartao_id,
             item_agregado_id=item_agregado_id,  # Pode ser None
+            categoria_id=dados_lancamento['categoria_id'],  # Categoria da DESPESA (obrigatória)
             valor=Decimal(str(dados_lancamento['valor'])),
             descricao=dados_lancamento['descricao'],
             data_compra=dados_lancamento['data_compra'],

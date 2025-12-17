@@ -66,9 +66,10 @@ async function carregarCategorias() {
         const data = await response.json();
         state.categorias = Array.isArray(data) ? data : [];
 
-        // Preencher selects de categoria
+        // Preencher selects de categoria de DESPESA (analítica)
         const selects = [
-            document.getElementById('cartao-categoria')
+            document.getElementById('cartao-categoria'),
+            document.getElementById('lancamento-categoria-despesa')
         ];
 
         selects.forEach(select => {
@@ -356,8 +357,8 @@ function atualizarSelectsItensAgregados() {
         });
     }
 
-    // Select de lançamento: categoria opcional
-    const selectLancamento = document.getElementById('lancamento-categoria');
+    // Select de lançamento (CATEGORIA DO CARTÃO): opcional
+    const selectLancamento = document.getElementById('lancamento-categoria-cartao');
     if (selectLancamento) {
         selectLancamento.innerHTML = '<option value="">Sem categoria (não controla limite)</option>';
         state.itensAgregados.forEach(item => {
@@ -798,7 +799,8 @@ async function salvarLancamento(event) {
     }
 
     const id = document.getElementById('lancamento-id').value;
-    const itemAgregadoId = document.getElementById('lancamento-categoria').value;
+    const categoriaDespesaId = document.getElementById('lancamento-categoria-despesa').value;
+    const itemAgregadoId = document.getElementById('lancamento-categoria-cartao').value;
 
     // Converter mês da fatura de MM/AAAA para ISO YYYY-MM
     const faturaBR = document.getElementById('lancamento-fatura').value;
@@ -816,7 +818,8 @@ async function salvarLancamento(event) {
         mes_fatura: faturaISO.substring(0, 7), // YYYY-MM
         numero_parcela: parseInt(document.getElementById('lancamento-parcela').value) || 1,
         total_parcelas: parseInt(document.getElementById('lancamento-total-parcelas').value) || 1,
-        observacoes: document.getElementById('lancamento-observacoes').value
+        observacoes: document.getElementById('lancamento-observacoes').value,
+        categoria_id: parseInt(categoriaDespesaId)  // Categoria da DESPESA (obrigatória)
     };
 
     // Adicionar item_agregado_id apenas se selecionado (pode ser null)

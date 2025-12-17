@@ -479,6 +479,7 @@ def criar_lancamento_sem_categoria(cartao_id):
         dados_lancamento = {
             'cartao_id': cartao_id,
             'item_agregado_id': dados.get('item_agregado_id'),  # OPCIONAL (None se não informado)
+            'categoria_id': dados['categoria_id'],  # Categoria da DESPESA (obrigatória)
             'descricao': dados['descricao'],
             'valor': dados['valor'],
             'data_compra': data_compra,
