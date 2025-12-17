@@ -573,12 +573,18 @@ def obter_resumo_cartao(cartao_id):
         if not cartao:
             return jsonify({'erro': 'Cartão não encontrado'}), 404
 
-        # Buscar itens agregados ativos
+        # Calcular EXECUTADO TOTAL do cartão (TODOS os lançamentos, com ou sem categoria)
+        total_gasto_cartao = db.session.query(func.sum(LancamentoAgregado.valor)).filter(
+            LancamentoAgregado.cartao_id == cartao_id,
+            LancamentoAgregado.mes_fatura == mes_ref_date
+        ).scalar() or 0
+        total_gasto_cartao = float(total_gasto_cartao)
+
+        # Buscar itens agregados ativos (categorias)
         itens = ItemAgregado.query.filter_by(item_despesa_id=cartao_id, ativo=True).all()
 
         resumo_itens = []
         total_orcado = 0
-        total_gasto = 0
 
         for item in itens:
             # Buscar orçamento do mês
@@ -587,7 +593,7 @@ def obter_resumo_cartao(cartao_id):
                 mes_referencia=mes_ref_date
             ).first()
 
-            # Buscar gastos do mês
+            # Buscar gastos do mês (apenas lançamentos DESTA categoria)
             gastos = LancamentoAgregado.query.filter_by(
                 item_agregado_id=item.id,
                 mes_fatura=mes_ref_date
@@ -597,7 +603,6 @@ def obter_resumo_cartao(cartao_id):
             valor_gasto = sum(float(g.valor) for g in gastos)
 
             total_orcado += valor_orcado
-            total_gasto += valor_gasto
 
             resumo_itens.append({
                 'id': item.id,
@@ -614,15 +619,17 @@ def obter_resumo_cartao(cartao_id):
             'cartao': cartao.to_dict(),
             'mes_referencia': mes_referencia,
             'total_orcado': total_orcado,
-            'total_gasto': total_gasto,
-            'saldo_disponivel': total_orcado - total_gasto,
+            'total_gasto': total_gasto_cartao,  # Inclui lançamentos sem categoria
+            'saldo_disponivel': total_orcado - total_gasto_cartao,
             'limite_credito': float(cartao.config_agregador.limite_credito) if cartao.config_agregador and cartao.config_agregador.limite_credito else None,
             'itens': resumo_itens
         }
 
         return jsonify(resultado), 200
     except Exception as e:
-        return jsonify({'erro': str(e)}), 500
+        import traceback
+        traceback.print_exc()  # Log completo no console
+        return jsonify({'erro': f'Erro ao carregar resumo: {str(e)}'}), 500
 
 
 # ============================================================================
