@@ -287,9 +287,15 @@ function voltarListaCartoes() {
 async function carregarResumoCartao(cartaoId) {
     try {
         const response = await fetch(`/api/cartoes/${cartaoId}/resumo?mes_referencia=${state.mesSelecionado}`);
-        if (!response.ok) throw new Error('Erro ao carregar resumo');
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            console.error('❌ Erro do backend:', errorData);
+            throw new Error(errorData.erro || 'Erro ao carregar resumo');
+        }
 
         const resumo = await response.json();
+        console.log('✅ Resumo carregado:', resumo);
 
         // Atualizar cards de resumo
         document.getElementById('total-orcado').textContent = `R$ ${formatarMoeda(resumo.total_orcado)}`;
