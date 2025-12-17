@@ -29,6 +29,15 @@ document.addEventListener('DOMContentLoaded', () => {
     carregarReceitasPendentes(); // Carregar receitas pendentes
 });
 
+// Detectar restauração da página do cache (bfcache)
+// Garante que dados sejam recarregados ao voltar para a tela
+window.addEventListener('pageshow', (event) => {
+    if (event.persisted) {
+        // Página foi restaurada do bfcache - recarregar dados
+        carregarLancamentos();
+    }
+});
+
 function inicializarFiltros() {
     const hoje = new Date();
     const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
