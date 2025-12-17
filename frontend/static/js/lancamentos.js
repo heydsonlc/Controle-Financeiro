@@ -177,8 +177,8 @@ async function carregarCategoriasPorCartao() {
             const response = await fetch('/api/categorias');
             const data = await response.json();
             console.log('📊 Categorias recebidas:', data);
-            // Garantir que seja um array
-            state.categoriasDespesa = Array.isArray(data) ? data : (data.categorias || []);
+            // A resposta vem como { data: [...], success: true, total: N }
+            state.categoriasDespesa = data.data || data.categorias || (Array.isArray(data) ? data : []);
             console.log('📊 Categorias processadas:', state.categoriasDespesa);
         }
 
