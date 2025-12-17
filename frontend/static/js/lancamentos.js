@@ -431,7 +431,76 @@ function abrirModalLancamento() {
     document.getElementById('lancamento-mes-fatura').value = state.filtros.mes ||
         `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
 
+    // CRÍTICO: Limpar validações ao abrir modal (tipo ainda não selecionado)
+    ajustarCamposPorTipo('');
+
     abrirModal('modal-lancamento');
+}
+
+/**
+ * Ajusta campos required/disabled conforme tipo de lançamento
+ * REGRA: Apenas campos visíveis do tipo atual devem ter validação HTML5
+ */
+function ajustarCamposPorTipo(tipo) {
+    // Campos específicos de cada tipo
+    const camposCartao = {
+        'lancamento-cartao': true,
+        'lancamento-categoria-despesa-cartao': true,
+        'lancamento-item-agregado': false, // opcional
+        'lancamento-mes-fatura': true,
+        'lancamento-parcelas': false // opcional
+    };
+
+    const camposDireto = {
+        'lancamento-categoria-geral': true
+    };
+
+    const camposCredito = {
+        'lancamento-conta-bancaria': true
+    };
+
+    // 1. LIMPAR TODOS os campos específicos (remover required)
+    Object.keys(camposCartao).forEach(id => {
+        const campo = document.getElementById(id);
+        if (campo) {
+            campo.removeAttribute('required');
+            campo.disabled = false;
+        }
+    });
+
+    Object.keys(camposDireto).forEach(id => {
+        const campo = document.getElementById(id);
+        if (campo) campo.removeAttribute('required');
+    });
+
+    Object.keys(camposCredito).forEach(id => {
+        const campo = document.getElementById(id);
+        if (campo) campo.removeAttribute('required');
+    });
+
+    // 2. ATIVAR required APENAS nos campos do tipo atual
+    if (tipo === 'cartao') {
+        Object.entries(camposCartao).forEach(([id, isRequired]) => {
+            const campo = document.getElementById(id);
+            if (campo && isRequired) {
+                campo.setAttribute('required', 'required');
+            }
+        });
+    } else if (tipo === 'direto') {
+        Object.entries(camposDireto).forEach(([id, isRequired]) => {
+            const campo = document.getElementById(id);
+            if (campo && isRequired) {
+                campo.setAttribute('required', 'required');
+            }
+        });
+    } else if (tipo === 'credito') {
+        Object.entries(camposCredito).forEach(([id, isRequired]) => {
+            const campo = document.getElementById(id);
+            if (campo && isRequired) {
+                campo.setAttribute('required', 'required');
+            }
+        });
+    }
 }
 
 function alternarTipoLancamento() {
@@ -465,6 +534,9 @@ function alternarTipoLancamento() {
         camposDireto.style.display = 'none';
         camposCredito.style.display = 'none';
     }
+
+    // CRÍTICO: Ajustar validações após mudar visibilidade
+    ajustarCamposPorTipo(tipo);
 }
 
 async function salvarLancamento(event) {
