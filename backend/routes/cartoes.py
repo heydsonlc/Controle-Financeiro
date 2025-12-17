@@ -455,6 +455,34 @@ def criar_lancamento(item_id):
         return jsonify({'success': False, 'erro': str(e)}), 500
 
 
+@cartoes_bp.route('/<int:cartao_id>/lancamentos', methods=['GET'])
+def listar_todos_lancamentos_cartao(cartao_id):
+    """
+    Lista TODOS os lançamentos de um cartão (com e sem categoria do cartão)
+
+    Retorna lançamentos com item_agregado_id preenchido E com item_agregado_id = NULL.
+    Conforme contrato: lançamentos sem categoria aparecem no histórico.
+    """
+    try:
+        mes_fatura = request.args.get('mes_fatura')
+
+        # Query base: todos os lançamentos do cartão
+        query = LancamentoAgregado.query.filter_by(cartao_id=cartao_id)
+
+        # Filtro opcional por mês
+        if mes_fatura:
+            # Converter para primeiro dia do mês
+            mes_fat_date = datetime.strptime(mes_fatura + '-01', '%Y-%m-%d').date()
+            query = query.filter_by(mes_fatura=mes_fat_date)
+
+        # Ordenar por data mais recente
+        lancamentos = query.order_by(LancamentoAgregado.data_compra.desc()).all()
+
+        return jsonify([l.to_dict() for l in lancamentos]), 200
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
+
+
 @cartoes_bp.route('/<int:cartao_id>/lancamentos', methods=['POST'])
 def criar_lancamento_sem_categoria(cartao_id):
     """

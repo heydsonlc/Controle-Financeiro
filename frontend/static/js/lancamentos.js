@@ -225,28 +225,29 @@ async function carregarLancamentos() {
     try {
         const lancamentos = [];
 
-        // 1. Buscar lançamentos de cartões de crédito
+        // 1. Buscar TODOS lançamentos de cartões de crédito (com e sem categoria do cartão)
         for (const cartao of state.cartoes) {
-            const response = await fetch(`/api/cartoes/${cartao.id}/itens`);
-            const itens = await response.json();
+            const response = await fetch(`/api/cartoes/${cartao.id}/lancamentos`);
+            const lancsCartao = await response.json();
 
-            for (const item of itens) {
-                const respLanc = await fetch(`/api/cartoes/itens/${item.id}/lancamentos`);
-                const lancsItem = await respLanc.json();
+            // Buscar categorias do cartão para enriquecer (apenas para exibição)
+            const respItens = await fetch(`/api/cartoes/${cartao.id}/itens`);
+            const itens = await respItens.json();
 
-                lancsItem.forEach(lanc => {
-                    lancamentos.push({
-                        ...lanc,
-                        tipo: 'cartao',
-                        cartao_id: cartao.id,
-                        cartao_nome: cartao.nome,
-                        categoria_id: item.id,
-                        categoria_nome: item.nome,
-                        data_compra: lanc.data_compra,
-                        mes_fatura: lanc.mes_fatura
-                    });
+            lancsCartao.forEach(lanc => {
+                // Enriquecer com nome da categoria do cartão (se houver)
+                const itemCategoria = itens.find(i => i.id === lanc.item_agregado_id);
+
+                lancamentos.push({
+                    ...lanc,
+                    tipo: 'cartao',
+                    cartao_id: cartao.id,
+                    cartao_nome: cartao.nome,
+                    categoria_cartao_nome: itemCategoria ? itemCategoria.nome : 'Sem categoria do cartão',
+                    data_compra: lanc.data_compra,
+                    mes_fatura: lanc.mes_fatura
                 });
-            }
+            });
         }
 
         // 2. Buscar despesas diretas (tipo Simples)

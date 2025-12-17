@@ -681,17 +681,20 @@ async function carregarLancamentos() {
     if (!state.cartaoAtual) return;
 
     try {
-        // Carregar lançamentos de todos os itens do cartão
-        const promises = state.itensAgregados.map(item =>
-            fetch(`/api/cartoes/itens/${item.id}/lancamentos?mes_fatura=${state.mesSelecionado}`)
-                .then(r => r.json())
-                .then(lancamentos => lancamentos.map(l => ({ ...l, item_nome: item.nome })))
-        );
+        // Carregar TODOS os lançamentos do cartão (com e sem categoria)
+        const response = await fetch(`/api/cartoes/${state.cartaoAtual.id}/lancamentos?mes_fatura=${state.mesSelecionado}`);
+        const lancamentos = await response.json();
 
-        const resultados = await Promise.all(promises);
-        const todosLancamentos = resultados.flat();
+        // Enriquecer com nome da categoria do cartão (quando houver)
+        const lancamentosEnriquecidos = lancamentos.map(lanc => {
+            const item = state.itensAgregados.find(i => i.id === lanc.item_agregado_id);
+            return {
+                ...lanc,
+                item_nome: item ? item.nome : 'Sem categoria do cartão'
+            };
+        });
 
-        renderizarLancamentos(todosLancamentos);
+        renderizarLancamentos(lancamentosEnriquecidos);
     } catch (error) {
         console.error('Erro ao carregar lançamentos:', error);
         container.innerHTML = '<p class="error">Erro ao carregar lançamentos</p>';
@@ -760,26 +763,25 @@ function abrirModalLancamento() {
 
 async function editarLancamento(id) {
     try {
-        // Buscar o lançamento nos itens
-        let lancamento = null;
-        let itemId = null;
-
-        for (const item of state.itensAgregados) {
-            const response = await fetch(`/api/cartoes/itens/${item.id}/lancamentos?mes_fatura=${state.mesSelecionado}`);
-            const lancamentos = await response.json();
-            lancamento = lancamentos.find(l => l.id === id);
-            if (lancamento) {
-                itemId = item.id;
-                break;
-            }
-        }
+        // Buscar o lançamento em TODOS os lançamentos do cartão (inclui sem categoria)
+        const response = await fetch(`/api/cartoes/${state.cartaoAtual.id}/lancamentos?mes_fatura=${state.mesSelecionado}`);
+        const lancamentos = await response.json();
+        const lancamento = lancamentos.find(l => l.id === id);
 
         if (!lancamento) throw new Error('Lançamento não encontrado');
 
         document.getElementById('modal-lancamento-titulo').textContent = 'Editar Gasto';
         document.getElementById('lancamento-id').value = lancamento.id;
-        document.getElementById('lancamento-item-id').value = itemId;
-        document.getElementById('lancamento-categoria').value = itemId;
+
+        // Categoria da DESPESA (obrigatória)
+        document.getElementById('lancamento-categoria-despesa').value = lancamento.categoria_id;
+
+        // Categoria do CARTÃO (opcional) - null-safe
+        const selectCategoriaCartao = document.getElementById('lancamento-categoria-cartao');
+        if (selectCategoriaCartao) {
+            selectCategoriaCartao.value = lancamento.item_agregado_id || '';
+        }
+
         document.getElementById('lancamento-descricao').value = lancamento.descricao;
         document.getElementById('lancamento-valor').value = lancamento.valor;
         document.getElementById('lancamento-data').value = lancamento.data_compra;
