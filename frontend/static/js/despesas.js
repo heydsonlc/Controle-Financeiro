@@ -167,6 +167,13 @@ function aplicarFiltros() {
 /**
  * Renderiza a lista de despesas
  */
+/**
+ * Renderiza a lista de despesas seguindo o padrão FATURA MENSAL CONSOLIDADA
+ * Conforme contrato seção 2: Despesas como Fatura Mensal Consolidada
+ *
+ * Estrutura padronizada: [Status] Descrição | Competência | Tipo | Valor
+ * Regra definitiva do cartão: Previsto OU Executado (NUNCA ambos)
+ */
 function renderizarDespesas(despesasParaRenderizar) {
     const lista = document.getElementById('despesas-lista');
 
@@ -181,61 +188,52 @@ function renderizarDespesas(despesasParaRenderizar) {
     }
 
     lista.innerHTML = despesasParaRenderizar.map(despesa => {
-        // Verificar se é fatura de cartão (nova lógica)
+        // Determinar tipo de despesa para identificação visual
         const isFaturaCartao = despesa.is_fatura_cartao === true;
         const isAgrupado = despesa.agrupado === true || isFaturaCartao;
+        const isRecorrente = despesa.recorrente === true;
+        const isParcela = despesa.total_parcelas > 1;
 
-        // Usar a categoria que vem do backend (já completa) ou buscar no array local
-        const categoria = despesa.categoria || (despesa.categoria_id ? categorias.find(c => c.id === despesa.categoria_id) : null);
+        // Status: Pago ou Pendente
         const statusClass = despesa.pago ? 'pago' : 'pendente';
-        const statusTexto = despesa.pago ? 'Paga' : 'Pendente';
+        const statusTexto = despesa.pago ? 'Pago' : 'Pendente';
 
-        let dataVencimento = '';
-        if (despesa.data_vencimento) {
-            const data = new Date(despesa.data_vencimento + 'T00:00:00');
-            dataVencimento = data.toLocaleDateString('pt-BR');
-        }
+        // Determinar TIPO conforme regras do contrato
+        let tipoTexto = '';
+        let tipoClass = '';
 
-        let dataPagamento = '';
-        if (despesa.data_pagamento) {
-            const data = new Date(despesa.data_pagamento + 'T00:00:00');
-            dataPagamento = data.toLocaleDateString('pt-BR');
-        }
-
-        // Informações específicas de fatura de cartão
-        let infoFaturaCartao = '';
         if (isFaturaCartao) {
-            const valorPlanejado = parseFloat(despesa.valor_planejado || 0);
-            const valorExecutado = parseFloat(despesa.valor_executado || 0);
-            const estouro = despesa.estouro_orcamento === true;
-
-            infoFaturaCartao = `
-                <div class="fatura-cartao-info">
-                    <div class="valores-comparacao">
-                        <div class="valor-item ${!despesa.pago ? 'valor-destaque' : ''}">
-                            <span class="valor-label">💰 Planejado:</span>
-                            <span class="valor-numero">R$ ${valorPlanejado.toFixed(2).replace('.', ',')}</span>
-                        </div>
-                        <div class="valor-item ${despesa.pago ? 'valor-destaque' : ''}">
-                            <span class="valor-label">💳 Executado:</span>
-                            <span class="valor-numero">R$ ${valorExecutado.toFixed(2).replace('.', ',')}</span>
-                        </div>
-                    </div>
-                    ${estouro ? `
-                        <div class="alerta-estouro">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                                <line x1="12" y1="9" x2="12" y2="13"></line>
-                                <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                            </svg>
-                            <span>Orçamento ultrapassado em R$ ${(valorExecutado - valorPlanejado).toFixed(2).replace('.', ',')}</span>
-                        </div>
-                    ` : ''}
-                </div>
-            `;
+            // REGRA DEFINITIVA: Previsto OU Executado (NUNCA ambos)
+            tipoTexto = despesa.pago ? 'Executado' : 'Previsto';
+            tipoClass = despesa.pago ? 'tipo-executado' : 'tipo-previsto';
+        } else if (isParcela) {
+            tipoTexto = 'Parcela';
+            tipoClass = 'tipo-parcela';
+        } else if (isRecorrente) {
+            tipoTexto = 'Recorrente';
+            tipoClass = 'tipo-recorrente';
+        } else {
+            tipoTexto = 'Direto';
+            tipoClass = 'tipo-direto';
         }
 
-        // Para faturas de cartão, mostrar apenas botão de pagar (se pendente)
+        // Determinar VALOR conforme regra do cartão
+        let valorExibir = parseFloat(despesa.valor);
+        if (isFaturaCartao) {
+            // REGRA: Previsto usa valor_planejado, Executado usa valor_executado
+            valorExibir = despesa.pago
+                ? parseFloat(despesa.valor_executado || despesa.valor)
+                : parseFloat(despesa.valor_planejado || despesa.valor);
+        }
+
+        // Categoria (opcional, metadado)
+        const categoria = despesa.categoria || (despesa.categoria_id ? categorias.find(c => c.id === despesa.categoria_id) : null);
+        const categoriaNome = categoria ? categoria.nome : 'Sem categoria';
+
+        // Competência formatada
+        const competencia = despesa.mes_competencia ? formatarCompetencia(despesa.mes_competencia) : '';
+
+        // Ações disponíveis
         const acoesHTML = isFaturaCartao ? `
             <div class="despesa-actions">
                 ${!despesa.pago ? `
@@ -261,41 +259,37 @@ function renderizarDespesas(despesasParaRenderizar) {
             </div>
         `);
 
+        // Layout padronizado para TODAS as despesas
+        // Estrutura: [Status] Descrição | Competência | Tipo | Valor
         return `
-            <div class="despesa-card ${statusClass} ${isFaturaCartao ? 'fatura-cartao' : ''} ${isAgrupado ? 'agrupado' : ''} ${despesa.estouro_orcamento ? 'com-estouro' : ''}">
-                <div class="despesa-info">
-                    <div class="despesa-header">
-                        <div class="despesa-nome">
-                            <span class="status-indicador status-indicador-${statusClass}"></span>
-                            ${despesa.nome}
-                            ${isFaturaCartao ? '<span class="badge-fatura">Fatura Virtual</span>' : ''}
-                        </div>
-                        <div class="despesa-valor ${isFaturaCartao ? 'valor-fatura' : ''}">
-                            R$ ${parseFloat(despesa.valor).toFixed(2).replace('.', ',')}
-                            ${isFaturaCartao && !despesa.pago ? '<span class="valor-tipo">(Planejado)</span>' : ''}
-                            ${isFaturaCartao && despesa.pago ? '<span class="valor-tipo">(Executado)</span>' : ''}
-                        </div>
-                        ${categoria ? `
-                            <div class="despesa-categoria">
-                                <span class="categoria-cor" style="background-color: ${categoria.cor}"></span>
-                                ${categoria.nome}
-                            </div>
-                        ` : ''}
+            <div class="despesa-card despesa-card-padrao ${statusClass} ${tipoClass}">
+                <div class="despesa-linha-principal">
+                    <div class="despesa-status">
+                        <span class="status-badge status-badge-${statusClass}">${statusTexto}</span>
                     </div>
 
-                    ${infoFaturaCartao}
-
-                    ${despesa.descricao && !isFaturaCartao ? `<div style="color: rgba(255,255,255,0.8); font-size: 0.9em;">${despesa.descricao}</div>` : ''}
-
-                    <div class="despesa-detalhes">
-                        ${dataVencimento ? `<span>📅 Venc: ${dataVencimento}</span>` : ''}
-                        ${dataPagamento ? `<span>✓ Pago: ${dataPagamento}</span>` : ''}
-                        ${despesa.mes_competencia ? `<span>💼 Competência: ${formatarCompetencia(despesa.mes_competencia)}</span>` : ''}
-                        ${despesa.recorrente && !isAgrupado ? `<span>🔄 ${formatarTipoRecorrencia(despesa.tipo_recorrencia)}</span>` : ''}
+                    <div class="despesa-descricao">
+                        ${despesa.nome}
                     </div>
+
+                    <div class="despesa-meta">
+                        ${competencia ? `<span class="meta-competencia">${competencia}</span>` : ''}
+                        <span class="meta-tipo ${tipoClass}">${tipoTexto}</span>
+                        ${categoria ? `<span class="meta-categoria">${categoriaNome}</span>` : ''}
+                    </div>
+
+                    <div class="despesa-valor-principal">
+                        R$ ${valorExibir.toFixed(2).replace('.', ',')}
+                    </div>
+
+                    ${acoesHTML}
                 </div>
 
-                ${acoesHTML}
+                ${despesa.descricao && !isFaturaCartao ? `
+                    <div class="despesa-linha-detalhes">
+                        <span class="despesa-obs">${despesa.descricao}</span>
+                    </div>
+                ` : ''}
             </div>
         `;
     }).join('');

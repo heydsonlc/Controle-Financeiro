@@ -740,3 +740,222 @@ body.mobile-view header h1 {
 body.mobile-view .breadcrumb {
     font-size: 0.85em;
 }
+
+/* ============================================ */
+/* LAYOUT PADRONIZADO - FATURA MENSAL          */
+/* Conforme contrato seção 2                   */
+/* Estrutura: [Status] Descrição | Meta | Valor*/
+/* ============================================ */
+
+/* Card padronizado - todas as despesas seguem este layout */
+.despesa-card-padrao {
+    background: #ffffff;
+    border-radius: 10px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-left: 3px solid;
+    transition: all 0.2s ease;
+    margin-bottom: 8px;
+}
+
+.despesa-card-padrao.pendente {
+    border-left-color: #ff9500;
+}
+
+.despesa-card-padrao.pago {
+    border-left-color: #34c759;
+    opacity: 0.65;
+}
+
+.despesa-card-padrao:hover {
+    transform: translateX(2px);
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Linha principal - layout horizontal com todos os elementos */
+.despesa-linha-principal {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    min-height: 48px;
+}
+
+/* Status badge (Pago/Pendente) */
+.despesa-status {
+    flex-shrink: 0;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.status-badge-pago {
+    background: rgba(52, 199, 89, 0.12);
+    color: #34c759;
+}
+
+.status-badge-pendente {
+    background: rgba(255, 149, 0, 0.12);
+    color: #ff9500;
+}
+
+/* Descrição da despesa */
+.despesa-descricao {
+    flex: 1;
+    min-width: 180px;
+    font-size: 0.95em;
+    font-weight: 500;
+    color: #1d1d1f;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Metadados (competência, tipo, categoria) */
+.despesa-meta {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.meta-competencia,
+.meta-tipo,
+.meta-categoria {
+    font-size: 0.75em;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-weight: 500;
+}
+
+.meta-competencia {
+    background: rgba(0, 0, 0, 0.05);
+    color: #6e6e73;
+}
+
+.meta-categoria {
+    background: rgba(0, 122, 255, 0.08);
+    color: #007aff;
+}
+
+/* Tipos de despesa */
+.meta-tipo {
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.tipo-previsto,
+.meta-tipo.tipo-previsto {
+    background: rgba(255, 149, 0, 0.15);
+    color: #ff9500;
+}
+
+.tipo-executado,
+.meta-tipo.tipo-executado {
+    background: rgba(0, 122, 255, 0.15);
+    color: #007aff;
+}
+
+.tipo-parcela,
+.meta-tipo.tipo-parcela {
+    background: rgba(88, 86, 214, 0.12);
+    color: #5856d6;
+}
+
+.tipo-recorrente,
+.meta-tipo.tipo-recorrente {
+    background: rgba(255, 59, 48, 0.12);
+    color: #ff3b30;
+}
+
+.tipo-direto,
+.meta-tipo.tipo-direto {
+    background: rgba(52, 199, 89, 0.12);
+    color: #34c759;
+}
+
+/* Valor principal */
+.despesa-valor-principal {
+    flex-shrink: 0;
+    font-size: 1.05em;
+    font-weight: 600;
+    color: #1d1d1f;
+    min-width: 100px;
+    text-align: right;
+}
+
+/* Ações (botões) */
+.despesa-actions {
+    flex-shrink: 0;
+    display: flex;
+    gap: 6px;
+}
+
+/* Linha de detalhes (observações) - opcional */
+.despesa-linha-detalhes {
+    padding: 0 16px 12px 16px;
+    font-size: 0.85em;
+    color: #6e6e73;
+    line-height: 1.4;
+}
+
+.despesa-obs {
+    font-style: italic;
+}
+
+/* Responsivo - telas pequenas */
+@media (max-width: 768px) {
+    .despesa-linha-principal {
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 10px 14px;
+    }
+
+    .despesa-descricao {
+        flex-basis: 100%;
+        order: 1;
+    }
+
+    .despesa-status {
+        order: 0;
+    }
+
+    .despesa-meta {
+        flex: 1;
+        order: 2;
+    }
+
+    .despesa-valor-principal {
+        order: 3;
+        margin-left: auto;
+    }
+
+    .despesa-actions {
+        order: 4;
+    }
+}
+
+/* View mobile - ajustes adicionais */
+body.mobile-view .despesa-card-padrao {
+    border-radius: 8px;
+}
+
+body.mobile-view .despesa-linha-principal {
+    padding: 10px 12px;
+}
+
+body.mobile-view .despesa-descricao {
+    font-size: 0.9em;
+}
+
+body.mobile-view .despesa-valor-principal {
+    font-size: 1em;
+}
