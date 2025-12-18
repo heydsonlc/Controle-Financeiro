@@ -308,6 +308,29 @@ def criar_despesa():
             except Exception as e:
                 # Não falhar se a geração de contas der erro, apenas logar
                 print(f'Aviso: Erro ao gerar contas recorrentes: {e}')
+        else:
+            # Se NÃO for recorrente, criar UMA Conta imediatamente
+            # Isso garante que a despesa apareça no histórico de lançamentos
+            if data_vencimento:
+                mes_referencia = data_vencimento.replace(day=1)
+                status = 'Pago' if dados.get('pago') or data_pagamento else 'Pendente'
+
+                nova_conta = Conta(
+                    item_despesa_id=despesa.id,
+                    mes_referencia=mes_referencia,
+                    descricao=despesa.nome,
+                    valor=despesa.valor,
+                    data_vencimento=data_vencimento,
+                    data_pagamento=data_pagamento,
+                    status_pagamento=status,
+                    debito_automatico=False,
+                    numero_parcela=1,
+                    total_parcelas=1,
+                    observacoes=despesa.descricao,
+                    is_fatura_cartao=False
+                )
+                db.session.add(nova_conta)
+                db.session.commit()
 
         return jsonify({
             'success': True,
@@ -352,6 +375,30 @@ def atualizar_despesa(id):
 
         if 'observacoes' in dados:
             conta.observacoes = dados['observacoes']
+
+        if 'data_pagamento' in dados:
+            if dados['data_pagamento']:
+                try:
+                    conta.data_pagamento = datetime.strptime(dados['data_pagamento'], '%Y-%m-%d').date()
+                    # Se definir data de pagamento, marcar como pago
+                    if conta.status_pagamento != 'Pago':
+                        conta.status_pagamento = 'Pago'
+                except ValueError:
+                    pass
+            else:
+                conta.data_pagamento = None
+                conta.status_pagamento = 'Pendente'
+
+        # Atualizar status de pagamento se fornecido explicitamente
+        if 'pago' in dados:
+            if dados['pago']:
+                conta.status_pagamento = 'Pago'
+                # Se não tem data de pagamento, usar data de vencimento
+                if not conta.data_pagamento:
+                    conta.data_pagamento = conta.data_vencimento
+            else:
+                conta.status_pagamento = 'Pendente'
+                conta.data_pagamento = None
 
         db.session.commit()
 
