@@ -287,9 +287,83 @@ Sempre que **qualquer campo, regra ou relacionamento** for alterado, a I.A **DEV
 
 ---
 
-## 7️⃣ Convenções Visuais (Frontend)
+## 7️⃣ Separação de Responsabilidades (Telas do Sistema)
 
-### 7.1 Selects obrigatórios
+### 7.1 Tela de Lançamentos
+
+**Definição:** Registro histórico de **execuções financeiras pontuais**.
+
+**O que DEVE aparecer:**
+* Despesas Diretas (tipo: Simples) - pagas e pendentes
+* Lançamentos de Cartão de Crédito
+* Receitas / Entradas Pontuais
+
+**O que NÃO DEVE aparecer:**
+* Parcelas de Financiamentos (tipo: individual)
+* Parcelas de Consórcios (tipo: individual)
+* Obrigações futuras estruturadas
+
+**Finalidade:** Visão operacional e histórica de transações cotidianas.
+
+---
+
+### 7.2 Tela de Despesas
+
+**Definição:** Mapa de **obrigações financeiras** que devem ser pagas quando houver disponibilidade de receita.
+
+> **Princípio:** "As despesas serão o retrato dos pagamentos que eu devo fazer quando a receita cair."
+
+**O que DEVE aparecer:**
+* Despesas Diretas (pagas ou pendentes)
+* Parcelas de Financiamentos e Consórcios
+* Faturas de Cartão de Crédito
+* **QUALQUER Conta que represente obrigação financeira real**
+
+**Regras:**
+* A entidade `Conta` é a base desta tela
+* Todas as Contas (tipo: Simples, individual, etc.) devem ser exibidas
+* Categoria é metadado - sua ausência NUNCA pode impedir renderização
+* Filtro de competência deve mostrar apenas parcelas do mês selecionado
+
+**Finalidade:** Planejamento financeiro e controle de obrigações.
+
+---
+
+### 7.3 Tela de Financiamentos
+
+**Definição:** Planejamento e detalhamento de **financiamentos e consórcios**.
+
+**O que DEVE aparecer:**
+* Simulações (SAC, PRICE)
+* Tabela de evolução do saldo
+* Geração de parcelas
+* Amortizações
+
+**Finalidade:** Gerenciamento detalhado de financiamentos.
+
+**Relação com outras telas:**
+* Alimenta a tela de Despesas (gera Contas)
+* NÃO substitui a tela de Despesas
+
+---
+
+### 7.4 Regra de Ouro - Histórico e Metadados
+
+> **Histórico é registro de fato ocorrido.
+> Categoria é metadado.
+> Metadado nunca pode decidir existência.**
+
+**Aplicação prática:**
+* Se uma Conta existe, ela DEVE ser renderizada
+* Categoria ausente → exibir "Sem categoria"
+* Categoria ausente → NUNCA bloquear exibição
+* Frontend NUNCA deve assumir formato de resposta
+
+---
+
+## 8️⃣ Convenções Visuais (Frontend)
+
+### 8.1 Selects obrigatórios
 
 * Categoria da Despesa → **obrigatória**
 * Categoria do Cartão → **opcional**
@@ -303,7 +377,7 @@ Exemplo:
 
 ---
 
-## 8️⃣ Regra Final (a mais importante)
+## 9️⃣ Regra Final (a mais importante)
 
 > ❗ **Nenhuma funcionalidade é considerada pronta
 > se não funcionar no fluxo completo de ponta a ponta.**

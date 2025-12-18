@@ -95,7 +95,8 @@ function ajustarVisibilidadeFiltros() {
 async function carregarCartoes() {
     try {
         const response = await fetch('/api/cartoes');
-        const cartoes = await response.json();
+        const json = await response.json();
+        const cartoes = extrairArray(json);
 
         state.cartoes = cartoes;
 
@@ -127,8 +128,8 @@ async function carregarCategoriasAnalíticas() {
         // Buscar CATEGORIAS ANALÍTICAS (tabela: categoria)
         // NÃO buscar categorias do cartão (tabela: item_agregado)
         const response = await fetch('/api/categorias');
-        const result = await response.json();
-        const categorias = result.data || result; // Suporta tanto { data: [] } quanto []
+        const json = await response.json();
+        const categorias = extrairArray(json);
 
         // Popular select de filtro
         const selectFiltro = document.getElementById('filtro-categoria');
@@ -150,8 +151,8 @@ async function carregarCategoriasAnalíticas() {
 async function carregarCategoriasGerais() {
     try {
         const response = await fetch('/api/categorias');
-        const result = await response.json();
-        const categorias = result.data || result; // Suporta tanto { data: [] } quanto []
+        const json = await response.json();
+        const categorias = extrairArray(json);
 
         const selectCategoria = document.getElementById('lancamento-categoria-geral');
         selectCategoria.innerHTML = '<option value="">Selecione uma categoria...</option>';
@@ -171,8 +172,8 @@ async function carregarCategoriasGerais() {
 async function carregarContasBancarias() {
     try {
         const response = await fetch('/api/contas');
-        const result = await response.json();
-        const contas = result.data || result;
+        const json = await response.json();
+        const contas = extrairArray(json);
 
         state.contasBancarias = contas;
 
@@ -206,10 +207,9 @@ async function carregarCategoriasPorCartao() {
         // 1. Carregar CATEGORIAS DE DESPESA (analíticas) - sempre disponíveis
         if (!state.categoriasDespesa) {
             const response = await fetch('/api/categorias');
-            const data = await response.json();
-            console.log('📊 Categorias recebidas:', data);
-            // A resposta vem como { data: [...], success: true, total: N }
-            state.categoriasDespesa = data.data || data.categorias || (Array.isArray(data) ? data : []);
+            const json = await response.json();
+            console.log('📊 Categorias recebidas:', json);
+            state.categoriasDespesa = extrairArray(json);
             console.log('📊 Categorias processadas:', state.categoriasDespesa);
         }
 
@@ -230,7 +230,8 @@ async function carregarCategoriasPorCartao() {
         // 2. Carregar CATEGORIAS DO CARTÃO (ItemAgregado) - opcional
         if (!state.categorias[cartaoId]) {
             const response = await fetch(`/api/cartoes/${cartaoId}/itens`);
-            const categorias = await response.json();
+            const json = await response.json();
+            const categorias = extrairArray(json);
             state.categorias[cartaoId] = categorias;
         }
 
@@ -259,11 +260,13 @@ async function carregarLancamentos() {
         // 1. Buscar TODOS lançamentos de cartões de crédito (com e sem categoria do cartão)
         for (const cartao of state.cartoes) {
             const response = await fetch(`/api/cartoes/${cartao.id}/lancamentos`);
-            const lancsCartao = await response.json();
+            const jsonLancs = await response.json();
+            const lancsCartao = extrairArray(jsonLancs);
 
             // Buscar categorias do cartão para enriquecer (apenas para exibição)
             const respItens = await fetch(`/api/cartoes/${cartao.id}/itens`);
-            const itens = await respItens.json();
+            const jsonItens = await respItens.json();
+            const itens = extrairArray(jsonItens);
 
             lancsCartao.forEach(lanc => {
                 // Enriquecer com nome da categoria do cartão (se houver)
@@ -283,8 +286,8 @@ async function carregarLancamentos() {
 
         // 2. Buscar despesas diretas (tipo Simples)
         const respDespesas = await fetch('/api/despesas/');
-        const resultDespesas = await respDespesas.json();
-        const despesas = resultDespesas.data || resultDespesas; // Suporta tanto { data: [] } quanto []
+        const jsonDespesas = await respDespesas.json();
+        const despesas = extrairArray(jsonDespesas);
 
         despesas.forEach(desp => {
             // Mostrar TODAS despesas Simples (Pagas E Pendentes)
