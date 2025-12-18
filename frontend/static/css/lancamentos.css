@@ -742,3 +742,25 @@
     padding: 40px;
     font-size: 16px;
 }
+
+
+/* Badges de Status (Pago/Pendente) */
+.badge-status {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.badge-status-pago {
+    background: #10b981;
+    color: white;
+}
+
+.badge-status-pendente {
+    background: #f59e0b;
+    color: white;
+}
+

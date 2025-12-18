@@ -287,9 +287,10 @@ async function carregarLancamentos() {
         const despesas = resultDespesas.data || resultDespesas; // Suporta tanto { data: [] } quanto []
 
         despesas.forEach(desp => {
-            // Verificar se é despesa Simples E se foi paga
+            // Mostrar TODAS despesas Simples (Pagas E Pendentes)
+            // Histórico de Lançamentos mostra EXECUÇÃO, não planejamento
             // NOTA: Backend retorna campo "pago" computed (status_pagamento == 'Pago')
-            if (desp.tipo === 'Simples' && desp.pago) {
+            if (desp.tipo === 'Simples') {
                 lancamentos.push({
                     id: desp.id,
                     tipo: 'direto',
@@ -301,7 +302,9 @@ async function carregarLancamentos() {
                     categoria_nome: desp.categoria?.nome || 'Sem categoria',
                     observacoes: desp.descricao,
                     numero_parcela: 1,
-                    total_parcelas: 1
+                    total_parcelas: 1,
+                    pago: desp.pago,  // Adicionar status para exibição
+                    status_pagamento: desp.status_pagamento
                 });
             }
         });
@@ -411,6 +414,11 @@ function renderizarLancamentos(lancamentos) {
             tipoTexto = 'Direto';
         }
 
+        // Badge de status para despesas diretas
+        const statusBadge = (lanc.tipo === 'direto' && lanc.status_pagamento)
+            ? `<span class="badge badge-status badge-status-${lanc.status_pagamento.toLowerCase()}">${lanc.status_pagamento}</span>`
+            : '';
+
         return `
         <div class="lancamento-card ${isCredito ? 'lancamento-credito' : ''}">
             <div class="lancamento-row-1">
@@ -420,6 +428,7 @@ function renderizarLancamentos(lancamentos) {
                 </div>
                 <div class="lancamento-badges">
                     <span class="badge badge-tipo-${lanc.tipo}">${tipoIcon} ${tipoTexto}</span>
+                    ${statusBadge}
                     ${isCartao ? `<span class="badge badge-cartao">${lanc.cartao_nome}</span>` : ''}
                     <span class="badge badge-categoria">${lanc.categoria_nome}</span>
                 </div>
@@ -667,6 +676,8 @@ async function salvarLancamentoDireto() {
     const isEdicao = lancamentoId && document.getElementById('lancamento-id').dataset.tipo === 'direto';
 
     const dataCompra = document.getElementById('lancamento-data').value;
+    const pago = document.getElementById('lancamento-pago').checked;
+
     const dados = {
         categoria_id: parseInt(categoriaId),
         nome: document.getElementById('lancamento-descricao').value,
@@ -674,8 +685,9 @@ async function salvarLancamentoDireto() {
         descricao: document.getElementById('lancamento-observacoes').value || '',
         valor: parseFloat(document.getElementById('lancamento-valor').value),
         data_vencimento: dataCompra,
-        data_pagamento: dataCompra,
-        pago: true,
+        // Se pago, enviar data_pagamento. Se não, enviar null.
+        data_pagamento: pago ? dataCompra : null,
+        pago: pago,
         recorrente: false,
         mes_competencia: dataCompra.substring(0, 7) + '-01'
     };
