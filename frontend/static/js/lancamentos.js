@@ -34,10 +34,26 @@ document.addEventListener('DOMContentLoaded', () => {
 // Garante que dados sejam recarregados ao voltar para a tela
 window.addEventListener('pageshow', (event) => {
     if (event.persisted) {
-        // Página foi restaurada do bfcache - recarregar dados
-        carregarLancamentos();
+        // Página foi restaurada do bfcache
+        // IMPORTANTE: state.cartoes e state.contasBancarias estão vazios
+        // Precisa recarregar TODAS as dependências antes de carregarLancamentos()
+        recarregarDadosCompleto();
     }
 });
+
+async function recarregarDadosCompleto() {
+    // Recarrega todas as dependências na ordem correta
+    // Necessário porque bfcache limpa o estado JavaScript (state)
+    try {
+        await carregarCartoes();
+        await carregarCategoriasAnalíticas();
+        await carregarContasBancarias();
+        await carregarLancamentos();
+    } catch (error) {
+        console.error('Erro ao recarregar dados:', error);
+        mostrarErro('Erro ao recarregar dados da página');
+    }
+}
 
 function inicializarFiltros() {
     const hoje = new Date();
