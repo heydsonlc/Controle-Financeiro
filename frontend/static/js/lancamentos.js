@@ -287,7 +287,9 @@ async function carregarLancamentos() {
         const despesas = resultDespesas.data || resultDespesas; // Suporta tanto { data: [] } quanto []
 
         despesas.forEach(desp => {
-            if (desp.tipo === 'Simples' && desp.pago) {
+            // Verificar se é despesa Simples E se foi paga (data_pagamento preenchida)
+            // NOTA: Campo "pago" não existe no modelo, usar data_pagamento
+            if (desp.tipo === 'Simples' && desp.data_pagamento) {
                 lancamentos.push({
                     id: desp.id,
                     tipo: 'direto',
