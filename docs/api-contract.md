@@ -35,9 +35,89 @@ const dados = extrairArray(json);
 
 ---
 
-## 2️⃣ Formato PADRÃO de Resposta da API
+## 2️⃣ Conceito Central do Sistema (FUNDAMENTO)
 
-### 2.1 Estrutura obrigatória
+### 2.1 Despesas como Fatura Mensal Consolidada
+
+> **Princípio:** A tela de Despesas representa a **fatura mensal consolidada** da vida financeira do usuário.
+
+**Analogia do Cartão de Crédito:**
+
+Assim como uma fatura de cartão de crédito:
+* Lista TODOS os itens do mês (competência)
+* Não importa quando cada compra foi feita
+* Importa quando a fatura vence (mês de competência)
+* Cada item é uma linha da fatura
+
+**No sistema:**
+* Cada **Conta** = Item da fatura mensal
+* **Despesas** = Fatura mensal consolidada
+* **Competência** = Mês de referência (igual ao "mês da fatura")
+
+### 2.2 O que entra na "Fatura Mensal" (Despesas)
+
+Em cada competência, a tela de Despesas deve listar **TODAS as Contas** que representam valores a serem pagos naquele mês, independentemente da origem:
+
+| Tipo de Conta | Entra em Despesas? | Motivo |
+|---------------|-------------------|--------|
+| Parcela de financiamento | ✅ SIM | Obrigação do mês |
+| Parcela de consórcio | ✅ SIM | Obrigação do mês |
+| Fatura de cartão de crédito | ✅ SIM | Obrigação do mês |
+| Despesa direta (paga) | ✅ SIM | Compromisso do mês |
+| Despesa direta (pendente) | ✅ SIM | Compromisso do mês |
+
+**Regra Definitiva:**
+```
+Se existe uma Conta com aquela competência → aparece na "fatura mensal" (Despesas)
+```
+
+### 2.3 Por que Lançamentos é diferente
+
+**Lançamentos** = Registro de eventos pontuais
+* Não é fatura
+* É histórico operacional
+* Serve para rastreamento
+
+**Despesas** = Fatura mensal consolidada
+* É obrigação
+* É planejamento
+* Serve para controle de caixa
+
+### 2.4 Fluxo Financeiro Completo
+
+```
+┌─────────────────────────────────────────────┐
+│ 1. RECEITA CAI NO MÊS                      │
+│    "Salário de Janeiro chegou"              │
+└──────────────┬──────────────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────────────┐
+│ 2. CONSULTAR DESPESAS (COMPETÊNCIA JAN/25) │
+│    "Minha fatura do mês de Janeiro"         │
+│                                              │
+│    - Financiamento casa: R$ 8.000           │
+│    - Consórcio carro: R$ 1.200              │
+│    - Fatura Nubank: R$ 2.500                │
+│    - Internet (pendente): R$ 100            │
+│    ────────────────────────────              │
+│    TOTAL A PAGAR: R$ 11.800                 │
+└──────────────┬──────────────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────────────┐
+│ 3. PAGAR ITENS DA FATURA                    │
+│    Marcar como "Pago" quando efetuar        │
+└─────────────────────────────────────────────┘
+```
+
+**Esse é o conceito central do sistema.**
+
+---
+
+## 3️⃣ Formato PADRÃO de Resposta da API
+
+### 3.1 Estrutura obrigatória
 
 Todos os endpoints **DEVEM** seguir este padrão:
 
@@ -59,7 +139,7 @@ Todos os endpoints **DEVEM** seguir este padrão:
 
 ---
 
-### 2.2 Resposta de erro
+### 3.2 Resposta de erro
 
 ```json
 {
@@ -72,9 +152,9 @@ Todos os endpoints **DEVEM** seguir este padrão:
 
 ---
 
-## 3️⃣ Função Obrigatória no Frontend
+## 4️⃣ Função Obrigatória no Frontend
 
-### 3.1 Função padrão de normalização
+### 4.1 Função padrão de normalização
 
 Essa função **DEVE existir** e **DEVE ser usada em todo o frontend**:
 
@@ -96,9 +176,9 @@ const categorias = extrairArray(json);
 
 ---
 
-## 4️⃣ Contratos Específicos do Sistema
+## 5️⃣ Contratos Específicos do Sistema
 
-### 4.1 Categorias da Despesa (Analíticas)
+### 5.1 Categorias da Despesa (Analíticas)
 
 📍 **Tabela:** `categoria`
 
@@ -114,7 +194,7 @@ Categoria da Despesa ≠ Categoria do Cartão
 
 ---
 
-### 4.2 Categorias do Cartão (Orçamentárias)
+### 5.2 Categorias do Cartão (Orçamentárias)
 
 📍 **Tabela:** `item_agregado`
 
@@ -130,7 +210,7 @@ item_agregado_id = nullable
 
 ---
 
-### 4.3 Lançamentos no Cartão
+### 5.3 Lançamentos no Cartão
 
 📍 **Tabela:** `lancamento_agregado`
 
@@ -227,7 +307,7 @@ const payload = {
 
 ---
 
-### 4.4 Fatura do Cartão
+### 5.4 Fatura do Cartão
 
 📍 **Tabela:** `conta`
 
@@ -244,9 +324,9 @@ Cartão gera UMA fatura mensal.
 
 ---
 
-## 5️⃣ Regras de Exclusão (Obrigatórias)
+## 6️⃣ Regras de Exclusão (Obrigatórias)
 
-### 5.1 Categoria do Cartão
+### 6.1 Categoria do Cartão
 
 | Situação        | Ação         |
 | --------------- | ------------ |
@@ -261,7 +341,7 @@ Mensagem obrigatória:
 
 ---
 
-### 5.2 Financiamentos
+### 6.2 Financiamentos
 
 | Situação                    | Ação                  |
 | --------------------------- | --------------------- |
@@ -270,7 +350,7 @@ Mensagem obrigatória:
 
 ---
 
-## 6️⃣ Mudanças Estruturais (CHECKLIST OBRIGATÓRIO)
+## 7️⃣ Mudanças Estruturais (CHECKLIST OBRIGATÓRIO)
 
 Sempre que **qualquer campo, regra ou relacionamento** for alterado, a I.A **DEVE executar** este checklist:
 
@@ -287,9 +367,9 @@ Sempre que **qualquer campo, regra ou relacionamento** for alterado, a I.A **DEV
 
 ---
 
-## 7️⃣ Separação de Responsabilidades (Telas do Sistema)
+## 8️⃣ Separação de Responsabilidades (Telas do Sistema)
 
-### 7.1 Tela de Lançamentos
+### 8.1 Tela de Lançamentos
 
 **Definição:** Registro histórico de **execuções financeiras pontuais**.
 
@@ -307,7 +387,7 @@ Sempre que **qualquer campo, regra ou relacionamento** for alterado, a I.A **DEV
 
 ---
 
-### 7.2 Tela de Despesas
+### 8.2 Tela de Despesas
 
 **Definição:** Mapa de **obrigações financeiras** que devem ser pagas quando houver disponibilidade de receita.
 
@@ -329,7 +409,7 @@ Sempre que **qualquer campo, regra ou relacionamento** for alterado, a I.A **DEV
 
 ---
 
-### 7.3 Tela de Financiamentos
+### 8.3 Tela de Financiamentos
 
 **Definição:** Planejamento e detalhamento de **financiamentos e consórcios**.
 
@@ -347,7 +427,7 @@ Sempre que **qualquer campo, regra ou relacionamento** for alterado, a I.A **DEV
 
 ---
 
-### 7.4 Regra de Ouro - Histórico e Metadados
+### 8.4 Regra de Ouro - Histórico e Metadados
 
 > **Histórico é registro de fato ocorrido.
 > Categoria é metadado.
@@ -361,9 +441,9 @@ Sempre que **qualquer campo, regra ou relacionamento** for alterado, a I.A **DEV
 
 ---
 
-## 8️⃣ Convenções Visuais (Frontend)
+## 9️⃣ Convenções Visuais (Frontend)
 
-### 8.1 Selects obrigatórios
+### 9.1 Selects obrigatórios
 
 * Categoria da Despesa → **obrigatória**
 * Categoria do Cartão → **opcional**
@@ -377,7 +457,7 @@ Exemplo:
 
 ---
 
-## 9️⃣ Regra Final (a mais importante)
+## 🔟 Regra Final (a mais importante)
 
 > ❗ **Nenhuma funcionalidade é considerada pronta
 > se não funcionar no fluxo completo de ponta a ponta.**
