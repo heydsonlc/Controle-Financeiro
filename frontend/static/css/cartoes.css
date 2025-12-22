@@ -890,3 +890,24 @@ body.mobile-view .cartao-info-grid {
     color: white;
 }
 
+/* ============================================================================
+   FIX: SELECTS LEGÍVEIS EM MODAIS (TEMA CLARO)
+   ============================================================================ */
+
+.modal .form-group label {
+    color: #1d1d1f;
+}
+
+.modal .form-group select,
+.modal .form-group input,
+.modal .form-group textarea {
+    background: #ffffff;
+    color: #1d1d1f;
+    border: 1px solid #e5e7eb;
+}
+
+.modal .form-group select option {
+    background: #ffffff;
+    color: #1d1d1f;
+}
+
