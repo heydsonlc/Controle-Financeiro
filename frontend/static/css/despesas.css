@@ -465,8 +465,9 @@
 }
 
 .categoria-nome {
+    font-size: 14px;
     font-weight: 500;
-    color: #3a3a3c;
+    color: #1d1d1f;
 }
 
 .categoria-indicador {
