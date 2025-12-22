@@ -1302,15 +1302,22 @@ function organizarLancamentosEmBlocos(lancamentos, resumoCartao) {
     };
 
     // Mapear categorias com previs?o (valor_orcado no resumo)
+    console.log('DEBUG: resumoCartao recebido:', resumoCartao);
+    console.log('DEBUG: resumoCartao.itens:', resumoCartao?.itens);
+
     (resumoCartao?.itens || []).forEach(item => {
+        console.log('DEBUG: Processando item:', item);
+        console.log('DEBUG: item.nome =', item.nome, 'tipo:', typeof item.nome);
+
         const previsto = parseFloat(item.valor_orcado || 0);
         if (previsto > 0) {
             blocos.porCategoria[item.id] = {
                 id: item.id,
-                nome: item.nome,
+                nome: item.nome || 'Categoria Sem Nome',  // ← FALLBACK caso nome esteja vazio
                 previsto,
                 lancamentos: []
             };
+            console.log('DEBUG: Categoria adicionada:', blocos.porCategoria[item.id]);
         }
     });
 
