@@ -83,8 +83,19 @@ class ItemDespesa(db.Model):
     itens_agregados = db.relationship('ItemAgregado', back_populates='item_despesa_pai', lazy='dynamic')
 
     # Relacionamentos para recorrência paga via cartão
-    cartao = db.relationship('ItemDespesa', remote_side=[id], foreign_keys=[cartao_id])  # Self-reference ao cartão
-    item_agregado = db.relationship('ItemAgregado', foreign_keys=[item_agregado_id])
+    cartao = db.relationship(
+        'ItemDespesa',
+        remote_side=[id],
+        foreign_keys=[cartao_id],
+        post_update=True,
+        uselist=False
+    )
+    item_agregado = db.relationship(
+        'ItemAgregado',
+        foreign_keys=[item_agregado_id],
+        post_update=True,
+        uselist=False
+    )
 
     def __repr__(self):
         return f'<ItemDespesa {self.nome} ({self.tipo})>'
@@ -433,7 +444,12 @@ class LancamentoAgregado(db.Model):
     # Relacionamentos
     item_agregado = db.relationship('ItemAgregado', back_populates='lancamentos_agregados')
     categoria = db.relationship('Categoria')
-    item_despesa_recorrente = db.relationship('ItemDespesa', foreign_keys=[item_despesa_id])  # Despesa recorrente que gerou este lançamento
+    item_despesa_recorrente = db.relationship(
+        'ItemDespesa',
+        foreign_keys=[item_despesa_id],
+        post_update=True,
+        uselist=False
+    )
 
     # Índices
     __table_args__ = (
