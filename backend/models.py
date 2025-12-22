@@ -80,7 +80,7 @@ class ItemDespesa(db.Model):
     config_agregador = db.relationship('ConfigAgregador', back_populates='item_despesa', uselist=False)
     orcamentos = db.relationship('Orcamento', back_populates='item_despesa', lazy='dynamic')
     contas = db.relationship('Conta', back_populates='item_despesa', lazy='dynamic')
-    itens_agregados = db.relationship('ItemAgregado', back_populates='item_despesa_pai', lazy='dynamic')
+    itens_agregados = db.relationship('ItemAgregado', back_populates='item_despesa_pai', lazy='dynamic', foreign_keys='ItemAgregado.item_despesa_id')
 
     # Relacionamentos para recorrência paga via cartão
     cartao = db.relationship(
@@ -341,7 +341,7 @@ class ItemAgregado(db.Model):
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relacionamentos
-    item_despesa_pai = db.relationship('ItemDespesa', back_populates='itens_agregados')
+    item_despesa_pai = db.relationship('ItemDespesa', back_populates='itens_agregados', foreign_keys=[item_despesa_id])
     orcamentos_agregados = db.relationship('OrcamentoAgregado', back_populates='item_agregado', lazy='dynamic')
     lancamentos_agregados = db.relationship('LancamentoAgregado', back_populates='item_agregado', lazy='dynamic')
     grupo = db.relationship('GrupoAgregador', back_populates='categorias')
