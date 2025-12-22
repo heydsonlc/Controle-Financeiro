@@ -58,7 +58,12 @@ def listar_despesas():
                 mes_referencia = datetime.strptime(f"{mes_arg}-01", "%Y-%m-%d").date()
                 despesas_recorrentes = ItemDespesa.query.filter_by(recorrente=True).all()
                 for desp in despesas_recorrentes:
-                    gerar_contas_despesa_recorrente(desp.id, meses_futuros=1, mes_referencia=mes_referencia)
+                    # Despesas recorrentes pagas via cartão geram LancamentoAgregado
+                    if desp.meio_pagamento == 'cartao':
+                        gerar_lancamentos_cartao_recorrente(desp.id, meses_futuros=1, mes_referencia=mes_referencia)
+                    # Demais despesas recorrentes geram Conta
+                    else:
+                        gerar_contas_despesa_recorrente(desp.id, meses_futuros=1, mes_referencia=mes_referencia)
             except Exception:
                 pass
 
@@ -314,13 +319,16 @@ def criar_despesa():
         db.session.add(despesa)
         db.session.commit()
 
-        # Se for recorrente, gerar Contas para os próximos meses
+        # Se for recorrente, gerar Contas ou Lançamentos para os próximos meses
         if despesa.recorrente and data_vencimento:
             try:
-                gerar_contas_despesa_recorrente(despesa.id)
+                if despesa.meio_pagamento == 'cartao':
+                    gerar_lancamentos_cartao_recorrente(despesa.id)
+                else:
+                    gerar_contas_despesa_recorrente(despesa.id)
             except Exception as e:
-                # Não falhar se a geração de contas der erro, apenas logar
-                print(f'Aviso: Erro ao gerar contas recorrentes: {e}')
+                # Não falhar se a geração der erro, apenas logar
+                print(f'Aviso: Erro ao gerar recorrências: {e}')
         else:
             # Se NÃO for recorrente, criar UMA Conta imediatamente
             # Isso garante que a despesa apareça no histórico de lançamentos
@@ -894,3 +902,90 @@ def gerar_contas_despesa_recorrente(item_despesa_id, meses_futuros=12, mes_refer
     db.session.commit()
     return contas_criadas
 
+
+def gerar_lancamentos_cartao_recorrente(item_despesa_id, meses_futuros=12, mes_referencia=None):
+    """
+    Gera lançamentos automaticamente para despesas recorrentes pagas via cartão de crédito.
+    
+    Diferença da geração de Conta:
+    - Gera LancamentoAgregado ao invés de Conta
+    - Aparece na fatura do cartão
+    - Classificado como "Despesas Fixas"
+    
+    Garante idempotência: 1 recorrência = 1 lançamento/mês
+    """
+    from models import ItemDespesa, LancamentoAgregado
+    
+    item = ItemDespesa.query.get(item_despesa_id)
+    if not item:
+        raise ValueError('ItemDespesa não encontrado')
+    if not item.recorrente:
+        raise ValueError('ItemDespesa não é recorrente')
+    if item.meio_pagamento != 'cartao':
+        raise ValueError('ItemDespesa não é pago via cartão')
+    if not item.cartao_id:
+        raise ValueError('ItemDespesa recorrente pago via cartão precisa ter cartao_id')
+    if not item.data_vencimento:
+        raise ValueError('ItemDespesa recorrente precisa ter data_vencimento')
+    if not item.categoria_id:
+        raise ValueError('ItemDespesa recorrente precisa ter categoria_id')
+    
+    tipo_recorrencia = item.tipo_recorrencia or 'mensal'
+    data_inicio = item.data_vencimento
+    inicio_geracao = data_inicio.replace(day=1)
+    mes_ref_base = mes_referencia.replace(day=1) if mes_referencia else None
+    inicio_janela = max(inicio_geracao, mes_ref_base) if mes_ref_base else inicio_geracao
+    data_fim_base = (inicio_janela + relativedelta(months=meses_futuros)) - timedelta(days=1)
+    
+    lancamentos_criados = []
+    
+    def criar_lancamento(data_compra):
+        """Cria LancamentoAgregado se ainda não existe para esta competência"""
+        mes_fatura = data_compra.replace(day=1)
+        
+        # Verificar se já existe lançamento deste item_despesa para este mês (idempotência)
+        existente = LancamentoAgregado.query.filter_by(
+            item_despesa_id=item_despesa_id,
+            mes_fatura=mes_fatura,
+            is_recorrente=True
+        ).first()
+        
+        if existente:
+            return  # Já existe, não cria duplicado
+        
+        novo = LancamentoAgregado(
+            cartao_id=item.cartao_id,
+            item_agregado_id=item.item_agregado_id,  # Opcional - categoria do cartão
+            categoria_id=item.categoria_id,  # Categoria analítica obrigatória
+            descricao=item.nome,
+            valor=item.valor,
+            data_compra=data_compra,
+            mes_fatura=mes_fatura,
+            numero_parcela=1,
+            total_parcelas=1,
+            observacoes=item.descricao or '',
+            is_recorrente=True,  # Marca como recorrente para aparecer em "Despesas Fixas"
+            item_despesa_id=item_despesa_id  # Referência à despesa recorrente
+        )
+        db.session.add(novo)
+        lancamentos_criados.append(novo)
+    
+    # Gerar lançamentos conforme tipo de recorrência (apenas mensal por enquanto)
+    if tipo_recorrencia == 'mensal':
+        data_ref = data_inicio
+        while data_ref < inicio_janela:
+            data_ref += relativedelta(months=1)
+        while data_ref <= data_fim_base:
+            criar_lancamento(data_ref)
+            data_ref += relativedelta(months=1)
+    
+    elif tipo_recorrencia == 'anual':
+        data_ref = data_inicio
+        while data_ref < inicio_janela:
+            data_ref += relativedelta(years=1)
+        while data_ref <= data_fim_base:
+            criar_lancamento(data_ref)
+            data_ref += relativedelta(years=1)
+    
+    db.session.commit()
+    return lancamentos_criados

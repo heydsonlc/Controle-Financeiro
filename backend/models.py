@@ -68,6 +68,11 @@ class ItemDespesa(db.Model):
     tipo_recorrencia = db.Column(db.String(20), default='mensal')  # 'semanal', 'a_cada_2_semanas', 'mensal' ou 'anual'
     mes_competencia = db.Column(db.String(7))  # Formato: YYYY-MM (mês do salário que paga)
 
+    # Campos para recorrência paga via cartão
+    meio_pagamento = db.Column(db.String(20))  # 'boleto', 'debito', 'cartao', 'pix', etc. (None = não especificado)
+    cartao_id = db.Column(db.Integer, db.ForeignKey('item_despesa.id'), nullable=True)  # Obrigatório quando meio_pagamento='cartao'
+    item_agregado_id = db.Column(db.Integer, db.ForeignKey('item_agregado.id'), nullable=True)  # Categoria do cartão (opcional)
+
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relacionamentos
@@ -76,6 +81,10 @@ class ItemDespesa(db.Model):
     orcamentos = db.relationship('Orcamento', back_populates='item_despesa', lazy='dynamic')
     contas = db.relationship('Conta', back_populates='item_despesa', lazy='dynamic')
     itens_agregados = db.relationship('ItemAgregado', back_populates='item_despesa_pai', lazy='dynamic')
+
+    # Relacionamentos para recorrência paga via cartão
+    cartao = db.relationship('ItemDespesa', remote_side=[id], foreign_keys=[cartao_id])  # Self-reference ao cartão
+    item_agregado = db.relationship('ItemAgregado', foreign_keys=[item_agregado_id])
 
     def __repr__(self):
         return f'<ItemDespesa {self.nome} ({self.tipo})>'
@@ -95,7 +104,10 @@ class ItemDespesa(db.Model):
             'pago': self.pago,
             'recorrente': self.recorrente,
             'tipo_recorrencia': self.tipo_recorrencia,
-            'mes_competencia': self.mes_competencia
+            'mes_competencia': self.mes_competencia,
+            'meio_pagamento': self.meio_pagamento,
+            'cartao_id': self.cartao_id,
+            'item_agregado_id': self.item_agregado_id
         }
 
         # Adicionar categoria apenas se existir
@@ -103,6 +115,20 @@ class ItemDespesa(db.Model):
             result['categoria'] = {
                 'id': self.categoria.id,
                 'nome': self.categoria.nome
+            }
+
+        # Adicionar dados do cartão se for recorrência paga via cartão
+        if self.cartao:
+            result['cartao'] = {
+                'id': self.cartao.id,
+                'nome': self.cartao.nome
+            }
+
+        # Adicionar dados da categoria do cartão se especificado
+        if self.item_agregado:
+            result['item_agregado'] = {
+                'id': self.item_agregado.id,
+                'nome': self.item_agregado.nome
             }
 
         return result
@@ -188,6 +214,7 @@ class Conta(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     item_despesa_id = db.Column(db.Integer, db.ForeignKey('item_despesa.id'), nullable=False)
+    financiamento_parcela_id = db.Column(db.Integer, db.ForeignKey('financiamento_parcela.id'))
     mes_referencia = db.Column(db.Date, nullable=False)
     descricao = db.Column(db.String(200), nullable=False)
     valor = db.Column(db.Numeric(10, 2), nullable=False)
@@ -210,6 +237,7 @@ class Conta(db.Model):
 
     # Relacionamentos
     item_despesa = db.relationship('ItemDespesa', back_populates='contas')
+    financiamento_parcela = db.relationship('FinanciamentoParcela', foreign_keys=[financiamento_parcela_id])
 
     # Índices
     __table_args__ = (
@@ -395,11 +423,17 @@ class LancamentoAgregado(db.Model):
     numero_parcela = db.Column(db.Integer, default=1)
     total_parcelas = db.Column(db.Integer, default=1)
     observacoes = db.Column(db.Text)
+
+    # Campos para lançamentos recorrentes (Despesas Fixas)
+    is_recorrente = db.Column(db.Boolean, default=False)  # Se foi gerado por despesa recorrente
+    item_despesa_id = db.Column(db.Integer, db.ForeignKey('item_despesa.id'), nullable=True)  # Referência à despesa recorrente que gerou este lançamento
+
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relacionamentos
     item_agregado = db.relationship('ItemAgregado', back_populates='lancamentos_agregados')
     categoria = db.relationship('Categoria')
+    item_despesa_recorrente = db.relationship('ItemDespesa', foreign_keys=[item_despesa_id])  # Despesa recorrente que gerou este lançamento
 
     # Índices
     __table_args__ = (
@@ -421,7 +455,9 @@ class LancamentoAgregado(db.Model):
             'mes_fatura': self.mes_fatura.strftime('%Y-%m-%d'),
             'numero_parcela': self.numero_parcela,
             'total_parcelas': self.total_parcelas,
-            'observacoes': self.observacoes
+            'observacoes': self.observacoes,
+            'is_recorrente': self.is_recorrente,
+            'item_despesa_id': self.item_despesa_id
         }
 
 

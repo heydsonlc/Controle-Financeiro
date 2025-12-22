@@ -1319,7 +1319,7 @@ function organizarLancamentosEmBlocos(lancamentos, resumoCartao) {
         const totalParcelas = parseInt(lanc.total_parcelas || 0);
         const numeroParcela = parseInt(lanc.numero_parcela || 0);
         const categoriaPrevista = blocos.porCategoria[lanc.item_agregado_id];
-        const isRecorrenteCartao = lanc.recorrente === true;
+        const isRecorrenteCartao = lanc.is_recorrente === true;  // Lançamento gerado por despesa recorrente
 
         // PARTE 1: Compras Parceladas
         if (totalParcelas > 1) {
@@ -1330,7 +1330,7 @@ function organizarLancamentosEmBlocos(lancamentos, resumoCartao) {
                 total_parcelas: totalParcelas
             });
         }
-        // PARTE 2: Despesas Fixas (recorrentes mensais sem parcelamento)
+        // PARTE 2: Despesas Fixas (recorrentes no cartão)
         else if (isRecorrenteCartao && totalParcelas <= 1) {
             blocos.fixas.push({
                 descricao: lanc.descricao,
