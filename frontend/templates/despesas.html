@@ -143,6 +143,37 @@
                     </select>
                 </div>
 
+                <!-- Campo de meio de pagamento (só para recorrentes) -->
+                <div class="form-group" id="meio-pagamento-group" style="display: none;">
+                    <label for="meio_pagamento">Meio de Pagamento</label>
+                    <select id="meio_pagamento" name="meio_pagamento" onchange="alternarCamposCartao()">
+                        <option value="">Selecione...</option>
+                        <option value="boleto">Boleto</option>
+                        <option value="debito">Débito</option>
+                        <option value="pix">PIX</option>
+                        <option value="cartao">Cartão de Crédito</option>
+                    </select>
+                </div>
+
+                <!-- Campos de cartão (só quando meio_pagamento = 'cartao') -->
+                <div id="campos-cartao" style="display: none;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="cartao_id">Cartão de Crédito *</label>
+                            <select id="cartao_id" name="cartao_id">
+                                <option value="">Selecione o cartão...</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="item_agregado_id">Categoria do Cartão</label>
+                            <select id="item_agregado_id" name="item_agregado_id">
+                                <option value="">Sem categoria</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Campos específicos para recorrência semanal -->
                 <div id="campos-semanal" style="display: none;">
                     <div class="form-row">
@@ -429,11 +460,16 @@
         // Mostrar/esconder campo de tipo de recorrência
         document.getElementById('recorrente').addEventListener('change', function() {
             const tipoGroup = document.getElementById('tipo-recorrencia-group');
-            tipoGroup.style.display = this.checked ? 'block' : 'none';
+            const meioPagamentoGroup = document.getElementById('meio-pagamento-group');
 
-            // Se desmarcar, esconder campos semanais também
+            tipoGroup.style.display = this.checked ? 'block' : 'none';
+            meioPagamentoGroup.style.display = this.checked ? 'block' : 'none';
+
+            // Se desmarcar, esconder campos semanais e cartão também
             if (!this.checked) {
                 document.getElementById('campos-semanal').style.display = 'none';
+                document.getElementById('campos-cartao').style.display = 'none';
+                document.getElementById('meio_pagamento').value = '';
             } else {
                 // Se marcar, verificar se é semanal
                 alternarCamposSemanal();
@@ -449,6 +485,21 @@
                 camposSemanal.style.display = 'block';
             } else {
                 camposSemanal.style.display = 'none';
+            }
+        }
+
+        // Mostrar/esconder campos de cartão
+        function alternarCamposCartao() {
+            const meioPagamento = document.getElementById('meio_pagamento').value;
+            const camposCartao = document.getElementById('campos-cartao');
+
+            if (meioPagamento === 'cartao') {
+                camposCartao.style.display = 'block';
+                carregarCartoes();
+            } else {
+                camposCartao.style.display = 'none';
+                document.getElementById('cartao_id').value = '';
+                document.getElementById('item_agregado_id').value = '';
             }
         }
 

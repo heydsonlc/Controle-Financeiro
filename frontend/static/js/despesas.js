@@ -29,6 +29,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Event listener para calcular competência automaticamente quando data de vencimento mudar
     document.getElementById('data_vencimento').addEventListener('change', calcularCompetenciaAutomaticamente);
+
+    // Event listener para carregar categorias quando cartão for selecionado
+    document.getElementById('cartao_id').addEventListener('change', function() {
+        const cartaoId = this.value;
+        if (cartaoId) {
+            carregarCategoriasCartao(cartaoId);
+        } else {
+            const selectCategoria = document.getElementById('item_agregado_id');
+            selectCategoria.innerHTML = '<option value="">Sem categoria</option>';
+        }
+    });
 });
 
 /**
@@ -62,6 +73,54 @@ async function carregarCategorias() {
         }
     } catch (error) {
         console.error('Erro ao carregar categorias:', error);
+    }
+}
+
+/**
+ * Carrega lista de cartões de crédito para seleção em despesas recorrentes
+ */
+async function carregarCartoes() {
+    try {
+        const response = await fetch('/api/cartoes');
+        const data = await response.json();
+
+        if (data.success) {
+            const selectCartao = document.getElementById('cartao_id');
+            selectCartao.innerHTML = '<option value="">Selecione o cartão...</option>';
+
+            // Filtrar apenas itens do tipo 'Agregador' (cartões)
+            const cartoes = data.data.filter(item => item.tipo === 'Agregador');
+            cartoes.forEach(cartao => {
+                if (cartao.ativo) {
+                    selectCartao.innerHTML += `<option value="${cartao.id}">${cartao.nome}</option>`;
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Erro ao carregar cartões:', error);
+    }
+}
+
+/**
+ * Carrega categorias (ItemAgregado) de um cartão específico
+ */
+async function carregarCategoriasCartao(cartaoId) {
+    try {
+        const response = await fetch(`/api/cartoes/${cartaoId}/itens`);
+        const data = await response.json();
+
+        if (data.success) {
+            const selectCategoria = document.getElementById('item_agregado_id');
+            selectCategoria.innerHTML = '<option value="">Sem categoria</option>';
+
+            data.data.forEach(categoria => {
+                if (categoria.ativo) {
+                    selectCategoria.innerHTML += `<option value="${categoria.id}">${categoria.nome}</option>`;
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Erro ao carregar categorias do cartão:', error);
     }
 }
 
@@ -330,6 +389,8 @@ function abrirModal() {
     document.getElementById('form-despesa').reset();
     document.getElementById('despesa-id').value = '';
     document.getElementById('tipo-recorrencia-group').style.display = 'none';
+    document.getElementById('meio-pagamento-group').style.display = 'none';
+    document.getElementById('campos-cartao').style.display = 'none';
     document.getElementById('campos-semanal').style.display = 'none';
     document.getElementById('campos-consorcio').style.display = 'none';
     document.getElementById('campo-valor-reajuste').style.display = 'none';
@@ -407,6 +468,40 @@ async function editarDespesa(id) {
         // Mostrar campo de recorrência se necessário
         document.getElementById('tipo-recorrencia-group').style.display = despesa.recorrente ? 'block' : 'none';
 
+        // Mostrar campo de meio de pagamento se recorrente
+        document.getElementById('meio-pagamento-group').style.display = despesa.recorrente ? 'block' : 'none';
+
+        // Preencher meio de pagamento e campos de cartão se existirem
+        if (despesa.recorrente && despesa.meio_pagamento) {
+            document.getElementById('meio_pagamento').value = despesa.meio_pagamento;
+
+            if (despesa.meio_pagamento === 'cartao') {
+                // Mostrar campos de cartão
+                document.getElementById('campos-cartao').style.display = 'block';
+
+                // Carregar cartões primeiro
+                await carregarCartoes();
+
+                // Selecionar o cartão se existir
+                if (despesa.cartao_id) {
+                    document.getElementById('cartao_id').value = despesa.cartao_id;
+
+                    // Carregar categorias do cartão
+                    await carregarCategoriasCartao(despesa.cartao_id);
+
+                    // Selecionar a categoria se existir
+                    if (despesa.item_agregado_id) {
+                        document.getElementById('item_agregado_id').value = despesa.item_agregado_id;
+                    }
+                }
+            } else {
+                document.getElementById('campos-cartao').style.display = 'none';
+            }
+        } else {
+            document.getElementById('meio_pagamento').value = '';
+            document.getElementById('campos-cartao').style.display = 'none';
+        }
+
         // Mostrar campos semanais se for semanal
         if (despesa.recorrente && despesa.tipo_recorrencia && despesa.tipo_recorrencia.startsWith('semanal')) {
             document.getElementById('campos-semanal').style.display = 'block';
@@ -471,6 +566,26 @@ async function salvarDespesa(event) {
         tipo_recorrencia: tipoRecorrencia,
         mes_competencia: document.getElementById('mes_competencia').value || null
     };
+
+    // Adicionar campos de recorrência paga via cartão (se preenchidos)
+    if (recorrente) {
+        const meioPagamento = document.getElementById('meio_pagamento').value;
+        if (meioPagamento) {
+            dados.meio_pagamento = meioPagamento;
+        }
+
+        if (meioPagamento === 'cartao') {
+            const cartaoId = document.getElementById('cartao_id').value;
+            const itemAgregadoId = document.getElementById('item_agregado_id').value;
+
+            if (cartaoId) {
+                dados.cartao_id = parseInt(cartaoId);
+            }
+            if (itemAgregadoId) {
+                dados.item_agregado_id = parseInt(itemAgregadoId);
+            }
+        }
+    }
 
     try {
         // Se estiver editando parcela de consórcio, adicionar tipo de edição na URL
