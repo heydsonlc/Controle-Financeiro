@@ -1439,7 +1439,14 @@ body.mobile-view .despesa-valor-principal {
     transition: background 0.15s ease;
     font-family: inherit;
     text-align: left;
-    color: #1d1d1f;  /* ← ADICIONADO: garante cor escura visível no button */
+    color: #1d1d1f !important;  /* ← FORÇADO: garante cor escura visível no button */
+}
+
+/* FORÇA visibilidade de todos os elementos dentro do botão categoria */
+.categoria-linha * {
+    color: inherit !important;
+    opacity: 1 !important;
+    visibility: visible !important;
 }
 
 .categoria-linha:hover {
@@ -1456,15 +1463,20 @@ body.mobile-view .despesa-valor-principal {
 .categoria-valor {
     font-size: 16px;
     font-weight: 600;
-    color: #1d1d1f;
+    color: #1d1d1f !important;
     min-width: 100px;
     letter-spacing: -0.01em;
+    opacity: 1 !important;
+    visibility: visible !important;
 }
 
 .categoria-nome {
-    font-size: 14px;
+    font-size: 14px !important;
     font-weight: 500;
-    color: #1d1d1f;
+    color: #1d1d1f !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: inline !important;
 }
 
 .categoria-indicador {
