@@ -3,6 +3,7 @@ Rotas para gerenciamento de Despesas (Itens de Despesa)
 """
 from flask import Blueprint, request, jsonify
 from datetime import datetime, timedelta
+import json
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import func
 
@@ -50,6 +51,17 @@ def listar_despesas():
       mostram valor_planejado (pendente) ou valor_executado (pago)
     """
     try:
+        # GeraÇõÇœ de contas recorrentes para o mÇ¦s solicitado (uma Ç§nica chamada por requisiÇõÇœo)
+        mes_arg = request.args.get('mes_referencia') or request.args.get('mes')
+        if mes_arg:
+            try:
+                mes_referencia = datetime.strptime(f"{mes_arg}-01", "%Y-%m-%d").date()
+                despesas_recorrentes = ItemDespesa.query.filter_by(recorrente=True).all()
+                for desp in despesas_recorrentes:
+                    gerar_contas_despesa_recorrente(desp.id, meses_futuros=1, mes_referencia=mes_referencia)
+            except Exception:
+                pass
+
         resultado = []
 
         # 1. Buscar CONTAS que NÃO são faturas de cartão de crédito
@@ -130,8 +142,9 @@ def listar_despesas():
                 'id': fatura.id,
                 'nome': fatura.descricao,
                 'descricao': fatura.observacoes or '',
-                'tipo': 'Agregador',
+                'tipo': 'cartao',  # ← CORRIGIDO: era 'Agregador', mas frontend espera 'cartao'
                 'valor': valor_exibido,
+                'valor_fatura': valor_exibido,  # ← ADICIONADO: campo que frontend espera ler
                 'valor_planejado': float(fatura.valor_planejado or 0),
                 'valor_executado': float(fatura.valor_executado or 0),
                 'estouro_orcamento': fatura.estouro_orcamento or False,
@@ -748,121 +761,136 @@ def marcar_como_pago(id):
 # FUNÇÕES AUXILIARES PARA DESPESAS RECORRENTES
 # ============================================================================
 
-def gerar_contas_despesa_recorrente(item_despesa_id, meses_futuros=12):
+def normalizar_dias_semana(dias):
     """
-    Gera Contas para despesas recorrentes (mensal ou semanal)
-
-    Similar ao sistema de financiamentos, cria registros na tabela Conta
-    para que a despesa recorrente apareça na listagem de despesas
-
-    Args:
-        item_despesa_id (int): ID do ItemDespesa recorrente
-        meses_futuros (int): Quantos meses à frente gerar contas (padrão: 12)
+    Recebe lista ou string e retorna lista padronizada sem acentos:
+    ['segunda','terca','quarta','quinta','sexta','sabado','domingo']
     """
+    if not dias:
+        return []
+    if isinstance(dias, str):
+        try:
+            import json
+            parsed = json.loads(dias)
+            if isinstance(parsed, list):
+                dias = parsed
+            else:
+                dias = [d.strip() for d in dias.split(",") if d.strip()]
+        except Exception:
+            dias = [d.strip() for d in dias.split(",") if d.strip()]
+    nomes = {
+        'segunda': 'segunda', 'seg': 'segunda', '1': 'segunda',
+        'terca': 'terca', 'ter': 'terca', '2': 'terca',
+        'quarta': 'quarta', 'qua': 'quarta', '3': 'quarta',
+        'quinta': 'quinta', 'qui': 'quinta', '4': 'quinta',
+        'sexta': 'sexta', 'sex': 'sexta', '5': 'sexta',
+        'sabado': 'sabado', 'sab': 'sabado', '6': 'sabado',
+        'domingo': 'domingo', 'dom': 'domingo', '0': 'domingo'
+    }
+    resultado = []
+    for d in dias:
+        chave = str(d).strip().lower()
+        if chave in nomes:
+            resultado.append(nomes[chave])
+    return resultado
+
+def gerar_contas_despesa_recorrente(item_despesa_id, meses_futuros=12, mes_referencia=None):
+    """Gera contas reais para despesas recorrentes (mensal, anual, semanal, a_cada_2_semanas ou dias_semana)."""
     item = ItemDespesa.query.get(item_despesa_id)
     if not item:
-        raise ValueError('ItemDespesa não encontrado')
-
+        raise ValueError('ItemDespesa nao encontrado')
     if not item.recorrente:
-        raise ValueError('ItemDespesa não é recorrente')
-
+        raise ValueError('ItemDespesa nao e recorrente')
     if not item.data_vencimento:
         raise ValueError('ItemDespesa recorrente precisa ter data_vencimento')
 
     tipo_recorrencia = item.tipo_recorrencia or 'mensal'
     data_inicio = item.data_vencimento
-
-    # Deletar contas futuras existentes (para regenerar)
-    hoje = datetime.now().date()
-    Conta.query.filter(
-        Conta.item_despesa_id == item_despesa_id,
-        Conta.data_vencimento >= hoje,
-        Conta.status_pagamento == 'Pendente'
-    ).delete()
+    inicio_geracao = data_inicio.replace(day=1)
+    mes_ref_base = mes_referencia.replace(day=1) if mes_referencia else None
+    inicio_janela = max(inicio_geracao, mes_ref_base) if mes_ref_base else inicio_geracao
+    data_fim_base = (inicio_janela + relativedelta(months=meses_futuros)) - timedelta(days=1)
 
     contas_criadas = []
 
+    def criar_conta(data_venc, descricao_custom=None):
+        mes_ref = data_venc.replace(day=1)
+        existente = Conta.query.filter_by(
+            item_despesa_id=item_despesa_id,
+            data_vencimento=data_venc
+        ).first()
+        if existente:
+            return
+        nova = Conta(
+            item_despesa_id=item_despesa_id,
+            mes_referencia=mes_ref,
+            descricao=descricao_custom or item.nome,
+            valor=item.valor,
+            data_vencimento=data_venc,
+            status_pagamento='Pendente',
+            observacoes=item.descricao or ''
+        )
+        db.session.add(nova)
+        contas_criadas.append(nova)
+
     if tipo_recorrencia == 'mensal':
-        # Gerar contas mensais
-        for i in range(meses_futuros):
-            data_vencimento = data_inicio + relativedelta(months=i)
+        data_venc = data_inicio
+        while data_venc < inicio_janela:
+            data_venc += relativedelta(months=1)
+        while data_venc <= data_fim_base:
+            criar_conta(data_venc)
+            data_venc += relativedelta(months=1)
 
-            # Pular se já passou
-            if data_vencimento < hoje:
-                continue
+    elif tipo_recorrencia == 'anual':
+        data_ref = data_inicio
+        while data_ref < inicio_janela:
+            data_ref += relativedelta(years=1)
+        while data_ref <= data_fim_base:
+            criar_conta(data_ref)
+            data_ref += relativedelta(years=1)
 
-            # Calcular competência (mês de referência)
-            mes_referencia = data_vencimento.replace(day=1)
+    elif tipo_recorrencia == 'semanal' or tipo_recorrencia.startswith('semanal_') or tipo_recorrencia == 'a_cada_2_semanas':
+        intervalo = 1 if tipo_recorrencia == "semanal" else 2
+        dia_semana_alvo = None
+        if tipo_recorrencia.startswith("semanal_"):
+            partes = tipo_recorrencia.split("_")
+            if len(partes) > 1:
+                try:
+                    intervalo = int(partes[1])
+                except Exception:
+                    intervalo = max(intervalo, 1)
+            if len(partes) > 2:
+                try:
+                    dia_semana_alvo = int(partes[2])
+                except Exception:
+                    dia_semana_alvo = None
 
-            # Verificar se já existe conta para este mês
-            conta_existente = Conta.query.filter_by(
-                item_despesa_id=item_despesa_id,
-                mes_referencia=mes_referencia
-            ).first()
-
-            if not conta_existente:
-                nova_conta = Conta(
-                    item_despesa_id=item_despesa_id,
-                    mes_referencia=mes_referencia,
-                    descricao=item.nome,
-                    valor=item.valor,
-                    data_vencimento=data_vencimento,
-                    status_pagamento='Pendente',
-                    observacoes=item.descricao or ''
-                )
-                db.session.add(nova_conta)
-                contas_criadas.append(nova_conta)
-
-    elif tipo_recorrencia == 'semanal' or tipo_recorrencia.startswith('semanal_'):
-        # Suporta: 'semanal' ou 'semanal_X_Y' onde X=intervalo de semanas, Y=dia da semana
-        intervalo_semanas = 2  # padrão quinzenal
-        dia_semana_alvo = None  # None = usa data_inicio
-
-        if tipo_recorrencia.startswith('semanal_'):
-            # Formato: semanal_2_1 (a cada 2 semanas, segunda-feira=1)
-            partes = tipo_recorrencia.split('_')
-            if len(partes) >= 2:
-                intervalo_semanas = int(partes[1])
-            if len(partes) >= 3:
-                dia_semana_alvo = int(partes[2])  # 0=domingo, 1=segunda, ..., 6=sábado
-
-        # Ajustar data_inicio para o dia da semana correto
-        data_atual = data_inicio
+        data_atual = max(data_inicio, inicio_janela)
         if dia_semana_alvo is not None:
-            # Encontrar a próxima ocorrência do dia da semana alvo
             dias_ate_alvo = (dia_semana_alvo - data_atual.weekday()) % 7
-            if dias_ate_alvo > 0:
-                data_atual += timedelta(days=dias_ate_alvo)
+            data_atual += timedelta(days=dias_ate_alvo)
 
-        data_fim = hoje + relativedelta(months=meses_futuros)
+        while data_atual <= data_fim_base:
+            if data_atual >= inicio_geracao:
+                criar_conta(data_atual, descricao_custom=f"{item.nome} - {data_atual.strftime('%d/%m')}")
+            data_atual += timedelta(weeks=intervalo)
 
-        while data_atual <= data_fim:
-            # Pular se já passou
-            if data_atual >= hoje:
-                # Calcular competência (mês de referência)
-                mes_referencia = data_atual.replace(day=1)
-
-                # Verificar se já existe conta para esta data
-                conta_existente = Conta.query.filter_by(
-                    item_despesa_id=item_despesa_id,
-                    data_vencimento=data_atual
-                ).first()
-
-                if not conta_existente:
-                    nova_conta = Conta(
-                        item_despesa_id=item_despesa_id,
-                        mes_referencia=mes_referencia,
-                        descricao=f'{item.nome} - {data_atual.strftime("%d/%m/%Y")}',
-                        valor=item.valor,
-                        data_vencimento=data_atual,
-                        status_pagamento='Pendente',
-                        observacoes=item.descricao or ''
-                    )
-                    db.session.add(nova_conta)
-                    contas_criadas.append(nova_conta)
-
-            # Avançar pelo intervalo especificado
-            data_atual += timedelta(weeks=intervalo_semanas)
+    elif tipo_recorrencia == 'dias_semana':
+        dias_lista = normalizar_dias_semana(getattr(item, 'dias_semana', None))
+        frequencia = getattr(item, 'frequencia_semanal', '') or 'toda_semana'
+        mapa_num = {
+            'segunda': 0, 'terca': 1, 'quarta': 2, 'quinta': 3, 'sexta': 4, 'sabado': 5, 'domingo': 6
+        }
+        dias_alvo = [mapa_num[d] for d in dias_lista if d in mapa_num]
+        data_atual = inicio_janela
+        while data_atual <= data_fim_base:
+            if dias_alvo and data_atual.weekday() in dias_alvo:
+                if frequencia == 'alternado' and data_atual.isocalendar()[1] % 2 != 0:
+                    data_atual += timedelta(days=1)
+                    continue
+                criar_conta(data_atual, descricao_custom=f"{item.nome} - {data_atual.strftime('%d/%m')}")
+            data_atual += timedelta(days=1)
 
     db.session.commit()
     return contas_criadas
+
