@@ -436,15 +436,28 @@ def criar_lancamento(item_id):
         # Usar CartaoService para adicionar lançamento e garantir fatura
         lancamento, fatura = CartaoService.adicionar_lancamento(dados_lancamento)
 
+        # Decisao soberana de valor da fatura
+        fatura_paga = (fatura.status_pagamento == 'Pago')
+        valor_fatura = float(fatura.valor_executado or fatura.valor or 0) if fatura_paga else float(fatura.valor_planejado or fatura.valor or 0)
+        tipo_valor = 'executado' if fatura_paga else 'previsto'
+        status_simplificado = 'pago' if fatura_paga else 'pendente'
+
         return jsonify({
             'success': True,
-            'message': 'Lançamento criado com sucesso',
+            'message': 'Lancamento criado com sucesso',
             'lancamento': lancamento.to_dict(),
             'fatura': {
                 'id': fatura.id,
                 'valor_planejado': float(fatura.valor_planejado),
                 'valor_executado': float(fatura.valor_executado),
-                'estouro_orcamento': fatura.estouro_orcamento
+                'estouro_orcamento': fatura.estouro_orcamento,
+                'valor_fatura': valor_fatura,
+                'tipo_valor': tipo_valor,
+                'status': status_simplificado,
+                'tipo': 'cartao',
+                'cartao_id': fatura.item_despesa_id,
+                'nome': fatura.descricao,
+                'competencia': fatura.cartao_competencia.strftime('%Y-%m') if fatura.cartao_competencia else None
             }
         }), 201
 
@@ -520,15 +533,28 @@ def criar_lancamento_sem_categoria(cartao_id):
         # Usar CartaoService para adicionar lançamento e garantir fatura
         lancamento, fatura = CartaoService.adicionar_lancamento(dados_lancamento)
 
+        # Decisao soberana de valor da fatura
+        fatura_paga = (fatura.status_pagamento == 'Pago')
+        valor_fatura = float(fatura.valor_executado or fatura.valor or 0) if fatura_paga else float(fatura.valor_planejado or fatura.valor or 0)
+        tipo_valor = 'executado' if fatura_paga else 'previsto'
+        status_simplificado = 'pago' if fatura_paga else 'pendente'
+
         return jsonify({
             'success': True,
-            'message': 'Lançamento criado com sucesso',
+            'message': 'Lancamento criado com sucesso',
             'lancamento': lancamento.to_dict(),
             'fatura': {
                 'id': fatura.id,
                 'valor_planejado': float(fatura.valor_planejado),
                 'valor_executado': float(fatura.valor_executado),
-                'estouro_orcamento': fatura.estouro_orcamento
+                'estouro_orcamento': fatura.estouro_orcamento,
+                'valor_fatura': valor_fatura,
+                'tipo_valor': tipo_valor,
+                'status': status_simplificado,
+                'tipo': 'cartao',
+                'cartao_id': fatura.item_despesa_id,
+                'nome': fatura.descricao,
+                'competencia': fatura.cartao_competencia.strftime('%Y-%m') if fatura.cartao_competencia else None
             }
         }), 201
 
@@ -633,7 +659,7 @@ def obter_resumo_cartao(cartao_id):
 
             total_orcado += valor_orcado
 
-            resumo_itens.append({
+            item_dict = {
                 'id': item.id,
                 'nome': item.nome,
                 'descricao': item.descricao,
@@ -642,7 +668,12 @@ def obter_resumo_cartao(cartao_id):
                 'saldo': valor_orcado - valor_gasto,
                 'percentual_utilizado': round((valor_gasto / valor_orcado * 100) if valor_orcado > 0 else 0, 2),
                 'orcamento_id': orcamento.id if orcamento else None
-            })
+            }
+
+            # DEBUG: Verificar se nome está vazio
+            print(f"DEBUG BACKEND: ItemAgregado ID={item.id}, nome='{item.nome}', tipo={type(item.nome)}, len={len(item.nome) if item.nome else 0}")
+
+            resumo_itens.append(item_dict)
 
         resultado = {
             'cartao': cartao.to_dict(),
