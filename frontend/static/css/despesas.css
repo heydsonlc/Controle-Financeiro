@@ -447,6 +447,7 @@
     padding: 10px 12px;
     cursor: pointer;
     text-align: left;
+    color: #1d1d1f;  /* ← ADICIONADO: garante cor escura visível */
 }
 
 .categoria-linha:hover {
@@ -1438,6 +1439,7 @@ body.mobile-view .despesa-valor-principal {
     transition: background 0.15s ease;
     font-family: inherit;
     text-align: left;
+    color: #1d1d1f;  /* ← ADICIONADO: garante cor escura visível no button */
 }
 
 .categoria-linha:hover {
