@@ -175,7 +175,7 @@
 /* Lista de despesas */
 .despesas-lista {
     display: grid;
-    gap: 15px;
+    gap: 0;
 }
 
 .despesa-card {
@@ -297,6 +297,243 @@
     text-transform: uppercase;
     letter-spacing: 0.5px;
     font-weight: 500;
+}
+
+/* VisualizaÇõÇœo detalhada da fatura do cartÇœo */
+.fatura-container {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 16px 0;
+    margin-top: 10px;
+}
+
+.fatura-header {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e5e5ea;
+    margin-bottom: 12px;
+}
+
+.fatura-header h3 {
+    margin: 0;
+    font-size: 1.05em;
+    font-weight: 600;
+    color: #1d1d1f;
+    letter-spacing: -0.01em;
+}
+
+.fatura-totais {
+    display: block;
+    gap: 0;
+}
+
+.total-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    margin-bottom: 6px;
+    gap: 12px;
+}
+
+.total-item.destaque {
+    background: transparent;
+    border-color: transparent;
+}
+
+.total-label {
+    font-size: 14px;
+    color: #6e6e73;
+}
+
+.total-valor {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1d1d1f;
+    letter-spacing: -0.01em;
+}
+
+.fatura-blocos {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.fatura-bloco {
+    padding: 10px 0;
+    border-top: 1px solid #e5e5ea;
+}
+
+.bloco-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 600;
+    color: #1d1d1f;
+    margin-bottom: 8px;
+}
+
+.bloco-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.bloco-titulo {
+    font-weight: 600;
+}
+
+.bloco-subtotal {
+    font-weight: 600;
+    color: #1d1d1f;
+}
+
+.linha-simples {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: flex-start;
+    background: #ffffff;
+    border: 1px solid #e5e5ea;
+    border-radius: 10px;
+    padding: 8px 10px;
+}
+
+.linha-titulo {
+    font-weight: 600;
+    color: #1d1d1f;
+    letter-spacing: -0.01em;
+}
+
+.linha-legenda {
+    font-size: 0.85em;
+    color: #6e6e73;
+    margin-top: 2px;
+}
+
+.linha-valor {
+    font-weight: 600;
+    color: #1d1d1f;
+    min-width: 90px;
+    text-align: right;
+}
+
+.linha-vazia {
+    font-size: 0.9em;
+    color: #8e8e93;
+    padding: 4px 2px;
+}
+
+.categoria-bloco {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.categoria-linha {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #ffffff;
+    border: 1px solid #e5e5ea;
+    border-radius: 10px;
+    padding: 10px 12px;
+    cursor: pointer;
+    text-align: left;
+}
+
+.categoria-linha:hover {
+    border-color: #c7c7cc;
+}
+
+.categoria-info {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.categoria-valor {
+    font-weight: 700;
+    color: #1d1d1f;
+}
+
+.categoria-nome {
+    font-weight: 500;
+    color: #3a3a3c;
+}
+
+.categoria-indicador {
+    font-weight: 700;
+    color: #3a3a3c;
+}
+
+.categoria-detalhes {
+    margin-top: 4px;
+    padding-left: 10px;
+    border-left: 1px solid #e5e5ea;
+    display: none;
+}
+
+.categoria-detalhes .linha-simples {
+    border: none;
+    border-bottom: 1px solid #f0f0f0;
+    border-radius: 0;
+    padding-left: 0;
+    padding-right: 0;
+    background: transparent;
+}
+
+.categoria-detalhes .linha-simples:last-child {
+    border-bottom: none;
+}
+
+.rodape-fatura {
+    border-top: 1px solid #d1d1d6;
+    margin-top: 12px;
+    padding-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.rodape-linha {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+    font-weight: 400;
+    color: #1d1d1f;
+}
+
+.rodape-valor {
+    font-weight: 600;
+}
+
+.rodape-label {
+    font-weight: 400;
+    color: #6e6e73;
+}
+
+@media (max-width: 768px) {
+    .fatura-totais {
+        grid-template-columns: 1fr;
+    }
+
+    .linha-simples {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .linha-valor {
+        text-align: left;
+    }
 }
 
 .valor-numero {
@@ -721,7 +958,7 @@ body.mobile-view .modal-content {
 }
 
 body.mobile-view .despesas-lista {
-    gap: 12px;
+    gap: 0;
 }
 
 body.mobile-view .actions-bar {
@@ -749,53 +986,79 @@ body.mobile-view .breadcrumb {
 
 /* Card padronizado - todas as despesas seguem este layout */
 .despesa-card-padrao {
-    background: #ffffff;
-    border-radius: 12px;
-    border: 1px solid #d1d1d6;
-    border-left: 2px solid #d1d1d6;
-    transition: border-color 0.2s ease;
-    margin-bottom: 1px;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 0;
+    box-shadow: none;
+    transition: background 0.15s ease;
+    margin-bottom: 0;
 }
 
 /* Status: cor APENAS na borda esquerda */
 .despesa-card-padrao.pendente {
-    border-left-color: #ff9500;
+    opacity: 1;
 }
 
 .despesa-card-padrao.pago {
-    border-left-color: #34c759;
-    opacity: 0.7;
+    opacity: 1;
 }
 
 .despesa-card-padrao:hover {
-    border-color: #86868b;
+    background: rgba(0, 0, 0, 0.02);
+}
+
+/* Neutraliza estilos de "card" herdados de .despesa-card */
+.despesa-card.despesa-card-padrao {
+    padding: 0;
+    border-left: none;
+    box-shadow: none;
+    transform: none;
+    grid-template-columns: 1fr;
+    gap: 0;
+    align-items: stretch;
+}
+
+.despesa-card.despesa-card-padrao:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+.despesa-card.despesa-card-padrao.pago,
+.despesa-card.despesa-card-padrao.pendente {
+    opacity: 1;
 }
 
 /* Linha principal - layout horizontal com todos os elementos */
 .despesa-linha-principal {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 14px 20px;
-    min-height: 52px;
+    display: grid;
+    grid-template-columns: auto 1fr auto auto;
+    grid-template-areas:
+        "status descricao valor actions"
+        "status meta     valor actions";
+    column-gap: 14px;
+    row-gap: 2px;
+    padding: 10px 0;
+    min-height: auto;
 }
 
 /* Status badge - minimalista, sem cor de fundo */
 .despesa-status {
-    flex-shrink: 0;
+    grid-area: status;
+    align-self: center;
 }
 
 .status-badge {
     display: inline-block;
-    font-size: 0.8em;
-    font-weight: 500;
+    font-size: 12px;
+    font-weight: 400;
     color: #6e6e73;
     text-transform: none;
     letter-spacing: 0;
 }
 
 .status-badge-pago {
-    color: #34c759;
+    color: #6e6e73;
 }
 
 .status-badge-pendente {
@@ -804,9 +1067,9 @@ body.mobile-view .breadcrumb {
 
 /* Descrição da despesa - destaque tipográfico */
 .despesa-descricao {
-    flex: 1;
-    min-width: 200px;
-    font-size: 0.95em;
+    grid-area: descricao;
+    min-width: 0;
+    font-size: 15px;
     font-weight: 500;
     color: #1d1d1f;
     overflow: hidden;
@@ -817,17 +1080,18 @@ body.mobile-view .breadcrumb {
 
 /* Metadados - sem cores, apenas tipografia */
 .despesa-meta {
+    grid-area: meta;
     display: flex;
-    gap: 12px;
+    gap: 10px;
     flex-wrap: wrap;
     align-items: center;
-    flex-shrink: 0;
+    margin-top: 2px;
 }
 
 .meta-competencia,
 .meta-tipo,
 .meta-categoria {
-    font-size: 0.8em;
+    font-size: 12px;
     font-weight: 400;
     color: #6e6e73;
     padding: 0;
@@ -846,6 +1110,12 @@ body.mobile-view .breadcrumb {
     content: none;
 }
 
+/* Forca separador correto no layout de fatura */
+.meta-competencia::after,
+.meta-tipo::after {
+    content: '•';
+}
+
 /* Tipos - apenas texto, SEM cor */
 .meta-tipo {
     font-weight: 400;
@@ -855,18 +1125,21 @@ body.mobile-view .breadcrumb {
 
 /* Valor principal - destaque tipográfico sutil */
 .despesa-valor-principal {
-    flex-shrink: 0;
-    font-size: 1em;
+    grid-area: valor;
+    align-self: center;
+    font-size: 15px;
     font-weight: 600;
     color: #1d1d1f;
     min-width: 110px;
     text-align: right;
+    white-space: nowrap;
     letter-spacing: -0.02em;
 }
 
 /* Ações (botões) */
 .despesa-actions {
-    flex-shrink: 0;
+    grid-area: actions;
+    align-self: center;
     display: flex;
     gap: 6px;
 }
@@ -930,4 +1203,369 @@ body.mobile-view .despesa-descricao {
 
 body.mobile-view .despesa-valor-principal {
     font-size: 1em;
+}
+
+@media (max-width: 600px) {
+    .despesa-linha-principal {
+        grid-template-columns: 1fr auto;
+        grid-template-areas:
+            "descricao valor"
+            "meta     actions"
+            "status   status";
+        column-gap: 8px;
+    }
+
+    .despesa-valor-principal {
+        font-size: 14px;
+        font-weight: 600;
+    }
+}
+
+/* Desktop: acoes so no hover */
+@media (min-width: 769px) {
+    .despesa-card-padrao .despesa-actions {
+        opacity: 0;
+        transition: opacity 0.15s ease;
+    }
+
+    .despesa-card-padrao:hover .despesa-actions {
+        opacity: 1;
+    }
+}
+
+/* Mobile: acoes sempre visiveis */
+@media (max-width: 768px) {
+    .despesa-card-padrao .despesa-actions {
+        opacity: 1;
+    }
+}
+
+/* ================================
+   LEGACY (nao usado na DESPESAS atual)
+   Mantido apenas para compatibilidade
+   ================================ */
+
+.despesa-card:not(.despesa-card-padrao),
+.badge-fatura,
+.status-indicador {
+    all: unset;
+}
+
+/* ============================================ */
+/* VISUALIZAÇÃO DA FATURA DO CARTÃO            */
+/* Estilo Apple: Minimalista, Sóbrio, Claro    */
+/* ============================================ */
+
+/* Container da fatura expandida */
+.fatura-detalhes {
+    background: #f5f5f7;
+    border-top: 1px solid #d1d1d6;
+    padding: 0;
+}
+
+.fatura-container {
+    padding: 24px;
+    max-width: 100%;
+}
+
+/* Loading e erro */
+.loading-detalhes,
+.erro-detalhes {
+    padding: 32px;
+    text-align: center;
+    color: #6e6e73;
+    font-size: 14px;
+}
+
+.erro-detalhes p {
+    margin-bottom: 16px;
+    color: #ff3b30;
+}
+
+/* Cabeçalho da fatura */
+.fatura-header {
+    margin-bottom: 32px;
+}
+
+.fatura-header h3 {
+    font-size: 20px;
+    font-weight: 600;
+    color: #1d1d1f;
+    margin: 0 0 16px 0;
+    letter-spacing: -0.02em;
+}
+
+.fatura-totais {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.total-item {
+    flex: 1;
+    min-width: 200px;
+    background: #ffffff;
+    border: 1px solid #d1d1d6;
+    border-radius: 12px;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.total-item.destaque {
+    border: 2px solid #1d1d1f;
+}
+
+.total-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: #6e6e73;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.total-valor {
+    font-size: 24px;
+    font-weight: 600;
+    color: #1d1d1f;
+    letter-spacing: -0.02em;
+}
+
+/* Blocos da fatura */
+.fatura-blocos {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.fatura-bloco {
+    background: #ffffff;
+    border: 1px solid #d1d1d6;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.bloco-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    background: #fafafa;
+    border-bottom: 1px solid #e5e5ea;
+}
+
+.bloco-titulo {
+    font-size: 15px;
+    font-weight: 600;
+    color: #1d1d1f;
+    letter-spacing: -0.01em;
+}
+
+.bloco-subtotal {
+    font-size: 14px;
+    font-weight: 500;
+    color: #6e6e73;
+}
+
+.bloco-lista {
+    padding: 0;
+}
+
+/* Linhas simples (parceladas, fixas, outros) */
+.linha-simples {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    border-bottom: 1px solid #f5f5f7;
+    gap: 16px;
+}
+
+.linha-simples:last-child {
+    border-bottom: none;
+}
+
+.linha-titulo {
+    font-size: 14px;
+    font-weight: 400;
+    color: #1d1d1f;
+    line-height: 1.4;
+}
+
+.linha-legenda {
+    font-size: 12px;
+    font-weight: 400;
+    color: #86868b;
+    margin-top: 2px;
+}
+
+.linha-valor {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1d1d1f;
+    white-space: nowrap;
+    letter-spacing: -0.01em;
+}
+
+.linha-vazia {
+    padding: 20px;
+    text-align: center;
+    font-size: 13px;
+    color: #86868b;
+    font-style: italic;
+}
+
+/* Categorias expansíveis (Parte 3) */
+.categoria-bloco {
+    border-bottom: 1px solid #f5f5f7;
+}
+
+.categoria-bloco:last-child {
+    border-bottom: none;
+}
+
+.categoria-linha {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    font-family: inherit;
+    text-align: left;
+}
+
+.categoria-linha:hover {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+.categoria-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
+.categoria-valor {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1d1d1f;
+    min-width: 100px;
+    letter-spacing: -0.01em;
+}
+
+.categoria-nome {
+    font-size: 14px;
+    font-weight: 500;
+    color: #1d1d1f;
+}
+
+.categoria-indicador {
+    font-size: 18px;
+    font-weight: 400;
+    color: #6e6e73;
+    min-width: 24px;
+    text-align: center;
+}
+
+.categoria-detalhes {
+    background: #fafafa;
+    border-top: 1px solid #e5e5ea;
+    padding: 0;
+}
+
+.categoria-detalhes .linha-simples {
+    padding: 12px 20px 12px 40px;
+    background: #fafafa;
+}
+
+/* Rodapé com resumo */
+.rodape-fatura {
+    margin-top: 32px;
+    padding: 24px;
+    background: #fafafa;
+    border-radius: 12px;
+    border: 1px solid #e5e5ea;
+}
+
+.rodape-linha {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    gap: 16px;
+}
+
+.rodape-valor {
+    font-size: 14px;
+    font-weight: 500;
+    color: #1d1d1f;
+    min-width: 100px;
+    letter-spacing: -0.01em;
+}
+
+.rodape-label {
+    font-size: 13px;
+    font-weight: 400;
+    color: #6e6e73;
+    flex: 1;
+}
+
+/* Botão de detalhes */
+.btn-detalhes svg {
+    transition: transform 0.2s ease;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+    .fatura-container {
+        padding: 16px;
+    }
+
+    .fatura-totais {
+        flex-direction: column;
+    }
+
+    .total-item {
+        min-width: 100%;
+    }
+
+    .total-valor {
+        font-size: 20px;
+    }
+
+    .categoria-info {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+
+    .categoria-valor {
+        min-width: auto;
+        font-size: 14px;
+    }
+
+    .linha-simples {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .linha-valor {
+        align-self: flex-end;
+    }
+
+    .rodape-linha {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+
+    .rodape-valor {
+        min-width: auto;
+    }
 }

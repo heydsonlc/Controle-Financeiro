@@ -189,23 +189,24 @@ function renderizarDespesas(despesasParaRenderizar) {
 
     lista.innerHTML = despesasParaRenderizar.map(despesa => {
         // Determinar tipo de despesa para identificação visual
-        const isFaturaCartao = despesa.is_fatura_cartao === true;
+        const isFaturaCartao = despesa.is_fatura_cartao === true || despesa.tipo === 'cartao';
         const isAgrupado = despesa.agrupado === true || isFaturaCartao;
         const isRecorrente = despesa.recorrente === true;
         const isParcela = despesa.total_parcelas > 1;
+        const valorDespesa = obterValorDespesa(despesa);
 
-        // Status: Pago ou Pendente
-        const statusClass = despesa.pago ? 'pago' : 'pendente';
-        const statusTexto = despesa.pago ? 'Pago' : 'Pendente';
+        // Status: Pago ou Pendente (backend já decide)
+        const pagoFlag = despesa.status ? despesa.status.toLowerCase() === 'pago' : despesa.pago;
+        const statusClass = pagoFlag ? 'pago' : 'pendente';
+        const statusTexto = pagoFlag ? 'Pago' : 'Pendente';
 
         // Determinar TIPO conforme regras do contrato
         let tipoTexto = '';
         let tipoClass = '';
 
-        if (isFaturaCartao) {
-            // REGRA DEFINITIVA: Previsto OU Executado (NUNCA ambos)
-            tipoTexto = despesa.pago ? 'Executado' : 'Previsto';
-            tipoClass = despesa.pago ? 'tipo-executado' : 'tipo-previsto';
+        if (isFaturaCartao || despesa.tipo === 'cartao') {
+            tipoTexto = 'Cartão';
+            tipoClass = 'tipo-cartao';
         } else if (isParcela) {
             tipoTexto = 'Parcela';
             tipoClass = 'tipo-parcela';
@@ -215,15 +216,6 @@ function renderizarDespesas(despesasParaRenderizar) {
         } else {
             tipoTexto = 'Direto';
             tipoClass = 'tipo-direto';
-        }
-
-        // Determinar VALOR conforme regra do cartão
-        let valorExibir = parseFloat(despesa.valor);
-        if (isFaturaCartao) {
-            // REGRA: Previsto usa valor_planejado, Executado usa valor_executado
-            valorExibir = despesa.pago
-                ? parseFloat(despesa.valor_executado || despesa.valor)
-                : parseFloat(despesa.valor_planejado || despesa.valor);
         }
 
         // Categoria (opcional, metadado)
@@ -236,6 +228,11 @@ function renderizarDespesas(despesasParaRenderizar) {
         // Ações disponíveis
         const acoesHTML = isFaturaCartao ? `
             <div class="despesa-actions">
+                <button class="btn-icon btn-detalhes" onclick="toggleDetalhesFatura(${despesa.id}, '${despesa.cartao_id || ''}', '${despesa.mes_competencia || ''}')" title="Ver detalhes da fatura">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </button>
                 ${!despesa.pago ? `
                     <button class="btn-icon btn-pagar" onclick="marcarComoPago(${despesa.id})" title="Pagar fatura">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -262,7 +259,7 @@ function renderizarDespesas(despesasParaRenderizar) {
         // Layout padronizado para TODAS as despesas
         // Estrutura: [Status] Descrição | Competência | Tipo | Valor
         return `
-            <div class="despesa-card despesa-card-padrao ${statusClass} ${tipoClass}">
+            <div class="despesa-card despesa-card-padrao ${statusClass} ${tipoClass}" data-despesa-id="${despesa.id}">
                 <div class="despesa-linha-principal">
                     <div class="despesa-status">
                         <span class="status-badge status-badge-${statusClass}">${statusTexto}</span>
@@ -279,11 +276,17 @@ function renderizarDespesas(despesasParaRenderizar) {
                     </div>
 
                     <div class="despesa-valor-principal">
-                        R$ ${valorExibir.toFixed(2).replace('.', ',')}
+                        R$ ${valorDespesa.toFixed(2).replace('.', ',')}
                     </div>
 
                     ${acoesHTML}
                 </div>
+
+                ${isFaturaCartao ? `
+                    <div class="fatura-detalhes" id="fatura-detalhes-${despesa.id}" style="display: none;">
+                        <div class="loading-detalhes">Carregando detalhes...</div>
+                    </div>
+                ` : ''}
 
                 ${despesa.descricao && !isFaturaCartao ? `
                     <div class="despesa-linha-detalhes">
@@ -299,9 +302,19 @@ function renderizarDespesas(despesasParaRenderizar) {
  * Atualiza os cards de resumo
  */
 function atualizarResumo(despesasParaResumir) {
-    const total = despesasParaResumir.reduce((sum, d) => sum + parseFloat(d.valor), 0);
-    const totalPendentes = despesasParaResumir.filter(d => !d.pago).reduce((sum, d) => sum + parseFloat(d.valor), 0);
-    const totalPagas = despesasParaResumir.filter(d => d.pago).reduce((sum, d) => sum + parseFloat(d.valor), 0);
+    const total = despesasParaResumir.reduce((sum, d) => sum + obterValorDespesa(d), 0);
+    const totalPendentes = despesasParaResumir
+        .filter(d => {
+            const pagoFlag = d.status ? d.status.toLowerCase() === 'pago' : d.pago;
+            return !pagoFlag;
+        })
+        .reduce((sum, d) => sum + obterValorDespesa(d), 0);
+    const totalPagas = despesasParaResumir
+        .filter(d => {
+            const pagoFlag = d.status ? d.status.toLowerCase() === 'pago' : d.pago;
+            return pagoFlag;
+        })
+        .reduce((sum, d) => sum + obterValorDespesa(d), 0);
 
     document.getElementById('total-geral').textContent = `R$ ${total.toFixed(2).replace('.', ',')}`;
     document.getElementById('total-pendentes').textContent = `R$ ${totalPendentes.toFixed(2).replace('.', ',')}`;
@@ -858,6 +871,18 @@ function formatarCompetencia(competencia) {
 }
 
 /**
+ * Retorna o valor soberano da despesa.
+ * Para cartão, usa valor_fatura vindo do backend; demais usam valor.
+ */
+function obterValorDespesa(despesa) {
+    if (!despesa) return 0;
+    if (despesa.tipo === 'cartao' || despesa.is_fatura_cartao === true) {
+        return parseFloat(despesa.valor_fatura || 0);
+    }
+    return parseFloat(despesa.valor || 0);
+}
+
+/**
  * Formata tipo de recorrência para exibição
  */
 function formatarTipoRecorrencia(tipo) {
@@ -1175,6 +1200,414 @@ async function editarParcelaConsorcio(id, tipoEdicao) {
         console.error('Erro ao carregar despesa:', error);
         alert('Erro ao carregar despesa. Por favor, tente novamente.');
     }
+}
+
+/**
+ * Expande/contrai os detalhes da fatura do cartão
+ * Conforme script de fechamento da fatura
+ */
+async function toggleDetalhesFatura(despesaId, cartaoId, competencia) {
+    const container = document.getElementById(`fatura-detalhes-${despesaId}`);
+    const botao = event.target.closest('.btn-detalhes');
+
+    if (!container) return;
+
+    // Toggle visibilidade
+    if (container.style.display === 'none' || container.style.display === '') {
+        // Expandir
+        container.style.display = 'block';
+
+        // Rotacionar ícone do botão
+        if (botao) {
+            const svg = botao.querySelector('svg');
+            if (svg) svg.style.transform = 'rotate(180deg)';
+        }
+
+        // Verificar se já carregou os dados
+        if (!container.dataset.loaded) {
+            await carregarDetalhesFatura(despesaId, cartaoId, competencia);
+            container.dataset.loaded = 'true';
+        }
+    } else {
+        // Recolher
+        container.style.display = 'none';
+
+        // Rotacionar ícone de volta
+        if (botao) {
+            const svg = botao.querySelector('svg');
+            if (svg) svg.style.transform = 'rotate(0deg)';
+        }
+    }
+}
+
+/**
+ * Carrega e renderiza os detalhes completos da fatura do cartão
+ * Estrutura em 4 blocos conforme script:
+ * 1. Compras Parceladas
+ * 2. Despesas Fixas
+ * 3. Despesas por Categoria (com previsão)
+ * 4. Outros Lançamentos
+ */
+async function carregarDetalhesFatura(despesaId, cartaoId, competencia) {
+    const container = document.getElementById(`fatura-detalhes-${despesaId}`);
+    if (!container) return;
+
+    const competenciaNormalizada = normalizarCompetencia(competencia);
+    container.innerHTML = '<div class="loading-detalhes">Carregando detalhes...</div>';
+
+    try {
+        // Buscar lan?amentos do cart?o na compet?ncia
+        const response = await fetch(`/api/cartoes/${cartaoId}/lancamentos?mes_fatura=${competenciaNormalizada}`);
+        const json = await response.json();
+        const lancamentos = extrairArray(json);
+
+        // Buscar resumo do cart?o para obter previs?es das categorias
+        const resumoResponse = await fetch(`/api/cartoes/${cartaoId}/resumo?mes_referencia=${competenciaNormalizada}`);
+        const resumoJson = await resumoResponse.json();
+        if (!resumoResponse.ok) {
+            throw new Error(resumoJson?.erro || 'Erro ao carregar resumo do cart?o');
+        }
+
+        // Organizar lan?amentos nos 4 blocos
+        const blocos = organizarLancamentosEmBlocos(lancamentos, resumoJson);
+
+        // Calcular totais
+        const totais = calcularTotaisFatura(blocos, lancamentos);
+
+        // Renderizar visualiza??o completa
+        container.innerHTML = renderizarFaturaCompleta(blocos, totais, competenciaNormalizada);
+
+    } catch (error) {
+        console.error('Erro ao carregar detalhes da fatura:', error);
+        container.innerHTML = `
+            <div class="erro-detalhes">
+                <p>Erro ao carregar detalhes da fatura.</p>
+                <button onclick="toggleDetalhesFatura(${despesaId}, '${cartaoId}', '${competencia}')" class="btn btn-secondary">
+                    Fechar
+                </button>
+            </div>
+        `;
+    }
+}
+
+/**
+ * Organiza lançamentos nos 4 blocos conforme regras do script
+ */
+function organizarLancamentosEmBlocos(lancamentos, resumoCartao) {
+    const blocos = {
+        parceladas: [],      // Parte 1: total_parcelas > 1
+        fixas: [],           // Parte 2: recorrentes mensais (quando vierem marcadas)
+        porCategoria: {},    // Parte 3: com categoria que tem previs?es
+        outros: []           // Parte 4: resto
+    };
+
+    // Mapear categorias com previs?o (valor_orcado no resumo)
+    (resumoCartao?.itens || []).forEach(item => {
+        const previsto = parseFloat(item.valor_orcado || 0);
+        if (previsto > 0) {
+            blocos.porCategoria[item.id] = {
+                id: item.id,
+                nome: item.nome,
+                previsto,
+                lancamentos: []
+            };
+        }
+    });
+
+    lancamentos.forEach(lanc => {
+        const valorLanc = parseFloat(lanc.valor || 0);
+        const totalParcelas = parseInt(lanc.total_parcelas || 0);
+        const numeroParcela = parseInt(lanc.numero_parcela || 0);
+        const categoriaPrevista = blocos.porCategoria[lanc.item_agregado_id];
+        const isRecorrenteCartao = lanc.recorrente === true;
+
+        // PARTE 1: Compras Parceladas
+        if (totalParcelas > 1) {
+            blocos.parceladas.push({
+                descricao: lanc.descricao,
+                valor: valorLanc,
+                numero_parcela: numeroParcela,
+                total_parcelas: totalParcelas
+            });
+        }
+        // PARTE 2: Despesas Fixas (recorrentes mensais sem parcelamento)
+        else if (isRecorrenteCartao && totalParcelas <= 1) {
+            blocos.fixas.push({
+                descricao: lanc.descricao,
+                valor: valorLanc
+            });
+        }
+        // PARTE 3: Despesas por Categoria (com previs?o)
+        else if (categoriaPrevista) {
+            categoriaPrevista.lancamentos.push({
+                descricao: lanc.descricao,
+                valor: valorLanc,
+                data_compra: lanc.data_compra,
+                observacoes: lanc.observacoes
+            });
+        }
+        // PARTE 4: Outros Lan?amentos
+        else {
+            blocos.outros.push({
+                descricao: lanc.descricao,
+                valor: valorLanc,
+                data_compra: lanc.data_compra
+            });
+        }
+    });
+
+    return blocos;
+}
+
+/**
+ * Calcula totais da fatura
+ */
+function calcularTotaisFatura(blocos, lancamentos) {
+    // Total Atual = soma de tudo executado
+    const totalAtual = lancamentos.reduce((sum, l) => sum + parseFloat(l.valor || 0), 0);
+
+    // Previsão Máxima = executado + (previstos não executados das categorias)
+    let previsaoMaxima = totalAtual;
+
+    Object.values(blocos.porCategoria).forEach(cat => {
+        const executado = cat.lancamentos.reduce((sum, l) => sum + parseFloat(l.valor || 0), 0);
+        const previsto = parseFloat(cat.previsto || 0);
+
+        // Se previsto > executado, adicionar a diferença
+        if (previsto > executado) {
+            previsaoMaxima += (previsto - executado);
+        }
+    });
+
+    return {
+        totalAtual,
+        previsaoMaxima
+    };
+}
+
+/**
+ * Renderiza a visualização completa da fatura
+ */
+function renderizarFaturaCompleta(blocos, totais, competencia) {
+    const competenciaFormatada = formatarCompetenciaCompleta(competencia);
+
+    return `
+        <div class="fatura-container">
+            <div class="fatura-header">
+                <h3>Fatura do Cart?o ? ${competenciaFormatada}</h3>
+                <div class="fatura-totais">
+                    <div class="total-item">
+                        <span class="total-label">Total Atual:</span>
+                        <span class="total-valor">R$ ${totais.totalAtual.toFixed(2).replace('.', ',')}</span>
+                    </div>
+                    <div class="total-item destaque">
+                        <span class="total-label">Previs?o M?xima de Fechamento:</span>
+                        <span class="total-valor">R$ ${totais.previsaoMaxima.toFixed(2).replace('.', ',')}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="fatura-blocos">
+                ${renderizarBlocoParceladas(blocos.parceladas)}
+                ${renderizarBlocoFixas(blocos.fixas)}
+                ${renderizarBlocoPorCategoria(blocos.porCategoria)}
+                ${renderizarBlocoOutros(blocos.outros)}
+            </div>
+
+            ${renderizarRodapeFatura(blocos)}
+        </div>
+    `;
+}
+
+function renderizarBlocoParceladas(parceladas) {
+    const total = parceladas.reduce((sum, p) => sum + (p.valor || 0), 0);
+    const linhas = parceladas.length > 0
+        ? parceladas.map(p => `
+            <div class="linha-simples">
+                <div>
+                    <div class="linha-titulo">${p.descricao}</div>
+                    <div class="linha-legenda">${formatarParcelaAtual(p.numero_parcela, p.total_parcelas)}</div>
+                </div>
+                <div class="linha-valor">R$ ${formatarValorBR(p.valor)}</div>
+            </div>
+        `).join('')
+        : '<div class="linha-vazia">Nenhuma compra parcelada neste m?s.</div>';
+
+    return `
+        <div class="fatura-bloco">
+            <div class="bloco-header">
+                <span class="bloco-titulo">Compras Parceladas</span>
+                <span class="bloco-subtotal">R$ ${formatarValorBR(total)}</span>
+            </div>
+            <div class="bloco-lista">${linhas}</div>
+        </div>
+    `;
+}
+
+function renderizarBlocoFixas(fixas) {
+    const total = fixas.reduce((sum, f) => sum + (f.valor || 0), 0);
+    const linhas = fixas.length > 0
+        ? fixas.map(f => `
+            <div class="linha-simples">
+                <div class="linha-titulo">${f.descricao}</div>
+                <div class="linha-valor">R$ ${formatarValorBR(f.valor)}</div>
+            </div>
+        `).join('')
+        : '<div class="linha-vazia">Nenhuma despesa fixa no cart?o neste m?s.</div>';
+
+    return `
+        <div class="fatura-bloco">
+            <div class="bloco-header">
+                <span class="bloco-titulo">Despesas Fixas</span>
+                <span class="bloco-subtotal">R$ ${formatarValorBR(total)}</span>
+            </div>
+            <div class="bloco-lista">${linhas}</div>
+        </div>
+    `;
+}
+
+function renderizarBlocoPorCategoria(porCategoria) {
+    const categorias = Object.values(porCategoria || {});
+    const conteudo = categorias.length > 0
+        ? categorias.map(cat => {
+            const executado = cat.lancamentos.reduce((sum, l) => sum + (l.valor || 0), 0);
+            const indicador = executado < cat.previsto ? '?' : executado > cat.previsto ? '?' : '=';
+            const detalhes = cat.lancamentos.length > 0
+                ? cat.lancamentos.map(l => `
+                    <div class="linha-simples">
+                        <div>
+                            <div class="linha-titulo">${l.descricao}</div>
+                            ${l.data_compra ? `<div class="linha-legenda">${formatarDataCurta(l.data_compra)}</div>` : ''}
+                            ${l.observacoes ? `<div class="linha-legenda">${l.observacoes}</div>` : ''}
+                        </div>
+                        <div class="linha-valor">R$ ${formatarValorBR(l.valor)}</div>
+                    </div>
+                `).join('')
+                : '<div class="linha-vazia">Nenhum lan?amento executado.</div>';
+
+            return `
+                <div class="categoria-bloco">
+                    <button type="button" class="categoria-linha" onclick="toggleCategoriaDetalhe('${cat.id}')">
+                        <div class="categoria-info">
+                            <span class="categoria-valor">R$ ${formatarValorBR(cat.previsto)}</span>
+                            <span class="categoria-nome">${cat.nome}</span>
+                        </div>
+                        <div class="categoria-indicador">${indicador}</div>
+                    </button>
+                    <div class="categoria-detalhes" id="categoria-detalhe-${cat.id}" style="display: none;">
+                        ${detalhes}
+                    </div>
+                </div>
+            `;
+        }).join('')
+        : '<div class="linha-vazia">Nenhuma categoria com previs?o neste m?s.</div>';
+
+    return `
+        <div class="fatura-bloco">
+            <div class="bloco-header">
+                <span class="bloco-titulo">Despesas por Categoria</span>
+                <span class="bloco-subtotal">Previsto</span>
+            </div>
+            <div class="bloco-lista">${conteudo}</div>
+        </div>
+    `;
+}
+
+function renderizarBlocoOutros(outros) {
+    const total = outros.reduce((sum, o) => sum + (o.valor || 0), 0);
+    const linhas = outros.length > 0
+        ? outros.map(o => `
+            <div class="linha-simples">
+                <div>
+                    <div class="linha-titulo">${o.descricao}</div>
+                    ${o.data_compra ? `<div class="linha-legenda">${formatarDataCurta(o.data_compra)}</div>` : ''}
+                </div>
+                <div class="linha-valor">R$ ${formatarValorBR(o.valor)}</div>
+            </div>
+        `).join('')
+        : '<div class="linha-vazia">Sem outros lan?amentos no cart?o.</div>';
+
+    return `
+        <div class="fatura-bloco">
+            <div class="bloco-header">
+                <span class="bloco-titulo">Outros Lan?amentos</span>
+                <span class="bloco-subtotal">R$ ${formatarValorBR(total)}</span>
+            </div>
+            <div class="bloco-lista">${linhas}</div>
+        </div>
+    `;
+}
+
+function renderizarRodapeFatura(blocos) {
+    const totalParceladas = blocos.parceladas.reduce((sum, p) => sum + (p.valor || 0), 0);
+    const totalFixas = blocos.fixas.reduce((sum, f) => sum + (f.valor || 0), 0);
+    const totalOutros = blocos.outros.reduce((sum, o) => sum + (o.valor || 0), 0);
+    const linhasCategorias = Object.values(blocos.porCategoria || {}).map(cat => `
+        <div class="rodape-linha">
+            <span class="rodape-valor">R$ ${formatarValorBR(cat.previsto || 0)}</span>
+            <span class="rodape-label">${cat.nome}</span>
+        </div>
+    `).join('');
+
+    return `
+        <div class="rodape-fatura">
+            <div class="rodape-linha">
+                <span class="rodape-valor">R$ ${formatarValorBR(totalParceladas)}</span>
+                <span class="rodape-label">Compras Parceladas do m?s</span>
+            </div>
+            <div class="rodape-linha">
+                <span class="rodape-valor">R$ ${formatarValorBR(totalFixas)}</span>
+                <span class="rodape-label">Despesas Fixas</span>
+            </div>
+            ${linhasCategorias}
+            <div class="rodape-linha">
+                <span class="rodape-valor">R$ ${formatarValorBR(totalOutros)}</span>
+                <span class="rodape-label">Outros Lan?amentos</span>
+            </div>
+        </div>
+    `;
+}
+
+function toggleCategoriaDetalhe(categoriaId) {
+    const detalhe = document.getElementById(`categoria-detalhe-${categoriaId}`);
+    if (!detalhe) return;
+
+    detalhe.style.display = detalhe.style.display === 'none' || detalhe.style.display === ''
+        ? 'block'
+        : 'none';
+}
+
+function formatarValorBR(valor) {
+    const numero = parseFloat(valor || 0);
+    return numero.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function formatarParcelaAtual(numero, total) {
+    if (!total || total <= 1) return '';
+    const atual = String(numero || 1).padStart(2, '0');
+    const totalFormatado = String(total).padStart(2, '0');
+    return `${atual}/${totalFormatado}`;
+}
+
+function formatarDataCurta(dataISO) {
+    if (!dataISO) return '';
+    const data = new Date(`${dataISO}T00:00:00`);
+    return data.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+}
+
+function normalizarCompetencia(competencia) {
+    if (!competencia) return '';
+    return competencia.substring(0, 7);
+}
+
+function formatarCompetenciaCompleta(competencia) {
+    const comp = normalizarCompetencia(competencia);
+    if (!comp || comp.length < 7) return comp || '';
+
+    const [ano, mes] = comp.split('-');
+    const meses = ['Janeiro', 'Fevereiro', 'Mar?o', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+    const nomeMes = meses[parseInt(mes, 10) - 1] || mes;
+    return `${nomeMes}/${ano}`;
 }
 
 // Fechar modal ao clicar fora dele
