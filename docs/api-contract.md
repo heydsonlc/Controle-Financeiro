@@ -203,6 +203,9 @@ Categoria da Despesa ≠ Categoria do Cartão
   * Alertas
 * **Nunca representam despesas**
 * **Podem não existir em um lançamento**
+* **`nome` é obrigatório e soberano**
+  * Origem: `item_agregado.nome`
+  * O frontend deve exibir **exclusivamente** este campo (proibido “Categoria 1/2…” por índice)
 
 ```txt
 item_agregado_id = nullable
@@ -530,6 +533,112 @@ categorias.forEach(...); // SEMPRE FUNCIONA
 
 ---
 
+## 🔄 Despesas Recorrentes Pagas via Cartão
+
+### Conceito
+
+Despesas recorrentes cujo `meio_pagamento='cartao'` (ex: Netflix, Spotify, assinaturas) **não geram Conta**, mas sim **LancamentoAgregado** automaticamente a cada competência.
+
+### Modelo de Dados
+
+**ItemDespesa (despesa recorrente):**
+```python
+{
+  "id": 123,
+  "nome": "Netflix",
+  "valor": 45.90,
+  "recorrente": true,
+  "tipo_recorrencia": "mensal",
+  "meio_pagamento": "cartao",  # ← NOVO CAMPO
+  "cartao_id": 1,               # ← NOVO CAMPO (obrigatório quando meio_pagamento='cartao')
+  "item_agregado_id": 5,        # ← NOVO CAMPO (opcional - categoria do cartão)
+  "categoria_id": 10            # ← Categoria analítica (obrigatório)
+}
+```
+
+**LancamentoAgregado (gerado automaticamente):**
+```python
+{
+  "id": 456,
+  "cartao_id": 1,
+  "item_agregado_id": 5,         # opcional
+  "categoria_id": 10,
+  "descricao": "Netflix",
+  "valor": 45.90,
+  "data_compra": "2025-01-15",
+  "mes_fatura": "2025-01-01",
+  "is_recorrente": true,          # ← NOVO CAMPO (marca como Despesa Fixa)
+  "item_despesa_id": 123,         # ← NOVO CAMPO (referência à despesa recorrente)
+  "numero_parcela": 1,
+  "total_parcelas": 1
+}
+```
+
+### Regras Técnicas
+
+#### Backend
+
+1. **Geração Automática:**
+   - Quando `ItemDespesa.recorrente=True` e `meio_pagamento='cartao'`
+   - Função `gerar_lancamentos_cartao_recorrente()` gera `LancamentoAgregado`
+   - **NÃO** gera `Conta` (a Conta é a fatura do cartão)
+
+2. **Idempotência:**
+   - 1 despesa recorrente = 1 lançamento por competência
+   - Verificação por `(item_despesa_id, mes_fatura, is_recorrente=True)`
+
+3. **Campos Obrigatórios:**
+   - `meio_pagamento='cartao'` → `cartao_id` é obrigatório
+   - `categoria_id` é sempre obrigatório (categoria analítica)
+
+#### Frontend
+
+1. **Classificação no Detalhamento da Fatura:**
+   - Lançamentos com `is_recorrente=True` aparecem no bloco **"Despesas Fixas"**
+   - Não entram em "Compras Parceladas"
+   - Não entram em "Outros Lançamentos" (exceto se não tiver categoria)
+
+2. **Cálculo da Fatura:**
+   - Lançamentos recorrentes entram no **valor PREVISTO** da fatura
+   - São computados normalmente no total
+
+#### Endpoint Afetado
+
+**GET /api/despesas:**
+- Retorna fatura do cartão como Conta
+- Lançamentos recorrentes estão **dentro** da fatura (não como Conta separada)
+
+**GET /api/cartoes/{id}/lancamentos:**
+- Inclui lançamentos com `is_recorrente=True`
+- Frontend classifica em "Despesas Fixas"
+
+**GET /api/cartoes/{id}/resumo:**
+- Inclui lançamentos recorrentes no cálculo do `total_gasto`
+
+### Exemplo Prático
+
+**Cadastro:**
+```
+POST /api/despesas
+{
+  "nome": "Netflix",
+  "valor": 45.90,
+  "recorrente": true,
+  "tipo_recorrencia": "mensal",
+  "meio_pagamento": "cartao",
+  "cartao_id": 1,
+  "categoria_id": 10,
+  "data_vencimento": "2025-01-15"
+}
+```
+
+**Resultado Automático:**
+- Sistema gera `LancamentoAgregado` todo mês 15
+- Aparece em "Despesas Fixas" da fatura do Cartão 1
+- Não cria Conta separada
+
+---
+
 ## 📋 Checklist de Validação de Endpoint
 
 Antes de considerar um endpoint **pronto**, validar:
@@ -544,6 +653,6 @@ Antes de considerar um endpoint **pronto**, validar:
 
 ---
 
-**Versão:** 1.0.0
+**Versão:** 1.1.0
 **Data:** 2025-01-17
-**Última atualização:** 2025-01-17
+**Última atualização:** 2025-12-22 (Adicionado: Despesas Recorrentes Pagas via Cartão)
