@@ -1361,32 +1361,46 @@ function organizarLancamentosEmBlocos(lancamentos, resumoCartao) {
 
 /**
  * Calcula totais da fatura
+ *
+ * REGRA IMUTÁVEL: A fatura mostra SEMPRE valores PREVISTOS
+ * - totalFatura = soma dos PREVISTOS de todos os blocos
+ * - totalExecutado = soma dos EXECUTADOS (apenas para referência interna)
  */
 function calcularTotaisFatura(blocos, lancamentos) {
-    // Total Atual = soma de tudo executado
-    const totalAtual = lancamentos.reduce((sum, l) => sum + parseFloat(l.valor || 0), 0);
+    // === PREVISTO: Soma dos orçamentos/tetos de cada bloco ===
 
-    // Previsão Máxima = executado + (previstos não executados das categorias)
-    let previsaoMaxima = totalAtual;
+    // Bloco 1: Compras Parceladas (valor executado = previsto)
+    const previstoParceladas = blocos.parceladas.reduce((sum, p) => sum + parseFloat(p.valor || 0), 0);
 
-    Object.values(blocos.porCategoria).forEach(cat => {
-        const executado = cat.lancamentos.reduce((sum, l) => sum + parseFloat(l.valor || 0), 0);
-        const previsto = parseFloat(cat.previsto || 0);
+    // Bloco 2: Despesas Fixas (valor executado = previsto)
+    const previstoFixas = blocos.fixas.reduce((sum, f) => sum + parseFloat(f.valor || 0), 0);
 
-        // Se previsto > executado, adicionar a diferença
-        if (previsto > executado) {
-            previsaoMaxima += (previsto - executado);
-        }
-    });
+    // Bloco 3: Despesas por Categoria (usa valor_previsto do orçamento)
+    const previstoCategorias = Object.values(blocos.porCategoria).reduce((sum, cat) => {
+        return sum + parseFloat(cat.previsto || 0);
+    }, 0);
+
+    // Bloco 4: Outros Lançamentos (valor executado = previsto)
+    const previstoOutros = blocos.outros.reduce((sum, o) => sum + parseFloat(o.valor || 0), 0);
+
+    // TOTAL DA FATURA = SOMA DOS PREVISTOS
+    const totalFatura = previstoParceladas + previstoFixas + previstoCategorias + previstoOutros;
+
+    // === EXECUTADO: Soma real dos lançamentos (para referência) ===
+    const totalExecutado = lancamentos.reduce((sum, l) => sum + parseFloat(l.valor || 0), 0);
 
     return {
-        totalAtual,
-        previsaoMaxima
+        totalFatura,      // ← PREVISTO (usado no cabeçalho da fatura)
+        totalExecutado    // ← EXECUTADO (referência interna, não exibido)
     };
 }
 
 /**
  * Renderiza a visualização completa da fatura
+ *
+ * CABEÇALHO: Exibe SEMPRE valores PREVISTOS
+ * - Total da Fatura = soma dos PREVISTOS (quanto vou pagar)
+ * - Total Executado = soma dos EXECUTADOS (quanto já gastei, para transparência)
  */
 function renderizarFaturaCompleta(blocos, totais, competencia) {
     const competenciaFormatada = formatarCompetenciaCompleta(competencia);
@@ -1396,13 +1410,13 @@ function renderizarFaturaCompleta(blocos, totais, competencia) {
             <div class="fatura-header">
                 <h3>Fatura do Cart?o ? ${competenciaFormatada}</h3>
                 <div class="fatura-totais">
-                    <div class="total-item">
-                        <span class="total-label">Total Atual:</span>
-                        <span class="total-valor">R$ ${totais.totalAtual.toFixed(2).replace('.', ',')}</span>
-                    </div>
                     <div class="total-item destaque">
-                        <span class="total-label">Previs?o M?xima de Fechamento:</span>
-                        <span class="total-valor">R$ ${totais.previsaoMaxima.toFixed(2).replace('.', ',')}</span>
+                        <span class="total-label">Total da Fatura (Previsto):</span>
+                        <span class="total-valor">R$ ${totais.totalFatura.toFixed(2).replace('.', ',')}</span>
+                    </div>
+                    <div class="total-item">
+                        <span class="total-label">Total Executado:</span>
+                        <span class="total-valor">R$ ${totais.totalExecutado.toFixed(2).replace('.', ',')}</span>
                     </div>
                 </div>
             </div>
@@ -1466,24 +1480,32 @@ function renderizarBlocoFixas(fixas) {
     `;
 }
 
+/**
+ * Renderiza bloco "Despesas por Categoria"
+ *
+ * LINHA PRINCIPAL: Mostra PREVISTO (orçamento da categoria)
+ * DETALHAMENTO INTERNO: Mostra EXECUTADO (lançamentos reais)
+ */
 function renderizarBlocoPorCategoria(porCategoria) {
     const categorias = Object.values(porCategoria || {});
     const conteudo = categorias.length > 0
         ? categorias.map(cat => {
             const executado = cat.lancamentos.reduce((sum, l) => sum + (l.valor || 0), 0);
-            const indicador = executado < cat.previsto ? '?' : executado > cat.previsto ? '?' : '=';
+            const indicador = executado < cat.previsto ? '↑' : executado > cat.previsto ? '↓' : '=';
+
+            // ← DETALHAMENTO: Valores EXECUTADOS (lançamentos reais)
             const detalhes = cat.lancamentos.length > 0
                 ? cat.lancamentos.map(l => `
                     <div class="linha-simples">
                         <div>
                             <div class="linha-titulo">${l.descricao}</div>
-                            ${l.data_compra ? `<div class="linha-legenda">${formatarDataCurta(l.data_compra)}</div>` : ''}
+                            ${l.data_compra ? `<div class="linha-legenda">${formatarDataCurta(l.data_compra)} • executado</div>` : `<div class="linha-legenda">executado</div>`}
                             ${l.observacoes ? `<div class="linha-legenda">${l.observacoes}</div>` : ''}
                         </div>
                         <div class="linha-valor">R$ ${formatarValorBR(l.valor)}</div>
                     </div>
                 `).join('')
-                : '<div class="linha-vazia">Nenhum lan?amento executado.</div>';
+                : '<div class="linha-vazia">Nenhum lançamento executado.</div>';
 
             return `
                 <div class="categoria-bloco">
@@ -1500,7 +1522,7 @@ function renderizarBlocoPorCategoria(porCategoria) {
                 </div>
             `;
         }).join('')
-        : '<div class="linha-vazia">Nenhuma categoria com previs?o neste m?s.</div>';
+        : '<div class="linha-vazia">Nenhuma categoria com previsão neste mês.</div>';
 
     return `
         <div class="fatura-bloco">
