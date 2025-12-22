@@ -1301,23 +1301,16 @@ function organizarLancamentosEmBlocos(lancamentos, resumoCartao) {
         outros: []           // Parte 4: resto
     };
 
-    // Mapear categorias com previs?o (valor_orcado no resumo)
-    console.log('DEBUG: resumoCartao recebido:', resumoCartao);
-    console.log('DEBUG: resumoCartao.itens:', resumoCartao?.itens);
-
+    // Mapear categorias com previsão (valor_orcado no resumo)
     (resumoCartao?.itens || []).forEach(item => {
-        console.log('DEBUG: Processando item:', item);
-        console.log('DEBUG: item.nome =', item.nome, 'tipo:', typeof item.nome);
-
         const previsto = parseFloat(item.valor_orcado || 0);
         if (previsto > 0) {
             blocos.porCategoria[item.id] = {
                 id: item.id,
-                nome: item.nome || 'Categoria Sem Nome',  // ← FALLBACK caso nome esteja vazio
+                nome: item.nome,
                 previsto,
                 lancamentos: []
             };
-            console.log('DEBUG: Categoria adicionada:', blocos.porCategoria[item.id]);
         }
     });
 

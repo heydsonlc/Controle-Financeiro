@@ -209,9 +209,14 @@ def criar_item_agregado(cartao_id):
     try:
         dados = request.json
 
+        # Validar nome obrigatório e não vazio
+        nome = dados.get('nome', '').strip()
+        if not nome:
+            return jsonify({'erro': 'Nome da categoria é obrigatório'}), 400
+
         novo_item = ItemAgregado(
             item_despesa_id=cartao_id,
-            nome=dados['nome'],
+            nome=nome,
             descricao=dados.get('descricao', ''),
             ativo=True
         )
@@ -234,8 +239,16 @@ def atualizar_item_agregado(item_id):
             return jsonify({'erro': 'Item não encontrado'}), 404
 
         dados = request.json
-        item.nome = dados.get('nome', item.nome)
-        item.descricao = dados.get('descricao', item.descricao)
+
+        # Validar nome não vazio se fornecido
+        if 'nome' in dados:
+            nome = dados['nome'].strip()
+            if not nome:
+                return jsonify({'erro': 'Nome da categoria não pode ser vazio'}), 400
+            item.nome = nome
+
+        if 'descricao' in dados:
+            item.descricao = dados['descricao']
 
         db.session.commit()
         return jsonify(item.to_dict()), 200
@@ -659,7 +672,7 @@ def obter_resumo_cartao(cartao_id):
 
             total_orcado += valor_orcado
 
-            item_dict = {
+            resumo_itens.append({
                 'id': item.id,
                 'nome': item.nome,
                 'descricao': item.descricao,
@@ -668,12 +681,7 @@ def obter_resumo_cartao(cartao_id):
                 'saldo': valor_orcado - valor_gasto,
                 'percentual_utilizado': round((valor_gasto / valor_orcado * 100) if valor_orcado > 0 else 0, 2),
                 'orcamento_id': orcamento.id if orcamento else None
-            }
-
-            # DEBUG: Verificar se nome está vazio
-            print(f"DEBUG BACKEND: ItemAgregado ID={item.id}, nome='{item.nome}', tipo={type(item.nome)}, len={len(item.nome) if item.nome else 0}")
-
-            resumo_itens.append(item_dict)
+            })
 
         resultado = {
             'cartao': cartao.to_dict(),
