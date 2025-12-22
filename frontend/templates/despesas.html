@@ -490,12 +490,20 @@
 
         // Mostrar/esconder campos de cartão
         function alternarCamposCartao() {
+            console.log('DEBUG HTML: alternarCamposCartao() foi chamada');
             const meioPagamento = document.getElementById('meio_pagamento').value;
+            console.log('DEBUG HTML: meio_pagamento =', meioPagamento);
             const camposCartao = document.getElementById('campos-cartao');
 
             if (meioPagamento === 'cartao') {
+                console.log('DEBUG HTML: Mostrando campos de cartão e chamando carregarCartoes()');
                 camposCartao.style.display = 'block';
-                carregarCartoes();
+
+                if (typeof carregarCartoes === 'function') {
+                    carregarCartoes();
+                } else {
+                    console.error('DEBUG HTML: Função carregarCartoes() NÃO está definida!');
+                }
             } else {
                 camposCartao.style.display = 'none';
                 document.getElementById('cartao_id').value = '';

@@ -80,22 +80,41 @@ async function carregarCategorias() {
  * Carrega lista de cartões de crédito para seleção em despesas recorrentes
  */
 async function carregarCartoes() {
+    console.log('DEBUG: Iniciando carregamento de cartões...');
     try {
         const response = await fetch('/api/cartoes');
+        console.log('DEBUG: Response status:', response.status);
+
         const data = await response.json();
+        console.log('DEBUG: Dados recebidos:', data);
 
-        if (data.success) {
-            const selectCartao = document.getElementById('cartao_id');
-            selectCartao.innerHTML = '<option value="">Selecione o cartão...</option>';
-
-            // Filtrar apenas itens do tipo 'Agregador' (cartões)
-            const cartoes = data.data.filter(item => item.tipo === 'Agregador');
-            cartoes.forEach(cartao => {
-                if (cartao.ativo) {
-                    selectCartao.innerHTML += `<option value="${cartao.id}">${cartao.nome}</option>`;
-                }
-            });
+        // Aceitar tanto Array direto quanto objeto {success, data}
+        let cartoesList = [];
+        if (Array.isArray(data)) {
+            // API retorna array diretamente
+            cartoesList = data;
+        } else if (data.success && data.data) {
+            // API retorna {success: true, data: [...]}
+            cartoesList = data.data;
+        } else {
+            console.error('DEBUG: Formato de resposta não reconhecido:', data);
+            return;
         }
+
+        const selectCartao = document.getElementById('cartao_id');
+        selectCartao.innerHTML = '<option value="">Selecione o cartão...</option>';
+
+        // Filtrar apenas itens do tipo 'Agregador' (cartões)
+        const cartoes = cartoesList.filter(item => item.tipo === 'Agregador');
+        console.log('DEBUG: Cartões filtrados:', cartoes);
+
+        cartoes.forEach(cartao => {
+            if (cartao.ativo) {
+                selectCartao.innerHTML += `<option value="${cartao.id}">${cartao.nome}</option>`;
+            }
+        });
+
+        console.log('DEBUG: Select HTML final:', selectCartao.innerHTML);
     } catch (error) {
         console.error('Erro ao carregar cartões:', error);
     }
@@ -109,16 +128,22 @@ async function carregarCategoriasCartao(cartaoId) {
         const response = await fetch(`/api/cartoes/${cartaoId}/itens`);
         const data = await response.json();
 
-        if (data.success) {
-            const selectCategoria = document.getElementById('item_agregado_id');
-            selectCategoria.innerHTML = '<option value="">Sem categoria</option>';
-
-            data.data.forEach(categoria => {
-                if (categoria.ativo) {
-                    selectCategoria.innerHTML += `<option value="${categoria.id}">${categoria.nome}</option>`;
-                }
-            });
+        // Aceitar tanto Array direto quanto objeto {success, data}
+        let categoriasList = [];
+        if (Array.isArray(data)) {
+            categoriasList = data;
+        } else if (data.success && data.data) {
+            categoriasList = data.data;
         }
+
+        const selectCategoria = document.getElementById('item_agregado_id');
+        selectCategoria.innerHTML = '<option value="">Sem categoria</option>';
+
+        categoriasList.forEach(categoria => {
+            if (categoria.ativo) {
+                selectCategoria.innerHTML += `<option value="${categoria.id}">${categoria.nome}</option>`;
+            }
+        });
     } catch (error) {
         console.error('Erro ao carregar categorias do cartão:', error);
     }
