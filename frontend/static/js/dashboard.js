@@ -25,8 +25,12 @@ async function carregarDashboard() {
             carregarGraficoCategorias(),
             carregarGraficoEvolucao(),
             carregarGraficoSaldo(),
-            carregarAlertas()
+            carregarAlertas(),
+            carregarAgendaFinanceira()
         ]);
+
+        // Gerar leitura do mês após carregar dados
+        await gerarLeituraDoMes();
     } catch (error) {
         console.error('Erro ao carregar dashboard:', error);
         mostrarErro('Erro ao carregar dados do dashboard');
@@ -447,7 +451,8 @@ function exibirAlertasCartoes(cartoes) {
         <div class="alerta-item cartao">
             <p class="item-titulo">${cartao.nome}</p>
             <div class="item-detalhes">
-                <span>Vence dia ${cartao.dia_vencimento}</span>
+                <span>📅 ${cartao.data_vencimento} | ${cartao.status}</span>
+                <span class="item-valor">${formatarMoeda(cartao.valor)}</span>
             </div>
         </div>
     `).join('');
@@ -492,6 +497,87 @@ function exibirAlertasReceitas(receitas) {
 }
 
 // ============================================
+// FASE 5.2 — LEITURA DO MÊS
+// Bloco interpretativo.
+// NÃO cria regras.
+// NÃO sugere ações.
+// NÃO altera cálculos financeiros.
+// ============================================
+
+async function gerarLeituraDoMes() {
+    try {
+        // Buscar dados do resumo e indicadores
+        const [resumoResponse, indicadoresResponse, categoriasResponse] = await Promise.all([
+            fetch(`${API_BASE}/resumo-mes`),
+            fetch(`${API_BASE}/indicadores`),
+            fetch(`${API_BASE}/grafico-categorias`)
+        ]);
+
+        const resumo = await resumoResponse.json();
+        const indicadores = await indicadoresResponse.json();
+        const categorias = await categoriasResponse.json();
+
+        if (!resumo.success || !indicadores.success || !categorias.success) {
+            throw new Error('Dados incompletos');
+        }
+
+        const frases = [];
+        const dados = resumo.data;
+        const inds = indicadores.data;
+        const cats = categorias.data;
+
+        // Leitura 1: Saldo do Mês
+        if (dados.saldo_liquido !== undefined) {
+            if (dados.saldo_liquido > 0) {
+                frases.push(`O saldo líquido do mês está positivo em ${formatarMoeda(dados.saldo_liquido)}.`);
+            } else if (dados.saldo_liquido < 0) {
+                frases.push(`O saldo líquido do mês está negativo em ${formatarMoeda(Math.abs(dados.saldo_liquido))}.`);
+            } else {
+                frases.push(`O saldo líquido do mês está equilibrado.`);
+            }
+        }
+
+        // Leitura 2: Execução do Orçamento (se disponível)
+        if (dados.despesas_mes > 0 && inds.despesas_mes_atual > 0) {
+            const percentual = Math.round((inds.despesas_mes_atual / dados.despesas_mes) * 100);
+            if (percentual > 0 && percentual <= 100) {
+                frases.push(`Até agora, ${percentual}% das despesas previstas já foram executadas.`);
+            }
+        }
+
+        // Leitura 3: Principal Origem de Despesa
+        if (cats.labels && cats.labels.length > 0 && cats.valores && cats.valores.length > 0) {
+            const indiceMaior = cats.valores.indexOf(Math.max(...cats.valores));
+            const categoriaPrincipal = cats.labels[indiceMaior];
+            frases.push(`A maior parte das despesas do mês está concentrada em ${categoriaPrincipal}.`);
+        }
+
+        // Leitura 4: Cartões (condicional)
+        if (inds.faturas_cartao_proximas > 0) {
+            frases.push(`As faturas de cartão representam uma parcela relevante das despesas do mês.`);
+        }
+
+        // Leitura 5: Situação Geral (neutra)
+        if (dados.saldo_liquido >= 0 && inds.percentual_poupado >= 0) {
+            frases.push(`O mês apresenta um comportamento financeiro consistente até o momento.`);
+        } else {
+            frases.push(`O comportamento financeiro do mês exige acompanhamento.`);
+        }
+
+        // Renderizar leitura (máximo 5 frases)
+        const container = document.getElementById('leitura-container');
+        container.innerHTML = frases.slice(0, 5).map(frase =>
+            `<p style="margin: 8px 0; font-size: 14px;">${frase}</p>`
+        ).join('');
+
+    } catch (error) {
+        console.error('Erro ao gerar leitura do mês:', error);
+        const container = document.getElementById('leitura-container');
+        container.innerHTML = '<p style="color: rgba(255,255,255,0.5);">Dados insuficientes para gerar leitura.</p>';
+    }
+}
+
+// ============================================
 // FUNÇÕES AUXILIARES
 // ============================================
 function formatarMoeda(valor) {
@@ -503,6 +589,205 @@ function formatarMoeda(valor) {
 
 function mostrarErro(mensagem) {
     alert(mensagem);
+}
+
+// ============================================
+// FASE 6.1: AGENDA FINANCEIRA + INSIGHTS TEMPORAIS
+// ============================================
+
+async function carregarAgendaFinanceira() {
+    try {
+        const response = await fetch(`${API_BASE}/alertas`);
+        const data = await response.json();
+
+        if (data.success) {
+            const alertas = data.data;
+
+            // Consolidar todos os itens em uma única timeline
+            const todosItens = consolidarTimeline(alertas);
+
+            // Renderizar timeline
+            renderizarTimeline(todosItens);
+
+            // Gerar insights temporais
+            gerarInsightsTemporais(todosItens);
+        }
+    } catch (error) {
+        console.error('Erro ao carregar agenda financeira:', error);
+        document.getElementById('timeline-agenda').innerHTML =
+            '<p style="color: rgba(255,255,255,0.5);">Erro ao carregar agenda.</p>';
+        document.getElementById('insights-temporais').innerHTML =
+            '<p style="color: rgba(255,255,255,0.5);">Erro ao gerar insights.</p>';
+    }
+}
+
+function consolidarTimeline(alertas) {
+    const itens = [];
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    // Adicionar contas comuns
+    if (alertas.contas_vencer) {
+        alertas.contas_vencer.forEach(conta => {
+            itens.push({
+                data: parseDataBR(conta.data_vencimento),
+                dataStr: conta.data_vencimento,
+                tipo: 'Conta',
+                descricao: conta.descricao,
+                valor: conta.valor,
+                status: 'Pendente',
+                categoria: conta.categoria
+            });
+        });
+    }
+
+    // Adicionar faturas de cartão
+    if (alertas.faturas_cartao) {
+        alertas.faturas_cartao.forEach(cartao => {
+            if (cartao.data_vencimento && cartao.data_vencimento !== 'N/A') {
+                itens.push({
+                    data: parseDataBR(cartao.data_vencimento),
+                    dataStr: cartao.data_vencimento,
+                    tipo: 'Cartão',
+                    descricao: cartao.nome,
+                    valor: cartao.valor,
+                    status: cartao.status,
+                    categoria: 'Fatura de Cartão'
+                });
+            }
+        });
+    }
+
+    // Adicionar financiamentos
+    if (alertas.financiamentos) {
+        alertas.financiamentos.forEach(fin => {
+            // Financiamentos não têm data_vencimento específica, usar primeiro dia do mês
+            const primeiroDiaMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+            itens.push({
+                data: primeiroDiaMes,
+                dataStr: primeiroDiaMes.toLocaleDateString('pt-BR'),
+                tipo: 'Financiamento',
+                descricao: `${fin.descricao} (${fin.parcela_atual}/${fin.total_parcelas})`,
+                valor: fin.valor_parcela,
+                status: 'Pendente',
+                categoria: 'Financiamento'
+            });
+        });
+    }
+
+    // Ordenar por data (ascendente)
+    itens.sort((a, b) => a.data - b.data);
+
+    return itens;
+}
+
+function parseDataBR(dataStr) {
+    // Converte DD/MM/YYYY para Date
+    const [dia, mes, ano] = dataStr.split('/');
+    return new Date(ano, mes - 1, dia);
+}
+
+function renderizarTimeline(itens) {
+    const container = document.getElementById('timeline-agenda');
+
+    if (itens.length === 0) {
+        container.innerHTML = '<p style="color: rgba(255,255,255,0.5);">Nenhum evento financeiro no período.</p>';
+        return;
+    }
+
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    let html = '<div style="display: flex; flex-direction: column; gap: 12px;">';
+
+    itens.forEach(item => {
+        const isHoje = item.data.getTime() === hoje.getTime();
+        const isPassado = item.data < hoje;
+
+        const bgColor = isHoje ? 'rgba(0, 122, 255, 0.15)' : 'rgba(255,255,255,0.05)';
+        const borderColor = isHoje ? '#007aff' : 'rgba(255,255,255,0.1)';
+        const textOpacity = isPassado ? '0.5' : '0.9';
+
+        html += `
+            <div style="
+                background: ${bgColor};
+                border-left: 3px solid ${borderColor};
+                border-radius: 6px;
+                padding: 12px 16px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                opacity: ${textOpacity};
+            ">
+                <div style="flex: 1;">
+                    <div style="font-size: 0.85em; color: rgba(255,255,255,0.6); margin-bottom: 4px;">
+                        ${item.dataStr} ${isHoje ? '• HOJE' : ''}
+                    </div>
+                    <div style="font-weight: 500; color: white; margin-bottom: 2px;">
+                        ${item.descricao}
+                    </div>
+                    <div style="font-size: 0.85em; color: rgba(255,255,255,0.6);">
+                        ${item.tipo} ${item.categoria ? `• ${item.categoria}` : ''}
+                    </div>
+                </div>
+                <div style="font-weight: 600; color: white; white-space: nowrap; margin-left: 16px;">
+                    ${formatarMoeda(item.valor)}
+                </div>
+            </div>
+        `;
+    });
+
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+function gerarInsightsTemporais(itens) {
+    const container = document.getElementById('insights-temporais');
+
+    if (itens.length === 0) {
+        container.innerHTML = '<p style="color: rgba(255,255,255,0.5);">Dados insuficientes para gerar insights.</p>';
+        return;
+    }
+
+    const frases = [];
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    // Insight 1: Percentual já vencido
+    const itensPassados = itens.filter(item => item.data <= hoje);
+    const percentualVencido = Math.round((itensPassados.length / itens.length) * 100);
+
+    if (percentualVencido > 0) {
+        frases.push(`Até hoje, ${percentualVencido}% das despesas do mês já venceram.`);
+    }
+
+    // Insight 2: Concentração temporal
+    const primeiraDezena = itens.filter(item => item.data.getDate() <= 10).length;
+    const segundaDezena = itens.filter(item => item.data.getDate() > 10 && item.data.getDate() <= 20).length;
+    const terceiraDezena = itens.filter(item => item.data.getDate() > 20).length;
+
+    const maiorConcentracao = Math.max(primeiraDezena, segundaDezena, terceiraDezena);
+    if (maiorConcentracao === terceiraDezena && terceiraDezena > 0) {
+        frases.push('O maior volume de vencimentos ocorre na terceira dezena do mês.');
+    } else if (maiorConcentracao === segundaDezena && segundaDezena > 0) {
+        frases.push('O maior volume de vencimentos concentra-se entre os dias 11 e 20.');
+    } else if (primeiraDezena > 0) {
+        frases.push('O maior volume de vencimentos ocorre nos primeiros 10 dias do mês.');
+    }
+
+    // Insight 3: Cartões
+    const itensCartao = itens.filter(item => item.tipo === 'Cartão');
+    if (itensCartao.length > 0) {
+        const mediaDataCartao = itensCartao.reduce((acc, item) => acc + item.data.getDate(), 0) / itensCartao.length;
+        if (mediaDataCartao > 20) {
+            frases.push('As despesas de cartão concentram-se após o dia 20.');
+        }
+    }
+
+    // Renderizar insights (máximo 3)
+    container.innerHTML = frases.slice(0, 3).map(frase =>
+        `<p style="margin: 8px 0; font-size: 14px;">${frase}</p>`
+    ).join('');
 }
 
 // Atualizar dashboard a cada 5 minutos

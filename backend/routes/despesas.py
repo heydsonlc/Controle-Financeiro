@@ -8,13 +8,57 @@ from dateutil.relativedelta import relativedelta
 from sqlalchemy import func
 
 try:
-    from backend.models import db, ItemDespesa, Categoria, LancamentoAgregado, ItemAgregado, Conta
+    from backend.models import db, ItemDespesa, Categoria, LancamentoAgregado, ItemAgregado, OrcamentoAgregado, Conta
     from backend.services.cartao_service import CartaoService
 except ImportError:
-    from models import db, ItemDespesa, Categoria, LancamentoAgregado, ItemAgregado, Conta
+    from models import db, ItemDespesa, Categoria, LancamentoAgregado, ItemAgregado, OrcamentoAgregado, Conta
     from services.cartao_service import CartaoService
 
 despesas_bp = Blueprint('despesas', __name__, url_prefix='/api/despesas')
+
+
+def _ler_payload_request():
+    dados = request.get_json(silent=True)
+    if not dados:
+        dados = request.form.to_dict()
+    return dados or {}
+
+
+def _to_int(value):
+    try:
+        if value is None:
+            return None
+        if isinstance(value, str) and value.strip() == '':
+            return None
+        return int(value)
+    except Exception:
+        return None
+
+
+def _normalizar_meio_pagamento(value):
+    return (value or '').strip().lower() or None
+
+
+def gerar_execucao_despesa_recorrente(item_despesa_id, meses_futuros=1, mes_referencia=None):
+    """
+    Orquestrador único de recorrência:
+    - Se meio_pagamento == 'cartao' → gera LancamentoAgregado
+    - Caso contrário → gera Conta
+
+    IMPORTANTE: esta função NÃO faz commit; o caller controla a transação.
+    """
+    item = ItemDespesa.query.get(item_despesa_id)
+    if not item:
+        raise ValueError('ItemDespesa não encontrado')
+    if not item.recorrente:
+        return []
+
+    if item.meio_pagamento == 'cartao':
+        if not item.cartao_id:
+            return []
+        return gerar_lancamentos_cartao_recorrente(item.id, meses_futuros=meses_futuros, mes_referencia=mes_referencia)
+
+    return gerar_contas_despesa_recorrente(item.id, meses_futuros=meses_futuros, mes_referencia=mes_referencia)
 
 
 def calcular_competencia(data_vencimento):
@@ -40,6 +84,67 @@ def calcular_competencia(data_vencimento):
     return mes_competencia.strftime('%Y-%m')
 
 
+def _calcular_totais_fatura_cartao_previsto(cartao_id, competencia):
+    """
+    Retorna (total_previsto, total_executado) para a fatura de um cartão no mês.
+
+    Definição:
+    - total_executado = soma de TODOS os LancamentoAgregado do mês (com e sem categoria)
+    - total_previsto = total_executado + soma(max(0, orcado_categoria - gasto_categoria))
+      (equivalente a somar max(orcado, gasto) por categoria sem duplo-contar os gastos)
+    """
+    comp = competencia.replace(day=1)
+
+    total_executado = db.session.query(
+        func.coalesce(func.sum(LancamentoAgregado.valor), 0)
+    ).filter(
+        LancamentoAgregado.cartao_id == cartao_id,
+        LancamentoAgregado.mes_fatura == comp
+    ).scalar()
+    total_executado = float(total_executado or 0)
+
+    itens = ItemAgregado.query.filter_by(item_despesa_id=cartao_id, ativo=True).all()
+    if not itens:
+        return total_executado, total_executado
+
+    itens_ids = [i.id for i in itens]
+
+    gastos_por_item = dict(
+        db.session.query(
+            LancamentoAgregado.item_agregado_id,
+            func.coalesce(func.sum(LancamentoAgregado.valor), 0)
+        ).filter(
+            LancamentoAgregado.cartao_id == cartao_id,
+            LancamentoAgregado.mes_fatura == comp,
+            LancamentoAgregado.item_agregado_id.in_(itens_ids)
+        ).group_by(
+            LancamentoAgregado.item_agregado_id
+        ).all()
+    )
+
+    orcados_por_item = dict(
+        db.session.query(
+            OrcamentoAgregado.item_agregado_id,
+            func.coalesce(func.sum(OrcamentoAgregado.valor_teto), 0)
+        ).filter(
+            OrcamentoAgregado.mes_referencia == comp,
+            OrcamentoAgregado.item_agregado_id.in_(itens_ids)
+        ).group_by(
+            OrcamentoAgregado.item_agregado_id
+        ).all()
+    )
+
+    complemento_orcamento = 0.0
+    for item_id in itens_ids:
+        gasto = float(gastos_por_item.get(item_id, 0) or 0)
+        orcado = float(orcados_por_item.get(item_id, 0) or 0)
+        if orcado > gasto:
+            complemento_orcamento += (orcado - gasto)
+
+    total_previsto = total_executado + complemento_orcamento
+    return total_previsto, total_executado
+
+
 @despesas_bp.route('/', methods=['GET'])
 def listar_despesas():
     """
@@ -51,20 +156,60 @@ def listar_despesas():
       mostram valor_planejado (pendente) ou valor_executado (pago)
     """
     try:
-        # GeraÇõÇœ de contas recorrentes para o mÇ¦s solicitado (uma Ç§nica chamada por requisiÇõÇœo)
+        # ✅ LAZY GENERATION: Preencher lacunas até o mês navegado + 1 mês futuro
+        # ⚠️ Dashboard NÃO deve passar mes_arg - apenas navegação explícita por mês
         mes_arg = request.args.get('mes_referencia') or request.args.get('mes')
+
         if mes_arg:
             try:
                 mes_referencia = datetime.strptime(f"{mes_arg}-01", "%Y-%m-%d").date()
                 despesas_recorrentes = ItemDespesa.query.filter_by(recorrente=True).all()
+
                 for desp in despesas_recorrentes:
-                    # Despesas recorrentes pagas via cartão geram LancamentoAgregado
-                    if desp.meio_pagamento == 'cartao':
-                        gerar_lancamentos_cartao_recorrente(desp.id, meses_futuros=1, mes_referencia=mes_referencia)
-                    # Demais despesas recorrentes geram Conta
+                    if not desp.data_vencimento:
+                        continue
+
+                    # Calcular quantos meses entre o início da despesa e o mês navegado
+                    inicio = desp.data_vencimento.replace(day=1)
+
+                    # Calcular diferença em meses
+                    meses_diferenca = (mes_referencia.year - inicio.year) * 12 + \
+                                     (mes_referencia.month - inicio.month)
+
+                    # Garantir que preencha ATÉ o mês navegado + 1 mês futuro (UX suave)
+                    # Se meses_diferenca < 0, a despesa é futura, então gerar apenas se for o mês
+                    # Se meses_diferenca >= 0, gerar até o mês navegado + 1
+                    if meses_diferenca >= 0:
+                        meses_futuros = meses_diferenca + 2  # Mês navegado + próximo mês
                     else:
-                        gerar_contas_despesa_recorrente(desp.id, meses_futuros=1, mes_referencia=mes_referencia)
-            except Exception:
+                        meses_futuros = 1  # Despesa futura, gerar apenas se for o mês
+
+                    # Gerar todas as contas necessárias (preenchendo lacunas)
+                    # mes_referencia=None faz gerar a partir da data_vencimento
+                    gerar_execucao_despesa_recorrente(
+                        desp.id,
+                        meses_futuros=meses_futuros,
+                        mes_referencia=None
+                    )
+
+                # ✅ LAZY GENERATION (CARTÕES): garantir que a fatura exista
+                # mesmo sem lançamentos, para o mês navegado (+1 mês futuro)
+                competencias_fatura = [
+                    mes_referencia.replace(day=1),
+                    (mes_referencia + relativedelta(months=1)).replace(day=1),
+                ]
+                cartoes_ativos = ItemDespesa.query.filter_by(tipo='Agregador', ativo=True).all()
+                for cartao in cartoes_ativos:
+                    for comp in competencias_fatura:
+                        try:
+                            CartaoService.get_or_create_fatura(cartao.id, comp)
+                        except Exception:
+                            continue
+
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                # Continuar mesmo com erro (modo degradado - lista apenas o que existe)
                 pass
 
         resultado = []
@@ -77,7 +222,7 @@ def listar_despesas():
         # - NÃO são fatura de cartão (is_fatura_cartao = False ou NULL)
         # IMPORTANTE: Não filtrar por ItemDespesa.ativo pois consórcios/financiamentos
         # podem ter ItemDespesa inativo mas geram Contas ativas
-        contas_nao_cartao = db.session.query(Conta).join(
+        contas_nao_cartao = db.session.query(Conta).outerjoin(
             ItemDespesa, Conta.item_despesa_id == ItemDespesa.id
         ).outerjoin(
             Categoria, ItemDespesa.categoria_id == Categoria.id
@@ -101,6 +246,7 @@ def listar_despesas():
                 'descricao': conta.observacoes or '',
                 'tipo': item.tipo if item else 'Simples',
                 'valor': float(conta.valor),
+                'financiamento_parcela_id': conta.financiamento_parcela_id,
                 'categoria_id': categoria.id if categoria else None,
                 'categoria': categoria.to_dict() if categoria else None,
                 'data_vencimento': conta.data_vencimento.isoformat(),
@@ -120,7 +266,7 @@ def listar_despesas():
             resultado.append(conta_dict)
 
         # 2. Buscar FATURAS VIRTUAIS de cartão de crédito (Conta.is_fatura_cartao = True)
-        faturas_cartao = db.session.query(Conta).join(
+        faturas_cartao = db.session.query(Conta).outerjoin(
             ItemDespesa, Conta.item_despesa_id == ItemDespesa.id
         ).outerjoin(
             Categoria, ItemDespesa.categoria_id == Categoria.id
@@ -135,13 +281,21 @@ def listar_despesas():
             item = fatura.item_despesa
             categoria = item.categoria if item else None
 
-            # REGRA: Exibir planejado (pendente) ou executado (pago)
-            if fatura.status_pagamento == 'Pago':
-                # Mostra valor executado real
-                valor_exibido = float(fatura.valor_executado or fatura.valor or 0)
-            else:
-                # Mostra valor planejado (orçamento)
-                valor_exibido = float(fatura.valor_planejado or fatura.valor or 0)
+            # REGRA: Card da fatura:
+            # - Se PENDENTE → exibe TOTAL PREVISTO da fatura
+            # - Se PAGA → exibe TOTAL EXECUTADO
+            total_previsto = float(fatura.valor_planejado or fatura.valor or 0)
+            total_executado = float(fatura.valor_executado or 0)
+
+            if getattr(fatura, 'cartao_competencia', None) and fatura.item_despesa_id:
+                total_previsto_calc, total_executado_calc = _calcular_totais_fatura_cartao_previsto(
+                    cartao_id=fatura.item_despesa_id,
+                    competencia=fatura.cartao_competencia
+                )
+                total_previsto = total_previsto_calc
+                total_executado = total_executado_calc  # Sempre usar valor recalculado (fonte da verdade: LancamentoAgregado)
+
+            valor_exibido = total_executado if fatura.status_pagamento == 'Pago' else total_previsto
 
             fatura_dict = {
                 'id': fatura.id,
@@ -149,9 +303,10 @@ def listar_despesas():
                 'descricao': fatura.observacoes or '',
                 'tipo': 'cartao',  # ← CORRIGIDO: era 'Agregador', mas frontend espera 'cartao'
                 'valor': valor_exibido,
+                'financiamento_parcela_id': None,
                 'valor_fatura': valor_exibido,  # ← ADICIONADO: campo que frontend espera ler
-                'valor_planejado': float(fatura.valor_planejado or 0),
-                'valor_executado': float(fatura.valor_executado or 0),
+                'valor_planejado': total_previsto,
+                'valor_executado': total_executado,
                 'estouro_orcamento': fatura.estouro_orcamento or False,
                 'categoria_id': categoria.id if categoria else None,
                 'categoria': categoria.to_dict() if categoria else None,
@@ -246,7 +401,12 @@ def obter_despesa(id):
 def criar_despesa():
     """Cria uma nova despesa"""
     try:
-        dados = request.get_json()
+        # ==========================================================
+        # CORREÇÃO DEFINITIVA — LEITURA CORRETA DO PAYLOAD
+        # SUPORTA JSON E FORM-DATA
+        # ==========================================================
+
+        dados = _ler_payload_request()
 
         # Validações
         if not dados.get('nome'):
@@ -317,41 +477,70 @@ def criar_despesa():
         )
 
         db.session.add(despesa)
-        db.session.commit()
+        db.session.flush()  # Garante despesa.id antes de qualquer lógica derivada
 
-        # Se for recorrente, gerar Contas ou Lançamentos para os próximos meses
-        if despesa.recorrente and data_vencimento:
-            try:
-                if despesa.meio_pagamento == 'cartao':
-                    gerar_lancamentos_cartao_recorrente(despesa.id)
-                else:
-                    gerar_contas_despesa_recorrente(despesa.id)
-            except Exception as e:
-                # Não falhar se a geração der erro, apenas logar
-                print(f'Aviso: Erro ao gerar recorrências: {e}')
+        # ==========================================================
+        # PERSISTÊNCIA CORRETA — PAGAMENTO VIA CARTÃO
+        # ==========================================================
+
+        meio_pagamento = _normalizar_meio_pagamento(dados.get('meio_pagamento'))
+        despesa.meio_pagamento = meio_pagamento
+
+        # Se for despesa recorrente paga via cartão de crédito
+        if bool(despesa.recorrente) and meio_pagamento == 'cartao':
+            cartao_id = _to_int(dados.get('cartao_id'))
+            item_agregado_id = _to_int(dados.get('item_agregado_id'))
+
+            # Validação mínima de integridade
+            if not cartao_id:
+                db.session.rollback()
+                return jsonify({
+                    'success': False,
+                    'error': "cartao_id é obrigatório quando meio_pagamento = 'cartao'."
+                }), 400
+
+            despesa.cartao_id = cartao_id
+            despesa.item_agregado_id = item_agregado_id
         else:
-            # Se NÃO for recorrente, criar UMA Conta imediatamente
-            # Isso garante que a despesa apareça no histórico de lançamentos
-            if data_vencimento:
-                mes_referencia = data_vencimento.replace(day=1)
-                status = 'Pago' if dados.get('pago') or data_pagamento else 'Pendente'
+            # Garantir limpeza para outros meios de pagamento
+            despesa.cartao_id = None
+            despesa.item_agregado_id = None
 
-                nova_conta = Conta(
-                    item_despesa_id=despesa.id,
-                    mes_referencia=mes_referencia,
-                    descricao=despesa.nome,
-                    valor=despesa.valor,
-                    data_vencimento=data_vencimento,
-                    data_pagamento=data_pagamento,
-                    status_pagamento=status,
-                    debito_automatico=False,
-                    numero_parcela=1,
-                    total_parcelas=1,
-                    observacoes=despesa.descricao,
-                    is_fatura_cartao=False
-                )
-                db.session.add(nova_conta)
-                db.session.commit()
+        try:
+            if despesa.recorrente:
+                # ✅ LAZY GENERATION: Gerar apenas o mês inicial
+                # O restante será gerado conforme o usuário navegar pelos meses
+                gerar_execucao_despesa_recorrente(despesa.id, meses_futuros=1, mes_referencia=None)
+            else:
+                # Se NÃO for recorrente, criar UMA Conta imediatamente
+                # Isso garante que a despesa apareça no histórico de lançamentos
+                if data_vencimento:
+                    mes_referencia = data_vencimento.replace(day=1)
+                    status = 'Pago' if dados.get('pago') or data_pagamento else 'Pendente'
+
+                    nova_conta = Conta(
+                        item_despesa_id=despesa.id,
+                        mes_referencia=mes_referencia,
+                        descricao=despesa.nome,
+                        valor=despesa.valor,
+                        data_vencimento=data_vencimento,
+                        data_pagamento=data_pagamento,
+                        status_pagamento=status,
+                        debito_automatico=False,
+                        numero_parcela=1,
+                        total_parcelas=1,
+                        observacoes=despesa.descricao,
+                        is_fatura_cartao=False
+                    )
+                    db.session.add(nova_conta)
+
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({
+                'success': False,
+                'error': f'Falha ao gerar recorrência: {str(e)}'
+            }), 500
 
         return jsonify({
             'success': True,
@@ -422,6 +611,22 @@ def atualizar_despesa(id):
                 conta.data_pagamento = None
 
         db.session.commit()
+
+        # ========================================================================
+        # HOOK: Sincronizar pagamento com Financiamento (se aplicável)
+        # ========================================================================
+        # Se esta conta está vinculada a uma parcela de financiamento E foi marcada como paga,
+        # chamar o motor do financiamento para sincronizar estado
+        if conta.financiamento_parcela_id and conta.status_pagamento == 'Pago':
+            from backend.services.financiamento_service import FinanciamentoService
+
+            # Registrar pagamento no motor do financiamento
+            # Isso atualiza: parcela.status, parcela.valor_pago, saldo soberano, etc.
+            FinanciamentoService.registrar_pagamento_parcela(
+                parcela_id=conta.financiamento_parcela_id,
+                valor_pago=conta.valor,
+                data_pagamento=conta.data_pagamento or conta.data_vencimento
+            )
 
         return jsonify({
             'success': True,
@@ -746,6 +951,22 @@ def marcar_como_pago(id):
 
         db.session.commit()
 
+        # ========================================================================
+        # HOOK: Sincronizar pagamento com Financiamento (se aplicável)
+        # ========================================================================
+        # Se esta conta está vinculada a uma parcela de financiamento E foi marcada como paga,
+        # chamar o motor do financiamento para sincronizar estado
+        if conta.financiamento_parcela_id and conta.status_pagamento == 'Pago':
+            from backend.services.financiamento_service import FinanciamentoService
+
+            # Registrar pagamento no motor do financiamento
+            # Isso atualiza: parcela.status, parcela.valor_pago, saldo soberano, etc.
+            FinanciamentoService.registrar_pagamento_parcela(
+                parcela_id=conta.financiamento_parcela_id,
+                valor_pago=conta.valor,
+                data_pagamento=conta.data_pagamento or conta.data_vencimento
+            )
+
         return jsonify({
             'success': True,
             'message': 'Despesa marcada como paga',
@@ -899,7 +1120,6 @@ def gerar_contas_despesa_recorrente(item_despesa_id, meses_futuros=12, mes_refer
                 criar_conta(data_atual, descricao_custom=f"{item.nome} - {data_atual.strftime('%d/%m')}")
             data_atual += timedelta(days=1)
 
-    db.session.commit()
     return contas_criadas
 
 
@@ -914,8 +1134,8 @@ def gerar_lancamentos_cartao_recorrente(item_despesa_id, meses_futuros=12, mes_r
     
     Garante idempotência: 1 recorrência = 1 lançamento/mês
     """
-    from models import ItemDespesa, LancamentoAgregado
-    
+    from datetime import date
+
     item = ItemDespesa.query.get(item_despesa_id)
     if not item:
         raise ValueError('ItemDespesa não encontrado')
@@ -925,13 +1145,27 @@ def gerar_lancamentos_cartao_recorrente(item_despesa_id, meses_futuros=12, mes_r
         raise ValueError('ItemDespesa não é pago via cartão')
     if not item.cartao_id:
         raise ValueError('ItemDespesa recorrente pago via cartão precisa ter cartao_id')
-    if not item.data_vencimento:
-        raise ValueError('ItemDespesa recorrente precisa ter data_vencimento')
     if not item.categoria_id:
         raise ValueError('ItemDespesa recorrente precisa ter categoria_id')
-    
+
     tipo_recorrencia = item.tipo_recorrencia or 'mensal'
-    data_inicio = item.data_vencimento
+
+    # Fallback obrigatório para conseguir inferir mes_fatura quando não há data_vencimento/mes_competencia
+    if item.data_vencimento:
+        data_base = item.data_vencimento
+    elif item.mes_competencia:
+        if isinstance(item.mes_competencia, str):
+            # Aceitar "YYYY-MM" ou "YYYY-MM-DD"
+            try:
+                data_base = datetime.strptime(item.mes_competencia + '-01', '%Y-%m-%d').date()
+            except ValueError:
+                data_base = datetime.strptime(item.mes_competencia, '%Y-%m-%d').date()
+        else:
+            data_base = item.mes_competencia
+    else:
+        data_base = date.today()
+
+    data_inicio = data_base
     inicio_geracao = data_inicio.replace(day=1)
     mes_ref_base = mes_referencia.replace(day=1) if mes_referencia else None
     inicio_janela = max(inicio_geracao, mes_ref_base) if mes_ref_base else inicio_geracao
@@ -987,5 +1221,4 @@ def gerar_lancamentos_cartao_recorrente(item_despesa_id, meses_futuros=12, mes_r
             criar_lancamento(data_ref)
             data_ref += relativedelta(years=1)
     
-    db.session.commit()
     return lancamentos_criados

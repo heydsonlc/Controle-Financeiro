@@ -362,6 +362,60 @@ class ReceitaService:
         return receita
 
     @staticmethod
+    def atualizar_receita_realizada(id, dados_receita):
+        """
+        Atualiza uma receita realizada existente.
+
+        Args:
+            id (int): ID da receita realizada
+            dados_receita (dict): mesmos campos do registrar_receita_realizada
+
+        Returns:
+            ReceitaRealizada | None: Receita atualizada ou None se não encontrada
+        """
+        receita = ReceitaRealizada.query.get(id)
+        if not receita:
+            return None
+
+        if not dados_receita.get('item_receita_id'):
+            raise ValueError('item_receita_id é obrigatório')
+
+        if not dados_receita.get('data_recebimento'):
+            raise ValueError('data_recebimento é obrigatório')
+
+        if not dados_receita.get('valor_recebido'):
+            raise ValueError('valor_recebido é obrigatório')
+
+        data_recebimento = dados_receita['data_recebimento']
+        if isinstance(data_recebimento, str):
+            data_recebimento = datetime.strptime(data_recebimento[:10], '%Y-%m-%d').date()
+
+        competencia = dados_receita.get('competencia')
+        if competencia:
+            if isinstance(competencia, str):
+                competencia = datetime.strptime(competencia[:10], '%Y-%m-%d').date()
+            competencia = competencia.replace(day=1)
+        else:
+            competencia = data_recebimento.replace(day=1)
+
+        orcamento = ReceitaOrcamento.query.filter_by(
+            item_receita_id=dados_receita['item_receita_id'],
+            mes_referencia=competencia
+        ).first()
+
+        receita.item_receita_id = dados_receita['item_receita_id']
+        receita.data_recebimento = data_recebimento
+        receita.valor_recebido = dados_receita['valor_recebido']
+        receita.mes_referencia = competencia
+        receita.conta_origem_id = dados_receita.get('conta_origem_id')
+        receita.descricao = dados_receita.get('descricao', '')
+        receita.orcamento_id = orcamento.id if orcamento else None
+        receita.observacoes = dados_receita.get('observacoes', '')
+
+        db.session.commit()
+        return receita
+
+    @staticmethod
     def listar_receitas_realizadas(ano_mes=None, item_receita_id=None):
         """
         Lista receitas realizadas com filtros opcionais

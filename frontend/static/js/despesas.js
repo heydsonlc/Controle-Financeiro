@@ -24,7 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Event listeners para filtros
     document.getElementById('filtro-categoria').addEventListener('change', aplicarFiltros);
     document.getElementById('filtro-status').addEventListener('change', aplicarFiltros);
-    document.getElementById('filtro-mes').addEventListener('change', aplicarFiltros);
+    document.getElementById('filtro-vencimento-ate').addEventListener('change', aplicarFiltros);
     document.getElementById('filtro-competencia').addEventListener('change', aplicarFiltros);
 
     // Event listener para calcular competência automaticamente quando data de vencimento mudar
@@ -154,7 +154,19 @@ async function carregarCategoriasCartao(cartaoId) {
  */
 async function carregarDespesas() {
     try {
-        const response = await fetch(API_URL);
+        // Pegar mês selecionado no filtro de competência (formato: MM/YYYY)
+        const filtroCompetencia = document.getElementById('filtro-competencia').value;
+        let url = API_URL;
+
+        if (filtroCompetencia) {
+            // Converter MM/YYYY para YYYY-MM
+            const [mes, ano] = filtroCompetencia.split('/');
+            const mesFormatado = `${ano}-${mes}`;
+            url = `${API_URL}?mes_referencia=${mesFormatado}`;
+            console.log(`[DEBUG] Carregando despesas para: ${mesFormatado}`);
+        }
+
+        const response = await fetch(url);
         const data = await response.json();
 
         if (!data.success) {
@@ -201,7 +213,7 @@ function calcularCompetenciaAutomaticamente() {
 function aplicarFiltros() {
     const categoriaFiltro = document.getElementById('filtro-categoria').value;
     const statusFiltro = document.getElementById('filtro-status').value;
-    const mesFiltro = document.getElementById('filtro-mes').value;
+    const vencimentoAteFiltro = document.getElementById('filtro-vencimento-ate').value; // Formato YYYY-MM-DD
     const competenciaFiltro = document.getElementById('filtro-competencia').value;
 
     let despesasFiltradas = [...despesas];
@@ -220,19 +232,7 @@ function aplicarFiltros() {
         }
     }
 
-    // Filtrar por mês de vencimento (formato brasileiro MM/AAAA -> YYYY-MM)
-    if (mesFiltro && mesFiltro.length === 7) {
-        const mesISO = converterMesAnoBRparaISO(mesFiltro);
-        if (mesISO) {
-            const anoMes = mesISO.substring(0, 7); // Pega apenas YYYY-MM
-            despesasFiltradas = despesasFiltradas.filter(d => {
-                if (!d.data_vencimento) return false;
-                return d.data_vencimento.startsWith(anoMes);
-            });
-        }
-    }
-
-    // Filtrar por mês de competência (formato brasileiro MM/AAAA -> YYYY-MM)
+    // NOVO: Filtrar por competência PRIMEIRO (eixo soberano)
     if (competenciaFiltro && competenciaFiltro.length === 7) {
         const competenciaISO = converterMesAnoBRparaISO(competenciaFiltro);
         if (competenciaISO) {
@@ -244,8 +244,258 @@ function aplicarFiltros() {
         }
     }
 
+    // NOVO: Filtrar por vencimento até (data completa) DENTRO da competência
+    // Regra: mostrar apenas despesas onde data_vencimento <= data_selecionada
+    if (vencimentoAteFiltro) {
+        despesasFiltradas = despesasFiltradas.filter(d => {
+            if (!d.data_vencimento) return false;
+            // Comparar datas no formato ISO (YYYY-MM-DD)
+            return d.data_vencimento <= vencimentoAteFiltro;
+        });
+    }
+
     renderizarDespesas(despesasFiltradas);
     atualizarResumo(despesasFiltradas);
+}
+
+/**
+ * Agrupa despesas recorrentes semanais por (item_despesa_id + competência)
+ * REGRA: Agrupamento APENAS VISUAL (runtime) - sem persistência
+ * Seção conforme script: apenas despesas com recorrente=true e tipo_recorrencia='semanal'
+ */
+function agruparDespesasSemanais(despesas) {
+    const agrupamentos = {};
+    const despesasNaoAgrupadas = [];
+
+    despesas.forEach(despesa => {
+        // Critério de agrupamento: recorrente=true E tipo_recorrencia COMEÇA com 'semanal'
+        // Aceita: 'semanal', 'semanal_1_2', etc
+        const ehSemanal = despesa.tipo_recorrencia && despesa.tipo_recorrencia.startsWith('semanal');
+
+        if (despesa.recorrente === true && ehSemanal) {
+            // Extrair nome base (remover " - DD/MM" do final)
+            // Ex: "Diarista - 31/12" → "Diarista"
+            const nomeBase = despesa.nome.replace(/\s*-\s*\d{2}\/\d{2}$/, '').trim();
+
+            // Chave de agrupamento: nome base + competência
+            // Isso agrupa todas as ocorrências semanais do mesmo item no mesmo mês
+            const chave = `${nomeBase}_${despesa.mes_competencia}`;
+
+            if (!agrupamentos[chave]) {
+                agrupamentos[chave] = {
+                    tipo: 'agrupador_semanal',
+                    nome: nomeBase,  // Nome sem a data
+                    mes_competencia: despesa.mes_competencia,
+                    categoria_id: despesa.categoria_id,
+                    categoria: despesa.categoria,
+                    ocorrencias: [],
+                    _agrupado: true  // Flag interna para identificação
+                };
+            }
+
+            agrupamentos[chave].ocorrencias.push(despesa);
+        } else {
+            // Não agrupa: mensal, anual, ou não recorrente
+            despesasNaoAgrupadas.push(despesa);
+        }
+    });
+
+    // Converter agrupamentos em array e retornar com não agrupados
+    const agrupados = Object.values(agrupamentos);
+    return [...agrupados, ...despesasNaoAgrupadas];
+}
+
+/**
+ * Calcula totais de um agrupamento semanal (runtime)
+ * Considera apenas ocorrências não canceladas
+ */
+function calcularTotaisAgrupamento(ocorrencias) {
+    const nao_canceladas = ocorrencias.filter(o => !o.cancelada);
+
+    return {
+        total_ocorrencias: nao_canceladas.length,
+        pagas: nao_canceladas.filter(o => o.pago).length,
+        valor_total: nao_canceladas.reduce((sum, o) => sum + (parseFloat(o.valor) || 0), 0)
+    };
+}
+
+/**
+ * Renderiza um agrupador de despesas semanais
+ * Usa o MESMO layout visual de uma despesa comum
+ * Formato: <Nome> — <MM/YYYY> — <pagas>/<total> — R$ <valor_total>
+ */
+function renderizarAgrupadorSemanal(agrupador, index) {
+    const totais = calcularTotaisAgrupamento(agrupador.ocorrencias);
+    const categoria = agrupador.categoria || (agrupador.categoria_id ? categorias.find(c => c.id === agrupador.categoria_id) : null);
+    const categoriaNome = categoria ? categoria.nome : 'Sem categoria';
+    const competencia = agrupador.mes_competencia ? formatarCompetencia(agrupador.mes_competencia) : '';
+
+    // Status: se TODAS pagas = Pago, senão Pendente
+    const todasPagas = totais.pagas === totais.total_ocorrencias && totais.total_ocorrencias > 0;
+    const statusClass = todasPagas ? 'pago' : 'pendente';
+    const statusTexto = todasPagas ? 'Pago' : 'Pendente';
+
+    // Descrição agregada: Nome — MM/YYYY — pagas/total — R$ valor
+    const descricaoAgrupada = `${agrupador.nome} — ${competencia} — ${totais.pagas}/${totais.total_ocorrencias}`;
+
+    return `
+        <div class="despesa-card despesa-card-padrao ${statusClass} tipo-recorrente agrupador-semanal" data-agrupador-index="${index}">
+            <div class="despesa-linha-principal">
+                <div class="despesa-status">
+                    <span class="status-badge status-badge-${statusClass}">${statusTexto}</span>
+                </div>
+
+                <div class="despesa-descricao">
+                    ${descricaoAgrupada}
+                </div>
+
+                <div class="despesa-meta">
+                    <span class="meta-tipo tipo-recorrente">Recorrente</span>
+                    ${categoria ? `<span class="meta-categoria">${categoriaNome}</span>` : ''}
+                </div>
+
+                <div class="despesa-valor-principal">
+                    R$ ${totais.valor_total.toFixed(2).replace('.', ',')}
+                </div>
+
+                <div class="despesa-actions">
+                    <button class="btn-icon btn-pagar" onclick="pagarTodasOcorrencias(${index})" title="${todasPagas ? 'Todas ocorrências já pagas' : 'Pagar todas as ocorrências pendentes'}" ${todasPagas ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                    </button>
+                    <button class="btn-icon btn-expandir" onclick="toggleAgrupadorSemanal(${index})" title="Expandir ocorrências">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="agrupador-detalhes" id="agrupador-detalhes-${index}" style="display: none;">
+                ${agrupador.ocorrencias.map(ocorrencia => renderizarOcorrenciaIndividual(ocorrencia)).join('')}
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Renderiza uma ocorrência individual dentro de um agrupamento
+ * Mantém botões funcionais (Pagar e Editar apenas)
+ */
+function renderizarOcorrenciaIndividual(despesa) {
+    const pagoFlag = despesa.status ? despesa.status.toLowerCase() === 'pago' : despesa.pago;
+    const statusClass = pagoFlag ? 'pago' : 'pendente';
+    const statusTexto = pagoFlag ? 'Pago' : 'Pendente';
+    const cancelada = despesa.cancelada || false;
+
+    return `
+        <div class="ocorrencia-item ${cancelada ? 'cancelada' : ''}" style="padding: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span class="status-badge status-badge-${statusClass}" style="font-size: 0.8em;">${cancelada ? 'Cancelado' : statusTexto}</span>
+                    <span style="color: rgba(255, 255, 255, 0.9);">
+                        ${despesa.data_vencimento ? new Date(despesa.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : 'Sem data'}
+                    </span>
+                    ${despesa.descricao ? `<span style="color: rgba(255, 255, 255, 0.6); font-size: 0.9em;">${despesa.descricao}</span>` : ''}
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span style="font-weight: 600; color: white;">R$ ${parseFloat(despesa.valor).toFixed(2).replace('.', ',')}</span>
+                    <button class="btn-icon btn-pagar" onclick="marcarComoPago(${despesa.id})" title="${pagoFlag ? 'Já pago' : 'Marcar como pago'}" ${pagoFlag ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                    </button>
+                    <button class="btn-icon" onclick="editarDespesa(${despesa.id})" title="Editar">✏️</button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Toggle de expansão do agrupador semanal
+ */
+function toggleAgrupadorSemanal(index) {
+    const detalhes = document.getElementById(`agrupador-detalhes-${index}`);
+    if (detalhes) {
+        detalhes.style.display = detalhes.style.display === 'none' ? 'block' : 'none';
+    }
+}
+
+/**
+ * Paga todas as ocorrências pendentes de um agrupamento semanal
+ */
+async function pagarTodasOcorrencias(index) {
+    // Obter o agrupamento da lista processada
+    const despesasProcessadas = agruparDespesasSemanais(despesas);
+    const agrupador = despesasProcessadas[index];
+
+    if (!agrupador || agrupador.tipo !== 'agrupador_semanal') {
+        alert('Erro: Agrupamento não encontrado');
+        return;
+    }
+
+    // Filtrar apenas ocorrências pendentes (não pagas e não canceladas)
+    const ocorrenciasPendentes = agrupador.ocorrencias.filter(o => !o.pago && !o.cancelada);
+
+    if (ocorrenciasPendentes.length === 0) {
+        alert('Todas as ocorrências já foram pagas!');
+        return;
+    }
+
+    // Confirmar ação
+    const nomeAgrupador = agrupador.nome;
+    const totalPendente = ocorrenciasPendentes.reduce((sum, o) => sum + parseFloat(o.valor), 0);
+    const competencia = agrupador.mes_competencia ? formatarCompetencia(agrupador.mes_competencia) : '';
+
+    const confirmar = confirm(
+        `Pagar ${ocorrenciasPendentes.length} ocorrência(s) de "${nomeAgrupador}" (${competencia})?\n\n` +
+        `Valor total: R$ ${totalPendente.toFixed(2).replace('.', ',')}`
+    );
+
+    if (!confirmar) return;
+
+    // Pagar cada ocorrência pendente
+    const dataHoje = new Date().toISOString().split('T')[0];
+    let sucessos = 0;
+    let erros = 0;
+
+    for (const ocorrencia of ocorrenciasPendentes) {
+        try {
+            // ItemDespesa usa endpoint PUT /<id> com campo pago=true
+            const response = await fetch(`${API_URL}/${ocorrencia.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    pago: true,
+                    data_pagamento: dataHoje,
+                    valor_pago: ocorrencia.valor
+                })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                sucessos++;
+            } else {
+                erros++;
+                console.error(`Erro ao pagar ocorrência ${ocorrencia.id}:`, data.error);
+            }
+        } catch (error) {
+            erros++;
+            console.error(`Erro ao pagar ocorrência ${ocorrencia.id}:`, error);
+        }
+    }
+
+    // Mostrar resultado
+    if (erros === 0) {
+        alert(`✓ ${sucessos} ocorrência(s) paga(s) com sucesso!`);
+    } else {
+        alert(`Pagamento concluído com avisos:\n✓ ${sucessos} paga(s)\n✗ ${erros} com erro`);
+    }
+
+    // Recarregar lista
+    await carregarDespesas();
 }
 
 /**
@@ -257,6 +507,8 @@ function aplicarFiltros() {
  *
  * Estrutura padronizada: [Status] Descrição | Competência | Tipo | Valor
  * Regra definitiva do cartão: Previsto OU Executado (NUNCA ambos)
+ *
+ * NOVO: Agrupa visualmente despesas recorrentes semanais
  */
 function renderizarDespesas(despesasParaRenderizar) {
     const lista = document.getElementById('despesas-lista');
@@ -271,7 +523,39 @@ function renderizarDespesas(despesasParaRenderizar) {
         return;
     }
 
-    lista.innerHTML = despesasParaRenderizar.map(despesa => {
+    // Agrupar despesas semanais ANTES de renderizar (apenas organização visual)
+    // IMPORTANTE: manter o índice original do agrupador semanal, pois pagarTodasOcorrencias(index)
+    // recalcula com agruparDespesasSemanais(despesas) e usa o mesmo índice.
+    const despesasProcessadas = agruparDespesasSemanais(despesasParaRenderizar);
+
+    const ORDEM_GRUPOS = [
+        'FINANCIAMENTOS',
+        'FATURAS_CARTAO',
+        'DESPESAS_RECORRENTES',
+        'DESPESAS_AVULSAS',
+        'INVESTIMENTOS',
+    ];
+
+    const rotulosGrupo = {
+        FINANCIAMENTOS: 'FINANCIAMENTOS',
+        FATURAS_CARTAO: 'FATURAS DE CARTÃO DE CRÉDITO',
+        DESPESAS_RECORRENTES: 'DESPESAS RECORRENTES',
+        DESPESAS_AVULSAS: 'DESPESAS AVULSAS',
+        INVESTIMENTOS: 'INVESTIMENTOS',
+    };
+
+    function grupoLeitura(d) {
+        if (d?.tipo === 'agrupador_semanal') return 'DESPESAS_RECORRENTES';
+        if (d && d.financiamento_parcela_id != null) return 'FINANCIAMENTOS';
+        if (d && d.is_fatura_cartao === true) return 'FATURAS_CARTAO';
+        if (d && d.recorrente === true && String(d.tipo || '').trim().toLowerCase() === 'simples') return 'DESPESAS_RECORRENTES';
+        if (String(d?.tipo || '').trim().toLowerCase() === 'consorcio') return 'INVESTIMENTOS';
+        return 'DESPESAS_AVULSAS';
+    }
+
+    function renderizarCardDespesa(despesa) {
+
+        // Renderização normal para despesas não agrupadas
         // Determinar tipo de despesa para identificação visual
         const isFaturaCartao = despesa.is_fatura_cartao === true || despesa.tipo === 'cartao';
         const isAgrupado = despesa.agrupado === true || isFaturaCartao;
@@ -317,26 +601,30 @@ function renderizarDespesas(despesasParaRenderizar) {
                         <polyline points="6 9 12 15 18 9"></polyline>
                     </svg>
                 </button>
-                ${!despesa.pago ? `
-                    <button class="btn-icon btn-pagar" onclick="marcarComoPago(${despesa.id})" title="Pagar fatura">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="20 6 9 17 4 12"></polyline>
+                ${despesa.status_fatura === 'ABERTA' ? `
+                    <button class="btn-icon btn-consolidar" onclick="consolidarFatura(${despesa.cartao_id || despesa.id}, '${despesa.competencia || despesa.mes_competencia || ''}')" title="Consolidar fatura" style="color: #ff9500;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 11l3 3L22 4"></path>
+                            <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path>
                         </svg>
                     </button>
                 ` : ''}
+                <button class="btn-icon btn-pagar" onclick="marcarComoPago(${despesa.id})" title="${despesa.pago ? 'Fatura já paga' : 'Pagar fatura'}" ${despesa.pago ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                </button>
             </div>
         ` : (isAgrupado ? '' : `
             <div class="despesa-actions">
                 <button class="btn-icon" onclick="editarDespesa(${despesa.id})" title="Editar">
                     ✏️
                 </button>
-                ${!despesa.pago ? `
-                    <button class="btn-icon btn-pagar" onclick="marcarComoPago(${despesa.id})" title="Marcar como pago">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                    </button>
-                ` : ''}
+                <button class="btn-icon btn-pagar" onclick="marcarComoPago(${despesa.id})" title="${despesa.pago ? 'Já pago' : 'Marcar como pago'}" ${despesa.pago ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                </button>
             </div>
         `);
 
@@ -356,6 +644,7 @@ function renderizarDespesas(despesasParaRenderizar) {
                     <div class="despesa-meta">
                         ${competencia ? `<span class="meta-competencia">${competencia}</span>` : ''}
                         <span class="meta-tipo ${tipoClass}">${tipoTexto}</span>
+                        ${isFaturaCartao && despesa.status_fatura ? `<span class="meta-status-fatura" style="background: ${despesa.status_fatura === 'FECHADA' ? '#ff9500' : despesa.status_fatura === 'PAGA' ? '#34c759' : '#007aff'}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75em; font-weight: 600;">${despesa.status_fatura}</span>` : ''}
                         ${categoria ? `<span class="meta-categoria">${categoriaNome}</span>` : ''}
                     </div>
 
@@ -372,14 +661,44 @@ function renderizarDespesas(despesasParaRenderizar) {
                     </div>
                 ` : ''}
 
-                ${despesa.descricao && !isFaturaCartao ? `
+                ${despesa.descricao && !isFaturaCartao && despesa.financiamento_parcela_id == null ? `
                     <div class="despesa-linha-detalhes">
                         <span class="despesa-obs">${despesa.descricao}</span>
                     </div>
                 ` : ''}
             </div>
         `;
-    }).join('');
+    }
+
+    const grupos = {
+        FINANCIAMENTOS: [],
+        FATURAS_CARTAO: [],
+        DESPESAS_RECORRENTES: [],
+        DESPESAS_AVULSAS: [],
+        INVESTIMENTOS: [],
+    };
+
+    despesasProcessadas.forEach((despesa, indexOriginal) => {
+        const g = grupoLeitura(despesa);
+        grupos[g].push({ despesa, indexOriginal });
+    });
+
+    const partesHTML = [];
+    ORDEM_GRUPOS.forEach(g => {
+        const itens = grupos[g] || [];
+        if (!itens.length) return;
+
+        partesHTML.push(`<div class="despesas-grupo-titulo">${rotulosGrupo[g] || g}</div>`);
+        itens.forEach(({ despesa, indexOriginal }) => {
+            if (despesa.tipo === 'agrupador_semanal') {
+                partesHTML.push(renderizarAgrupadorSemanal(despesa, indexOriginal));
+                return;
+            }
+            partesHTML.push(renderizarCardDespesa(despesa));
+        });
+    });
+
+    lista.innerHTML = partesHTML.join('');
 }
 
 /**
@@ -603,11 +922,18 @@ async function salvarDespesa(event) {
             const cartaoId = document.getElementById('cartao_id').value;
             const itemAgregadoId = document.getElementById('item_agregado_id').value;
 
-            if (cartaoId) {
-                dados.cartao_id = parseInt(cartaoId);
+            const cartaoIdNumber = Number(cartaoId);
+            if (!Number.isInteger(cartaoIdNumber) || cartaoIdNumber <= 0) {
+                alert('Selecione um cartão válido.');
+                return;
             }
+            dados.cartao_id = cartaoIdNumber;
+
             if (itemAgregadoId) {
-                dados.item_agregado_id = parseInt(itemAgregadoId);
+                const itemAgregadoIdNumber = Number(itemAgregadoId);
+                if (Number.isInteger(itemAgregadoIdNumber) && itemAgregadoIdNumber > 0) {
+                    dados.item_agregado_id = itemAgregadoIdNumber;
+                }
             }
         }
     }
@@ -666,6 +992,12 @@ async function salvarConsorcio(id) {
     }
 
     // Preparar dados do consórcio
+    const categoriaId = parseInt(document.getElementById('categoria_id')?.value) || null;
+    if (!categoriaId) {
+        alert('Selecione uma categoria para o consórcio.');
+        return;
+    }
+
     const dados = {
         nome: document.getElementById('nome').value.trim(),
         valor_inicial: parseFloat(document.getElementById('valor').value),
@@ -675,7 +1007,8 @@ async function salvarConsorcio(id) {
         valor_reajuste: parseFloat(document.getElementById('valor_reajuste').value) || 0,
         mes_contemplacao: null,
         valor_premio: null,
-        item_despesa_id: parseInt(document.getElementById('categoria_id').value) || null,
+        categoria_id: categoriaId,
+        item_despesa_id: null, // legacy: não usar para categoria
         item_receita_id: null
     };
 
@@ -697,7 +1030,7 @@ async function salvarConsorcio(id) {
     }
 
     try {
-        const url = id ? `/api/consorcios/${id}` : '/api/consorcios';
+        const url = id ? `/api/consorcios/${id}` : '/api/consorcios/';
         const method = id ? 'PUT' : 'POST';
 
         const response = await fetch(url, {
@@ -805,13 +1138,22 @@ function marcarComoPago(id) {
         }
 
         // Configurar valor para executado
-        document.getElementById('pagar-valor-previsto').value = valorExecutado;
-        document.getElementById('pagar-valor-previsto-display').textContent = `R$ ${valorExecutado.toFixed(2).replace('.', ',')}`;
-        document.getElementById('pagar-valor-pago').value = valorExecutado;
+        const valorPrevistoInput = document.getElementById('pagar-valor-previsto');
+        const valorPrevistoDisplay = document.getElementById('pagar-valor-previsto-display');
+        const valorPagoInput = document.getElementById('pagar-valor-pago');
+
+        if (valorPrevistoInput) valorPrevistoInput.value = valorExecutado;
+        if (valorPrevistoDisplay) valorPrevistoDisplay.textContent = `R$ ${valorExecutado.toFixed(2).replace('.', ',')}`;
+        if (valorPagoInput) valorPagoInput.value = valorExecutado;
 
         // Trocar texto para "Valor Executado"
-        const labelTotal = document.querySelector('input[name="tipo-pagamento"][value="total"]').closest('label').querySelector('span');
-        labelTotal.innerHTML = `Valor Executado (Gasto Real): <strong>R$ ${valorExecutado.toFixed(2).replace('.', ',')}</strong>`;
+        const labelTotal = document.querySelector('input[name="tipo-pagamento"][value="total"]');
+        if (labelTotal) {
+            const spanElement = labelTotal.closest('label')?.querySelector('span');
+            if (spanElement) {
+                spanElement.innerHTML = `Valor Executado (Gasto Real): <strong>R$ ${valorExecutado.toFixed(2).replace('.', ',')}</strong>`;
+            }
+        }
     } else {
         // Remover aviso se existir
         const avisoExistente = document.querySelector('.aviso-fatura-cartao');
@@ -821,21 +1163,34 @@ function marcarComoPago(id) {
 
         // Despesa normal
         const valorFormatado = `R$ ${parseFloat(despesa.valor).toFixed(2).replace('.', ',')}`;
-        document.getElementById('pagar-valor-previsto').value = despesa.valor;
-        document.getElementById('pagar-valor-previsto-display').textContent = valorFormatado;
-        document.getElementById('pagar-valor-pago').value = despesa.valor;
+        const valorPrevistoInput = document.getElementById('pagar-valor-previsto');
+        const valorPrevistoDisplay = document.getElementById('pagar-valor-previsto-display');
+        const valorPagoInput = document.getElementById('pagar-valor-pago');
+
+        if (valorPrevistoInput) valorPrevistoInput.value = despesa.valor;
+        if (valorPrevistoDisplay) valorPrevistoDisplay.textContent = valorFormatado;
+        if (valorPagoInput) valorPagoInput.value = despesa.valor;
 
         // Texto padrão
-        const labelTotal = document.querySelector('input[name="tipo-pagamento"][value="total"]').closest('label').querySelector('span');
-        labelTotal.innerHTML = `Valor Total: <strong>${valorFormatado}</strong>`;
+        const labelTotal = document.querySelector('input[name="tipo-pagamento"][value="total"]');
+        if (labelTotal) {
+            const spanElement = labelTotal.closest('label')?.querySelector('span');
+            if (spanElement) {
+                spanElement.innerHTML = `Valor Total: <strong>${valorFormatado}</strong>`;
+            }
+        }
     }
 
     // Resetar para o estado inicial
-    document.querySelector('input[name="tipo-pagamento"][value="total"]').checked = true;
-    document.getElementById('campo-valor-custom').style.display = 'none';
+    const radioTotal = document.querySelector('input[name="tipo-pagamento"][value="total"]');
+    if (radioTotal) radioTotal.checked = true;
+
+    const campoCustom = document.getElementById('campo-valor-custom');
+    if (campoCustom) campoCustom.style.display = 'none';
 
     // Abrir modal
-    document.getElementById('modal-pagar').style.display = 'block';
+    const modal = document.getElementById('modal-pagar');
+    if (modal) modal.style.display = 'block';
 }
 
 /**
@@ -1396,25 +1751,25 @@ async function carregarDetalhesFatura(despesaId, cartaoId, competencia) {
     container.innerHTML = '<div class="loading-detalhes">Carregando detalhes...</div>';
 
     try {
-        // Buscar lan?amentos do cart?o na compet?ncia
+        // Buscar lançamentos do cartão na competência
         const response = await fetch(`/api/cartoes/${cartaoId}/lancamentos?mes_fatura=${competenciaNormalizada}`);
         const json = await response.json();
         const lancamentos = extrairArray(json);
 
-        // Buscar resumo do cart?o para obter previs?es das categorias
+        // Buscar resumo do cartão para obter previsões das categorias
         const resumoResponse = await fetch(`/api/cartoes/${cartaoId}/resumo?mes_referencia=${competenciaNormalizada}`);
         const resumoJson = await resumoResponse.json();
         if (!resumoResponse.ok) {
-            throw new Error(resumoJson?.erro || 'Erro ao carregar resumo do cart?o');
+            throw new Error(resumoJson?.erro || 'Erro ao carregar resumo do cartão');
         }
 
-        // Organizar lan?amentos nos 4 blocos
+        // Organizar lançamentos nos 4 blocos
         const blocos = organizarLancamentosEmBlocos(lancamentos, resumoJson);
 
         // Calcular totais
         const totais = calcularTotaisFatura(blocos, lancamentos);
 
-        // Renderizar visualiza??o completa
+        // Renderizar visualização completa
         container.innerHTML = renderizarFaturaCompleta(blocos, totais, competenciaNormalizada);
 
     } catch (error) {
@@ -1477,7 +1832,7 @@ function organizarLancamentosEmBlocos(lancamentos, resumoCartao) {
                 valor: valorLanc
             });
         }
-        // PARTE 3: Despesas por Categoria (com previs?o)
+        // PARTE 3: Despesas por Categoria (com previsão)
         else if (categoriaPrevista) {
             categoriaPrevista.lancamentos.push({
                 descricao: lanc.descricao,
@@ -1486,7 +1841,7 @@ function organizarLancamentosEmBlocos(lancamentos, resumoCartao) {
                 observacoes: lanc.observacoes
             });
         }
-        // PARTE 4: Outros Lan?amentos
+        // PARTE 4: Outros Lançamentos
         else {
             blocos.outros.push({
                 descricao: lanc.descricao,
@@ -1548,7 +1903,7 @@ function renderizarFaturaCompleta(blocos, totais, competencia) {
     return `
         <div class="fatura-container">
             <div class="fatura-header">
-                <h3>Fatura do Cart?o ? ${competenciaFormatada}</h3>
+                <h3>Fatura do Cartão - ${competenciaFormatada}</h3>
                 <div class="fatura-totais">
                     <div class="total-item destaque">
                         <span class="total-label">Total da Fatura (Previsto):</span>
@@ -1585,7 +1940,7 @@ function renderizarBlocoParceladas(parceladas) {
                 <div class="linha-valor">R$ ${formatarValorBR(p.valor)}</div>
             </div>
         `).join('')
-        : '<div class="linha-vazia">Nenhuma compra parcelada neste m?s.</div>';
+        : '<div class="linha-vazia">Nenhuma compra parcelada neste mês.</div>';
 
     return `
         <div class="fatura-bloco">
@@ -1607,7 +1962,7 @@ function renderizarBlocoFixas(fixas) {
                 <div class="linha-valor">R$ ${formatarValorBR(f.valor)}</div>
             </div>
         `).join('')
-        : '<div class="linha-vazia">Nenhuma despesa fixa no cart?o neste m?s.</div>';
+        : '<div class="linha-vazia">Nenhuma despesa fixa no cartão neste mês.</div>';
 
     return `
         <div class="fatura-bloco">
@@ -1630,8 +1985,10 @@ function renderizarBlocoPorCategoria(porCategoria) {
     const categorias = Object.values(porCategoria || {});
     const conteudo = categorias.length > 0
         ? categorias.map(cat => {
+            const previsto = parseFloat(cat.previsto || 0);
             const executado = cat.lancamentos.reduce((sum, l) => sum + (l.valor || 0), 0);
-            const indicador = executado < cat.previsto ? '↑' : executado > cat.previsto ? '↓' : '=';
+            const indicador = executado < previsto ? '↑' : executado > previsto ? '↓' : '=';
+            const corIndicador = executado < previsto ? '#10b981' : executado > previsto ? '#ef4444' : '#6e6e73';
 
             // ← DETALHAMENTO: Valores EXECUTADOS (lançamentos reais)
             const detalhes = cat.lancamentos.length > 0
@@ -1651,10 +2008,15 @@ function renderizarBlocoPorCategoria(porCategoria) {
                 <div class="categoria-bloco">
                     <button type="button" class="categoria-linha" onclick="toggleCategoriaDetalhe('${cat.id}')">
                         <div class="categoria-info">
-                            <span class="categoria-valor">R$ ${formatarValorBR(cat.previsto)}</span>
+                            <span class="categoria-valor">
+                                R$ ${formatarValorBR(previsto)}
+                                <span style="margin-left: 6px; font-weight: 700; color: ${corIndicador};" title="Comparação: executado vs previsto">${indicador}</span>
+                            </span>
                             <span class="categoria-nome">${cat.nome}</span>
                         </div>
-                        <div class="categoria-indicador">${indicador}</div>
+                        <div class="categoria-indicador" style="color: #6e6e73; font-size: 13px;" title="Total executado desta categoria">
+                            R$ ${formatarValorBR(executado)}
+                        </div>
                     </button>
                     <div class="categoria-detalhes" id="categoria-detalhe-${cat.id}" style="display: none;">
                         ${detalhes}
@@ -1687,12 +2049,12 @@ function renderizarBlocoOutros(outros) {
                 <div class="linha-valor">R$ ${formatarValorBR(o.valor)}</div>
             </div>
         `).join('')
-        : '<div class="linha-vazia">Sem outros lan?amentos no cart?o.</div>';
+        : '<div class="linha-vazia">Sem outros lançamentos no cartão.</div>';
 
     return `
         <div class="fatura-bloco">
             <div class="bloco-header">
-                <span class="bloco-titulo">Outros Lan?amentos</span>
+                <span class="bloco-titulo">Outros Lançamentos</span>
                 <span class="bloco-subtotal">R$ ${formatarValorBR(total)}</span>
             </div>
             <div class="bloco-lista">${linhas}</div>
@@ -1704,18 +2066,23 @@ function renderizarRodapeFatura(blocos) {
     const totalParceladas = blocos.parceladas.reduce((sum, p) => sum + (p.valor || 0), 0);
     const totalFixas = blocos.fixas.reduce((sum, f) => sum + (f.valor || 0), 0);
     const totalOutros = blocos.outros.reduce((sum, o) => sum + (o.valor || 0), 0);
-    const linhasCategorias = Object.values(blocos.porCategoria || {}).map(cat => `
+    const linhasCategorias = Object.values(blocos.porCategoria || {}).map(cat => {
+        const previsto = parseFloat(cat.previsto || 0);
+        const executado = (cat.lancamentos || []).reduce((s, l) => s + parseFloat(l.valor || 0), 0);
+        const valorRodape = Math.max(previsto, executado);
+        return `
         <div class="rodape-linha">
-            <span class="rodape-valor">R$ ${formatarValorBR(cat.previsto || 0)}</span>
+            <span class="rodape-valor">R$ ${formatarValorBR(valorRodape)}</span>
             <span class="rodape-label">${cat.nome}</span>
         </div>
-    `).join('');
+    `;
+    }).join('');
 
     return `
         <div class="rodape-fatura">
             <div class="rodape-linha">
                 <span class="rodape-valor">R$ ${formatarValorBR(totalParceladas)}</span>
-                <span class="rodape-label">Compras Parceladas do m?s</span>
+                <span class="rodape-label">Compras Parceladas do mês</span>
             </div>
             <div class="rodape-linha">
                 <span class="rodape-valor">R$ ${formatarValorBR(totalFixas)}</span>
@@ -1724,7 +2091,7 @@ function renderizarRodapeFatura(blocos) {
             ${linhasCategorias}
             <div class="rodape-linha">
                 <span class="rodape-valor">R$ ${formatarValorBR(totalOutros)}</span>
-                <span class="rodape-label">Outros Lan?amentos</span>
+                <span class="rodape-label">Outros Lançamentos</span>
             </div>
         </div>
     `;
@@ -1767,9 +2134,47 @@ function formatarCompetenciaCompleta(competencia) {
     if (!comp || comp.length < 7) return comp || '';
 
     const [ano, mes] = comp.split('-');
-    const meses = ['Janeiro', 'Fevereiro', 'Mar?o', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+    const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
     const nomeMes = meses[parseInt(mes, 10) - 1] || mes;
     return `${nomeMes}/${ano}`;
+}
+
+/**
+ * Consolida (fecha) uma fatura de cartão de crédito
+ * Apenas faturas com status='ABERTA' podem ser consolidadas
+ */
+async function consolidarFatura(cartaoId, competencia) {
+    // Extrair apenas YYYY-MM da competencia
+    const mesCompetencia = competencia.substring(0, 7);
+
+    if (!confirm(`Deseja consolidar a fatura de ${mesCompetencia}?\n\nApós a consolidação, a fatura ficará marcada como FECHADA.\nAinda será possível adicionar lançamentos, mas o valor consolidado será mantido como referência.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/cartoes/${cartaoId}/faturas/${mesCompetencia}/consolidar`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.erro || 'Erro ao consolidar fatura');
+        }
+
+        // Sucesso
+        alert(`Fatura consolidada com sucesso!\n\nValor consolidado: R$ ${data.fatura.valor_consolidado.toFixed(2).replace('.', ',')}\nStatus: ${data.fatura.status_fatura}`);
+
+        // Recarregar lista de despesas
+        carregarDespesas();
+
+    } catch (error) {
+        console.error('Erro ao consolidar fatura:', error);
+        alert(`Erro ao consolidar fatura: ${error.message}`);
+    }
 }
 
 // Fechar modal ao clicar fora dele

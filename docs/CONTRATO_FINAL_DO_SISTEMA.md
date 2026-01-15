@@ -43,6 +43,8 @@ Define quando a Conta pertence à fatura
 
 Exemplo: 2025-05
 
+**REGRA FUNDAMENTAL:** A competência é sempre definida explicitamente pelo usuário ou pelo sistema durante a criação da obrigação. Nenhuma funcionalidade do sistema infere ou calcula competência a partir de datas de transação ou fechamento.
+
 3.4 Planejamento × Execução
 
 Planejamento: intenção futura (simulações, contratos, previsões)
@@ -205,6 +207,80 @@ marca a parcela como paga
 sincroniza a Conta vinculada
 
 Backend é soberano
+
+5.4 Pagamento Parcial de Fatura (Planejado — Fase 3)
+
+⚠️ FUNCIONALIDADE NÃO IMPLEMENTADA
+
+O sistema foi arquitetado para suportar pagamento parcial de faturas de cartão de crédito, porém esta funcionalidade NÃO está ativa no escopo atual.
+
+Decisão de projeto
+
+Priorizar simplicidade, previsibilidade e educação financeira
+
+Evitar complexidade prematura
+
+Implementar apenas após estabilização do core (3+ meses em produção)
+
+Evitar incentivo a práticas financeiras prejudiciais (rotativo)
+
+Conceito (quando implementado)
+
+Pagamento parcial: valor pago < valor total da fatura
+
+Saldo residual: diferença entre valor fatura e valor pago
+
+Rotativo: saldo residual que entra na próxima fatura
+
+Juros: aplicados sobre saldo residual (configurável por cartão)
+
+IOF: imposto sobre operações de rotativo (configurável)
+
+Impactos da implementação futura
+
+Backend
+
+Novos campos: valor_pago, saldo_devedor, taxa_juros, iof
+
+Migration para adicionar campos ao modelo Conta
+
+Endpoint: POST /api/cartoes/{id}/faturas/{competencia}/pagar-parcial
+
+Lógica de cálculo de juros e IOF
+
+Geração automática de lançamento "Saldo rotativo" na próxima fatura
+
+Validação de múltiplos pagamentos parciais
+
+Frontend
+
+Modal de pagamento com opção "Pagar valor diferente"
+
+Indicador visual de "Pagamento Parcial Realizado"
+
+Exibição de saldo devedor pendente
+
+Histórico de pagamentos parciais por fatura
+
+UX e Educação Financeira
+
+Avisos sobre custo de juros rotativos
+
+Calculadora de simulação de rotativo
+
+Alertas de endividamento progressivo
+
+Incentivo ao pagamento integral (melhores práticas)
+
+Regra atual (vigente)
+
+Pagamento de fatura é SEMPRE integral
+
+Ao pagar: status_fatura → PAGA
+
+Novos lançamentos após pagamento → próxima fatura
+
+Não existe saldo residual
 
 6. PAPEL DO BACKEND × FRONTEND
 Backend (soberano)

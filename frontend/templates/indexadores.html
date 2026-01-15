@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Indexadores Mensais - TR, IPCA, etc.</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/global.css') }}">
+    <style>
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 150px 100px 100px 150px auto;
+            gap: 10px;
+            align-items: end;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        .form-group input, .form-group select {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .btn-primary {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #0056b3;
+        }
+
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+
+        .btn-danger {
+            background-color: #dc3545;
+            color: white;
+            padding: 5px 10px;
+            font-size: 12px;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            margin-top: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead {
+            background-color: #f8f9fa;
+        }
+
+        th {
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .alert {
+            padding: 12px 20px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+
+        .alert-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .badge {
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-tr {
+            background-color: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .badge-ipca {
+            background-color: #fff3e0;
+            color: #f57c00;
+        }
+
+        .filter-section {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+
+        .filter-row {
+            display: flex;
+            gap: 15px;
+            align-items: end;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Indexadores Mensais</h1>
+            <button class="btn btn-secondary" onclick="window.location.href='/'">Voltar ao Dashboard</button>
+        </div>
+
+        <!-- Alertas -->
+        <div id="alertContainer"></div>
+
+        <!-- Formulário de cadastro -->
+        <div class="card">
+            <h2>Adicionar/Atualizar Indexador</h2>
+            <form id="formIndexador" onsubmit="salvarIndexador(event)">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="nome">Tipo</label>
+                        <select id="nome" required>
+                            <option value="TR">TR</option>
+                            <option value="IPCA">IPCA</option>
+                            <option value="IPCA-E">IPCA-E</option>
+                            <option value="IGP-M">IGP-M</option>
+                            <option value="CDI">CDI</option>
+                            <option value="SELIC">SELIC</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="mes">Mês</label>
+                        <input type="number" id="mes" min="1" max="12" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="ano">Ano</label>
+                        <input type="number" id="ano" min="1990" max="2050" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="valor">Valor (%)</label>
+                        <input type="number" id="valor" step="0.0001" required placeholder="Ex: 0.1690">
+                    </div>
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-primary">Salvar</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Filtros -->
+        <div class="filter-section">
+            <div class="filter-row">
+                <div class="form-group">
+                    <label for="filtroNome">Filtrar por tipo:</label>
+                    <select id="filtroNome" onchange="carregarIndexadores()">
+                        <option value="">Todos</option>
+                        <option value="TR">TR</option>
+                        <option value="IPCA">IPCA</option>
+                        <option value="IPCA-E">IPCA-E</option>
+                        <option value="IGP-M">IGP-M</option>
+                        <option value="CDI">CDI</option>
+                        <option value="SELIC">SELIC</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="filtroAno">Filtrar por ano:</label>
+                    <input type="number" id="filtroAno" min="1990" max="2050" placeholder="Ex: 2025" onchange="carregarIndexadores()">
+                </div>
+                <div class="form-group">
+                    <button class="btn btn-secondary" onclick="limparFiltros()">Limpar Filtros</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabela de indexadores -->
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tipo</th>
+                        <th>Mês/Ano</th>
+                        <th>Valor (%)</th>
+                        <th>Data de Cadastro</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="tabelaIndexadores">
+                    <tr>
+                        <td colspan="5" style="text-align: center;">Carregando...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Inicializar com mês e ano atuais
+        document.addEventListener('DOMContentLoaded', function() {
+            const hoje = new Date();
+            document.getElementById('mes').value = hoje.getMonth() + 1;
+            document.getElementById('ano').value = hoje.getFullYear();
+
+            carregarIndexadores();
+        });
+
+        function mostrarAlerta(mensagem, tipo = 'success') {
+            const container = document.getElementById('alertContainer');
+            const alerta = document.createElement('div');
+            alerta.className = `alert alert-${tipo}`;
+            alerta.textContent = mensagem;
+            container.appendChild(alerta);
+
+            setTimeout(() => alerta.remove(), 5000);
+        }
+
+        async function carregarIndexadores() {
+            try {
+                const nome = document.getElementById('filtroNome').value;
+                const ano = document.getElementById('filtroAno').value;
+
+                let url = '/api/indexadores?';
+                if (nome) url += `nome=${nome}&`;
+                if (ano) url += `ano=${ano}&`;
+
+                const response = await fetch(url);
+                const indexadores = await response.json();
+
+                const tbody = document.getElementById('tabelaIndexadores');
+
+                if (indexadores.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Nenhum indexador encontrado</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = indexadores.map(idx => `
+                    <tr>
+                        <td><span class="badge badge-${idx.nome.toLowerCase()}">${idx.nome}</span></td>
+                        <td>${idx.mes_ano}</td>
+                        <td>${idx.valor.toFixed(4)}%</td>
+                        <td>${new Date(idx.criado_em).toLocaleString('pt-BR')}</td>
+                        <td>
+                            <button class="btn btn-danger" onclick="deletarIndexador(${idx.id}, '${idx.nome}', '${idx.mes_ano}')">
+                                Excluir
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                mostrarAlerta('Erro ao carregar indexadores: ' + error.message, 'error');
+            }
+        }
+
+        async function salvarIndexador(event) {
+            event.preventDefault();
+
+            const dados = {
+                nome: document.getElementById('nome').value,
+                mes: parseInt(document.getElementById('mes').value),
+                ano: parseInt(document.getElementById('ano').value),
+                valor: parseFloat(document.getElementById('valor').value)
+            };
+
+            try {
+                const response = await fetch('/api/indexadores', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(dados)
+                });
+
+                const resultado = await response.json();
+
+                if (response.ok) {
+                    mostrarAlerta(resultado.mensagem, 'success');
+                    document.getElementById('valor').value = '';
+                    carregarIndexadores();
+                } else {
+                    mostrarAlerta(resultado.erro || 'Erro ao salvar indexador', 'error');
+                }
+            } catch (error) {
+                mostrarAlerta('Erro ao salvar: ' + error.message, 'error');
+            }
+        }
+
+        async function deletarIndexador(id, nome, mesAno) {
+            if (!confirm(`Deseja realmente excluir o indexador ${nome} de ${mesAno}?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/indexadores/${id}`, {
+                    method: 'DELETE'
+                });
+
+                const resultado = await response.json();
+
+                if (response.ok) {
+                    mostrarAlerta(resultado.mensagem, 'success');
+                    carregarIndexadores();
+                } else {
+                    mostrarAlerta(resultado.erro || 'Erro ao deletar indexador', 'error');
+                }
+            } catch (error) {
+                mostrarAlerta('Erro ao deletar: ' + error.message, 'error');
+            }
+        }
+
+        function limparFiltros() {
+            document.getElementById('filtroNome').value = '';
+            document.getElementById('filtroAno').value = '';
+            carregarIndexadores();
+        }
+    </script>
+</body>
+</html>

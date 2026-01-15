@@ -12,6 +12,7 @@ from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
 from decimal import Decimal
 from sqlalchemy import func, and_
+import uuid
 
 try:
     from backend.models import (db, Conta, ItemDespesa, ItemAgregado,
@@ -165,6 +166,22 @@ class CartaoService:
 
         return Decimal(str(total_executado or 0))
 
+    # ==========================================================
+    # FUTURO (FASE 3): Pagamento parcial de fatura
+    #
+    # Quando implementado, este método precisará considerar:
+    # 1. Pagamento parcial: valor_pago < valor_total
+    # 2. Saldo rotativo: diferença que vai para próxima fatura
+    # 3. Cálculo de juros sobre saldo residual
+    # 4. Aplicação de IOF sobre operação rotativa
+    # 5. Geração automática de lançamento "Saldo rotativo"
+    # 6. Histórico de múltiplos pagamentos parciais
+    #
+    # ATUALMENTE: pagamento é sempre integral
+    # Fatura só vai para status='PAGA' após pagamento total
+    # Não existe saldo residual ou cálculo de juros
+    # ==========================================================
+
     @staticmethod
     def recalcular_fatura(cartao_id, competencia):
         """
@@ -291,19 +308,25 @@ class CartaoService:
         """
         Adiciona um lançamento no cartão e garante que a fatura existe
 
+        CORREÇÃO PARCELAMENTO:
+        - Se total_parcelas > 1: cria N lançamentos, cada um em um mês distinto
+        - Valor é dividido igualmente entre as parcelas
+        - Garante idempotência: não duplica parcelas já existentes
+
         Args:
             dados_lancamento (dict): Dados do lançamento
                 - cartao_id: ID do cartão (obrigatório)
                 - item_agregado_id: ID da categoria (OPCIONAL - se None, não controla limite)
-                - valor: Valor do lançamento
+                - valor: Valor TOTAL da compra (será dividido pelas parcelas)
                 - descricao: Descrição
                 - data_compra: Data da compra
-                - mes_fatura: Mês da fatura
+                - mes_fatura: Mês da PRIMEIRA fatura
                 - categoria_id: Categoria real da despesa
-                - numero_parcela, total_parcelas (opcional)
+                - numero_parcela: ignorado (sempre começa em 1)
+                - total_parcelas: número de parcelas (default=1)
 
         Returns:
-            tuple: (LancamentoAgregado, Conta fatura)
+            tuple: (LancamentoAgregado primeira parcela, Conta fatura primeira parcela)
         """
         # ID do cartão (agora obrigatório nos dados)
         cartao_id = dados_lancamento['cartao_id']
@@ -315,37 +338,102 @@ class CartaoService:
             if not item_agregado:
                 raise ValueError('ItemAgregado não encontrado')
 
-        # Mês da fatura (competência)
-        mes_fatura = dados_lancamento['mes_fatura']
-        if isinstance(mes_fatura, str):
-            mes_fatura = datetime.strptime(mes_fatura, '%Y-%m-%d').date()
-        mes_fatura = mes_fatura.replace(day=1)
+        # Parcelamento
+        total_parcelas = dados_lancamento.get('total_parcelas', 1)
+        valor_total = Decimal(str(dados_lancamento['valor']))
 
-        # Garantir que a fatura existe (criar se necessário)
-        fatura = CartaoService.get_or_create_fatura(cartao_id, mes_fatura)
+        # FASE 2: Gerar UUID único para esta compra
+        # Todas as parcelas compartilharão este ID para idempotência robusta
+        compra_uuid = str(uuid.uuid4())
 
-        # Criar lançamento (não cria despesa separada!)
-        lancamento = LancamentoAgregado(
-            cartao_id=cartao_id,
-            item_agregado_id=item_agregado_id,  # Pode ser None
-            categoria_id=dados_lancamento['categoria_id'],  # Categoria da DESPESA (obrigatória)
-            valor=Decimal(str(dados_lancamento['valor'])),
-            descricao=dados_lancamento['descricao'],
-            data_compra=dados_lancamento['data_compra'],
-            mes_fatura=mes_fatura,
-            numero_parcela=dados_lancamento.get('numero_parcela', 1),
-            total_parcelas=dados_lancamento.get('total_parcelas', 1),
-            observacoes=dados_lancamento.get('observacoes', '')
-        )
+        # CORREÇÃO FINANCEIRA: Distribuição de centavos
+        # Garante que soma das parcelas = valor total (sem perda de centavos)
+        total_centavos = int(round(valor_total * 100))
+        centavos_base = total_centavos // total_parcelas
+        centavos_resto = total_centavos % total_parcelas
 
-        db.session.add(lancamento)
+        # Mês da primeira fatura (competência)
+        mes_fatura_inicial = dados_lancamento['mes_fatura']
+        if isinstance(mes_fatura_inicial, str):
+            mes_fatura_inicial = datetime.strptime(mes_fatura_inicial, '%Y-%m-%d').date()
+        mes_fatura_inicial = mes_fatura_inicial.replace(day=1)
+
+        data_compra_inicial = dados_lancamento['data_compra']
+
+        # Lista para armazenar lançamentos criados
+        lancamentos_criados = []
+        primeira_fatura = None
+        faturas_afetadas_set = set()  # Armazena meses de faturas afetadas (considerando redirecionamento)
+
+        # Criar uma parcela para cada mês
+        for n in range(1, total_parcelas + 1):
+            # Calcular data da parcela (incrementa mês a cada parcela)
+            data_parcela = data_compra_inicial + relativedelta(months=n-1)
+            mes_fatura_parcela = mes_fatura_inicial + relativedelta(months=n-1)
+
+            # REGRA DE FECHAMENTO DE FATURA:
+            # Se a fatura do mês estiver PAGA, redirecionar para a próxima fatura
+            fatura_mes = CartaoService.get_or_create_fatura(cartao_id, mes_fatura_parcela)
+            if fatura_mes.status_fatura == 'PAGA':
+                # Buscar próxima fatura em aberto
+                mes_fatura_parcela = mes_fatura_parcela + relativedelta(months=1)
+                fatura_mes = CartaoService.get_or_create_fatura(cartao_id, mes_fatura_parcela)
+
+            # Calcular valor desta parcela (distribui centavos do resto nas primeiras parcelas)
+            centavos_parcela = centavos_base + (1 if n <= centavos_resto else 0)
+            valor_parcela = Decimal(centavos_parcela) / 100
+
+            # FASE 2: IDEMPOTÊNCIA ROBUSTA
+            # Verifica se parcela já existe usando compra_id (UUID único)
+            # Muito mais seguro que usar descrição (texto livre)
+            lancamento_existente = LancamentoAgregado.query.filter_by(
+                compra_id=compra_uuid,
+                numero_parcela=n
+            ).first()
+
+            if lancamento_existente:
+                # Parcela já existe, pular
+                if n == 1:
+                    lancamentos_criados.append(lancamento_existente)
+                    primeira_fatura = fatura_mes
+                continue
+
+            # Criar lançamento da parcela
+            lancamento = LancamentoAgregado(
+                cartao_id=cartao_id,
+                item_agregado_id=item_agregado_id,  # Pode ser None
+                categoria_id=dados_lancamento['categoria_id'],  # Categoria da DESPESA (obrigatória)
+                valor=valor_parcela,  # ← CORREÇÃO: valor com distribuição correta de centavos
+                descricao=dados_lancamento['descricao'],
+                data_compra=data_parcela,  # ← Data incrementada por mês
+                mes_fatura=mes_fatura_parcela,  # ← Mês incrementado
+                numero_parcela=n,  # ← Parcela correta (1, 2, 3...)
+                total_parcelas=total_parcelas,
+                observacoes=dados_lancamento.get('observacoes', ''),
+                is_recorrente=False,  # Parcelamento NÃO é recorrência
+                compra_id=compra_uuid  # ← FASE 2: UUID único da compra
+            )
+
+            db.session.add(lancamento)
+            lancamentos_criados.append(lancamento)
+
+            # Guardar primeira fatura para retornar
+            if n == 1:
+                primeira_fatura = fatura_mes
+
+            # Registrar fatura afetada (mês real usado, após possível redirecionamento)
+            faturas_afetadas_set.add(mes_fatura_parcela)
+
         db.session.flush()
 
-        # Recalcular fatura (atualiza executado e verifica estouro)
-        fatura = CartaoService.recalcular_fatura(cartao_id, mes_fatura)
+        # Recalcular TODAS as faturas afetadas (considerando redirecionamentos por status PAGA)
+        for mes_fatura_afetada in faturas_afetadas_set:
+            CartaoService.recalcular_fatura(cartao_id, mes_fatura_afetada)
 
         db.session.commit()
-        return lancamento, fatura
+
+        # Retornar primeira parcela e primeira fatura (compatibilidade com código existente)
+        return lancamentos_criados[0] if lancamentos_criados else None, primeira_fatura
 
     @staticmethod
     def avaliar_alertas(cartao_id, competencia):

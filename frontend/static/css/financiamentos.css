@@ -173,6 +173,25 @@
     font-weight: 600;
 }
 
+/* Destaque para Saldo Devedor */
+.info-item-destaque {
+    background: #e7f3ff;
+    padding: 12px;
+    border-radius: 6px;
+    border-left: 4px solid #007bff;
+}
+
+.info-item-destaque label {
+    color: #0056b3;
+    font-weight: 600;
+}
+
+.info-item-destaque span {
+    font-size: 18px;
+    color: #0056b3;
+    font-weight: 700;
+}
+
 .financiamento-progress {
     margin-bottom: 16px;
 }

@@ -13,6 +13,36 @@ let financiamentoAtual = null;
 let parcelaAtualPagamento = null;
 
 // ============================================================================
+// TOAST NOTIFICATIONS (Feedback Visual)
+// ============================================================================
+
+/**
+ * Exibe notificação toast não bloqueante
+ * @param {string} message - Mensagem a ser exibida (aceita HTML)
+ * @param {string} type - Tipo: 'success', 'error', 'warning'
+ * @param {number} duration - Duração em ms (padrão: 4000)
+ */
+function showToast(message, type = 'success', duration = 4000) {
+    const toast = document.createElement('div');
+
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = message;
+
+    document.body.appendChild(toast);
+
+    // Trigger animation
+    setTimeout(() => {
+        toast.classList.add('show');
+    }, 50);
+
+    // Remove toast
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, duration);
+}
+
+// ============================================================================
 // INICIALIZAÇÃO
 // ============================================================================
 
@@ -94,16 +124,16 @@ function renderizarFinanciamentos(financiamentos) {
                     <span>${formatarMoedaDisplay(fin.valor_financiado)}</span>
                 </div>
                 <div class="info-item">
-                    <label>Prazo Total</label>
-                    <span>${fin.prazo_total_meses} meses</span>
+                    <label>Saldo Devedor Atual</label>
+                    <span>${formatarMoedaDisplay(fin.saldo_devedor_atual || fin.valor_financiado)}</span>
                 </div>
                 <div class="info-item">
-                    <label>Taxa Anual</label>
+                    <label>Parcelas</label>
+                    <span>${fin.parcelas_pagas || 0} / ${fin.total_parcelas || fin.prazo_total_meses}</span>
+                </div>
+                <div class="info-item">
+                    <label>Taxa de Juros Anual</label>
                     <span>${formatarPercentualDisplay(fin.taxa_juros_nominal_anual)}</span>
-                </div>
-                <div class="info-item">
-                    <label>Data Contrato</label>
-                    <span>${formatarData(fin.data_contrato)}</span>
                 </div>
             </div>
 
@@ -136,8 +166,13 @@ function atualizarResumo(financiamentos) {
     const totalFinanciado = ativos.reduce((sum, f) => sum + parseFloat(f.valor_financiado), 0);
     const saldoDevedor = ativos.reduce((sum, f) => sum + parseFloat(f.saldo_devedor_atual || f.valor_financiado), 0);
 
+    // Calcular total de parcelas pagas e total de parcelas
+    const totalParcelasPagas = ativos.reduce((sum, f) => sum + (f.parcelas_pagas || 0), 0);
+    const totalParcelas = ativos.reduce((sum, f) => sum + (f.total_parcelas || 0), 0);
+
     document.getElementById('total-financiado').textContent = formatarMoedaDisplay(totalFinanciado);
     document.getElementById('saldo-devedor').textContent = formatarMoedaDisplay(saldoDevedor);
+    document.getElementById('parcelas-pagas').textContent = `${totalParcelasPagas} / ${totalParcelas}`;
     document.getElementById('contratos-ativos').textContent = ativos.length;
 }
 
@@ -151,6 +186,11 @@ function abrirModalNovoFinanciamento() {
     form.removeAttribute('data-editing-id');
     document.querySelector('#modal-financiamento h2').textContent = 'Novo Financiamento';
     configurarDataAtual();
+
+    // MODO CRIAÇÃO: Mostrar seção de vigências (obrigatória)
+    const secaoVigencias = document.getElementById('secao-vigencias-seguro');
+    if (secaoVigencias) secaoVigencias.style.display = 'block';
+
     abrirModal('modal-financiamento');
 }
 
@@ -175,17 +215,109 @@ async function salvarFinanciamento(event) {
         taxa_administracao_fixa: parseMoeda(document.getElementById('fin-taxa-adm').value) || 0
     };
 
-    // Adicionar dados de seguro baseado no tipo
-    const seguroTipo = document.getElementById('fin-seguro-tipo').value;
-    dados.seguro_tipo = seguroTipo;
+    // Função para normalizar data de input type="month" para YYYY-MM-DD
+    function normalizarDataMes(valorInput) {
+        if (!valorInput) return null;
 
-    if (seguroTipo === 'fixo') {
-        dados.valor_seguro_mensal = parseMoeda(document.getElementById('fin-seguro-valor').value) || 0;
-        dados.seguro_percentual = 0.0006; // valor padrão
-    } else { // percentual_saldo
-        dados.seguro_percentual = parseFloat(document.getElementById('fin-seguro-percentual').value) || 0.0006;
-        dados.valor_seguro_mensal = 0;
+        console.log('DEBUG: normalizarDataMes - Input:', valorInput);
+
+        // Se já está no formato YYYY-MM, adicionar -01
+        if (/^\d{4}-\d{2}$/.test(valorInput)) {
+            const resultado = valorInput + '-01';
+            console.log('DEBUG: Formato YYYY-MM detectado, resultado:', resultado);
+            return resultado;
+        }
+
+        // Se está no formato MM/YYYY, converter para YYYY-MM-01
+        const matchMMYYYY = valorInput.match(/^(\d{2})\/(\d{4})$/);
+        if (matchMMYYYY) {
+            const resultado = `${matchMMYYYY[2]}-${matchMMYYYY[1]}-01`;
+            console.log('DEBUG: Formato MM/YYYY detectado, resultado:', resultado);
+            return resultado;
+        }
+
+        // Se está no formato MM/YYYY-DD (formato incorreto), converter para YYYY-MM-01
+        const matchMMYYYYDD = valorInput.match(/^(\d{2})\/(\d{4})-(\d{2})$/);
+        if (matchMMYYYYDD) {
+            const resultado = `${matchMMYYYYDD[2]}-${matchMMYYYYDD[1]}-01`;
+            console.log('DEBUG: Formato MM/YYYY-DD detectado, resultado:', resultado);
+            return resultado;
+        }
+
+        // Se está no formato DD/MM/YYYY, converter para YYYY-MM-01 (usar apenas mês/ano)
+        const matchDDMMYYYY = valorInput.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        if (matchDDMMYYYY) {
+            const dia = matchDDMMYYYY[1];
+            const mes = matchDDMMYYYY[2];
+            const ano = matchDDMMYYYY[3];
+            const resultado = `${ano}-${mes}-01`;
+            console.log('DEBUG: Formato DD/MM/YYYY detectado, resultado:', resultado);
+            return resultado;
+        }
+
+        // Fallback: tentar adicionar -01 (YYYY-MM incompleto)
+        console.log('DEBUG: Nenhum formato reconhecido, usando fallback');
+        return valorInput + '-01';
     }
+
+    // ========================================================================
+    // VIGÊNCIAS DE SEGURO
+    // ========================================================================
+    // REGRA CRÍTICA:
+    // - Ao CRIAR financiamento: vigências vão no payload (obrigatório)
+    // - Ao EDITAR financiamento: vigências NÃO vão no payload (usa endpoint separado)
+    // ========================================================================
+
+    if (!isEditing) {
+        // MODO CRIAÇÃO: Coletar vigências (mínimo 1 obrigatória)
+        const vigencias = [];
+
+        // Vigência 1 (obrigatória)
+        const data1 = document.getElementById('seg-data-1').value;
+        const valor1 = parseMoeda(document.getElementById('seg-valor-1').value);
+        if (data1 && valor1 > 0) {
+            vigencias.push({
+                competencia_inicio: normalizarDataMes(data1),
+                valor_mensal: valor1,
+                observacoes: document.getElementById('seg-obs-1').value || null
+            });
+        }
+
+        // Vigência 2 (opcional)
+        const data2 = document.getElementById('seg-data-2').value;
+        const valor2 = parseMoeda(document.getElementById('seg-valor-2').value);
+        if (data2 && valor2 > 0) {
+            vigencias.push({
+                competencia_inicio: normalizarDataMes(data2),
+                valor_mensal: valor2,
+                observacoes: document.getElementById('seg-obs-2').value || null
+            });
+        }
+
+        // Vigência 3 (opcional)
+        const data3 = document.getElementById('seg-data-3').value;
+        const valor3 = parseMoeda(document.getElementById('seg-valor-3').value);
+        if (data3 && valor3 > 0) {
+            vigencias.push({
+                competencia_inicio: normalizarDataMes(data3),
+                valor_mensal: valor3,
+                observacoes: document.getElementById('seg-obs-3').value || null
+            });
+        }
+
+        // Validar se tem pelo menos 1 vigência
+        if (vigencias.length === 0) {
+            mostrarErro('É obrigatório cadastrar pelo menos uma vigência de seguro (Vigência 1)');
+            return;
+        }
+
+        // Adicionar vigências aos dados (SOMENTE ao criar)
+        dados.vigencias_seguro = vigencias;
+    }
+    // MODO EDIÇÃO: NÃO envia vigências (usa POST /vigencias-seguro separadamente)
+
+    // DEBUG: Log do payload antes de enviar
+    console.log('DEBUG: Payload do financiamento:', JSON.stringify(dados, null, 2));
 
     try {
         const url = isEditing ? `/api/financiamentos/${editingId}` : '/api/financiamentos';
@@ -225,25 +357,7 @@ function atualizarInfoSistema() {
     infoDiv.textContent = infos[sistema] || '';
 }
 
-function atualizarCampoSeguro() {
-    const tipo = document.getElementById('fin-seguro-tipo').value;
-    const campoFixo = document.getElementById('campo-seguro-fixo');
-    const campoPercentual = document.getElementById('campo-seguro-percentual');
-
-    if (tipo === 'fixo') {
-        campoFixo.style.display = 'block';
-        campoPercentual.style.display = 'none';
-        // Tornar campo fixo obrigatório
-        document.getElementById('fin-seguro-valor').setAttribute('required', 'required');
-        document.getElementById('fin-seguro-percentual').removeAttribute('required');
-    } else { // percentual_saldo
-        campoFixo.style.display = 'none';
-        campoPercentual.style.display = 'block';
-        // Tornar campo percentual obrigatório
-        document.getElementById('fin-seguro-percentual').setAttribute('required', 'required');
-        document.getElementById('fin-seguro-valor').removeAttribute('required');
-    }
-}
+// Função atualizarCampoSeguro() removida - obsoleta após migração para vigências
 
 // ============================================================================
 // DETALHES DO FINANCIAMENTO
@@ -266,18 +380,44 @@ async function verDetalhes(id) {
     }
 }
 
+/**
+ * Recarrega detalhes do financiamento se o modal estiver aberto
+ * Útil após operações que alteram o estado (pagar, amortizar, adicionar vigência)
+ */
+async function recarregarDetalhesSeAberto(financiamentoId) {
+    const modal = document.getElementById('modal-detalhes');
+    const isAberto = modal && modal.classList.contains('show');
+
+    if (isAberto && financiamentoId) {
+        try {
+            const response = await fetch(`/api/financiamentos/${financiamentoId}`);
+            const result = await response.json();
+
+            if (result.success) {
+                financiamentoAtual = result.data;
+                renderizarDetalhes(result.data);
+                // Não abre o modal novamente, apenas re-renderiza o conteúdo
+            }
+        } catch (error) {
+            console.error('Erro ao recarregar detalhes:', error);
+        }
+    }
+}
+
 function renderizarDetalhes(dados) {
     document.getElementById('detalhes-titulo').textContent = dados.nome;
 
     const conteudo = document.getElementById('detalhes-conteudo');
 
-    // Formatar informação de seguro
-    let seguroInfo = '';
-    if (dados.seguro_tipo === 'percentual_saldo') {
-        const percentual = (dados.seguro_percentual * 100).toFixed(2);
-        seguroInfo = `${percentual}% sobre saldo (variável)`;
-    } else {
-        seguroInfo = `${formatarMoedaDisplay(dados.valor_seguro_mensal)} (fixo)`;
+    // Formatar informação de seguro - usar valor real calculado da primeira parcela
+    let seguroInfo = 'R$ 0,00';
+    if (dados.parcelas && dados.parcelas.length > 0) {
+        // Pegar valor do seguro da primeira parcela (já calculado pelo backend)
+        const valorSeguroParcela = dados.parcelas[0].valor_seguro;
+        seguroInfo = formatarMoedaDisplay(valorSeguroParcela);
+    } else if (dados.seguro_tipo === 'fixo') {
+        // Fallback para seguro fixo se não houver parcelas
+        seguroInfo = formatarMoedaDisplay(dados.valor_seguro_mensal);
     }
 
     conteudo.innerHTML = `
@@ -307,13 +447,19 @@ function renderizarDetalhes(dados) {
                 <span>${dados.indexador_saldo || 'Nenhum'}</span>
             </div>
             <div class="info-item">
-                <label>Seguro</label>
-                <span class="${dados.seguro_tipo === 'percentual_saldo' ? 'seguro-variavel' : ''}">${seguroInfo}</span>
+                <label>Seguro Habitacional</label>
+                <span>${seguroInfo}</span>
             </div>
             <div class="info-item">
                 <label>Taxa Administrativa</label>
                 <span>${formatarMoedaDisplay(dados.taxa_administracao_fixa || 0)}/mês</span>
             </div>
+        </div>
+
+        <div style="margin: 20px 0; padding: 15px; background: #f5f5f7; border-radius: 8px;">
+            <button class="btn btn-info" onclick="abrirModalSeguro(${dados.id})" style="width: 100%;">
+                🛡️ Gerenciar Seguro Habitacional (Vigências)
+            </button>
         </div>
 
         <div class="detalhes-section">
@@ -385,14 +531,18 @@ function abrirModalPagamento(parcelaId) {
 
     parcelaAtualPagamento = parcela;
 
+    // Usar valor_previsto_total que vem do backend
+    const valorPrevisto = parcela.valor_previsto_total || 0;
+
     document.getElementById('pagar-parcela-id').value = parcelaId;
     document.getElementById('pagar-data').value = new Date().toISOString().split('T')[0];
-    document.getElementById('pagar-valor').value = formatarMoedaDisplay(parcela.encargo_total);
+    // Preencher com o valor previsto (usuário pode editar se for diferente)
+    document.getElementById('pagar-valor').value = formatarMoedaDisplay(valorPrevisto);
 
     document.getElementById('pagar-info').innerHTML = `
         <p><strong>Parcela:</strong> ${parcela.numero_parcela} / ${financiamentoAtual.prazo_total_meses}</p>
         <p><strong>Vencimento:</strong> ${formatarData(parcela.data_vencimento)}</p>
-        <p><strong>Valor Previsto:</strong> ${formatarMoedaDisplay(parcela.encargo_total)}</p>
+        <p><strong>Valor Previsto:</strong> ${formatarMoedaDisplay(valorPrevisto)}</p>
     `;
 
     abrirModal('modal-pagar');
@@ -420,6 +570,7 @@ async function salvarPagamento(event) {
             mostrarSucesso('Pagamento registrado com sucesso!');
             fecharModal('modal-pagar');
             verDetalhes(financiamentoAtual.id); // Recarregar detalhes
+            carregarFinanciamentos(); // Atualizar listagem e cards de resumo
         } else {
             mostrarErro('Erro ao registrar pagamento: ' + result.error);
         }
@@ -463,6 +614,8 @@ async function salvarAmortizacao(event) {
             mostrarSucesso('Amortização extraordinária registrada! Parcelas recalculadas.');
             fecharModal('modal-amortizacao');
             carregarFinanciamentos();
+            // Recarregar detalhes se modal estiver aberto (atualiza saldo exibido)
+            await recarregarDetalhesSeAberto(financiamentoId);
         } else {
             mostrarErro('Erro ao registrar amortização: ' + result.error);
         }
@@ -481,6 +634,40 @@ function atualizarInfoAmortizacao() {
     };
 
     infoDiv.textContent = infos[tipo] || '';
+}
+
+// ============================================================================
+// ADICIONAR VIGÊNCIA DE SEGURO (endpoint separado)
+// ============================================================================
+
+/**
+ * Adiciona nova vigência de seguro usando endpoint específico
+ * IMPORTANTE: Não usa PUT /financiamentos (evita recálculo estrutural)
+ */
+async function adicionarVigenciaSeguro(financiamentoId, dadosVigencia) {
+    try {
+        const response = await fetch(`/api/financiamentos/${financiamentoId}/vigencias-seguro`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dadosVigencia)
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            mostrarSucesso(`Vigência criada! ${result.data.parcelas_atualizadas} parcelas atualizadas.`);
+            carregarFinanciamentos();
+            // Recarregar detalhes se modal estiver aberto
+            await recarregarDetalhesSeAberto(financiamentoId);
+            return true;
+        } else {
+            mostrarErro('Erro ao adicionar vigência: ' + result.error);
+            return false;
+        }
+    } catch (error) {
+        mostrarErro('Erro ao adicionar vigência: ' + error.message);
+        return false;
+    }
 }
 
 // ============================================================================
@@ -628,12 +815,23 @@ function abrirModal(modalId) {
 
 function fecharModal(modalId) {
     document.getElementById(modalId).style.display = 'none';
+
+    // Atualizar listagem se fechar modal de detalhes (pode ter havido alterações)
+    if (modalId === 'modal-detalhes') {
+        carregarFinanciamentos();
+    }
 }
 
 // Fechar modal ao clicar fora
 window.onclick = function(event) {
     if (event.target.classList.contains('modal')) {
+        const modalId = event.target.id;
         event.target.style.display = 'none';
+
+        // Atualizar listagem se fechar modal de detalhes
+        if (modalId === 'modal-detalhes') {
+            carregarFinanciamentos();
+        }
     }
 };
 
@@ -650,6 +848,9 @@ async function editarFinanciamento(id) {
         if (result.success) {
             const fin = result.data;
 
+            // Armazenar dados do financiamento para uso posterior (ex: saldo_devedor_atual ao salvar vigências)
+            window.financiamentoAtual = fin;
+
             // Preencher formulário (reutilizar o modal de novo financiamento)
             document.getElementById('fin-nome').value = fin.nome;
             document.getElementById('fin-produto').value = fin.produto || '';
@@ -661,21 +862,12 @@ async function editarFinanciamento(id) {
             document.getElementById('fin-data-contrato').value = fin.data_contrato;
             document.getElementById('fin-data-primeira').value = fin.data_primeira_parcela;
 
-            // Preencher campos de seguro
-            const seguroTipo = fin.seguro_tipo || 'fixo';
-            document.getElementById('fin-seguro-tipo').value = seguroTipo;
-
-            if (seguroTipo === 'fixo') {
-                document.getElementById('fin-seguro-valor').value = formatarMoedaDisplay(fin.valor_seguro_mensal || 0);
-            } else {
-                document.getElementById('fin-seguro-percentual').value = fin.seguro_percentual || 0.0006;
-            }
+            // MODO EDIÇÃO: Esconder seção de vigências (usa modal separado)
+            const secaoVigencias = document.getElementById('secao-vigencias-seguro');
+            if (secaoVigencias) secaoVigencias.style.display = 'none';
 
             // Preencher taxa de administração
             document.getElementById('fin-taxa-adm').value = formatarMoedaDisplay(fin.taxa_administracao_fixa || 0);
-
-            // Atualizar visualização dos campos de seguro
-            atualizarCampoSeguro();
 
             // Alterar título do modal e adicionar ID para update
             document.querySelector('#modal-financiamento h2').textContent = 'Editar Financiamento';
@@ -765,6 +957,379 @@ async function inativarFinanciamento(id, nome) {
     } catch (error) {
         console.error('Erro:', error);
         mostrarErro('Erro ao inativar financiamento');
+    }
+}
+
+// ============================================================================
+// GERENCIAMENTO DE SEGURO HABITACIONAL (MODAL SEPARADO)
+// ============================================================================
+
+/**
+ * Abre modal de gerenciamento de seguro e carrega vigências
+ * IMPORTANTE: Este modal NÃO chama PUT /financiamentos (evita recálculo estrutural)
+ */
+async function abrirModalSeguro(financiamentoId) {
+    // Armazenar ID do financiamento
+    document.getElementById('seguro-financiamento-id').value = financiamentoId;
+
+    // Limpar campos editáveis (antes de preencher dados)
+    document.getElementById('seguro-competencia').value = '';
+    document.getElementById('seguro-valor').value = '';
+    document.getElementById('seguro-observacoes').value = '';
+
+    // Buscar dados do financiamento para preencher saldo devedor e identificar competência atual
+    let competenciaAtual = null;
+    try {
+        const response = await fetch(`/api/financiamentos/${financiamentoId}`);
+        const result = await response.json();
+
+        if (result.success) {
+            const saldoAtual = result.data.saldo_devedor_atual;
+            document.getElementById('seguro-saldo-devedor').value = formatarMoedaDisplay(saldoAtual);
+
+            // Identificar competência da próxima parcela não paga (ou primeira parcela se todas pagas)
+            if (result.data.parcelas && result.data.parcelas.length > 0) {
+                const proximaParcela = result.data.parcelas.find(p => p.status !== 'pago');
+
+                if (proximaParcela && proximaParcela.data_vencimento) {
+                    // Extrair YYYY-MM da data_vencimento
+                    competenciaAtual = proximaParcela.data_vencimento.substring(0, 7); // "YYYY-MM-DD" -> "YYYY-MM"
+                } else {
+                    // Fallback: usar última parcela se todas estiverem pagas
+                    const ultimaParcela = result.data.parcelas[result.data.parcelas.length - 1];
+                    if (ultimaParcela && ultimaParcela.data_vencimento) {
+                        competenciaAtual = ultimaParcela.data_vencimento.substring(0, 7);
+                    }
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Erro ao buscar financiamento:', error);
+        document.getElementById('seguro-saldo-devedor').value = 'R$ 0,00';
+    }
+
+    // Carregar vigências (passando competência para lógica temporal)
+    await carregarVigenciasSeguro(financiamentoId, competenciaAtual);
+
+    // Abrir modal
+    abrirModal('modal-seguro');
+}
+
+/**
+ * Carrega todas as vigências do financiamento
+ * @param {number} financiamentoId - ID do financiamento
+ * @param {string} competenciaAtual - Competência da parcela atual (YYYY-MM) para lógica temporal
+ */
+async function carregarVigenciasSeguro(financiamentoId, competenciaAtual = null) {
+    try {
+        const response = await fetch(`/api/financiamentos/${financiamentoId}/seguros`);
+        const result = await response.json();
+
+        if (!result.success) {
+            throw new Error(result.error || 'Erro ao carregar vigências');
+        }
+
+        const vigencias = result.data;
+
+        // Renderizar vigência atual (usando lógica temporal)
+        renderizarVigenciaAtualSeguro(vigencias, competenciaAtual);
+
+        // Renderizar histórico
+        renderizarHistoricoVigenciasSeguro(vigencias);
+
+    } catch (error) {
+        console.error('Erro ao carregar vigências:', error);
+        mostrarErro('Erro ao carregar vigências: ' + error.message);
+    }
+}
+
+/**
+ * Renderiza a vigência aplicável no card de destaque
+ * @param {Array} vigencias - Lista de vigências
+ * @param {string} competenciaAtual - Competência da parcela atual (YYYY-MM) para lógica temporal
+ */
+function renderizarVigenciaAtualSeguro(vigencias, competenciaAtual = null) {
+    const container = document.getElementById('seguro-vigencia-atual');
+
+    // ========================================================================
+    // LÓGICA TEMPORAL: Encontrar vigência aplicável para a competência atual
+    // ========================================================================
+    let vigenciaAplicavel = null;
+
+    if (competenciaAtual && vigencias.length > 0) {
+        console.log(`[Vigência] Usando lógica temporal para competência: ${competenciaAtual}`);
+
+        // Filtrar vigências que iniciam antes ou na competência atual
+        const vigenciasAplicaveis = vigencias.filter(v => {
+            if (!v.competencia_inicio) return false;
+
+            // Extrair YYYY-MM da competencia_inicio (pode vir como "YYYY-MM-DD")
+            const competenciaVigencia = v.competencia_inicio.substring(0, 7);
+
+            return competenciaVigencia <= competenciaAtual;
+        });
+
+        // Ordenar por competencia_inicio decrescente e pegar a primeira (mais recente)
+        if (vigenciasAplicaveis.length > 0) {
+            vigenciasAplicaveis.sort((a, b) => {
+                const compA = a.competencia_inicio.substring(0, 7);
+                const compB = b.competencia_inicio.substring(0, 7);
+                return compB.localeCompare(compA); // Ordem decrescente
+            });
+
+            vigenciaAplicavel = vigenciasAplicaveis[0];
+            console.log(`[Vigência] Vigência aplicável encontrada: ${vigenciaAplicavel.competencia_inicio.substring(0, 7)}`);
+        } else {
+            console.warn(`[Vigência] Nenhuma vigência encontrada para competência ${competenciaAtual}`);
+        }
+    } else {
+        // Fallback: usar vigencia_ativa (compatibilidade com casos sem competência)
+        console.log('[Vigência] Usando fallback: vigencia_ativa');
+        vigenciaAplicavel = vigencias.find(v => v.vigencia_ativa);
+    }
+
+    // Se não encontrou vigência aplicável
+    if (!vigenciaAplicavel) {
+        container.innerHTML = `
+            <div style="text-align: center; color: #999;">
+                <p>⚠️ Nenhuma vigência aplicável</p>
+                <p style="font-size: 13px; margin-top: 5px;">Cadastre uma nova vigência abaixo</p>
+            </div>
+        `;
+        return;
+    }
+
+    // Proteger contra campos ausentes
+    if (!vigenciaAplicavel.competencia_inicio || !vigenciaAplicavel.valor_mensal) {
+        console.error('Vigência aplicável com dados incompletos:', vigenciaAplicavel);
+        container.innerHTML = `
+            <div style="text-align: center; color: #ff3b30;">
+                <p>⚠️ Erro ao carregar vigência aplicável</p>
+                <p style="font-size: 13px; margin-top: 5px;">Dados incompletos</p>
+            </div>
+        `;
+        return;
+    }
+
+    // Formatar competência (YYYY-MM-DD -> MM/YYYY)
+    const [ano, mes] = vigenciaAplicavel.competencia_inicio.split('-');
+    const competenciaFormatada = `${mes}/${ano}`;
+
+    // Formatar valor com proteção
+    const valorMensal = parseFloat(vigenciaAplicavel.valor_mensal) || 0;
+
+    container.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <p style="margin: 0; font-size: 14px; color: #666;">Valor Mensal</p>
+                <h2 style="margin: 5px 0; color: #007aff;">R$ ${valorMensal.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</h2>
+            </div>
+            <div style="text-align: right;">
+                <p style="margin: 0; font-size: 14px; color: #666;">Vigente desde</p>
+                <p style="margin: 5px 0; font-size: 18px; font-weight: 600;">${competenciaFormatada}</p>
+            </div>
+        </div>
+        ${vigenciaAplicavel.observacoes ? `
+        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
+            <p style="margin: 0; font-size: 13px; color: #666;">Observações:</p>
+            <p style="margin: 5px 0; font-size: 14px;">${vigenciaAplicavel.observacoes}</p>
+        </div>
+        ` : ''}
+    `;
+}
+
+/**
+ * Renderiza o histórico de vigências na tabela
+ */
+function renderizarHistoricoVigenciasSeguro(vigencias) {
+    const tbody = document.getElementById('seguro-tbody-vigencias');
+
+    if (vigencias.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" style="text-align: center; color: #999;">Nenhuma vigência cadastrada</td>
+            </tr>
+        `;
+        return;
+    }
+
+    // Ordenar por competência (decrescente - mais recente primeiro)
+    vigencias.sort((a, b) => new Date(b.competencia_inicio) - new Date(a.competencia_inicio));
+
+    tbody.innerHTML = vigencias.map(v => {
+        // Proteger contra dados ausentes
+        if (!v.competencia_inicio || v.valor_mensal === undefined || v.valor_mensal === null) {
+            console.warn('Vigência com dados incompletos:', v);
+            return `
+                <tr>
+                    <td colspan="6" style="text-align: center; color: #ff3b30;">
+                        Vigência #${v.id || '?'} com dados incompletos
+                    </td>
+                </tr>
+            `;
+        }
+
+        const [anoInicio, mesInicio] = v.competencia_inicio.split('-');
+        const dataInicio = `${mesInicio}/${anoInicio}`;
+
+        let dataFim = '---';
+        if (v.competencia_fim) {
+            const [anoFim, mesFim] = v.competencia_fim.split('-');
+            dataFim = `${mesFim}/${anoFim}`;
+        }
+
+        const status = v.vigencia_ativa ?
+            '<span class="status-badge status-ativo" style="background: #34c759; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">Ativa</span>' :
+            '<span class="status-badge status-encerrada" style="background: #999; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">Encerrada</span>';
+
+        const valorMensal = parseFloat(v.valor_mensal) || 0;
+        const valorFormatado = `R$ ${valorMensal.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+        return `
+            <tr>
+                <td>${dataInicio}</td>
+                <td>${dataFim}</td>
+                <td><strong>${valorFormatado}</strong></td>
+                <td>${status}</td>
+                <td>${v.observacoes || '<span style="color: #999;">---</span>'}</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary"
+                            onclick="editarVigenciaObservacoes(${v.id}, '${(v.observacoes || '').replace(/'/g, "\\'")}', ${v.vigencia_ativa})"
+                            style="font-size: 12px; padding: 4px 8px;">
+                        ✏️ Editar
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+/**
+ * Salva nova vigência usando endpoint específico
+ * IMPORTANTE: NÃO usa PUT /financiamentos (evita recálculo estrutural)
+ */
+async function salvarNovaVigencia(event) {
+    event.preventDefault();
+
+    const financiamentoId = document.getElementById('seguro-financiamento-id').value;
+    const competenciaInput = document.getElementById('seguro-competencia').value; // YYYY-MM
+    const valorInput = document.getElementById('seguro-valor').value;
+    const saldoDevedorInput = document.getElementById('seguro-saldo-devedor').value;
+    const observacoes = document.getElementById('seguro-observacoes').value;
+
+    // Validar campos obrigatórios
+    if (!competenciaInput) {
+        mostrarErro('Competência de início é obrigatória');
+        return;
+    }
+
+    if (!valorInput) {
+        mostrarErro('Valor mensal é obrigatório');
+        return;
+    }
+
+    const valorMensal = parseMoeda(valorInput);
+    const saldoDevedor = parseMoeda(saldoDevedorInput);
+
+    // Validar valores
+    if (valorMensal <= 0) {
+        mostrarErro('Valor mensal deve ser maior que zero');
+        return;
+    }
+
+    // Converter competência para YYYY-MM-01
+    const competenciaInicio = competenciaInput + '-01';
+
+    try {
+        const response = await fetch(`/api/financiamentos/${financiamentoId}/seguros`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                competencia_inicio: competenciaInicio,
+                valor_mensal: valorMensal,
+                saldo_devedor_vigencia: saldoDevedor,
+                observacoes: observacoes || null
+            })
+        });
+
+        const result = await response.json();
+
+        if (!result.success) {
+            throw new Error(result.error || 'Erro ao criar vigência');
+        }
+
+        // Sucesso
+        mostrarSucesso('Vigência criada com sucesso!');
+
+        // Toast de feedback
+        showToast(
+            'Seguro atualizado com sucesso.<br>Parcelas futuras recalculadas automaticamente.',
+            'success'
+        );
+
+        // Limpar formulário (exceto saldo devedor que é readonly)
+        document.getElementById('seguro-competencia').value = '';
+        document.getElementById('seguro-valor').value = '';
+        document.getElementById('seguro-observacoes').value = '';
+        // saldo_devedor permanece (readonly, informativo)
+
+        // Recarregar vigências
+        await carregarVigenciasSeguro(financiamentoId);
+
+        // Recarregar detalhes do financiamento se modal estiver aberto
+        await recarregarDetalhesSeAberto(financiamentoId);
+
+    } catch (error) {
+        console.error('Erro ao criar vigência:', error);
+        mostrarErro('Erro ao criar vigência: ' + error.message);
+    }
+}
+
+/**
+ * Edita observações de uma vigência
+ */
+async function editarVigenciaObservacoes(vigenciaId, observacoesAtuais, vigenciaAtiva) {
+    const novasObservacoes = prompt('Editar Observações:', observacoesAtuais);
+
+    // Se cancelou ou não alterou, sair
+    if (novasObservacoes === null || novasObservacoes === observacoesAtuais) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/financiamentos/seguros/${vigenciaId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                observacoes: novasObservacoes
+            })
+        });
+
+        const result = await response.json();
+
+        if (!result.success) {
+            throw new Error(result.error || 'Erro ao atualizar observações');
+        }
+
+        // Sucesso
+        mostrarSucesso('Observações atualizadas com sucesso!');
+
+        // Toast de feedback
+        showToast(
+            'Vigência de seguro atualizada.<br>Parcelas futuras recalculadas automaticamente.',
+            'success'
+        );
+
+        // Recarregar vigências
+        const financiamentoId = document.getElementById('seguro-financiamento-id').value;
+        await carregarVigenciasSeguro(financiamentoId);
+
+        // Recarregar detalhes do financiamento se modal estiver aberto
+        await recarregarDetalhesSeAberto(financiamentoId);
+
+    } catch (error) {
+        console.error('Erro ao atualizar observações:', error);
+        mostrarErro('Erro ao atualizar observações: ' + error.message);
     }
 }
 

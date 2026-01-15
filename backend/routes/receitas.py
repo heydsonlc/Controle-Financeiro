@@ -11,14 +11,95 @@ from flask import Blueprint, request, jsonify
 from datetime import datetime
 
 try:
-    from backend.models import db, ItemReceita, ReceitaOrcamento, ReceitaRealizada
+    from backend.models import db, ItemReceita, ReceitaOrcamento, ReceitaRealizada, ContratoConsorcio
     from backend.services.receita_service import ReceitaService
 except ImportError:
-    from models import db, ItemReceita, ReceitaOrcamento, ReceitaRealizada
+    from models import db, ItemReceita, ReceitaOrcamento, ReceitaRealizada, ContratoConsorcio
     from services.receita_service import ReceitaService
 
 # Criar blueprint
 receitas_bp = Blueprint('receitas', __name__)
+
+
+def _backfill_receitas_contemplacao_consorcios(ano: int | None = None) -> None:
+    """
+    Backfill idempotente para consórcios antigos (já cadastrados antes da automação),
+    garantindo que contemplações gerem ReceitaRealizada e apareçam no módulo de receitas.
+    """
+    query = ContratoConsorcio.query.filter(ContratoConsorcio.ativo == True)
+    if ano:
+        ini = datetime.strptime(f'{ano}-01-01', '%Y-%m-%d').date()
+        fim = datetime.strptime(f'{ano}-12-31', '%Y-%m-%d').date()
+        query = query.filter(
+            ContratoConsorcio.mes_contemplacao.isnot(None),
+            ContratoConsorcio.mes_contemplacao >= ini,
+            ContratoConsorcio.mes_contemplacao <= fim,
+        )
+
+    consorcios = query.all()
+    if not consorcios:
+        return
+
+    item_padrao = ItemReceita.query.filter_by(nome='Contemplação de Consórcio').first()
+    if not item_padrao:
+        item_padrao = ItemReceita(
+            nome='Contemplação de Consórcio',
+            tipo='OUTROS',
+            descricao='Receita pontual gerada automaticamente por consórcio contemplado.',
+            ativo=True,
+            recorrente=False,
+            valor_base_mensal=None,
+            dia_previsto_pagamento=None,
+            conta_origem_id=None,
+        )
+        db.session.add(item_padrao)
+        db.session.flush()
+
+    alterou = False
+
+    for consorcio in consorcios:
+        if not consorcio.mes_contemplacao or not consorcio.valor_premio:
+            continue
+
+        competencia = consorcio.mes_contemplacao.replace(day=1)
+        marcador = f"consorcio_id={consorcio.id}"
+
+        existente = ReceitaRealizada.query.filter(
+            ReceitaRealizada.item_receita_id == item_padrao.id,
+            ReceitaRealizada.mes_referencia == competencia,
+            ReceitaRealizada.observacoes.ilike(f"%{marcador}%"),
+        ).first()
+
+        descricao = f"Consórcio {consorcio.nome} - contemplação (ID {consorcio.id})"
+
+        if existente:
+            # Atualizar para refletir possíveis mudanças no contrato
+            existente.data_recebimento = consorcio.mes_contemplacao
+            existente.valor_recebido = consorcio.valor_premio
+            existente.mes_referencia = competencia
+            existente.descricao = descricao
+            if not existente.observacoes:
+                existente.observacoes = marcador
+            elif marcador not in existente.observacoes:
+                existente.observacoes = f"{existente.observacoes}\n{marcador}".strip()
+            alterou = True
+            continue
+
+        receita = ReceitaRealizada(
+            item_receita_id=item_padrao.id,
+            data_recebimento=consorcio.mes_contemplacao,
+            valor_recebido=consorcio.valor_premio,
+            mes_referencia=competencia,
+            conta_origem_id=None,
+            descricao=descricao,
+            orcamento_id=None,
+            observacoes=marcador,
+        )
+        db.session.add(receita)
+        alterou = True
+
+    if alterou:
+        db.session.commit()
 
 
 # ============================================================================
@@ -38,6 +119,9 @@ def listar_itens():
         JSON com lista de fontes
     """
     try:
+        # Backfill idempotente para garantir que contemplações antigas apareçam
+        _backfill_receitas_contemplacao_consorcios()
+
         tipo = request.args.get('tipo')
         ativo = request.args.get('ativo')
 
@@ -369,7 +453,7 @@ def criar_orcamento():
                 'error': 'ano_mes é obrigatório'
             }), 400
 
-        if not data.get('valor_previsto'):
+        if data.get('valor_previsto') is None:
             return jsonify({
                 'success': False,
                 'error': 'valor_previsto é obrigatório'
@@ -520,6 +604,49 @@ def buscar_realizada(id):
         }), 200
 
     except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@receitas_bp.route('/realizadas/<int:id>', methods=['PUT'])
+def atualizar_realizada(id):
+    """
+    Atualiza uma receita realizada.
+
+    Body (JSON): mesmos campos do POST /realizadas
+    """
+    try:
+        data = request.get_json()
+
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'Dados não fornecidos'
+            }), 400
+
+        receita = ReceitaService.atualizar_receita_realizada(id, data)
+        if not receita:
+            return jsonify({
+                'success': False,
+                'error': 'Receita não encontrada'
+            }), 404
+
+        return jsonify({
+            'success': True,
+            'message': 'Receita atualizada com sucesso',
+            'data': receita.to_dict()
+        }), 200
+
+    except ValueError as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 400
+
+    except Exception as e:
+        db.session.rollback()
         return jsonify({
             'success': False,
             'error': str(e)
@@ -744,6 +871,9 @@ def resumo_mensal():
                 'success': False,
                 'error': 'Parâmetro ano é obrigatório'
             }), 400
+
+        # Backfill idempotente para garantir que contemplações do ano apareçam no resumo
+        _backfill_receitas_contemplacao_consorcios(ano=ano)
 
         resumo = ReceitaService.get_resumo_receitas_por_mes(ano)
 

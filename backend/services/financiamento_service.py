@@ -88,6 +88,22 @@ class FinanciamentoService:
         else:
             data_primeira_parcela = dados['data_primeira_parcela']
 
+        # Se não foi fornecido item_despesa_id, criar automaticamente
+        # Conforme CONTRATO: 1 parcela = 1 Conta = 1 linha em DESPESAS
+        item_despesa_id = dados.get('item_despesa_id')
+        if not item_despesa_id:
+            from backend.models import ItemDespesa
+            item_despesa = ItemDespesa(
+                nome=dados['nome'],
+                tipo='Financiamento',
+                ativo=True,
+                valor=0,  # Valor será da parcela individual
+                recorrente=False
+            )
+            db.session.add(item_despesa)
+            db.session.flush()
+            item_despesa_id = item_despesa.id
+
         # Criar financiamento
         financiamento = Financiamento(
             nome=dados['nome'],
@@ -103,7 +119,7 @@ class FinanciamentoService:
             indexador_saldo=dados.get('indexador_saldo'),
             data_contrato=data_contrato,
             data_primeira_parcela=data_primeira_parcela,
-            item_despesa_id=dados.get('item_despesa_id'),
+            item_despesa_id=item_despesa_id,
             # Configuração de seguro
             seguro_tipo=dados.get('seguro_tipo', 'fixo'),
             seguro_percentual=Decimal(str(dados.get('seguro_percentual', 0.0006))),
@@ -116,7 +132,107 @@ class FinanciamentoService:
         db.session.add(financiamento)
         db.session.flush()  # Para obter o ID
 
-        # Gerar parcelas (agora usa configurações do próprio financiamento)
+        # ========================================================================
+        # Inicializar ESTADO SOBERANO
+        # ========================================================================
+        financiamento.saldo_devedor_atual = financiamento.valor_financiado
+        financiamento.numero_parcela_base = 0
+        financiamento.data_base = data_primeira_parcela
+
+        # Calcular amortização mensal inicial (SAC)
+        if financiamento.sistema_amortizacao == 'SAC':
+            financiamento.amortizacao_mensal_atual = financiamento.valor_financiado / Decimal(str(financiamento.prazo_total_meses))
+
+        financiamento.regime_pos_amortizacao = None  # Ainda não houve amortização
+        db.session.flush()
+
+        # Criar vigências de seguro (se fornecidas)
+        vigencias_seguro = dados.get('vigencias_seguro', [])
+        if vigencias_seguro:
+            from backend.services.seguro_vigencia_service import SeguroVigenciaService
+
+            # Ordenar vigências por competencia_inicio para criar na ordem cronológica
+            vigencias_ordenadas = sorted(
+                vigencias_seguro,
+                key=lambda v: v['competencia_inicio']
+            )
+
+            for idx, vigencia_data in enumerate(vigencias_ordenadas):
+                # Converter string de data para objeto date (aceita múltiplos formatos)
+                competencia_inicio = vigencia_data['competencia_inicio']
+                if isinstance(competencia_inicio, str):
+                    competencia_inicio_str = vigencia_data['competencia_inicio']
+
+                    # Limpar e normalizar a string de data
+                    # Se veio YYYY-MM-DD, manter apenas YYYY-MM
+                    if '-' in competencia_inicio_str and len(competencia_inicio_str) > 7:
+                        parts = competencia_inicio_str.split('-')
+                        competencia_inicio_str = f"{parts[0]}-{parts[1]}"  # YYYY-MM
+
+                    competencia_inicio = None
+
+                    # Tentar formato YYYY-MM (input type="month")
+                    if len(competencia_inicio_str) == 7 and competencia_inicio_str[4] == '-':
+                        try:
+                            competencia_inicio = datetime.strptime(competencia_inicio_str + '-01', '%Y-%m-%d').date()
+                        except ValueError:
+                            pass
+
+                    # Tentar formato MM/YYYY
+                    if not competencia_inicio and '/' in competencia_inicio_str:
+                        partes = competencia_inicio_str.split('/')
+                        if len(partes) == 2:
+                            try:
+                                mes, ano = partes
+                                competencia_inicio = datetime(int(ano), int(mes), 1).date()
+                            except (ValueError, IndexError):
+                                pass
+
+                    # Tentar formato DD/MM/YYYY
+                    if not competencia_inicio and '/' in competencia_inicio_str:
+                        try:
+                            competencia_inicio = datetime.strptime(competencia_inicio_str, '%d/%m/%Y').date()
+                            competencia_inicio = competencia_inicio.replace(day=1)
+                        except ValueError:
+                            pass
+
+                    # Tentar formato YYYY-MM-DD (ISO)
+                    if not competencia_inicio:
+                        try:
+                            competencia_inicio = datetime.strptime(competencia_inicio_str, '%Y-%m-%d').date()
+                            competencia_inicio = competencia_inicio.replace(day=1)
+                        except ValueError:
+                            pass
+
+                    if not competencia_inicio:
+                        raise ValueError(
+                            f'Formato de data inválido para competencia_inicio: {vigencia_data["competencia_inicio"]}. '
+                            f'Use YYYY-MM, MM/YYYY, YYYY-MM-DD ou DD/MM/YYYY'
+                        )
+
+                    # Normalizar para o primeiro dia do mês
+                    competencia_inicio = competencia_inicio.replace(day=1)
+
+                # Se não é a primeira vigência, encerrar a anterior
+                if idx > 0:
+                    SeguroVigenciaService._encerrar_vigencia_anterior(
+                        financiamento_id=financiamento.id,
+                        nova_competencia_inicio=competencia_inicio
+                    )
+
+                SeguroVigenciaService.criar_vigencia(
+                    financiamento_id=financiamento.id,
+                    competencia_inicio=competencia_inicio,
+                    valor_mensal=Decimal(str(vigencia_data['valor_mensal'])),
+                    saldo_devedor_vigencia=financiamento.saldo_devedor_atual,
+                    observacoes=vigencia_data.get('observacoes')
+                )
+
+            # CRÍTICO: Flush para persistir vigências ANTES de gerar parcelas
+            # Isso garante que obter_seguro_por_data() encontre as vigências
+            db.session.flush()
+
+        # Gerar parcelas (agora usa configurações do próprio financiamento + vigências criadas)
         FinanciamentoService.gerar_parcelas(financiamento)
 
         db.session.commit()
@@ -137,6 +253,36 @@ class FinanciamentoService:
         # Fórmula: (1 + taxa_anual)^(1/12) - 1
         taxa_mensal = (Decimal('1') + taxa_anual) ** (Decimal('1') / Decimal('12')) - Decimal('1')
         return taxa_mensal
+
+    @staticmethod
+    def financiamento_tem_historico_alterado(financiamento_id):
+        """
+        Verifica se o financiamento possui histórico alterado (imutável)
+
+        Retorna True se:
+        - Existe parcela paga OU
+        - Existe amortização extraordinária
+
+        Quando True, recálculo estrutural é PROIBIDO para preservar histórico.
+
+        Args:
+            financiamento_id (int): ID do financiamento
+
+        Returns:
+            bool: True se há histórico alterado, False caso contrário
+        """
+        # 1) Verificar se há parcelas pagas
+        existe_pago = FinanciamentoParcela.query.filter_by(
+            financiamento_id=financiamento_id,
+            status='pago'
+        ).first() is not None
+
+        # 2) Verificar se há amortizações extraordinárias
+        existe_amortizacao = FinanciamentoAmortizacaoExtra.query.filter_by(
+            financiamento_id=financiamento_id
+        ).first() is not None
+
+        return existe_pago or existe_amortizacao
 
     @staticmethod
     def listar_financiamentos(ativo=None):
@@ -196,14 +342,130 @@ class FinanciamentoService:
         if 'taxa_administracao_fixa' in dados:
             financiamento.taxa_administracao_fixa = Decimal(str(dados['taxa_administracao_fixa']))
 
-        # Identificar se houve mudança em encargos que requerem recálculo
-        campos_que_afetam_parcelas = ['seguro_tipo', 'seguro_percentual', 'valor_seguro_mensal', 'taxa_administracao_fixa']
-        requer_recalculo = any(campo in dados for campo in campos_que_afetam_parcelas)
+        # Criar novas vigências de seguro (se fornecidas)
+        # IMPORTANTE: Nunca editar vigências existentes, sempre criar novas
+        vigencias_seguro = dados.get('vigencias_seguro', [])
+        if vigencias_seguro:
+            from backend.services.seguro_vigencia_service import SeguroVigenciaService
+            from datetime import datetime
+
+            for vigencia_data in vigencias_seguro:
+                # Converter string de data para objeto date (aceita múltiplos formatos)
+                competencia_inicio = vigencia_data['competencia_inicio']
+                if isinstance(competencia_inicio, str):
+                    competencia_inicio_str = vigencia_data['competencia_inicio']
+
+                    # Limpar e normalizar a string de data
+                    # Remover sufixos como "-01", "-1", etc que vêm do frontend
+                    if '-' in competencia_inicio_str:
+                        competencia_inicio_str = competencia_inicio_str.split('-')[0]
+
+                    competencia_inicio = None
+
+                    # Tentar formato YYYY-MM (input type="month")
+                    if len(competencia_inicio_str) == 7 and competencia_inicio_str[4] == '-':
+                        try:
+                            competencia_inicio = datetime.strptime(competencia_inicio_str + '-01', '%Y-%m-%d').date()
+                        except ValueError:
+                            pass
+
+                    # Tentar formato MM/YYYY (frontend pode enviar assim)
+                    if not competencia_inicio and '/' in competencia_inicio_str:
+                        partes = competencia_inicio_str.split('/')
+                        if len(partes) == 2:
+                            try:
+                                mes, ano = partes
+                                competencia_inicio = datetime(int(ano), int(mes), 1).date()
+                            except (ValueError, IndexError):
+                                pass
+
+                    # Tentar formato DD/MM/YYYY
+                    if not competencia_inicio and '/' in competencia_inicio_str:
+                        try:
+                            competencia_inicio = datetime.strptime(competencia_inicio_str, '%d/%m/%Y').date()
+                            # Normalizar para primeiro dia do mês
+                            competencia_inicio = competencia_inicio.replace(day=1)
+                        except ValueError:
+                            pass
+
+                    # Tentar formato YYYY-MM-DD (ISO)
+                    if not competencia_inicio:
+                        try:
+                            competencia_inicio = datetime.strptime(competencia_inicio_str, '%Y-%m-%d').date()
+                            # Normalizar para primeiro dia do mês
+                            competencia_inicio = competencia_inicio.replace(day=1)
+                        except ValueError:
+                            pass
+
+                    if not competencia_inicio:
+                        raise ValueError(
+                            f'Formato de data inválido para competencia_inicio: {vigencia_data["competencia_inicio"]}. '
+                            f'Use YYYY-MM, MM/YYYY, YYYY-MM-DD ou DD/MM/YYYY'
+                        )
+
+                SeguroVigenciaService.criar_vigencia(
+                    financiamento_id=financiamento.id,
+                    competencia_inicio=competencia_inicio,
+                    valor_mensal=Decimal(str(vigencia_data['valor_mensal'])),
+                    saldo_devedor_vigencia=financiamento.saldo_devedor_atual,
+                    observacoes=vigencia_data.get('observacoes')
+                )
+
+            # CRÍTICO: Flush para persistir vigências ANTES de commit
+            # Isso garante que obter_seguro_por_data() encontre as vigências
+            db.session.flush()
+
+        # ========================================================================
+        # DECISÃO DE RECÁLCULO: Separar mudanças estruturais de encargos acessórios
+        # ========================================================================
+        # Mudanças estruturais afetam saldo/amortização/juros → recálculo completo
+        campos_estruturais = ['taxa_administracao_fixa']  # Campos que afetam estrutura
+
+        # Mudanças de seguro são apenas encargo acessório → recálculo seguro-only
+        houve_mudanca_seguro = 'vigencias_seguro' in dados and dados['vigencias_seguro']
+        houve_mudanca_estrutural = any(campo in dados for campo in campos_estruturais)
 
         db.session.commit()
 
-        # Recalcular parcelas futuras se houve mudança em encargos
-        if requer_recalculo:
+        # Recalcular baseado no tipo de mudança
+        if houve_mudanca_seguro and not houve_mudanca_estrutural:
+            # ✅ NOVA VIGÊNCIA → Recálculo SEGURO-ONLY (NÃO toca em saldo/amortização)
+            primeira_vigencia = dados['vigencias_seguro'][0]
+            competencia_inicio = primeira_vigencia['competencia_inicio']
+
+            # Converter para date se for string
+            if isinstance(competencia_inicio, str):
+                from datetime import datetime
+                if len(competencia_inicio) == 7:  # YYYY-MM
+                    competencia_inicio = datetime.strptime(competencia_inicio + '-01', '%Y-%m-%d').date()
+                else:
+                    competencia_inicio = datetime.strptime(competencia_inicio, '%Y-%m-%d').date()
+
+            FinanciamentoService.recalcular_seguro_parcelas_futuras(
+                financiamento.id,
+                a_partir_de=competencia_inicio
+            )
+        elif houve_mudanca_estrutural:
+            # ========================================================================
+            # TRAVA DE SOBERANIA: Bloquear recálculo estrutural se há histórico
+            # ========================================================================
+            # Recálculo estrutural (recalcular_parcelas_futuras) SOBRESCREVE:
+            # - Amortização (recalcula saldo / parcelas)
+            # - Juros (recalcula sobre novo saldo)
+            # - Saldo projetado
+            #
+            # Se já houve amortização extra OU parcela paga, o histórico é IMUTÁVEL.
+            # Permitir recálculo estrutural destruiria esses eventos.
+            force_recalculo = dados.get('force_recalculo', False)
+
+            if FinanciamentoService.financiamento_tem_historico_alterado(financiamento.id) and not force_recalculo:
+                raise ValueError(
+                    'RECALCULO_BLOQUEADO: Este financiamento possui histórico (parcelas pagas e/ou '
+                    'amortização extraordinária). Recalcular estruturalmente pode desfazer alterações. '
+                    'Para forçar, envie force_recalculo=true no payload.'
+                )
+
+            # ❗ MUDANÇA ESTRUTURAL → Recálculo completo (só se não bloqueado)
             FinanciamentoService.recalcular_parcelas_futuras(financiamento.id)
 
         return financiamento
@@ -212,6 +474,9 @@ class FinanciamentoService:
     def inativar_financiamento(financiamento_id):
         """
         Inativa (soft delete) um financiamento
+
+        IMPORTANTE: Remove contas futuras (despesas de parcelas pendentes)
+        mas mantém histórico de parcelas pagas.
 
         Args:
             financiamento_id (int): ID do financiamento
@@ -224,11 +489,25 @@ class FinanciamentoService:
             raise ValueError('Financiamento não encontrado')
 
         financiamento.ativo = False
-        db.session.commit()
 
-        # Criar contas (despesas) para as parcelas
+        # Remover contas (despesas) de parcelas PENDENTES futuras
+        # Manter contas de parcelas pagas (histórico imutável)
         if financiamento.item_despesa_id:
-            FinanciamentoService.sincronizar_contas(financiamento.id)
+            # Buscar IDs de parcelas pendentes
+            parcelas_pendentes = FinanciamentoParcela.query.filter_by(
+                financiamento_id=financiamento_id,
+                status='pendente'
+            ).all()
+
+            parcelas_pendentes_ids = [p.id for p in parcelas_pendentes]
+
+            if parcelas_pendentes_ids:
+                # Remover contas vinculadas a parcelas pendentes
+                Conta.query.filter(
+                    Conta.financiamento_parcela_id.in_(parcelas_pendentes_ids)
+                ).delete(synchronize_session=False)
+
+        db.session.commit()
 
         return financiamento
 
@@ -325,6 +604,12 @@ class FinanciamentoService:
         Returns:
             int: Número de parcelas recalculadas
         """
+        from backend.services.seguro_vigencia_service import SeguroVigenciaService
+        import logging
+        logger = logging.getLogger(__name__)
+
+        logger.info(f"[RECALC] ========== INÍCIO RECÁLCULO FIN_ID={financiamento_id} ==========")
+
         financiamento = Financiamento.query.get(financiamento_id)
         if not financiamento:
             raise ValueError('Financiamento não encontrado')
@@ -338,24 +623,56 @@ class FinanciamentoService:
         if not parcelas_pendentes:
             return 0  # Nenhuma parcela para recalcular
 
-        # Buscar última parcela paga para determinar saldo atual
-        ultima_paga = FinanciamentoParcela.query.filter_by(
-            financiamento_id=financiamento_id,
-            status='pago'
-        ).order_by(FinanciamentoParcela.numero_parcela.desc()).first()
+        # ========================================================================
+        # 🔥 CORREÇÃO CRÍTICA: Determinar saldo devedor inicial correto
+        #
+        # PROBLEMA: Se houver amortização extraordinária APÓS última parcela paga,
+        # o saldo da última paga NÃO reflete essa amortização.
+        #
+        # SOLUÇÃO: Buscar a parcela IMEDIATAMENTE ANTERIOR à primeira pendente,
+        # independente do status (paga ou pendente), pois ela já reflete
+        # o impacto de amortizações extraordinárias.
+        # ========================================================================
+        primeira_pendente = parcelas_pendentes[0]
+        numero_anterior = primeira_pendente.numero_parcela - 1
 
-        # Determinar saldo devedor inicial
-        if ultima_paga:
-            saldo_devedor = ultima_paga.saldo_devedor_apos_pagamento
-        else:
+        logger.info(f"[RECALC] Primeira pendente: parcela #{primeira_pendente.numero_parcela}, vencimento={primeira_pendente.data_vencimento}")
+        logger.info(f"[RECALC] Buscando parcela anterior: #{numero_anterior}")
+
+        # Se primeira pendente é a parcela 1, usar valor financiado
+        if numero_anterior == 0:
             saldo_devedor = financiamento.valor_financiado
+            logger.info(f"[RECALC] Parcela anterior é 0, usando valor_financiado: R$ {saldo_devedor}")
+        else:
+            # Buscar parcela anterior (independente do status)
+            parcela_anterior = FinanciamentoParcela.query.filter_by(
+                financiamento_id=financiamento_id,
+                numero_parcela=numero_anterior
+            ).first()
+
+            if parcela_anterior:
+                # Usar saldo da parcela anterior (já reflete amortizações extras)
+                saldo_devedor = parcela_anterior.saldo_devedor_apos_pagamento
+                logger.info(f"[RECALC] Parcela anterior encontrada: #{parcela_anterior.numero_parcela}, status={parcela_anterior.status}")
+                logger.info(f"[RECALC] Saldo da parcela anterior: R$ {saldo_devedor}")
+            else:
+                # Fallback: usar valor financiado
+                saldo_devedor = financiamento.valor_financiado
+                logger.warning(f"[RECALC] Parcela anterior NÃO encontrada! Usando valor_financiado: R$ {saldo_devedor}")
+
+        logger.info(f"[RECALC] SALDO_BASE PARA RECÁLCULO: R$ {saldo_devedor}")
 
         # Taxa de juros mensal
         taxa_mensal = financiamento.taxa_juros_mensal
         sistema = financiamento.sistema_amortizacao
 
+        logger.info(f"[RECALC] Taxa mensal: {taxa_mensal} (já em decimal)")
+        logger.info(f"[RECALC] Sistema: {sistema}")
+        logger.info(f"[RECALC] Total de parcelas pendentes: {len(parcelas_pendentes)}")
+
         # Recalcular cada parcela pendente
-        for parcela in parcelas_pendentes:
+        for idx, parcela in enumerate(parcelas_pendentes, 1):
+            logger.info(f"[RECALC] --- Recalculando parcela #{parcela.numero_parcela} ({idx}/{len(parcelas_pendentes)}) ---")
             # Calcular juros sobre saldo atual
             juros = saldo_devedor * taxa_mensal
 
@@ -379,11 +696,25 @@ class FinanciamentoService:
                 # Juros simples fixos
                 juros = financiamento.valor_financiado * taxa_mensal
 
-            # Calcular seguro baseado no tipo
-            if financiamento.seguro_tipo == 'percentual_saldo':
-                valor_seguro = saldo_devedor * financiamento.seguro_percentual
-            else:  # fixo
-                valor_seguro = financiamento.valor_seguro_mensal
+            # ========================================================================
+            # 🔥 CORREÇÃO CRÍTICA: Buscar seguro por VIGÊNCIA baseada na DATA da parcela
+            # NÃO usar modelo antigo (seguro_tipo, valor_seguro_mensal)
+            # ========================================================================
+            logger.info(f"[RECALC] Buscando vigência para data: {parcela.data_vencimento}")
+            vigencia = SeguroVigenciaService.obter_vigencia_por_data(
+                financiamento_id=financiamento.id,
+                data_referencia=parcela.data_vencimento
+            )
+
+            if not vigencia:
+                logger.error(f"[RECALC] ERRO: Nenhuma vigência encontrada para {parcela.data_vencimento}")
+                raise ValueError(
+                    f'Nenhuma vigência de seguro encontrada para a data {parcela.data_vencimento.strftime("%Y-%m-%d")}. '
+                    f'Cadastre uma vigência válida antes de gerar/recalcular parcelas.'
+                )
+
+            valor_seguro = vigencia.valor_mensal
+            logger.info(f"[RECALC] Vigência encontrada: inicio={vigencia.competencia_inicio}, valor=R$ {valor_seguro}")
 
             # Taxa administrativa (valor fixo)
             valor_taxa_adm = financiamento.taxa_administracao_fixa
@@ -391,15 +722,109 @@ class FinanciamentoService:
             # Atualizar parcela
             parcela.valor_amortizacao = amortizacao
             parcela.valor_juros = juros
-            parcela.valor_seguro = valor_seguro
+            parcela.valor_seguro = valor_seguro  # ✅ AGORA USA VIGÊNCIA CORRETA
             parcela.valor_taxa_adm = valor_taxa_adm
             parcela.valor_previsto_total = amortizacao + juros + valor_seguro + valor_taxa_adm
-            parcela.saldo_devedor_apos_pagamento = saldo_devedor - amortizacao
+            parcela.saldo_devedor_apos_pagamento = saldo_devedor - amortizacao  # ✅ REENCADEAMENTO CORRETO
 
-            # Atualizar saldo para próxima iteração
+            logger.info(f"[RECALC] Saldo atual: R$ {saldo_devedor}")
+            logger.info(f"[RECALC] Juros: R$ {juros}")
+            logger.info(f"[RECALC] Amortização: R$ {amortizacao}")
+            logger.info(f"[RECALC] Seguro: R$ {valor_seguro}")
+            logger.info(f"[RECALC] Taxa ADM: R$ {valor_taxa_adm}")
+            logger.info(f"[RECALC] TOTAL: R$ {parcela.valor_previsto_total}")
+            logger.info(f"[RECALC] Saldo após: R$ {parcela.saldo_devedor_apos_pagamento}")
+
+            # Atualizar saldo para próxima iteração (✅ REENCADEAMENTO)
             saldo_devedor = saldo_devedor - amortizacao
 
         db.session.commit()
+        logger.info(f"[RECALC] ========== FIM RECÁLCULO - {len(parcelas_pendentes)} parcelas atualizadas ==========")
+        return len(parcelas_pendentes)
+
+    @staticmethod
+    def recalcular_seguro_parcelas_futuras(financiamento_id, a_partir_de=None):
+        """
+        Recálculo SEGURO-ONLY - NÃO toca em amortização, juros ou saldo devedor.
+
+        Este método é usado quando SOMENTE o seguro muda (ex: nova vigência).
+        Seguro é encargo acessório e NUNCA afeta saldo devedor ou amortização.
+
+        Args:
+            financiamento_id: ID do financiamento
+            a_partir_de: Data opcional - recalcula apenas parcelas >= esta data
+
+        Returns:
+            Quantidade de parcelas atualizadas
+
+        Raises:
+            ValueError: Se faltar vigência para alguma data (fail-fast)
+        """
+        from backend.services.seguro_vigencia_service import SeguroVigenciaService
+        import logging
+        logger = logging.getLogger(__name__)
+
+        logger.info(f"[SEGURO-ONLY] ========== INÍCIO RECÁLCULO SEGURO FIN_ID={financiamento_id} ==========")
+        if a_partir_de:
+            logger.info(f"[SEGURO-ONLY] A partir de: {a_partir_de}")
+
+        # Buscar financiamento
+        financiamento = Financiamento.query.get(financiamento_id)
+        if not financiamento:
+            raise ValueError(f'Financiamento {financiamento_id} não encontrado')
+
+        # Buscar parcelas pendentes
+        query = FinanciamentoParcela.query.filter_by(
+            financiamento_id=financiamento_id,
+            status='pendente'
+        )
+
+        # Filtrar por data se fornecido
+        if a_partir_de:
+            query = query.filter(FinanciamentoParcela.data_vencimento >= a_partir_de)
+
+        parcelas_pendentes = query.order_by(FinanciamentoParcela.numero_parcela).all()
+
+        if not parcelas_pendentes:
+            logger.info(f"[SEGURO-ONLY] Nenhuma parcela pendente para atualizar")
+            return 0
+
+        logger.info(f"[SEGURO-ONLY] Total de parcelas a atualizar: {len(parcelas_pendentes)}")
+
+        # Atualizar SOMENTE o componente seguro
+        for parcela in parcelas_pendentes:
+            # Buscar vigência por data da parcela
+            vigencia = SeguroVigenciaService.obter_vigencia_por_data(
+                financiamento_id=financiamento.id,
+                data_referencia=parcela.data_vencimento
+            )
+
+            if not vigencia:
+                logger.error(f"[SEGURO-ONLY] ERRO: Nenhuma vigência para {parcela.data_vencimento}")
+                raise ValueError(
+                    f'Nenhuma vigência de seguro encontrada para a data {parcela.data_vencimento.strftime("%Y-%m-%d")}. '
+                    f'Cadastre uma vigência válida antes de recalcular.'
+                )
+
+            # ❗ CRÍTICO: NÃO mexe em amortização, juros ou saldo
+            # Apenas atualiza seguro e total
+            parcela.valor_seguro = vigencia.valor_mensal
+            parcela.valor_previsto_total = (
+                parcela.valor_amortizacao +
+                parcela.valor_juros +
+                parcela.valor_seguro +
+                parcela.valor_taxa_adm
+            )
+
+            logger.info(
+                f"[SEGURO-ONLY] Parcela #{parcela.numero_parcela}: "
+                f"Seguro R$ {parcela.valor_seguro:,.2f} | "
+                f"Total R$ {parcela.valor_previsto_total:,.2f} "
+                f"(amort={parcela.valor_amortizacao}, juros={parcela.valor_juros}, saldo_após={parcela.saldo_devedor_apos_pagamento})"
+            )
+
+        db.session.commit()
+        logger.info(f"[SEGURO-ONLY] ========== FIM RECÁLCULO SEGURO - {len(parcelas_pendentes)} parcelas atualizadas ==========")
         return len(parcelas_pendentes)
 
     # ========================================================================
@@ -418,6 +843,11 @@ class FinanciamentoService:
         Args:
             financiamento (Financiamento): Objeto do financiamento com todas configurações
         """
+        parcelas_existentes = FinanciamentoParcela.query.filter_by(financiamento_id=financiamento.id).all()
+        ids_antigos = [p.id for p in parcelas_existentes]
+        if ids_antigos:
+            Conta.query.filter(Conta.financiamento_parcela_id.in_(ids_antigos)).delete(synchronize_session=False)
+
         # Deletar parcelas existentes
         FinanciamentoParcela.query.filter_by(financiamento_id=financiamento.id).delete()
 
@@ -437,42 +867,147 @@ class FinanciamentoService:
             FinanciamentoService.sincronizar_contas(financiamento.id)
 
     @staticmethod
+    def _criar_conta_da_parcela(financiamento, parcela):
+        """
+        Cria ou atualiza uma Conta para a parcela, garantindo idempotência.
+        """
+        if not financiamento.item_despesa_id:
+            return
+
+        conta_existente = Conta.query.filter_by(financiamento_parcela_id=parcela.id).first()
+        mes_referencia = parcela.data_vencimento.replace(day=1)
+
+        if conta_existente:
+            conta_existente.valor = parcela.valor_previsto_total
+            conta_existente.data_vencimento = parcela.data_vencimento
+            conta_existente.mes_referencia = mes_referencia
+            conta_existente.numero_parcela = parcela.numero_parcela
+            conta_existente.total_parcelas = financiamento.prazo_total_meses
+            conta_existente.financiamento_parcela_id = parcela.id
+        else:
+            conta_existente = Conta(
+                item_despesa_id=financiamento.item_despesa_id,
+                financiamento_parcela_id=parcela.id,
+                mes_referencia=mes_referencia,
+                descricao=f'{financiamento.nome} - Parcela {parcela.numero_parcela}/{financiamento.prazo_total_meses}',
+                valor=parcela.valor_previsto_total,
+                data_vencimento=parcela.data_vencimento,
+                data_pagamento=parcela.data_vencimento if parcela.status == 'pago' else None,
+                status_pagamento='Pago' if parcela.status == 'pago' else 'Pendente',
+                numero_parcela=parcela.numero_parcela,
+                total_parcelas=financiamento.prazo_total_meses,
+                observacoes=f'Financiamento {financiamento.sistema_amortizacao}'
+            )
+            db.session.add(conta_existente)
+
+        if parcela.status == 'pago':
+            conta_existente.status_pagamento = 'Pago'
+            conta_existente.data_pagamento = parcela.data_vencimento
+        else:
+            conta_existente.status_pagamento = 'Pendente'
+            conta_existente.data_pagamento = None
+
+        db.session.flush()
+        parcela.conta_id = conta_existente.id
+
+    @staticmethod
     def _gerar_parcelas_sac(financiamento):
         """
-        Sistema de Amortização Constante (SAC)
+        Sistema de Amortização Constante (SAC) com Modelo de Fases
 
-        Amortização fixa em todas as parcelas
-        Juros decrescentes sobre saldo devedor
-        Seguro calculado conforme tipo (fixo ou percentual do saldo)
-        Aplica TR/indexador se configurado
+        FASE 1: Parcelas antes de amortização extraordinária
+        - Amortização fixa (saldo / prazo)
+        - Juros decrescentes sobre saldo devedor
+
+        EVENTO: Amortização extraordinária (reduzir_parcela ou reduzir_prazo)
+
+        FASE 2: Parcelas após amortização
+        - Tipo 'reduzir_parcela': Recalcula amortização fixa = novo_saldo / parcelas_restantes
+        - Tipo 'reduzir_prazo': Mantém amortização fixa, reduz número de parcelas
+
+        Aplica TR/indexador se configurado (independente de fases)
         """
         valor_financiado = financiamento.valor_financiado
         prazo = financiamento.prazo_total_meses
         taxa_mensal = financiamento.taxa_juros_mensal
         indexador = financiamento.indexador_saldo
 
-        # Amortização constante
-        amortizacao = valor_financiado / Decimal(str(prazo))
+        # Buscar amortizações extraordinárias para aplicar durante a geração
+        amortizacoes = FinanciamentoAmortizacaoExtra.query.filter_by(
+            financiamento_id=financiamento.id
+        ).order_by(FinanciamentoAmortizacaoExtra.data).all()
+
+        # Amortização constante inicial (FASE 1)
+        amortizacao_fixa = valor_financiado / Decimal(str(prazo))
         saldo_devedor = valor_financiado
         data_vencimento = financiamento.data_primeira_parcela
 
+        # Controle de fases
+        amortizacao_aplicada = None
+        parcelas_geradas = 0
+
         for num_parcela in range(1, prazo + 1):
-            # Buscar TR/indexador se configurado
+            # DETECÇÃO DE EVENTO: Verificar se há amortização antes desta parcela
+            for amort in amortizacoes:
+                if (amortizacao_aplicada != amort and
+                    amort.data < data_vencimento and
+                    parcelas_geradas > 0):  # Só aplica se já gerou pelo menos 1 parcela
+
+                    # TRANSIÇÃO DE FASE: Aplicar amortização extraordinária
+                    saldo_devedor = saldo_devedor - amort.valor
+
+                    if saldo_devedor < 0:
+                        saldo_devedor = Decimal('0')
+                        break
+
+                    # Recalcular amortização fixa baseado no tipo
+                    parcelas_restantes = prazo - num_parcela + 1
+
+                    if amort.tipo == 'reduzir_parcela':
+                        # FASE 2A: Recalcula amortização fixa
+                        amortizacao_fixa = saldo_devedor / Decimal(str(parcelas_restantes))
+                    elif amort.tipo == 'reduzir_prazo':
+                        # FASE 2B: Mantém amortização, reduz prazo
+                        # Amortização fixa permanece a mesma
+                        # O número de parcelas será ajustado quando saldo zerar
+                        pass
+
+                    amortizacao_aplicada = amort
+
+            # Se saldo zerou, parar de gerar parcelas
+            if saldo_devedor <= Decimal('0.01'):
+                break
+
+            # Buscar TR/indexador se configurado (aplica no saldo ANTES de calcular a parcela)
             taxa_indexador = Decimal('0')
             if indexador:
                 taxa_indexador = FinanciamentoService._obter_indexador(indexador, data_vencimento)
 
-            # Atualizar saldo com indexador
-            saldo_corrigido = saldo_devedor * (Decimal('1') + taxa_indexador)
+            # Corrigir saldo devedor com indexador (TR faz saldo CRESCER)
+            # Importante: isso só acontece UMA VEZ por mês, no início do período
+            saldo_corrigido = saldo_devedor * (Decimal('1') + taxa_indexador / Decimal('100'))
 
             # Calcular juros sobre saldo corrigido
+            # IMPORTANTE: taxa_mensal já é decimal (ex: 0.006827), não dividir por 100!
             juros = saldo_corrigido * taxa_mensal
 
-            # Calcular seguro baseado no tipo
-            if financiamento.seguro_tipo == 'percentual_saldo':
-                valor_seguro_parcela = saldo_corrigido * financiamento.seguro_percentual
-            else:  # fixo
-                valor_seguro_parcela = financiamento.valor_seguro_mensal
+            # Usar amortização fixa atual (pode ter sido recalculada após amortização)
+            amortizacao = amortizacao_fixa
+
+            # Proteção: Se amortização é maior que saldo, ajustar (última parcela)
+            if amortizacao > saldo_corrigido:
+                amortizacao = saldo_corrigido
+
+            # Buscar seguro por vigência
+            vigencia_seguro = financiamento.obter_seguro_por_data(data_vencimento)
+
+            if not vigencia_seguro:
+                raise ValueError(
+                    f"Seguro não configurado para a data {data_vencimento.strftime('%d/%m/%Y')}. "
+                    f"Cadastre uma vigência de seguro antes de gerar as parcelas."
+                )
+
+            valor_seguro_parcela = vigencia_seguro.valor_mensal
 
             # Taxa administrativa (valor fixo mensal)
             valor_taxa_adm = financiamento.taxa_administracao_fixa
@@ -480,7 +1015,7 @@ class FinanciamentoService:
             # Compor parcela
             valor_previsto_total = amortizacao + juros + valor_seguro_parcela + valor_taxa_adm
 
-            # Calcular saldo após pagamento
+            # Calcular saldo após pagamento (subtrai amortização do saldo CORRIGIDO)
             saldo_apos_pagamento = saldo_corrigido - amortizacao
 
             # Criar parcela
@@ -498,8 +1033,13 @@ class FinanciamentoService:
             )
 
             db.session.add(parcela)
+            db.session.flush()
+            FinanciamentoService._criar_conta_da_parcela(financiamento, parcela)
 
-            # Atualizar para próxima iteração
+            parcelas_geradas += 1
+
+            # Atualizar saldo para próxima iteração
+            # IMPORTANTE: passa o saldo SEM correção, pois a TR será aplicada no próximo mês
             saldo_devedor = saldo_apos_pagamento
             data_vencimento = data_vencimento + relativedelta(months=1)
 
@@ -510,7 +1050,7 @@ class FinanciamentoService:
 
         Parcela fixa (amortização + juros)
         Juros decrescentes, amortização crescente
-        Seguro calculado conforme tipo (fixo ou percentual do saldo)
+        Seguro obtido via lookup de vigência por data
         """
         valor_financiado = financiamento.valor_financiado
         prazo = financiamento.prazo_total_meses
@@ -534,11 +1074,16 @@ class FinanciamentoService:
             # Amortização = PMT - Juros
             amortizacao = pmt - juros
 
-            # Calcular seguro baseado no tipo
-            if financiamento.seguro_tipo == 'percentual_saldo':
-                valor_seguro_parcela = saldo_devedor * financiamento.seguro_percentual
-            else:  # fixo
-                valor_seguro_parcela = financiamento.valor_seguro_mensal
+            # Buscar seguro por vigência
+            vigencia_seguro = financiamento.obter_seguro_por_data(data_vencimento)
+
+            if not vigencia_seguro:
+                raise ValueError(
+                    f"Seguro não configurado para a data {data_vencimento.strftime('%d/%m/%Y')}. "
+                    f"Cadastre uma vigência de seguro antes de gerar as parcelas."
+                )
+
+            valor_seguro_parcela = vigencia_seguro.valor_mensal
 
             # Taxa administrativa (valor fixo mensal)
             valor_taxa_adm = financiamento.taxa_administracao_fixa
@@ -564,6 +1109,8 @@ class FinanciamentoService:
             )
 
             db.session.add(parcela)
+            db.session.flush()
+            FinanciamentoService._criar_conta_da_parcela(financiamento, parcela)
 
             # Atualizar
             saldo_devedor = saldo_apos_pagamento
@@ -576,7 +1123,7 @@ class FinanciamentoService:
 
         Juros fixos sobre valor inicial em todas as parcelas
         Amortização constante
-        Seguro calculado conforme tipo (fixo ou percentual do saldo)
+        Seguro obtido via lookup de vigência por data
         """
         valor_financiado = financiamento.valor_financiado
         prazo = financiamento.prazo_total_meses
@@ -592,11 +1139,16 @@ class FinanciamentoService:
         data_vencimento = financiamento.data_primeira_parcela
 
         for num_parcela in range(1, prazo + 1):
-            # Calcular seguro baseado no tipo
-            if financiamento.seguro_tipo == 'percentual_saldo':
-                valor_seguro_parcela = saldo_devedor * financiamento.seguro_percentual
-            else:  # fixo
-                valor_seguro_parcela = financiamento.valor_seguro_mensal
+            # Buscar seguro por vigência
+            vigencia_seguro = financiamento.obter_seguro_por_data(data_vencimento)
+
+            if not vigencia_seguro:
+                raise ValueError(
+                    f"Seguro não configurado para a data {data_vencimento.strftime('%d/%m/%Y')}. "
+                    f"Cadastre uma vigência de seguro antes de gerar as parcelas."
+                )
+
+            valor_seguro_parcela = vigencia_seguro.valor_mensal
 
             # Taxa administrativa (valor fixo mensal)
             valor_taxa_adm = financiamento.taxa_administracao_fixa
@@ -619,6 +1171,8 @@ class FinanciamentoService:
             )
 
             db.session.add(parcela)
+            db.session.flush()
+            FinanciamentoService._criar_conta_da_parcela(financiamento, parcela)
 
             saldo_devedor = saldo_apos_pagamento
             data_vencimento = data_vencimento + relativedelta(months=1)
@@ -671,14 +1225,30 @@ class FinanciamentoService:
 
         # Atualizar valores
         parcela.valor_pago = Decimal(str(valor_pago))
-        parcela.data_pagamento = data_pagamento
+        # Nota: FinanciamentoParcela não tem campo data_pagamento
+        # A data de pagamento é armazenada na Conta vinculada
         parcela.dif_apurada = parcela.valor_previsto_total - parcela.valor_pago
         parcela.status = 'pago'
+
+        # ========================================================================
+        # ATUALIZAR SALDO SOBERANO (usar saldo calculado da parcela)
+        # ========================================================================
+        financiamento = Financiamento.query.get(parcela.financiamento_id)
+        if financiamento:
+            # Usar saldo_devedor_apos_pagamento da parcela (já considera TR, amortização, etc.)
+            # Este campo foi calculado corretamente pelo sistema SAC durante geração/recálculo
+            financiamento.saldo_devedor_atual = parcela.saldo_devedor_apos_pagamento
+
+        # Sincronizar conta vinculada diretamente
+        conta_relacionada = Conta.query.filter_by(financiamento_parcela_id=parcela.id).first()
+        if conta_relacionada:
+            conta_relacionada.status_pagamento = 'Pago'
+            conta_relacionada.data_pagamento = data_pagamento
+            conta_relacionada.valor = parcela.valor_pago or parcela.valor_previsto_total
 
         db.session.commit()
 
         # Sincronizar com a Conta correspondente
-        financiamento = Financiamento.query.get(parcela.financiamento_id)
         if financiamento and financiamento.item_despesa_id:
             FinanciamentoService.sincronizar_contas(parcela.financiamento_id)
 
@@ -729,6 +1299,38 @@ class FinanciamentoService:
         db.session.add(amortizacao)
         db.session.flush()
 
+        # ========================================================================
+        # ATUALIZAR ESTADO SOBERANO (fonte de verdade)
+        # ========================================================================
+        # 1) Reduzir saldo devedor ATUAL
+        financiamento.saldo_devedor_atual = financiamento.saldo_devedor_atual - valor
+
+        # 2) Atualizar regime
+        financiamento.regime_pos_amortizacao = tipo.upper().replace('reduzir_', 'REDUZIR_')
+
+        # 3) Recalcular amortização mensal ou prazo conforme regime
+        if tipo == 'reduzir_parcela':
+            # Mantém prazo, reduz amortização mensal
+            financiamento.amortizacao_mensal_atual = financiamento.saldo_devedor_atual / Decimal(str(financiamento.prazo_remanescente_meses))
+        elif tipo == 'reduzir_prazo':
+            # Mantém amortização mensal, reduz prazo
+            import math
+            prazo_novo = math.ceil(float(financiamento.saldo_devedor_atual / financiamento.amortizacao_mensal_atual))
+            financiamento.prazo_remanescente_meses = prazo_novo
+
+        # 4) Atualizar numero_parcela_base e data_base
+        # Buscar última parcela consolidada (paga ou anterior à primeira pendente)
+        ultima_consolidada = FinanciamentoParcela.query.filter_by(
+            financiamento_id=financiamento.id,
+            status='pago'
+        ).order_by(FinanciamentoParcela.numero_parcela.desc()).first()
+
+        if ultima_consolidada:
+            financiamento.numero_parcela_base = ultima_consolidada.numero_parcela
+            financiamento.data_base = ultima_consolidada.data_vencimento
+
+        db.session.flush()  # Persistir estado soberano ANTES de recalcular parcelas
+
         # Recalcular parcelas futuras
         FinanciamentoService._recalcular_apos_amortizacao(financiamento, data_amort, valor, tipo)
 
@@ -745,13 +1347,17 @@ class FinanciamentoService:
         """
         Recalcula parcelas futuras após amortização extraordinária
 
+        IMPORTANTE: O estado soberano (saldo_devedor_atual, amortizacao_mensal_atual, etc)
+        JÁ FOI ATUALIZADO antes de chamar este método.
+        Aqui apenas regeneramos as parcelas pendentes com base no estado soberano.
+
         Args:
             financiamento (Financiamento): Objeto do financiamento
             data_amortizacao (date): Data da amortização
             valor_amortizado (Decimal): Valor amortizado
             tipo (str): 'reduzir_parcela' ou 'reduzir_prazo'
         """
-        # Buscar última parcela paga ou a primeira pendente após a data
+        # Buscar parcelas pendentes após a data de amortização
         parcelas_pendentes = FinanciamentoParcela.query.filter(
             FinanciamentoParcela.financiamento_id == financiamento.id,
             FinanciamentoParcela.data_vencimento >= data_amortizacao,
@@ -761,23 +1367,11 @@ class FinanciamentoService:
         if not parcelas_pendentes:
             return
 
-        # Buscar última parcela paga para pegar saldo correto
-        ultima_paga = FinanciamentoParcela.query.filter(
-            FinanciamentoParcela.financiamento_id == financiamento.id,
-            FinanciamentoParcela.status == 'pago'
-        ).order_by(FinanciamentoParcela.numero_parcela.desc()).first()
-
-        # Calcular saldo devedor atual (antes da amortização)
-        if ultima_paga:
-            saldo_atual = ultima_paga.saldo_devedor_apos_pagamento
-        else:
-            saldo_atual = financiamento.valor_financiado
-
-        # Reduzir saldo com a amortização
-        novo_saldo = saldo_atual - valor_amortizado
-
-        if novo_saldo < 0:
-            raise ValueError('Valor da amortização maior que o saldo devedor')
+        # ========================================================================
+        # USAR ESTADO SOBERANO (NÃO tentar descobrir saldo de parcelas antigas)
+        # ========================================================================
+        # O saldo JÁ foi atualizado no financiamento.saldo_devedor_atual
+        novo_saldo = financiamento.saldo_devedor_atual
 
         # Taxa de juros mensal
         taxa_anual = financiamento.taxa_juros_nominal_anual / Decimal('100')
@@ -824,11 +1418,24 @@ class FinanciamentoService:
                 num_parcelas_restantes = len([p for p in parcelas_pendentes if p.numero_parcela >= parcela.numero_parcela])
                 amortizacao = saldo_devedor / Decimal(str(num_parcelas_restantes))
 
-            # Calcular seguro baseado no tipo
-            if financiamento.seguro_tipo == 'percentual_saldo':
-                valor_seguro = saldo_devedor * financiamento.seguro_percentual
-            else:  # fixo
-                valor_seguro = financiamento.valor_seguro_mensal
+            # ========================================================================
+            # 🔥 CORREÇÃO CRÍTICA: Buscar seguro por VIGÊNCIA baseada na DATA da parcela
+            # NÃO usar modelo antigo (seguro_tipo, valor_seguro_mensal)
+            # ========================================================================
+            from backend.services.seguro_vigencia_service import SeguroVigenciaService
+
+            vigencia = SeguroVigenciaService.obter_vigencia_por_data(
+                financiamento_id=financiamento.id,
+                data_referencia=parcela.data_vencimento
+            )
+
+            if not vigencia:
+                raise ValueError(
+                    f'Nenhuma vigência de seguro encontrada para a data {parcela.data_vencimento.strftime("%Y-%m-%d")}. '
+                    f'Cadastre uma vigência válida antes de recalcular após amortização.'
+                )
+
+            valor_seguro = vigencia.valor_mensal
 
             # Taxa administrativa (mantida)
             valor_taxa_adm = parcela.valor_taxa_adm or Decimal('0')
@@ -880,11 +1487,24 @@ class FinanciamentoService:
                 amortizacao = saldo_devedor
                 juros = saldo_devedor * taxa_mensal
 
-            # Calcular seguro baseado no tipo
-            if financiamento.seguro_tipo == 'percentual_saldo':
-                valor_seguro = saldo_devedor * financiamento.seguro_percentual
-            else:  # fixo
-                valor_seguro = financiamento.valor_seguro_mensal
+            # ========================================================================
+            # 🔥 CORREÇÃO CRÍTICA: Buscar seguro por VIGÊNCIA baseada na DATA da parcela
+            # NÃO usar modelo antigo (seguro_tipo, valor_seguro_mensal)
+            # ========================================================================
+            from backend.services.seguro_vigencia_service import SeguroVigenciaService
+
+            vigencia = SeguroVigenciaService.obter_vigencia_por_data(
+                financiamento_id=financiamento.id,
+                data_referencia=parcela.data_vencimento
+            )
+
+            if not vigencia:
+                raise ValueError(
+                    f'Nenhuma vigência de seguro encontrada para a data {parcela.data_vencimento.strftime("%Y-%m-%d")}. '
+                    f'Cadastre uma vigência válida antes de recalcular após amortização.'
+                )
+
+            valor_seguro = vigencia.valor_mensal
 
             # Taxa administrativa (mantida)
             valor_taxa_adm = parcela.valor_taxa_adm or Decimal('0')
@@ -1001,11 +1621,15 @@ class FinanciamentoService:
         ).order_by(FinanciamentoParcela.numero_parcela).all()
 
         for parcela in parcelas:
-            # Verificar se já existe uma Conta para esta parcela
-            conta_existente = Conta.query.filter(
-                Conta.item_despesa_id == financiamento.item_despesa_id,
-                Conta.descricao.like(f'%{financiamento.nome}%Parcela {parcela.numero_parcela}/%')
-            ).first()
+            FinanciamentoService._criar_conta_da_parcela(financiamento, parcela)
+            continue
+            conta_existente = Conta.query.filter_by(financiamento_parcela_id=parcela.id).first()
+            if not conta_existente:
+                conta_existente = Conta.query.filter(
+                    Conta.item_despesa_id == financiamento.item_despesa_id,
+                    Conta.numero_parcela == parcela.numero_parcela,
+                    Conta.total_parcelas == financiamento.prazo_total_meses
+                ).first()
 
             # Calcular mês de referência (mesma lógica do consórcio)
             mes_referencia = parcela.data_vencimento.replace(day=1)
@@ -1015,11 +1639,13 @@ class FinanciamentoService:
                 conta_existente.valor = parcela.valor_previsto_total
                 conta_existente.data_vencimento = parcela.data_vencimento
                 conta_existente.mes_referencia = mes_referencia
+                conta_existente.financiamento_parcela_id = parcela.id
+                parcela.conta_id = conta_existente.id
 
                 # Sincronizar status de pagamento
                 if parcela.status == 'pago' and not conta_existente.data_pagamento:
                     conta_existente.status_pagamento = 'Pago'
-                    conta_existente.data_pagamento = parcela.data_pagamento or parcela.data_vencimento
+                    conta_existente.data_pagamento = parcela.data_vencimento
                 elif parcela.status == 'pendente':
                     conta_existente.status_pagamento = 'Pendente'
                     conta_existente.data_pagamento = None
@@ -1027,11 +1653,12 @@ class FinanciamentoService:
                 # Criar nova conta
                 nova_conta = Conta(
                     item_despesa_id=financiamento.item_despesa_id,
+                    financiamento_parcela_id=parcela.id,
                     mes_referencia=mes_referencia,
                     descricao=f'{financiamento.nome} - Parcela {parcela.numero_parcela}/{financiamento.prazo_total_meses}',
                     valor=parcela.valor_previsto_total,
                     data_vencimento=parcela.data_vencimento,
-                    data_pagamento=parcela.data_pagamento if parcela.status == 'pago' else None,
+                    data_pagamento=parcela.data_vencimento if parcela.status == 'pago' else None,
                     status_pagamento='Pago' if parcela.status == 'pago' else 'Pendente',
                     numero_parcela=parcela.numero_parcela,
                     total_parcelas=financiamento.prazo_total_meses,
@@ -1040,6 +1667,8 @@ class FinanciamentoService:
                                f'Juros: R$ {float(parcela.valor_juros):.2f}'
                 )
                 db.session.add(nova_conta)
+                db.session.flush()
+                parcela.conta_id = nova_conta.id
 
         db.session.commit()
 

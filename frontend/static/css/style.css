@@ -13,7 +13,14 @@ body {
     padding: 20px;
     padding-bottom: 90px; /* Espaço para bottom navigation */
     color: #1d1d1f;
+    line-height: 1.4;
 }
+
+button, input, select, textarea, .card-badge {
+    font-family: inherit;
+}
+
+
 
 .container {
     max-width: 1200px;
@@ -385,8 +392,16 @@ body.mobile-view .mobile-toggle button {
     cursor: pointer;
     transition: all 0.3s;
     text-decoration: none;
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     text-align: center;
+    min-height: 36px;
+    line-height: 1.2;
+    font-family: inherit;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .btn-primary {
@@ -503,4 +518,43 @@ body.mobile-view .mobile-toggle button {
     .btn {
         width: 100%;
     }
+}
+
+/* ============================================================================
+   TOAST NOTIFICATIONS (Feedback Visual)
+   ============================================================================ */
+
+.toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background-color: #2ecc71;
+    color: #fff;
+    padding: 14px 18px;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    font-size: 14px;
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    z-index: 9999;
+    max-width: 350px;
+    line-height: 1.5;
+}
+
+.toast.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.toast-success {
+    background-color: #2ecc71;
+}
+
+.toast-error {
+    background-color: #e74c3c;
+}
+
+.toast-warning {
+    background-color: #f39c12;
 }

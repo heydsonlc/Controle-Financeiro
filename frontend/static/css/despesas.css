@@ -26,6 +26,18 @@
     gap: 15px;
 }
 
+/* Títulos de grupo na lista principal (apenas leitura) */
+.despesas-grupo-titulo {
+    margin: 18px 0 8px;
+    padding: 0 4px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    color: #6e6e73;
+    text-transform: uppercase;
+    text-align: center;
+}
+
 .filters {
     display: flex;
     gap: 10px;

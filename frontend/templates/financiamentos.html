@@ -2,6 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Financiamentos - Controle Financeiro</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
@@ -143,28 +144,74 @@
                     </div>
                 </div>
 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="fin-seguro-tipo">Tipo de Seguro *</label>
-                        <select id="fin-seguro-tipo" onchange="atualizarCampoSeguro()" required>
-                            <option value="fixo">Valor Fixo Mensal</option>
-                            <option value="percentual_saldo">Percentual sobre Saldo (0,06%)</option>
-                        </select>
+                <!-- Vigências de Seguro (Apenas no modo CRIAÇÃO) -->
+                <div id="secao-vigencias-seguro">
+                    <h3 style="margin: 20px; font-size: 16px; color: #1d1d1f;">Vigências de Seguro Habitacional</h3>
+
+                    <div class="alert alert-info" style="margin: 10px 20px; padding: 12px; background: #e8f4fd; border-left: 4px solid #007aff; font-size: 13px;">
+                        <strong>ℹ️ Vigências:</strong> Cadastre os valores do seguro ao longo do tempo. Mínimo 1 vigência (inicial) obrigatória.
+                        Você pode adicionar até 3 vigências agora, e mais vigências depois no modal de gerenciamento.
                     </div>
-                    <div class="form-group" id="campo-seguro-fixo">
-                        <label for="fin-seguro-valor">Valor Seguro Mensal *</label>
-                        <input type="text" id="fin-seguro-valor"
-                               placeholder="R$ 0,00" onkeyup="formatarMoeda(this)">
+
+                    <!-- Vigência 1 (Obrigatória) -->
+                    <div class="form-row" style="background: #f5f5f7; padding: 15px; margin: 10px 20px; border-radius: 8px;">
+                        <div class="form-group">
+                            <label for="seg-data-1">Vigência 1 - Data Início *</label>
+                            <input type="month" id="seg-data-1" required>
+                            <small class="form-help">Primeiro mês do contrato (ex: 2024-05 ou use o seletor)</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="seg-valor-1">Valor Mensal (R$) *</label>
+                            <input type="text" id="seg-valor-1" required
+                                   placeholder="R$ 0,00" onkeyup="formatarMoeda(this)">
+                        </div>
+                        <div class="form-group">
+                            <label for="seg-obs-1">Observações</label>
+                            <input type="text" id="seg-obs-1" maxlength="200"
+                                   placeholder="Ex: Tabela Caixa 2024">
+                        </div>
                     </div>
-                    <div class="form-group" id="campo-seguro-percentual" style="display: none;">
-                        <label for="fin-seguro-percentual">Percentual sobre Saldo *</label>
-                        <input type="number" id="fin-seguro-percentual"
-                               placeholder="0.0006" step="0.0001" min="0.0001" max="0.01"
-                               value="0.0006">
-                        <small style="color: #6e6e73; font-size: 12px;">0.0006 = 0,06% ao mês</small>
+
+                    <!-- Vigência 2 (Opcional) -->
+                    <div class="form-row" style="padding: 15px; margin: 10px 20px; border-radius: 8px; border: 1px dashed #ccc;">
+                        <div class="form-group">
+                            <label for="seg-data-2">Vigência 2 - Data Início</label>
+                            <input type="month" id="seg-data-2">
+                            <small class="form-help">Opcional (ex: 2025-01 ou use o seletor)</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="seg-valor-2">Valor Mensal (R$)</label>
+                            <input type="text" id="seg-valor-2"
+                                   placeholder="R$ 0,00" onkeyup="formatarMoeda(this)">
+                        </div>
+                        <div class="form-group">
+                            <label for="seg-obs-2">Observações</label>
+                            <input type="text" id="seg-obs-2" maxlength="200"
+                                   placeholder="Ex: Atualização anual">
+                        </div>
+                    </div>
+
+                    <!-- Vigência 3 (Opcional) -->
+                    <div class="form-row" style="padding: 15px; margin: 10px 20px; border-radius: 8px; border: 1px dashed #ccc;">
+                        <div class="form-group">
+                            <label for="seg-data-3">Vigência 3 - Data Início</label>
+                            <input type="month" id="seg-data-3">
+                            <small class="form-help">Opcional (ex: 2026-01 ou use o seletor)</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="seg-valor-3">Valor Mensal (R$)</label>
+                            <input type="text" id="seg-valor-3"
+                                   placeholder="R$ 0,00" onkeyup="formatarMoeda(this)">
+                        </div>
+                        <div class="form-group">
+                            <label for="seg-obs-3">Observações</label>
+                            <input type="text" id="seg-obs-3" maxlength="200"
+                                   placeholder="Ex: Mudança de faixa etária">
+                        </div>
                     </div>
                 </div>
 
+                <!-- Taxa Administrativa -->
                 <div class="form-row">
                     <div class="form-group">
                         <label for="fin-taxa-adm">Taxa Administrativa Mensal</label>
@@ -303,6 +350,85 @@
         </div>
     </div>
 
+    <!-- Modal: Gerenciar Seguro Habitacional -->
+    <div id="modal-seguro" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2>Seguro Habitacional - Vigências</h2>
+                <span class="close" onclick="fecharModal('modal-seguro')">&times;</span>
+            </div>
+
+            <div style="padding: 20px;">
+                <!-- Vigência Atual (Card Destaque) -->
+                <h3 style="margin-bottom: 15px; font-size: 16px; color: #1d1d1f;">Vigência Atual</h3>
+                <div id="seguro-vigencia-atual" style="background: #f5f5f7; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
+                    <p class="loading">Carregando vigência atual...</p>
+                </div>
+
+                <!-- Formulário: Nova Vigência -->
+                <h3 style="margin-bottom: 15px; font-size: 16px; color: #1d1d1f;">Criar Nova Vigência</h3>
+                <form id="form-nova-vigencia-modal" onsubmit="salvarNovaVigencia(event)">
+                    <input type="hidden" id="seguro-financiamento-id">
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="seguro-competencia">Competência de Início *</label>
+                            <input type="month" id="seguro-competencia" required>
+                            <small class="form-help">Mês/Ano de início (ex: 2025-08 ou use o seletor)</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="seguro-valor">Valor Mensal (R$) *</label>
+                            <input type="text" id="seguro-valor" required
+                                   placeholder="R$ 0,00" onkeyup="formatarMoeda(this)">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="seguro-saldo-devedor">Saldo Devedor de Referência (R$)</label>
+                            <input type="text" id="seguro-saldo-devedor" readonly
+                                   style="background: #f5f5f7; cursor: not-allowed;">
+                            <small class="form-help">Preenchido automaticamente (informativo)</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="seguro-observacoes">Observações</label>
+                            <input type="text" id="seguro-observacoes" maxlength="200"
+                                   placeholder="Ex: Mudança de faixa etária">
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">
+                            Criar Vigência
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Histórico de Vigências -->
+                <h3 style="margin: 25px 0 15px 0; font-size: 16px; color: #1d1d1f;">Histórico de Vigências</h3>
+                <div id="seguro-historico" style="overflow-x: auto;">
+                    <table class="parcelas-tabela">
+                        <thead>
+                            <tr>
+                                <th>Início</th>
+                                <th>Fim</th>
+                                <th>Valor Mensal</th>
+                                <th>Status</th>
+                                <th>Observações</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="seguro-tbody-vigencias">
+                            <tr>
+                                <td colspan="6" class="text-center">Carregando...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Bottom Navigation -->
     <nav class="bottom-nav">
         <div class="bottom-nav-container">
@@ -317,10 +443,6 @@
             <a href="/despesas" class="nav-item">
                 <span class="icon">▬</span>
                 <span class="label">DESPESAS</span>
-            </a>
-            <a href="/cartoes" class="nav-item">
-                <span class="icon">▭</span>
-                <span class="label">Cartões</span>
             </a>
             <a href="/configuracoes" class="nav-item">
                 <span class="icon">⚙</span>

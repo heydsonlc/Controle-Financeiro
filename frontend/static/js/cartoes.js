@@ -23,31 +23,8 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 async function inicializar() {
-    // Definir mês atual (converter de ISO para formato brasileiro)
-    const mesInput = document.getElementById('filtro-mes');
-    mesInput.value = converterISOparaMesAnoBR(state.mesSelecionado);
-
-    // Event listeners
-    document.getElementById('filtro-mes').addEventListener('change', (e) => {
-        // Converter de MM/AAAA para ISO YYYY-MM
-        const mesBR = e.target.value;
-        const mesISO = converterMesAnoBRparaISO(mesBR);
-        if (mesISO) {
-            state.mesSelecionado = mesISO.substring(0, 7); // YYYY-MM
-            if (state.cartaoAtual) {
-                carregarResumoCartao(state.cartaoAtual.id);
-            }
-        }
-    });
-
-    document.getElementById('filtro-cartao').addEventListener('change', (e) => {
-        if (e.target.value) {
-            const cartao = state.cartoes.find(c => c.id == e.target.value);
-            if (cartao) {
-                visualizarCartao(cartao);
-            }
-        }
-    });
+    // Mês atual já definido no state (linha 14)
+    // Não há mais seletor de mês na tela de Cartões (tela estrutural, não temporal)
 
     // Carregar dados iniciais
     await carregarCategorias();
@@ -154,11 +131,8 @@ function renderizarCartoes() {
 }
 
 function atualizarFiltroCartoes() {
-    const select = document.getElementById('filtro-cartao');
-    select.innerHTML = '<option value="">Selecione um cartão...</option>';
-    state.cartoes.forEach(cartao => {
-        select.innerHTML += `<option value="${cartao.id}">${cartao.nome}</option>`;
-    });
+    // Função removida - não há mais seletor de cartão na tela
+    // Cartões são visualizados clicando nos cards
 }
 
 function abrirModalCartao() {
@@ -265,9 +239,6 @@ function visualizarCartao(cartao) {
     document.getElementById('cartao-nome-detalhe').textContent = cartao.nome;
     document.getElementById('cartao-descricao-detalhe').textContent = cartao.descricao || '';
 
-    // Atualizar seletor
-    document.getElementById('filtro-cartao').value = cartao.id;
-
     // Mostrar view de detalhes
     document.getElementById('view-lista-cartoes').style.display = 'none';
     document.getElementById('view-detalhes-cartao').style.display = 'block';
@@ -279,7 +250,6 @@ function visualizarCartao(cartao) {
 
 function voltarListaCartoes() {
     state.cartaoAtual = null;
-    document.getElementById('filtro-cartao').value = '';
     document.getElementById('view-lista-cartoes').style.display = 'block';
     document.getElementById('view-detalhes-cartao').style.display = 'none';
 }
@@ -296,14 +266,6 @@ async function carregarResumoCartao(cartaoId) {
 
         const resumo = await response.json();
         console.log('✅ Resumo carregado:', resumo);
-
-        // Atualizar cards de resumo
-        document.getElementById('total-orcado').textContent = `R$ ${formatarMoeda(resumo.total_orcado)}`;
-        document.getElementById('total-gasto').textContent = `R$ ${formatarMoeda(resumo.total_gasto)}`;
-        document.getElementById('saldo-disponivel').textContent = `R$ ${formatarMoeda(resumo.saldo_disponivel)}`;
-        document.getElementById('limite-credito').textContent = resumo.limite_credito
-            ? `R$ ${formatarMoeda(resumo.limite_credito)}`
-            : '-';
 
         // Renderizar orçamentos com os dados do resumo
         renderizarOrcamentos(resumo.itens);
@@ -381,54 +343,36 @@ function renderizarOrcamentos(itens) {
     const container = document.getElementById('lista-orcamentos');
 
     if (!itens || itens.length === 0) {
-        container.innerHTML = '<p class="empty-state">Nenhuma categoria definida para este mês. Clique em "Nova Categoria" para começar.</p>';
+        container.innerHTML = '<p class="empty-state">Nenhuma categoria definida. Clique em "Nova Categoria" para começar.</p>';
         return;
     }
 
     container.innerHTML = itens.map(item => {
         const percentual = item.percentual_utilizado || 0;
-        const cor = percentual > 100 ? '#ef4444' : percentual > 80 ? '#f59e0b' : '#10b981';
+        const valorOrcado = item.valor_orcado || 0;
+        const valorGasto = item.valor_gasto || 0;
+        const saldo = item.saldo || 0;
 
         return `
-            <div class="orcamento-card">
-                <div class="orcamento-header">
-                    <h4>${item.nome}</h4>
-                    <div style="display: flex; gap: 8px; align-items: center;">
-                        <span class="percentual" style="color: ${cor}">${percentual.toFixed(0)}%</span>
-                        <button class="btn-icon" onclick="editarItemAgregado(${item.id})" title="Editar categoria">
-                            ✏️
-                        </button>
-                        <button class="btn-icon" onclick="excluirItemAgregado(${item.id})" title="Excluir categoria">
-                            🗑️
-                        </button>
-                    </div>
+            <div class="categoria-linha">
+                <div class="categoria-info">
+                    <strong>${item.nome}</strong>
+                    ${item.descricao ? `<span class="descricao">${item.descricao}</span>` : ''}
                 </div>
-                ${item.descricao ? `<p style="color: #6e6e73; font-size: 13px; margin: 5px 0 10px 0;">${item.descricao}</p>` : ''}
-                <div class="orcamento-valores">
-                    <div class="valor-item">
-                        <span class="label">Limite Mensal:</span>
-                        <span class="value">R$ ${formatarMoeda(item.valor_orcado)}</span>
-                    </div>
-                    <div class="valor-item">
-                        <span class="label">Utilizado:</span>
-                        <span class="value">R$ ${formatarMoeda(item.valor_gasto)}</span>
-                    </div>
-                    <div class="valor-item">
-                        <span class="label">Disponível:</span>
-                        <span class="value" style="color: ${item.saldo >= 0 ? '#10b981' : '#ef4444'}">
-                            R$ ${formatarMoeda(item.saldo)}
-                        </span>
-                    </div>
+
+                <div class="categoria-metricas">
+                    <span class="percentual">${percentual.toFixed(0)}%</span>
+                    <span class="utilizado">Utilizado: R$ ${formatarMoeda(valorGasto)}</span>
+                    <span class="disponivel">Disponível: R$ ${formatarMoeda(saldo)}</span>
+                    ${valorOrcado > 0 ? `<span class="limite">Limite: R$ ${formatarMoeda(valorOrcado)}</span>` : ''}
+
+                    ${item.orcamento_id ?
+                        `<button class="btn-text-link" onclick="editarOrcamento(${item.id}, ${item.orcamento_id})" title="Editar Limite">Editar Limite</button>` :
+                        `<button class="btn-text-link" onclick="abrirModalOrcamento(${item.id})" title="Definir Limite">Definir Limite</button>`
+                    }
+                    <button class="btn-icon editar" onclick="editarItemAgregado(${item.id})" title="Editar">✏️</button>
+                    <button class="btn-icon excluir" onclick="excluirItemAgregado(${item.id})" title="Excluir">🗑️</button>
                 </div>
-                <div class="orcamento-barra">
-                    <div class="barra-progresso" style="width: ${Math.min(percentual, 100)}%; background: ${cor}"></div>
-                </div>
-                ${item.orcamento_id ? `
-                    <div class="orcamento-actions">
-                        <button class="btn-sm btn-secondary" onclick="editarOrcamento(${item.id}, ${item.orcamento_id})">Editar Limite</button>
-                        <button class="btn-sm btn-danger" onclick="excluirOrcamento(${item.orcamento_id})">Excluir Limite</button>
-                    </div>
-                ` : ''}
             </div>
         `;
     }).join('');
@@ -561,7 +505,7 @@ async function excluirItemAgregado(itemId) {
 
 // ========== ORÇAMENTO (LIMITE MENSAL) ==========
 
-function abrirModalOrcamento() {
+function abrirModalOrcamento(itemId = null) {
     // Validar se existem categorias cadastradas
     if (!state.itensAgregados || state.itensAgregados.length === 0) {
         if (confirm('Nenhuma categoria cadastrada.\n\nCrie uma nova categoria do cartão para continuar.\n\nDeseja criar agora?')) {
@@ -573,6 +517,16 @@ function abrirModalOrcamento() {
     document.getElementById('modal-orcamento-titulo').textContent = 'Definir Limite da Categoria';
     document.getElementById('form-orcamento').reset();
     document.getElementById('orcamento-id').value = '';
+
+    // Se itemId foi passado, pré-selecionar a categoria
+    if (itemId) {
+        document.getElementById('orcamento-item-id').value = itemId;
+        const selectCategoria = document.getElementById('orcamento-categoria');
+        if (selectCategoria) {
+            selectCategoria.value = itemId;
+        }
+    }
+
     // Converter ISO YYYY-MM para MM/AAAA
     document.getElementById('orcamento-mes').value = converterISOparaMesAnoBR(state.mesSelecionado);
     abrirModal('modal-orcamento');
@@ -1062,26 +1016,8 @@ async function pagarFatura(event) {
 // ============================================================================
 // CONTROLE DE TABS
 // ============================================================================
-
-window.trocarTab = function(tabName) {
-    // Remover active de todos
-    document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-
-    // Adicionar active no selecionado
-    event.target.classList.add('active');
-    document.getElementById('tab-' + tabName).classList.add('active');
-
-    // Carregar dados específicos da tab
-    if (tabName === 'lancamentos') {
-        carregarLancamentos();
-    } else if (tabName === 'faturas') {
-        if (state.cartaoAtual) {
-            carregarFaturas(state.cartaoAtual.id);
-        }
-    }
-};
-
+// Função trocarTab removida - não há mais abas na tela de cartões
+// (Lançamentos e Faturas estão na tela de Despesas)
 // ============================================================================
 // UTILITÁRIOS
 // ============================================================================

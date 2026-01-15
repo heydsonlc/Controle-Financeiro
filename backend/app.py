@@ -46,6 +46,10 @@ def create_app(config_name=None):
 
     app.config.from_object(get_config(config_name))
 
+    # Garantir encoding UTF-8 para JSON
+    app.config['JSON_AS_ASCII'] = False
+    app.config['JSON_SORT_KEYS'] = False
+
     # Desabilitar cache de templates e arquivos estáticos em desenvolvimento
     if config_name == 'development':
         app.config['TEMPLATES_AUTO_RELOAD'] = True
@@ -58,11 +62,27 @@ def create_app(config_name=None):
     # Inicializar Flask-Migrate
     migrate = Migrate(app, db)
 
+    # Compatibilidade de schema (SQLite): alguns ambientes usam DB criado fora do Alembic.
+    try:
+        from backend.services.sqlite_schema_compat import ensure_sqlite_schema_compat
+    except ImportError:
+        from services.sqlite_schema_compat import ensure_sqlite_schema_compat
+    with app.app_context():
+        ensure_sqlite_schema_compat()
+
     # Registrar blueprints (rotas)
     register_blueprints(app)
 
     # Registrar handlers de erro
     register_error_handlers(app)
+
+    # Middleware para garantir UTF-8 em todas as respostas
+    @app.after_request
+    def add_charset_to_content_type(response):
+        """Adiciona charset UTF-8 explicitamente no Content-Type de todas as respostas"""
+        if response.content_type and 'charset' not in response.content_type:
+            response.content_type = f'{response.content_type}; charset=utf-8'
+        return response
 
     # Rotas de páginas
     @app.route('/')
@@ -100,6 +120,11 @@ def create_app(config_name=None):
         """Página de gerenciamento de financiamentos"""
         return render_template('financiamentos.html')
 
+    @app.route('/financiamentos/seguro')
+    def financiamento_seguro():
+        """Página de gerenciamento de vigências de seguro habitacional"""
+        return render_template('financiamento_seguro.html')
+
     @app.route('/configuracoes')
     def configuracoes():
         """Página de configurações do sistema"""
@@ -119,6 +144,15 @@ def create_app(config_name=None):
     def preferencias():
         """Página de preferências e configurações gerais"""
         return render_template('preferencias.html')
+
+    @app.route('/importar-cartao')
+    def importar_cartao():
+        """Página de importação de fatura de cartão (CSV)"""
+        return render_template('importar_cartao.html')
+
+    @app.route('/veiculos')
+    def veiculos():
+        return render_template('veiculos.html')
 
     @app.route('/health')
     def health():
@@ -147,10 +181,16 @@ def register_blueprints(app):
         from backend.routes.consorcios import consorcios_bp
         from backend.routes.receitas import receitas_bp
         from backend.routes.financiamentos import financiamentos_bp
+        from backend.routes.financiamento_seguro import bp as financiamento_seguro_bp
         from backend.routes.contas_bancarias import contas_bancarias_bp
         from backend.routes.patrimonio import patrimonio_bp
         from backend.routes.dashboard import dashboard_bp
         from backend.routes.preferencias import preferencias_bp
+        from backend.routes.importacao_cartao import bp as importacao_cartao_bp
+        from backend.routes.indexadores import indexadores_bp
+        from backend.routes.veiculos import veiculos_bp
+        from backend.routes.despesas_previstas import despesas_previstas_bp
+        from backend.routes.mobilidade_app import mobilidade_app_bp
     except ImportError:
         from routes.categorias import categorias_bp
         from routes.despesas import despesas_bp
@@ -158,10 +198,16 @@ def register_blueprints(app):
         from routes.consorcios import consorcios_bp
         from routes.receitas import receitas_bp
         from routes.financiamentos import financiamentos_bp
+        from routes.financiamento_seguro import bp as financiamento_seguro_bp
         from routes.contas_bancarias import contas_bancarias_bp
         from routes.patrimonio import patrimonio_bp
         from routes.dashboard import dashboard_bp
         from routes.preferencias import preferencias_bp
+        from routes.importacao_cartao import bp as importacao_cartao_bp
+        from routes.indexadores import indexadores_bp
+        from routes.veiculos import veiculos_bp
+        from routes.despesas_previstas import despesas_previstas_bp
+        from routes.mobilidade_app import mobilidade_app_bp
 
     # Registrar blueprints
     app.register_blueprint(categorias_bp, url_prefix='/api/categorias')
@@ -170,10 +216,16 @@ def register_blueprints(app):
     app.register_blueprint(consorcios_bp, url_prefix='/api/consorcios')
     app.register_blueprint(receitas_bp, url_prefix='/api/receitas')
     app.register_blueprint(financiamentos_bp, url_prefix='/api/financiamentos')
+    app.register_blueprint(financiamento_seguro_bp)  # Já tem url_prefix no blueprint
     app.register_blueprint(contas_bancarias_bp, url_prefix='/api/contas')
     app.register_blueprint(patrimonio_bp, url_prefix='/api/patrimonio')
     app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
     app.register_blueprint(preferencias_bp, url_prefix='/api/preferencias')
+    app.register_blueprint(importacao_cartao_bp)  # Já tem url_prefix no blueprint
+    app.register_blueprint(indexadores_bp)  # Indexadores (TR, IPCA, etc.)
+    app.register_blueprint(veiculos_bp, url_prefix='/api/veiculos')
+    app.register_blueprint(despesas_previstas_bp, url_prefix='/api/despesas-previstas')
+    app.register_blueprint(mobilidade_app_bp, url_prefix='/api/mobilidade-app')
 
 
 def register_error_handlers(app):

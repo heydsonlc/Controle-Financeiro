@@ -1,12 +1,16 @@
 """
 Rotas da API para Dashboard - Dados Consolidados
 
+ATENÇÃO:
+Este dashboard reflete dados consolidados do sistema financeiro.
+O gráfico de saldo bancário é uma PROJEÇÃO, não um histórico real.
+
 Endpoints:
 - GET /api/dashboard/resumo-mes         - Resumo financeiro do mês atual
 - GET /api/dashboard/indicadores        - Indicadores inteligentes e insights
 - GET /api/dashboard/grafico-categorias - Dados para gráfico de pizza (despesas por categoria)
 - GET /api/dashboard/grafico-evolucao   - Dados para gráfico de evolução (últimos 6 meses)
-- GET /api/dashboard/grafico-saldo      - Dados para gráfico de linha (evolução do saldo)
+- GET /api/dashboard/grafico-saldo      - Dados para gráfico de linha (evolução do saldo - PROJEÇÃO)
 - GET /api/dashboard/alertas            - Alertas e agenda financeira (próximos vencimentos)
 """
 from flask import Blueprint, request, jsonify
@@ -15,9 +19,9 @@ from sqlalchemy import func, extract
 from decimal import Decimal
 
 try:
-    from backend.models import db, Conta, Categoria, ItemDespesa, ConfigAgregador, ItemReceita, ReceitaRealizada, ContaBancaria, Financiamento, FinanciamentoParcela, ItemAgregado, ReceitaOrcamento
+    from backend.models import db, Conta, Categoria, ItemDespesa, ConfigAgregador, ItemReceita, ReceitaRealizada, ContaBancaria, Financiamento, FinanciamentoParcela, ItemAgregado, ReceitaOrcamento, LancamentoAgregado, OrcamentoAgregado
 except ImportError:
-    from models import db, Conta, Categoria, ItemDespesa, ConfigAgregador, ItemReceita, ReceitaRealizada, ContaBancaria, Financiamento, FinanciamentoParcela, ItemAgregado, ReceitaOrcamento
+    from models import db, Conta, Categoria, ItemDespesa, ConfigAgregador, ItemReceita, ReceitaRealizada, ContaBancaria, Financiamento, FinanciamentoParcela, ItemAgregado, ReceitaOrcamento, LancamentoAgregado, OrcamentoAgregado
 
 # Criar blueprint
 dashboard_bp = Blueprint('dashboard', __name__)
@@ -28,6 +32,123 @@ def decimal_to_float(value):
     if value is None:
         return 0.0
     return float(value) if isinstance(value, Decimal) else value
+
+
+def _calcular_totais_fatura_cartao(cartao_id, competencia):
+    """
+    Calcula (total_previsto, total_executado) para fatura de cartão.
+
+    LÓGICA IDÊNTICA ao despesas.py:
+    - total_executado = soma de TODOS LancamentoAgregado do mês
+    - total_previsto = total_executado + complemento de orçamentos não gastos
+    """
+    comp = competencia.replace(day=1)
+
+    # Total executado = soma de todos os lançamentos do mês
+    total_executado = db.session.query(
+        func.coalesce(func.sum(LancamentoAgregado.valor), 0)
+    ).filter(
+        LancamentoAgregado.cartao_id == cartao_id,
+        LancamentoAgregado.mes_fatura == comp
+    ).scalar()
+    total_executado = float(total_executado or 0)
+
+    # Itens (categorias) do cartão
+    itens = ItemAgregado.query.filter_by(item_despesa_id=cartao_id, ativo=True).all()
+    if not itens:
+        return total_executado, total_executado
+
+    itens_ids = [i.id for i in itens]
+
+    # Gastos por categoria
+    gastos_por_item = dict(
+        db.session.query(
+            LancamentoAgregado.item_agregado_id,
+            func.coalesce(func.sum(LancamentoAgregado.valor), 0)
+        ).filter(
+            LancamentoAgregado.cartao_id == cartao_id,
+            LancamentoAgregado.mes_fatura == comp,
+            LancamentoAgregado.item_agregado_id.in_(itens_ids)
+        ).group_by(
+            LancamentoAgregado.item_agregado_id
+        ).all()
+    )
+
+    # Orçamentos por categoria
+    orcados_por_item = dict(
+        db.session.query(
+            OrcamentoAgregado.item_agregado_id,
+            func.coalesce(func.sum(OrcamentoAgregado.valor_teto), 0)
+        ).filter(
+            OrcamentoAgregado.mes_referencia == comp,
+            OrcamentoAgregado.item_agregado_id.in_(itens_ids)
+        ).group_by(
+            OrcamentoAgregado.item_agregado_id
+        ).all()
+    )
+
+    # Complemento: orçado que ainda não foi gasto
+    complemento_orcamento = 0.0
+    for item_id in itens_ids:
+        gasto = float(gastos_por_item.get(item_id, 0) or 0)
+        orcado = float(orcados_por_item.get(item_id, 0) or 0)
+        if orcado > gasto:
+            complemento_orcamento += (orcado - gasto)
+
+    total_previsto = total_executado + complemento_orcamento
+
+    return total_previsto, total_executado
+
+
+def calcular_despesas_mes(mes, ano):
+    """
+    Calcula total de despesas do mês aplicando a regra correta para faturas de cartão.
+
+    Regra:
+    - Despesas comuns: usa Conta.valor diretamente
+    - Faturas de cartão:
+        - Se PAGO: usa total_executado (calculado dinamicamente)
+        - Se PENDENTE: usa total_previsto (calculado dinamicamente)
+
+    Esta é a regra soberana consolidada no sistema (mesma de /api/despesas)
+    """
+    # Despesas comuns (não-cartão)
+    despesas_comuns = db.session.query(func.sum(Conta.valor)).filter(
+        extract('month', Conta.mes_referencia) == mes,
+        extract('year', Conta.mes_referencia) == ano,
+        db.or_(
+            Conta.is_fatura_cartao == False,
+            Conta.is_fatura_cartao.is_(None)
+        )
+    ).scalar() or 0
+
+    # Faturas de cartão
+    faturas = db.session.query(Conta).filter(
+        Conta.is_fatura_cartao == True,
+        extract('month', Conta.mes_referencia) == mes,
+        extract('year', Conta.mes_referencia) == ano
+    ).all()
+
+    total_faturas = 0
+    for fatura in faturas:
+        # Calcular valores dinamicamente (não usar campos do banco que podem estar zerados)
+        if getattr(fatura, 'cartao_competencia', None) and fatura.item_despesa_id:
+            total_previsto, total_executado = _calcular_totais_fatura_cartao(
+                cartao_id=fatura.item_despesa_id,
+                competencia=fatura.cartao_competencia
+            )
+        else:
+            # Fallback: usar campos do banco (pode estar zerado)
+            total_previsto = decimal_to_float(fatura.valor_planejado or fatura.valor or 0)
+            total_executado = decimal_to_float(fatura.valor_executado or fatura.valor or 0)
+
+        # Aplicar regra soberana
+        if fatura.status_pagamento == 'Pago':
+            total_faturas += total_executado
+        else:
+            total_faturas += total_previsto
+
+    return decimal_to_float(despesas_comuns) + total_faturas
 
 
 # ============================================================================
@@ -82,13 +203,8 @@ def resumo_mes():
         receitas_mes = decimal_to_float(receitas_realizadas) + decimal_to_float(receitas_previstas)
 
         # 2. DESPESAS DO MÊS (Por mês de competência)
-        # Busca todas as contas do mês, independente do status
-        # Se pendente: conta o valor previsto
-        # Se paga: conta o valor pago (atualmente igual ao previsto)
-        despesas_mes = db.session.query(func.sum(Conta.valor)).filter(
-            extract('month', Conta.mes_referencia) == mes_atual,
-            extract('year', Conta.mes_referencia) == ano_atual
-        ).scalar() or 0
+        # Usa função auxiliar que aplica regra correta para faturas de cartão
+        despesas_mes = calcular_despesas_mes(mes_atual, ano_atual)
 
         # 3. SALDO LÍQUIDO
         despesas_float = decimal_to_float(despesas_mes)
@@ -142,12 +258,10 @@ def indicadores():
             Conta.mes_referencia < primeiro_dia_mes
         ).scalar() or 0
 
-        despesas_mes_atual = db.session.query(func.sum(Conta.valor)).filter(
-            extract('month', Conta.mes_referencia) == mes_atual,
-            extract('year', Conta.mes_referencia) == ano_atual
-        ).scalar() or 0
+        # Despesas do mês atual (usa função auxiliar que aplica regra correta)
+        despesas_mes_atual = calcular_despesas_mes(mes_atual, ano_atual)
 
-        acima_media = decimal_to_float(despesas_mes_atual) > (decimal_to_float(media_historica) * 1.1)
+        acima_media = despesas_mes_atual > (decimal_to_float(media_historica) * 1.1)
 
         # 2. GASTOS PENDENTES PRÓXIMOS (próximos 7 dias)
         proximos_7_dias = hoje + timedelta(days=7)
@@ -156,11 +270,12 @@ def indicadores():
             Conta.status_pagamento == 'Pendente'
         ).scalar() or 0
 
-        # 3. FATURAS DE CARTÃO (simplificado - contar cartões ativos)
-        faturas_proximas = db.session.query(func.count(ConfigAgregador.id)).join(
-            ItemDespesa, ConfigAgregador.item_despesa_id == ItemDespesa.id
-        ).filter(
-            ItemDespesa.ativo == True
+        # 3. FATURAS DE CARTÃO PENDENTES (mês atual)
+        faturas_proximas = db.session.query(func.count(Conta.id)).filter(
+            Conta.is_fatura_cartao == True,
+            Conta.status_pagamento == 'Pendente',
+            extract('month', Conta.mes_referencia) == mes_atual,
+            extract('year', Conta.mes_referencia) == ano_atual
         ).scalar() or 0
 
         # 4. PORCENTAGEM POUPADA
@@ -294,15 +409,13 @@ def grafico_evolucao():
                 mes += 12
                 ano -= 1
 
-            total_mes = db.session.query(func.sum(Conta.valor)).filter(
-                extract('month', Conta.mes_referencia) == mes,
-                extract('year', Conta.mes_referencia) == ano
-            ).scalar() or 0
+            # Usar função auxiliar que aplica regra correta para faturas de cartão
+            total_mes = calcular_despesas_mes(mes, ano)
 
             # Formato do mês
             data_ref = date(ano, mes, 1)
             meses.append(data_ref.strftime('%b/%y'))
-            valores.append(decimal_to_float(total_mes))
+            valores.append(total_mes)
 
         return jsonify({
             'success': True,
@@ -371,12 +484,10 @@ def grafico_saldo():
             receitas_previstas_mes = query_prev.scalar() or 0
             receitas_mes = decimal_to_float(receitas_realizadas_mes) + decimal_to_float(receitas_previstas_mes)
 
-            despesas_mes = db.session.query(func.sum(Conta.valor)).filter(
-                extract('month', Conta.mes_referencia) == mes,
-                extract('year', Conta.mes_referencia) == ano
-            ).scalar() or 0
+            # Usar função auxiliar que aplica regra correta para faturas de cartão
+            despesas_mes = calcular_despesas_mes(mes, ano)
 
-            diferencial = receitas_mes - decimal_to_float(despesas_mes)
+            diferencial = receitas_mes - despesas_mes
 
             # Projetar saldo (aproximação)
             saldo_mes = saldo_atual_float - (diferencial * (i + 1))
@@ -389,7 +500,9 @@ def grafico_saldo():
             'success': True,
             'data': {
                 'labels': meses,
-                'valores': saldos
+                'valores': saldos,
+                'tipo': 'projecao',
+                'descricao': 'Evolução projetada do saldo com base no saldo atual'
             }
         }), 200
 
@@ -425,11 +538,14 @@ def alertas():
             Conta.status_pagamento == 'Pendente'
         ).order_by(Conta.data_vencimento).limit(10).all()
 
-        # 2. CARTÕES ATIVOS
-        cartoes_vencer = db.session.query(ConfigAgregador).join(
-            ItemDespesa, ConfigAgregador.item_despesa_id == ItemDespesa.id
+        # 2. FATURAS DE CARTÃO PENDENTES (mês atual)
+        cartoes_vencer = db.session.query(Conta).outerjoin(
+            ItemDespesa, Conta.item_despesa_id == ItemDespesa.id
         ).filter(
-            ItemDespesa.ativo == True
+            Conta.is_fatura_cartao == True,
+            Conta.status_pagamento == 'Pendente',
+            extract('month', Conta.mes_referencia) == mes_atual,
+            extract('year', Conta.mes_referencia) == ano_atual
         ).limit(5).all()
 
         # 3. FINANCIAMENTOS ATIVOS
@@ -458,24 +574,48 @@ def alertas():
             })
 
         cartoes_lista = []
-        for cartao in cartoes_vencer:
+        for fatura in cartoes_vencer:
+            # Calcular valor dinamicamente (mesma regra de calcular_despesas_mes)
+            if getattr(fatura, 'cartao_competencia', None) and fatura.item_despesa_id:
+                total_previsto, total_executado = _calcular_totais_fatura_cartao(
+                    cartao_id=fatura.item_despesa_id,
+                    competencia=fatura.cartao_competencia
+                )
+            else:
+                # Fallback: usar campos do banco
+                total_previsto = decimal_to_float(fatura.valor_planejado or fatura.valor or 0)
+                total_executado = decimal_to_float(fatura.valor_executado or fatura.valor or 0)
+
+            # Aplicar regra soberana
+            valor_fatura = total_executado if fatura.status_pagamento == 'Pago' else total_previsto
+
             cartoes_lista.append({
-                'id': cartao.id,
-                'nome': cartao.item_despesa.nome if cartao.item_despesa else 'Cartão',
-                'dia_vencimento': cartao.dia_vencimento if hasattr(cartao, 'dia_vencimento') else 10,
+                'id': fatura.id,
+                'nome': fatura.item_despesa.nome if fatura.item_despesa else 'Cartão',
+                'valor': valor_fatura,
+                'data_vencimento': fatura.data_vencimento.strftime('%d/%m/%Y') if fatura.data_vencimento else 'N/A',
+                'status': fatura.status_fatura if hasattr(fatura, 'status_fatura') else 'PENDENTE',
                 'tipo': 'cartao'
             })
 
         financiamentos_lista = []
         for fin in financiamentos_mes:
-            financiamentos_lista.append({
-                'id': fin.id,
-                'descricao': fin.nome,
-                'valor_parcela': decimal_to_float(fin.valor_parcela_inicial) if hasattr(fin, 'valor_parcela_inicial') and fin.valor_parcela_inicial else 0,
-                'parcela_atual': fin.parcelas_pagas if hasattr(fin, 'parcelas_pagas') else 0,
-                'total_parcelas': fin.prazo_total_meses,
-                'tipo': 'financiamento'
-            })
+            # Buscar parcela do mês atual
+            parcela_mes = FinanciamentoParcela.query.filter_by(
+                financiamento_id=fin.id,
+                mes_referencia=date(ano_atual, mes_atual, 1)
+            ).first()
+
+            # Apenas adicionar se houver parcela no mês
+            if parcela_mes:
+                financiamentos_lista.append({
+                    'id': fin.id,
+                    'descricao': fin.nome,
+                    'valor_parcela': decimal_to_float(parcela_mes.valor_previsto_total),
+                    'parcela_atual': parcela_mes.numero_parcela,
+                    'total_parcelas': fin.prazo_total_meses,
+                    'tipo': 'financiamento'
+                })
 
         receitas_lista = []
         for orcamento in receitas_previstas:

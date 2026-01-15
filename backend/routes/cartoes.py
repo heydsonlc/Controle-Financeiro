@@ -4,9 +4,9 @@ Rotas para gerenciamento de Cartões de Crédito
 from flask import Blueprint, request, jsonify
 from backend.models import db, ItemDespesa, ConfigAgregador, ItemAgregado, OrcamentoAgregado, LancamentoAgregado, Categoria
 from backend.services.cartao_service import CartaoService
-from datetime import datetime
+from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import func
+from sqlalchemy import func, and_
 
 cartoes_bp = Blueprint('cartoes', __name__, url_prefix='/api/cartoes')
 
@@ -198,7 +198,24 @@ def listar_itens_agregados(cartao_id):
     """Lista todas as categorias de um cartão"""
     try:
         itens = ItemAgregado.query.filter_by(item_despesa_id=cartao_id, ativo=True).all()
-        return jsonify([item.to_dict() for item in itens]), 200
+        resultado = []
+        for item in itens:
+            item_dict = {
+                'id': item.id,
+                'item_despesa_id': item.item_despesa_id,
+                'nome': item.nome,
+                'descricao': item.descricao,
+                'ativo': item.ativo,
+                'grupo_agregador_id': item.grupo_agregador_id
+            }
+            if item.grupo:
+                item_dict['grupo'] = {
+                    'id': item.grupo.id,
+                    'nome': item.grupo.nome
+                }
+            resultado.append(item_dict)
+
+        return jsonify(resultado), 200
     except Exception as e:
         return jsonify({'erro': str(e)}), 500
 
@@ -316,7 +333,10 @@ def listar_orcamentos(item_id):
 
 @cartoes_bp.route('/itens/<int:item_id>/orcamentos', methods=['POST'])
 def criar_orcamento(item_id):
-    """Cria um orçamento para um item agregado"""
+    """
+    Cria um orçamento para um item agregado com vigência.
+    O limite vale a partir do mês de referência para todas as faturas futuras.
+    """
     try:
         dados = request.json
 
@@ -324,20 +344,31 @@ def criar_orcamento(item_id):
         mes_ref_str = dados['mes_referencia']
         mes_ref_date = datetime.strptime(mes_ref_str + '-01', '%Y-%m-%d').date()
 
-        # Verificar se já existe orçamento para este mês
-        orcamento_existente = OrcamentoAgregado.query.filter_by(
-            item_agregado_id=item_id,
-            mes_referencia=mes_ref_date
+        # Verificar se já existe orçamento VIGENTE para esta categoria
+        # (vigência sobreposta não é permitida)
+        orcamento_vigente = OrcamentoAgregado.query.filter(
+            and_(
+                OrcamentoAgregado.item_agregado_id == item_id,
+                OrcamentoAgregado.ativo == True,
+                OrcamentoAgregado.vigencia_fim == None  # Vigência atual/futura
+            )
         ).first()
 
-        if orcamento_existente:
-            return jsonify({'erro': 'Já existe orçamento para este mês'}), 400
+        if orcamento_vigente:
+            return jsonify({
+                'erro': f'Já existe limite vigente a partir de {orcamento_vigente.vigencia_inicio.strftime("%m/%Y")}. '
+                        f'Para alterar, use "Editar Limite".'
+            }), 400
 
+        # Criar novo orçamento com vigência a partir do mês de referência
         novo_orcamento = OrcamentoAgregado(
             item_agregado_id=item_id,
-            mes_referencia=mes_ref_date,
+            mes_referencia=mes_ref_date,  # Mantido por compatibilidade
             valor_teto=dados['valor_teto'],
-            observacoes=dados.get('observacoes', '')
+            observacoes=dados.get('observacoes', ''),
+            vigencia_inicio=mes_ref_date,
+            vigencia_fim=None,  # Vigência indefinida (vale para o futuro)
+            ativo=True
         )
 
         db.session.add(novo_orcamento)
@@ -351,18 +382,56 @@ def criar_orcamento(item_id):
 
 @cartoes_bp.route('/orcamentos/<int:orcamento_id>', methods=['PUT'])
 def atualizar_orcamento(orcamento_id):
-    """Atualiza um orçamento"""
+    """
+    Atualiza um orçamento criando uma nova vigência.
+
+    Ao editar o limite:
+    1. Finaliza a vigência anterior (vigencia_fim = mês anterior ao novo)
+    2. Cria novo registro com vigência a partir do mês informado
+
+    Isso preserva o histórico: meses anteriores mantêm o limite antigo.
+    """
     try:
-        orcamento = OrcamentoAgregado.query.get(orcamento_id)
-        if not orcamento:
+        orcamento_antigo = OrcamentoAgregado.query.get(orcamento_id)
+        if not orcamento_antigo:
             return jsonify({'erro': 'Orçamento não encontrado'}), 404
 
         dados = request.json
-        orcamento.valor_teto = dados.get('valor_teto', orcamento.valor_teto)
-        orcamento.observacoes = dados.get('observacoes', orcamento.observacoes)
 
+        # Se não tem mes_referencia, atualiza apenas observações (sem criar nova vigência)
+        if 'mes_referencia' not in dados:
+            orcamento_antigo.observacoes = dados.get('observacoes', orcamento_antigo.observacoes)
+            db.session.commit()
+            return jsonify(orcamento_antigo.to_dict()), 200
+
+        # Nova vigência a partir do mês informado
+        mes_ref_str = dados['mes_referencia']
+        mes_ref_date = datetime.strptime(mes_ref_str + '-01', '%Y-%m-%d').date()
+
+        # Validar: novo mês deve ser futuro ou presente
+        if mes_ref_date < date.today().replace(day=1):
+            return jsonify({'erro': 'Não é possível editar limite para meses passados'}), 400
+
+        # 1. Finalizar vigência do orçamento antigo (um mês antes da nova vigência)
+        from dateutil.relativedelta import relativedelta
+        orcamento_antigo.vigencia_fim = mes_ref_date - relativedelta(months=1)
+        orcamento_antigo.ativo = False  # Marcar como inativo
+
+        # 2. Criar novo orçamento com nova vigência
+        novo_orcamento = OrcamentoAgregado(
+            item_agregado_id=orcamento_antigo.item_agregado_id,
+            mes_referencia=mes_ref_date,
+            valor_teto=dados.get('valor_teto', orcamento_antigo.valor_teto),
+            observacoes=dados.get('observacoes', ''),
+            vigencia_inicio=mes_ref_date,
+            vigencia_fim=None,  # Nova vigência indefinida
+            ativo=True
+        )
+
+        db.session.add(novo_orcamento)
         db.session.commit()
-        return jsonify(orcamento.to_dict()), 200
+
+        return jsonify(novo_orcamento.to_dict()), 200
     except Exception as e:
         db.session.rollback()
         return jsonify({'erro': str(e)}), 500
@@ -698,6 +767,88 @@ def obter_resumo_cartao(cartao_id):
         import traceback
         traceback.print_exc()  # Log completo no console
         return jsonify({'erro': f'Erro ao carregar resumo: {str(e)}'}), 500
+
+
+# ============================================================================
+# ROTAS PARA FECHAMENTO DE FATURA
+# ============================================================================
+
+@cartoes_bp.route('/<int:cartao_id>/faturas/<string:competencia>/consolidar', methods=['POST'])
+def consolidar_fatura(cartao_id, competencia):
+    """
+    Consolida (fecha) uma fatura de cartão de crédito
+
+    Regras:
+    - Apenas faturas com status_fatura='ABERTA' podem ser consolidadas
+    - Recalcula o valor executado
+    - Define status_fatura='FECHADA'
+    - Persiste valor_consolidado e data_consolidacao
+    - Fatura FECHADA ainda aceita novos lançamentos (recalcula executado)
+    """
+    try:
+        from backend.models import Conta
+
+        # Converter competencia (YYYY-MM) para date (YYYY-MM-01)
+        competencia_date = datetime.strptime(competencia + '-01', '%Y-%m-%d').date()
+
+        # Buscar fatura do cartão
+        fatura = Conta.query.filter_by(
+            item_despesa_id=cartao_id,
+            cartao_competencia=competencia_date,
+            is_fatura_cartao=True
+        ).first()
+
+        if not fatura:
+            return jsonify({
+                'success': False,
+                'erro': 'Fatura não encontrada'
+            }), 404
+
+        # Verificar se fatura já está fechada ou paga
+        if fatura.status_fatura == 'FECHADA':
+            return jsonify({
+                'success': False,
+                'erro': 'Fatura já está consolidada'
+            }), 400
+
+        if fatura.status_fatura == 'PAGA':
+            return jsonify({
+                'success': False,
+                'erro': 'Fatura já está paga e não pode ser consolidada novamente'
+            }), 400
+
+        # Recalcular executado usando CartaoService
+        fatura_atualizada = CartaoService.recalcular_fatura(cartao_id, competencia_date)
+
+        # Consolidar fatura
+        fatura_atualizada.status_fatura = 'FECHADA'
+        fatura_atualizada.valor_consolidado = fatura_atualizada.valor_executado
+        fatura_atualizada.data_consolidacao = datetime.now()
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': 'Fatura consolidada com sucesso',
+            'fatura': {
+                'id': fatura_atualizada.id,
+                'status_fatura': fatura_atualizada.status_fatura,
+                'valor_consolidado': float(fatura_atualizada.valor_consolidado),
+                'data_consolidacao': fatura_atualizada.data_consolidacao.strftime('%Y-%m-%d %H:%M:%S'),
+                'valor_executado': float(fatura_atualizada.valor_executado),
+                'valor_planejado': float(fatura_atualizada.valor_planejado) if fatura_atualizada.valor_planejado else None,
+                'competencia': fatura_atualizada.cartao_competencia.strftime('%Y-%m')
+            }
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'erro': f'Erro ao consolidar fatura: {str(e)}'
+        }), 500
 
 
 # ============================================================================

@@ -7,6 +7,15 @@
 
 ---
 
+## 🤖 Governança de Implementação
+
+Este projeto possui um padrão obrigatório de atuação da I.A.
+Antes de qualquer implementação, consultar:
+
+📄 **[docs/AI_IMPLEMENTATION_STANDARD.md](AI_IMPLEMENTATION_STANDARD.md)**
+
+---
+
 ## 1️⃣ Princípios Gerais (OBRIGATÓRIOS)
 
 ### 1.1 Backend é a fonte da verdade
@@ -599,6 +608,9 @@ Despesas recorrentes cujo `meio_pagamento='cartao'` (ex: Netflix, Spotify, assin
    - Não entram em "Outros Lançamentos" (exceto se não tiver categoria)
 
 2. **Cálculo da Fatura:**
+   - **Topo do detalhamento (Previsto):** sempre **orçamento** (categorias do cartão) + previstos dos demais blocos; **nunca** “puxa” executado
+   - **Topo do detalhamento (Executado):** sempre soma real dos lançamentos
+   - **Card principal (lista `/despesas`) e rodapé:** refletem impacto financeiro real e usam `max(previsto, executado)` por categoria (quando executado excede o previsto)
    - Lançamentos recorrentes entram no **valor PREVISTO** da fatura
    - São computados normalmente no total
 
@@ -653,6 +665,274 @@ Antes de considerar um endpoint **pronto**, validar:
 
 ---
 
-**Versão:** 1.1.0
+## 🔧 Parcelamento no Cartão de Crédito
+
+### Modelo de Dados
+
+**LancamentoAgregado (parcela):**
+```python
+{
+  "id": 789,
+  "cartao_id": 1,
+  "categoria_id": 10,
+  "descricao": "Notebook Dell",
+  "valor": 300.00,  # Valor já DIVIDIDO pela quantidade de parcelas
+  "data_compra": "2025-01-15",
+  "mes_fatura": "2025-02-01",
+  "numero_parcela": 1,
+  "total_parcelas": 3,
+  "compra_id": "a3f2c8d9-4b1e-4f5a-9c2d-1e3f4a5b6c7d"  # UUID único da compra
+}
+```
+
+### Regras Técnicas
+
+#### Backend
+
+1. **Distribuição de Centavos:**
+   - Converte valor para centavos inteiros
+   - Divide por número de parcelas
+   - Distribui resto nas primeiras parcelas
+   - Garante soma exata (sem perda de centavos)
+
+2. **Idempotência Robusta:**
+   - Gera UUID único (`compra_id`) por compra
+   - Todas as parcelas compartilham mesmo UUID
+   - Verificação: `compra_id + numero_parcela`
+   - Impossível duplicar parcelas
+
+3. **Criação de Parcelas:**
+   - 1 compra = N lançamentos (1 por mês)
+   - Cada parcela em competência distinta
+   - Recalcula faturas de todos os meses afetados
+
+#### Exemplo
+
+**Input:**
+```json
+{
+  "cartao_id": 1,
+  "categoria_id": 10,
+  "descricao": "Notebook Dell",
+  "valor": 100.00,
+  "total_parcelas": 3,
+  "data_compra": "2025-01-15",
+  "mes_fatura": "2025-02-01"
+}
+```
+
+**Output (3 lançamentos criados):**
+```
+Parcela 1/3: R$ 33,34 (Fev/2025) - compra_id: abc123...
+Parcela 2/3: R$ 33,33 (Mar/2025) - compra_id: abc123...
+Parcela 3/3: R$ 33,33 (Abr/2025) - compra_id: abc123...
+SOMA: R$ 100,00 (exata)
+```
+
+---
+
+## 🔒 Fechamento de Fatura de Cartão de Crédito
+
+### Estados da Fatura
+
+**Modelo de Dados (Conta):**
+```python
+{
+  "status_fatura": "ABERTA",  # 'ABERTA' | 'FECHADA' | 'PAGA'
+  "data_consolidacao": "2025-12-27 15:30:00",  # DateTime do fechamento
+  "valor_consolidado": 1250.50  # Valor executado no momento do fechamento
+}
+```
+
+### Regras Fundamentais
+
+#### 1. Estados Possíveis
+
+| Estado | Descrição | Aceita Lançamentos? | Comportamento |
+|--------|-----------|---------------------|---------------|
+| `ABERTA` | Fatura em aberto | ✅ Sim | Lançamentos entram normalmente |
+| `FECHADA` | Fatura consolidada | ✅ Sim | Aceita lançamentos, recalcula executado |
+| `PAGA` | Fatura paga | ❌ Não | Lançamentos vão para próxima fatura |
+
+#### 2. Transições de Estado
+
+```
+ABERTA ──[consolidar]──> FECHADA ──[pagar]──> PAGA
+   │                        │                    │
+   └──[lançar]──> OK       └──[lançar]──> OK   └──[lançar]──> Redireciona
+```
+
+### Regras Técnicas
+
+#### Backend
+
+1. **Consolidação de Fatura:**
+   ```
+   POST /api/cartoes/{cartao_id}/faturas/{competencia}/consolidar
+   ```
+   - Só permite consolidar fatura com `status_fatura='ABERTA'`
+   - Recalcula `valor_executado`
+   - Define `status_fatura='FECHADA'`
+   - Persiste `valor_consolidado = valor_executado`
+   - Persiste `data_consolidacao = now()`
+
+2. **Lançamento em Fatura FECHADA:**
+   - Aceita normalmente
+   - Recalcula `valor_executado`
+   - Mantém `status_fatura='FECHADA'`
+   - `valor_consolidado` permanece inalterado (histórico)
+
+3. **Lançamento em Fatura PAGA:**
+   - Backend redireciona automaticamente para próxima fatura
+   - Frontend não decide competência
+   - Exemplo:
+     ```
+     Fatura Jan/2025: PAGA
+     Lançamento tentado: Jan/2025
+     Backend: redireciona para Fev/2025
+     ```
+
+#### Frontend
+
+1. **Exibição de Status:**
+   - Botão "Consolidar Fatura" só aparece se `status_fatura='ABERTA'`
+   - Após `FECHADA`: mostrar badge visual (ex: "⚠️ Consolidada")
+   - Após lançamento em fatura `FECHADA`: tooltip "Lançamento incluído após fechamento"
+
+2. **Não Bloqueia Usuário:**
+   - Nunca mostrar modal bloqueante
+   - Lançamentos em fatura `FECHADA` são aceitos silenciosamente
+   - Apenas indicador visual discreto
+
+### Exemplo de Fluxo
+
+**Situação:** Fatura Dez/2024 está FECHADA, usuário lança despesa atrasada
+
+```python
+# 1. Fatura antes
+{
+  "competencia": "2024-12",
+  "status_fatura": "FECHADA",
+  "valor_consolidado": 1200.00,  # Valor no fechamento
+  "valor_executado": 1200.00      # Valor atual
+}
+
+# 2. Usuário lança R$ 50,00 atrasado
+
+# 3. Fatura depois
+{
+  "competencia": "2024-12",
+  "status_fatura": "FECHADA",          # Permanece FECHADA
+  "valor_consolidado": 1200.00,        # Não muda (histórico)
+  "valor_executado": 1250.00           # Recalculado
+}
+```
+
+**Situação:** Fatura Dez/2024 está PAGA, usuário lança despesa
+
+```python
+# Backend detecta status_fatura='PAGA'
+# Redireciona para próxima fatura (Jan/2025)
+# Lançamento aparece em Jan/2025
+```
+
+### Regra-Mestre
+
+> **Fatura pode ser alterada após o fechamento enquanto NÃO estiver paga.**
+> **Após pagamento, qualquer novo lançamento vai para ajuste da próxima fatura.**
+
+---
+
+## ⏳ FASE 3 (FUTURA) — PAGAMENTO PARCIAL DE FATURA (NÃO IMPLEMENTADO)
+
+> ⚠️ **IMPORTANTE:** Esta funcionalidade **NÃO está ativa** no sistema atual.
+> ⚠️ Nenhum endpoint aceita pagamento parcial no momento.
+> ⚠️ Pagamento de fatura é **sempre integral** na versão atual.
+
+### Conceito
+
+Pagamento parcial ocorre quando o **valor pago é inferior ao valor total** da fatura consolidada.
+
+**Exemplo:**
+```
+Fatura consolidada: R$ 1.200,00
+Valor pago: R$ 800,00
+Saldo residual: R$ 400,00 (vai para próxima fatura como rotativo)
+```
+
+### Regras Previstas (Não Implementadas)
+
+1. **Pagamento Parcial NÃO Quita Fatura:**
+   - Fatura permanece com `status_fatura='FECHADA'`
+   - Apenas quando `valor_pago >= valor_total` → `status_fatura='PAGA'`
+
+2. **Saldo Rotativo:**
+   - Diferença entre `valor_fatura` e `valor_pago`
+   - Entra automaticamente como lançamento na próxima fatura
+   - Descrição: "Saldo rotativo fatura MM/AAAA"
+
+3. **Juros (Opcional):**
+   - Aplicados sobre saldo residual
+   - Configurável por cartão
+   - Cálculo: `saldo_residual * taxa_juros_mensal`
+
+4. **IOF (Opcional):**
+   - Aplicado sobre operação de rotativo
+   - Configurável por cartão
+   - Alíquota conforme regulação bancária
+
+5. **Múltiplos Pagamentos Parciais:**
+   - Permitido até quitação total
+   - Cada pagamento reduz saldo devedor
+   - Histórico de pagamentos mantido
+
+### Estados Possíveis (Futuros)
+
+| Status | Descrição | Valor Pago |
+|--------|-----------|------------|
+| `ABERTA` | Fatura em formação | - |
+| `FECHADA` | Consolidada, aguardando pagamento | R$ 0,00 |
+| `FECHADA (parcial)` | Pagamento parcial realizado | R$ 0,01 até R$ (total - 0,01) |
+| `PAGA` | Quitada integralmente | R$ (total) ou mais |
+
+### Impactos da Implementação
+
+A introdução de pagamento parcial exigirá:
+
+**Backend:**
+- Novos campos: `valor_pago`, `saldo_devedor`, `taxa_juros`, `iof`
+- Migration para adicionar campos
+- Endpoint: `POST /api/cartoes/{id}/faturas/{competencia}/pagar-parcial`
+- Lógica de cálculo de juros e IOF
+- Geração automática de lançamento rotativo
+
+**Frontend:**
+- Modal de pagamento com opção "Pagar valor diferente"
+- Indicador visual de "Pagamento Parcial"
+- Exibição de saldo devedor
+- Histórico de pagamentos parciais
+
+**UX:**
+- Educação financeira: avisos sobre juros
+- Calculadora de simulação de rotativo
+- Alertas de endividamento
+
+### Decisão de Projeto
+
+**Por que NÃO está implementado agora:**
+- Priorizar simplicidade e previsibilidade
+- Evitar complexidade prematura
+- Educar para pagamento integral (melhores práticas financeiras)
+- Focar em estabilização do core
+
+**Quando considerar implementar:**
+- Após 3+ meses de sistema estável em produção
+- Após feedback de usuários reais
+- Se houver demanda explícita
+- Com análise de impacto educacional
+
+---
+
+**Versão:** 1.3.0
 **Data:** 2025-01-17
-**Última atualização:** 2025-12-22 (Adicionado: Despesas Recorrentes Pagas via Cartão)
+**Última atualização:** 2025-12-27 (Fechamento de fatura + documentação Fase 3)

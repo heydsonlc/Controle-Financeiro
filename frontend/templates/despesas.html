@@ -2,6 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Despesas - Controle Financeiro</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
@@ -31,9 +32,9 @@
                         <option value="pago">Pagas</option>
                     </select>
 
-                    <input type="text" id="filtro-mes" class="filter-input"
-                           placeholder="Vencimento (MM/AAAA)" maxlength="7"
-                           onkeyup="mascaraMesAno(this)" onchange="aplicarFiltros()">
+                    <input type="date" id="filtro-vencimento-ate" class="filter-input"
+                           placeholder="Vencimento até" onchange="aplicarFiltros()"
+                           title="Filtrar despesas que vencem até esta data (dentro da competência)">
 
                     <input type="text" id="filtro-competencia" class="filter-input"
                            placeholder="Competência (MM/AAAA)" maxlength="7"
@@ -425,10 +426,6 @@
             <a href="/despesas" class="nav-item active">
                 <span class="icon">▬</span>
                 <span class="label">DESPESAS</span>
-            </a>
-            <a href="/cartoes" class="nav-item">
-                <span class="icon">▭</span>
-                <span class="label">Cartões</span>
             </a>
             <a href="/configuracoes" class="nav-item">
                 <span class="icon">⚙</span>

@@ -12,14 +12,86 @@ from flask import Blueprint, request, jsonify
 from datetime import datetime
 
 try:
-    from backend.models import db, Financiamento, FinanciamentoParcela, IndexadorMensal
+    from backend.models import db, Financiamento, FinanciamentoParcela, IndexadorMensal, FinanciamentoSeguroVigencia, FinanciamentoAmortizacaoExtra
     from backend.services.financiamento_service import FinanciamentoService
 except ImportError:
-    from models import db, Financiamento, FinanciamentoParcela, IndexadorMensal
+    from models import db, Financiamento, FinanciamentoParcela, IndexadorMensal, FinanciamentoSeguroVigencia, FinanciamentoAmortizacaoExtra
     from services.financiamento_service import FinanciamentoService
 
 # Criar blueprint
 financiamentos_bp = Blueprint('financiamentos', __name__)
+
+
+# ============================================================================
+# FUNÇÕES AUXILIARES
+# ============================================================================
+
+def _obter_info_vigencia_para_edicao(financiamento):
+    """
+    Obtém informações sobre vigências de seguro para pré-preencher tela de edição
+
+    Regras (conforme manifesto):
+    - Nunca editar vigência existente
+    - Histórico imutável
+    - Sem inferência de valores
+
+    Caso 1: SEM amortização após última vigência
+        → Retorna dados da última vigência (referência visual)
+
+    Caso 2: COM amortização após última vigência
+        → Retorna data sugerida (mês após amortização)
+        → Valor vazio
+        → Mensagem orientativa
+
+    Returns:
+        dict com: data_sugerida, valor_sugerido, observacoes_sugeridas, mensagem_orientativa
+    """
+    from datetime import date
+    from dateutil.relativedelta import relativedelta
+
+    # Buscar última vigência ativa
+    ultima_vigencia = FinanciamentoSeguroVigencia.query.filter_by(
+        financiamento_id=financiamento.id,
+        vigencia_ativa=True
+    ).order_by(FinanciamentoSeguroVigencia.competencia_inicio.desc()).first()
+
+    # Buscar última amortização extraordinária
+    ultima_amortizacao = FinanciamentoAmortizacaoExtra.query.filter_by(
+        financiamento_id=financiamento.id
+    ).order_by(FinanciamentoAmortizacaoExtra.data.desc()).first()
+
+    # Caso: nenhuma vigência cadastrada (não deveria acontecer, mas tratamos)
+    if not ultima_vigencia:
+        return {
+            'data_sugerida': None,
+            'valor_sugerido': None,
+            'observacoes_sugeridas': None,
+            'mensagem_orientativa': 'Nenhuma vigência de seguro cadastrada. Cadastre a primeira vigência.'
+        }
+
+    # Caso 1: SEM amortização OU amortização ANTES da última vigência
+    if not ultima_amortizacao or ultima_amortizacao.data < ultima_vigencia.competencia_inicio:
+        return {
+            'data_sugerida': ultima_vigencia.competencia_inicio.strftime('%Y-%m-%d'),
+            'valor_sugerido': float(ultima_vigencia.valor_mensal),
+            'observacoes_sugeridas': ultima_vigencia.observacoes,
+            'mensagem_orientativa': None
+        }
+
+    # Caso 2: Amortização APÓS a última vigência
+    # Data sugerida: primeiro dia do mês seguinte à amortização
+    data_amortizacao = ultima_amortizacao.data
+    primeiro_dia_mes_amortizacao = date(data_amortizacao.year, data_amortizacao.month, 1)
+    data_sugerida = primeiro_dia_mes_amortizacao + relativedelta(months=1)
+
+    mes_ano_sugerido = data_sugerida.strftime('%m/%Y')
+
+    return {
+        'data_sugerida': data_sugerida.strftime('%Y-%m-%d'),
+        'valor_sugerido': None,  # NÃO inferir valor
+        'observacoes_sugeridas': None,
+        'mensagem_orientativa': f'Após amortização extraordinária, informe o novo valor do seguro a partir de {mes_ano_sugerido}.'
+    }
 
 
 # ============================================================================
@@ -35,7 +107,7 @@ def listar_financiamentos():
         ativo: true/false - Filtrar por status ativo
 
     Returns:
-        JSON com lista de financiamentos
+        JSON com lista de financiamentos (com estatísticas calculadas)
     """
     try:
         ativo = request.args.get('ativo')
@@ -44,10 +116,33 @@ def listar_financiamentos():
 
         financiamentos = FinanciamentoService.listar_financiamentos(ativo=ativo)
 
+        # Enriquecer dados com estatísticas calculadas
+        dados_enriquecidos = []
+        for f in financiamentos:
+            dados = f.to_dict()
+
+            # Calcular parcelas pagas
+            parcelas_pagas = FinanciamentoParcela.query.filter_by(
+                financiamento_id=f.id,
+                status='pago'
+            ).count()
+
+            # Calcular total de parcelas
+            total_parcelas = FinanciamentoParcela.query.filter_by(
+                financiamento_id=f.id
+            ).count()
+
+            # Adicionar campos calculados
+            # NOTA: saldo_devedor_atual já vem correto do to_dict() (estado soberano)
+            dados['parcelas_pagas'] = parcelas_pagas
+            dados['total_parcelas'] = total_parcelas
+
+            dados_enriquecidos.append(dados)
+
         return jsonify({
             'success': True,
-            'data': [f.to_dict() for f in financiamentos],
-            'total': len(financiamentos)
+            'data': dados_enriquecidos,
+            'total': len(dados_enriquecidos)
         }), 200
 
     except Exception as e:
@@ -82,25 +177,23 @@ def buscar_financiamento(id):
             financiamento_id=id
         ).order_by(FinanciamentoParcela.numero_parcela).all()
 
-        # Calcular saldo devedor atual (última parcela pendente)
-        ultima_parcela_paga = FinanciamentoParcela.query.filter_by(
+        # Contar parcelas pagas
+        parcelas_pagas = FinanciamentoParcela.query.filter_by(
             financiamento_id=id,
             status='pago'
-        ).order_by(FinanciamentoParcela.numero_parcela.desc()).first()
+        ).count()
 
-        saldo_devedor_atual = 0
-        if ultima_parcela_paga:
-            saldo_devedor_atual = float(ultima_parcela_paga.saldo_devedor_apos_pagamento or 0)
-        else:
-            saldo_devedor_atual = float(financiamento.valor_financiado)
+        # Buscar informações de vigência de seguro (para edição)
+        vigencia_info = _obter_info_vigencia_para_edicao(financiamento)
 
         return jsonify({
             'success': True,
             'data': {
                 **financiamento.to_dict(),
-                'saldo_devedor_atual': saldo_devedor_atual,
+                'parcelas_pagas': parcelas_pagas,
                 'parcelas': [p.to_dict() for p in parcelas],
-                'total_parcelas': len(parcelas)
+                'total_parcelas': len(parcelas),
+                'vigencia_seguro_info': vigencia_info
             }
         }), 200
 
@@ -146,37 +239,43 @@ def criar_financiamento():
                 'error': 'Dados não fornecidos'
             }), 400
 
-        # Validar tipo de seguro
-        seguro_tipo = data.get('seguro_tipo', 'fixo')
+        # DEBUG: Log do payload recebido
+        import json
+        print("DEBUG: Payload recebido no backend:")
+        print(json.dumps(data, indent=2, ensure_ascii=False))
 
-        if seguro_tipo not in ['fixo', 'percentual_saldo']:
+        # Validar vigências de seguro (obrigatório pelo menos 1)
+        vigencias_seguro = data.get('vigencias_seguro', [])
+
+        if not vigencias_seguro or len(vigencias_seguro) == 0:
             return jsonify({
                 'success': False,
-                'error': 'seguro_tipo deve ser "fixo" ou "percentual_saldo"'
+                'error': 'É obrigatório informar pelo menos uma vigência de seguro'
             }), 400
 
-        # Validar campos de seguro baseado no tipo
-        if seguro_tipo == 'percentual_saldo':
-            if 'seguro_percentual' not in data or data['seguro_percentual'] is None:
+        # Validar cada vigência
+        for i, vigencia in enumerate(vigencias_seguro, 1):
+            if 'competencia_inicio' not in vigencia:
                 return jsonify({
                     'success': False,
-                    'error': 'seguro_percentual é obrigatório quando seguro_tipo é "percentual_saldo"'
+                    'error': f'Vigência {i}: competencia_inicio é obrigatório'
                 }), 400
 
-            # Validar range do percentual (0.01% a 1%)
-            percentual = float(data['seguro_percentual'])
-            if percentual < 0.0001 or percentual > 0.01:
+            if 'valor_mensal' not in vigencia or vigencia['valor_mensal'] <= 0:
                 return jsonify({
                     'success': False,
-                    'error': 'seguro_percentual deve estar entre 0.0001 (0.01%) e 0.01 (1%)'
+                    'error': f'Vigência {i}: valor_mensal deve ser maior que zero'
                 }), 400
 
-        elif seguro_tipo == 'fixo':
-            if 'valor_seguro_mensal' not in data or data['valor_seguro_mensal'] is None:
-                return jsonify({
-                    'success': False,
-                    'error': 'valor_seguro_mensal é obrigatório quando seguro_tipo é "fixo"'
-                }), 400
+            # Validação OPCIONAL de saldo_devedor_vigencia (backward compatibility)
+            # - Se fornecido: valida se > 0 (mas será IGNORADO pelo service - usa saldo soberano)
+            # - Se não fornecido: OK (backend usa financiamento.saldo_devedor_atual)
+            if 'saldo_devedor_vigencia' in vigencia:
+                if vigencia['saldo_devedor_vigencia'] <= 0:
+                    return jsonify({
+                        'success': False,
+                        'error': f'Vigência {i}: saldo_devedor_vigencia, se fornecido, deve ser maior que zero'
+                    }), 400
 
         financiamento = FinanciamentoService.criar_financiamento(data)
 
@@ -488,6 +587,153 @@ def registrar_amortizacao_extra(id):
             'success': True,
             'message': 'Amortização extraordinária registrada com sucesso',
             'data': amortizacao.to_dict()
+        }), 201
+
+    except ValueError as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 400
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@financiamentos_bp.route('/<int:id>/vigencias-seguro', methods=['POST'])
+def adicionar_vigencia_seguro(id):
+    """
+    Adiciona nova vigência de seguro ao financiamento
+
+    IMPORTANTE: Este é o endpoint CORRETO para adicionar vigências.
+    NÃO usar PUT /financiamentos/<id> para adicionar vigências.
+
+    Regra de ouro: saldo_devedor_vigencia SEMPRE vem do estado soberano,
+    nunca do frontend.
+
+    Args:
+        id: ID do financiamento
+
+    Payload JSON:
+        {
+            "competencia_inicio": "2026-03" ou "01/03/2026" ou "2026-03-01",
+            "valor_mensal": 200.00,
+            "observacoes": "Reajuste anual" (opcional)
+        }
+
+    Returns:
+        JSON com vigência criada e status do recálculo
+    """
+    try:
+        from backend.services.seguro_vigencia_service import SeguroVigenciaService
+        from datetime import datetime
+        from decimal import Decimal
+
+        # Buscar financiamento
+        financiamento = Financiamento.query.get(id)
+        if not financiamento:
+            return jsonify({
+                'success': False,
+                'error': 'Financiamento não encontrado'
+            }), 404
+
+        data = request.get_json()
+
+        # Validações
+        if not data.get('competencia_inicio'):
+            return jsonify({
+                'success': False,
+                'error': 'competencia_inicio é obrigatório'
+            }), 400
+
+        if not data.get('valor_mensal'):
+            return jsonify({
+                'success': False,
+                'error': 'valor_mensal é obrigatório'
+            }), 400
+
+        # Normalizar data (aceitar múltiplos formatos)
+        competencia_str = data['competencia_inicio']
+
+        # Remover sufixos indesejados
+        if '-' in competencia_str and len(competencia_str) > 7:
+            competencia_str = competencia_str.split('-')[0] + '-' + competencia_str.split('-')[1]
+
+        competencia_inicio = None
+
+        # Tentar formato YYYY-MM (input type="month")
+        if len(competencia_str) == 7 and competencia_str[4] == '-':
+            try:
+                competencia_inicio = datetime.strptime(competencia_str + '-01', '%Y-%m-%d').date()
+            except ValueError:
+                pass
+
+        # Tentar formato MM/YYYY
+        if not competencia_inicio and '/' in competencia_str:
+            partes = competencia_str.split('/')
+            if len(partes) == 2:
+                try:
+                    mes, ano = partes
+                    competencia_inicio = datetime(int(ano), int(mes), 1).date()
+                except (ValueError, IndexError):
+                    pass
+
+        # Tentar formato DD/MM/YYYY
+        if not competencia_inicio and '/' in competencia_str:
+            try:
+                competencia_inicio = datetime.strptime(competencia_str, '%d/%m/%Y').date()
+                competencia_inicio = competencia_inicio.replace(day=1)
+            except ValueError:
+                pass
+
+        # Tentar formato YYYY-MM-DD (ISO)
+        if not competencia_inicio:
+            try:
+                competencia_inicio = datetime.strptime(competencia_str, '%Y-%m-%d').date()
+                competencia_inicio = competencia_inicio.replace(day=1)
+            except ValueError:
+                pass
+
+        if not competencia_inicio:
+            return jsonify({
+                'success': False,
+                'error': f'Formato de data inválido: {data["competencia_inicio"]}. Use YYYY-MM, MM/YYYY ou DD/MM/YYYY'
+            }), 400
+
+        # ====================================================================
+        # REGRA DE OURO: Saldo soberano NÃO vem do frontend
+        # ====================================================================
+        # SEMPRE usar financiamento.saldo_devedor_atual
+        saldo_devedor_vigencia = financiamento.saldo_devedor_atual
+
+        # Criar vigência
+        vigencia = SeguroVigenciaService.criar_vigencia(
+            financiamento_id=financiamento.id,
+            competencia_inicio=competencia_inicio,
+            valor_mensal=Decimal(str(data['valor_mensal'])),
+            saldo_devedor_vigencia=saldo_devedor_vigencia,
+            observacoes=data.get('observacoes', '')
+        )
+
+        # ====================================================================
+        # RECÁLCULO SEGURO-ONLY (não toca em saldo/amortização/juros)
+        # ====================================================================
+        parcelas_atualizadas = FinanciamentoService.recalcular_seguro_parcelas_futuras(
+            financiamento_id=financiamento.id,
+            a_partir_de=competencia_inicio
+        )
+
+        return jsonify({
+            'success': True,
+            'message': f'Vigência criada com sucesso. {parcelas_atualizadas} parcelas atualizadas.',
+            'data': {
+                'vigencia': vigencia.to_dict(),
+                'parcelas_atualizadas': parcelas_atualizadas,
+                'saldo_devedor_atual': float(financiamento.saldo_devedor_atual)
+            }
         }), 201
 
     except ValueError as e:

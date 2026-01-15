@@ -138,6 +138,65 @@
     border-radius: 8px;
     padding: 20px;
     transition: all 0.3s;
+    position: relative;
+}
+
+.card-item.card-realizada {
+    padding: 12px 20px;
+}
+
+.card-realizada .linha-receita {
+    display: flex;
+    align-items: center;
+    padding: 4px 0;
+    gap: 12px;
+    border-bottom: 0;
+}
+
+.card-realizada .col-descricao {
+    flex: 1;
+    font-weight: 500;
+    color: #212529;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.card-realizada .col-fill {
+    flex: 1;
+}
+
+.card-realizada .col-valor {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 240px;
+    gap: 8px;
+    flex-shrink: 0;
+    flex-wrap: nowrap;
+    margin-left: auto;
+}
+
+.card-realizada .valor {
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+.card-realizada .acoes {
+    display: flex;
+    gap: 6px;
+}
+
+.card-realizada .linha-meta {
+    margin-top: 4px;
+    color: #6c757d;
+    font-size: 12px;
+}
+
+.card-realizada .btn-icon {
+    font-size: 16px;
+    padding: 4px 8px;
 }
 
 .card-item:hover {
@@ -182,6 +241,175 @@
     margin-top: 15px;
     padding-top: 15px;
     border-top: 1px solid #dee2e6;
+    justify-content: flex-end;
+}
+
+/* Aba Fontes: ações na 1ª linha (canto direito) */
+#fontes-lista .item-header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+#fontes-lista .item-header-acoes {
+    display: flex;
+    gap: 6px;
+}
+
+/* Lista do mês: layout tipo despesas */
+.linha-receita {
+    display: flex;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #f1f3f5;
+}
+
+.linha-receita .col-descricao {
+    flex: 1;
+    min-width: 0;
+}
+
+.linha-receita .col-fill {
+    flex: 1;
+}
+
+.linha-receita .col-valor {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 240px;
+    gap: 8px;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+.linha-receita .valor {
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+.linha-receita .acoes {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+/* Desktop: ações só no hover (igual despesas) */
+@media (min-width: 769px) {
+    .linha-receita-mes .acoes {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition: opacity 0.15s ease;
+    }
+
+    .linha-receita-mes:hover .acoes {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+    }
+}
+
+/* Mobile: ações sempre visíveis */
+@media (max-width: 768px) {
+    .linha-receita-mes .acoes {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+    }
+}
+
+/* Botões (mesmo padrão das despesas) */
+.linha-receita-mes .acoes {
+    min-width: 102px; /* reserva espaço fixo: ✏️ + X + ✅ */
+    justify-content: flex-end;
+}
+
+.linha-receita-mes .btn-icon {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
+    padding: 6px;
+    border-radius: 6px;
+    transition: all 0.2s;
+    opacity: 0.6;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    line-height: 1;
+}
+
+.linha-receita-mes .btn-icon:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.linha-receita-mes .btn-icon:disabled {
+    opacity: 0.25;
+    cursor: not-allowed;
+    background: transparent;
+}
+
+.linha-receita-mes .btn-danger {
+    color: #ff3b30;
+}
+
+.linha-receita-mes .btn-danger:hover {
+    background: rgba(255, 59, 48, 0.1);
+}
+
+.linha-receita-mes .btn-consolidar-icon {
+    color: #34c759;
+}
+
+.linha-receita-mes .btn-consolidar-icon:disabled {
+    color: #6e6e73;
+}
+
+.linha-receita .titulo {
+    font-weight: 500;
+    color: #212529;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.linha-receita .subtitulo {
+    margin-top: 2px;
+    font-size: 12px;
+    color: #6c757d;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.status {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.status-prevista {
+    background: #cce5ff;
+    color: #004085;
+}
+
+.status-realizada {
+    background: #d4edda;
+    color: #155724;
+}
+
+.btn-consolidar {
+    padding: 6px 10px;
+    font-size: 12px;
 }
 
 .btn-icon {

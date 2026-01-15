@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block title %}Seguro Habitacional - Vigências{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Seguro Habitacional</h1>
+        <a href="/financiamentos" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar para Financiamentos
+        </a>
+    </div>
+
+    <!-- Vigência Atual (Card Destaque) -->
+    <div class="card mb-4 border-primary">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">
+                <i class="fas fa-shield-alt"></i> Vigência Atual
+            </h5>
+        </div>
+        <div class="card-body" id="vigencia-atual">
+            <div class="text-center text-muted">
+                <i class="fas fa-spinner fa-spin"></i> Carregando...
+            </div>
+        </div>
+    </div>
+
+    <!-- Histórico de Vigências -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="fas fa-history"></i> Histórico de Vigências
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover" id="tabela-vigencias">
+                    <thead>
+                        <tr>
+                            <th>Vigência</th>
+                            <th>Encerramento</th>
+                            <th>Valor Mensal</th>
+                            <th>Status</th>
+                            <th>Observações</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-vigencias">
+                        <tr>
+                            <td colspan="6" class="text-center text-muted">
+                                <i class="fas fa-spinner fa-spin"></i> Carregando...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Nova Vigência -->
+    <div class="card">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0">
+                <i class="fas fa-plus"></i> Cadastrar Nova Vigência
+            </h5>
+        </div>
+        <div class="card-body">
+            <form id="form-nova-vigencia">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="competencia_inicio">Competência Inicial *</label>
+                            <input type="month" class="form-control" id="competencia_inicio" required>
+                            <small class="form-text text-muted">Mês/ano de início da vigência</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="valor_mensal">Valor Mensal (R$) *</label>
+                            <input type="number" class="form-control" id="valor_mensal" step="0.01" min="0" required>
+                            <small class="form-text text-muted">Valor do seguro</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="saldo_devedor">Saldo Devedor (R$) *</label>
+                            <input type="number" class="form-control" id="saldo_devedor" step="0.01" min="0" required>
+                            <small class="form-text text-muted">Saldo na competência</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="observacoes">Observações</label>
+                            <input type="text" class="form-control" id="observacoes" maxlength="200">
+                            <small class="form-text text-muted">Ex: Tabela Caixa 2026</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert alert-warning mt-3">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Atenção:</strong> Ao cadastrar uma nova vigência, o sistema encerrará automaticamente a anterior.
+                    Parcelas antigas não serão alteradas (histórico preservado).
+                </div>
+
+                <button type="submit" class="btn btn-success">
+                    <i class="fas fa-save"></i> Cadastrar Nova Vigência
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Edição -->
+<div class="modal fade" id="modalEditarObservacoes" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Editar Observações</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="form-editar-obs">
+                    <input type="hidden" id="edit-vigencia-id">
+                    <div class="form-group">
+                        <label for="edit-observacoes">Observações</label>
+                        <textarea class="form-control" id="edit-observacoes" rows="3" maxlength="500"></textarea>
+                        <small class="form-text text-muted">
+                            Apenas observações podem ser editadas. Valor e competência são imutáveis.
+                        </small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btn-salvar-obs">
+                    <i class="fas fa-save"></i> Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/financiamento_seguro.js') }}"></script>
+{% endblock %}

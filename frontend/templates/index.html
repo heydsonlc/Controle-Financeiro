@@ -2,6 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - Controle Financeiro</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
@@ -52,6 +53,16 @@
             </section>
 
             <!-- ========================================== -->
+            <!-- LEITURA DO MÊS                             -->
+            <!-- ========================================== -->
+            <section class="leitura-mes" style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; margin: 20px 0;">
+                <h2 class="section-title" style="font-size: 18px; margin-bottom: 15px;">Leitura do Mês</h2>
+                <div id="leitura-container" style="color: rgba(255,255,255,0.8); line-height: 1.6;">
+                    <p class="loading">Carregando leitura...</p>
+                </div>
+            </section>
+
+            <!-- ========================================== -->
             <!-- BLOCO 2: INDICADORES INTELIGENTES         -->
             <!-- ========================================== -->
             <section class="indicadores">
@@ -86,11 +97,28 @@
 
                     <!-- Gráfico de Linha: Saldo Bancário -->
                     <div class="grafico-card wide">
-                        <h3>Evolução do Saldo Bancário</h3>
+                        <h3>Evolução Projetada do Saldo (Estimativa)</h3>
                         <div class="grafico-wrapper">
                             <canvas id="grafico-saldo"></canvas>
                         </div>
                     </div>
+                </div>
+            </section>
+
+            <!-- ========================================== -->
+            <!-- FASE 6.1: AGENDA FINANCEIRA DO MÊS        -->
+            <!-- ========================================== -->
+            <section class="agenda-financeira" style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; margin: 20px 0;">
+                <h2 class="section-title" style="font-size: 18px; margin-bottom: 15px;">📅 Agenda Financeira do Mês</h2>
+
+                <!-- Insights Temporais -->
+                <div id="insights-temporais" style="background: rgba(255,255,255,0.08); border-radius: 8px; padding: 15px; margin-bottom: 20px; font-size: 0.9em; color: rgba(255,255,255,0.8); line-height: 1.6;">
+                    <p class="loading">Carregando insights...</p>
+                </div>
+
+                <!-- Timeline Cronológica -->
+                <div id="timeline-agenda" style="font-size: 0.9em;">
+                    <p class="loading">Carregando agenda...</p>
                 </div>
             </section>
 
@@ -154,10 +182,6 @@
             <a href="/despesas" class="nav-item">
                 <span class="icon">▬</span>
                 <span class="label">DESPESAS</span>
-            </a>
-            <a href="/cartoes" class="nav-item">
-                <span class="icon">▭</span>
-                <span class="label">Cartões</span>
             </a>
             <a href="/configuracoes" class="nav-item">
                 <span class="icon">⚙</span>

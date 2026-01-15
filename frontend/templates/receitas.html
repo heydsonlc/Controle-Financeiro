@@ -2,6 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Receitas - Controle Financeiro</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
@@ -80,13 +81,21 @@
 
             <!-- Abas de Navegação -->
             <div class="tabs">
-                <button class="tab-button active" onclick="mudarAba('fontes')">Fontes de Receita</button>
+                <button class="tab-button active" onclick="mudarAba('mes')">Receitas do Mês</button>
+                <button class="tab-button" onclick="mudarAba('fontes')">Fontes de Receita</button>
                 <button class="tab-button" onclick="mudarAba('orcamento')">Orçamento</button>
                 <button class="tab-button" onclick="mudarAba('realizadas')">Receitas Recebidas</button>
             </div>
 
+            <!-- Aba: Receitas do Mês -->
+            <div id="aba-mes" class="tab-content active">
+                <div class="lista" id="mes-lista">
+                    <p class="loading">Carregando receitas do mês...</p>
+                </div>
+            </div>
+
             <!-- Aba: Fontes de Receita -->
-            <div id="aba-fontes" class="tab-content active">
+            <div id="aba-fontes" class="tab-content">
                 <div class="actions">
                     <button class="btn btn-primary" onclick="abrirModalFonte()">
                         + Nova Fonte de Receita
@@ -291,10 +300,11 @@
     <div id="modal-realizada" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Registrar Recebimento</h2>
+                <h2 id="modal-realizada-titulo">Registrar Recebimento</h2>
                 <span class="close" onclick="fecharModal('modal-realizada')">&times;</span>
             </div>
             <form id="form-realizada" onsubmit="salvarRealizada(event)">
+                <input type="hidden" id="realizada-id">
                 <div class="form-group">
                     <label for="real-fonte">Fonte de Receita *</label>
                     <select id="real-fonte" required>
@@ -352,10 +362,6 @@
             <a href="/despesas" class="nav-item">
                 <span class="icon">▬</span>
                 <span class="label">DESPESAS</span>
-            </a>
-            <a href="/cartoes" class="nav-item">
-                <span class="icon">▭</span>
-                <span class="label">Cartões</span>
             </a>
             <a href="/configuracoes" class="nav-item">
                 <span class="icon">⚙</span>
