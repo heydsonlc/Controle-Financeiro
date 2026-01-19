@@ -10,6 +10,11 @@
  * @param {*} response - Resposta da API
  * @returns {Array} Array de dados ou array vazio
  */
+// ======================================================
+// 🟡 HÍBRIDO – ORQUESTRAÇÃO OK, CÁLCULO PARCIAL
+// ATENÇÃO: não refatorar até migração completa
+// ======================================================
+
 function extrairArray(response) {
     // Se já é array, retorna direto
     if (Array.isArray(response)) return response;
