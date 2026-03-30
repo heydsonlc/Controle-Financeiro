@@ -79,45 +79,6 @@
     color: #dc3545;
 }
 
-/* Sistema de Abas */
-.tabs {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 20px;
-    border-bottom: 2px solid #dee2e6;
-}
-
-.tab-button {
-    padding: 12px 24px;
-    background: none;
-    border: none;
-    border-bottom: 3px solid transparent;
-    font-size: 16px;
-    font-weight: 500;
-    color: #ffffff;
-    cursor: pointer;
-    transition: all 0.3s;
-}
-
-.tab-button:hover {
-    color: #ffffff;
-    background: rgba(255, 255, 255, 0.1);
-}
-
-.tab-button.active {
-    color: #ffffff;
-    border-bottom-color: #ffffff;
-    background: rgba(255, 255, 255, 0.1);
-}
-
-.tab-content {
-    display: none;
-}
-
-.tab-content.active {
-    display: block;
-}
-
 /* Ações */
 .actions {
     margin-bottom: 20px;
@@ -242,18 +203,6 @@
     padding-top: 15px;
     border-top: 1px solid #dee2e6;
     justify-content: flex-end;
-}
-
-/* Aba Fontes: ações na 1ª linha (canto direito) */
-#fontes-lista .item-header-right {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-#fontes-lista .item-header-acoes {
-    display: flex;
-    gap: 6px;
 }
 
 /* Lista do mês: layout tipo despesas */
@@ -657,11 +606,6 @@ form {
 
     .cards-resumo {
         grid-template-columns: 1fr;
-    }
-
-    .tabs {
-        overflow-x: auto;
-        flex-wrap: nowrap;
     }
 
     .modal-content {

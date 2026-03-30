@@ -376,9 +376,10 @@
 
                 <div class="form-group">
                     <label for="fatura-conta-bancaria">Conta Bancária (opcional)</label>
-                    <select id="fatura-conta-bancaria">
-                        <option value="">Nenhuma</option>
+                    <select id="fatura-conta-bancaria" required>
+                        <option value="">Selecione...</option>
                     </select>
+                    <small class="form-help">Obrigatorio para gerar debito no extrato da conta.</small>
                 </div>
 
                 <div class="form-actions">

@@ -50,7 +50,7 @@
             </div>
 
             <!-- Lista de Contas -->
-            <div class="contas-grid" id="contas-lista">
+            <div class="contas-lista" id="contas-lista">
                 <p class="loading">Carregando contas...</p>
             </div>
         </main>
@@ -166,7 +166,7 @@
                 <span class="close" onclick="fecharModal('modal-confirmar')">&times;</span>
             </div>
             <div style="padding: 20px;">
-                <p style="margin-bottom: 20px; color: rgba(255, 255, 255, 0.9);">
+                <p style="margin-bottom: 20px; color: #6e6e73;">
                     Deseja realmente inativar esta conta? Os lançamentos anteriores serão mantidos.
                 </p>
                 <div class="form-actions">
@@ -178,6 +178,89 @@
                     </button>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Modal: Extrato -->
+    <div id="modal-extrato" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2 id="extrato-titulo">Extrato</h2>
+                <span class="close" onclick="fecharModal('modal-extrato')">&times;</span>
+            </div>
+            <div style="padding: 20px;">
+                <div class="extrato-header">
+                    <div>
+                        <div class="extrato-saldo-label">Saldo Atual</div>
+                        <div class="extrato-saldo-valor" id="extrato-saldo">R$ 0,00</div>
+                        <div class="extrato-saldo-help">O saldo é derivado do extrato (movimentos).</div>
+                    </div>
+                    <button class="btn-icon" onclick="abrirModalAjusteSaldo()" title="Ajustar saldo">⚙️</button>
+                </div>
+                <div id="extrato-lista" class="extrato-lista">
+                    <p class="loading">Carregando extrato...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Ajuste de Saldo -->
+    <div id="modal-ajuste" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="ajuste-titulo">Ajustar Saldo</h2>
+                <span class="close" onclick="fecharModal('modal-ajuste')">&times;</span>
+            </div>
+            <form id="form-ajuste" onsubmit="salvarAjusteSaldo(event)">
+                <input type="hidden" id="ajuste-conta-id">
+                <input type="hidden" id="ajuste-movimento-id">
+
+                <div class="form-group">
+                    <label>Saldo atual (derivado)</label>
+                    <input type="text" id="ajuste-saldo-atual" readonly>
+                </div>
+
+                <!-- Modo: criar ajuste por saldo final -->
+                <div id="ajuste-modo-saldo-final">
+                    <div class="form-group">
+                        <label for="ajuste-novo-saldo">Novo saldo</label>
+                        <input type="text" id="ajuste-novo-saldo" placeholder="R$ 0,00" onkeyup="formatarMoeda(this)">
+                        <small class="form-help">Isso criará um lançamento de ajuste no extrato.</small>
+                    </div>
+                </div>
+
+                <!-- Modo: editar ajuste existente -->
+                <div id="ajuste-modo-editar" style="display:none;">
+                    <div class="form-group">
+                        <label for="ajuste-tipo">Tipo do ajuste</label>
+                        <select id="ajuste-tipo">
+                            <option value="CREDITO">Crédito</option>
+                            <option value="DEBITO">Débito</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="ajuste-valor">Valor do ajuste</label>
+                        <input type="text" id="ajuste-valor" placeholder="R$ 0,00" onkeyup="formatarMoeda(this)">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="ajuste-data">Data do movimento</label>
+                    <input type="date" id="ajuste-data">
+                </div>
+
+                <div class="form-group">
+                    <label for="ajuste-descricao">Descrição (opcional)</label>
+                    <input type="text" id="ajuste-descricao" placeholder="Ex: Ajuste por conciliação">
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="fecharModal('modal-ajuste')">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
         </div>
     </div>
 

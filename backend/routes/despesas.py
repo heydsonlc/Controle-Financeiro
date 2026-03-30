@@ -3,6 +3,7 @@ Rotas para gerenciamento de Despesas (Itens de Despesa)
 """
 from flask import Blueprint, request, jsonify
 from datetime import datetime, timedelta
+from decimal import Decimal
 import json
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import func
@@ -246,6 +247,7 @@ def listar_despesas():
                 'descricao': conta.observacoes or '',
                 'tipo': item.tipo if item else 'Simples',
                 'valor': float(conta.valor),
+                'conta_bancaria_id': getattr(conta, 'conta_bancaria_id', None),
                 'financiamento_parcela_id': conta.financiamento_parcela_id,
                 'categoria_id': categoria.id if categoria else None,
                 'categoria': categoria.to_dict() if categoria else None,
@@ -303,6 +305,7 @@ def listar_despesas():
                 'descricao': fatura.observacoes or '',
                 'tipo': 'cartao',  # ← CORRIGIDO: era 'Agregador', mas frontend espera 'cartao'
                 'valor': valor_exibido,
+                'conta_bancaria_id': getattr(fatura, 'conta_bancaria_id', None),
                 'financiamento_parcela_id': None,
                 'valor_fatura': valor_exibido,  # ← ADICIONADO: campo que frontend espera ler
                 'valor_planejado': total_previsto,
@@ -906,6 +909,15 @@ def marcar_como_pago(id):
 
         dados = request.get_json() or {}
 
+        # Conta bancária é obrigatória quando o dinheiro se move
+        conta_bancaria_id = dados.get('conta_bancaria_id') or getattr(conta, 'conta_bancaria_id', None)
+        if not conta_bancaria_id:
+            return jsonify({'success': False, 'error': 'Selecione uma conta bancária para executar o pagamento'}), 400
+        try:
+            conta_bancaria_id = int(conta_bancaria_id)
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'error': 'Conta bancária inválida'}), 400
+
         # Determinar data de pagamento
         data_pagamento = datetime.now().date()
         if dados.get('data_pagamento'):
@@ -923,7 +935,7 @@ def marcar_como_pago(id):
                 fatura_id=id,
                 data_pagamento=data_pagamento,
                 valor_pago=valor_pago,
-                conta_bancaria_id=dados.get('conta_bancaria_id')
+                conta_bancaria_id=conta_bancaria_id
             )
 
             db.session.commit()
@@ -937,17 +949,48 @@ def marcar_como_pago(id):
                     'valor_executado': float(conta.valor_executado),
                     'valor_pago': float(conta.valor),
                     'data_pagamento': conta.data_pagamento.strftime('%Y-%m-%d'),
-                    'estouro_orcamento': conta.estouro_orcamento
+                    'estouro_orcamento': conta.estouro_orcamento,
+                    'conta_bancaria_id': conta.conta_bancaria_id
                 }
             }), 200
 
         # SE NÃO FOR FATURA: lógica tradicional
         conta.status_pagamento = 'Pago'
         conta.data_pagamento = data_pagamento
+        conta.conta_bancaria_id = conta_bancaria_id
 
         # Se um valor pago foi fornecido, atualizar o valor da conta
         if valor_pago is not None:
             conta.valor = float(valor_pago)
+
+        # Se conta bancária informada: gerar movimento (débito) e recalcular saldo
+        # conta_bancaria_id já validado acima
+        if conta_bancaria_id:
+            try:
+                from backend.models import ContaBancaria, MovimentoFinanceiro
+                from backend.services.conta_bancaria_service import ContaBancariaService
+            except ImportError:
+                from models import ContaBancaria, MovimentoFinanceiro
+                from services.conta_bancaria_service import ContaBancariaService
+
+            conta_bancaria = ContaBancaria.query.get(conta_bancaria_id)
+            if not conta_bancaria:
+                return jsonify({'success': False, 'error': 'Conta bancária não encontrada'}), 404
+            if conta_bancaria.status != 'ATIVO':
+                return jsonify({'success': False, 'error': 'Conta bancária está inativa'}), 400
+
+            movimento = MovimentoFinanceiro(
+                conta_bancaria_id=conta_bancaria_id,
+                tipo='DEBITO',
+                valor=Decimal(str(conta.valor)),
+                descricao=f'Pagamento despesa - {conta.descricao}',
+                data_movimento=data_pagamento,
+                conta_id=conta.id,
+                origem='DESPESA',
+                ajustavel=False
+            )
+            db.session.add(movimento)
+            ContaBancariaService.recalcular_saldo_conta(conta_bancaria_id)
 
         db.session.commit()
 
@@ -974,7 +1017,8 @@ def marcar_como_pago(id):
                 'id': conta.id,
                 'status_pagamento': conta.status_pagamento,
                 'data_pagamento': conta.data_pagamento.isoformat() if conta.data_pagamento else None,
-                'valor': float(conta.valor) if conta.valor else 0
+                'valor': float(conta.valor) if conta.valor else 0,
+                'conta_bancaria_id': conta.conta_bancaria_id
             }
         })
 

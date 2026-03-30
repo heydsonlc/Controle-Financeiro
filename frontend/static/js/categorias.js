@@ -5,35 +5,33 @@
 const API_URL = '/api/categorias';
 let categoriaEditando = null;
 
-// Carregar categorias ao iniciar a página
 document.addEventListener('DOMContentLoaded', () => {
     carregarCategorias();
 
-    // Atualizar preview da cor quando mudar
     const corInput = document.getElementById('cor');
     if (corInput) {
         corInput.addEventListener('input', (e) => {
-            document.getElementById('cor-valor').textContent = e.target.value;
+            const el = document.getElementById('cor-valor');
+            if (el) el.textContent = e.target.value;
         });
     }
 });
 
-/**
- * Carrega todas as categorias da API
- */
 async function carregarCategorias() {
+    const lista = document.getElementById('categorias-lista');
+    if (!lista) return;
+
     try {
         const response = await fetch(API_URL);
         const data = await response.json();
-
-        const lista = document.getElementById('categorias-lista');
 
         if (!data.success) {
             lista.innerHTML = `<p class="empty-state">Erro ao carregar categorias: ${data.error}</p>`;
             return;
         }
 
-        if (data.data.length === 0) {
+        const categorias = data.data || [];
+        if (categorias.length === 0) {
             lista.innerHTML = `
                 <div class="empty-state">
                     <h3>Nenhuma categoria cadastrada</h3>
@@ -43,46 +41,36 @@ async function carregarCategorias() {
             return;
         }
 
-        // Renderizar categorias
-        lista.innerHTML = data.data.map(categoria => `
-            <div class="categoria-card" style="border-left-color: ${categoria.cor}">
-                <div class="categoria-header">
-                    <div class="categoria-nome">${categoria.nome}</div>
-                    <span class="categoria-status ${categoria.ativo ? 'status-ativo' : 'status-inativo'}">
+        lista.innerHTML = categorias.map((categoria) => `
+            <div class="categoria-row">
+                <div class="col-descricao">
+                    <div class="titulo">
+                        <span class="categoria-dot" style="background-color: ${categoria.cor}" aria-hidden="true"></span>
+                        <span class="categoria-nome-texto">${categoria.nome}</span>
+                    </div>
+                    ${categoria.descricao ? `<div class="subtitulo">${categoria.descricao}</div>` : ''}
+                </div>
+
+                <div class="col-fill"></div>
+
+                <div class="col-direita">
+                    <span class="status ${categoria.ativo ? 'status-ativo' : 'status-inativo'}">
                         ${categoria.ativo ? 'Ativa' : 'Inativa'}
                     </span>
-                </div>
 
-                <div class="categoria-descricao">
-                    ${categoria.descricao || '<em>Sem descrição</em>'}
-                </div>
-
-                <div style="margin: 10px 0;">
-                    <span class="categoria-cor-preview" style="background-color: ${categoria.cor}"></span>
-                    <span style="color: #666; font-size: 0.9em;">${categoria.cor}</span>
-                </div>
-
-                <div class="categoria-actions">
-                    <button class="btn btn-edit" onclick="editarCategoria(${categoria.id})">
-                        Editar
-                    </button>
-                    <button class="btn btn-danger" onclick="confirmarDeletar(${categoria.id}, '${categoria.nome}')">
-                        Deletar
-                    </button>
+                    <div class="acoes">
+                        <button class="btn-icon" onclick="editarCategoria(${categoria.id})" title="Editar">✏️</button>
+                        <button class="btn-icon btn-danger" onclick="confirmarDeletar(${categoria.id}, ${JSON.stringify(categoria.nome)})" title="Excluir">❌</button>
+                    </div>
                 </div>
             </div>
         `).join('');
-
     } catch (error) {
         console.error('Erro ao carregar categorias:', error);
-        document.getElementById('categorias-lista').innerHTML =
-            `<p class="empty-state">Erro ao carregar categorias. Por favor, tente novamente.</p>`;
+        lista.innerHTML = '<p class="empty-state">Erro ao carregar categorias. Por favor, tente novamente.</p>';
     }
 }
 
-/**
- * Abre o modal para criar nova categoria
- */
 function abrirModal() {
     categoriaEditando = null;
     document.getElementById('modal-titulo').textContent = 'Nova Categoria';
@@ -94,17 +82,11 @@ function abrirModal() {
     document.getElementById('modal-categoria').style.display = 'block';
 }
 
-/**
- * Fecha o modal
- */
 function fecharModal() {
     document.getElementById('modal-categoria').style.display = 'none';
     categoriaEditando = null;
 }
 
-/**
- * Edita uma categoria existente
- */
 async function editarCategoria(id) {
     try {
         const response = await fetch(`${API_URL}/${id}`);
@@ -118,7 +100,6 @@ async function editarCategoria(id) {
         const categoria = data.data;
         categoriaEditando = id;
 
-        // Preencher formulário
         document.getElementById('modal-titulo').textContent = 'Editar Categoria';
         document.getElementById('categoria-id').value = categoria.id;
         document.getElementById('nome').value = categoria.nome;
@@ -127,18 +108,13 @@ async function editarCategoria(id) {
         document.getElementById('cor-valor').textContent = categoria.cor;
         document.getElementById('ativo').checked = categoria.ativo;
 
-        // Abrir modal
         document.getElementById('modal-categoria').style.display = 'block';
-
     } catch (error) {
         console.error('Erro ao carregar categoria:', error);
         alert('Erro ao carregar categoria. Por favor, tente novamente.');
     }
 }
 
-/**
- * Salva categoria (criar ou atualizar)
- */
 async function salvarCategoria(event) {
     event.preventDefault();
 
@@ -172,25 +148,18 @@ async function salvarCategoria(event) {
         alert(data.message);
         fecharModal();
         carregarCategorias();
-
     } catch (error) {
         console.error('Erro ao salvar categoria:', error);
         alert('Erro ao salvar categoria. Por favor, tente novamente.');
     }
 }
 
-/**
- * Confirma antes de deletar categoria
- */
 function confirmarDeletar(id, nome) {
     if (confirm(`Tem certeza que deseja deletar a categoria "${nome}"?\n\nEsta ação não pode ser desfeita.`)) {
         deletarCategoria(id);
     }
 }
 
-/**
- * Deleta uma categoria
- */
 async function deletarCategoria(id) {
     try {
         const response = await fetch(`${API_URL}/${id}`, {
@@ -206,17 +175,16 @@ async function deletarCategoria(id) {
 
         alert(data.message);
         carregarCategorias();
-
     } catch (error) {
         console.error('Erro ao deletar categoria:', error);
         alert('Erro ao deletar categoria. Por favor, tente novamente.');
     }
 }
 
-// Fechar modal ao clicar fora dele
 window.onclick = function(event) {
     const modal = document.getElementById('modal-categoria');
     if (event.target === modal) {
         fecharModal();
     }
-}
+};
+

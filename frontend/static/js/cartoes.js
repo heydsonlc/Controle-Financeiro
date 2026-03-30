@@ -946,6 +946,7 @@ function renderizarFaturas(faturas) {
 function abrirModalPagarFatura(despesaId, competencia, valor) {
     document.getElementById('fatura-despesa-id').value = despesaId;
     document.getElementById('fatura-data-pagamento').value = new Date().toISOString().slice(0, 10);
+    carregarContasBancariasAtivasFatura();
 
     // Preencher info da fatura
     document.getElementById('fatura-info').innerHTML = `
@@ -966,6 +967,34 @@ function abrirModalPagarFatura(despesaId, competencia, valor) {
  * Confirma pagamento da fatura
  * Chama endpoint de despesas já existente
  */
+async function carregarContasBancariasAtivasFatura() {
+    const select = document.getElementById('fatura-conta-bancaria');
+    if (!select) return;
+
+    select.innerHTML = '<option value=\"\">Carregando...</option>';
+
+    try {
+        const resp = await fetch('/api/contas?status=ATIVO');
+        const json = await resp.json();
+        if (!json.success) {
+            select.innerHTML = '<option value=\"\">Selecione...</option>';
+            return;
+        }
+
+        const contas = json.data || [];
+        select.innerHTML = '<option value=\"\">Selecione...</option>';
+        contas.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = `${c.nome} (${c.instituicao})`;
+            select.appendChild(opt);
+        });
+    } catch (e) {
+        console.error('Erro ao carregar contas bancárias:', e);
+        select.innerHTML = '<option value=\"\">Selecione...</option>';
+    }
+}
+
 async function pagarFatura(event) {
     event.preventDefault();
 
@@ -978,9 +1007,11 @@ async function pagarFatura(event) {
     };
 
     // Conta bancária é opcional
-    if (contaBancariaId) {
-        dados.conta_bancaria_id = parseInt(contaBancariaId);
+    if (!contaBancariaId) {
+        mostrarErro('Selecione a conta bancária para executar o pagamento.');
+        return;
     }
+    dados.conta_bancaria_id = parseInt(contaBancariaId, 10);
 
     mostrarLoading('Processando pagamento...');
 
@@ -1285,4 +1316,3 @@ function converterISOparaMesAnoBR(dataISO) {
 
     return `${partes[1]}/${partes[0]}`;
 }
-

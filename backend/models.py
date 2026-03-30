@@ -234,6 +234,8 @@ class Conta(db.Model):
     data_pagamento = db.Column(db.Date)
     status_pagamento = db.Column(db.String(20), default='Pendente')  # 'Pendente', 'Pago', 'Atrasado'
     debito_automatico = db.Column(db.Boolean, default=False)
+    # Conta bancária usada na execução (quando pago)
+    conta_bancaria_id = db.Column(db.Integer, db.ForeignKey('conta_bancaria.id'))
     numero_parcela = db.Column(db.Integer)  # Ex: parcela 2 de 12
     total_parcelas = db.Column(db.Integer)
     observacoes = db.Column(db.Text)
@@ -267,6 +269,7 @@ class Conta(db.Model):
     # Relacionamentos
     item_despesa = db.relationship('ItemDespesa', back_populates='contas')
     financiamento_parcela = db.relationship('FinanciamentoParcela', foreign_keys=[financiamento_parcela_id])
+    conta_bancaria = db.relationship('ContaBancaria', foreign_keys=[conta_bancaria_id])
 
     # Índices
     __table_args__ = (
@@ -290,6 +293,7 @@ class Conta(db.Model):
             'data_pagamento': self.data_pagamento.strftime('%Y-%m-%d') if self.data_pagamento else None,
             'status_pagamento': self.status_pagamento,
             'debito_automatico': self.debito_automatico,
+            'conta_bancaria_id': self.conta_bancaria_id,
             'numero_parcela': self.numero_parcela,
             'total_parcelas': self.total_parcelas,
             'observacoes': self.observacoes,
@@ -539,7 +543,10 @@ class ItemReceita(db.Model):
     # Campos de configuração para receitas fixas
     valor_base_mensal = db.Column(db.Numeric(10, 2))  # Valor fixo mensal (para salários)
     dia_previsto_pagamento = db.Column(db.Integer)  # Dia do mês (1-31)
-    conta_origem_id = db.Column(db.Integer, db.ForeignKey('conta_patrimonio.id'))  # Conta onde entra
+    # Conta onde entra (LEGACY: patrimônio). Mantido para compatibilidade.
+    conta_origem_id = db.Column(db.Integer, db.ForeignKey('conta_patrimonio.id'))
+    # Conta bancária onde entra (v1.0 Contas Bancárias)
+    conta_bancaria_id = db.Column(db.Integer, db.ForeignKey('conta_bancaria.id'))
     recorrente = db.Column(db.Boolean, default=True)  # Se gera orçamentos automaticamente
 
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
@@ -548,6 +555,7 @@ class ItemReceita(db.Model):
     receitas_orcamento = db.relationship('ReceitaOrcamento', back_populates='item_receita', lazy='dynamic')
     receitas_realizadas = db.relationship('ReceitaRealizada', back_populates='item_receita', lazy='dynamic')
     conta_origem = db.relationship('ContaPatrimonio', foreign_keys=[conta_origem_id])
+    conta_bancaria = db.relationship('ContaBancaria', foreign_keys=[conta_bancaria_id])
 
     def __repr__(self):
         return f'<ItemReceita {self.nome} ({self.tipo})>'
@@ -562,6 +570,7 @@ class ItemReceita(db.Model):
             'valor_base_mensal': float(self.valor_base_mensal) if self.valor_base_mensal else None,
             'dia_previsto_pagamento': self.dia_previsto_pagamento,
             'conta_origem_id': self.conta_origem_id,
+            'conta_bancaria_id': self.conta_bancaria_id,
             'recorrente': self.recorrente
         }
 
@@ -633,7 +642,10 @@ class ReceitaRealizada(db.Model):
     mes_referencia = db.Column(db.Date, nullable=False)  # YYYY-MM-01
 
     # Conta onde entrou o dinheiro
+    # LEGACY: patrimônio (mantido para compatibilidade)
     conta_origem_id = db.Column(db.Integer, db.ForeignKey('conta_patrimonio.id'))
+    # v1.0 Contas Bancárias
+    conta_bancaria_id = db.Column(db.Integer, db.ForeignKey('conta_bancaria.id'))
 
     # Descrição detalhada
     descricao = db.Column(db.String(200))  # Ex: "Salário Maio/2025", "Cálculo judicial processo XXXXX"
@@ -648,6 +660,7 @@ class ReceitaRealizada(db.Model):
     # Relacionamentos
     item_receita = db.relationship('ItemReceita', back_populates='receitas_realizadas')
     conta_origem = db.relationship('ContaPatrimonio', foreign_keys=[conta_origem_id])
+    conta_bancaria = db.relationship('ContaBancaria', foreign_keys=[conta_bancaria_id])
     orcamento = db.relationship('ReceitaOrcamento', foreign_keys=[orcamento_id])
 
     # Índices
@@ -669,6 +682,7 @@ class ReceitaRealizada(db.Model):
             'mes_referencia': self.mes_referencia.strftime('%Y-%m-%d'),
             'competencia': self.mes_referencia.strftime('%Y-%m-%d'),  # Alias para compatibilidade
             'conta_origem_id': self.conta_origem_id,
+            'conta_bancaria_id': self.conta_bancaria_id,
             'descricao': self.descricao,
             'orcamento_id': self.orcamento_id,
             'observacoes': self.observacoes
@@ -1274,12 +1288,24 @@ class MovimentoFinanceiro(db.Model):
     valor = db.Column(db.Numeric(15, 2), nullable=False)
     descricao = db.Column(db.String(200), nullable=False)
     data_movimento = db.Column(db.Date, nullable=False)
-    fatura_id = db.Column(db.Integer, db.ForeignKey('conta.id'))  # Nullable - link para fatura de cartão
+
+    # Referências opcionais
+    fatura_id = db.Column(db.Integer, db.ForeignKey('conta.id'))  # Compat: fatura (Conta)
+    conta_id = db.Column(db.Integer, db.ForeignKey('conta.id'))  # Conta (despesa) paga (Conta)
+    receita_realizada_id = db.Column(db.Integer, db.ForeignKey('receita_realizada.id'))
+    transferencia_id = db.Column(db.String(36))  # UUID para parear débito/crédito
+
+    # Metadados de rastreio
+    origem = db.Column(db.String(20), default='MANUAL')  # MANUAL, RECEITA, DESPESA, FATURA, TRANSFERENCIA, AJUSTE
+    ajustavel = db.Column(db.Boolean, default=False)  # true apenas para AJUSTE
+
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relacionamentos
     conta_bancaria = db.relationship('ContaBancaria', backref='movimentos')
     fatura = db.relationship('Conta', foreign_keys=[fatura_id])
+    conta = db.relationship('Conta', foreign_keys=[conta_id])
+    receita_realizada = db.relationship('ReceitaRealizada', foreign_keys=[receita_realizada_id])
 
     # Índices
     __table_args__ = (
@@ -1300,6 +1326,11 @@ class MovimentoFinanceiro(db.Model):
             'descricao': self.descricao,
             'data_movimento': self.data_movimento.strftime('%Y-%m-%d'),
             'fatura_id': self.fatura_id,
+            'conta_id': self.conta_id,
+            'receita_realizada_id': self.receita_realizada_id,
+            'transferencia_id': self.transferencia_id,
+            'origem': self.origem,
+            'ajustavel': bool(self.ajustavel),
             'criado_em': self.criado_em.strftime('%Y-%m-%d %H:%M:%S') if self.criado_em else None
         }
 

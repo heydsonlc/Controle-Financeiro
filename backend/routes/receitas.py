@@ -9,6 +9,7 @@ Endpoints organizados em 4 grupos:
 """
 from flask import Blueprint, request, jsonify
 from datetime import datetime
+from decimal import Decimal
 
 try:
     from backend.models import db, ItemReceita, ReceitaOrcamento, ReceitaRealizada, ContratoConsorcio
@@ -618,6 +619,10 @@ def atualizar_realizada(id):
     Body (JSON): mesmos campos do POST /realizadas
     """
     try:
+        receita_antes = ReceitaRealizada.query.get(id)
+        if not receita_antes:
+            return jsonify({'success': False, 'error': 'Receita não encontrada'}), 404
+
         data = request.get_json()
 
         if not data:
@@ -626,12 +631,62 @@ def atualizar_realizada(id):
                 'error': 'Dados não fornecidos'
             }), 400
 
+        # Default de conta bancária: se não veio no payload, tenta herdar da fonte
+        if not data.get('conta_bancaria_id') and data.get('item_receita_id'):
+            item = ItemReceita.query.get(data.get('item_receita_id'))
+            if item and item.conta_bancaria_id:
+                data['conta_bancaria_id'] = item.conta_bancaria_id
+
         receita = ReceitaService.atualizar_receita_realizada(id, data)
         if not receita:
             return jsonify({
                 'success': False,
                 'error': 'Receita não encontrada'
             }), 404
+
+        # Sync do movimento financeiro (se houver conta_bancaria_id)
+        try:
+            from backend.services.conta_bancaria_service import ContaBancariaService
+            from backend.models import MovimentoFinanceiro
+        except ImportError:
+            from services.conta_bancaria_service import ContaBancariaService
+            from models import MovimentoFinanceiro
+
+        mov = MovimentoFinanceiro.query.filter_by(receita_realizada_id=receita.id, origem='RECEITA').first()
+        contas_recalc = set()
+        if receita_antes.conta_bancaria_id:
+            contas_recalc.add(receita_antes.conta_bancaria_id)
+        if receita.conta_bancaria_id:
+            contas_recalc.add(receita.conta_bancaria_id)
+
+        if receita.conta_bancaria_id:
+            if mov:
+                mov.conta_bancaria_id = receita.conta_bancaria_id
+                mov.tipo = 'CREDITO'
+                mov.valor = Decimal(str(receita.valor_recebido))
+                mov.descricao = f'Receita - {receita.descricao or "Receita"}'
+                mov.data_movimento = receita.data_recebimento
+                mov.ajustavel = False
+                mov.origem = 'RECEITA'
+            else:
+                ContaBancariaService.criar_movimento(
+                    receita.conta_bancaria_id,
+                    tipo='CREDITO',
+                    valor=Decimal(str(receita.valor_recebido)),
+                    descricao=f'Receita - {receita.descricao or "Receita"}',
+                    data_movimento=receita.data_recebimento,
+                    origem='RECEITA',
+                    ajustavel=False,
+                    receita_realizada_id=receita.id,
+                )
+        else:
+            if mov:
+                contas_recalc.add(mov.conta_bancaria_id)
+                db.session.delete(mov)
+
+        for cid in contas_recalc:
+            ContaBancariaService.recalcular_saldo_conta(cid)
+        db.session.commit()
 
         return jsonify({
             'success': True,
@@ -681,7 +736,43 @@ def criar_realizada():
                 'error': 'Dados não fornecidos'
             }), 400
 
+        # Default de conta bancária: se não veio no payload, tenta herdar da fonte
+        if not data.get('conta_bancaria_id') and data.get('item_receita_id'):
+            try:
+                from backend.models import ItemReceita
+            except ImportError:
+                from models import ItemReceita
+            item = ItemReceita.query.get(data.get('item_receita_id'))
+            if item and item.conta_bancaria_id:
+                data['conta_bancaria_id'] = item.conta_bancaria_id
+
         receita = ReceitaService.registrar_receita_realizada(data)
+
+        # Integração com Contas Bancárias: crédito automático via MovimentoFinanceiro
+        try:
+            from backend.services.conta_bancaria_service import ContaBancariaService
+            from backend.models import MovimentoFinanceiro
+        except ImportError:
+            from services.conta_bancaria_service import ContaBancariaService
+            from models import MovimentoFinanceiro
+
+        if receita.conta_bancaria_id:
+            existe = MovimentoFinanceiro.query.filter_by(
+                receita_realizada_id=receita.id,
+                origem='RECEITA'
+            ).first()
+            if not existe:
+                ContaBancariaService.criar_movimento(
+                    receita.conta_bancaria_id,
+                    tipo='CREDITO',
+                    valor=Decimal(str(receita.valor_recebido)),
+                    descricao=f'Receita - {receita.descricao or "Receita"}',
+                    data_movimento=receita.data_recebimento,
+                    origem='RECEITA',
+                    ajustavel=False,
+                    receita_realizada_id=receita.id,
+                )
+                db.session.commit()
 
         return jsonify({
             'success': True,
@@ -727,8 +818,10 @@ def criar_receita_pontual():
 
     try:
         from backend.models import ContaBancaria
+        from backend.services.conta_bancaria_service import ContaBancariaService
     except ImportError:
         from models import ContaBancaria
+        from services.conta_bancaria_service import ContaBancariaService
 
     try:
         data = request.get_json()
@@ -760,22 +853,35 @@ def criar_receita_pontual():
         # Converter valor para Decimal
         valor_recebido = Decimal(str(data['valor_recebido']))
 
+        if conta.status != 'ATIVO':
+            return jsonify({'success': False, 'error': 'Conta bancária está inativa'}), 400
+
         # Criar receita realizada sem item_receita_id e orcamento_id
         receita = ReceitaRealizada(
             item_receita_id=None,  # Receita pontual não tem fonte fixa
             orcamento_id=None,     # Não vinculada a orçamento
-            conta_origem_id=data['conta_bancaria_id'],  # Usar conta_origem_id
+            conta_bancaria_id=data['conta_bancaria_id'],
             data_recebimento=datetime.strptime(data['data_recebimento'], '%Y-%m-%d').date(),
             valor_recebido=valor_recebido,
             mes_referencia=datetime.strptime(data['competencia'], '%Y-%m-%d').date(),  # Usar mes_referencia
             descricao=data['descricao'],
             observacoes=data.get('observacoes', '')
         )
-
-        # Atualizar saldo da conta bancária (usando Decimal)
-        conta.saldo_atual = (conta.saldo_atual or Decimal('0')) + valor_recebido
-
         db.session.add(receita)
+        db.session.flush()
+
+        # Movimento financeiro (crédito)
+        ContaBancariaService.criar_movimento(
+            conta_bancaria_id=conta.id,
+            tipo='CREDITO',
+            valor=valor_recebido,
+            descricao=f'Receita pontual - {receita.descricao}',
+            data_movimento=receita.data_recebimento,
+            origem='RECEITA',
+            ajustavel=False,
+            receita_realizada_id=receita.id,
+        )
+
         db.session.commit()
 
         return jsonify({
@@ -809,12 +915,12 @@ def deletar_realizada(id):
     Returns:
         JSON com confirmação
     """
-    from decimal import Decimal
-
     try:
-        from backend.models import ContaBancaria
+        from backend.services.conta_bancaria_service import ContaBancariaService
+        from backend.models import MovimentoFinanceiro
     except ImportError:
-        from models import ContaBancaria
+        from services.conta_bancaria_service import ContaBancariaService
+        from models import MovimentoFinanceiro
 
     try:
         receita = ReceitaRealizada.query.get(id)
@@ -825,13 +931,15 @@ def deletar_realizada(id):
                 'error': 'Receita não encontrada'
             }), 404
 
-        # Se for receita pontual, reverter o saldo da conta
-        if receita.conta_origem_id and not receita.orcamento_id:
-            conta = ContaBancaria.query.get(receita.conta_origem_id)
-            if conta:
-                conta.saldo_atual = (conta.saldo_atual or Decimal('0')) - receita.valor_recebido
+        # Remover movimento financeiro vinculado (se existir) e recalcular saldo
+        movimentos = MovimentoFinanceiro.query.filter_by(receita_realizada_id=receita.id, origem='RECEITA').all()
+        contas_para_recalcular = {m.conta_bancaria_id for m in movimentos}
+        for m in movimentos:
+            db.session.delete(m)
 
         db.session.delete(receita)
+        for cid in contas_para_recalcular:
+            ContaBancariaService.recalcular_saldo_conta(cid)
         db.session.commit()
 
         return jsonify({

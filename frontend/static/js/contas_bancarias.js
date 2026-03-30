@@ -6,6 +6,8 @@ const API_BASE = 'http://localhost:5000/api/contas';
 
 let contaAtual = null;
 let contaParaInativar = null;
+let contaExtratoId = null;
+let extratoMovimentos = [];
 
 // Carregar contas ao iniciar a página
 document.addEventListener('DOMContentLoaded', () => {
@@ -46,13 +48,58 @@ function exibirContas(contas) {
         return;
     }
 
-    lista.innerHTML = contas.map(conta => criarCardConta(conta)).join('');
+    lista.innerHTML = contas.map(conta => criarLinhaConta(conta)).join('');
+}
+
+/**
+ * Cria o HTML de uma linha (lista)
+ */
+function criarLinhaConta(conta) {
+    const saldoClass = conta.saldo_atual < 0 ? 'negativo' : '';
+    const statusText = conta.status === 'INATIVO' ? 'INATIVA' : 'ATIVA';
+    const statusClass = conta.status === 'INATIVO' ? 'status-inativo' : 'status-ativo';
+
+    const instituicao = conta.instituicao || '';
+    const tipo = conta.tipo || '';
+    const subtitulo = [instituicao, tipo].filter(Boolean).join(' · ');
+
+    const btnExtrato = `<button class="btn-icon" onclick="abrirExtrato(${conta.id})" title="Extrato" ${conta.status !== 'ATIVO' ? 'disabled' : ''}>📄</button>`;
+    const btnEditar = `<button class="btn-icon" onclick="editarConta(${conta.id})" title="Editar">✏️</button>`;
+    const btnFinal = (conta.status === 'ATIVO')
+        ? `<button class="btn-icon btn-danger" onclick="abrirModalInativar(${conta.id})" title="Inativar">❌</button>`
+        : `<button class="btn-icon" onclick="ativarConta(${conta.id})" title="Ativar">🔁</button>`;
+
+    return `
+        <div class="conta-row ${conta.status === 'INATIVO' ? 'inativa' : ''}">
+            <div class="col-descricao">
+                <div class="titulo">
+                    <span class="conta-dot" style="background-color: ${conta.cor_display || '#6e6e73'}" aria-hidden="true"></span>
+                    <span class="conta-nome-texto">${conta.nome}</span>
+                </div>
+                <div class="subtitulo">
+                    ${subtitulo}
+                    <span class="status ${statusClass}">${statusText}</span>
+                </div>
+            </div>
+
+            <div class="col-fill"></div>
+
+            <div class="col-direita">
+                <div class="saldo ${saldoClass}">${formatarMoedaDisplay(conta.saldo_atual)}</div>
+                <div class="acoes">
+                    ${btnExtrato}
+                    ${btnEditar}
+                    ${btnFinal}
+                </div>
+            </div>
+        </div>
+    `;
 }
 
 /**
  * Cria o HTML de um card de conta
  */
-function criarCardConta(conta) {
+function criarCardContaLegacy(conta) {
     const saldoClass = conta.saldo_atual < 0 ? 'negativo' : '';
     const statusClass = conta.status === 'INATIVO' ? 'inativo' : '';
     const statusText = conta.status === 'INATIVO' ? 'INATIVA' : 'ATIVA';
@@ -93,6 +140,14 @@ function criarCardConta(conta) {
             </div>
 
             <div class="conta-actions">
+                ${conta.status === 'ATIVO' ? `
+                    <button class="btn-extrato" onclick="abrirExtrato(${conta.id})">
+                        📄 Extrato
+                    </button>
+                    <button class="btn-ajustar" onclick="abrirAjusteSaldo(${conta.id})">
+                        ⚖ Ajustar
+                    </button>
+                ` : ''}
                 <button class="btn-editar" onclick="editarConta(${conta.id})">
                     ✏️ Editar
                 </button>
@@ -301,6 +356,188 @@ function abrirModal(modalId) {
  */
 function fecharModal(modalId) {
     document.getElementById(modalId).style.display = 'none';
+}
+
+// ============================================================================
+// EXTRATO / AJUSTE DE SALDO
+// ============================================================================
+
+async function abrirExtrato(contaId) {
+    contaExtratoId = contaId;
+    document.getElementById('extrato-lista').innerHTML = '<p class="loading">Carregando extrato...</p>';
+    abrirModal('modal-extrato');
+
+    try {
+        const [respConta, respMov] = await Promise.all([
+            fetch(`${API_BASE}/${contaId}`),
+            fetch(`${API_BASE}/${contaId}/movimentos?incluir_saldo=1&limit=200`)
+        ]);
+        const [jsonConta, jsonMov] = await Promise.all([respConta.json(), respMov.json()]);
+
+        if (!jsonConta.success) throw new Error(jsonConta.error || 'Erro ao carregar conta');
+        if (!jsonMov.success) throw new Error(jsonMov.error || 'Erro ao carregar extrato');
+
+        const conta = jsonConta.data;
+        extratoMovimentos = jsonMov.data || [];
+
+        document.getElementById('extrato-titulo').textContent = `Extrato — ${conta.nome}`;
+        document.getElementById('extrato-saldo').textContent = formatarMoedaDisplay(conta.saldo_atual);
+        renderizarExtrato(extratoMovimentos);
+    } catch (e) {
+        console.error(e);
+        document.getElementById('extrato-lista').innerHTML = `<p class="empty-state">Erro ao carregar extrato</p>`;
+    }
+}
+
+function renderizarExtrato(movimentos) {
+    const lista = document.getElementById('extrato-lista');
+    if (!movimentos || movimentos.length === 0) {
+        lista.innerHTML = '<p class="empty-state">Nenhum movimento encontrado</p>';
+        return;
+    }
+
+    lista.innerHTML = movimentos.map(m => {
+        const tipoClass = m.tipo === 'DEBITO' ? 'debito' : 'credito';
+        const sinal = m.tipo === 'DEBITO' ? '-' : '+';
+        const tag = (m.origem === 'AJUSTE') ? 'AJUSTE' : (m.origem || '');
+        const meta = `${formatarDataBR(m.data_movimento)}${tag ? ' · ' + tag : ''}`;
+        const saldoApos = (m.saldo_apos_movimento != null) ? formatarMoedaDisplay(m.saldo_apos_movimento) : null;
+
+        const acoes = (m.ajustavel)
+            ? `<div class="acoes">
+                    <button onclick="editarAjuste(${m.id})">✏️</button>
+                    <button onclick="excluirAjuste(${m.id})">🗑️</button>
+               </div>`
+            : '';
+
+        return `
+            <div class="movimento">
+                <div class="mov-desc">
+                    <div class="titulo">${m.descricao}</div>
+                    <div class="meta">${meta}</div>
+                </div>
+                <div class="mov-valor">
+                    <div class="valor ${tipoClass}">${sinal} ${formatarMoedaDisplay(m.valor)}</div>
+                    ${saldoApos ? `<div class="saldo-apos">Saldo: ${saldoApos}</div>` : ''}
+                    ${acoes}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function abrirAjusteSaldo(contaId) {
+    contaExtratoId = contaId;
+    abrirModalAjusteSaldo();
+}
+
+function abrirModalAjusteSaldo() {
+    const hoje = new Date().toISOString().split('T')[0];
+    document.getElementById('ajuste-conta-id').value = contaExtratoId || '';
+    document.getElementById('ajuste-movimento-id').value = '';
+    document.getElementById('ajuste-titulo').textContent = 'Ajustar Saldo';
+    document.getElementById('ajuste-modo-saldo-final').style.display = 'block';
+    document.getElementById('ajuste-modo-editar').style.display = 'none';
+    document.getElementById('ajuste-data').value = hoje;
+    document.getElementById('ajuste-descricao').value = '';
+    document.getElementById('ajuste-novo-saldo').value = '';
+    document.getElementById('ajuste-valor').value = '';
+    document.getElementById('ajuste-tipo').value = 'CREDITO';
+
+    // saldo atual exibido
+    const saldoAtualTexto = document.getElementById('extrato-saldo')?.textContent || 'R$ 0,00';
+    document.getElementById('ajuste-saldo-atual').value = saldoAtualTexto;
+
+    abrirModal('modal-ajuste');
+}
+
+function editarAjuste(movId) {
+    const mov = (extratoMovimentos || []).find(m => m.id === movId);
+    if (!mov) return;
+
+    contaExtratoId = mov.conta_bancaria_id;
+    document.getElementById('ajuste-conta-id').value = contaExtratoId;
+    document.getElementById('ajuste-movimento-id').value = mov.id;
+    document.getElementById('ajuste-titulo').textContent = 'Editar Ajuste';
+    document.getElementById('ajuste-modo-saldo-final').style.display = 'none';
+    document.getElementById('ajuste-modo-editar').style.display = 'block';
+
+    document.getElementById('ajuste-saldo-atual').value = document.getElementById('extrato-saldo')?.textContent || 'R$ 0,00';
+    document.getElementById('ajuste-data').value = mov.data_movimento;
+    document.getElementById('ajuste-descricao').value = mov.descricao || '';
+    document.getElementById('ajuste-tipo').value = mov.tipo;
+    document.getElementById('ajuste-valor').value = formatarMoedaDisplay(mov.valor);
+
+    abrirModal('modal-ajuste');
+}
+
+async function excluirAjuste(movId) {
+    if (!contaExtratoId) return;
+    if (!confirm('Excluir este ajuste?')) return;
+
+    try {
+        const resp = await fetch(`${API_BASE}/${contaExtratoId}/movimentos/${movId}`, { method: 'DELETE' });
+        const json = await resp.json();
+        if (!json.success) throw new Error(json.error || 'Erro ao excluir ajuste');
+        await abrirExtrato(contaExtratoId);
+    } catch (e) {
+        console.error(e);
+        mostrarErro('Erro ao excluir ajuste: ' + e.message);
+    }
+}
+
+async function salvarAjusteSaldo(event) {
+    event.preventDefault();
+    const contaId = parseInt(document.getElementById('ajuste-conta-id').value, 10);
+    const movId = document.getElementById('ajuste-movimento-id').value;
+    const dataMov = document.getElementById('ajuste-data').value;
+    const descricao = document.getElementById('ajuste-descricao').value || '';
+
+    try {
+        if (!contaId) throw new Error('Conta inválida');
+
+        if (movId) {
+            const payload = {
+                tipo: document.getElementById('ajuste-tipo').value,
+                valor: parseMoeda(document.getElementById('ajuste-valor').value),
+                descricao,
+                data_movimento: dataMov
+            };
+            const resp = await fetch(`${API_BASE}/${contaId}/movimentos/${movId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const json = await resp.json();
+            if (!json.success) throw new Error(json.error || 'Erro ao editar ajuste');
+        } else {
+            const payload = {
+                valor_final_desejado: parseMoeda(document.getElementById('ajuste-novo-saldo').value),
+                descricao,
+                data_movimento: dataMov
+            };
+            const resp = await fetch(`${API_BASE}/${contaId}/ajuste-saldo`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const json = await resp.json();
+            if (!json.success) throw new Error(json.error || 'Erro ao criar ajuste');
+        }
+
+        fecharModal('modal-ajuste');
+        await abrirExtrato(contaId);
+        await carregarContas();
+    } catch (e) {
+        console.error(e);
+        mostrarErro('Erro ao salvar ajuste: ' + e.message);
+    }
+}
+
+function formatarDataBR(valor) {
+    if (!valor) return '';
+    const [ano, mes, dia] = valor.slice(0, 10).split('-');
+    return `${dia}/${mes}/${ano}`;
 }
 
 /**

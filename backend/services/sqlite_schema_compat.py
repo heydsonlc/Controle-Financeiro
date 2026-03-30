@@ -32,7 +32,36 @@ def ensure_sqlite_schema_compat() -> None:
         return
 
     with engine.begin() as conn:
-        if not _sqlite_has_table(conn, 'veiculo_regra_manutencao_km'):
-            return
-        if not _sqlite_has_column(conn, 'veiculo_regra_manutencao_km', 'meses_intervalo'):
-            conn.execute(text('ALTER TABLE veiculo_regra_manutencao_km ADD COLUMN meses_intervalo INTEGER'))
+        # =====================================================================
+        # Veículos
+        # =====================================================================
+        if _sqlite_has_table(conn, 'veiculo_regra_manutencao_km'):
+            if not _sqlite_has_column(conn, 'veiculo_regra_manutencao_km', 'meses_intervalo'):
+                conn.execute(text('ALTER TABLE veiculo_regra_manutencao_km ADD COLUMN meses_intervalo INTEGER'))
+
+        # =====================================================================
+        # Contas Bancárias / Movimentos Financeiros
+        # =====================================================================
+        if _sqlite_has_table(conn, 'movimento_financeiro'):
+            if not _sqlite_has_column(conn, 'movimento_financeiro', 'origem'):
+                conn.execute(text("ALTER TABLE movimento_financeiro ADD COLUMN origem VARCHAR(20) DEFAULT 'MANUAL'"))
+            if not _sqlite_has_column(conn, 'movimento_financeiro', 'ajustavel'):
+                conn.execute(text('ALTER TABLE movimento_financeiro ADD COLUMN ajustavel BOOLEAN DEFAULT 0'))
+            if not _sqlite_has_column(conn, 'movimento_financeiro', 'receita_realizada_id'):
+                conn.execute(text('ALTER TABLE movimento_financeiro ADD COLUMN receita_realizada_id INTEGER'))
+            if not _sqlite_has_column(conn, 'movimento_financeiro', 'conta_id'):
+                conn.execute(text('ALTER TABLE movimento_financeiro ADD COLUMN conta_id INTEGER'))
+            if not _sqlite_has_column(conn, 'movimento_financeiro', 'transferencia_id'):
+                conn.execute(text('ALTER TABLE movimento_financeiro ADD COLUMN transferencia_id VARCHAR(36)'))
+
+        if _sqlite_has_table(conn, 'item_receita'):
+            if not _sqlite_has_column(conn, 'item_receita', 'conta_bancaria_id'):
+                conn.execute(text('ALTER TABLE item_receita ADD COLUMN conta_bancaria_id INTEGER'))
+
+        if _sqlite_has_table(conn, 'receita_realizada'):
+            if not _sqlite_has_column(conn, 'receita_realizada', 'conta_bancaria_id'):
+                conn.execute(text('ALTER TABLE receita_realizada ADD COLUMN conta_bancaria_id INTEGER'))
+
+        if _sqlite_has_table(conn, 'conta'):
+            if not _sqlite_has_column(conn, 'conta', 'conta_bancaria_id'):
+                conn.execute(text('ALTER TABLE conta ADD COLUMN conta_bancaria_id INTEGER'))

@@ -283,12 +283,18 @@ class CartaoService:
                 valor=valor_final_pagamento,
                 descricao=f'Pagamento fatura cartão - {fatura.descricao}',
                 data_movimento=data_pagamento,
-                fatura_id=fatura_id
+                fatura_id=fatura_id,
+                conta_id=fatura_id,
+                origem='FATURA',
+                ajustavel=False
             )
             db.session.add(movimento)
-
-            # Debitar saldo da conta
-            conta.saldo_atual = conta.saldo_atual - valor_final_pagamento
+            try:
+                from backend.services.conta_bancaria_service import ContaBancariaService
+            except ImportError:
+                from services.conta_bancaria_service import ContaBancariaService
+            ContaBancariaService.recalcular_saldo_conta(conta_bancaria_id)
+            fatura.conta_bancaria_id = conta_bancaria_id
 
         # Atualizar fatura
         fatura.valor_executado = valor_executado_final

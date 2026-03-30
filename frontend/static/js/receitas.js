@@ -16,8 +16,8 @@ let estado = {
     anoAtual: new Date().getFullYear(),
     mesAtual: null,
     tipoFiltro: '',
-    abaAtiva: 'mes',
     fontes: [],
+    contasBancarias: [],
     orcamentos: [],
     realizadas: [],
     receitasMes: []
@@ -48,40 +48,37 @@ function inicializar() {
     }
 
     // Carregar dados iniciais
-    carregarFontesReceita();
+    carregarContasBancarias();
     atualizarDados();
 }
 
-// ============================================================================
-// GERENCIAMENTO DE ABAS
-// ============================================================================
-
-function mudarAba(aba) {
-    // Atualizar botões
-    document.querySelectorAll('.tab-button').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    event.target.classList.add('active');
-
-    // Atualizar conteúdo
-    document.querySelectorAll('.tab-content').forEach(content => {
-        content.classList.remove('active');
-    });
-    document.getElementById(`aba-${aba}`).classList.add('active');
-
-    // Atualizar estado
-    estado.abaAtiva = aba;
-
-    // Carregar dados da aba
-    if (aba === 'mes') {
-        carregarReceitasMes();
-    } else if (aba === 'fontes') {
-        carregarFontesReceita();
-    } else if (aba === 'orcamento') {
-        carregarOrcamentos();
-    } else if (aba === 'realizadas') {
-        carregarRealizadas();
+async function carregarContasBancarias() {
+    try {
+        const resp = await fetch('/api/contas?status=ATIVO');
+        const json = await resp.json();
+        if (!json.success) return;
+        estado.contasBancarias = json.data || [];
+        atualizarSelectsContasBancarias(estado.contasBancarias);
+    } catch (e) {
+        console.error('Erro ao carregar contas bancárias:', e);
     }
+}
+
+function atualizarSelectsContasBancarias(contas) {
+    const selects = ['fonte-conta-bancaria', 'real-conta-bancaria', 'consolidar-conta-bancaria'];
+    selects.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const atual = el.value;
+        el.innerHTML = '<option value="">Selecione...</option>';
+        (contas || []).forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = `${c.nome} (${c.instituicao})`;
+            el.appendChild(opt);
+        });
+        if (atual) el.value = atual;
+    });
 }
 
 // ============================================================================
@@ -91,21 +88,17 @@ function mudarAba(aba) {
 function atualizarDados() {
     const ano = document.getElementById('filtro-ano').value;
     const mes = document.getElementById('filtro-mes').value;
+    const tipo = document.getElementById('filtro-tipo').value;
 
     estado.anoAtual = parseInt(ano);
     estado.mesAtual = mes || null;
+    estado.tipoFiltro = tipo || '';
 
     // Atualizar resumo
     atualizarResumo();
 
-    // Recarregar aba ativa
-    if (estado.abaAtiva === 'mes') {
-        carregarReceitasMes();
-    } else if (estado.abaAtiva === 'orcamento') {
-        carregarOrcamentos();
-    } else if (estado.abaAtiva === 'realizadas') {
-        carregarRealizadas();
-    }
+    // Fluxo único: recarregar fontes/contas e lista do mês
+    Promise.all([carregarFontesReceita(), carregarContasBancarias()]).then(() => carregarReceitasMes());
 }
 
 async function atualizarResumo() {
@@ -156,32 +149,22 @@ async function atualizarResumo() {
 // ============================================================================
 
 async function carregarFontesReceita() {
-    const lista = document.getElementById('fontes-lista');
-    lista.innerHTML = '<p class="loading">Carregando...</p>';
-
     try {
-        const tipo = document.getElementById('filtro-tipo').value;
-        const url = tipo ? `/api/receitas/itens?tipo=${tipo}` : '/api/receitas/itens';
+        const url = '/api/receitas/itens';
 
         const response = await fetch(url);
         const result = await response.json();
 
         if (result.success) {
             estado.fontes = result.data;
-            renderizarFontes(result.data);
 
             // Atualizar selects de fontes nos modais
             atualizarSelectsFontes(result.data);
-
-            if (estado.abaAtiva === 'mes') {
-                carregarReceitasMes();
-            }
         } else {
-            lista.innerHTML = `<p class="error">${result.error}</p>`;
+            console.error('Erro ao carregar fontes:', result.error);
         }
     } catch (error) {
         console.error('Erro ao carregar fontes:', error);
-        lista.innerHTML = '<p class="error">Erro ao carregar fontes de receita</p>';
     }
 }
 
@@ -253,6 +236,7 @@ function montarListaReceitasMes(orcamentos, realizadas, anoMes) {
             orcamento_id: o.id,
             item_receita_id: itemId,
             descricao: (fonte ? fonte.nome : (o.item_receita?.nome || 'Receita')),
+            tipo: (fonte ? fonte.tipo : (o.item_receita?.tipo || null)),
             sub: `${formatarMesAno(anoMes)} · Receita`,
             status,
             valor,
@@ -278,6 +262,7 @@ function montarListaReceitasMes(orcamentos, realizadas, anoMes) {
                 origem: 'fonte_base',
                 item_receita_id: f.id,
                 descricao: f.nome,
+                tipo: f.tipo,
                 sub: `${formatarMesAno(anoMes)} · Receita`,
                 status,
                 valor,
@@ -297,6 +282,7 @@ function montarListaReceitasMes(orcamentos, realizadas, anoMes) {
                 id: r.id,
                 item_receita_id: r.item_receita_id,
                 descricao: r.descricao || (fonte ? fonte.nome : 'Receita'),
+                tipo: (fonte ? fonte.tipo : (r.item_receita?.tipo || null)),
                 sub: `${formatarMesAno(anoMes)} · Receita`,
                 status: 'REALIZADA',
                 valor: r.valor_recebido || 0,
@@ -306,7 +292,11 @@ function montarListaReceitasMes(orcamentos, realizadas, anoMes) {
             };
         }).filter(i => i.valor > 0);
 
-    return [...itensPlanejados, ...fontesRecorrentes, ...eventos];
+    const lista = [...itensPlanejados, ...fontesRecorrentes, ...eventos];
+    if (estado.tipoFiltro) {
+        return lista.filter(i => i.tipo === estado.tipoFiltro);
+    }
+    return lista;
 }
 
 function renderizarReceitasMes(listaReceitas, anoMes) {
@@ -372,7 +362,35 @@ async function consolidarReceitaMes(itemReceitaId, valorPrevisto) {
     }
 
     const fonte = estado.fontes.find(f => f.id === itemReceitaId);
+
+    // Exigir confirmaÇõÇœo de conta bancÇ­ria (execuÇõÇœo)
+    document.getElementById('consolidar-item-receita-id').value = itemReceitaId;
+    document.getElementById('consolidar-valor-previsto').value = valorPrevisto;
+
+    const select = document.getElementById('consolidar-conta-bancaria');
+    if (select) {
+        atualizarSelectsContasBancarias(estado.contasBancarias || []);
+        select.value = fonte?.conta_bancaria_id ? String(fonte.conta_bancaria_id) : '';
+    }
+
+    document.getElementById('modal-consolidar-conta').style.display = 'block';
+}
+
+async function confirmarConsolidacaoComConta(event) {
+    event.preventDefault();
+
+    const itemReceitaId = parseInt(document.getElementById('consolidar-item-receita-id').value, 10);
+    const valorPrevisto = parseFloat(document.getElementById('consolidar-valor-previsto').value);
+    const contaBancariaId = document.getElementById('consolidar-conta-bancaria').value;
+
+    if (!contaBancariaId) {
+        alert('Selecione a conta bancária para consolidar.');
+        return;
+    }
+
+    const fonte = estado.fontes.find(f => f.id === itemReceitaId);
     const hoje = new Date().toISOString().split('T')[0];
+    const anoMes = getAnoMesSelecionado();
 
     try {
         const response = await fetch('/api/receitas/realizadas', {
@@ -384,7 +402,8 @@ async function consolidarReceitaMes(itemReceitaId, valorPrevisto) {
                 valor_recebido: valorPrevisto,
                 competencia: anoMes,
                 descricao: fonte ? fonte.nome : 'Receita',
-                observacoes: ''
+                observacoes: '',
+                conta_bancaria_id: parseInt(contaBancariaId, 10)
             })
         });
 
@@ -394,6 +413,7 @@ async function consolidarReceitaMes(itemReceitaId, valorPrevisto) {
             return;
         }
 
+        fecharModal('modal-consolidar-conta');
         atualizarResumo();
         carregarReceitasMes();
     } catch (error) {
@@ -455,47 +475,49 @@ async function excluirReceitaPrevista(itemReceitaId, origem) {
         return;
     }
 
-    // Fonte base: inativar fonte (impacta meses futuros)
-    deletarFonte(itemReceitaId);
-}
-
-function renderizarFontes(fontes) {
-    const lista = document.getElementById('fontes-lista');
-
-    if (fontes.length === 0) {
-        lista.innerHTML = '<p class="empty">Nenhuma fonte de receita cadastrada</p>';
+    // Fonte base: zerar valor base mensal (impacta meses futuros)
+    if (!confirm('Zerar o valor base mensal desta fonte? Isso remove a previsão para os próximos meses.')) {
         return;
     }
 
-    lista.innerHTML = fontes.map(fonte => {
-        const badge = (fonte.nome === 'Contemplação de Consórcio')
-            ? ''
-            : `<span class="badge ${getTipoBadgeClass(fonte.tipo)}">${formatarTipo(fonte.tipo)}</span>`;
+    const fonte = estado.fontes.find(f => f.id === itemReceitaId);
+    if (!fonte) {
+        alert('Fonte não encontrada.');
+        return;
+    }
 
-        return `
-            <div class="card-item ${fonte.ativo ? '' : 'inativo'} ${fonte.nome === 'Contemplação de Consórcio' ? 'fonte-consorcio' : ''}">
-                <div class="item-header">
-                    <h3>${fonte.nome}</h3>
-                    <div class="item-header-right">
-                        ${badge}
-                        <div class="item-header-acoes">
-                            <button class="btn-icon" onclick="editarFonte(${fonte.id})" title="Editar">✏️</button>
-                            <button class="btn-icon" onclick="deletarFonte(${fonte.id})" title="Deletar">🗑️</button>
-                        </div>
-                    </div>
-                </div>
-                <div class="item-body">
-                    ${fonte.descricao ? `<p>${fonte.descricao}</p>` : ''}
-                    ${fonte.valor_base_mensal ? `<p><strong>Valor Base:</strong> ${formatarMoeda(fonte.valor_base_mensal)}</p>` : ''}
-                    ${fonte.dia_previsto_pagamento ? `<p><strong>Dia de Pagamento:</strong> ${fonte.dia_previsto_pagamento}</p>` : ''}
-                </div>
-            </div>
-        `;
-    }).join('');
+    try {
+        const response = await fetch(`/api/receitas/itens/${itemReceitaId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                nome: fonte.nome,
+                tipo: fonte.tipo,
+                descricao: fonte.descricao || '',
+                valor_base_mensal: 0,
+                dia_previsto_pagamento: fonte.dia_previsto_pagamento || null,
+                recorrente: !!fonte.recorrente,
+                ativo: !!fonte.ativo
+            })
+        });
+
+        const result = await response.json();
+        if (!result.success) {
+            alert('Erro: ' + (result.error || 'Falha ao atualizar fonte'));
+            return;
+        }
+
+        await carregarFontesReceita();
+        atualizarResumo();
+        carregarReceitasMes();
+    } catch (error) {
+        console.error('Erro ao zerar valor base:', error);
+        alert('Erro ao zerar valor base');
+    }
 }
 
 function atualizarSelectsFontes(fontes) {
-    const selects = ['orc-fonte', 'rec-fonte', 'real-fonte'];
+    const selects = ['orc-fonte', 'real-fonte'];
 
     selects.forEach(selectId => {
         const select = document.getElementById(selectId);
@@ -529,6 +551,7 @@ function abrirModalFonte(id = null) {
             document.getElementById('fonte-descricao').value = fonte.descricao || '';
             document.getElementById('fonte-valor-base').value = fonte.valor_base_mensal || '';
             document.getElementById('fonte-dia-pagamento').value = fonte.dia_previsto_pagamento || '';
+            document.getElementById('fonte-conta-bancaria').value = fonte.conta_bancaria_id || '';
             document.getElementById('fonte-ativo').checked = fonte.ativo;
             document.getElementById('modal-fonte-titulo').textContent = 'Editar Fonte de Receita';
         }
@@ -542,22 +565,6 @@ function abrirModalFonte(id = null) {
 
 function abrirModalOrcamento() {
     const modal = document.getElementById('modal-orcamento');
-    modal.style.display = 'block';
-}
-
-function abrirModalRecorrente() {
-    const modal = document.getElementById('modal-recorrente');
-    modal.style.display = 'block';
-}
-
-function abrirModalRealizada() {
-    const modal = document.getElementById('modal-realizada');
-    const form = document.getElementById('form-realizada');
-    form.reset();
-    document.getElementById('realizada-id').value = '';
-    document.getElementById('modal-realizada-titulo').textContent = 'Registrar Recebimento';
-    const hoje = new Date().toISOString().split('T')[0];
-    document.getElementById('real-data-recebimento').value = hoje;
     modal.style.display = 'block';
 }
 
@@ -584,6 +591,7 @@ function editarRealizada(id) {
     document.getElementById('real-data-recebimento').value = receita.data_recebimento;
     document.getElementById('real-valor').value = receita.valor_recebido;
     document.getElementById('real-competencia').value = (receita.competencia || receita.mes_referencia || '').slice(0, 7);
+    document.getElementById('real-conta-bancaria').value = receita.conta_bancaria_id || '';
     document.getElementById('real-descricao').value = receita.descricao || '';
     document.getElementById('real-observacoes').value = receita.observacoes || '';
 
@@ -601,7 +609,6 @@ function fecharModal(modalId) {
 async function salvarFonte(event) {
     event.preventDefault();
 
-    const form = document.getElementById('form-fonte');
     const id = document.getElementById('fonte-id').value;
 
     const dados = {
@@ -610,6 +617,7 @@ async function salvarFonte(event) {
         descricao: document.getElementById('fonte-descricao').value,
         valor_base_mensal: document.getElementById('fonte-valor-base').value || null,
         dia_previsto_pagamento: document.getElementById('fonte-dia-pagamento').value || null,
+        conta_bancaria_id: (document.getElementById('fonte-conta-bancaria').value ? parseInt(document.getElementById('fonte-conta-bancaria').value, 10) : null),
         recorrente: document.getElementById('fonte-recorrente').checked,
         ativo: document.getElementById('fonte-ativo').checked
     };
@@ -631,7 +639,9 @@ async function salvarFonte(event) {
         if (result.success) {
             alert(result.message);
             fecharModal('modal-fonte');
-            carregarFontesReceita();
+            await carregarFontesReceita();
+            atualizarResumo();
+            carregarReceitasMes();
         } else {
             alert('Erro: ' + result.error);
         }
@@ -666,48 +676,14 @@ async function salvarOrcamento(event) {
         if (result.success) {
             alert(result.message);
             fecharModal('modal-orcamento');
-            carregarOrcamentos();
+            atualizarResumo();
+            carregarReceitasMes();
         } else {
             alert('Erro: ' + result.error);
         }
     } catch (error) {
         console.error('Erro ao salvar orçamento:', error);
         alert('Erro ao salvar orçamento');
-    }
-}
-
-async function gerarRecorrente(event) {
-    event.preventDefault();
-
-    const dados = {
-        item_receita_id: parseInt(document.getElementById('rec-fonte').value),
-        data_inicio: document.getElementById('rec-inicio').value + '-01',
-        data_fim: document.getElementById('rec-fim').value + '-01',
-        valor_mensal: parseFloat(document.getElementById('rec-valor').value),
-        periodicidade: 'MENSAL_FIXA'
-    };
-
-    try {
-        const response = await fetch('/api/receitas/orcamento/gerar-recorrente', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(dados)
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-            alert(result.message);
-            fecharModal('modal-recorrente');
-            carregarOrcamentos();
-        } else {
-            alert('Erro: ' + result.error);
-        }
-    } catch (error) {
-        console.error('Erro ao gerar projeções:', error);
-        alert('Erro ao gerar projeções recorrentes');
     }
 }
 
@@ -719,6 +695,7 @@ async function salvarRealizada(event) {
         data_recebimento: document.getElementById('real-data-recebimento').value,
         valor_recebido: parseFloat(document.getElementById('real-valor').value),
         competencia: document.getElementById('real-competencia').value + '-01',
+        conta_bancaria_id: (document.getElementById('real-conta-bancaria').value ? parseInt(document.getElementById('real-conta-bancaria').value, 10) : null),
         descricao: document.getElementById('real-descricao').value,
         observacoes: document.getElementById('real-observacoes').value
     };
@@ -741,8 +718,8 @@ async function salvarRealizada(event) {
         if (result.success) {
             alert(result.message);
             fecharModal('modal-realizada');
-            carregarRealizadas();
             atualizarResumo();
+            carregarReceitasMes();
         } else {
             alert('Erro: ' + result.error);
         }
@@ -775,144 +752,6 @@ function formatarTipo(tipo) {
     return tipos[tipo] || tipo;
 }
 
-function getTipoBadgeClass(tipo) {
-    const classes = {
-        'SALARIO_FIXO': 'badge-success',
-        'GRATIFICACAO': 'badge-primary',
-        'RENDA_EXTRA': 'badge-warning',
-        'ALUGUEL': 'badge-info',
-        'RENDIMENTO_FINANCEIRO': 'badge-secondary',
-        'OUTROS': 'badge-default'
-    };
-    return classes[tipo] || 'badge-default';
-}
-
-async function carregarOrcamentos() {
-    const lista = document.getElementById('orcamento-lista');
-    lista.innerHTML = '<p class="loading">Carregando...</p>';
-
-    try {
-        const response = await fetch(`/api/receitas/orcamento?ano=${estado.anoAtual}`);
-        const result = await response.json();
-
-        if (result.success) {
-            estado.orcamentos = result.data;
-            renderizarOrcamentos(result.data);
-        } else {
-            lista.innerHTML = `<p class="error">${result.error}</p>`;
-        }
-    } catch (error) {
-        console.error('Erro ao carregar orçamentos:', error);
-        lista.innerHTML = '<p class="error">Erro ao carregar orçamentos</p>';
-    }
-}
-
-function renderizarOrcamentos(orcamentos) {
-    const lista = document.getElementById('orcamento-lista');
-
-    if (orcamentos.length === 0) {
-        lista.innerHTML = '<p class="empty">Nenhum orçamento cadastrado</p>';
-        return;
-    }
-
-    // Agrupar por item_receita_id
-    const grouped = {};
-    orcamentos.forEach(orc => {
-        if (!grouped[orc.item_receita_id]) {
-            grouped[orc.item_receita_id] = [];
-        }
-        grouped[orc.item_receita_id].push(orc);
-    });
-
-    // Renderizar
-    lista.innerHTML = Object.values(grouped).map(grupo => {
-        const fonte = estado.fontes.find(f => f.id === grupo[0].item_receita_id);
-        const totalPrevisto = grupo.reduce((sum, o) => sum + (o.valor_previsto ?? o.valor_esperado ?? 0), 0);
-
-        return `
-            <div class="card-item">
-                <div class="item-header">
-                    <h3>${fonte ? fonte.nome : 'Fonte desconhecida'}</h3>
-                    <span class="badge badge-info">${grupo.length} meses</span>
-                </div>
-                <div class="item-body">
-                    <p><strong>Total previsto:</strong> ${formatarMoeda(totalPrevisto)}</p>
-                    <p><strong>Meses:</strong> ${grupo.map(o => {
-                        const data = new Date(o.ano_mes || o.mes_referencia);
-                        return (data.getMonth() + 1).toString().padStart(2, '0');
-                    }).join(', ')}</p>
-                </div>
-            </div>
-        `;
-    }).join('');
-}
-
-async function carregarRealizadas() {
-    const lista = document.getElementById('realizadas-lista');
-    lista.innerHTML = '<p class="loading">Carregando...</p>';
-
-    try {
-        let url = '/api/receitas/realizadas';
-        if (estado.mesAtual) {
-            url += `?ano_mes=${estado.anoAtual}-${estado.mesAtual}-01`;
-        }
-
-        const response = await fetch(url);
-        const result = await response.json();
-
-        if (result.success) {
-            estado.realizadas = result.data;
-            renderizarRealizadas(result.data);
-        } else {
-            lista.innerHTML = `<p class="error">${result.error}</p>`;
-        }
-    } catch (error) {
-        console.error('Erro ao carregar realizadas:', error);
-        lista.innerHTML = '<p class="error">Erro ao carregar receitas realizadas</p>';
-    }
-}
-
-function renderizarRealizadas(receitas) {
-    const lista = document.getElementById('realizadas-lista');
-
-    if (receitas.length === 0) {
-        lista.innerHTML = '<p class="empty">Nenhuma receita recebida</p>';
-        return;
-    }
-
-    // Renderização em 2 linhas (descrição + meta), com valor e ações alinhados à direita.
-    lista.innerHTML = receitas.map(rec => {
-        const fonte = estado.fontes.find(f => f.id === rec.item_receita_id);
-        const descricao = rec.descricao || (fonte ? fonte.nome : 'Receita');
-        const dataRecebimento = formatarDataBR(rec.data_recebimento);
-        const competencia = formatarMesAno(rec.competencia || rec.mes_referencia);
-        const meta = [dataRecebimento ? `Recebido em ${dataRecebimento}` : null, competencia ? `Competência ${competencia}` : null]
-            .filter(Boolean)
-            .join(' • ');
-
-        const botaoEditar = rec.item_receita_id
-            ? `<button class="btn-icon" onclick="editarRealizada(${rec.id})" title="Editar">✏️</button>`
-            : '';
-
-        return `
-            <div class="card-item card-realizada">
-                <div class="linha-receita">
-                    <div class="col-descricao">${descricao}</div>
-                    <div class="col-fill"></div>
-                    <div class="col-valor">
-                        <span class="valor">${formatarMoeda(rec.valor_recebido)}</span>
-                        <div class="acoes">
-                            ${botaoEditar}
-                            <button class="btn-icon" onclick="deletarRealizada(${rec.id})" title="Deletar">🗑️</button>
-                        </div>
-                    </div>
-                </div>
-                <div class="linha-meta">${meta}</div>
-            </div>
-        `;
-    }).join('');
-}
-
 async function deletarRealizada(id) {
     if (!confirm('Tem certeza que deseja deletar esta receita?')) {
         return;
@@ -927,8 +766,8 @@ async function deletarRealizada(id) {
 
         if (result.success) {
             alert(result.message);
-            carregarRealizadas();
             atualizarResumo();
+            carregarReceitasMes();
         } else {
             alert('Erro: ' + result.error);
         }
@@ -938,45 +777,11 @@ async function deletarRealizada(id) {
     }
 }
 
-function editarFonte(id) {
-    abrirModalFonte(id);
-}
-
-async function deletarFonte(id) {
-    if (!confirm('Tem certeza que deseja inativar esta fonte de receita?')) {
-        return;
-    }
-
-    try {
-        const response = await fetch(`/api/receitas/itens/${id}`, {
-            method: 'DELETE'
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-            alert(result.message);
-            carregarFontesReceita();
-        } else {
-            alert('Erro: ' + result.error);
-        }
-    } catch (error) {
-        console.error('Erro ao inativar fonte:', error);
-        alert('Erro ao inativar fonte de receita');
-    }
-}
-
 function formatarMesAno(valor) {
     if (!valor) return '';
     const ano = valor.slice(0, 4);
     const mes = valor.slice(5, 7);
     return `${mes}/${ano}`;
-}
-
-function formatarDataBR(valor) {
-    if (!valor) return '';
-    const [ano, mes, dia] = valor.slice(0, 10).split('-');
-    return `${dia}/${mes}/${ano}`;
 }
 
 // ============================================================================

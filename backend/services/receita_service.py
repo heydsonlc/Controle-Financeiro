@@ -76,7 +76,8 @@ class ReceitaService:
             ativo=dados.get('ativo', True),
             valor_base_mensal=dados.get('valor_base_mensal'),
             dia_previsto_pagamento=dados.get('dia_previsto_pagamento'),
-            conta_origem_id=dados.get('conta_origem_id')
+            conta_origem_id=dados.get('conta_origem_id'),
+            conta_bancaria_id=dados.get('conta_bancaria_id')
         )
 
         db.session.add(item)
@@ -153,6 +154,8 @@ class ReceitaService:
 
         if 'conta_origem_id' in dados:
             item.conta_origem_id = dados['conta_origem_id']
+        if 'conta_bancaria_id' in dados:
+            item.conta_bancaria_id = dados['conta_bancaria_id']
 
         db.session.commit()
         return item
@@ -308,7 +311,8 @@ class ReceitaService:
                 - valor_recebido (float): Valor recebido
                 - competencia (str ou date): Mês de referência
                 - descricao (str, opcional)
-                - conta_origem_id (int, opcional)
+                - conta_origem_id (int, opcional) (LEGACY - patrimônio)
+                - conta_bancaria_id (int, opcional)
                 - observacoes (str, opcional)
 
         Returns:
@@ -351,6 +355,7 @@ class ReceitaService:
             valor_recebido=dados_receita['valor_recebido'],
             mes_referencia=competencia,
             conta_origem_id=dados_receita.get('conta_origem_id'),
+            conta_bancaria_id=dados_receita.get('conta_bancaria_id'),
             descricao=dados_receita.get('descricao', ''),
             orcamento_id=orcamento.id if orcamento else None,
             observacoes=dados_receita.get('observacoes', '')
@@ -408,6 +413,7 @@ class ReceitaService:
         receita.valor_recebido = dados_receita['valor_recebido']
         receita.mes_referencia = competencia
         receita.conta_origem_id = dados_receita.get('conta_origem_id')
+        receita.conta_bancaria_id = dados_receita.get('conta_bancaria_id')
         receita.descricao = dados_receita.get('descricao', '')
         receita.orcamento_id = orcamento.id if orcamento else None
         receita.observacoes = dados_receita.get('observacoes', '')
@@ -459,7 +465,7 @@ class ReceitaService:
         data_inicio = date(ano, 1, 1)
         data_fim = date(ano, 12, 31)
 
-        # Buscar orçamentos
+        # Buscar orçamentos (PREVISTO base)
         orcamentos = db.session.query(
             extract('month', ReceitaOrcamento.mes_referencia).label('mes'),
             ItemReceita.tipo,
@@ -469,15 +475,26 @@ class ReceitaService:
             ReceitaOrcamento.mes_referencia <= data_fim
         ).group_by('mes', ItemReceita.tipo).all()
 
-        # Buscar realizadas
+        # Buscar realizadas (REALIZADO)
         realizadas = db.session.query(
             extract('month', ReceitaRealizada.mes_referencia).label('mes'),
-            ItemReceita.tipo,
+            func.coalesce(ItemReceita.tipo, 'PONTUAL').label('tipo'),
             func.sum(ReceitaRealizada.valor_recebido).label('total_recebido')
-        ).join(ItemReceita).filter(
+        ).outerjoin(ItemReceita, ReceitaRealizada.item_receita_id == ItemReceita.id).filter(
             ReceitaRealizada.mes_referencia >= data_inicio,
             ReceitaRealizada.mes_referencia <= data_fim
-        ).group_by('mes', ItemReceita.tipo).all()
+        ).group_by('mes', 'tipo').all()
+
+        # Complemento do previsto: realizadas sem orçamento (ex: consórcios / pontuais)
+        realizadas_sem_orcamento = db.session.query(
+            extract('month', ReceitaRealizada.mes_referencia).label('mes'),
+            func.coalesce(ItemReceita.tipo, 'PONTUAL').label('tipo'),
+            func.sum(ReceitaRealizada.valor_recebido).label('total_recebido')
+        ).outerjoin(ItemReceita, ReceitaRealizada.item_receita_id == ItemReceita.id).filter(
+            ReceitaRealizada.mes_referencia >= data_inicio,
+            ReceitaRealizada.mes_referencia <= data_fim,
+            ReceitaRealizada.orcamento_id.is_(None)
+        ).group_by('mes', 'tipo').all()
 
         # Organizar dados
         resumo = {}
@@ -496,6 +513,14 @@ class ReceitaService:
             tipo = orc.tipo
             valor = float(orc.total_previsto or 0)
             resumo[mes]['previsto'][tipo] = valor
+            resumo[mes]['total_previsto'] += valor
+
+        # Complementar previstos com realizadas sem orçamento (ex: consórcios / pontuais)
+        for real in realizadas_sem_orcamento:
+            mes = int(real.mes)
+            tipo = real.tipo
+            valor = float(real.total_recebido or 0)
+            resumo[mes]['previsto'][tipo] = resumo[mes]['previsto'].get(tipo, 0) + valor
             resumo[mes]['total_previsto'] += valor
 
         # Preencher realizados

@@ -8,6 +8,7 @@ const CATEGORIAS_URL = '/api/categorias';
 let despesaEditando = null;
 let despesas = [];
 let categorias = [];
+let contasBancariasAtivas = [];
 
 // Carregar dados ao iniciar a página
 document.addEventListener('DOMContentLoaded', () => {
@@ -20,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     carregarCategorias();
     carregarDespesas();
+    carregarContasBancariasAtivas();
 
     // Event listeners para filtros
     document.getElementById('filtro-categoria').addEventListener('change', aplicarFiltros);
@@ -41,6 +43,37 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
+
+async function carregarContasBancariasAtivas() {
+    try {
+        const resp = await fetch('/api/contas?status=ATIVO');
+        const json = await resp.json();
+        if (!json.success) return;
+        contasBancariasAtivas = json.data || [];
+        atualizarSelectContaBancariaPagamento(contasBancariasAtivas);
+    } catch (e) {
+        console.error('Erro ao carregar contas bancárias:', e);
+    }
+}
+
+function atualizarSelectContaBancariaPagamento(contas, selecionado = '') {
+    const select = document.getElementById('pagar-conta-bancaria');
+    if (!select) return;
+
+    const valorAtual = selecionado || select.value || '';
+    select.innerHTML = '<option value=\"\">Selecione...</option>';
+
+    (contas || []).forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = `${c.nome} (${c.instituicao})`;
+        select.appendChild(opt);
+    });
+
+    if (valorAtual) {
+        select.value = String(valorAtual);
+    }
+}
 
 /**
  * Carrega categorias para os selects
@@ -1084,6 +1117,7 @@ function marcarComoPago(id) {
     }
 
     const isFaturaCartao = despesa.is_fatura_cartao === true;
+    const contaBancariaId = despesa.conta_bancaria_id || '';
 
     // Guardar no modal se é fatura de cartão
     document.getElementById('pagar-despesa-id').value = id;
@@ -1092,6 +1126,20 @@ function marcarComoPago(id) {
     // Preencher dados básicos
     document.getElementById('pagar-nome-despesa').textContent = despesa.nome;
     document.getElementById('pagar-data').value = new Date().toISOString().split('T')[0];
+
+    const groupConta = document.getElementById('pagar-conta-bancaria-group');
+    const selectConta = document.getElementById('pagar-conta-bancaria');
+    if (selectConta) {
+        if (!contasBancariasAtivas || contasBancariasAtivas.length === 0) {
+            carregarContasBancariasAtivas();
+        }
+        atualizarSelectContaBancariaPagamento(contasBancariasAtivas, contaBancariaId);
+
+        const temContaDefinida = Boolean(contaBancariaId);
+        selectConta.disabled = temContaDefinida;
+        selectConta.required = !temContaDefinida;
+        if (groupConta) groupConta.style.display = temContaDefinida ? 'none' : 'block';
+    }
 
     // Se for fatura de cartão, criar interface especial
     if (isFaturaCartao) {
@@ -1221,6 +1269,7 @@ async function confirmarPagamento(event) {
     const tipoPagamento = document.querySelector('input[name="tipo-pagamento"]:checked').value;
     const valorPrevisto = parseFloat(document.getElementById('pagar-valor-previsto').value);
     const dataPagamento = document.getElementById('pagar-data').value;
+    const contaBancariaId = document.getElementById('pagar-conta-bancaria')?.value;
 
     // Determinar o valor a ser pago
     let valorPago;
@@ -1241,6 +1290,12 @@ async function confirmarPagamento(event) {
         const payload = {
             data_pagamento: dataPagamento
         };
+
+        if (!contaBancariaId) {
+            alert('Selecione a conta bancária para executar o pagamento.');
+            return;
+        }
+        payload.conta_bancaria_id = parseInt(contaBancariaId, 10);
 
         // Adicionar valor_pago apenas se for diferente do total
         if (valorPago !== null) {
@@ -1282,6 +1337,15 @@ function fecharModalPagar() {
     document.getElementById('form-pagar').reset();
     document.querySelector('input[name="tipo-pagamento"][value="total"]').checked = true;
     document.getElementById('campo-valor-custom').style.display = 'none';
+
+    const groupConta = document.getElementById('pagar-conta-bancaria-group');
+    const selectConta = document.getElementById('pagar-conta-bancaria');
+    if (groupConta) groupConta.style.display = 'block';
+    if (selectConta) {
+        selectConta.disabled = false;
+        selectConta.required = true;
+        selectConta.value = '';
+    }
 }
 
 /**
