@@ -1,4 +1,4 @@
-# 🚀 Guia de Início Rápido
+# Guia de Início Rápido
 
 ## Configuração Inicial (Primeira vez)
 
@@ -120,14 +120,14 @@ Você verá a página inicial do sistema.
 
 ---
 
-## Próximos Passos de Desenvolvimento
+## Estado Atual (v1.1 — 2026-03)
 
-Após a estrutura base estar funcionando:
+O sistema está funcionalmente completo. Módulos ativos:
+- Dashboard, Despesas, Receitas, Cartões, Lançamentos
+- Financiamentos, Consórcios, Patrimônio, Veículos
+- Contas Bancárias (em finalização — MVP 1)
 
-1. **Implementar APIs de CRUD** (categorias, despesas, receitas)
-2. **Criar interfaces** (formulários, tabelas)
-3. **Implementar lógica de negócio** (projeção vs real)
-4. **Desenvolver dashboard** (visualizações e gráficos)
+Próximas melhorias planejadas: ver `docs/HISTORIA_DO_PROJETO.md`.
 
 ---
 
@@ -193,5 +193,7 @@ python --version
 ## Suporte
 
 Para problemas ou dúvidas, consulte:
-- [README.md](README.md) - Documentação completa
-- Arquivos de documentação originais (README.txt, Conceito visual geral.txt)
+- `README.md` — Filosofia do sistema
+- `README_TECNICO.md` — Arquitetura e endpoints
+- `docs/ARQUITETURA.md` — Módulos e entidades
+- `docs/CONTRATO_FINAL_DO_SISTEMA.md` — Regras imutáveis
