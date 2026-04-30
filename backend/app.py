@@ -88,7 +88,7 @@ def create_app(config_name=None):
     @app.route('/')
     def index():
         """Página inicial - Dashboard"""
-        return render_template('index.html')
+        return render_template('index.html', active_page='dashboard', page_title='Dashboard')
 
     @app.route('/categorias')
     def categorias():
@@ -128,7 +128,7 @@ def create_app(config_name=None):
     @app.route('/configuracoes')
     def configuracoes():
         """Página de configurações do sistema"""
-        return render_template('configuracoes.html')
+        return render_template('configuracoes.html', active_page='configuracoes', page_title='Configurações')
 
     @app.route('/contas-bancarias')
     def contas_bancarias():

@@ -1,0 +1,240 @@
+/* Shell visual desktop/web - UX-1A */
+
+body.app-shell-body {
+    min-height: 100vh;
+    padding: 0;
+    padding-bottom: 0;
+    background: #f5f5f7;
+    color: #1d1d1f;
+}
+
+body.app-shell-body .app-shell {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: 280px minmax(0, 1fr);
+    background: #f5f5f7;
+}
+
+body.app-shell-body .app-sidebar {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    background: rgba(255, 255, 255, 0.86);
+    border-right: 1px solid rgba(0, 0, 0, 0.08);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+}
+
+body.app-shell-body .app-sidebar-header {
+    padding: 24px 20px 18px;
+}
+
+body.app-shell-body .app-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #1d1d1f !important;
+    text-decoration: none;
+}
+
+body.app-shell-body .app-brand-mark {
+    width: 36px;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    background: #1d1d1f;
+    color: #ffffff !important;
+    flex: 0 0 auto;
+}
+
+body.app-shell-body .app-brand-mark svg,
+body.app-shell-body .app-icon svg,
+body.app-shell-body .app-menu-button svg,
+body.app-shell-body .app-topbar-button svg {
+    width: 20px;
+    height: 20px;
+    display: block;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+body.app-shell-body .app-brand-text {
+    color: #1d1d1f !important;
+    font-size: 0.98rem;
+    font-weight: 650;
+    line-height: 1.15;
+}
+
+body.app-shell-body .app-nav {
+    padding: 0 12px 24px;
+}
+
+body.app-shell-body .app-nav-section {
+    margin-top: 18px;
+}
+
+body.app-shell-body .app-nav-section:first-child {
+    margin-top: 4px;
+}
+
+body.app-shell-body .app-nav-section-title {
+    padding: 0 10px 7px;
+    color: #86868b !important;
+    font-size: 0.72rem;
+    font-weight: 650;
+    letter-spacing: 0;
+    text-transform: uppercase;
+}
+
+body.app-shell-body .app-nav-link {
+    display: flex;
+    align-items: center;
+    min-height: 40px;
+    gap: 10px;
+    padding: 9px 10px;
+    border-radius: 10px;
+    color: #515154 !important;
+    text-decoration: none;
+    transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+body.app-shell-body .app-nav-link:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: #1d1d1f !important;
+    transform: translateX(2px);
+}
+
+body.app-shell-body .app-nav-link.active {
+    background: #1d1d1f;
+    color: #ffffff !important;
+}
+
+body.app-shell-body .app-icon {
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: inherit !important;
+    flex: 0 0 auto;
+}
+
+body.app-shell-body .app-nav-text {
+    color: inherit !important;
+    font-size: 0.92rem;
+    font-weight: 520;
+    line-height: 1.2;
+}
+
+body.app-shell-body .app-main {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+body.app-shell-body .app-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    min-height: 72px;
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 28px;
+    background: rgba(245, 245, 247, 0.82);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+}
+
+body.app-shell-body .app-menu-button,
+body.app-shell-body .app-topbar-button {
+    width: 40px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.74);
+    color: #1d1d1f;
+    cursor: default;
+}
+
+body.app-shell-body .app-topbar-title {
+    min-width: 0;
+}
+
+body.app-shell-body .app-topbar-title span {
+    display: block;
+    overflow: hidden;
+    color: #1d1d1f !important;
+    font-size: 1.18rem;
+    font-weight: 650;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+body.app-shell-body .app-content {
+    width: 100%;
+    padding: 32px;
+}
+
+body.app-shell-body .app-content > .container {
+    max-width: 1280px;
+    margin: 0 auto;
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 2px 16px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    overflow: hidden;
+}
+
+body.app-shell-body .bottom-nav,
+body.app-shell-body .mobile-toggle {
+    display: none;
+}
+
+@media (max-width: 1024px) {
+    body.app-shell-body .app-shell {
+        grid-template-columns: 236px minmax(0, 1fr);
+    }
+
+    body.app-shell-body .app-content {
+        padding: 24px;
+    }
+}
+
+@media (max-width: 768px) {
+    body.app-shell-body .app-shell {
+        display: block;
+    }
+
+    body.app-shell-body .app-sidebar {
+        display: none;
+    }
+
+    body.app-shell-body .app-topbar {
+        grid-template-columns: 40px minmax(0, 1fr) 40px;
+        min-height: 60px;
+        padding: 10px 14px;
+    }
+
+    body.app-shell-body .app-content {
+        padding: 16px;
+    }
+
+    body.app-shell-body .app-content > .container {
+        border-radius: 12px;
+    }
+}

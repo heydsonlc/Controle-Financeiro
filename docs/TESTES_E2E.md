@@ -91,10 +91,14 @@ Exceção temporária: `favicon.ico` 404 é ignorado pelo helper de console, poi
 
 ## Rotas com Pendência Conhecida
 
-- `/financiamentos/seguro`: rota conhecida como pendente até UX-1B, pois o template usa `base.html` ainda inexistente.
+- `/financiamentos/seguro`: rota conhecida como pendente até UX-1B. Após UX-1A, `base.html` existe e a rota pode renderizar parcialmente, mas a tela ainda mantém estrutura visual legada com Bootstrap/Font Awesome órfãos e continua fora do smoke principal.
 - `/indexadores`: rota existente, mantida fora do smoke principal até validação visual/asset dedicada.
 
 Essas rotas aparecem como testes ignorados/diagnósticos, sem correção neste MVP.
+
+## Uso em MVPs de UX
+
+Para MVPs de interface, o smoke E2E deve ser executado antes e depois das alterações. No UX-1A, o baseline deve confirmar as 13 rotas principais passando antes da criação do shell visual, e a validação final deve repetir o smoke e a suíte Playwright completa.
 
 ## Como Interpretar Falhas
 

@@ -1,28 +1,29 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - Controle Financeiro</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Controle Financeiro{% endblock %}
+
+{% block extra_css %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme-light.css') }}">
-    <!-- Chart.js para gráficos -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-</head>
-<body>
+{% endblock %}
+
+{% block content %}
     <div class="container">
         <header>
             <h1>Dashboard Financeiro</h1>
             <p class="subtitle" id="mes-atual">Carregando...</p>
+            <div class="filtro-periodo">
+                <label for="filtro-periodo-input">Período:</label>
+                <input type="month" id="filtro-periodo-input">
+                <button id="filtro-periodo-aplicar" type="button">Aplicar</button>
+                <button id="filtro-periodo-limpar" type="button">Atual</button>
+            </div>
         </header>
 
         <main>
             <!-- ========================================== -->
             <!-- BLOCO 1: RESUMO FINANCEIRO DO MÊS         -->
             <!-- ========================================== -->
-            <section class="resumo-mes">
+            <section class="resumo-mes" id="secao-resumo">
                 <div class="resumo-card receitas" onclick="window.location.href='/receitas'">
                     <div class="resumo-info">
                         <h3>RECEITAS DO MÊS</h3>
@@ -37,14 +38,14 @@
                     </div>
                 </div>
 
-                <div class="resumo-card saldo-liquido">
+                <div class="resumo-card saldo-liquido" id="card-saldo-liquido">
                     <div class="resumo-info">
                         <h3>SALDO LÍQUIDO</h3>
                         <p class="resumo-valor" id="saldo-liquido">R$ 0,00</p>
                     </div>
                 </div>
 
-                <div class="resumo-card contas-bancarias" onclick="window.location.href='/contas-bancarias'">
+                <div class="resumo-card contas-bancarias" id="card-saldo-contas" onclick="window.location.href='/contas-bancarias'">
                     <div class="resumo-info">
                         <h3>SALDO NAS CONTAS</h3>
                         <p class="resumo-valor" id="saldo-contas">R$ 0,00</p>
@@ -65,7 +66,7 @@
             <!-- ========================================== -->
             <!-- BLOCO 2: INDICADORES INTELIGENTES         -->
             <!-- ========================================== -->
-            <section class="indicadores">
+            <section class="indicadores" id="secao-indicadores">
                 <h2 class="section-title">Indicadores e Insights</h2>
                 <div class="indicadores-grid" id="indicadores-container">
                     <div class="loading-indicator">Carregando indicadores...</div>
@@ -75,12 +76,12 @@
             <!-- ========================================== -->
             <!-- BLOCO 3: GRÁFICOS                         -->
             <!-- ========================================== -->
-            <section class="graficos">
+            <section class="graficos" id="secao-graficos">
                 <h2 class="section-title">Análise Visual</h2>
 
                 <div class="graficos-grid">
                     <!-- Gráfico de Pizza: Despesas por Categoria -->
-                    <div class="grafico-card">
+                    <div class="grafico-card" id="card-grafico-categorias">
                         <h3>Distribuição por Categoria</h3>
                         <div class="grafico-wrapper">
                             <canvas id="grafico-categorias"></canvas>
@@ -88,7 +89,7 @@
                     </div>
 
                     <!-- Gráfico de Barras: Evolução de Gastos -->
-                    <div class="grafico-card">
+                    <div class="grafico-card" id="card-grafico-evolucao">
                         <h3>Evolução de Gastos (6 meses)</h3>
                         <div class="grafico-wrapper">
                             <canvas id="grafico-evolucao"></canvas>
@@ -96,7 +97,7 @@
                     </div>
 
                     <!-- Gráfico de Linha: Saldo Bancário -->
-                    <div class="grafico-card wide">
+                    <div class="grafico-card wide" id="card-grafico-saldo">
                         <h3>Evolução Projetada do Saldo (Estimativa)</h3>
                         <div class="grafico-wrapper">
                             <canvas id="grafico-saldo"></canvas>
@@ -105,28 +106,19 @@
                 </div>
             </section>
 
-            <!-- ========================================== -->
-            <!-- FASE 6.1: AGENDA FINANCEIRA DO MÊS        -->
-            <!-- ========================================== -->
-            <section class="agenda-financeira" style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; margin: 20px 0;">
-                <h2 class="section-title" style="font-size: 18px; margin-bottom: 15px;">📅 Agenda Financeira do Mês</h2>
-
-                <!-- Insights Temporais -->
-                <div id="insights-temporais" style="background: rgba(255,255,255,0.08); border-radius: 8px; padding: 15px; margin-bottom: 20px; font-size: 0.9em; color: rgba(255,255,255,0.8); line-height: 1.6;">
-                    <p class="loading">Carregando insights...</p>
-                </div>
-
-                <!-- Timeline Cronológica -->
-                <div id="timeline-agenda" style="font-size: 0.9em;">
-                    <p class="loading">Carregando agenda...</p>
+            <section class="fluxo-projetado" id="secao-fluxo-projetado">
+                <h2 class="section-title">Fluxo de Caixa Projetado (Enxuto)</h2>
+                <p class="fluxo-subtitle" id="fluxo-projetado-subtitle">Carregando...</p>
+                <div id="fluxo-projetado-lista" class="fluxo-lista">
+                    <p class="loading">Carregando projeção...</p>
                 </div>
             </section>
 
             <!-- ========================================== -->
-            <!-- BLOCO 4: ALERTAS E AGENDA FINANCEIRA      -->
+            <!-- BLOCO 4: ALERTAS FINANCEIROS              -->
             <!-- ========================================== -->
             <section class="alertas">
-                <h2 class="section-title">🔔 Alertas e Agenda Financeira</h2>
+                <h2 class="section-title">🔔 Alertas Financeiros</h2>
 
                 <div class="alertas-grid">
                     <!-- Contas a Vencer -->
@@ -167,41 +159,10 @@
             <div style="height: 30px;"></div>
         </main>
     </div>
+{% endblock %}
 
-    <!-- Bottom Navigation -->
-    <nav class="bottom-nav">
-        <div class="bottom-nav-container">
-            <a href="/" class="nav-item active">
-                <span class="icon">⌂</span>
-                <span class="label">Dashboard</span>
-            </a>
-            <a href="/lancamentos" class="nav-item">
-                <span class="icon">✎</span>
-                <span class="label">Lançamentos</span>
-            </a>
-            <a href="/despesas" class="nav-item">
-                <span class="icon">▬</span>
-                <span class="label">DESPESAS</span>
-            </a>
-            <a href="/configuracoes" class="nav-item">
-                <span class="icon">⚙</span>
-                <span class="label">Config</span>
-            </a>
-        </div>
-    </nav>
-
-    <!-- Botão Mobile -->
-    <div class="mobile-toggle">
-        <button onclick="toggleMobileView()" id="mobile-btn">📱 Ver em Mobile</button>
-    </div>
-
+{% block extra_js %}
+    <!-- Chart.js para gráficos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
-    <script>
-        function toggleMobileView() {
-            document.body.classList.toggle('mobile-view');
-            const btn = document.getElementById('mobile-btn');
-            btn.innerHTML = document.body.classList.contains('mobile-view') ? '💻 Ver em Desktop' : '📱 Ver em Mobile';
-        }
-    </script>
-</body>
-</html>
+{% endblock %}
