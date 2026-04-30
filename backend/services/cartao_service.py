@@ -30,6 +30,28 @@ class CartaoService:
     ServiÃ§o para gerenciamento completo de cartÃµes de crÃ©dito
     """
 
+    @staticmethod
+    def _primeiro_dia_mes(data_ou_competencia):
+        if isinstance(data_ou_competencia, datetime):
+            data_ou_competencia = data_ou_competencia.date()
+
+        if isinstance(data_ou_competencia, date):
+            return data_ou_competencia.replace(day=1)
+
+        if isinstance(data_ou_competencia, str):
+            valor = data_ou_competencia.strip()
+            if len(valor) == 7:
+                valor = f'{valor}-01'
+            return datetime.strptime(valor, '%Y-%m-%d').date().replace(day=1)
+
+        raise ValueError('Competencia invalida para calculo de fatura')
+
+    @staticmethod
+    def _intervalo_mes(data_ou_competencia):
+        inicio_mes = CartaoService._primeiro_dia_mes(data_ou_competencia)
+        inicio_mes_seguinte = inicio_mes + relativedelta(months=1)
+        return inicio_mes, inicio_mes_seguinte
+
     # ========================================================================
     # GERAÃ‡ÃƒO E RECUPERAÃ‡ÃƒO DE FATURAS
     # ========================================================================
@@ -50,7 +72,7 @@ class CartaoService:
             Conta: Fatura do cartÃ£o (planejado ou executado)
         """
         # Normalizar competÃªncia para primeiro dia do mÃªs
-        comp_primeiro_dia = competencia.replace(day=1)
+        comp_primeiro_dia = CartaoService._primeiro_dia_mes(competencia)
 
         # Buscar fatura existente
         fatura = Conta.query.filter_by(
@@ -110,7 +132,7 @@ class CartaoService:
         Returns:
             Decimal: Valor total orÃ§ado
         """
-        comp_primeiro_dia = competencia.replace(day=1)
+        comp_primeiro_dia = CartaoService._primeiro_dia_mes(competencia)
 
         # Buscar todos os itens agregados (categorias) do cartÃ£o
         itens_agregados = ItemAgregado.query.filter_by(
@@ -148,7 +170,7 @@ class CartaoService:
         Returns:
             Decimal: Valor total gasto
         """
-        comp_primeiro_dia = competencia.replace(day=1)
+        comp_primeiro_dia, proximo_mes = CartaoService._intervalo_mes(competencia)
 
         # Buscar todos os itens agregados do cartÃ£o
         itens_agregados_ids = [item.id for item in ItemAgregado.query.filter_by(
@@ -158,13 +180,13 @@ class CartaoService:
         if not itens_agregados_ids:
             return Decimal('0')
 
-        # Somar lanÃ§amentos do mÃªs
-        # Usar STRFTIME para compatibilidade com SQLite
+        # Somar lanÃ§amentos do mÃªs por intervalo, compatÃ­vel com SQLite/PostgreSQL.
         total_executado = db.session.query(
             func.coalesce(func.sum(LancamentoAgregado.valor), 0)
         ).filter(
             LancamentoAgregado.item_agregado_id.in_(itens_agregados_ids),
-            func.strftime('%Y-%m', LancamentoAgregado.mes_fatura) == comp_primeiro_dia.strftime('%Y-%m')
+            LancamentoAgregado.mes_fatura >= comp_primeiro_dia,
+            LancamentoAgregado.mes_fatura < proximo_mes
         ).scalar()
 
         return Decimal(str(total_executado or 0))
@@ -197,7 +219,8 @@ class CartaoService:
         Returns:
             Conta: Fatura atualizada
         """
-        fatura = CartaoService.get_or_create_fatura(cartao_id, competencia)
+        comp_primeiro_dia = CartaoService._primeiro_dia_mes(competencia)
+        fatura = CartaoService.get_or_create_fatura(cartao_id, comp_primeiro_dia)
 
         # Se jÃ¡ foi paga, nÃ£o recalcular
         if fatura.status_pagamento == 'Pago':
@@ -460,7 +483,8 @@ class CartaoService:
                 'categorias_estouro': list
             }
         """
-        fatura = CartaoService.get_or_create_fatura(cartao_id, competencia)
+        comp_primeiro_dia, proximo_mes = CartaoService._intervalo_mes(competencia)
+        fatura = CartaoService.get_or_create_fatura(cartao_id, comp_primeiro_dia)
 
         planejado = fatura.valor_planejado or Decimal('0')
         executado = fatura.valor_executado or Decimal('0')
@@ -477,22 +501,22 @@ class CartaoService:
                 and_(
                     OrcamentoAgregado.item_agregado_id == item.id,
                     OrcamentoAgregado.ativo == True,
-                    OrcamentoAgregado.vigencia_inicio <= competencia,
+                    OrcamentoAgregado.vigencia_inicio <= comp_primeiro_dia,
                     (OrcamentoAgregado.vigencia_fim == None) |
-                    (OrcamentoAgregado.vigencia_fim >= competencia)
+                    (OrcamentoAgregado.vigencia_fim >= comp_primeiro_dia)
                 )
             ).first()
 
             if not orcamento:
                 continue
 
-            # Gasto da categoria
-            # Usar STRFTIME para compatibilidade com SQLite
+            # Gasto da categoria no mÃªs por intervalo compatÃ­vel com SQLite/PostgreSQL.
             gasto = db.session.query(
                 func.coalesce(func.sum(LancamentoAgregado.valor), 0)
             ).filter(
                 LancamentoAgregado.item_agregado_id == item.id,
-                func.strftime('%Y-%m', LancamentoAgregado.mes_fatura) == competencia.strftime('%Y-%m')
+                LancamentoAgregado.mes_fatura >= comp_primeiro_dia,
+                LancamentoAgregado.mes_fatura < proximo_mes
             ).scalar()
 
             gasto_decimal = Decimal(str(gasto or 0))
@@ -563,7 +587,7 @@ class CartaoService:
         Returns:
             dict ou None: Alerta estruturado ou None se nÃ£o houver estouro
         """
-        comp_primeiro_dia = competencia.replace(day=1)
+        comp_primeiro_dia, proximo_mes = CartaoService._intervalo_mes(competencia)
 
         # Buscar item agregado
         item = ItemAgregado.query.get(item_agregado_id)
@@ -589,7 +613,8 @@ class CartaoService:
             func.coalesce(func.sum(LancamentoAgregado.valor), 0)
         ).filter(
             LancamentoAgregado.item_agregado_id == item_agregado_id,
-            func.strftime('%Y-%m', LancamentoAgregado.mes_fatura) == comp_primeiro_dia.strftime('%Y-%m')
+            LancamentoAgregado.mes_fatura >= comp_primeiro_dia,
+            LancamentoAgregado.mes_fatura < proximo_mes
         ).scalar()
 
         consumo_decimal = Decimal(str(consumo or 0))
@@ -643,7 +668,7 @@ class CartaoService:
         Returns:
             dict ou None: Alerta estruturado ou None se nÃ£o houver estouro
         """
-        comp_primeiro_dia = competencia.replace(day=1)
+        comp_primeiro_dia, proximo_mes = CartaoService._intervalo_mes(competencia)
 
         # Buscar grupo
         try:
@@ -689,7 +714,8 @@ class CartaoService:
                 func.coalesce(func.sum(LancamentoAgregado.valor), 0)
             ).filter(
                 LancamentoAgregado.item_agregado_id == item.id,
-                func.strftime('%Y-%m', LancamentoAgregado.mes_fatura) == comp_primeiro_dia.strftime('%Y-%m')
+                LancamentoAgregado.mes_fatura >= comp_primeiro_dia,
+                LancamentoAgregado.mes_fatura < proximo_mes
             ).scalar()
 
             consumo_decimal = Decimal(str(consumo or 0))
@@ -753,7 +779,7 @@ class CartaoService:
         if competencia is None:
             competencia = date.today().replace(day=1)
         else:
-            competencia = competencia.replace(day=1)
+            competencia = CartaoService._primeiro_dia_mes(competencia)
 
         alertas_locais = []
         alertas_globais = []

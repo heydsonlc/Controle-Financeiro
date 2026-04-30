@@ -240,6 +240,12 @@ Se `DATABASE_URL` nao estiver definida, o SQLite local permanece como fallback t
 
 Este MVP nao cria banco PostgreSQL, nao roda migrations, nao recria schema e nao altera dados. A compatibilidade de runtime entre SQLite e PostgreSQL, incluindo pontos como `strftime`, fica para o DB-2B.
 
+## DB-2B - Compatibilidade runtime minima com PostgreSQL
+
+O fluxo ativo de cartao iniciou a remocao de dependencias SQLite-specific no runtime. O uso de `func.strftime` em filtros mensais de `backend/services/cartao_service.py` foi substituido por filtro por intervalo mensal calculado em Python, no formato `inicio_mes <= mes_fatura < inicio_mes_seguinte`, compativel com SQLite e PostgreSQL.
+
+Este MVP nao cria banco PostgreSQL local, nao roda migrations e nao altera dados. Scripts, migrations antigas e demais pontos SQLite-specific permanecem pendentes para analise posterior.
+
 ## 6. SQLite
 
 SQLite deve deixar de ser a base principal de desenvolvimento da evolução web do projeto.
