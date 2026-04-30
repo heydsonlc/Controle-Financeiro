@@ -246,6 +246,14 @@ O fluxo ativo de cartao iniciou a remocao de dependencias SQLite-specific no run
 
 Este MVP nao cria banco PostgreSQL local, nao roda migrations e nao altera dados. Scripts, migrations antigas e demais pontos SQLite-specific permanecem pendentes para analise posterior.
 
+## DB-2C - PostgreSQL local validado
+
+O ambiente local de desenvolvimento foi validado com PostgreSQL em `localhost:5432`, banco `controle_financeiro_dev` e usuario local `controle_financeiro`. A `DATABASE_URL` local fica em `.env.local`, que permanece fora do Git.
+
+O schema limpo foi criado pelo mecanismo atual de startup em desenvolvimento (`backend/app.py` com `db.create_all()`), sem migration, sem seed e sem insercao manual de dados. Durante a validacao, o runtime criou apenas 1 registro tecnico em `preferencia`. O SQLite permanece como fallback temporario quando `DATABASE_URL` nao estiver definida.
+
+DigitalOcean, producao e bancos remotos nao foram acessados. A consolidacao da fonte oficial de schema, Alembic e seeds fica para etapa futura.
+
 ## 6. SQLite
 
 SQLite deve deixar de ser a base principal de desenvolvimento da evolução web do projeto.

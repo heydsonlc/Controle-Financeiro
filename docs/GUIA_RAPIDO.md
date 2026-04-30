@@ -154,6 +154,7 @@ Próximas melhorias planejadas: ver `docs/HISTORIA_DO_PROJETO.md`.
 2. **Commit frequente** no Git
 3. **Teste localmente** antes de pensar em produção
 4. **Use dados de exemplo** (`--sample`) para testar funcionalidades
+5. **Use PostgreSQL local** em desenvolvimento quando `.env.local` tiver `DATABASE_URL` apontando para `localhost`
 
 ### ❌ Evite
 
@@ -180,11 +181,13 @@ app.run(port=5001)  # Trocar para outra porta
 ```
 
 ### Banco de dados não cria
-**Solução:** Certifique-se de que a pasta `data/` existe:
+**Solução:** Se estiver usando SQLite fallback, certifique-se de que a pasta `data/` existe:
 ```bash
 mkdir data
 python init_db.py --sample
 ```
+
+Se estiver usando PostgreSQL local, confirme que o servico local esta ativo, que `.env.local` aponta para `localhost` e que o banco `controle_financeiro_dev` existe. Nunca use URL DigitalOcean ou banco remoto em desenvolvimento.
 
 ---
 
