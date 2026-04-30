@@ -17,6 +17,8 @@ from flask import Blueprint, request, jsonify
 from datetime import datetime, date, timedelta
 from sqlalchemy import func, extract
 from decimal import Decimal
+from calendar import monthrange
+import logging
 
 try:
     from backend.models import db, Conta, Categoria, ItemDespesa, ConfigAgregador, ItemReceita, ReceitaRealizada, ContaBancaria, Financiamento, FinanciamentoParcela, ItemAgregado, ReceitaOrcamento, LancamentoAgregado, OrcamentoAgregado
@@ -25,6 +27,12 @@ except ImportError:
 
 # Criar blueprint
 dashboard_bp = Blueprint('dashboard', __name__)
+logger = logging.getLogger(__name__)
+
+
+def _internal_error(contexto='dashboard'):
+    logger.exception('Erro interno em %s', contexto)
+    return jsonify({'success': False, 'error': 'Erro interno ao processar requisicao'}), 500
 
 
 def decimal_to_float(value):
@@ -32,6 +40,120 @@ def decimal_to_float(value):
     if value is None:
         return 0.0
     return float(value) if isinstance(value, Decimal) else value
+
+
+def _deslocar_mes(ano, mes, delta):
+    """
+    Desloca um par (ano, mes) em `delta` meses.
+    delta negativo = meses passados; positivo = meses futuros.
+    """
+    indice = (ano * 12 + (mes - 1)) + delta
+    novo_ano = indice // 12
+    novo_mes = (indice % 12) + 1
+    return novo_ano, novo_mes
+
+
+def _periodo_mes(ano, mes):
+    primeiro_dia = date(ano, mes, 1)
+    ultimo_dia = date(ano, mes, monthrange(ano, mes)[1])
+    return primeiro_dia, ultimo_dia
+
+
+def _resolver_periodo_request():
+    """
+    Resolve período de referência do dashboard.
+    Aceita:
+    - ?mes=MM&ano=YYYY
+    - ?periodo=YYYY-MM
+    """
+    hoje = date.today()
+    mes = request.args.get('mes', type=int)
+    ano = request.args.get('ano', type=int)
+    periodo = (request.args.get('periodo') or '').strip()
+    filtro_ativo = False
+
+    if periodo and '-' in periodo:
+        partes = periodo.split('-', 1)
+        if len(partes) == 2 and partes[0].isdigit() and partes[1].isdigit():
+            ano = int(partes[0])
+            mes = int(partes[1])
+            filtro_ativo = True
+
+    if mes is not None or ano is not None:
+        filtro_ativo = True
+        if mes is None:
+            mes = hoje.month
+        if ano is None:
+            ano = hoje.year
+
+    if mes is None or ano is None:
+        mes = hoje.month
+        ano = hoje.year
+
+    if not (1 <= int(mes) <= 12):
+        mes = hoje.month
+        filtro_ativo = False
+    if int(ano) < 2000 or int(ano) > 2100:
+        ano = hoje.year
+        filtro_ativo = False
+
+    return int(mes), int(ano), filtro_ativo
+
+
+def _calcular_receitas_mes(mes, ano):
+    """
+    Soma receitas do mês:
+    - realizadas
+    - previstas ainda não realizadas
+    """
+    orcamentos_com_realizacao = db.session.query(ReceitaRealizada.orcamento_id).filter(
+        extract('month', ReceitaRealizada.mes_referencia) == mes,
+        extract('year', ReceitaRealizada.mes_referencia) == ano,
+        ReceitaRealizada.orcamento_id.isnot(None)
+    ).distinct().all()
+
+    ids_orcamentos_realizados = [o[0] for o in orcamentos_com_realizacao]
+
+    receitas_realizadas = db.session.query(func.sum(ReceitaRealizada.valor_recebido)).filter(
+        extract('month', ReceitaRealizada.mes_referencia) == mes,
+        extract('year', ReceitaRealizada.mes_referencia) == ano
+    ).scalar() or 0
+
+    query_previstas = db.session.query(func.sum(ReceitaOrcamento.valor_esperado)).filter(
+        extract('month', ReceitaOrcamento.mes_referencia) == mes,
+        extract('year', ReceitaOrcamento.mes_referencia) == ano
+    )
+
+    if ids_orcamentos_realizados:
+        query_previstas = query_previstas.filter(~ReceitaOrcamento.id.in_(ids_orcamentos_realizados))
+
+    receitas_previstas = query_previstas.scalar() or 0
+    return decimal_to_float(receitas_realizadas) + decimal_to_float(receitas_previstas)
+
+
+def _receitas_por_fonte_mes(mes, ano):
+    """
+    Visão gerencial simples de receitas realizadas por tipo/fonte.
+    """
+    resultado = db.session.query(
+        ItemReceita.tipo,
+        func.sum(ReceitaRealizada.valor_recebido)
+    ).outerjoin(
+        ItemReceita, ReceitaRealizada.item_receita_id == ItemReceita.id
+    ).filter(
+        extract('month', ReceitaRealizada.mes_referencia) == mes,
+        extract('year', ReceitaRealizada.mes_referencia) == ano
+    ).group_by(
+        ItemReceita.tipo
+    ).all()
+
+    fontes = []
+    for tipo, total in resultado:
+        fontes.append({
+            'fonte': tipo or 'Nao informado',
+            'valor': decimal_to_float(total or 0)
+        })
+    return fontes
 
 
 def _calcular_totais_fatura_cartao(cartao_id, competencia):
@@ -165,42 +287,9 @@ def resumo_mes():
     - Saldo total nas contas bancárias
     """
     try:
-        hoje = date.today()
-        mes_atual = hoje.month
-        ano_atual = hoje.year
-
-        # 1. RECEITAS DO MÊS (Por mês de competência)
-        # Se houver ReceitaRealizada correspondente, usa o valor recebido
-        # Senão, usa o valor esperado do orçamento
-
-        # Buscar IDs dos orçamentos que JÁ TÊM receita realizada no mês
-        orcamentos_com_realizacao = db.session.query(ReceitaRealizada.orcamento_id).filter(
-            extract('month', ReceitaRealizada.mes_referencia) == mes_atual,
-            extract('year', ReceitaRealizada.mes_referencia) == ano_atual,
-            ReceitaRealizada.orcamento_id.isnot(None)
-        ).distinct().all()
-
-        ids_orcamentos_realizados = [o[0] for o in orcamentos_com_realizacao]
-
-        # Somar receitas REALIZADAS (confirmadas)
-        receitas_realizadas = db.session.query(func.sum(ReceitaRealizada.valor_recebido)).filter(
-            extract('month', ReceitaRealizada.mes_referencia) == mes_atual,
-            extract('year', ReceitaRealizada.mes_referencia) == ano_atual
-        ).scalar() or 0
-
-        # Somar receitas PREVISTAS (apenas as que NÃO foram confirmadas)
-        query_previstas = db.session.query(func.sum(ReceitaOrcamento.valor_esperado)).filter(
-            extract('month', ReceitaOrcamento.mes_referencia) == mes_atual,
-            extract('year', ReceitaOrcamento.mes_referencia) == ano_atual
-        )
-
-        if ids_orcamentos_realizados:
-            query_previstas = query_previstas.filter(~ReceitaOrcamento.id.in_(ids_orcamentos_realizados))
-
-        receitas_previstas = query_previstas.scalar() or 0
-
-        # Total = Realizadas + Previstas (que não foram realizadas)
-        receitas_mes = decimal_to_float(receitas_realizadas) + decimal_to_float(receitas_previstas)
+        mes_atual, ano_atual, filtro_ativo = _resolver_periodo_request()
+        data_ref = date(ano_atual, mes_atual, 1)
+        receitas_mes = _calcular_receitas_mes(mes_atual, ano_atual)
 
         # 2. DESPESAS DO MÊS (Por mês de competência)
         # Usa função auxiliar que aplica regra correta para faturas de cartão
@@ -224,15 +313,14 @@ def resumo_mes():
                 'saldo_contas_bancarias': decimal_to_float(saldo_contas),
                 'mes': mes_atual,
                 'ano': ano_atual,
-                'mes_nome': hoje.strftime('%B/%Y').capitalize()
+                'periodo': f'{ano_atual:04d}-{mes_atual:02d}',
+                'filtro_aplicado': filtro_ativo,
+                'mes_nome': data_ref.strftime('%B/%Y').capitalize()
             }
         }), 200
 
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+    except Exception:
+        return _internal_error('resumo_mes')
 
 
 # ============================================================================
@@ -245,13 +333,12 @@ def indicadores():
     Retorna indicadores inteligentes e insights
     """
     try:
-        hoje = date.today()
-        mes_atual = hoje.month
-        ano_atual = hoje.year
+        mes_atual, ano_atual, filtro_ativo = _resolver_periodo_request()
+        primeiro_dia_mes = date(ano_atual, mes_atual, 1)
+        ano_mes_anterior, mes_anterior = _deslocar_mes(ano_atual, mes_atual, -1)
 
         # 1. MÉDIA HISTÓRICA DE DESPESAS (últimos 3 meses, por competência)
-        tres_meses_atras = date(ano_atual, mes_atual, 1) - timedelta(days=90)
-        primeiro_dia_mes = date(ano_atual, mes_atual, 1)
+        tres_meses_atras = primeiro_dia_mes - timedelta(days=90)
 
         media_historica = db.session.query(func.avg(Conta.valor)).filter(
             Conta.mes_referencia >= tres_meses_atras,
@@ -263,12 +350,20 @@ def indicadores():
 
         acima_media = despesas_mes_atual > (decimal_to_float(media_historica) * 1.1)
 
-        # 2. GASTOS PENDENTES PRÓXIMOS (próximos 7 dias)
-        proximos_7_dias = hoje + timedelta(days=7)
-        gastos_pendentes = db.session.query(func.count(Conta.id)).filter(
-            Conta.data_vencimento.between(hoje, proximos_7_dias),
-            Conta.status_pagamento == 'Pendente'
-        ).scalar() or 0
+        # 2. GASTOS PENDENTES (janela default = próximos 7 dias; com filtro = mês selecionado)
+        if filtro_ativo:
+            inicio_ref, fim_ref = _periodo_mes(ano_atual, mes_atual)
+            gastos_pendentes = db.session.query(func.count(Conta.id)).filter(
+                Conta.data_vencimento.between(inicio_ref, fim_ref),
+                Conta.status_pagamento == 'Pendente'
+            ).scalar() or 0
+        else:
+            hoje = date.today()
+            proximos_7_dias = hoje + timedelta(days=7)
+            gastos_pendentes = db.session.query(func.count(Conta.id)).filter(
+                Conta.data_vencimento.between(hoje, proximos_7_dias),
+                Conta.status_pagamento == 'Pendente'
+            ).scalar() or 0
 
         # 3. FATURAS DE CARTÃO PENDENTES (mês atual)
         faturas_proximas = db.session.query(func.count(Conta.id)).filter(
@@ -279,37 +374,28 @@ def indicadores():
         ).scalar() or 0
 
         # 4. PORCENTAGEM POUPADA
-        # Usar mesma lógica do resumo-mes para calcular receitas (confirmadas + previstas não confirmadas)
-        orcamentos_com_realizacao = db.session.query(ReceitaRealizada.orcamento_id).filter(
-            extract('month', ReceitaRealizada.mes_referencia) == mes_atual,
-            extract('year', ReceitaRealizada.mes_referencia) == ano_atual,
-            ReceitaRealizada.orcamento_id.isnot(None)
-        ).distinct().all()
-
-        ids_orcamentos_realizados = [o[0] for o in orcamentos_com_realizacao]
-
-        receitas_realizadas = db.session.query(func.sum(ReceitaRealizada.valor_recebido)).filter(
-            extract('month', ReceitaRealizada.mes_referencia) == mes_atual,
-            extract('year', ReceitaRealizada.mes_referencia) == ano_atual
-        ).scalar() or 0
-
-        query_previstas = db.session.query(func.sum(ReceitaOrcamento.valor_esperado)).filter(
-            extract('month', ReceitaOrcamento.mes_referencia) == mes_atual,
-            extract('year', ReceitaOrcamento.mes_referencia) == ano_atual
-        )
-
-        if ids_orcamentos_realizados:
-            query_previstas = query_previstas.filter(~ReceitaOrcamento.id.in_(ids_orcamentos_realizados))
-
-        receitas_previstas = query_previstas.scalar() or 0
-        receitas_mes = decimal_to_float(receitas_realizadas) + decimal_to_float(receitas_previstas)
+        receitas_mes = _calcular_receitas_mes(mes_atual, ano_atual)
 
         despesas_totais = decimal_to_float(despesas_mes_atual)
         receitas_totais = receitas_mes
         percentual_poupado = ((receitas_totais - despesas_totais) / receitas_totais * 100) if receitas_totais > 0 else 0
 
-        # 5. RECEITAS EXTRAS (receitas acima da média ou variáveis)
+        # 5. RECEITAS EXTRAS (simplificado)
         receitas_extras = 0  # Simplificado por enquanto
+
+        # 6. Comparativos simples com mês anterior
+        despesas_mes_anterior = calcular_despesas_mes(mes_anterior, ano_mes_anterior)
+        receitas_mes_anterior = _calcular_receitas_mes(mes_anterior, ano_mes_anterior)
+
+        variacao_despesas_pct = 0
+        if despesas_mes_anterior > 0:
+            variacao_despesas_pct = ((despesas_mes_atual - despesas_mes_anterior) / despesas_mes_anterior) * 100
+
+        variacao_receitas_pct = 0
+        if receitas_mes_anterior > 0:
+            variacao_receitas_pct = ((receitas_mes - receitas_mes_anterior) / receitas_mes_anterior) * 100
+
+        receitas_por_fonte = _receitas_por_fonte_mes(mes_atual, ano_atual)
 
         return jsonify({
             'success': True,
@@ -320,15 +406,16 @@ def indicadores():
                 'gastos_pendentes_proximos': gastos_pendentes,
                 'faturas_cartao_proximas': faturas_proximas,
                 'percentual_poupado': round(percentual_poupado, 1),
-                'receitas_extras': receitas_extras
+                'receitas_extras': receitas_extras,
+                'variacao_despesas_mes_anterior_pct': round(variacao_despesas_pct, 1),
+                'variacao_receitas_mes_anterior_pct': round(variacao_receitas_pct, 1),
+                'receitas_por_fonte': receitas_por_fonte,
+                'periodo': f'{ano_atual:04d}-{mes_atual:02d}'
             }
         }), 200
 
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+    except Exception:
+        return _internal_error('indicadores')
 
 
 # ============================================================================
@@ -341,9 +428,7 @@ def grafico_categorias():
     Retorna dados para gráfico de pizza: Distribuição de Despesas por Categoria
     """
     try:
-        hoje = date.today()
-        mes_atual = hoje.month
-        ano_atual = hoje.year
+        mes_atual, ano_atual, _ = _resolver_periodo_request()
 
         # Agrupar despesas por categoria via ItemDespesa (por mês de competência)
         resultado = db.session.query(
@@ -382,11 +467,8 @@ def grafico_categorias():
             }
         }), 200
 
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+    except Exception:
+        return _internal_error('grafico_categorias')
 
 
 @dashboard_bp.route('/grafico-evolucao', methods=['GET'])
@@ -395,19 +477,13 @@ def grafico_evolucao():
     Retorna dados para gráfico de barras: Evolução de Gastos (últimos 6 meses)
     """
     try:
-        hoje = date.today()
+        mes_ref, ano_ref, _ = _resolver_periodo_request()
         meses = []
         valores = []
 
         # Últimos 6 meses
         for i in range(5, -1, -1):
-            # Calcular o primeiro dia do mês i meses atrás
-            ano = hoje.year
-            mes = hoje.month - i
-
-            if mes <= 0:
-                mes += 12
-                ano -= 1
+            ano, mes = _deslocar_mes(ano_ref, mes_ref, -i)
 
             # Usar função auxiliar que aplica regra correta para faturas de cartão
             total_mes = calcular_despesas_mes(mes, ano)
@@ -425,11 +501,8 @@ def grafico_evolucao():
             }
         }), 200
 
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+    except Exception:
+        return _internal_error('grafico_evolucao')
 
 
 @dashboard_bp.route('/grafico-saldo', methods=['GET'])
@@ -438,7 +511,7 @@ def grafico_saldo():
     Retorna dados para gráfico de linha: Evolução do Saldo Bancário
     """
     try:
-        hoje = date.today()
+        mes_ref, ano_ref, _ = _resolver_periodo_request()
         meses = []
         saldos = []
 
@@ -451,12 +524,7 @@ def grafico_saldo():
 
         # Últimos 6 meses (simulação simplificada)
         for i in range(5, -1, -1):
-            ano = hoje.year
-            mes = hoje.month - i
-
-            if mes <= 0:
-                mes += 12
-                ano -= 1
+            ano, mes = _deslocar_mes(ano_ref, mes_ref, -i)
 
             # Calcular diferencial de receitas - despesas desse mês
             # Usar lógica condicional para receitas (confirmadas + previstas não confirmadas)
@@ -506,11 +574,8 @@ def grafico_saldo():
             }
         }), 200
 
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+    except Exception:
+        return _internal_error('grafico_saldo')
 
 
 # ============================================================================
@@ -523,10 +588,16 @@ def alertas():
     Retorna alertas e agenda financeira
     """
     try:
+        mes_atual, ano_atual, filtro_ativo = _resolver_periodo_request()
         hoje = date.today()
-        proximos_7_dias = hoje + timedelta(days=7)
-        mes_atual = hoje.month
-        ano_atual = hoje.year
+        inicio_mes, fim_mes = _periodo_mes(ano_atual, mes_atual)
+
+        if filtro_ativo:
+            data_inicio_alerta = inicio_mes
+            data_fim_alerta = fim_mes
+        else:
+            data_inicio_alerta = hoje
+            data_fim_alerta = hoje + timedelta(days=7)
 
         # 1. CONTAS A VENCER (Contas pendentes)
         contas_vencer = db.session.query(Conta).outerjoin(
@@ -534,7 +605,7 @@ def alertas():
         ).outerjoin(
             Categoria, ItemDespesa.categoria_id == Categoria.id
         ).filter(
-            Conta.data_vencimento.between(hoje, proximos_7_dias),
+            Conta.data_vencimento.between(data_inicio_alerta, data_fim_alerta),
             Conta.status_pagamento == 'Pendente'
         ).order_by(Conta.data_vencimento).limit(10).all()
 
@@ -601,10 +672,11 @@ def alertas():
         financiamentos_lista = []
         for fin in financiamentos_mes:
             # Buscar parcela do mês atual
-            parcela_mes = FinanciamentoParcela.query.filter_by(
-                financiamento_id=fin.id,
-                mes_referencia=date(ano_atual, mes_atual, 1)
-            ).first()
+            parcela_mes = FinanciamentoParcela.query.filter(
+                FinanciamentoParcela.financiamento_id == fin.id,
+                extract('month', FinanciamentoParcela.data_vencimento) == mes_atual,
+                extract('year', FinanciamentoParcela.data_vencimento) == ano_atual
+            ).order_by(FinanciamentoParcela.numero_parcela).first()
 
             # Apenas adicionar se houver parcela no mês
             if parcela_mes:
@@ -633,13 +705,74 @@ def alertas():
             'data': {
                 'contas_vencer': contas_lista,
                 'cartoes_vencer': cartoes_lista,
+                'faturas_cartao': cartoes_lista,  # compatibilidade de contrato
                 'financiamentos_mes': financiamentos_lista,
-                'receitas_previstas': receitas_lista
+                'financiamentos': financiamentos_lista,  # compatibilidade de contrato
+                'receitas_previstas': receitas_lista,
+                'periodo': f'{ano_atual:04d}-{mes_atual:02d}',
+                'janela_alerta': {
+                    'inicio': data_inicio_alerta.isoformat(),
+                    'fim': data_fim_alerta.isoformat(),
+                    'tipo': 'mes' if filtro_ativo else 'proximos_7_dias'
+                }
             }
         }), 200
 
-    except Exception as e:
+    except Exception:
+        return _internal_error('alertas')
+
+
+@dashboard_bp.route('/fluxo-caixa-projetado', methods=['GET'])
+def fluxo_caixa_projetado():
+    """
+    Projeção simplificada de fluxo de caixa.
+    Premissas:
+    - usa receitas e despesas por competência já registradas/projetadas no sistema;
+    - não é previsão estatística avançada;
+    - horizonte curto para visão gerencial.
+    """
+    try:
+        mes_ref, ano_ref, _ = _resolver_periodo_request()
+        horizonte = request.args.get('meses', default=4, type=int)
+        horizonte = max(1, min(horizonte, 12))
+
+        saldo_atual = db.session.query(func.sum(ContaBancaria.saldo_atual)).filter(
+            ContaBancaria.status == 'ATIVO'
+        ).scalar() or 0
+        saldo_corrente = decimal_to_float(saldo_atual)
+
+        labels = []
+        entradas = []
+        saidas = []
+        saldos = []
+
+        for i in range(horizonte):
+            ano, mes = _deslocar_mes(ano_ref, mes_ref, i)
+            receitas_mes = _calcular_receitas_mes(mes, ano)
+            despesas_mes = calcular_despesas_mes(mes, ano)
+            saldo_corrente += (receitas_mes - despesas_mes)
+
+            labels.append(f'{mes:02d}/{ano}')
+            entradas.append(round(receitas_mes, 2))
+            saidas.append(round(despesas_mes, 2))
+            saldos.append(round(saldo_corrente, 2))
+
         return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+            'success': True,
+            'data': {
+                'labels': labels,
+                'entradas': entradas,
+                'saidas': saidas,
+                'saldo_projetado': saldos,
+                'periodo_inicio': f'{ano_ref:04d}-{mes_ref:02d}',
+                'horizonte_meses': horizonte,
+                'tipo': 'projecao_simplificada',
+                'premissas': [
+                    'Baseado em receitas e despesas por competência já disponíveis',
+                    'Não considera cenários múltiplos nem previsão estatística avançada',
+                    'Uso gerencial para acompanhamento de tendência'
+                ]
+            }
+        }), 200
+    except Exception:
+        return _internal_error('fluxo_caixa_projetado')

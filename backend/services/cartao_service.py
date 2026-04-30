@@ -1,18 +1,19 @@
-"""
-Serviço de Cartão de Crédito - Lógica de negócio
+﻿"""
+ServiÃ§o de CartÃ£o de CrÃ©dito - LÃ³gica de negÃ³cio
 
-Este serviço implementa:
-1. Geração de faturas virtuais (planejado vs executado)
-2. Controle de orçamento por categoria
-3. Consumo de orçamento por lançamentos
-4. Pagamento de faturas (planejado → executado)
-5. Alertas de estouro de orçamento
+Este serviÃ§o implementa:
+1. GeraÃ§Ã£o de faturas virtuais (planejado vs executado)
+2. Controle de orÃ§amento por categoria
+3. Consumo de orÃ§amento por lanÃ§amentos
+4. Pagamento de faturas (planejado â†’ executado)
+5. Alertas de estouro de orÃ§amento
 """
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
 from decimal import Decimal
 from sqlalchemy import func, and_
 import uuid
+import logging
 
 try:
     from backend.models import (db, Conta, ItemDespesa, ItemAgregado,
@@ -21,32 +22,34 @@ except ImportError:
     from models import (db, Conta, ItemDespesa, ItemAgregado,
                        OrcamentoAgregado, LancamentoAgregado, ConfigAgregador)
 
+logger = logging.getLogger(__name__)
+
 
 class CartaoService:
     """
-    Serviço para gerenciamento completo de cartões de crédito
+    ServiÃ§o para gerenciamento completo de cartÃµes de crÃ©dito
     """
 
     # ========================================================================
-    # GERAÇÃO E RECUPERAÇÃO DE FATURAS
+    # GERAÃ‡ÃƒO E RECUPERAÃ‡ÃƒO DE FATURAS
     # ========================================================================
 
     @staticmethod
     def get_or_create_fatura(cartao_id, competencia):
         """
-        Busca ou cria uma fatura virtual para o cartão + mês
+        Busca ou cria uma fatura virtual para o cartÃ£o + mÃªs
 
-        A fatura sempre existe, mesmo sem lançamentos.
-        Valor inicial = soma dos orçamentos das categorias do cartão
+        A fatura sempre existe, mesmo sem lanÃ§amentos.
+        Valor inicial = soma dos orÃ§amentos das categorias do cartÃ£o
 
         Args:
             cartao_id (int): ID do ItemDespesa (tipo 'Agregador')
-            competencia (date): Mês de referência (YYYY-MM-01)
+            competencia (date): MÃªs de referÃªncia (YYYY-MM-01)
 
         Returns:
-            Conta: Fatura do cartão (planejado ou executado)
+            Conta: Fatura do cartÃ£o (planejado ou executado)
         """
-        # Normalizar competência para primeiro dia do mês
+        # Normalizar competÃªncia para primeiro dia do mÃªs
         comp_primeiro_dia = competencia.replace(day=1)
 
         # Buscar fatura existente
@@ -62,14 +65,14 @@ class CartaoService:
         # Criar nova fatura virtual
         cartao = ItemDespesa.query.get(cartao_id)
         if not cartao or cartao.tipo != 'Agregador':
-            raise ValueError(f'ItemDespesa {cartao_id} não é um cartão de crédito')
+            raise ValueError(f'ItemDespesa {cartao_id} nÃ£o Ã© um cartÃ£o de crÃ©dito')
 
-        # Buscar configuração do cartão
+        # Buscar configuraÃ§Ã£o do cartÃ£o
         config = ConfigAgregador.query.filter_by(item_despesa_id=cartao_id).first()
         if not config:
-            raise ValueError(f'Cartão {cartao_id} sem configuração de fechamento/vencimento')
+            raise ValueError(f'CartÃ£o {cartao_id} sem configuraÃ§Ã£o de fechamento/vencimento')
 
-        # Calcular valor planejado (soma dos orçamentos)
+        # Calcular valor planejado (soma dos orÃ§amentos)
         valor_planejado = CartaoService.calcular_planejado(cartao_id, comp_primeiro_dia)
 
         # Calcular data de vencimento baseada no dia de vencimento configurado
@@ -82,7 +85,7 @@ class CartaoService:
             descricao=f'Fatura {cartao.nome} - {comp_primeiro_dia.strftime("%m/%Y")}',
             valor=valor_planejado,  # Inicialmente = planejado
             valor_planejado=valor_planejado,
-            valor_executado=Decimal('0'),  # Será calculado ao pagar
+            valor_executado=Decimal('0'),  # SerÃ¡ calculado ao pagar
             data_vencimento=data_vencimento,
             status_pagamento='Pendente',
             is_fatura_cartao=True,
@@ -98,18 +101,18 @@ class CartaoService:
     @staticmethod
     def calcular_planejado(cartao_id, competencia):
         """
-        Calcula valor planejado da fatura = soma dos orçamentos das categorias
+        Calcula valor planejado da fatura = soma dos orÃ§amentos das categorias
 
         Args:
-            cartao_id (int): ID do cartão
-            competencia (date): Mês de referência
+            cartao_id (int): ID do cartÃ£o
+            competencia (date): MÃªs de referÃªncia
 
         Returns:
-            Decimal: Valor total orçado
+            Decimal: Valor total orÃ§ado
         """
         comp_primeiro_dia = competencia.replace(day=1)
 
-        # Buscar todos os itens agregados (categorias) do cartão
+        # Buscar todos os itens agregados (categorias) do cartÃ£o
         itens_agregados = ItemAgregado.query.filter_by(
             item_despesa_id=cartao_id
         ).all()
@@ -117,7 +120,7 @@ class CartaoService:
         total_planejado = Decimal('0')
 
         for item in itens_agregados:
-            # Buscar orçamento vigente para essa categoria nessa competência
+            # Buscar orÃ§amento vigente para essa categoria nessa competÃªncia
             orcamento = OrcamentoAgregado.query.filter(
                 and_(
                     OrcamentoAgregado.item_agregado_id == item.id,
@@ -136,18 +139,18 @@ class CartaoService:
     @staticmethod
     def calcular_executado(cartao_id, competencia):
         """
-        Calcula valor executado da fatura = soma real dos lançamentos
+        Calcula valor executado da fatura = soma real dos lanÃ§amentos
 
         Args:
-            cartao_id (int): ID do cartão
-            competencia (date): Mês de referência
+            cartao_id (int): ID do cartÃ£o
+            competencia (date): MÃªs de referÃªncia
 
         Returns:
             Decimal: Valor total gasto
         """
         comp_primeiro_dia = competencia.replace(day=1)
 
-        # Buscar todos os itens agregados do cartão
+        # Buscar todos os itens agregados do cartÃ£o
         itens_agregados_ids = [item.id for item in ItemAgregado.query.filter_by(
             item_despesa_id=cartao_id
         ).all()]
@@ -155,7 +158,7 @@ class CartaoService:
         if not itens_agregados_ids:
             return Decimal('0')
 
-        # Somar lançamentos do mês
+        # Somar lanÃ§amentos do mÃªs
         # Usar STRFTIME para compatibilidade com SQLite
         total_executado = db.session.query(
             func.coalesce(func.sum(LancamentoAgregado.valor), 0)
@@ -169,38 +172,38 @@ class CartaoService:
     # ==========================================================
     # FUTURO (FASE 3): Pagamento parcial de fatura
     #
-    # Quando implementado, este método precisará considerar:
+    # Quando implementado, este mÃ©todo precisarÃ¡ considerar:
     # 1. Pagamento parcial: valor_pago < valor_total
-    # 2. Saldo rotativo: diferença que vai para próxima fatura
-    # 3. Cálculo de juros sobre saldo residual
-    # 4. Aplicação de IOF sobre operação rotativa
-    # 5. Geração automática de lançamento "Saldo rotativo"
-    # 6. Histórico de múltiplos pagamentos parciais
+    # 2. Saldo rotativo: diferenÃ§a que vai para prÃ³xima fatura
+    # 3. CÃ¡lculo de juros sobre saldo residual
+    # 4. AplicaÃ§Ã£o de IOF sobre operaÃ§Ã£o rotativa
+    # 5. GeraÃ§Ã£o automÃ¡tica de lanÃ§amento "Saldo rotativo"
+    # 6. HistÃ³rico de mÃºltiplos pagamentos parciais
     #
-    # ATUALMENTE: pagamento é sempre integral
-    # Fatura só vai para status='PAGA' após pagamento total
-    # Não existe saldo residual ou cálculo de juros
+    # ATUALMENTE: pagamento Ã© sempre integral
+    # Fatura sÃ³ vai para status='PAGA' apÃ³s pagamento total
+    # NÃ£o existe saldo residual ou cÃ¡lculo de juros
     # ==========================================================
 
     @staticmethod
     def recalcular_fatura(cartao_id, competencia):
         """
-        Recalcula uma fatura existente (útil após adicionar/remover lançamentos)
+        Recalcula uma fatura existente (Ãºtil apÃ³s adicionar/remover lanÃ§amentos)
 
         Args:
-            cartao_id (int): ID do cartão
-            competencia (date): Mês de referência
+            cartao_id (int): ID do cartÃ£o
+            competencia (date): MÃªs de referÃªncia
 
         Returns:
             Conta: Fatura atualizada
         """
         fatura = CartaoService.get_or_create_fatura(cartao_id, competencia)
 
-        # Se já foi paga, não recalcular
+        # Se jÃ¡ foi paga, nÃ£o recalcular
         if fatura.status_pagamento == 'Pago':
             return fatura
 
-        # Recalcular planejado (pode ter mudado o orçamento)
+        # Recalcular planejado (pode ter mudado o orÃ§amento)
         fatura.valor_planejado = CartaoService.calcular_planejado(cartao_id, competencia)
 
         # Calcular executado atual
@@ -212,7 +215,7 @@ class CartaoService:
         else:
             fatura.estouro_orcamento = False
 
-        # Valor exibido = planejado (enquanto não paga)
+        # Valor exibido = planejado (enquanto nÃ£o paga)
         fatura.valor = fatura.valor_planejado
 
         db.session.commit()
@@ -240,22 +243,22 @@ class CartaoService:
 
         fatura = Conta.query.get(fatura_id)
         if not fatura:
-            raise ValueError('Fatura não encontrada')
+            raise ValueError('Fatura nÃ£o encontrada')
 
         if not fatura.is_fatura_cartao:
-            raise ValueError('Esta conta não é uma fatura de cartão')
+            raise ValueError('Esta conta nÃ£o Ã© uma fatura de cartÃ£o')
 
-        # Validar se já está paga
+        # Validar se jÃ¡ estÃ¡ paga
         if fatura.status_pagamento == 'Pago':
-            raise ValueError('Fatura já foi paga anteriormente')
+            raise ValueError('Fatura jÃ¡ foi paga anteriormente')
 
-        # Converter data se necessário
+        # Converter data se necessÃ¡rio
         if isinstance(data_pagamento, str):
             data_pagamento = datetime.strptime(data_pagamento, '%Y-%m-%d').date()
 
         # Calcular valor executado final
-        # Se a fatura já tem valor_executado, usa ele (evita recalcular desnecessariamente)
-        # Senão, calcula a partir dos lançamentos
+        # Se a fatura jÃ¡ tem valor_executado, usa ele (evita recalcular desnecessariamente)
+        # SenÃ£o, calcula a partir dos lanÃ§amentos
         if fatura.valor_executado and fatura.valor_executado > 0:
             valor_executado_final = fatura.valor_executado
         else:
@@ -267,21 +270,21 @@ class CartaoService:
         # Definir valor final do pagamento
         valor_final_pagamento = valor_pago if valor_pago else valor_executado_final
 
-        # SE conta bancária informada: debitar saldo
+        # SE conta bancÃ¡ria informada: debitar saldo
         if conta_bancaria_id:
             conta = ContaBancaria.query.get(conta_bancaria_id)
             if not conta:
-                raise ValueError('Conta bancária não encontrada')
+                raise ValueError('Conta bancÃ¡ria nÃ£o encontrada')
 
             if conta.status != 'ATIVO':
-                raise ValueError('Conta bancária está inativa')
+                raise ValueError('Conta bancÃ¡ria estÃ¡ inativa')
 
-            # Criar movimento financeiro (débito)
+            # Criar movimento financeiro (dÃ©bito)
             movimento = MovimentoFinanceiro(
                 conta_bancaria_id=conta_bancaria_id,
                 tipo='DEBITO',
                 valor=valor_final_pagamento,
-                descricao=f'Pagamento fatura cartão - {fatura.descricao}',
+                descricao=f'Pagamento fatura cartÃ£o - {fatura.descricao}',
                 data_movimento=data_pagamento,
                 fatura_id=fatura_id,
                 conta_id=fatura_id,
@@ -306,59 +309,59 @@ class CartaoService:
         return fatura
 
     # ========================================================================
-    # LANÇAMENTOS
+    # LANÃ‡AMENTOS
     # ========================================================================
 
     @staticmethod
     def adicionar_lancamento(dados_lancamento):
         """
-        Adiciona um lançamento no cartão e garante que a fatura existe
+        Adiciona um lanÃ§amento no cartÃ£o e garante que a fatura existe
 
-        CORREÇÃO PARCELAMENTO:
-        - Se total_parcelas > 1: cria N lançamentos, cada um em um mês distinto
-        - Valor é dividido igualmente entre as parcelas
-        - Garante idempotência: não duplica parcelas já existentes
+        CORREÃ‡ÃƒO PARCELAMENTO:
+        - Se total_parcelas > 1: cria N lanÃ§amentos, cada um em um mÃªs distinto
+        - Valor Ã© dividido igualmente entre as parcelas
+        - Garante idempotÃªncia: nÃ£o duplica parcelas jÃ¡ existentes
 
         Args:
-            dados_lancamento (dict): Dados do lançamento
-                - cartao_id: ID do cartão (obrigatório)
-                - item_agregado_id: ID da categoria (OPCIONAL - se None, não controla limite)
-                - valor: Valor TOTAL da compra (será dividido pelas parcelas)
-                - descricao: Descrição
+            dados_lancamento (dict): Dados do lanÃ§amento
+                - cartao_id: ID do cartÃ£o (obrigatÃ³rio)
+                - item_agregado_id: ID da categoria (OPCIONAL - se None, nÃ£o controla limite)
+                - valor: Valor TOTAL da compra (serÃ¡ dividido pelas parcelas)
+                - descricao: DescriÃ§Ã£o
                 - data_compra: Data da compra
-                - mes_fatura: Mês da PRIMEIRA fatura
+                - mes_fatura: MÃªs da PRIMEIRA fatura
                 - categoria_id: Categoria real da despesa
-                - numero_parcela: ignorado (sempre começa em 1)
-                - total_parcelas: número de parcelas (default=1)
+                - numero_parcela: ignorado (sempre comeÃ§a em 1)
+                - total_parcelas: nÃºmero de parcelas (default=1)
 
         Returns:
             tuple: (LancamentoAgregado primeira parcela, Conta fatura primeira parcela)
         """
-        # ID do cartão (agora obrigatório nos dados)
+        # ID do cartÃ£o (agora obrigatÃ³rio nos dados)
         cartao_id = dados_lancamento['cartao_id']
 
-        # Item agregado é OPCIONAL
+        # Item agregado Ã© OPCIONAL
         item_agregado_id = dados_lancamento.get('item_agregado_id')
         if item_agregado_id:
             item_agregado = ItemAgregado.query.get(item_agregado_id)
             if not item_agregado:
-                raise ValueError('ItemAgregado não encontrado')
+                raise ValueError('ItemAgregado nÃ£o encontrado')
 
         # Parcelamento
         total_parcelas = dados_lancamento.get('total_parcelas', 1)
         valor_total = Decimal(str(dados_lancamento['valor']))
 
-        # FASE 2: Gerar UUID único para esta compra
-        # Todas as parcelas compartilharão este ID para idempotência robusta
+        # FASE 2: Gerar UUID Ãºnico para esta compra
+        # Todas as parcelas compartilharÃ£o este ID para idempotÃªncia robusta
         compra_uuid = str(uuid.uuid4())
 
-        # CORREÇÃO FINANCEIRA: Distribuição de centavos
+        # CORREÃ‡ÃƒO FINANCEIRA: DistribuiÃ§Ã£o de centavos
         # Garante que soma das parcelas = valor total (sem perda de centavos)
         total_centavos = int(round(valor_total * 100))
         centavos_base = total_centavos // total_parcelas
         centavos_resto = total_centavos % total_parcelas
 
-        # Mês da primeira fatura (competência)
+        # MÃªs da primeira fatura (competÃªncia)
         mes_fatura_inicial = dados_lancamento['mes_fatura']
         if isinstance(mes_fatura_inicial, str):
             mes_fatura_inicial = datetime.strptime(mes_fatura_inicial, '%Y-%m-%d').date()
@@ -366,22 +369,22 @@ class CartaoService:
 
         data_compra_inicial = dados_lancamento['data_compra']
 
-        # Lista para armazenar lançamentos criados
+        # Lista para armazenar lanÃ§amentos criados
         lancamentos_criados = []
         primeira_fatura = None
         faturas_afetadas_set = set()  # Armazena meses de faturas afetadas (considerando redirecionamento)
 
-        # Criar uma parcela para cada mês
+        # Criar uma parcela para cada mÃªs
         for n in range(1, total_parcelas + 1):
-            # Calcular data da parcela (incrementa mês a cada parcela)
+            # Calcular data da parcela (incrementa mÃªs a cada parcela)
             data_parcela = data_compra_inicial + relativedelta(months=n-1)
             mes_fatura_parcela = mes_fatura_inicial + relativedelta(months=n-1)
 
             # REGRA DE FECHAMENTO DE FATURA:
-            # Se a fatura do mês estiver PAGA, redirecionar para a próxima fatura
+            # Se a fatura do mÃªs estiver PAGA, redirecionar para a prÃ³xima fatura
             fatura_mes = CartaoService.get_or_create_fatura(cartao_id, mes_fatura_parcela)
             if fatura_mes.status_fatura == 'PAGA':
-                # Buscar próxima fatura em aberto
+                # Buscar prÃ³xima fatura em aberto
                 mes_fatura_parcela = mes_fatura_parcela + relativedelta(months=1)
                 fatura_mes = CartaoService.get_or_create_fatura(cartao_id, mes_fatura_parcela)
 
@@ -389,35 +392,35 @@ class CartaoService:
             centavos_parcela = centavos_base + (1 if n <= centavos_resto else 0)
             valor_parcela = Decimal(centavos_parcela) / 100
 
-            # FASE 2: IDEMPOTÊNCIA ROBUSTA
-            # Verifica se parcela já existe usando compra_id (UUID único)
-            # Muito mais seguro que usar descrição (texto livre)
+            # FASE 2: IDEMPOTÃŠNCIA ROBUSTA
+            # Verifica se parcela jÃ¡ existe usando compra_id (UUID Ãºnico)
+            # Muito mais seguro que usar descriÃ§Ã£o (texto livre)
             lancamento_existente = LancamentoAgregado.query.filter_by(
                 compra_id=compra_uuid,
                 numero_parcela=n
             ).first()
 
             if lancamento_existente:
-                # Parcela já existe, pular
+                # Parcela jÃ¡ existe, pular
                 if n == 1:
                     lancamentos_criados.append(lancamento_existente)
                     primeira_fatura = fatura_mes
                 continue
 
-            # Criar lançamento da parcela
+            # Criar lanÃ§amento da parcela
             lancamento = LancamentoAgregado(
                 cartao_id=cartao_id,
                 item_agregado_id=item_agregado_id,  # Pode ser None
-                categoria_id=dados_lancamento['categoria_id'],  # Categoria da DESPESA (obrigatória)
-                valor=valor_parcela,  # ← CORREÇÃO: valor com distribuição correta de centavos
+                categoria_id=dados_lancamento['categoria_id'],  # Categoria da DESPESA (obrigatÃ³ria)
+                valor=valor_parcela,  # â† CORREÃ‡ÃƒO: valor com distribuiÃ§Ã£o correta de centavos
                 descricao=dados_lancamento['descricao'],
-                data_compra=data_parcela,  # ← Data incrementada por mês
-                mes_fatura=mes_fatura_parcela,  # ← Mês incrementado
-                numero_parcela=n,  # ← Parcela correta (1, 2, 3...)
+                data_compra=data_parcela,  # â† Data incrementada por mÃªs
+                mes_fatura=mes_fatura_parcela,  # â† MÃªs incrementado
+                numero_parcela=n,  # â† Parcela correta (1, 2, 3...)
                 total_parcelas=total_parcelas,
                 observacoes=dados_lancamento.get('observacoes', ''),
-                is_recorrente=False,  # Parcelamento NÃO é recorrência
-                compra_id=compra_uuid  # ← FASE 2: UUID único da compra
+                is_recorrente=False,  # Parcelamento NÃƒO Ã© recorrÃªncia
+                compra_id=compra_uuid  # â† FASE 2: UUID Ãºnico da compra
             )
 
             db.session.add(lancamento)
@@ -427,7 +430,7 @@ class CartaoService:
             if n == 1:
                 primeira_fatura = fatura_mes
 
-            # Registrar fatura afetada (mês real usado, após possível redirecionamento)
+            # Registrar fatura afetada (mÃªs real usado, apÃ³s possÃ­vel redirecionamento)
             faturas_afetadas_set.add(mes_fatura_parcela)
 
         db.session.flush()
@@ -438,17 +441,17 @@ class CartaoService:
 
         db.session.commit()
 
-        # Retornar primeira parcela e primeira fatura (compatibilidade com código existente)
+        # Retornar primeira parcela e primeira fatura (compatibilidade com cÃ³digo existente)
         return lancamentos_criados[0] if lancamentos_criados else None, primeira_fatura
 
     @staticmethod
     def avaliar_alertas(cartao_id, competencia):
         """
-        Avalia se há alertas de estouro de orçamento
+        Avalia se hÃ¡ alertas de estouro de orÃ§amento
 
         Args:
-            cartao_id (int): ID do cartão
-            competencia (date): Mês de referência
+            cartao_id (int): ID do cartÃ£o
+            competencia (date): MÃªs de referÃªncia
 
         Returns:
             dict: {
@@ -469,7 +472,7 @@ class CartaoService:
         itens_agregados = ItemAgregado.query.filter_by(item_despesa_id=cartao_id).all()
 
         for item in itens_agregados:
-            # Orçamento da categoria
+            # OrÃ§amento da categoria
             orcamento = OrcamentoAgregado.query.filter(
                 and_(
                     OrcamentoAgregado.item_agregado_id == item.id,
@@ -510,22 +513,22 @@ class CartaoService:
         }
 
     # ========================================================================
-    # GERAÇÃO AUTOMÁTICA DE FATURAS (JOB MENSAL)
+    # GERAÃ‡ÃƒO AUTOMÃTICA DE FATURAS (JOB MENSAL)
     # ========================================================================
 
     @staticmethod
     def gerar_faturas_mes_atual():
         """
-        Job mensal: Gera faturas virtuais para todos os cartões ativos no mês atual
+        Job mensal: Gera faturas virtuais para todos os cartÃµes ativos no mÃªs atual
 
-        Deve ser executado no 1º dia de cada mês
+        Deve ser executado no 1Âº dia de cada mÃªs
 
         Returns:
             list: Lista de faturas criadas
         """
         mes_atual = date.today().replace(day=1)
 
-        # Buscar todos os cartões ativos
+        # Buscar todos os cartÃµes ativos
         cartoes = ItemDespesa.query.filter_by(tipo='Agregador', ativo=True).all()
 
         faturas_criadas = []
@@ -534,31 +537,31 @@ class CartaoService:
             try:
                 fatura = CartaoService.get_or_create_fatura(cartao.id, mes_atual)
                 faturas_criadas.append(fatura)
-            except Exception as e:
-                print(f'Erro ao criar fatura para cartão {cartao.id}: {str(e)}')
+            except Exception:
+                logger.warning('Falha ao gerar fatura mensal para cartao_id=%s', cartao.id, exc_info=True)
                 continue
 
         return faturas_criadas
 
     # ========================================================================
-    # SISTEMA DE ALERTAS (NÃO BLOQUEANTE)
+    # SISTEMA DE ALERTAS (NÃƒO BLOQUEANTE)
     # ========================================================================
 
     @staticmethod
     def calcular_alerta_local(item_agregado_id, competencia):
         """
-        Calcula alerta LOCAL para um ItemAgregado específico
+        Calcula alerta LOCAL para um ItemAgregado especÃ­fico
 
-        Verifica se o consumo real ultrapassou o orçamento da categoria
+        Verifica se o consumo real ultrapassou o orÃ§amento da categoria
 
-        IMPORTANTE: Alertas NÃO bloqueiam lançamentos, são apenas informativos
+        IMPORTANTE: Alertas NÃƒO bloqueiam lanÃ§amentos, sÃ£o apenas informativos
 
         Args:
-            item_agregado_id (int): ID do ItemAgregado (categoria do cartão)
-            competencia (date): Mês de referência
+            item_agregado_id (int): ID do ItemAgregado (categoria do cartÃ£o)
+            competencia (date): MÃªs de referÃªncia
 
         Returns:
-            dict ou None: Alerta estruturado ou None se não houver estouro
+            dict ou None: Alerta estruturado ou None se nÃ£o houver estouro
         """
         comp_primeiro_dia = competencia.replace(day=1)
 
@@ -567,7 +570,7 @@ class CartaoService:
         if not item or not item.ativo:
             return None
 
-        # Buscar orçamento vigente
+        # Buscar orÃ§amento vigente
         orcamento = OrcamentoAgregado.query.filter(
             and_(
                 OrcamentoAgregado.item_agregado_id == item_agregado_id,
@@ -581,7 +584,7 @@ class CartaoService:
         if not orcamento:
             return None
 
-        # Calcular consumo real (lançamentos do mês)
+        # Calcular consumo real (lanÃ§amentos do mÃªs)
         consumo = db.session.query(
             func.coalesce(func.sum(LancamentoAgregado.valor), 0)
         ).filter(
@@ -597,7 +600,7 @@ class CartaoService:
             excedente = consumo_decimal - orcado
             percentual = (float(consumo_decimal) / float(orcado) * 100) if orcado > 0 else 0
 
-            # Determinar nível de alerta
+            # Determinar nÃ­vel de alerta
             if percentual >= 150:
                 nivel = 'CRITICO'
             elif percentual >= 120:
@@ -626,19 +629,19 @@ class CartaoService:
         Calcula alerta GLOBAL para um GrupoAgregador
 
         Verifica se a soma dos consumos de todas as categorias do grupo
-        (em diferentes cartões) ultrapassou a soma dos orçamentos
+        (em diferentes cartÃµes) ultrapassou a soma dos orÃ§amentos
 
         IMPORTANTE:
-        - Grupos NÃO possuem orçamento próprio
-        - O limite é a soma dos orçamentos dos itens vinculados
+        - Grupos NÃƒO possuem orÃ§amento prÃ³prio
+        - O limite Ã© a soma dos orÃ§amentos dos itens vinculados
         - Permite acompanhamento familiar/casal
 
         Args:
             grupo_agregador_id (int): ID do GrupoAgregador
-            competencia (date): Mês de referência
+            competencia (date): MÃªs de referÃªncia
 
         Returns:
-            dict ou None: Alerta estruturado ou None se não houver estouro
+            dict ou None: Alerta estruturado ou None se nÃ£o houver estouro
         """
         comp_primeiro_dia = competencia.replace(day=1)
 
@@ -661,13 +664,13 @@ class CartaoService:
         if not itens_do_grupo:
             return None
 
-        # Calcular soma dos orçamentos e consumos
+        # Calcular soma dos orÃ§amentos e consumos
         total_orcado = Decimal('0')
         total_consumo = Decimal('0')
         detalhes_itens = []
 
         for item in itens_do_grupo:
-            # Buscar orçamento vigente
+            # Buscar orÃ§amento vigente
             orcamento = OrcamentoAgregado.query.filter(
                 and_(
                     OrcamentoAgregado.item_agregado_id == item.id,
@@ -707,7 +710,7 @@ class CartaoService:
             excedente = total_consumo - total_orcado
             percentual = (float(total_consumo) / float(total_orcado) * 100) if total_orcado > 0 else 0
 
-            # Determinar nível de alerta
+            # Determinar nÃ­vel de alerta
             if percentual >= 150:
                 nivel = 'CRITICO'
             elif percentual >= 120:
@@ -734,11 +737,11 @@ class CartaoService:
     @staticmethod
     def obter_todos_alertas(cartao_id=None, competencia=None):
         """
-        Retorna todos os alertas (locais e globais) para um cartão ou mês
+        Retorna todos os alertas (locais e globais) para um cartÃ£o ou mÃªs
 
         Args:
-            cartao_id (int, opcional): ID do cartão (se None, busca todos)
-            competencia (date, opcional): Mês de referência (se None, usa mês atual)
+            cartao_id (int, opcional): ID do cartÃ£o (se None, busca todos)
+            competencia (date, opcional): MÃªs de referÃªncia (se None, usa mÃªs atual)
 
         Returns:
             dict: {
@@ -781,7 +784,7 @@ class CartaoService:
         for grupo in grupos:
             alerta = CartaoService.calcular_alerta_global(grupo.id, competencia)
             if alerta:
-                # Se cartao_id foi especificado, verificar se o grupo contém itens desse cartão
+                # Se cartao_id foi especificado, verificar se o grupo contÃ©m itens desse cartÃ£o
                 if cartao_id:
                     tem_item_do_cartao = any(
                         item['cartao_id'] == cartao_id for item in alerta.get('itens', [])

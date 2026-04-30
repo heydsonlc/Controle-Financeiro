@@ -1,14 +1,15 @@
-"""
+﻿"""
 Rotas da API para gerenciamento de Receitas
 
 Endpoints organizados em 4 grupos:
 1. Fontes de Receita (ItemReceita)
-2. Orçamento de Receitas
+2. OrÃ§amento de Receitas
 3. Receitas Realizadas
-4. Relatórios e Análises
+4. RelatÃ³rios e AnÃ¡lises
 """
 from flask import Blueprint, request, jsonify
 from datetime import datetime
+import logging
 from decimal import Decimal
 
 try:
@@ -20,12 +21,18 @@ except ImportError:
 
 # Criar blueprint
 receitas_bp = Blueprint('receitas', __name__)
+logger = logging.getLogger(__name__)
+
+
+def _internal_error(contexto='receitas'):
+    logger.exception('Erro interno em %s', contexto)
+    return jsonify({'success': False, 'error': 'Erro interno ao processar requisicao'}), 500
 
 
 def _backfill_receitas_contemplacao_consorcios(ano: int | None = None) -> None:
     """
-    Backfill idempotente para consórcios antigos (já cadastrados antes da automação),
-    garantindo que contemplações gerem ReceitaRealizada e apareçam no módulo de receitas.
+    Backfill idempotente para consÃ³rcios antigos (jÃ¡ cadastrados antes da automaÃ§Ã£o),
+    garantindo que contemplaÃ§Ãµes gerem ReceitaRealizada e apareÃ§am no mÃ³dulo de receitas.
     """
     query = ContratoConsorcio.query.filter(ContratoConsorcio.ativo == True)
     if ano:
@@ -41,12 +48,12 @@ def _backfill_receitas_contemplacao_consorcios(ano: int | None = None) -> None:
     if not consorcios:
         return
 
-    item_padrao = ItemReceita.query.filter_by(nome='Contemplação de Consórcio').first()
+    item_padrao = ItemReceita.query.filter_by(nome='ContemplaÃ§Ã£o de ConsÃ³rcio').first()
     if not item_padrao:
         item_padrao = ItemReceita(
-            nome='Contemplação de Consórcio',
+            nome='ContemplaÃ§Ã£o de ConsÃ³rcio',
             tipo='OUTROS',
-            descricao='Receita pontual gerada automaticamente por consórcio contemplado.',
+            descricao='Receita pontual gerada automaticamente por consÃ³rcio contemplado.',
             ativo=True,
             recorrente=False,
             valor_base_mensal=None,
@@ -71,10 +78,10 @@ def _backfill_receitas_contemplacao_consorcios(ano: int | None = None) -> None:
             ReceitaRealizada.observacoes.ilike(f"%{marcador}%"),
         ).first()
 
-        descricao = f"Consórcio {consorcio.nome} - contemplação (ID {consorcio.id})"
+        descricao = f"ConsÃ³rcio {consorcio.nome} - contemplaÃ§Ã£o (ID {consorcio.id})"
 
         if existente:
-            # Atualizar para refletir possíveis mudanças no contrato
+            # Atualizar para refletir possÃ­veis mudanÃ§as no contrato
             existente.data_recebimento = consorcio.mes_contemplacao
             existente.valor_recebido = consorcio.valor_premio
             existente.mes_referencia = competencia
@@ -120,7 +127,7 @@ def listar_itens():
         JSON com lista de fontes
     """
     try:
-        # Backfill idempotente para garantir que contemplações antigas apareçam
+        # Backfill idempotente para garantir que contemplaÃ§Ãµes antigas apareÃ§am
         _backfill_receitas_contemplacao_consorcios()
 
         tipo = request.args.get('tipo')
@@ -137,17 +144,12 @@ def listar_itens():
             'total': len(itens)
         }), 200
 
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
+    except Exception:
+        return _internal_error('receitas')
 @receitas_bp.route('/itens/<int:id>', methods=['GET'])
 def buscar_item(id):
     """
-    Busca uma fonte de receita específica por ID
+    Busca uma fonte de receita especÃ­fica por ID
 
     Args:
         id: ID do item
@@ -161,7 +163,7 @@ def buscar_item(id):
         if not item:
             return jsonify({
                 'success': False,
-                'error': 'Fonte de receita não encontrada'
+                'error': 'Fonte de receita nÃ£o encontrada'
             }), 404
 
         return jsonify({
@@ -169,12 +171,8 @@ def buscar_item(id):
             'data': item.to_dict()
         }), 200
 
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
+    except Exception:
+        return _internal_error('receitas')
 
 @receitas_bp.route('/itens', methods=['POST'])
 def criar_item():
@@ -183,13 +181,13 @@ def criar_item():
 
     Body (JSON):
         {
-            "nome": "string" (obrigatório),
-            "tipo": "SALARIO_FIXO|GRATIFICACAO|RENDA_EXTRA|..." (obrigatório),
+            "nome": "string" (obrigatÃ³rio),
+            "tipo": "SALARIO_FIXO|GRATIFICACAO|RENDA_EXTRA|..." (obrigatÃ³rio),
             "descricao": "string" (opcional),
             "valor_base_mensal": float (opcional),
             "dia_previsto_pagamento": int (opcional),
             "conta_origem_id": int (opcional),
-            "ativo": boolean (opcional, padrão: true)
+            "ativo": boolean (opcional, padrÃ£o: true)
         }
 
     Returns:
@@ -201,24 +199,24 @@ def criar_item():
         if not data:
             return jsonify({
                 'success': False,
-                'error': 'Dados não fornecidos'
+                'error': 'Dados nÃ£o fornecidos'
             }), 400
 
         item = ReceitaService.criar_item_receita(data)
 
-        # Se for receita recorrente, gerar orçamentos automaticamente
+        # Se for receita recorrente, gerar orÃ§amentos automaticamente
         if item.recorrente and item.valor_base_mensal and item.valor_base_mensal > 0:
             try:
                 from datetime import date
                 from dateutil.relativedelta import relativedelta
 
-                # Gerar orçamentos para os próximos 12 meses
+                # Gerar orÃ§amentos para os prÃ³ximos 12 meses
                 hoje = date.today()
                 mes_referencia = date(hoje.year, hoje.month, 1)
                 orcamentos_criados = 0
 
                 for i in range(12):
-                    # Verificar se já existe
+                    # Verificar se jÃ¡ existe
                     orcamento_existente = ReceitaOrcamento.query.filter(
                         ReceitaOrcamento.item_receita_id == item.id,
                         ReceitaOrcamento.mes_referencia == mes_referencia
@@ -238,9 +236,9 @@ def criar_item():
                     mes_referencia = mes_referencia + relativedelta(months=1)
 
                 db.session.commit()
-            except Exception as e:
-                # Se falhar a geração de orçamentos, não falha a criação do item
-                print(f'Aviso: Erro ao gerar orçamentos automáticos: {e}')
+            except Exception:
+                # Se falhar a geraÃ§Ã£o de orÃ§amentos, nÃ£o falha a criaÃ§Ã£o do item
+                logger.warning('Falha ao gerar orcamentos automaticos na criacao de item de receita', exc_info=True)
 
         return jsonify({
             'success': True,
@@ -254,12 +252,9 @@ def criar_item():
             'error': str(e)
         }), 400
 
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return _internal_error('receitas')
 
 
 @receitas_bp.route('/itens/<int:id>', methods=['PUT'])
@@ -281,24 +276,24 @@ def atualizar_item(id):
         if not data:
             return jsonify({
                 'success': False,
-                'error': 'Dados não fornecidos'
+                'error': 'Dados nÃ£o fornecidos'
             }), 400
 
         item = ReceitaService.atualizar_item_receita(id, data)
 
-        # Se tornou recorrente ou valor base foi atualizado, gerar orçamentos
+        # Se tornou recorrente ou valor base foi atualizado, gerar orÃ§amentos
         if item.recorrente and item.valor_base_mensal and item.valor_base_mensal > 0:
             try:
                 from datetime import date
                 from dateutil.relativedelta import relativedelta
 
-                # Gerar orçamentos para os próximos 12 meses
+                # Gerar orÃ§amentos para os prÃ³ximos 12 meses
                 hoje = date.today()
                 mes_referencia = date(hoje.year, hoje.month, 1)
                 orcamentos_criados = 0
 
                 for i in range(12):
-                    # Verificar se já existe
+                    # Verificar se jÃ¡ existe
                     orcamento_existente = ReceitaOrcamento.query.filter(
                         ReceitaOrcamento.item_receita_id == item.id,
                         ReceitaOrcamento.mes_referencia == mes_referencia
@@ -318,9 +313,9 @@ def atualizar_item(id):
                     mes_referencia = mes_referencia + relativedelta(months=1)
 
                 db.session.commit()
-            except Exception as e:
-                # Se falhar a geração de orçamentos, não falha a atualização do item
-                print(f'Aviso: Erro ao gerar orçamentos automáticos: {e}')
+            except Exception:
+                # Se falhar a geraÃ§Ã£o de orÃ§amentos, nÃ£o falha a atualizaÃ§Ã£o do item
+                logger.warning('Falha ao gerar orcamentos automaticos na atualizacao de item de receita', exc_info=True)
 
         return jsonify({
             'success': True,
@@ -334,12 +329,9 @@ def atualizar_item(id):
             'error': str(e)
         }), 400
 
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return _internal_error('receitas')
 
 
 @receitas_bp.route('/itens/<int:id>', methods=['DELETE'])
@@ -351,7 +343,7 @@ def deletar_item(id):
         id: ID do item
 
     Returns:
-        JSON com confirmação
+        JSON com confirmaÃ§Ã£o
     """
     try:
         item = ReceitaService.inativar_item_receita(id)
@@ -368,28 +360,25 @@ def deletar_item(id):
             'error': str(e)
         }), 404
 
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return _internal_error('receitas')
 
 
 # ============================================================================
-# 2. ORÇAMENTO DE RECEITAS
+# 2. ORÃ‡AMENTO DE RECEITAS
 # ============================================================================
 
 @receitas_bp.route('/orcamento', methods=['GET'])
 def listar_orcamentos():
     """
-    Lista orçamentos de receitas
+    Lista orÃ§amentos de receitas
 
     Query params:
         ano: Ano para filtrar (ex: 2025)
 
     Returns:
-        JSON com lista de orçamentos
+        JSON com lista de orÃ§amentos
     """
     try:
         ano = request.args.get('ano', type=int)
@@ -397,7 +386,7 @@ def listar_orcamentos():
         if not ano:
             return jsonify({
                 'success': False,
-                'error': 'Parâmetro ano é obrigatório'
+                'error': 'ParÃ¢metro ano Ã© obrigatÃ³rio'
             }), 400
 
         orcamentos = ReceitaService.obter_orcamentos_por_ano(ano)
@@ -408,29 +397,26 @@ def listar_orcamentos():
             'total': len(orcamentos)
         }), 200
 
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+    except Exception:
+        return _internal_error('receitas')
 
 
 @receitas_bp.route('/orcamento', methods=['POST'])
 def criar_orcamento():
     """
-    Cria ou atualiza um orçamento mensal específico
+    Cria ou atualiza um orÃ§amento mensal especÃ­fico
 
     Body (JSON):
         {
-            "item_receita_id": int (obrigatório),
-            "ano_mes": "YYYY-MM-01" (obrigatório),
-            "valor_previsto": float (obrigatório),
+            "item_receita_id": int (obrigatÃ³rio),
+            "ano_mes": "YYYY-MM-01" (obrigatÃ³rio),
+            "valor_previsto": float (obrigatÃ³rio),
             "periodicidade": "MENSAL_FIXA|EVENTUAL|UNICA" (opcional),
             "observacoes": "string" (opcional)
         }
 
     Returns:
-        JSON com o orçamento criado
+        JSON com o orÃ§amento criado
     """
     try:
         data = request.get_json()
@@ -438,26 +424,26 @@ def criar_orcamento():
         if not data:
             return jsonify({
                 'success': False,
-                'error': 'Dados não fornecidos'
+                'error': 'Dados nÃ£o fornecidos'
             }), 400
 
-        # Validações
+        # ValidaÃ§Ãµes
         if not data.get('item_receita_id'):
             return jsonify({
                 'success': False,
-                'error': 'item_receita_id é obrigatório'
+                'error': 'item_receita_id Ã© obrigatÃ³rio'
             }), 400
 
         if not data.get('ano_mes'):
             return jsonify({
                 'success': False,
-                'error': 'ano_mes é obrigatório'
+                'error': 'ano_mes Ã© obrigatÃ³rio'
             }), 400
 
         if data.get('valor_previsto') is None:
             return jsonify({
                 'success': False,
-                'error': 'valor_previsto é obrigatório'
+                'error': 'valor_previsto Ã© obrigatÃ³rio'
             }), 400
 
         orcamento = ReceitaService.criar_ou_atualizar_orcamento_mensal(
@@ -470,35 +456,32 @@ def criar_orcamento():
 
         return jsonify({
             'success': True,
-            'message': 'Orçamento criado/atualizado com sucesso',
+            'message': 'OrÃ§amento criado/atualizado com sucesso',
             'data': orcamento.to_dict()
         }), 201
 
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return _internal_error('receitas')
 
 
 @receitas_bp.route('/orcamento/gerar-recorrente', methods=['POST'])
 def gerar_orcamento_recorrente():
     """
-    Gera orçamentos recorrentes automaticamente para um período
-    Útil para salários e gratificações fixas
+    Gera orÃ§amentos recorrentes automaticamente para um perÃ­odo
+    Ãštil para salÃ¡rios e gratificaÃ§Ãµes fixas
 
     Body (JSON):
         {
-            "item_receita_id": int (obrigatório),
-            "data_inicio": "YYYY-MM-01" (obrigatório),
-            "data_fim": "YYYY-MM-01" (obrigatório),
-            "valor_mensal": float (obrigatório),
-            "periodicidade": "MENSAL_FIXA" (opcional, padrão: MENSAL_FIXA)
+            "item_receita_id": int (obrigatÃ³rio),
+            "data_inicio": "YYYY-MM-01" (obrigatÃ³rio),
+            "data_fim": "YYYY-MM-01" (obrigatÃ³rio),
+            "valor_mensal": float (obrigatÃ³rio),
+            "periodicidade": "MENSAL_FIXA" (opcional, padrÃ£o: MENSAL_FIXA)
         }
 
     Returns:
-        JSON com os orçamentos criados
+        JSON com os orÃ§amentos criados
     """
     try:
         data = request.get_json()
@@ -506,16 +489,16 @@ def gerar_orcamento_recorrente():
         if not data:
             return jsonify({
                 'success': False,
-                'error': 'Dados não fornecidos'
+                'error': 'Dados nÃ£o fornecidos'
             }), 400
 
-        # Validações
+        # ValidaÃ§Ãµes
         campos_obrigatorios = ['item_receita_id', 'data_inicio', 'data_fim', 'valor_mensal']
         for campo in campos_obrigatorios:
             if not data.get(campo):
                 return jsonify({
                     'success': False,
-                    'error': f'{campo} é obrigatório'
+                    'error': f'{campo} Ã© obrigatÃ³rio'
                 }), 400
 
         orcamentos = ReceitaService.gerar_orcamento_recorrente(
@@ -528,17 +511,14 @@ def gerar_orcamento_recorrente():
 
         return jsonify({
             'success': True,
-            'message': f'{len(orcamentos)} orçamentos gerados com sucesso',
+            'message': f'{len(orcamentos)} orÃ§amentos gerados com sucesso',
             'data': [orc.to_dict() for orc in orcamentos],
             'total': len(orcamentos)
         }), 201
 
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return _internal_error('receitas')
 
 
 # ============================================================================
@@ -551,7 +531,7 @@ def listar_realizadas():
     Lista receitas realizadas
 
     Query params:
-        ano_mes: Filtrar por competência (YYYY-MM)
+        ano_mes: Filtrar por competÃªncia (YYYY-MM)
         item_receita_id: Filtrar por fonte
 
     Returns:
@@ -572,17 +552,14 @@ def listar_realizadas():
             'total': len(receitas)
         }), 200
 
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+    except Exception:
+        return _internal_error('receitas')
 
 
 @receitas_bp.route('/realizadas/<int:id>', methods=['GET'])
 def buscar_realizada(id):
     """
-    Busca uma receita realizada específica
+    Busca uma receita realizada especÃ­fica
 
     Args:
         id: ID da receita
@@ -596,7 +573,7 @@ def buscar_realizada(id):
         if not receita:
             return jsonify({
                 'success': False,
-                'error': 'Receita não encontrada'
+                'error': 'Receita nÃ£o encontrada'
             }), 404
 
         return jsonify({
@@ -604,11 +581,8 @@ def buscar_realizada(id):
             'data': receita.to_dict()
         }), 200
 
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+    except Exception:
+        return _internal_error('receitas')
 
 
 @receitas_bp.route('/realizadas/<int:id>', methods=['PUT'])
@@ -621,17 +595,17 @@ def atualizar_realizada(id):
     try:
         receita_antes = ReceitaRealizada.query.get(id)
         if not receita_antes:
-            return jsonify({'success': False, 'error': 'Receita não encontrada'}), 404
+            return jsonify({'success': False, 'error': 'Receita nÃ£o encontrada'}), 404
 
         data = request.get_json()
 
         if not data:
             return jsonify({
                 'success': False,
-                'error': 'Dados não fornecidos'
+                'error': 'Dados nÃ£o fornecidos'
             }), 400
 
-        # Default de conta bancária: se não veio no payload, tenta herdar da fonte
+        # Default de conta bancÃ¡ria: se nÃ£o veio no payload, tenta herdar da fonte
         if not data.get('conta_bancaria_id') and data.get('item_receita_id'):
             item = ItemReceita.query.get(data.get('item_receita_id'))
             if item and item.conta_bancaria_id:
@@ -641,7 +615,7 @@ def atualizar_realizada(id):
         if not receita:
             return jsonify({
                 'success': False,
-                'error': 'Receita não encontrada'
+                'error': 'Receita nÃ£o encontrada'
             }), 404
 
         # Sync do movimento financeiro (se houver conta_bancaria_id)
@@ -700,12 +674,9 @@ def atualizar_realizada(id):
             'error': str(e)
         }), 400
 
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return _internal_error('receitas')
 
 
 @receitas_bp.route('/realizadas', methods=['POST'])
@@ -715,10 +686,10 @@ def criar_realizada():
 
     Body (JSON):
         {
-            "item_receita_id": int (obrigatório),
-            "data_recebimento": "YYYY-MM-DD" (obrigatório),
-            "valor_recebido": float (obrigatório),
-            "competencia": "YYYY-MM-01" (opcional, usa mês do recebimento se não informado),
+            "item_receita_id": int (obrigatÃ³rio),
+            "data_recebimento": "YYYY-MM-DD" (obrigatÃ³rio),
+            "valor_recebido": float (obrigatÃ³rio),
+            "competencia": "YYYY-MM-01" (opcional, usa mÃªs do recebimento se nÃ£o informado),
             "descricao": "string" (opcional),
             "conta_origem_id": int (opcional),
             "observacoes": "string" (opcional)
@@ -733,10 +704,10 @@ def criar_realizada():
         if not data:
             return jsonify({
                 'success': False,
-                'error': 'Dados não fornecidos'
+                'error': 'Dados nÃ£o fornecidos'
             }), 400
 
-        # Default de conta bancária: se não veio no payload, tenta herdar da fonte
+        # Default de conta bancÃ¡ria: se nÃ£o veio no payload, tenta herdar da fonte
         if not data.get('conta_bancaria_id') and data.get('item_receita_id'):
             try:
                 from backend.models import ItemReceita
@@ -748,7 +719,7 @@ def criar_realizada():
 
         receita = ReceitaService.registrar_receita_realizada(data)
 
-        # Integração com Contas Bancárias: crédito automático via MovimentoFinanceiro
+        # IntegraÃ§Ã£o com Contas BancÃ¡rias: crÃ©dito automÃ¡tico via MovimentoFinanceiro
         try:
             from backend.services.conta_bancaria_service import ContaBancariaService
             from backend.models import MovimentoFinanceiro
@@ -786,27 +757,24 @@ def criar_realizada():
             'error': str(e)
         }), 400
 
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return _internal_error('receitas')
 
 
 @receitas_bp.route('/realizadas/pontual', methods=['POST'])
 def criar_receita_pontual():
     """
-    Registra uma receita pontual/eventual (sem vínculo com orçamento)
-    Útil para registrar entradas ocasionais como PIX recebido, venda de item, etc.
+    Registra uma receita pontual/eventual (sem vÃ­nculo com orÃ§amento)
+    Ãštil para registrar entradas ocasionais como PIX recebido, venda de item, etc.
 
     Body (JSON):
         {
-            "conta_bancaria_id": int (obrigatório),
-            "descricao": "string" (obrigatório),
-            "valor_recebido": float (obrigatório),
-            "data_recebimento": "YYYY-MM-DD" (obrigatório),
-            "competencia": "YYYY-MM-01" (obrigatório),
+            "conta_bancaria_id": int (obrigatÃ³rio),
+            "descricao": "string" (obrigatÃ³rio),
+            "valor_recebido": float (obrigatÃ³rio),
+            "data_recebimento": "YYYY-MM-DD" (obrigatÃ³rio),
+            "competencia": "YYYY-MM-01" (obrigatÃ³rio),
             "observacoes": "string" (opcional),
             "tipo_entrada": "string" (opcional, ex: RECEITA_PONTUAL)
         }
@@ -829,37 +797,37 @@ def criar_receita_pontual():
         if not data:
             return jsonify({
                 'success': False,
-                'error': 'Dados não fornecidos'
+                'error': 'Dados nÃ£o fornecidos'
             }), 400
 
-        # Validações
+        # ValidaÃ§Ãµes
         campos_obrigatorios = ['conta_bancaria_id', 'descricao', 'valor_recebido',
                                'data_recebimento', 'competencia']
         for campo in campos_obrigatorios:
             if not data.get(campo):
                 return jsonify({
                     'success': False,
-                    'error': f'{campo} é obrigatório'
+                    'error': f'{campo} Ã© obrigatÃ³rio'
                 }), 400
 
-        # Verificar se a conta bancária existe
+        # Verificar se a conta bancÃ¡ria existe
         conta = ContaBancaria.query.get(data['conta_bancaria_id'])
         if not conta:
             return jsonify({
                 'success': False,
-                'error': 'Conta bancária não encontrada'
+                'error': 'Conta bancÃ¡ria nÃ£o encontrada'
             }), 404
 
         # Converter valor para Decimal
         valor_recebido = Decimal(str(data['valor_recebido']))
 
         if conta.status != 'ATIVO':
-            return jsonify({'success': False, 'error': 'Conta bancária está inativa'}), 400
+            return jsonify({'success': False, 'error': 'Conta bancÃ¡ria estÃ¡ inativa'}), 400
 
         # Criar receita realizada sem item_receita_id e orcamento_id
         receita = ReceitaRealizada(
-            item_receita_id=None,  # Receita pontual não tem fonte fixa
-            orcamento_id=None,     # Não vinculada a orçamento
+            item_receita_id=None,  # Receita pontual nÃ£o tem fonte fixa
+            orcamento_id=None,     # NÃ£o vinculada a orÃ§amento
             conta_bancaria_id=data['conta_bancaria_id'],
             data_recebimento=datetime.strptime(data['data_recebimento'], '%Y-%m-%d').date(),
             valor_recebido=valor_recebido,
@@ -870,7 +838,7 @@ def criar_receita_pontual():
         db.session.add(receita)
         db.session.flush()
 
-        # Movimento financeiro (crédito)
+        # Movimento financeiro (crÃ©dito)
         ContaBancariaService.criar_movimento(
             conta_bancaria_id=conta.id,
             tipo='CREDITO',
@@ -896,12 +864,9 @@ def criar_receita_pontual():
             'error': str(e)
         }), 400
 
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return _internal_error('receitas')
 
 
 @receitas_bp.route('/realizadas/<int:id>', methods=['DELETE'])
@@ -913,7 +878,7 @@ def deletar_realizada(id):
         id: ID da receita
 
     Returns:
-        JSON com confirmação
+        JSON com confirmaÃ§Ã£o
     """
     try:
         from backend.services.conta_bancaria_service import ContaBancariaService
@@ -928,7 +893,7 @@ def deletar_realizada(id):
         if not receita:
             return jsonify({
                 'success': False,
-                'error': 'Receita não encontrada'
+                'error': 'Receita nÃ£o encontrada'
             }), 404
 
         # Remover movimento financeiro vinculado (se existir) e recalcular saldo
@@ -947,29 +912,26 @@ def deletar_realizada(id):
             'message': 'Receita deletada com sucesso'
         }), 200
 
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return _internal_error('receitas')
 
 
 # ============================================================================
-# 4. RELATÓRIOS E ANÁLISES
+# 4. RELATÃ“RIOS E ANÃLISES
 # ============================================================================
 
 @receitas_bp.route('/resumo-mensal', methods=['GET'])
 def resumo_mensal():
     """
-    Resumo consolidado de receitas por mês
+    Resumo consolidado de receitas por mÃªs
     Compara previsto vs realizado
 
     Query params:
-        ano: Ano (obrigatório)
+        ano: Ano (obrigatÃ³rio)
 
     Returns:
-        JSON com resumo por mês e por tipo
+        JSON com resumo por mÃªs e por tipo
     """
     try:
         ano = request.args.get('ano', type=int)
@@ -977,10 +939,10 @@ def resumo_mensal():
         if not ano:
             return jsonify({
                 'success': False,
-                'error': 'Parâmetro ano é obrigatório'
+                'error': 'ParÃ¢metro ano Ã© obrigatÃ³rio'
             }), 400
 
-        # Backfill idempotente para garantir que contemplações do ano apareçam no resumo
+        # Backfill idempotente para garantir que contemplaÃ§Ãµes do ano apareÃ§am no resumo
         _backfill_receitas_contemplacao_consorcios(ano=ano)
 
         resumo = ReceitaService.get_resumo_receitas_por_mes(ano)
@@ -990,11 +952,8 @@ def resumo_mensal():
             'data': resumo
         }), 200
 
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+    except Exception:
+        return _internal_error('receitas')
 
 
 @receitas_bp.route('/confiabilidade', methods=['GET'])
@@ -1004,8 +963,8 @@ def confiabilidade():
     % recebido / previsto por fonte e consolidado
 
     Query params:
-        ano_mes_ini: Início do período (YYYY-MM-01)
-        ano_mes_fim: Fim do período (YYYY-MM-01)
+        ano_mes_ini: InÃ­cio do perÃ­odo (YYYY-MM-01)
+        ano_mes_fim: Fim do perÃ­odo (YYYY-MM-01)
 
     Returns:
         JSON com percentuais de confiabilidade
@@ -1017,7 +976,7 @@ def confiabilidade():
         if not ano_mes_ini or not ano_mes_fim:
             return jsonify({
                 'success': False,
-                'error': 'Parâmetros ano_mes_ini e ano_mes_fim são obrigatórios'
+                'error': 'ParÃ¢metros ano_mes_ini e ano_mes_fim sÃ£o obrigatÃ³rios'
             }), 400
 
         confiabilidade = ReceitaService.get_confiabilidade_receitas(
@@ -1030,27 +989,24 @@ def confiabilidade():
             'data': confiabilidade
         }), 200
 
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+    except Exception:
+        return _internal_error('receitas')
 
 
 @receitas_bp.route('/itens/<int:item_id>/detalhe', methods=['GET'])
 def detalhe_item(item_id):
     """
     Detalhe completo de uma fonte de receita
-    Mostra todas as projeções e realizações mês a mês
+    Mostra todas as projeÃ§Ãµes e realizaÃ§Ãµes mÃªs a mÃªs
 
     Args:
         item_id: ID do item
 
     Query params:
-        ano: Ano (obrigatório)
+        ano: Ano (obrigatÃ³rio)
 
     Returns:
-        JSON com detalhe mês a mês
+        JSON com detalhe mÃªs a mÃªs
     """
     try:
         ano = request.args.get('ano', type=int)
@@ -1058,7 +1014,7 @@ def detalhe_item(item_id):
         if not ano:
             return jsonify({
                 'success': False,
-                'error': 'Parâmetro ano é obrigatório'
+                'error': 'ParÃ¢metro ano Ã© obrigatÃ³rio'
             }), 400
 
         detalhe = ReceitaService.get_detalhe_receitas_item(item_id, ano)
@@ -1074,8 +1030,7 @@ def detalhe_item(item_id):
             'error': str(e)
         }), 404
 
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+    except Exception:
+        return _internal_error('receitas')
+
+

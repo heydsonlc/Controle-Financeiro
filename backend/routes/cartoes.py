@@ -1,30 +1,41 @@
+﻿"""
+Rotas para gerenciamento de CartÃµes de CrÃ©dito
 """
-Rotas para gerenciamento de Cartões de Crédito
-"""
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from backend.models import db, ItemDespesa, ConfigAgregador, ItemAgregado, OrcamentoAgregado, LancamentoAgregado, Categoria
 from backend.services.cartao_service import CartaoService
 from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import func, and_
+import logging
 
 cartoes_bp = Blueprint('cartoes', __name__, url_prefix='/api/cartoes')
+logger = logging.getLogger(__name__)
+
+
+def _internal_error(contexto='cartoes'):
+    logger.exception('Erro interno em %s', contexto)
+    return jsonify({'success': False, 'error': 'Erro interno ao processar requisicao'}), 500
+
+
+def _business_error(message, status=400):
+    return jsonify({'success': False, 'error': message}), status
 
 
 # ============================================================================
-# ROTAS PARA CARTÕES DE CRÉDITO (ItemDespesa tipo='Agregador')
+# ROTAS PARA CARTÃ•ES DE CRÃ‰DITO (ItemDespesa tipo='Agregador')
 # ============================================================================
 
 @cartoes_bp.route('', methods=['GET'])
 def listar_cartoes():
-    """Lista todos os cartões de crédito"""
+    """Lista todos os cartÃµes de crÃ©dito"""
     try:
         cartoes = ItemDespesa.query.filter_by(tipo='Agregador', ativo=True).all()
         resultado = []
 
         for cartao in cartoes:
             cartao_dict = cartao.to_dict()
-            # Adicionar configuração do agregador
+            # Adicionar configuraÃ§Ã£o do agregador
             if cartao.config_agregador:
                 cartao_dict['config'] = cartao.config_agregador.to_dict()
             # Adicionar categoria
@@ -33,17 +44,17 @@ def listar_cartoes():
             resultado.append(cartao_dict)
 
         return jsonify(resultado), 200
-    except Exception as e:
-        return jsonify({'erro': str(e)}), 500
+    except Exception:
+        return _internal_error('cartoes')
 
 
 @cartoes_bp.route('/<int:id>', methods=['GET'])
 def obter_cartao(id):
-    """Obtém detalhes de um cartão específico"""
+    """ObtÃ©m detalhes de um cartÃ£o especÃ­fico"""
     try:
         cartao = ItemDespesa.query.filter_by(id=id, tipo='Agregador').first()
         if not cartao:
-            return jsonify({'erro': 'Cartão não encontrado'}), 404
+            return _business_error('Recurso nao encontrado', 404)
 
         cartao_dict = cartao.to_dict()
         if cartao.config_agregador:
@@ -52,17 +63,17 @@ def obter_cartao(id):
             cartao_dict['categoria_nome'] = cartao.categoria.nome
 
         return jsonify(cartao_dict), 200
-    except Exception as e:
-        return jsonify({'erro': str(e)}), 500
+    except Exception:
+        return _internal_error('cartoes')
 
 
 @cartoes_bp.route('', methods=['POST'])
 def criar_cartao():
-    """Cria um novo cartão de crédito"""
+    """Cria um novo cartÃ£o de crÃ©dito"""
     try:
         dados = request.json
 
-        # Se não especificou categoria, usa a categoria padrão "Cartões de Crédito"
+        # Se nÃ£o especificou categoria, usa a categoria padrÃ£o "CartÃµes de CrÃ©dito"
         categoria_id = dados.get('categoria_id')
         if not categoria_id:
             categoria_padrao = Categoria.query.filter_by(nome='Cartoes de Credito').first()
@@ -83,7 +94,7 @@ def criar_cartao():
         db.session.add(novo_cartao)
         db.session.flush()  # Para obter o ID
 
-        # Criar a configuração do agregador
+        # Criar a configuraÃ§Ã£o do agregador
         config = ConfigAgregador(
             item_despesa_id=novo_cartao.id,
             dia_fechamento=dados['dia_fechamento'],
@@ -103,18 +114,17 @@ def criar_cartao():
         resultado['config'] = config.to_dict()
 
         return jsonify(resultado), 201
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'erro': str(e)}), 500
+    except Exception:
+        return _internal_error('cartoes')
 
 
 @cartoes_bp.route('/<int:id>', methods=['PUT'])
 def atualizar_cartao(id):
-    """Atualiza um cartão existente"""
+    """Atualiza um cartÃ£o existente"""
     try:
         cartao = ItemDespesa.query.filter_by(id=id, tipo='Agregador').first()
         if not cartao:
-            return jsonify({'erro': 'Cartão não encontrado'}), 404
+            return _business_error('Recurso nao encontrado', 404)
 
         dados = request.json
 
@@ -141,61 +151,58 @@ def atualizar_cartao(id):
             resultado['config'] = cartao.config_agregador.to_dict()
 
         return jsonify(resultado), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'erro': str(e)}), 500
+    except Exception:
+        return _internal_error('cartoes')
 
 
 @cartoes_bp.route('/<int:id>/codigo-seguranca', methods=['POST'])
 def revelar_codigo_seguranca(id):
-    """Revela o código de segurança mediante senha"""
+    """Revela o cÃ³digo de seguranÃ§a mediante senha"""
     try:
-        dados = request.json
+        dados = request.get_json(silent=True) or {}
         senha = dados.get('senha')
+        senha_mestre = current_app.config.get('CARTOES_CVV_MASTER_PASSWORD') or current_app.config.get('SECRET_KEY')
 
-        # Validar senha (por enquanto, senha fixa - pode ser melhorado futuramente)
-        SENHA_MESTRE = '1234'  # TODO: Mover para configuração ou autenticação real
+        if not senha_mestre:
+            logger.error('Configuracao de senha mestre de cartoes ausente')
+            return _business_error('Configuracao de seguranca indisponivel', 503)
 
-        if senha != SENHA_MESTRE:
-            return jsonify({'erro': 'Senha incorreta'}), 401
+        if senha != senha_mestre:
+            return _business_error('Senha incorreta', 401)
 
-        # Buscar cartão
         cartao = ItemDespesa.query.filter_by(id=id, tipo='Agregador').first()
         if not cartao or not cartao.config_agregador:
-            return jsonify({'erro': 'Cartão não encontrado'}), 404
+            return _business_error('Cartao nao encontrado', 404)
 
-        return jsonify({
-            'codigo_seguranca': cartao.config_agregador.codigo_seguranca or ''
-        }), 200
+        return jsonify({'success': True, 'data': {'codigo_seguranca': cartao.config_agregador.codigo_seguranca or ''}}), 200
 
-    except Exception as e:
-        return jsonify({'erro': str(e)}), 500
+    except Exception:
+        return _internal_error('revelar_codigo_seguranca')
 
 
 @cartoes_bp.route('/<int:id>', methods=['DELETE'])
 def excluir_cartao(id):
-    """Exclui (desativa) um cartão"""
+    """Exclui (desativa) um cartÃ£o"""
     try:
         cartao = ItemDespesa.query.filter_by(id=id, tipo='Agregador').first()
         if not cartao:
-            return jsonify({'erro': 'Cartão não encontrado'}), 404
+            return _business_error('Recurso nao encontrado', 404)
 
         cartao.ativo = False
         db.session.commit()
 
-        return jsonify({'mensagem': 'Cartão excluído com sucesso'}), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'erro': str(e)}), 500
+        return jsonify({'mensagem': 'CartÃ£o excluÃ­do com sucesso'}), 200
+    except Exception:
+        return _internal_error('cartoes')
 
 
 # ============================================================================
-# ROTAS PARA ITENS AGREGADOS (Categorias dentro do cartão)
+# ROTAS PARA ITENS AGREGADOS (Categorias dentro do cartÃ£o)
 # ============================================================================
 
 @cartoes_bp.route('/<int:cartao_id>/itens', methods=['GET'])
 def listar_itens_agregados(cartao_id):
-    """Lista todas as categorias de um cartão"""
+    """Lista todas as categorias de um cartÃ£o"""
     try:
         itens = ItemAgregado.query.filter_by(item_despesa_id=cartao_id, ativo=True).all()
         resultado = []
@@ -216,20 +223,20 @@ def listar_itens_agregados(cartao_id):
             resultado.append(item_dict)
 
         return jsonify(resultado), 200
-    except Exception as e:
-        return jsonify({'erro': str(e)}), 500
+    except Exception:
+        return _internal_error('cartoes')
 
 
 @cartoes_bp.route('/<int:cartao_id>/itens', methods=['POST'])
 def criar_item_agregado(cartao_id):
-    """Cria uma nova categoria dentro do cartão"""
+    """Cria uma nova categoria dentro do cartÃ£o"""
     try:
         dados = request.json
 
-        # Validar nome obrigatório e não vazio
+        # Validar nome obrigatÃ³rio e nÃ£o vazio
         nome = dados.get('nome', '').strip()
         if not nome:
-            return jsonify({'erro': 'Nome da categoria é obrigatório'}), 400
+            return jsonify({'erro': 'Nome da categoria Ã© obrigatÃ³rio'}), 400
 
         novo_item = ItemAgregado(
             item_despesa_id=cartao_id,
@@ -242,26 +249,25 @@ def criar_item_agregado(cartao_id):
         db.session.commit()
 
         return jsonify(novo_item.to_dict()), 201
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'erro': str(e)}), 500
+    except Exception:
+        return _internal_error('cartoes')
 
 
 @cartoes_bp.route('/itens/<int:item_id>', methods=['PUT'])
 def atualizar_item_agregado(item_id):
-    """Atualiza uma categoria do cartão"""
+    """Atualiza uma categoria do cartÃ£o"""
     try:
         item = ItemAgregado.query.get(item_id)
         if not item:
-            return jsonify({'erro': 'Item não encontrado'}), 404
+            return _business_error('Recurso nao encontrado', 404)
 
         dados = request.json
 
-        # Validar nome não vazio se fornecido
+        # Validar nome nÃ£o vazio se fornecido
         if 'nome' in dados:
             nome = dados['nome'].strip()
             if not nome:
-                return jsonify({'erro': 'Nome da categoria não pode ser vazio'}), 400
+                return jsonify({'erro': 'Nome da categoria nÃ£o pode ser vazio'}), 400
             item.nome = nome
 
         if 'descricao' in dados:
@@ -269,105 +275,103 @@ def atualizar_item_agregado(item_id):
 
         db.session.commit()
         return jsonify(item.to_dict()), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'erro': str(e)}), 500
+    except Exception:
+        return _internal_error('cartoes')
 
 
 @cartoes_bp.route('/itens/<int:item_id>', methods=['DELETE'])
 def excluir_item_agregado(item_id):
     """
-    Exclui (inativa) uma categoria do cartão
+    Exclui (inativa) uma categoria do cartÃ£o
 
-    Regra: Só permite exclusão se não existirem lançamentos
+    Regra: SÃ³ permite exclusÃ£o se nÃ£o existirem lanÃ§amentos
     """
     try:
         item = ItemAgregado.query.get(item_id)
         if not item:
-            return jsonify({'erro': 'Item não encontrado'}), 404
+            return _business_error('Recurso nao encontrado', 404)
 
-        # Verificar se existem lançamentos (Teste 5 do roteiro)
+        # Verificar se existem lanÃ§amentos (Teste 5 do roteiro)
         total_lancamentos = LancamentoAgregado.query.filter_by(
             item_agregado_id=item_id
         ).count()
 
         if total_lancamentos > 0:
             return jsonify({
-                'erro': f'Não é possível excluir esta categoria. '
-                        f'Existem {total_lancamentos} lançamento(s) vinculado(s).',
+                'erro': f'NÃ£o Ã© possÃ­vel excluir esta categoria. '
+                        f'Existem {total_lancamentos} lanÃ§amento(s) vinculado(s).',
                 'total_lancamentos': total_lancamentos
             }), 400
 
-        # Se não houver lançamentos, permitir inativação
+        # Se nÃ£o houver lanÃ§amentos, permitir inativaÃ§Ã£o
         item.ativo = False
         db.session.commit()
 
-        return jsonify({'mensagem': 'Categoria excluída com sucesso'}), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'erro': str(e)}), 500
+        return jsonify({'mensagem': 'Categoria excluÃ­da com sucesso'}), 200
+    except Exception:
+        return _internal_error('cartoes')
 
 
 # ============================================================================
-# ROTAS PARA ORÇAMENTOS AGREGADOS (Previsão de gastos)
+# ROTAS PARA ORÃ‡AMENTOS AGREGADOS (PrevisÃ£o de gastos)
 # ============================================================================
 
 @cartoes_bp.route('/itens/<int:item_id>/orcamentos', methods=['GET'])
 def listar_orcamentos(item_id):
-    """Lista orçamentos de um item agregado"""
+    """Lista orÃ§amentos de um item agregado"""
     try:
         mes_referencia = request.args.get('mes_referencia')
 
         query = OrcamentoAgregado.query.filter_by(item_agregado_id=item_id)
 
         if mes_referencia:
-            # Converter para primeiro dia do mês
+            # Converter para primeiro dia do mÃªs
             mes_ref_date = datetime.strptime(mes_referencia + '-01', '%Y-%m-%d').date()
             query = query.filter_by(mes_referencia=mes_ref_date)
 
         orcamentos = query.all()
         return jsonify([orc.to_dict() for orc in orcamentos]), 200
-    except Exception as e:
-        return jsonify({'erro': str(e)}), 500
+    except Exception:
+        return _internal_error('cartoes')
 
 
 @cartoes_bp.route('/itens/<int:item_id>/orcamentos', methods=['POST'])
 def criar_orcamento(item_id):
     """
-    Cria um orçamento para um item agregado com vigência.
-    O limite vale a partir do mês de referência para todas as faturas futuras.
+    Cria um orÃ§amento para um item agregado com vigÃªncia.
+    O limite vale a partir do mÃªs de referÃªncia para todas as faturas futuras.
     """
     try:
         dados = request.json
 
-        # Converter mes_referencia para Date (primeiro dia do mês)
+        # Converter mes_referencia para Date (primeiro dia do mÃªs)
         mes_ref_str = dados['mes_referencia']
         mes_ref_date = datetime.strptime(mes_ref_str + '-01', '%Y-%m-%d').date()
 
-        # Verificar se já existe orçamento VIGENTE para esta categoria
-        # (vigência sobreposta não é permitida)
+        # Verificar se jÃ¡ existe orÃ§amento VIGENTE para esta categoria
+        # (vigÃªncia sobreposta nÃ£o Ã© permitida)
         orcamento_vigente = OrcamentoAgregado.query.filter(
             and_(
                 OrcamentoAgregado.item_agregado_id == item_id,
                 OrcamentoAgregado.ativo == True,
-                OrcamentoAgregado.vigencia_fim == None  # Vigência atual/futura
+                OrcamentoAgregado.vigencia_fim == None  # VigÃªncia atual/futura
             )
         ).first()
 
         if orcamento_vigente:
             return jsonify({
-                'erro': f'Já existe limite vigente a partir de {orcamento_vigente.vigencia_inicio.strftime("%m/%Y")}. '
+                'erro': f'JÃ¡ existe limite vigente a partir de {orcamento_vigente.vigencia_inicio.strftime("%m/%Y")}. '
                         f'Para alterar, use "Editar Limite".'
             }), 400
 
-        # Criar novo orçamento com vigência a partir do mês de referência
+        # Criar novo orÃ§amento com vigÃªncia a partir do mÃªs de referÃªncia
         novo_orcamento = OrcamentoAgregado(
             item_agregado_id=item_id,
             mes_referencia=mes_ref_date,  # Mantido por compatibilidade
             valor_teto=dados['valor_teto'],
             observacoes=dados.get('observacoes', ''),
             vigencia_inicio=mes_ref_date,
-            vigencia_fim=None,  # Vigência indefinida (vale para o futuro)
+            vigencia_fim=None,  # VigÃªncia indefinida (vale para o futuro)
             ativo=True
         )
 
@@ -375,56 +379,55 @@ def criar_orcamento(item_id):
         db.session.commit()
 
         return jsonify(novo_orcamento.to_dict()), 201
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'erro': str(e)}), 500
+    except Exception:
+        return _internal_error('cartoes')
 
 
 @cartoes_bp.route('/orcamentos/<int:orcamento_id>', methods=['PUT'])
 def atualizar_orcamento(orcamento_id):
     """
-    Atualiza um orçamento criando uma nova vigência.
+    Atualiza um orÃ§amento criando uma nova vigÃªncia.
 
     Ao editar o limite:
-    1. Finaliza a vigência anterior (vigencia_fim = mês anterior ao novo)
-    2. Cria novo registro com vigência a partir do mês informado
+    1. Finaliza a vigÃªncia anterior (vigencia_fim = mÃªs anterior ao novo)
+    2. Cria novo registro com vigÃªncia a partir do mÃªs informado
 
-    Isso preserva o histórico: meses anteriores mantêm o limite antigo.
+    Isso preserva o histÃ³rico: meses anteriores mantÃªm o limite antigo.
     """
     try:
         orcamento_antigo = OrcamentoAgregado.query.get(orcamento_id)
         if not orcamento_antigo:
-            return jsonify({'erro': 'Orçamento não encontrado'}), 404
+            return _business_error('Recurso nao encontrado', 404)
 
         dados = request.json
 
-        # Se não tem mes_referencia, atualiza apenas observações (sem criar nova vigência)
+        # Se nÃ£o tem mes_referencia, atualiza apenas observaÃ§Ãµes (sem criar nova vigÃªncia)
         if 'mes_referencia' not in dados:
             orcamento_antigo.observacoes = dados.get('observacoes', orcamento_antigo.observacoes)
             db.session.commit()
             return jsonify(orcamento_antigo.to_dict()), 200
 
-        # Nova vigência a partir do mês informado
+        # Nova vigÃªncia a partir do mÃªs informado
         mes_ref_str = dados['mes_referencia']
         mes_ref_date = datetime.strptime(mes_ref_str + '-01', '%Y-%m-%d').date()
 
-        # Validar: novo mês deve ser futuro ou presente
+        # Validar: novo mÃªs deve ser futuro ou presente
         if mes_ref_date < date.today().replace(day=1):
-            return jsonify({'erro': 'Não é possível editar limite para meses passados'}), 400
+            return jsonify({'erro': 'NÃ£o Ã© possÃ­vel editar limite para meses passados'}), 400
 
-        # 1. Finalizar vigência do orçamento antigo (um mês antes da nova vigência)
+        # 1. Finalizar vigÃªncia do orÃ§amento antigo (um mÃªs antes da nova vigÃªncia)
         from dateutil.relativedelta import relativedelta
         orcamento_antigo.vigencia_fim = mes_ref_date - relativedelta(months=1)
         orcamento_antigo.ativo = False  # Marcar como inativo
 
-        # 2. Criar novo orçamento com nova vigência
+        # 2. Criar novo orÃ§amento com nova vigÃªncia
         novo_orcamento = OrcamentoAgregado(
             item_agregado_id=orcamento_antigo.item_agregado_id,
             mes_referencia=mes_ref_date,
             valor_teto=dados.get('valor_teto', orcamento_antigo.valor_teto),
             observacoes=dados.get('observacoes', ''),
             vigencia_inicio=mes_ref_date,
-            vigencia_fim=None,  # Nova vigência indefinida
+            vigencia_fim=None,  # Nova vigÃªncia indefinida
             ativo=True
         )
 
@@ -432,58 +435,56 @@ def atualizar_orcamento(orcamento_id):
         db.session.commit()
 
         return jsonify(novo_orcamento.to_dict()), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'erro': str(e)}), 500
+    except Exception:
+        return _internal_error('cartoes')
 
 
 @cartoes_bp.route('/orcamentos/<int:orcamento_id>', methods=['DELETE'])
 def excluir_orcamento(orcamento_id):
-    """Exclui um orçamento"""
+    """Exclui um orÃ§amento"""
     try:
         orcamento = OrcamentoAgregado.query.get(orcamento_id)
         if not orcamento:
-            return jsonify({'erro': 'Orçamento não encontrado'}), 404
+            return _business_error('Recurso nao encontrado', 404)
 
         db.session.delete(orcamento)
         db.session.commit()
 
-        return jsonify({'mensagem': 'Orçamento excluído com sucesso'}), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'erro': str(e)}), 500
+        return jsonify({'mensagem': 'OrÃ§amento excluÃ­do com sucesso'}), 200
+    except Exception:
+        return _internal_error('cartoes')
 
 
 # ============================================================================
-# ROTAS PARA LANÇAMENTOS AGREGADOS (Gastos reais)
+# ROTAS PARA LANÃ‡AMENTOS AGREGADOS (Gastos reais)
 # ============================================================================
 
 @cartoes_bp.route('/itens/<int:item_id>/lancamentos', methods=['GET'])
 def listar_lancamentos(item_id):
-    """Lista lançamentos de um item agregado"""
+    """Lista lanÃ§amentos de um item agregado"""
     try:
         mes_fatura = request.args.get('mes_fatura')
 
         query = LancamentoAgregado.query.filter_by(item_agregado_id=item_id)
 
         if mes_fatura:
-            # Converter para primeiro dia do mês
+            # Converter para primeiro dia do mÃªs
             mes_fat_date = datetime.strptime(mes_fatura + '-01', '%Y-%m-%d').date()
             query = query.filter_by(mes_fatura=mes_fat_date)
 
         lancamentos = query.order_by(LancamentoAgregado.data_compra.desc()).all()
         return jsonify([lanc.to_dict() for lanc in lancamentos]), 200
-    except Exception as e:
-        return jsonify({'erro': str(e)}), 500
+    except Exception:
+        return _internal_error('cartoes')
 
 
 @cartoes_bp.route('/itens/<int:item_id>/lancamentos', methods=['POST'])
 def criar_lancamento(item_id):
     """
-    Cria um lançamento (gasto) em um item agregado
+    Cria um lanÃ§amento (gasto) em um item agregado
 
-    IMPORTANTE: Não cria despesa individual, apenas consome orçamento
-    A fatura virtual é criada automaticamente se não existir
+    IMPORTANTE: NÃ£o cria despesa individual, apenas consome orÃ§amento
+    A fatura virtual Ã© criada automaticamente se nÃ£o existir
     """
     try:
         dados = request.json
@@ -500,7 +501,7 @@ def criar_lancamento(item_id):
         # Buscar item agregado para pegar o cartao_id
         item_agregado = ItemAgregado.query.get(item_id)
         if not item_agregado:
-            return jsonify({'erro': 'Item agregado não encontrado'}), 404
+            return _business_error('Recurso nao encontrado', 404)
 
         # Preparar dados para o service
         dados_lancamento = {
@@ -515,7 +516,7 @@ def criar_lancamento(item_id):
             'observacoes': dados.get('observacoes', '')
         }
 
-        # Usar CartaoService para adicionar lançamento e garantir fatura
+        # Usar CartaoService para adicionar lanÃ§amento e garantir fatura
         lancamento, fatura = CartaoService.adicionar_lancamento(dados_lancamento)
 
         # Decisao soberana de valor da fatura
@@ -544,29 +545,28 @@ def criar_lancamento(item_id):
         }), 201
 
     except ValueError as e:
-        return jsonify({'success': False, 'erro': str(e)}), 400
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'success': False, 'erro': str(e)}), 500
+        return _business_error(str(e), 400)
+    except Exception:
+        return _internal_error('cartoes')
 
 
 @cartoes_bp.route('/<int:cartao_id>/lancamentos', methods=['GET'])
 def listar_todos_lancamentos_cartao(cartao_id):
     """
-    Lista TODOS os lançamentos de um cartão (com e sem categoria do cartão)
+    Lista TODOS os lanÃ§amentos de um cartÃ£o (com e sem categoria do cartÃ£o)
 
-    Retorna lançamentos com item_agregado_id preenchido E com item_agregado_id = NULL.
-    Conforme contrato: lançamentos sem categoria aparecem no histórico.
+    Retorna lanÃ§amentos com item_agregado_id preenchido E com item_agregado_id = NULL.
+    Conforme contrato: lanÃ§amentos sem categoria aparecem no histÃ³rico.
     """
     try:
         mes_fatura = request.args.get('mes_fatura')
 
-        # Query base: todos os lançamentos do cartão
+        # Query base: todos os lanÃ§amentos do cartÃ£o
         query = LancamentoAgregado.query.filter_by(cartao_id=cartao_id)
 
-        # Filtro opcional por mês
+        # Filtro opcional por mÃªs
         if mes_fatura:
-            # Converter para primeiro dia do mês
+            # Converter para primeiro dia do mÃªs
             mes_fat_date = datetime.strptime(mes_fatura + '-01', '%Y-%m-%d').date()
             query = query.filter_by(mes_fatura=mes_fat_date)
 
@@ -574,17 +574,17 @@ def listar_todos_lancamentos_cartao(cartao_id):
         lancamentos = query.order_by(LancamentoAgregado.data_compra.desc()).all()
 
         return jsonify([l.to_dict() for l in lancamentos]), 200
-    except Exception as e:
-        return jsonify({'erro': str(e)}), 500
+    except Exception:
+        return _internal_error('cartoes')
 
 
 @cartoes_bp.route('/<int:cartao_id>/lancamentos', methods=['POST'])
 def criar_lancamento_sem_categoria(cartao_id):
     """
-    Cria um lançamento diretamente no cartão (sem categoria)
+    Cria um lanÃ§amento diretamente no cartÃ£o (sem categoria)
 
-    Este endpoint aceita lançamentos que NÃO consomem limite orçamentário.
-    O item_agregado_id é opcional - se fornecido, consome limite; se None, apenas vai para fatura.
+    Este endpoint aceita lanÃ§amentos que NÃƒO consomem limite orÃ§amentÃ¡rio.
+    O item_agregado_id Ã© opcional - se fornecido, consome limite; se None, apenas vai para fatura.
     """
     try:
         dados = request.json
@@ -601,8 +601,8 @@ def criar_lancamento_sem_categoria(cartao_id):
         # Preparar dados para o service
         dados_lancamento = {
             'cartao_id': cartao_id,
-            'item_agregado_id': dados.get('item_agregado_id'),  # OPCIONAL (None se não informado)
-            'categoria_id': dados['categoria_id'],  # Categoria da DESPESA (obrigatória)
+            'item_agregado_id': dados.get('item_agregado_id'),  # OPCIONAL (None se nÃ£o informado)
+            'categoria_id': dados['categoria_id'],  # Categoria da DESPESA (obrigatÃ³ria)
             'descricao': dados['descricao'],
             'valor': dados['valor'],
             'data_compra': data_compra,
@@ -612,7 +612,7 @@ def criar_lancamento_sem_categoria(cartao_id):
             'observacoes': dados.get('observacoes', '')
         }
 
-        # Usar CartaoService para adicionar lançamento e garantir fatura
+        # Usar CartaoService para adicionar lanÃ§amento e garantir fatura
         lancamento, fatura = CartaoService.adicionar_lancamento(dados_lancamento)
 
         # Decisao soberana de valor da fatura
@@ -641,19 +641,18 @@ def criar_lancamento_sem_categoria(cartao_id):
         }), 201
 
     except ValueError as e:
-        return jsonify({'success': False, 'erro': str(e)}), 400
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'success': False, 'erro': str(e)}), 500
+        return _business_error(str(e), 400)
+    except Exception:
+        return _internal_error('cartoes')
 
 
 @cartoes_bp.route('/lancamentos/<int:lancamento_id>', methods=['PUT'])
 def atualizar_lancamento(lancamento_id):
-    """Atualiza um lançamento"""
+    """Atualiza um lanÃ§amento"""
     try:
         lancamento = LancamentoAgregado.query.get(lancamento_id)
         if not lancamento:
-            return jsonify({'erro': 'Lançamento não encontrado'}), 404
+            return _business_error('Recurso nao encontrado', 404)
 
         dados = request.json
 
@@ -672,45 +671,43 @@ def atualizar_lancamento(lancamento_id):
 
         db.session.commit()
         return jsonify(lancamento.to_dict()), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'erro': str(e)}), 500
+    except Exception:
+        return _internal_error('cartoes')
 
 
 @cartoes_bp.route('/lancamentos/<int:lancamento_id>', methods=['DELETE'])
 def excluir_lancamento(lancamento_id):
-    """Exclui um lançamento"""
+    """Exclui um lanÃ§amento"""
     try:
         lancamento = LancamentoAgregado.query.get(lancamento_id)
         if not lancamento:
-            return jsonify({'erro': 'Lançamento não encontrado'}), 404
+            return _business_error('Recurso nao encontrado', 404)
 
         db.session.delete(lancamento)
         db.session.commit()
 
-        return jsonify({'mensagem': 'Lançamento excluído com sucesso'}), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'erro': str(e)}), 500
+        return jsonify({'mensagem': 'LanÃ§amento excluÃ­do com sucesso'}), 200
+    except Exception:
+        return _internal_error('cartoes')
 
 
 # ============================================================================
-# ROTAS PARA RESUMO E RELATÓRIOS
+# ROTAS PARA RESUMO E RELATÃ“RIOS
 # ============================================================================
 
 @cartoes_bp.route('/<int:cartao_id>/resumo', methods=['GET'])
 def obter_resumo_cartao(cartao_id):
-    """Obtém resumo completo do cartão com orçamentos e gastos"""
+    """ObtÃ©m resumo completo do cartÃ£o com orÃ§amentos e gastos"""
     try:
         mes_referencia = request.args.get('mes_referencia', datetime.now().strftime('%Y-%m'))
         mes_ref_date = datetime.strptime(mes_referencia + '-01', '%Y-%m-%d').date()
 
-        # Buscar cartão
+        # Buscar cartÃ£o
         cartao = ItemDespesa.query.filter_by(id=cartao_id, tipo='Agregador').first()
         if not cartao:
-            return jsonify({'erro': 'Cartão não encontrado'}), 404
+            return _business_error('Recurso nao encontrado', 404)
 
-        # Calcular EXECUTADO TOTAL do cartão (TODOS os lançamentos, com ou sem categoria)
+        # Calcular EXECUTADO TOTAL do cartÃ£o (TODOS os lanÃ§amentos, com ou sem categoria)
         total_gasto_cartao = db.session.query(func.sum(LancamentoAgregado.valor)).filter(
             LancamentoAgregado.cartao_id == cartao_id,
             LancamentoAgregado.mes_fatura == mes_ref_date
@@ -724,13 +721,13 @@ def obter_resumo_cartao(cartao_id):
         total_orcado = 0
 
         for item in itens:
-            # Buscar orçamento do mês
+            # Buscar orÃ§amento do mÃªs
             orcamento = OrcamentoAgregado.query.filter_by(
                 item_agregado_id=item.id,
                 mes_referencia=mes_ref_date
             ).first()
 
-            # Buscar gastos do mês (apenas lançamentos DESTA categoria)
+            # Buscar gastos do mÃªs (apenas lanÃ§amentos DESTA categoria)
             gastos = LancamentoAgregado.query.filter_by(
                 item_agregado_id=item.id,
                 mes_fatura=mes_ref_date
@@ -756,17 +753,15 @@ def obter_resumo_cartao(cartao_id):
             'cartao': cartao.to_dict(),
             'mes_referencia': mes_referencia,
             'total_orcado': total_orcado,
-            'total_gasto': total_gasto_cartao,  # Inclui lançamentos sem categoria
+            'total_gasto': total_gasto_cartao,  # Inclui lanÃ§amentos sem categoria
             'saldo_disponivel': total_orcado - total_gasto_cartao,
             'limite_credito': float(cartao.config_agregador.limite_credito) if cartao.config_agregador and cartao.config_agregador.limite_credito else None,
             'itens': resumo_itens
         }
 
         return jsonify(resultado), 200
-    except Exception as e:
-        import traceback
-        traceback.print_exc()  # Log completo no console
-        return jsonify({'erro': f'Erro ao carregar resumo: {str(e)}'}), 500
+    except Exception:
+        return _internal_error('obter_resumo_cartao')
 
 
 # ============================================================================
@@ -776,14 +771,14 @@ def obter_resumo_cartao(cartao_id):
 @cartoes_bp.route('/<int:cartao_id>/faturas/<string:competencia>/consolidar', methods=['POST'])
 def consolidar_fatura(cartao_id, competencia):
     """
-    Consolida (fecha) uma fatura de cartão de crédito
+    Consolida (fecha) uma fatura de cartÃ£o de crÃ©dito
 
     Regras:
     - Apenas faturas com status_fatura='ABERTA' podem ser consolidadas
     - Recalcula o valor executado
     - Define status_fatura='FECHADA'
     - Persiste valor_consolidado e data_consolidacao
-    - Fatura FECHADA ainda aceita novos lançamentos (recalcula executado)
+    - Fatura FECHADA ainda aceita novos lanÃ§amentos (recalcula executado)
     """
     try:
         from backend.models import Conta
@@ -791,7 +786,7 @@ def consolidar_fatura(cartao_id, competencia):
         # Converter competencia (YYYY-MM) para date (YYYY-MM-01)
         competencia_date = datetime.strptime(competencia + '-01', '%Y-%m-%d').date()
 
-        # Buscar fatura do cartão
+        # Buscar fatura do cartÃ£o
         fatura = Conta.query.filter_by(
             item_despesa_id=cartao_id,
             cartao_competencia=competencia_date,
@@ -801,20 +796,20 @@ def consolidar_fatura(cartao_id, competencia):
         if not fatura:
             return jsonify({
                 'success': False,
-                'erro': 'Fatura não encontrada'
+                'erro': 'Fatura nÃ£o encontrada'
             }), 404
 
-        # Verificar se fatura já está fechada ou paga
+        # Verificar se fatura jÃ¡ estÃ¡ fechada ou paga
         if fatura.status_fatura == 'FECHADA':
             return jsonify({
                 'success': False,
-                'erro': 'Fatura já está consolidada'
+                'erro': 'Fatura jÃ¡ estÃ¡ consolidada'
             }), 400
 
         if fatura.status_fatura == 'PAGA':
             return jsonify({
                 'success': False,
-                'erro': 'Fatura já está paga e não pode ser consolidada novamente'
+                'erro': 'Fatura jÃ¡ estÃ¡ paga e nÃ£o pode ser consolidada novamente'
             }), 400
 
         # Recalcular executado usando CartaoService
@@ -841,30 +836,25 @@ def consolidar_fatura(cartao_id, competencia):
             }
         }), 200
 
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        import traceback
-        traceback.print_exc()
-        return jsonify({
-            'success': False,
-            'erro': f'Erro ao consolidar fatura: {str(e)}'
-        }), 500
+        return _internal_error('consolidar_fatura')
 
 
 # ============================================================================
-# ROTAS PARA ALERTAS (NÃO BLOQUEANTES)
+# ROTAS PARA ALERTAS (NÃƒO BLOQUEANTES)
 # ============================================================================
 
 @cartoes_bp.route('/alertas', methods=['GET'])
 def obter_alertas():
     """
-    Retorna todos os alertas de orçamento (locais e globais)
+    Retorna todos os alertas de orÃ§amento (locais e globais)
 
     Query params:
-        - cartao_id (opcional): ID do cartão para filtrar
-        - mes_referencia (opcional): Mês no formato YYYY-MM (padrão: mês atual)
+        - cartao_id (opcional): ID do cartÃ£o para filtrar
+        - mes_referencia (opcional): MÃªs no formato YYYY-MM (padrÃ£o: mÃªs atual)
 
-    IMPORTANTE: Alertas NÃO bloqueiam lançamentos, são apenas informativos
+    IMPORTANTE: Alertas NÃƒO bloqueiam lanÃ§amentos, sÃ£o apenas informativos
     """
     try:
         cartao_id = request.args.get('cartao_id', type=int)
@@ -887,20 +877,17 @@ def obter_alertas():
             'data': alertas
         }), 200
 
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'erro': str(e)
-        }), 500
+    except Exception:
+        return _internal_error('cartoes')
 
 
 @cartoes_bp.route('/<int:cartao_id>/alertas', methods=['GET'])
 def obter_alertas_cartao(cartao_id):
     """
-    Retorna alertas específicos de um cartão
+    Retorna alertas especÃ­ficos de um cartÃ£o
 
     Query params:
-        - mes_referencia (opcional): Mês no formato YYYY-MM (padrão: mês atual)
+        - mes_referencia (opcional): MÃªs no formato YYYY-MM (padrÃ£o: mÃªs atual)
     """
     try:
         mes_referencia = request.args.get('mes_referencia')
@@ -911,7 +898,7 @@ def obter_alertas_cartao(cartao_id):
         else:
             competencia = None
 
-        # Buscar alertas do cartão
+        # Buscar alertas do cartÃ£o
         alertas = CartaoService.obter_todos_alertas(
             cartao_id=cartao_id,
             competencia=competencia
@@ -923,9 +910,5 @@ def obter_alertas_cartao(cartao_id):
             'data': alertas
         }), 200
 
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'erro': str(e)
-        }), 500
-
+    except Exception:
+        return _internal_error('cartoes')

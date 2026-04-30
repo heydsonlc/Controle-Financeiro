@@ -10,6 +10,7 @@ Endpoints organizados em 4 grupos:
 """
 from flask import Blueprint, request, jsonify
 from datetime import datetime
+import logging
 
 try:
     from backend.models import db, Financiamento, FinanciamentoParcela, IndexadorMensal, FinanciamentoSeguroVigencia, FinanciamentoAmortizacaoExtra
@@ -20,6 +21,7 @@ except ImportError:
 
 # Criar blueprint
 financiamentos_bp = Blueprint('financiamentos', __name__)
+logger = logging.getLogger(__name__)
 
 
 # ============================================================================
@@ -239,10 +241,7 @@ def criar_financiamento():
                 'error': 'Dados não fornecidos'
             }), 400
 
-        # DEBUG: Log do payload recebido
-        import json
-        print("DEBUG: Payload recebido no backend:")
-        print(json.dumps(data, indent=2, ensure_ascii=False))
+        logger.debug('Payload recebido em criar_financiamento. Chaves: %s', list(data.keys()))
 
         # Validar vigências de seguro (obrigatório pelo menos 1)
         vigencias_seguro = data.get('vigencias_seguro', [])

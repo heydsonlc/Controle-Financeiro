@@ -25,7 +25,6 @@
       "Bash(set:*)",
       "Bash(del test_exclusao_financiamento.py)",
       "Bash(Essas categorias servem apenas para controle do cartao)",
-      "Bash(e nao representam despesas individuais.\"\n4. Atualizar botao \"Adicionar Orcamento\" → \"Nova Categoria\"\n\nFRONTEND - JavaScript (cartoes.js):\n1. Ajustar rotulos das colunas:\n   - \"Orcado\" → \"Limite Mensal\"\n   - \"Gasto\" → \"Utilizado\"\n   - \"Saldo\" → \"Disponivel\"\n2. Atualizar mensagens dos modais:\n   - \"Definir Orcamento\" → \"Definir Limite da Categoria\"\n   - \"Editar Orcamento\" → \"Editar Limite da Categoria\"\n3. Atualizar mensagens de sucesso:\n   - \"Orcamento criado\" → \"Categoria criada\"\n   - \"Orcamento atualizado\" → \"Limite atualizado\"\n   - \"Orcamento excluido\" → \"Limite excluido\"\n4. Atualizar empty state:\n   \"Nenhuma categoria definida para este mes. Clique em Nova Categoria para comecar.\"\n\nPRINCIPIOS RESPEITADOS:\n- Nao alterar backend\n- Nao alterar calculos\n- Nao alterar endpoints\n- Nao mexer em regras de negocio\n- Apenas clareza conceitual (UX)\n\nRESULTADO:\nUsuario agora entende que \"Categorias do Cartao\" sao limites orcamentarios,\nnao despesas individuais, eliminando confusao conceitual.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n)\")",
       "Bash(if exist financeiro.db del financeiro.db)",
       "Bash(sqlite3:*)",
       "Bash(python verificar_item_agregado.py:*)",
@@ -56,7 +55,10 @@
       "Bash(find:*)",
       "Bash(python teste_4_vigencia_apos_amortizacao.py:*)",
       "Bash(python teste_2_pagamento_despesas.py:*)",
-      "Bash(python debug_despesa_recorrente.py:*)"
+      "Bash(python debug_despesa_recorrente.py:*)",
+      "Bash(rm data/financial_control.db)",
+      "Bash(mkdir -p data/backup)",
+      "Bash(mv \"data/gastos-DESKTOP-3HHKJTN.db\" data/backup/)"
     ],
     "deny": [],
     "ask": []

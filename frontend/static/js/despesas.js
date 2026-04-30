@@ -1824,7 +1824,7 @@ async function carregarDetalhesFatura(despesaId, cartaoId, competencia) {
         const resumoResponse = await fetch(`/api/cartoes/${cartaoId}/resumo?mes_referencia=${competenciaNormalizada}`);
         const resumoJson = await resumoResponse.json();
         if (!resumoResponse.ok) {
-            throw new Error(resumoJson?.erro || 'Erro ao carregar resumo do cartão');
+            throw new Error(resumoJson?.error || resumoJson?.erro || resumoJson?.message || 'Erro ao carregar resumo do cartão');
         }
 
         // Organizar lançamentos nos 4 blocos
@@ -2226,7 +2226,7 @@ async function consolidarFatura(cartaoId, competencia) {
         const data = await response.json();
 
         if (!response.ok) {
-            throw new Error(data.erro || 'Erro ao consolidar fatura');
+            throw new Error(data.error || data.erro || data.message || 'Erro ao consolidar fatura');
         }
 
         // Sucesso

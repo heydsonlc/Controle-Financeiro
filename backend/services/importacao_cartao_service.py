@@ -1,22 +1,22 @@
-"""
-Serviço de Importação Assistida de Fatura de Cartão (CSV)
+﻿"""
+ServiÃ§o de ImportaÃ§Ã£o Assistida de Fatura de CartÃ£o (CSV)
 
-FASE 6.2 - Importação de CSV de fatura de cartão
+FASE 6.2 - ImportaÃ§Ã£o de CSV de fatura de cartÃ£o
 
-Este serviço:
+Este serviÃ§o:
 - Processa arquivo CSV de fatura
-- Normaliza descrições
-- Extrai parcelamento explícito
+- Normaliza descriÃ§Ãµes
+- Extrai parcelamento explÃ­cito
 - Reconhece despesas fixas existentes
-- Gera parcelas passadas, atual e futuras baseado na COMPETÊNCIA escolhida
-- Garante idempotência total
+- Gera parcelas passadas, atual e futuras baseado na COMPETÃŠNCIA escolhida
+- Garante idempotÃªncia total
 
-REGRAS INVIOLÁVEIS:
-✅ Apenas cria LancamentoAgregado
-✅ Não cria Conta (fatura consolidada)
-✅ Não infere categorias automaticamente
-✅ Não calcula mes_fatura baseado em data - usa competência do usuário
-✅ Sistema 100% baseado em COMPETÊNCIA (não em datas de fechamento)
+REGRAS INVIOLÃVEIS:
+âœ… Apenas cria LancamentoAgregado
+âœ… NÃ£o cria Conta (fatura consolidada)
+âœ… NÃ£o infere categorias automaticamente
+âœ… NÃ£o calcula mes_fatura baseado em data - usa competÃªncia do usuÃ¡rio
+âœ… Sistema 100% baseado em COMPETÃŠNCIA (nÃ£o em datas de fechamento)
 """
 
 import re
@@ -36,17 +36,89 @@ except ImportError:
 
 class ImportacaoCartaoService:
     """
-    Serviço especializado em importar CSV de faturas de cartão
+    ServiÃ§o especializado em importar CSV de faturas de cartÃ£o
     """
 
+    PERFIL_NUBANK = 'nubank_csv_simples'
+    PERFIL_CAIXA = 'caixa_credito_debito'
+    PERFIL_MANUAL = 'manual_generico'
+
+    @staticmethod
+    def _normalizar_coluna(coluna):
+        texto = str(coluna or '').strip().lower()
+        texto = texto.replace('\ufeff', '')
+        texto = texto.replace('Ã§', 'c').replace('Ã£', 'a').replace('Ã¡', 'a').replace('Ã¢', 'a')
+        texto = texto.replace('Ã©', 'e').replace('Ãª', 'e').replace('Ã­', 'i').replace('Ã³', 'o').replace('Ã´', 'o')
+        texto = texto.replace('Ãº', 'u')
+        return texto
+
+    @staticmethod
+    def detectar_perfil_csv(colunas):
+        """
+        Detecta perfil com base no cabecalho do CSV.
+        Retorna perfil + confianca + mapeamento sugerido (indices).
+        """
+        colunas_norm = [ImportacaoCartaoService._normalizar_coluna(c) for c in (colunas or [])]
+
+        def idx_any(nomes):
+            for nome in nomes:
+                try:
+                    return colunas_norm.index(nome)
+                except ValueError:
+                    continue
+            return None
+
+        nubank_map = {
+            'data_compra': idx_any(['date']),
+            'descricao': idx_any(['title']),
+            'valor': idx_any(['amount']),
+            'parcela': None,
+            'credito': None,
+            'debito': None
+        }
+        if all(v is not None for v in [nubank_map['data_compra'], nubank_map['descricao'], nubank_map['valor']]):
+            return {
+                'perfil': ImportacaoCartaoService.PERFIL_NUBANK,
+                'confianca': 'alta',
+                'mapeamento_sugerido': nubank_map
+            }
+
+        caixa_map = {
+            'data_compra': idx_any(['data']),
+            'descricao': idx_any(['descritivo']),
+            'valor': None,
+            'parcela': None,
+            'credito': idx_any(['credito', 'cr?dito']),
+            'debito': idx_any(['debito', 'd?bito'])
+        }
+        if all(v is not None for v in [caixa_map['data_compra'], caixa_map['descricao'], caixa_map['credito'], caixa_map['debito']]):
+            return {
+                'perfil': ImportacaoCartaoService.PERFIL_CAIXA,
+                'confianca': 'alta',
+                'mapeamento_sugerido': caixa_map
+            }
+
+        return {
+            'perfil': ImportacaoCartaoService.PERFIL_MANUAL,
+            'confianca': 'baixa',
+            'mapeamento_sugerido': {
+                'data_compra': None,
+                'descricao': None,
+                'valor': None,
+                'parcela': None,
+                'credito': None,
+                'debito': None
+            }
+        }
+
     # ========================================================================
-    # NORMALIZAÇÃO E EXTRAÇÃO
+    # NORMALIZAÃ‡ÃƒO E EXTRAÃ‡ÃƒO
     # ========================================================================
 
     @staticmethod
     def normalizar_descricao(descricao_bruta):
         """
-        Normaliza descrição e extrai informações de parcelamento
+        Normaliza descriÃ§Ã£o e extrai informaÃ§Ãµes de parcelamento
 
         Formatos reconhecidos:
         - NN/TT
@@ -59,11 +131,11 @@ class ImportacaoCartaoService:
 
         Returns:
             tuple: (descricao_normalizada, numero_parcela, total_parcelas)
-                Se não houver parcelamento: (descricao, 1, 1)
+                Se nÃ£o houver parcelamento: (descricao, 1, 1)
         """
         descricao = descricao_bruta.strip()
 
-        # Padrões de parcelamento (em ordem de especificidade)
+        # PadrÃµes de parcelamento (em ordem de especificidade)
         padroes = [
             r'(\d{1,2})/(\d{1,2})$',  # 12/12 ou 1/3
             r'(\d{1,2})\s+DE\s+(\d{1,2})$',  # 12 DE 12 ou 1 DE 3
@@ -77,21 +149,21 @@ class ImportacaoCartaoService:
                 numero_parcela = int(match.group(1))
                 total_parcelas = int(match.group(2))
 
-                # Remover trecho de parcelamento da descrição
+                # Remover trecho de parcelamento da descriÃ§Ã£o
                 descricao_normalizada = descricao[:match.start()].strip()
 
                 return descricao_normalizada, numero_parcela, total_parcelas
 
-        # Sem parcelamento explícito
+        # Sem parcelamento explÃ­cito
         return descricao, 1, 1
 
     @staticmethod
     def detectar_delimitador(conteudo_csv):
         """
-        Detecta o delimitador do CSV (;, vírgula, tab)
+        Detecta o delimitador do CSV (;, vÃ­rgula, tab)
 
         Args:
-            conteudo_csv (str): Conteúdo bruto do CSV
+            conteudo_csv (str): ConteÃºdo bruto do CSV
 
         Returns:
             str: Delimitador detectado
@@ -103,21 +175,21 @@ class ImportacaoCartaoService:
             dialeto = sniffer.sniff(amostra, delimiters=';,\t')
             return dialeto.delimiter
         except:
-            # Fallback: ponto-e-vírgula (padrão brasileiro)
+            # Fallback: ponto-e-vÃ­rgula (padrÃ£o brasileiro)
             return ';'
 
     @staticmethod
     def ler_csv(arquivo_csv):
         """
-        Lê arquivo CSV e retorna cabeçalho + linhas
+        LÃª arquivo CSV e retorna cabeÃ§alho + linhas
 
         Args:
-            arquivo_csv: FileStorage do Flask ou conteúdo string
+            arquivo_csv: FileStorage do Flask ou conteÃºdo string
 
         Returns:
-            tuple: (delimitador, colunas, linhas_amostra)
+            tuple: (delimitador, colunas, linhas_dados, linhas_amostra, total_linhas)
         """
-        # Ler conteúdo
+        # Ler conteÃºdo
         if hasattr(arquivo_csv, 'read'):
             conteudo = arquivo_csv.read().decode('utf-8', errors='ignore')
             arquivo_csv.seek(0)  # Resetar para leitura posterior
@@ -135,9 +207,11 @@ class ImportacaoCartaoService:
             raise ValueError("CSV vazio")
 
         colunas = linhas[0]
-        linhas_amostra = linhas[1:6]  # Primeiras 5 linhas de dados
+        linhas_dados = [linha for linha in linhas[1:] if any(str(c).strip() for c in linha)]
+        linhas_amostra = linhas_dados[:5]  # Primeiras 5 linhas de dados
+        total_linhas = len(linhas_dados)
 
-        return delimitador, colunas, linhas_amostra
+        return delimitador, colunas, linhas_dados, linhas_amostra, total_linhas
 
     # ========================================================================
     # RECONHECIMENTO DE DESPESAS FIXAS
@@ -146,11 +220,11 @@ class ImportacaoCartaoService:
     @staticmethod
     def reconhecer_despesa_fixa(descricao_normalizada, cartao_id):
         """
-        Verifica se a descrição corresponde a uma despesa fixa já cadastrada
+        Verifica se a descriÃ§Ã£o corresponde a uma despesa fixa jÃ¡ cadastrada
 
         Args:
-            descricao_normalizada (str): Descrição sem parcelamento
-            cartao_id (int): ID do cartão
+            descricao_normalizada (str): DescriÃ§Ã£o sem parcelamento
+            cartao_id (int): ID do cartÃ£o
 
         Returns:
             ItemDespesa ou None: Despesa fixa encontrada, ou None
@@ -165,7 +239,7 @@ class ImportacaoCartaoService:
         return despesa_fixa
 
     # ========================================================================
-    # GERAÇÃO DE PARCELAS
+    # GERAÃ‡ÃƒO DE PARCELAS
     # ========================================================================
 
     @staticmethod
@@ -187,17 +261,17 @@ class ImportacaoCartaoService:
         Gera todas as parcelas (passadas, atual, futuras) de uma compra
 
         Args:
-            descricao_normalizada (str): Descrição sem parcelamento
-            descricao_exibida (str): Descrição editável
+            descricao_normalizada (str): DescriÃ§Ã£o sem parcelamento
+            descricao_exibida (str): DescriÃ§Ã£o editÃ¡vel
             descricao_original (str): Texto bruto do CSV
             valor_total (Decimal): Valor da parcela
             data_compra (date): Data original da compra
-            numero_parcela_atual (int): Número da parcela lida do CSV
+            numero_parcela_atual (int): NÃºmero da parcela lida do CSV
             total_parcelas (int): Total de parcelas
-            cartao_id (int): ID do cartão
+            cartao_id (int): ID do cartÃ£o
             categoria_id (int): Categoria da despesa
-            item_agregado_id (int): Categoria do cartão (opcional)
-            competencia_base (date): Competência escolhida pelo usuário (YYYY-MM-01)
+            item_agregado_id (int): Categoria do cartÃ£o (opcional)
+            competencia_base (date): CompetÃªncia escolhida pelo usuÃ¡rio (YYYY-MM-01)
             compra_id (str): UUID da compra (se None, gera novo)
 
         Returns:
@@ -209,13 +283,13 @@ class ImportacaoCartaoService:
         parcelas = []
 
         for numero in range(1, total_parcelas + 1):
-            # Calcular meses de diferença em relação à parcela atual
+            # Calcular meses de diferenÃ§a em relaÃ§Ã£o Ã  parcela atual
             meses_diff = numero - numero_parcela_atual
 
             # Data de compra desta parcela
             data_parcela = data_compra + relativedelta(months=meses_diff)
 
-            # Mês de fatura: usar competência base + diferença de meses
+            # MÃªs de fatura: usar competÃªncia base + diferenÃ§a de meses
             mes_fatura = competencia_base + relativedelta(months=meses_diff)
 
             parcela = {
@@ -241,25 +315,87 @@ class ImportacaoCartaoService:
         return parcelas
 
     # ========================================================================
-    # PROCESSAMENTO E PERSISTÊNCIA
+    # PROCESSAMENTO E PERSISTÃŠNCIA
     # ========================================================================
+
+    @staticmethod
+    def _parse_valor(valor_str):
+        """
+        Converte string monetaria para Decimal de forma pragmatica.
+        Aceita formatos como:
+        - 1234.56
+        - 1.234,56
+        - 1234,56
+        """
+        if valor_str is None:
+            raise InvalidOperation("Valor ausente")
+
+        valor_limpo = str(valor_str).strip().replace('R$', '').replace(' ', '')
+        if ',' in valor_limpo and '.' in valor_limpo:
+            valor_limpo = valor_limpo.replace('.', '').replace(',', '.')
+        elif ',' in valor_limpo:
+            valor_limpo = valor_limpo.replace(',', '.')
+
+        return Decimal(valor_limpo)
+
+    @staticmethod
+    def _parse_parcela_texto(parcela_str):
+        if not parcela_str:
+            return None
+        texto = str(parcela_str).strip()
+        match = re.search(r'(\d{1,2})\s*[/\-]\s*(\d{1,2})', texto)
+        if match:
+            return int(match.group(1)), int(match.group(2))
+        match = re.search(r'parcela\s*(\d{1,2})\s*de\s*(\d{1,2})', texto, re.IGNORECASE)
+        if match:
+            return int(match.group(1)), int(match.group(2))
+        return None
+
+    @staticmethod
+    def sugerir_categoria_por_descricao(descricao_bruta, categoria_fallback_id=None):
+        descricao_normalizada, _, _ = ImportacaoCartaoService.normalizar_descricao(descricao_bruta or '')
+        if not descricao_normalizada:
+            return categoria_fallback_id, 'fallback'
+
+        registro = LancamentoAgregado.query.filter(
+            func.lower(
+                func.coalesce(
+                    LancamentoAgregado.descricao_original_normalizada,
+                    LancamentoAgregado.descricao
+                )
+            ) == descricao_normalizada.lower(),
+            LancamentoAgregado.categoria_id.isnot(None)
+        ).order_by(LancamentoAgregado.id.desc()).first()
+
+        if registro and registro.categoria_id:
+            return int(registro.categoria_id), 'historico'
+
+        return categoria_fallback_id, 'fallback'
 
     @staticmethod
     def processar_linhas_mapeadas(linhas_mapeadas, cartao_id, competencia_alvo):
         """
-        Processa linhas já mapeadas e gera lançamentos
+        Processa linhas jÃ¡ mapeadas e gera lanÃ§amentos
 
         Args:
             linhas_mapeadas (list): Lista de dicts com campos mapeados
-            cartao_id (int): ID do cartão
-            competencia_alvo (date): Mês de competência (YYYY-MM-01)
+            cartao_id (int): ID do cartÃ£o
+            competencia_alvo (date): MÃªs de competÃªncia (YYYY-MM-01)
 
         Returns:
-            list: Lista de lançamentos prontos para persistência
+            dict: {
+                'lancamentos': list,
+                'linhas_invalidas': list,
+                'total_linhas_recebidas': int
+            }
         """
         lancamentos = []
+        linhas_invalidas = []
 
-        for linha in linhas_mapeadas:
+        for idx, linha in enumerate(linhas_mapeadas, start=1):
+            if linha.get('ignorar'):
+                continue
+
             # Extrair campos
             data_compra_str = linha.get('data_compra')
             descricao_bruta = linha.get('descricao')
@@ -268,11 +404,15 @@ class ImportacaoCartaoService:
             categoria_id = linha.get('categoria_id')
             item_agregado_id = linha.get('item_agregado_id')  # Opcional
 
-            # Validar obrigatórios
+            # Validar obrigatÃ³rios
             if not all([data_compra_str, descricao_bruta, valor_str, categoria_id]):
-                continue  # Pular linha inválida
+                linhas_invalidas.append({
+                    'linha': idx,
+                    'erro': 'Campos obrigatorios ausentes (data_compra, descricao, valor, categoria_id)'
+                })
+                continue
 
-            # Parsear data (tentar múltiplos formatos)
+            # Parsear data (tentar mÃºltiplos formatos)
             data_compra = None
             formatos_data = ['%Y-%m-%d', '%d/%m/%Y', '%Y-%m-%d', '%d-%m-%Y']
 
@@ -284,23 +424,48 @@ class ImportacaoCartaoService:
                     continue
 
             if not data_compra:
-                continue  # Data inválida - pular linha
+                linhas_invalidas.append({
+                    'linha': idx,
+                    'erro': f'Data invalida: {data_compra_str}'
+                })
+                continue  # Data invÃ¡lida - pular linha
 
             # Parsear valor
             try:
-                valor = Decimal(valor_str.replace(',', '.'))
+                valor = ImportacaoCartaoService._parse_valor(valor_str)
             except (InvalidOperation, ValueError):
-                continue  # Valor inválido
+                linhas_invalidas.append({
+                    'linha': idx,
+                    'erro': f'Valor invalido: {valor_str}'
+                })
+                continue  # Valor invÃ¡lido
 
-            # Normalizar descrição e extrair parcelamento
+            # Normalizar descriÃ§Ã£o e extrair parcelamento
             descricao_normalizada, numero_parcela, total_parcelas = ImportacaoCartaoService.normalizar_descricao(descricao_bruta)
 
-            # Se parcela foi mapeada explicitamente no CSV, usar
-            if parcela_str and parcela_str != '1/1':
-                match = re.match(r'(\d+)/(\d+)', parcela_str)
-                if match:
-                    numero_parcela = int(match.group(1))
-                    total_parcelas = int(match.group(2))
+            numero_parcela_manual = linha.get('numero_parcela')
+            total_parcelas_manual = linha.get('total_parcelas')
+            if numero_parcela_manual and total_parcelas_manual:
+                try:
+                    numero_parcela = int(numero_parcela_manual)
+                    total_parcelas = int(total_parcelas_manual)
+                except (ValueError, TypeError):
+                    linhas_invalidas.append({
+                        'linha': idx,
+                        'erro': 'Parametros de parcela invalidos'
+                    })
+                    continue
+            else:
+                parsed = ImportacaoCartaoService._parse_parcela_texto(parcela_str)
+                if parsed:
+                    numero_parcela, total_parcelas = parsed
+
+            if numero_parcela < 1 or total_parcelas < 1 or numero_parcela > total_parcelas:
+                linhas_invalidas.append({
+                    'linha': idx,
+                    'erro': f'Parcela fora do intervalo: {numero_parcela}/{total_parcelas}'
+                })
+                continue
 
             # Reconhecer despesa fixa
             despesa_fixa = ImportacaoCartaoService.reconhecer_despesa_fixa(descricao_normalizada, cartao_id)
@@ -308,39 +473,107 @@ class ImportacaoCartaoService:
             item_despesa_id = despesa_fixa.id if despesa_fixa else None
 
             # Gerar todas as parcelas (passadas, atual, futuras)
-            parcelas = ImportacaoCartaoService.gerar_parcelas(
-                descricao_normalizada=descricao_normalizada,
-                descricao_exibida=linha.get('descricao_exibida', descricao_normalizada),
-                descricao_original=descricao_bruta,
-                valor_total=valor,
-                data_compra=data_compra,
-                numero_parcela_atual=numero_parcela,
-                total_parcelas=total_parcelas,
-                cartao_id=cartao_id,
-                categoria_id=categoria_id,
-                item_agregado_id=item_agregado_id,
-                competencia_base=competencia_alvo,  # Usar competência escolhida pelo usuário
-                compra_id=None  # Será gerado automaticamente
-            )
+            gerar_futuras = bool(linha.get('gerar_parcelas_futuras'))
+            if gerar_futuras and total_parcelas > 1:
+                parcelas = ImportacaoCartaoService.gerar_parcelas(
+                    descricao_normalizada=descricao_normalizada,
+                    descricao_exibida=linha.get('descricao_exibida', descricao_normalizada),
+                    descricao_original=descricao_bruta,
+                    valor_total=valor,
+                    data_compra=data_compra,
+                    numero_parcela_atual=numero_parcela,
+                    total_parcelas=total_parcelas,
+                    cartao_id=cartao_id,
+                    categoria_id=categoria_id,
+                    item_agregado_id=item_agregado_id,
+                    competencia_base=competencia_alvo,
+                    compra_id=None
+                )
+            else:
+                compra_id = str(uuid.uuid4())
+                parcelas = [{
+                    'descricao': descricao_normalizada,
+                    'descricao_original': descricao_bruta,
+                    'descricao_original_normalizada': descricao_normalizada,
+                    'descricao_exibida': linha.get('descricao_exibida', descricao_normalizada),
+                    'valor': valor,
+                    'data_compra': data_compra,
+                    'mes_fatura': competencia_alvo,
+                    'numero_parcela': numero_parcela,
+                    'total_parcelas': total_parcelas,
+                    'cartao_id': cartao_id,
+                    'categoria_id': categoria_id,
+                    'item_agregado_id': item_agregado_id,
+                    'compra_id': compra_id,
+                    'is_importado': True,
+                    'origem_importacao': 'csv'
+                }]
 
-            # Adicionar flag de recorrência
+            # Adicionar flag de recorrÃªncia
             for parcela in parcelas:
                 parcela['is_recorrente'] = is_recorrente
                 parcela['item_despesa_id'] = item_despesa_id
 
             lancamentos.extend(parcelas)
 
-        return lancamentos
+        return {
+            'lancamentos': lancamentos,
+            'linhas_invalidas': linhas_invalidas,
+            'total_linhas_recebidas': len(linhas_mapeadas)
+        }
 
     @staticmethod
-    def persistir_lancamentos(lancamentos):
-        """
-        Persiste lançamentos com garantia de idempotência
+    def _normalizar_chave_texto(valor):
+        return (valor or '').strip().lower()
 
-        Idempotência: (compra_id + numero_parcela) é único
+    @staticmethod
+    def _chave_negocio_lancamento(lanc):
+        valor = Decimal(str(lanc['valor'])).quantize(Decimal('0.01'))
+        return (
+            int(lanc['cartao_id']),
+            lanc['mes_fatura'].isoformat(),
+            lanc['data_compra'].isoformat(),
+            str(valor),
+            ImportacaoCartaoService._normalizar_chave_texto(lanc.get('descricao_original_normalizada') or lanc.get('descricao')),
+            int(lanc['numero_parcela']),
+            int(lanc['total_parcelas'])
+        )
+
+    @staticmethod
+    def _existe_duplicado_banco(lanc):
+        descricao_ref = ImportacaoCartaoService._normalizar_chave_texto(
+            lanc.get('descricao_original_normalizada') or lanc.get('descricao')
+        )
+
+        existente = LancamentoAgregado.query.filter(
+            LancamentoAgregado.cartao_id == lanc['cartao_id'],
+            LancamentoAgregado.mes_fatura == lanc['mes_fatura'],
+            LancamentoAgregado.data_compra == lanc['data_compra'],
+            LancamentoAgregado.valor == lanc['valor'],
+            LancamentoAgregado.numero_parcela == lanc['numero_parcela'],
+            LancamentoAgregado.total_parcelas == lanc['total_parcelas'],
+            func.lower(
+                func.coalesce(
+                    LancamentoAgregado.descricao_original_normalizada,
+                    LancamentoAgregado.descricao
+                )
+            ) == descricao_ref
+        ).first()
+
+        return existente is not None
+
+    @staticmethod
+    def persistir_lancamentos(lancamentos, dry_run=False):
+        """
+        Persiste lanÃ§amentos com garantia de idempotÃªncia
+
+        IdempotÃªncia MVP:
+        - Detecta duplicidade no lote atual (chave de negÃ³cio)
+        - Detecta duplicidade no banco (chave de negÃ³cio estÃ¡vel)
 
         Args:
-            lancamentos (list): Lista de dicts de lançamentos
+            lancamentos (list): Lista de dicts de lanÃ§amentos
+            dry_run (bool): Se True, nÃ£o persiste. Apenas analisa.
 
         Returns:
             dict: {'inseridos': int, 'duplicados': int, 'erros': []}
@@ -348,20 +581,37 @@ class ImportacaoCartaoService:
         inseridos = 0
         duplicados = 0
         erros = []
+        chaves_lote = set()
+        amostra_duplicados = []
+        amostra_erros = []
 
         for lanc in lancamentos:
             try:
-                # Verificar se já existe (idempotência)
-                existe = LancamentoAgregado.query.filter_by(
-                    compra_id=lanc['compra_id'],
-                    numero_parcela=lanc['numero_parcela']
-                ).first()
+                chave_lote = ImportacaoCartaoService._chave_negocio_lancamento(lanc)
+                duplicado_lote = chave_lote in chaves_lote
+                duplicado_banco = ImportacaoCartaoService._existe_duplicado_banco(lanc)
+                existe = duplicado_lote or duplicado_banco
 
                 if existe:
                     duplicados += 1
+                    if len(amostra_duplicados) < 20:
+                        amostra_duplicados.append({
+                            'descricao': lanc.get('descricao_exibida') or lanc.get('descricao'),
+                            'data_compra': lanc['data_compra'].isoformat(),
+                            'valor': float(lanc['valor']),
+                            'numero_parcela': lanc['numero_parcela'],
+                            'total_parcelas': lanc['total_parcelas'],
+                            'origem': 'lote' if duplicado_lote else 'banco'
+                        })
                     continue  # Pular duplicado
 
-                # Criar novo lançamento
+                chaves_lote.add(chave_lote)
+
+                if dry_run:
+                    inseridos += 1
+                    continue
+
+                # Criar novo lanÃ§amento
                 novo_lanc = LancamentoAgregado(
                     descricao=lanc['descricao'],
                     descricao_original=lanc['descricao_original'],
@@ -386,12 +636,24 @@ class ImportacaoCartaoService:
                 inseridos += 1
 
             except Exception as e:
-                erros.append({
+                erro_item = {
                     'descricao': lanc.get('descricao', 'Desconhecido'),
                     'erro': str(e)
-                })
+                }
+                erros.append(erro_item)
+                if len(amostra_erros) < 20:
+                    amostra_erros.append(erro_item)
 
-        # Commit atômico
+        if dry_run:
+            return {
+                'inseridos': inseridos,
+                'duplicados': duplicados,
+                'erros': erros,
+                'amostra_duplicados': amostra_duplicados,
+                'amostra_erros': amostra_erros
+            }
+
+        # Commit atÃ´mico
         try:
             db.session.commit()
         except Exception as e:
@@ -401,5 +663,7 @@ class ImportacaoCartaoService:
         return {
             'inseridos': inseridos,
             'duplicados': duplicados,
-            'erros': erros
+            'erros': erros,
+            'amostra_duplicados': amostra_duplicados,
+            'amostra_erros': amostra_erros
         }

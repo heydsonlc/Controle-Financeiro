@@ -66,6 +66,28 @@ Retomada do desenvolvimento após +1 ano de freeze.
 
 ---
 
+## Decisão Arquitetural — Web, Mobile, Segurança e PostgreSQL (2026-04-30)
+
+Após o diagnóstico do MVP UX-1 e seu adendo, foram registradas novas diretrizes para a evolução do sistema:
+
+- tratar o Controle Financeiro como Aplicação web, com experiência principal desktop;
+- manter a reestruturação visual baseada em menu lateral, barra superior de contexto e faixa de ações por módulo;
+- priorizar a tela Despesas como primeiro foco mobile, por representar a fatura mensal consolidada da vida financeira;
+- tratar autenticação e proteção global como bloqueantes para qualquer acesso externo;
+- reconhecer a ausência atual de autenticação ativa, mesmo com Flask-Login e Flask-WTF já instalados;
+- adotar PostgreSQL local como banco oficial de desenvolvimento;
+- reservar PostgreSQL DigitalOcean para produção/web futura;
+- reconhecer que os dados locais atuais não são dados reais e podem ser resetados, excluídos ou recriados durante o desenvolvimento;
+- limitar qualquer operação destrutiva ao ambiente local/dev, nunca a produção, DigitalOcean, banco remoto ou qualquer `DATABASE_URL` externa;
+- adotar Playwright E2E como padrão de Validação progressiva dos próximos MVPs;
+- manter Segurança como bloqueante para qualquer acesso externo;
+- tratar Despesas como prioridade mobile futura;
+- manter SQLite apenas como legado, fallback, compatibilidade temporária ou teste, até diagnóstico próprio.
+
+Essas decisões não alteram regras financeiras, contratos de API, banco de dados, código-fonte ou comportamento dos módulos existentes.
+
+---
+
 ## Backlog — Próximas fases
 
 Ver [plano de MVPs](./../C:/Users/heydson.cardoso/.claude/plans/sleepy-floating-candy.md) para o cronograma completo (MVP 1 ao 6).

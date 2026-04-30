@@ -1,10 +1,11 @@
-"""
+﻿"""
 Rotas para gerenciamento de Despesas (Itens de Despesa)
 """
 from flask import Blueprint, request, jsonify
 from datetime import datetime, timedelta
 from decimal import Decimal
 import json
+import logging
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import func
 
@@ -16,6 +17,12 @@ except ImportError:
     from services.cartao_service import CartaoService
 
 despesas_bp = Blueprint('despesas', __name__, url_prefix='/api/despesas')
+logger = logging.getLogger(__name__)
+
+
+def _internal_error(contexto='despesas'):
+    logger.exception('Erro interno em %s', contexto)
+    return jsonify({'success': False, 'error': 'Erro interno ao processar requisicao'}), 500
 
 
 def _ler_payload_request():
@@ -42,15 +49,15 @@ def _normalizar_meio_pagamento(value):
 
 def gerar_execucao_despesa_recorrente(item_despesa_id, meses_futuros=1, mes_referencia=None):
     """
-    Orquestrador único de recorrência:
-    - Se meio_pagamento == 'cartao' → gera LancamentoAgregado
-    - Caso contrário → gera Conta
+    Orquestrador Ãºnico de recorrÃªncia:
+    - Se meio_pagamento == 'cartao' â†’ gera LancamentoAgregado
+    - Caso contrÃ¡rio â†’ gera Conta
 
-    IMPORTANTE: esta função NÃO faz commit; o caller controla a transação.
+    IMPORTANTE: esta funÃ§Ã£o NÃƒO faz commit; o caller controla a transaÃ§Ã£o.
     """
     item = ItemDespesa.query.get(item_despesa_id)
     if not item:
-        raise ValueError('ItemDespesa não encontrado')
+        raise ValueError('ItemDespesa nÃ£o encontrado')
     if not item.recorrente:
         return []
 
@@ -64,12 +71,12 @@ def gerar_execucao_despesa_recorrente(item_despesa_id, meses_futuros=1, mes_refe
 
 def calcular_competencia(data_vencimento):
     """
-    Calcula o mês de competência (mês do salário que paga a despesa)
-    Regra: A competência é o mês anterior ao vencimento
+    Calcula o mÃªs de competÃªncia (mÃªs do salÃ¡rio que paga a despesa)
+    Regra: A competÃªncia Ã© o mÃªs anterior ao vencimento
 
     Exemplo:
-    - Vencimento em 15/12/2025 → Competência: 11/2025 (Novembro)
-    - Vencimento em 05/01/2026 → Competência: 12/2025 (Dezembro)
+    - Vencimento em 15/12/2025 â†’ CompetÃªncia: 11/2025 (Novembro)
+    - Vencimento em 05/01/2026 â†’ CompetÃªncia: 12/2025 (Dezembro)
 
     Args:
         data_vencimento: objeto date ou None
@@ -80,17 +87,17 @@ def calcular_competencia(data_vencimento):
     if not data_vencimento:
         return None
 
-    # Subtrai 1 mês da data de vencimento
+    # Subtrai 1 mÃªs da data de vencimento
     mes_competencia = data_vencimento - relativedelta(months=1)
     return mes_competencia.strftime('%Y-%m')
 
 
 def _calcular_totais_fatura_cartao_previsto(cartao_id, competencia):
     """
-    Retorna (total_previsto, total_executado) para a fatura de um cartão no mês.
+    Retorna (total_previsto, total_executado) para a fatura de um cartÃ£o no mÃªs.
 
-    Definição:
-    - total_executado = soma de TODOS os LancamentoAgregado do mês (com e sem categoria)
+    DefiniÃ§Ã£o:
+    - total_executado = soma de TODOS os LancamentoAgregado do mÃªs (com e sem categoria)
     - total_previsto = total_executado + soma(max(0, orcado_categoria - gasto_categoria))
       (equivalente a somar max(orcado, gasto) por categoria sem duplo-contar os gastos)
     """
@@ -149,16 +156,16 @@ def _calcular_totais_fatura_cartao_previsto(cartao_id, competencia):
 @despesas_bp.route('/', methods=['GET'])
 def listar_despesas():
     """
-    Lista todas as despesas, incluindo faturas virtuais de cartão
+    Lista todas as despesas, incluindo faturas virtuais de cartÃ£o
 
     Regra de agrupamento:
     - Despesas tipo='Simples': aparecem individualmente
-    - Despesas tipo='Agregador' (cartões): faturas virtuais (Conta.is_fatura_cartao=True)
+    - Despesas tipo='Agregador' (cartÃµes): faturas virtuais (Conta.is_fatura_cartao=True)
       mostram valor_planejado (pendente) ou valor_executado (pago)
     """
     try:
-        # ✅ LAZY GENERATION: Preencher lacunas até o mês navegado + 1 mês futuro
-        # ⚠️ Dashboard NÃO deve passar mes_arg - apenas navegação explícita por mês
+        # âœ… LAZY GENERATION: Preencher lacunas atÃ© o mÃªs navegado + 1 mÃªs futuro
+        # âš ï¸ Dashboard NÃƒO deve passar mes_arg - apenas navegaÃ§Ã£o explÃ­cita por mÃªs
         mes_arg = request.args.get('mes_referencia') or request.args.get('mes')
 
         if mes_arg:
@@ -170,22 +177,22 @@ def listar_despesas():
                     if not desp.data_vencimento:
                         continue
 
-                    # Calcular quantos meses entre o início da despesa e o mês navegado
+                    # Calcular quantos meses entre o inÃ­cio da despesa e o mÃªs navegado
                     inicio = desp.data_vencimento.replace(day=1)
 
-                    # Calcular diferença em meses
+                    # Calcular diferenÃ§a em meses
                     meses_diferenca = (mes_referencia.year - inicio.year) * 12 + \
                                      (mes_referencia.month - inicio.month)
 
-                    # Garantir que preencha ATÉ o mês navegado + 1 mês futuro (UX suave)
-                    # Se meses_diferenca < 0, a despesa é futura, então gerar apenas se for o mês
-                    # Se meses_diferenca >= 0, gerar até o mês navegado + 1
+                    # Garantir que preencha ATÃ‰ o mÃªs navegado + 1 mÃªs futuro (UX suave)
+                    # Se meses_diferenca < 0, a despesa Ã© futura, entÃ£o gerar apenas se for o mÃªs
+                    # Se meses_diferenca >= 0, gerar atÃ© o mÃªs navegado + 1
                     if meses_diferenca >= 0:
-                        meses_futuros = meses_diferenca + 2  # Mês navegado + próximo mês
+                        meses_futuros = meses_diferenca + 2  # MÃªs navegado + prÃ³ximo mÃªs
                     else:
-                        meses_futuros = 1  # Despesa futura, gerar apenas se for o mês
+                        meses_futuros = 1  # Despesa futura, gerar apenas se for o mÃªs
 
-                    # Gerar todas as contas necessárias (preenchendo lacunas)
+                    # Gerar todas as contas necessÃ¡rias (preenchendo lacunas)
                     # mes_referencia=None faz gerar a partir da data_vencimento
                     gerar_execucao_despesa_recorrente(
                         desp.id,
@@ -193,8 +200,8 @@ def listar_despesas():
                         mes_referencia=None
                     )
 
-                # ✅ LAZY GENERATION (CARTÕES): garantir que a fatura exista
-                # mesmo sem lançamentos, para o mês navegado (+1 mês futuro)
+                # âœ… LAZY GENERATION (CARTÃ•ES): garantir que a fatura exista
+                # mesmo sem lanÃ§amentos, para o mÃªs navegado (+1 mÃªs futuro)
                 competencias_fatura = [
                     mes_referencia.replace(day=1),
                     (mes_referencia + relativedelta(months=1)).replace(day=1),
@@ -205,23 +212,29 @@ def listar_despesas():
                         try:
                             CartaoService.get_or_create_fatura(cartao.id, comp)
                         except Exception:
+                            logger.warning(
+                                'Falha ao garantir fatura virtual no lazy generation cartao_id=%s competencia=%s',
+                                cartao.id,
+                                comp,
+                                exc_info=True,
+                            )
                             continue
 
                 db.session.commit()
-            except Exception as e:
+            except Exception:
                 db.session.rollback()
-                # Continuar mesmo com erro (modo degradado - lista apenas o que existe)
-                pass
+                # Continua em modo degradado, mas com rastreabilidade
+                logger.warning('Falha no lazy generation de despesas; seguindo com dados existentes', exc_info=True)
 
         resultado = []
 
-        # 1. Buscar CONTAS que NÃO são faturas de cartão de crédito
-        # (Despesas simples, consórcios, financiamentos, etc)
+        # 1. Buscar CONTAS que NÃƒO sÃ£o faturas de cartÃ£o de crÃ©dito
+        # (Despesas simples, consÃ³rcios, financiamentos, etc)
         from sqlalchemy import extract, or_
 
         # Buscar contas que:
-        # - NÃO são fatura de cartão (is_fatura_cartao = False ou NULL)
-        # IMPORTANTE: Não filtrar por ItemDespesa.ativo pois consórcios/financiamentos
+        # - NÃƒO sÃ£o fatura de cartÃ£o (is_fatura_cartao = False ou NULL)
+        # IMPORTANTE: NÃ£o filtrar por ItemDespesa.ativo pois consÃ³rcios/financiamentos
         # podem ter ItemDespesa inativo mas geram Contas ativas
         contas_nao_cartao = db.session.query(Conta).outerjoin(
             ItemDespesa, Conta.item_despesa_id == ItemDespesa.id
@@ -267,7 +280,7 @@ def listar_despesas():
             }
             resultado.append(conta_dict)
 
-        # 2. Buscar FATURAS VIRTUAIS de cartão de crédito (Conta.is_fatura_cartao = True)
+        # 2. Buscar FATURAS VIRTUAIS de cartÃ£o de crÃ©dito (Conta.is_fatura_cartao = True)
         faturas_cartao = db.session.query(Conta).outerjoin(
             ItemDespesa, Conta.item_despesa_id == ItemDespesa.id
         ).outerjoin(
@@ -278,14 +291,14 @@ def listar_despesas():
             Conta.data_vencimento.desc()
         ).all()
 
-        # Converter cada fatura de cartão para formato do frontend
+        # Converter cada fatura de cartÃ£o para formato do frontend
         for fatura in faturas_cartao:
             item = fatura.item_despesa
             categoria = item.categoria if item else None
 
             # REGRA: Card da fatura:
-            # - Se PENDENTE → exibe TOTAL PREVISTO da fatura
-            # - Se PAGA → exibe TOTAL EXECUTADO
+            # - Se PENDENTE â†’ exibe TOTAL PREVISTO da fatura
+            # - Se PAGA â†’ exibe TOTAL EXECUTADO
             total_previsto = float(fatura.valor_planejado or fatura.valor or 0)
             total_executado = float(fatura.valor_executado or 0)
 
@@ -303,11 +316,11 @@ def listar_despesas():
                 'id': fatura.id,
                 'nome': fatura.descricao,
                 'descricao': fatura.observacoes or '',
-                'tipo': 'cartao',  # ← CORRIGIDO: era 'Agregador', mas frontend espera 'cartao'
+                'tipo': 'cartao',  # â† CORRIGIDO: era 'Agregador', mas frontend espera 'cartao'
                 'valor': valor_exibido,
                 'conta_bancaria_id': getattr(fatura, 'conta_bancaria_id', None),
                 'financiamento_parcela_id': None,
-                'valor_fatura': valor_exibido,  # ← ADICIONADO: campo que frontend espera ler
+                'valor_fatura': valor_exibido,  # â† ADICIONADO: campo que frontend espera ler
                 'valor_planejado': total_previsto,
                 'valor_executado': total_executado,
                 'estouro_orcamento': fatura.estouro_orcamento or False,
@@ -323,7 +336,7 @@ def listar_despesas():
                 'debito_automatico': fatura.debito_automatico,
                 'numero_parcela': None,
                 'total_parcelas': None,
-                'agrupado': True,  # Flag para indicar que é fatura de cartão
+                'agrupado': True,  # Flag para indicar que Ã© fatura de cartÃ£o
                 'ativo': True,
                 'is_fatura_cartao': True,
                 'cartao_id': item.id if item else None
@@ -337,26 +350,23 @@ def listar_despesas():
             'success': True,
             'data': resultado
         })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+    except Exception:
+        return _internal_error('despesas')
 
 
 @despesas_bp.route('/<int:id>', methods=['GET'])
 def obter_despesa(id):
-    """Obtém uma conta específica"""
+    """ObtÃ©m uma conta especÃ­fica"""
     try:
-        # Buscar na tabela Conta (não ItemDespesa)
+        # Buscar na tabela Conta (nÃ£o ItemDespesa)
         conta = Conta.query.get(id)
         if not conta:
             return jsonify({
                 'success': False,
-                'error': 'Despesa não encontrada'
+                'error': 'Despesa nÃ£o encontrada'
             }), 404
 
-        # Buscar ItemDespesa relacionado para pegar informações adicionais
+        # Buscar ItemDespesa relacionado para pegar informaÃ§Ãµes adicionais
         item_despesa = None
         if conta.item_despesa_id:
             item_despesa = ItemDespesa.query.get(conta.item_despesa_id)
@@ -393,11 +403,8 @@ def obter_despesa(id):
             'success': True,
             'data': conta_dict
         })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+    except Exception:
+        return _internal_error('despesas')
 
 
 @despesas_bp.route('/', methods=['POST'])
@@ -405,29 +412,29 @@ def criar_despesa():
     """Cria uma nova despesa"""
     try:
         # ==========================================================
-        # CORREÇÃO DEFINITIVA — LEITURA CORRETA DO PAYLOAD
+        # CORREÃ‡ÃƒO DEFINITIVA â€” LEITURA CORRETA DO PAYLOAD
         # SUPORTA JSON E FORM-DATA
         # ==========================================================
 
         dados = _ler_payload_request()
 
-        # Validações
+        # ValidaÃ§Ãµes
         if not dados.get('nome'):
             return jsonify({
                 'success': False,
-                'error': 'Nome é obrigatório'
+                'error': 'Nome Ã© obrigatÃ³rio'
             }), 400
 
         if not dados.get('valor'):
             return jsonify({
                 'success': False,
-                'error': 'Valor é obrigatório'
+                'error': 'Valor Ã© obrigatÃ³rio'
             }), 400
 
         if not dados.get('categoria_id'):
             return jsonify({
                 'success': False,
-                'error': 'Categoria é obrigatória'
+                'error': 'Categoria Ã© obrigatÃ³ria'
             }), 400
 
         # Verificar se categoria existe
@@ -435,7 +442,7 @@ def criar_despesa():
         if not categoria:
             return jsonify({
                 'success': False,
-                'error': 'Categoria não encontrada'
+                'error': 'Categoria nÃ£o encontrada'
             }), 404
 
         # Converter datas
@@ -446,7 +453,7 @@ def criar_despesa():
             except ValueError:
                 return jsonify({
                     'success': False,
-                    'error': 'Formato de data inválido. Use YYYY-MM-DD'
+                    'error': 'Formato de data invÃ¡lido. Use YYYY-MM-DD'
                 }), 400
 
         data_pagamento = None
@@ -456,10 +463,10 @@ def criar_despesa():
             except ValueError:
                 return jsonify({
                     'success': False,
-                    'error': 'Formato de data de pagamento inválido. Use YYYY-MM-DD'
+                    'error': 'Formato de data de pagamento invÃ¡lido. Use YYYY-MM-DD'
                 }), 400
 
-        # Calcular competência automaticamente se não fornecida
+        # Calcular competÃªncia automaticamente se nÃ£o fornecida
         mes_competencia = dados.get('mes_competencia')
         if not mes_competencia and data_vencimento:
             mes_competencia = calcular_competencia(data_vencimento)
@@ -476,30 +483,30 @@ def criar_despesa():
             recorrente=dados.get('recorrente', False),
             tipo_recorrencia=dados.get('tipo_recorrencia', 'mensal'),
             mes_competencia=mes_competencia,
-            tipo='Simples'  # Define o tipo como 'Simples' por padrão
+            tipo='Simples'  # Define o tipo como 'Simples' por padrÃ£o
         )
 
         db.session.add(despesa)
-        db.session.flush()  # Garante despesa.id antes de qualquer lógica derivada
+        db.session.flush()  # Garante despesa.id antes de qualquer lÃ³gica derivada
 
         # ==========================================================
-        # PERSISTÊNCIA CORRETA — PAGAMENTO VIA CARTÃO
+        # PERSISTÃŠNCIA CORRETA â€” PAGAMENTO VIA CARTÃƒO
         # ==========================================================
 
         meio_pagamento = _normalizar_meio_pagamento(dados.get('meio_pagamento'))
         despesa.meio_pagamento = meio_pagamento
 
-        # Se for despesa recorrente paga via cartão de crédito
+        # Se for despesa recorrente paga via cartÃ£o de crÃ©dito
         if bool(despesa.recorrente) and meio_pagamento == 'cartao':
             cartao_id = _to_int(dados.get('cartao_id'))
             item_agregado_id = _to_int(dados.get('item_agregado_id'))
 
-            # Validação mínima de integridade
+            # ValidaÃ§Ã£o mÃ­nima de integridade
             if not cartao_id:
                 db.session.rollback()
                 return jsonify({
                     'success': False,
-                    'error': "cartao_id é obrigatório quando meio_pagamento = 'cartao'."
+                    'error': "cartao_id Ã© obrigatÃ³rio quando meio_pagamento = 'cartao'."
                 }), 400
 
             despesa.cartao_id = cartao_id
@@ -511,12 +518,12 @@ def criar_despesa():
 
         try:
             if despesa.recorrente:
-                # ✅ LAZY GENERATION: Gerar apenas o mês inicial
-                # O restante será gerado conforme o usuário navegar pelos meses
+                # âœ… LAZY GENERATION: Gerar apenas o mÃªs inicial
+                # O restante serÃ¡ gerado conforme o usuÃ¡rio navegar pelos meses
                 gerar_execucao_despesa_recorrente(despesa.id, meses_futuros=1, mes_referencia=None)
             else:
-                # Se NÃO for recorrente, criar UMA Conta imediatamente
-                # Isso garante que a despesa apareça no histórico de lançamentos
+                # Se NÃƒO for recorrente, criar UMA Conta imediatamente
+                # Isso garante que a despesa apareÃ§a no histÃ³rico de lanÃ§amentos
                 if data_vencimento:
                     mes_referencia = data_vencimento.replace(day=1)
                     status = 'Pago' if dados.get('pago') or data_pagamento else 'Pendente'
@@ -538,12 +545,9 @@ def criar_despesa():
                     db.session.add(nova_conta)
 
             db.session.commit()
-        except Exception as e:
+        except Exception:
             db.session.rollback()
-            return jsonify({
-                'success': False,
-                'error': f'Falha ao gerar recorrência: {str(e)}'
-            }), 500
+            return _internal_error('criar_despesa_recorrente')
 
         return jsonify({
             'success': True,
@@ -551,29 +555,26 @@ def criar_despesa():
             'data': despesa.to_dict()
         }), 201
 
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return _internal_error('despesas')
 
 
 @despesas_bp.route('/<int:id>', methods=['PUT'])
 def atualizar_despesa(id):
-    """Atualiza uma conta específica"""
+    """Atualiza uma conta especÃ­fica"""
     try:
-        # Buscar na tabela Conta (não ItemDespesa)
+        # Buscar na tabela Conta (nÃ£o ItemDespesa)
         conta = Conta.query.get(id)
         if not conta:
             return jsonify({
                 'success': False,
-                'error': 'Despesa não encontrada'
+                'error': 'Despesa nÃ£o encontrada'
             }), 404
 
         dados = request.get_json()
 
-        # Atualizar campos básicos da Conta
+        # Atualizar campos bÃ¡sicos da Conta
         if 'descricao' in dados:
             conta.descricao = dados['descricao']
 
@@ -584,7 +585,8 @@ def atualizar_despesa(id):
             try:
                 conta.data_vencimento = datetime.strptime(dados['data_vencimento'], '%Y-%m-%d').date()
             except ValueError:
-                pass
+                logger.warning('Data de vencimento invalida na atualizacao da despesa id=%s', id)
+                return jsonify({'success': False, 'error': 'Formato de data_vencimento invalido. Use YYYY-MM-DD'}), 400
 
         if 'observacoes' in dados:
             conta.observacoes = dados['observacoes']
@@ -597,7 +599,8 @@ def atualizar_despesa(id):
                     if conta.status_pagamento != 'Pago':
                         conta.status_pagamento = 'Pago'
                 except ValueError:
-                    pass
+                    logger.warning('Data de pagamento invalida na atualizacao da despesa id=%s', id)
+                    return jsonify({'success': False, 'error': 'Formato de data_pagamento invalido. Use YYYY-MM-DD'}), 400
             else:
                 conta.data_pagamento = None
                 conta.status_pagamento = 'Pendente'
@@ -606,7 +609,7 @@ def atualizar_despesa(id):
         if 'pago' in dados:
             if dados['pago']:
                 conta.status_pagamento = 'Pago'
-                # Se não tem data de pagamento, usar data de vencimento
+                # Se nÃ£o tem data de pagamento, usar data de vencimento
                 if not conta.data_pagamento:
                     conta.data_pagamento = conta.data_vencimento
             else:
@@ -616,9 +619,9 @@ def atualizar_despesa(id):
         db.session.commit()
 
         # ========================================================================
-        # HOOK: Sincronizar pagamento com Financiamento (se aplicável)
+        # HOOK: Sincronizar pagamento com Financiamento (se aplicÃ¡vel)
         # ========================================================================
-        # Se esta conta está vinculada a uma parcela de financiamento E foi marcada como paga,
+        # Se esta conta estÃ¡ vinculada a uma parcela de financiamento E foi marcada como paga,
         # chamar o motor do financiamento para sincronizar estado
         if conta.financiamento_parcela_id and conta.status_pagamento == 'Pago':
             from backend.services.financiamento_service import FinanciamentoService
@@ -636,23 +639,20 @@ def atualizar_despesa(id):
             'message': 'Despesa atualizada com sucesso'
         })
 
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return _internal_error('despesas')
 
 
 @despesas_bp.route('/<int:id>_OLD', methods=['PUT'])
 def atualizar_despesa_OLD(id):
-    """[BACKUP] Atualiza uma despesa existente (única ou com futuras) - VERSÃO ANTIGA"""
+    """[BACKUP] Atualiza uma despesa existente (Ãºnica ou com futuras) - VERSÃƒO ANTIGA"""
     try:
         despesa = ItemDespesa.query.get(id)
         if not despesa:
             return jsonify({
                 'success': False,
-                'error': 'Despesa não encontrada'
+                'error': 'Despesa nÃ£o encontrada'
             }), 404
 
         dados = request.get_json()
@@ -665,11 +665,11 @@ def atualizar_despesa_OLD(id):
         if tipo_edicao == 'futuras':
             # Atualizar esta despesa e todas as futuras do mesmo grupo
             if despesa.tipo == 'Consorcio':
-                # Para consórcio, buscar parcelas futuras pelo nome base
+                # Para consÃ³rcio, buscar parcelas futuras pelo nome base
                 nome_base = despesa.nome.rsplit(' - Parcela ', 1)[0] if ' - Parcela ' in despesa.nome else despesa.nome
                 mes_competencia_atual = despesa.mes_competencia
 
-                # Buscar parcelas futuras do mesmo consórcio
+                # Buscar parcelas futuras do mesmo consÃ³rcio
                 parcelas_futuras = ItemDespesa.query.filter(
                     ItemDespesa.tipo == 'Consorcio',
                     ItemDespesa.nome.like(f"{nome_base} - Parcela%"),
@@ -697,7 +697,7 @@ def atualizar_despesa_OLD(id):
         if 'nome' in dados and not dados['nome']:
             return jsonify({
                 'success': False,
-                'error': 'Nome não pode ser vazio'
+                'error': 'Nome nÃ£o pode ser vazio'
             }), 400
 
         if 'categoria_id' in dados:
@@ -705,13 +705,13 @@ def atualizar_despesa_OLD(id):
             if not categoria:
                 return jsonify({
                     'success': False,
-                    'error': 'Categoria não encontrada'
+                    'error': 'Categoria nÃ£o encontrada'
                 }), 404
 
         # Atualizar todos os campos para cada despesa
         for desp in despesas_para_atualizar:
             if 'nome' in dados:
-                # Se for múltiplas parcelas de consórcio, manter o número da parcela
+                # Se for mÃºltiplas parcelas de consÃ³rcio, manter o nÃºmero da parcela
                 if tipo_edicao == 'futuras' and desp.tipo == 'Consorcio' and ' - Parcela ' in desp.nome:
                     sufixo_parcela = ' - Parcela ' + desp.nome.split(' - Parcela ')[1]
                     desp.nome = dados['nome'] + sufixo_parcela
@@ -727,7 +727,7 @@ def atualizar_despesa_OLD(id):
             if 'categoria_id' in dados:
                 desp.categoria_id = dados['categoria_id']
 
-            # Para edição única, permitir alterar datas
+            # Para ediÃ§Ã£o Ãºnica, permitir alterar datas
             if tipo_edicao == 'unica':
                 if 'data_vencimento' in dados:
                     if dados['data_vencimento']:
@@ -738,7 +738,7 @@ def atualizar_despesa_OLD(id):
                         except ValueError:
                             return jsonify({
                                 'success': False,
-                                'error': 'Formato de data inválido. Use YYYY-MM-DD'
+                                'error': 'Formato de data invÃ¡lido. Use YYYY-MM-DD'
                             }), 400
                     else:
                         desp.data_vencimento = None
@@ -751,7 +751,7 @@ def atualizar_despesa_OLD(id):
                         except ValueError:
                             return jsonify({
                                 'success': False,
-                                'error': 'Formato de data de pagamento inválido. Use YYYY-MM-DD'
+                                'error': 'Formato de data de pagamento invÃ¡lido. Use YYYY-MM-DD'
                             }), 400
                     else:
                         desp.data_pagamento = None
@@ -781,24 +781,21 @@ def atualizar_despesa_OLD(id):
             'data': despesa.to_dict()
         })
 
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return _internal_error('despesas')
 
 
 @despesas_bp.route('/<int:id>', methods=['DELETE'])
 def deletar_despesa(id):
-    """Deleta uma conta específica"""
+    """Deleta uma conta especÃ­fica"""
     try:
-        # Buscar na tabela Conta (não ItemDespesa)
+        # Buscar na tabela Conta (nÃ£o ItemDespesa)
         conta = Conta.query.get(id)
         if not conta:
             return jsonify({
                 'success': False,
-                'error': 'Despesa não encontrada'
+                'error': 'Despesa nÃ£o encontrada'
             }), 404
 
         # Deletar a conta
@@ -810,23 +807,20 @@ def deletar_despesa(id):
             'message': 'Despesa deletada com sucesso'
         })
 
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return _internal_error('despesas')
 
 
 @despesas_bp.route('/<int:id>_OLD', methods=['DELETE'])
 def deletar_despesa_OLD(id):
-    """[BACKUP] Deleta uma despesa (única ou com futuras) - VERSÃO ANTIGA"""
+    """[BACKUP] Deleta uma despesa (Ãºnica ou com futuras) - VERSÃƒO ANTIGA"""
     try:
         despesa = ItemDespesa.query.get(id)
         if not despesa:
             return jsonify({
                 'success': False,
-                'error': 'Despesa não encontrada'
+                'error': 'Despesa nÃ£o encontrada'
             }), 404
 
         # Verificar se deve deletar apenas esta ou incluir futuras
@@ -837,12 +831,12 @@ def deletar_despesa_OLD(id):
         if tipo_exclusao == 'futuras':
             # Deletar esta despesa e todas as futuras do mesmo grupo
             if despesa.tipo == 'Consorcio':
-                # Para consórcio, buscar parcelas futuras pelo nome base
-                # Nome formato: "Consórcio X - Parcela N/M"
+                # Para consÃ³rcio, buscar parcelas futuras pelo nome base
+                # Nome formato: "ConsÃ³rcio X - Parcela N/M"
                 nome_base = despesa.nome.rsplit(' - Parcela ', 1)[0] if ' - Parcela ' in despesa.nome else despesa.nome
                 mes_competencia_atual = despesa.mes_competencia
 
-                # Buscar parcelas futuras do mesmo consórcio
+                # Buscar parcelas futuras do mesmo consÃ³rcio
                 parcelas_futuras = ItemDespesa.query.filter(
                     ItemDespesa.tipo == 'Consorcio',
                     ItemDespesa.nome.like(f"{nome_base} - Parcela%"),
@@ -882,12 +876,9 @@ def deletar_despesa_OLD(id):
             'quantidade_deletada': len(despesas_para_deletar)
         })
 
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return _internal_error('despesas')
 
 
 @despesas_bp.route('/<int:id>/pagar', methods=['POST'])
@@ -895,28 +886,28 @@ def marcar_como_pago(id):
     """
     Marca uma conta como paga
 
-    IMPORTANTE: Se for fatura de cartão, usa CartaoService para
+    IMPORTANTE: Se for fatura de cartÃ£o, usa CartaoService para
     substituir planejado por executado
     """
     try:
-        # Buscar na tabela Conta (não ItemDespesa)
+        # Buscar na tabela Conta (nÃ£o ItemDespesa)
         conta = Conta.query.get(id)
         if not conta:
             return jsonify({
                 'success': False,
-                'error': 'Despesa não encontrada'
+                'error': 'Despesa nÃ£o encontrada'
             }), 404
 
         dados = request.get_json() or {}
 
-        # Conta bancária é obrigatória quando o dinheiro se move
+        # Conta bancÃ¡ria Ã© obrigatÃ³ria quando o dinheiro se move
         conta_bancaria_id = dados.get('conta_bancaria_id') or getattr(conta, 'conta_bancaria_id', None)
         if not conta_bancaria_id:
-            return jsonify({'success': False, 'error': 'Selecione uma conta bancária para executar o pagamento'}), 400
+            return jsonify({'success': False, 'error': 'Selecione uma conta bancÃ¡ria para executar o pagamento'}), 400
         try:
             conta_bancaria_id = int(conta_bancaria_id)
         except (TypeError, ValueError):
-            return jsonify({'success': False, 'error': 'Conta bancária inválida'}), 400
+            return jsonify({'success': False, 'error': 'Conta bancÃ¡ria invÃ¡lida'}), 400
 
         # Determinar data de pagamento
         data_pagamento = datetime.now().date()
@@ -924,12 +915,13 @@ def marcar_como_pago(id):
             try:
                 data_pagamento = datetime.strptime(dados['data_pagamento'], '%Y-%m-%d').date()
             except ValueError:
-                pass
+                logger.warning('Data de pagamento invalida ao marcar despesa como paga id=%s', id)
+                return jsonify({'success': False, 'error': 'Formato de data_pagamento invalido. Use YYYY-MM-DD'}), 400
 
         # Determinar valor pago
         valor_pago = dados.get('valor_pago')
 
-        # SE FOR FATURA DE CARTÃO: usar CartaoService
+        # SE FOR FATURA DE CARTÃƒO: usar CartaoService
         if conta.is_fatura_cartao:
             conta = CartaoService.pagar_fatura(
                 fatura_id=id,
@@ -942,7 +934,7 @@ def marcar_como_pago(id):
 
             return jsonify({
                 'success': True,
-                'message': 'Fatura de cartão paga com sucesso',
+                'message': 'Fatura de cartÃ£o paga com sucesso',
                 'data': {
                     'id': conta.id,
                     'valor_planejado': float(conta.valor_planejado),
@@ -954,7 +946,7 @@ def marcar_como_pago(id):
                 }
             }), 200
 
-        # SE NÃO FOR FATURA: lógica tradicional
+        # SE NÃƒO FOR FATURA: lÃ³gica tradicional
         conta.status_pagamento = 'Pago'
         conta.data_pagamento = data_pagamento
         conta.conta_bancaria_id = conta_bancaria_id
@@ -963,8 +955,8 @@ def marcar_como_pago(id):
         if valor_pago is not None:
             conta.valor = float(valor_pago)
 
-        # Se conta bancária informada: gerar movimento (débito) e recalcular saldo
-        # conta_bancaria_id já validado acima
+        # Se conta bancÃ¡ria informada: gerar movimento (dÃ©bito) e recalcular saldo
+        # conta_bancaria_id jÃ¡ validado acima
         if conta_bancaria_id:
             try:
                 from backend.models import ContaBancaria, MovimentoFinanceiro
@@ -975,9 +967,9 @@ def marcar_como_pago(id):
 
             conta_bancaria = ContaBancaria.query.get(conta_bancaria_id)
             if not conta_bancaria:
-                return jsonify({'success': False, 'error': 'Conta bancária não encontrada'}), 404
+                return jsonify({'success': False, 'error': 'Conta bancÃ¡ria nÃ£o encontrada'}), 404
             if conta_bancaria.status != 'ATIVO':
-                return jsonify({'success': False, 'error': 'Conta bancária está inativa'}), 400
+                return jsonify({'success': False, 'error': 'Conta bancÃ¡ria estÃ¡ inativa'}), 400
 
             movimento = MovimentoFinanceiro(
                 conta_bancaria_id=conta_bancaria_id,
@@ -995,9 +987,9 @@ def marcar_como_pago(id):
         db.session.commit()
 
         # ========================================================================
-        # HOOK: Sincronizar pagamento com Financiamento (se aplicável)
+        # HOOK: Sincronizar pagamento com Financiamento (se aplicÃ¡vel)
         # ========================================================================
-        # Se esta conta está vinculada a uma parcela de financiamento E foi marcada como paga,
+        # Se esta conta estÃ¡ vinculada a uma parcela de financiamento E foi marcada como paga,
         # chamar o motor do financiamento para sincronizar estado
         if conta.financiamento_parcela_id and conta.status_pagamento == 'Pago':
             from backend.services.financiamento_service import FinanciamentoService
@@ -1022,16 +1014,13 @@ def marcar_como_pago(id):
             }
         })
 
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return _internal_error('despesas')
 
 
 # ============================================================================
-# FUNÇÕES AUXILIARES PARA DESPESAS RECORRENTES
+# FUNÃ‡Ã•ES AUXILIARES PARA DESPESAS RECORRENTES
 # ============================================================================
 
 def normalizar_dias_semana(dias):
@@ -1169,32 +1158,32 @@ def gerar_contas_despesa_recorrente(item_despesa_id, meses_futuros=12, mes_refer
 
 def gerar_lancamentos_cartao_recorrente(item_despesa_id, meses_futuros=12, mes_referencia=None):
     """
-    Gera lançamentos automaticamente para despesas recorrentes pagas via cartão de crédito.
+    Gera lanÃ§amentos automaticamente para despesas recorrentes pagas via cartÃ£o de crÃ©dito.
     
-    Diferença da geração de Conta:
-    - Gera LancamentoAgregado ao invés de Conta
-    - Aparece na fatura do cartão
+    DiferenÃ§a da geraÃ§Ã£o de Conta:
+    - Gera LancamentoAgregado ao invÃ©s de Conta
+    - Aparece na fatura do cartÃ£o
     - Classificado como "Despesas Fixas"
     
-    Garante idempotência: 1 recorrência = 1 lançamento/mês
+    Garante idempotÃªncia: 1 recorrÃªncia = 1 lanÃ§amento/mÃªs
     """
     from datetime import date
 
     item = ItemDespesa.query.get(item_despesa_id)
     if not item:
-        raise ValueError('ItemDespesa não encontrado')
+        raise ValueError('ItemDespesa nÃ£o encontrado')
     if not item.recorrente:
-        raise ValueError('ItemDespesa não é recorrente')
+        raise ValueError('ItemDespesa nÃ£o Ã© recorrente')
     if item.meio_pagamento != 'cartao':
-        raise ValueError('ItemDespesa não é pago via cartão')
+        raise ValueError('ItemDespesa nÃ£o Ã© pago via cartÃ£o')
     if not item.cartao_id:
-        raise ValueError('ItemDespesa recorrente pago via cartão precisa ter cartao_id')
+        raise ValueError('ItemDespesa recorrente pago via cartÃ£o precisa ter cartao_id')
     if not item.categoria_id:
         raise ValueError('ItemDespesa recorrente precisa ter categoria_id')
 
     tipo_recorrencia = item.tipo_recorrencia or 'mensal'
 
-    # Fallback obrigatório para conseguir inferir mes_fatura quando não há data_vencimento/mes_competencia
+    # Fallback obrigatÃ³rio para conseguir inferir mes_fatura quando nÃ£o hÃ¡ data_vencimento/mes_competencia
     if item.data_vencimento:
         data_base = item.data_vencimento
     elif item.mes_competencia:
@@ -1218,10 +1207,10 @@ def gerar_lancamentos_cartao_recorrente(item_despesa_id, meses_futuros=12, mes_r
     lancamentos_criados = []
     
     def criar_lancamento(data_compra):
-        """Cria LancamentoAgregado se ainda não existe para esta competência"""
+        """Cria LancamentoAgregado se ainda nÃ£o existe para esta competÃªncia"""
         mes_fatura = data_compra.replace(day=1)
         
-        # Verificar se já existe lançamento deste item_despesa para este mês (idempotência)
+        # Verificar se jÃ¡ existe lanÃ§amento deste item_despesa para este mÃªs (idempotÃªncia)
         existente = LancamentoAgregado.query.filter_by(
             item_despesa_id=item_despesa_id,
             mes_fatura=mes_fatura,
@@ -1229,12 +1218,12 @@ def gerar_lancamentos_cartao_recorrente(item_despesa_id, meses_futuros=12, mes_r
         ).first()
         
         if existente:
-            return  # Já existe, não cria duplicado
+            return  # JÃ¡ existe, nÃ£o cria duplicado
         
         novo = LancamentoAgregado(
             cartao_id=item.cartao_id,
-            item_agregado_id=item.item_agregado_id,  # Opcional - categoria do cartão
-            categoria_id=item.categoria_id,  # Categoria analítica obrigatória
+            item_agregado_id=item.item_agregado_id,  # Opcional - categoria do cartÃ£o
+            categoria_id=item.categoria_id,  # Categoria analÃ­tica obrigatÃ³ria
             descricao=item.nome,
             valor=item.valor,
             data_compra=data_compra,
@@ -1243,12 +1232,12 @@ def gerar_lancamentos_cartao_recorrente(item_despesa_id, meses_futuros=12, mes_r
             total_parcelas=1,
             observacoes=item.descricao or '',
             is_recorrente=True,  # Marca como recorrente para aparecer em "Despesas Fixas"
-            item_despesa_id=item_despesa_id  # Referência à despesa recorrente
+            item_despesa_id=item_despesa_id  # ReferÃªncia Ã  despesa recorrente
         )
         db.session.add(novo)
         lancamentos_criados.append(novo)
     
-    # Gerar lançamentos conforme tipo de recorrência (apenas mensal por enquanto)
+    # Gerar lanÃ§amentos conforme tipo de recorrÃªncia (apenas mensal por enquanto)
     if tipo_recorrencia == 'mensal':
         data_ref = data_inicio
         while data_ref < inicio_janela:

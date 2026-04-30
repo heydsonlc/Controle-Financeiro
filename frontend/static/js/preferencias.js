@@ -2,7 +2,11 @@
 // PREFERÊNCIAS - JAVASCRIPT PRINCIPAL
 // ============================================
 
-const API_BASE = 'http://localhost:5000/api/preferencias';
+const API_BASE = '/api/preferencias';
+
+function obterMensagemErro(payload, fallback = 'Erro desconhecido') {
+    return payload?.error || payload?.erro || payload?.message || fallback;
+}
 
 // ============================================
 // INICIALIZAÇÃO
@@ -44,15 +48,17 @@ async function carregarPreferencias() {
         const response = await fetch(API_BASE);
         const data = await response.json();
 
+        if (!response.ok || data?.success === false) {
+            throw new Error(obterMensagemErro(data, 'Erro ao carregar preferencias'));
+        }
+
         if (data.success) {
             const prefs = data.data;
             preencherFormularios(prefs);
-        } else {
-            console.error('Erro ao carregar preferências:', data.error);
         }
     } catch (error) {
         console.error('Erro na requisição:', error);
-        mostrarErro('Erro ao carregar preferências');
+        mostrarErro(error.message || 'Erro ao carregar preferencias');
     }
 }
 
@@ -172,14 +178,16 @@ async function salvarAba(aba) {
 
         const result = await response.json();
 
+        if (!response.ok || result?.success === false) {
+            throw new Error(obterMensagemErro(result, 'Erro ao salvar preferencias'));
+        }
+
         if (result.success) {
-            mostrarSucesso('Preferências salvas com sucesso!');
-        } else {
-            mostrarErro('Erro ao salvar: ' + result.error);
+            mostrarSucesso('Preferencias salvas com sucesso!');
         }
     } catch (error) {
         console.error('Erro ao salvar:', error);
-        mostrarErro('Erro ao salvar preferências');
+        mostrarErro(error.message || 'Erro ao salvar preferencias');
     }
 }
 

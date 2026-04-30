@@ -42,23 +42,127 @@ def upload_csv():
         if not arquivo.filename.endswith('.csv'):
             return jsonify({'success': False, 'message': 'Apenas arquivos CSV são permitidos'}), 400
 
-        # Ler e analisar CSV
-        delimitador, colunas, linhas_amostra = ImportacaoCartaoService.ler_csv(arquivo)
-
-        # Ler total de linhas
-        arquivo.seek(0)
-        total_linhas = len(arquivo.read().decode('utf-8', errors='ignore').split('\n')) - 1  # -1 cabeçalho
+        # Ler e analisar CSV completo
+        delimitador, colunas, linhas_dados, linhas_amostra, total_linhas = ImportacaoCartaoService.ler_csv(arquivo)
+        perfil_info = ImportacaoCartaoService.detectar_perfil_csv(colunas)
 
         return jsonify({
             'success': True,
             'delimitador': delimitador,
             'colunas': colunas,
+            'linhas_dados': linhas_dados,
             'linhas_amostra': linhas_amostra,
-            'total_linhas': total_linhas
+            'total_linhas': total_linhas,
+            'perfil_detectado': perfil_info.get('perfil'),
+            'autodeteccao_confianca': perfil_info.get('confianca'),
+            'mapeamento_sugerido': perfil_info.get('mapeamento_sugerido', {}),
+            'perfis_suportados': [
+                {'id': ImportacaoCartaoService.PERFIL_NUBANK, 'nome': 'Nubank CSV simples'},
+                {'id': ImportacaoCartaoService.PERFIL_CAIXA, 'nome': 'Caixa (Credito/Debito)'},
+                {'id': ImportacaoCartaoService.PERFIL_MANUAL, 'nome': 'Manual generico'}
+            ]
         })
 
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
+
+
+def _validar_payload_importacao(data):
+    if not data:
+        return None, ('Payload JSON ausente ou invalido', 400)
+
+    cartao_id = data.get('cartao_id')
+    competencia_str = data.get('competencia')
+    linhas = data.get('linhas', [])
+
+    if not cartao_id:
+        return None, ('cartao_id obrigatorio', 400)
+
+    if not competencia_str:
+        return None, ('competencia obrigatoria', 400)
+
+    if not isinstance(linhas, list) or not linhas:
+        return None, ('Nenhuma linha para processar', 400)
+
+    # Verificar se cartão existe
+    cartao = ItemDespesa.query.get(cartao_id)
+    if not cartao or cartao.tipo != 'Agregador':
+        return None, ('Cartao invalido', 400)
+
+    try:
+        competencia = datetime.strptime(competencia_str, '%Y-%m-%d').date().replace(day=1)
+    except ValueError:
+        return None, ('competencia deve estar no formato YYYY-MM-DD', 400)
+
+    return {
+        'cartao_id': cartao_id,
+        'competencia': competencia,
+        'linhas': linhas
+    }, None
+
+
+def _executar_importacao(data, dry_run=False):
+    validado, erro = _validar_payload_importacao(data)
+    if erro:
+        mensagem, status = erro
+        return jsonify({'success': False, 'message': mensagem}), status
+
+    resultado_processamento = ImportacaoCartaoService.processar_linhas_mapeadas(
+        validado['linhas'],
+        validado['cartao_id'],
+        validado['competencia']
+    )
+
+    lancamentos = resultado_processamento['lancamentos']
+    linhas_invalidas = resultado_processamento['linhas_invalidas']
+    total_recebidas = resultado_processamento['total_linhas_recebidas']
+
+    resultado = ImportacaoCartaoService.persistir_lancamentos(lancamentos, dry_run=dry_run)
+
+    erros = list(resultado.get('erros', []))
+    for item in linhas_invalidas:
+        erros.append({
+            'linha': item.get('linha'),
+            'erro': item.get('erro')
+        })
+
+    payload = {
+        'success': True,
+        'modo': 'previsualizacao' if dry_run else 'persistencia',
+        'total_recebidas': total_recebidas,
+        'linhas_validas': len(lancamentos),
+        'linhas_invalidas': len(linhas_invalidas),
+        'inseridos': resultado.get('inseridos', 0),
+        'duplicados': resultado.get('duplicados', 0),
+        'erros': erros,
+        'amostra_duplicados': resultado.get('amostra_duplicados', []),
+        'amostra_erros': resultado.get('amostra_erros', []),
+        'amostra_validos': [
+            {
+                'descricao': l.get('descricao_exibida') or l.get('descricao'),
+                'valor': float(l.get('valor', 0)),
+                'data_compra': l.get('data_compra').isoformat() if l.get('data_compra') else None,
+                'numero_parcela': l.get('numero_parcela'),
+                'total_parcelas': l.get('total_parcelas')
+            }
+            for l in lancamentos[:20]
+        ]
+    }
+
+    return jsonify(payload)
+
+
+@bp.route('/previsualizar', methods=['POST'])
+def previsualizar_importacao():
+    """
+    Executa validacao completa e deduplicacao sem persistir no banco.
+    """
+    try:
+        data = request.get_json(silent=True)
+        return _executar_importacao(data, dry_run=True)
+    except Exception:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': 'Falha ao gerar previsualizacao'}), 500
 
 
 @bp.route('/processar', methods=['POST'])
@@ -92,44 +196,11 @@ def processar_importacao():
         }
     """
     try:
-        data = request.json
-
-        cartao_id = data.get('cartao_id')
-        competencia_str = data.get('competencia')
-        linhas = data.get('linhas', [])
-
-        # Validações
-        if not cartao_id:
-            return jsonify({'success': False, 'message': 'cartao_id obrigatório'}), 400
-
-        if not competencia_str:
-            return jsonify({'success': False, 'message': 'competencia obrigatória'}), 400
-
-        if not linhas:
-            return jsonify({'success': False, 'message': 'Nenhuma linha para processar'}), 400
-
-        # Verificar se cartão existe
-        cartao = ItemDespesa.query.get(cartao_id)
-        if not cartao or cartao.tipo != 'Agregador':
-            return jsonify({'success': False, 'message': 'Cartão inválido'}), 400
-
-        # Parsear competência
-        competencia = datetime.strptime(competencia_str, '%Y-%m-%d').date().replace(day=1)
-
-        # Processar linhas
-        lancamentos = ImportacaoCartaoService.processar_linhas_mapeadas(linhas, cartao_id, competencia)
-
-        # Persistir
-        resultado = ImportacaoCartaoService.persistir_lancamentos(lancamentos)
-
-        return jsonify({
-            'success': True,
-            **resultado
-        })
-
-    except Exception as e:
+        data = request.get_json(silent=True)
+        return _executar_importacao(data, dry_run=False)
+    except Exception:
         db.session.rollback()
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, 'message': 'Falha ao processar importacao'}), 500
 
 
 @bp.route('/categorias', methods=['GET'])
@@ -150,3 +221,37 @@ def listar_categorias_cartao(cartao_id):
         'success': True,
         'categorias_cartao': [item.to_dict() for item in itens]
     })
+
+
+@bp.route('/sugerir-categorias', methods=['POST'])
+def sugerir_categorias():
+    """
+    Sugestao automatica simples de categoria por historico de descricao.
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        descricoes = data.get('descricoes') or []
+        categoria_fallback_id = data.get('categoria_fallback_id')
+
+        if not isinstance(descricoes, list):
+            return jsonify({'success': False, 'message': 'descricoes deve ser uma lista'}), 400
+
+        sugestoes = {}
+        for descricao in descricoes:
+            if descricao is None:
+                continue
+            categoria_id, origem = ImportacaoCartaoService.sugerir_categoria_por_descricao(
+                descricao_bruta=str(descricao),
+                categoria_fallback_id=categoria_fallback_id
+            )
+            sugestoes[str(descricao)] = {
+                'categoria_id': categoria_id,
+                'origem': origem
+            }
+
+        return jsonify({
+            'success': True,
+            'sugestoes': sugestoes
+        })
+    except Exception:
+        return jsonify({'success': False, 'message': 'Falha ao sugerir categorias'}), 500

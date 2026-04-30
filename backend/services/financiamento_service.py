@@ -14,6 +14,7 @@ from dateutil.relativedelta import relativedelta
 from sqlalchemy import func, extract, and_
 from decimal import Decimal
 import math
+import logging
 
 try:
     from backend.models import (db, Financiamento, FinanciamentoParcela,
@@ -21,6 +22,8 @@ try:
 except ImportError:
     from models import (db, Financiamento, FinanciamentoParcela,
                        FinanciamentoAmortizacaoExtra, IndexadorMensal, Conta)
+
+logger = logging.getLogger(__name__)
 
 
 class FinanciamentoService:
@@ -176,7 +179,7 @@ class FinanciamentoService:
                         try:
                             competencia_inicio = datetime.strptime(competencia_inicio_str + '-01', '%Y-%m-%d').date()
                         except ValueError:
-                            pass
+                            logger.debug('Formato YYYY-MM invalido para competencia_inicio=%s', competencia_inicio_str)
 
                     # Tentar formato MM/YYYY
                     if not competencia_inicio and '/' in competencia_inicio_str:
@@ -186,7 +189,7 @@ class FinanciamentoService:
                                 mes, ano = partes
                                 competencia_inicio = datetime(int(ano), int(mes), 1).date()
                             except (ValueError, IndexError):
-                                pass
+                                logger.debug('Formato MM/YYYY invalido para competencia_inicio=%s', competencia_inicio_str)
 
                     # Tentar formato DD/MM/YYYY
                     if not competencia_inicio and '/' in competencia_inicio_str:
@@ -194,7 +197,7 @@ class FinanciamentoService:
                             competencia_inicio = datetime.strptime(competencia_inicio_str, '%d/%m/%Y').date()
                             competencia_inicio = competencia_inicio.replace(day=1)
                         except ValueError:
-                            pass
+                            logger.debug('Formato DD/MM/YYYY invalido para competencia_inicio=%s', competencia_inicio_str)
 
                     # Tentar formato YYYY-MM-DD (ISO)
                     if not competencia_inicio:
@@ -202,7 +205,7 @@ class FinanciamentoService:
                             competencia_inicio = datetime.strptime(competencia_inicio_str, '%Y-%m-%d').date()
                             competencia_inicio = competencia_inicio.replace(day=1)
                         except ValueError:
-                            pass
+                            logger.debug('Formato YYYY-MM-DD invalido para competencia_inicio=%s', competencia_inicio_str)
 
                     if not competencia_inicio:
                         raise ValueError(
@@ -367,7 +370,7 @@ class FinanciamentoService:
                         try:
                             competencia_inicio = datetime.strptime(competencia_inicio_str + '-01', '%Y-%m-%d').date()
                         except ValueError:
-                            pass
+                            logger.debug('Formato YYYY-MM invalido para competencia_inicio=%s', competencia_inicio_str)
 
                     # Tentar formato MM/YYYY (frontend pode enviar assim)
                     if not competencia_inicio and '/' in competencia_inicio_str:
@@ -377,7 +380,7 @@ class FinanciamentoService:
                                 mes, ano = partes
                                 competencia_inicio = datetime(int(ano), int(mes), 1).date()
                             except (ValueError, IndexError):
-                                pass
+                                logger.debug('Formato MM/YYYY invalido para competencia_inicio=%s', competencia_inicio_str)
 
                     # Tentar formato DD/MM/YYYY
                     if not competencia_inicio and '/' in competencia_inicio_str:
@@ -386,7 +389,7 @@ class FinanciamentoService:
                             # Normalizar para primeiro dia do mês
                             competencia_inicio = competencia_inicio.replace(day=1)
                         except ValueError:
-                            pass
+                            logger.debug('Formato DD/MM/YYYY invalido para competencia_inicio=%s', competencia_inicio_str)
 
                     # Tentar formato YYYY-MM-DD (ISO)
                     if not competencia_inicio:
@@ -395,7 +398,7 @@ class FinanciamentoService:
                             # Normalizar para primeiro dia do mês
                             competencia_inicio = competencia_inicio.replace(day=1)
                         except ValueError:
-                            pass
+                            logger.debug('Formato YYYY-MM-DD invalido para competencia_inicio=%s', competencia_inicio_str)
 
                     if not competencia_inicio:
                         raise ValueError(

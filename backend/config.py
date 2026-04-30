@@ -11,6 +11,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 class Config:
     """Configuração base"""
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-me')
+    CARTOES_CVV_MASTER_PASSWORD = os.getenv('CARTOES_CVV_MASTER_PASSWORD')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ECHO = False
 
@@ -37,12 +38,8 @@ class ProductionConfig(Config):
     DEBUG = False
     TESTING = False
 
-    # PostgreSQL - DigitalOcean
-    # Formato: postgresql://usuario:senha@host:porta/nome_banco
-    SQLALCHEMY_DATABASE_URI = os.getenv(
-        'DATABASE_URL',
-        'postgresql://user:password@localhost:5432/controle_financeiro'
-    )
+    # ProduÃ§Ã£o deve usar DATABASE_URL explÃ­cito via ambiente
+    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL')
 
 
 class TestingConfig(Config):
@@ -76,4 +73,16 @@ def get_config(env=None):
     if env is None:
         env = os.getenv('FLASK_ENV', 'development')
 
-    return config.get(env, config['default'])
+    cfg = config.get(env, config['default'])
+
+    # Hardening de produÃ§Ã£o: sem fallbacks inseguros
+    if env == 'production':
+        secret = os.getenv('SECRET_KEY')
+        if not secret or secret.strip() in {'', 'dev-secret-key-change-me', 'dev-secret-key-local-123456'}:
+            raise RuntimeError('SECRET_KEY de producao ausente ou insegura')
+
+        db_url = os.getenv('DATABASE_URL')
+        if not db_url or db_url.strip() == '':
+            raise RuntimeError('DATABASE_URL de producao ausente')
+
+    return cfg

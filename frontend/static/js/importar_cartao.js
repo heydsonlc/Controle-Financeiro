@@ -1,371 +1,50 @@
-/**
- * Importação Assistida de Fatura de Cartão (CSV)
- * FASE 6.2
- */
+﻿const API_BASE='/api/importacao-cartao';
+const PERFIS={NUBANK:'nubank_csv_simples',CAIXA:'caixa_credito_debito',MANUAL:'manual_generico'};
+const estado={cartoes:[],categorias:[],categoriasCartao:[],csvData:null,linhasMapeadas:[],linhasInvalidasIniciais:[],resumoPrevia:null,perfilSelecionado:PERFIS.MANUAL,mapeamentoAtual:{data_compra:null,descricao:null,valor:null,parcela:null,credito:null,debito:null},regraNubank:'absoluto',regraCaixa:'debito'};
 
-const API_BASE = '/api/importacao-cartao';
+document.addEventListener('DOMContentLoaded',async()=>{await carregarCartoes();configurarUpload();configurarMascaraCompetencia();});
+function configurarMascaraCompetencia(){const i=document.getElementById('competenciaInput');i.addEventListener('input',e=>{let v=e.target.value.replace(/\D/g,'');if(v.length>=2)v=v.substring(0,2)+'/'+v.substring(2,6);e.target.value=v;});}
+const toIntOrNull=v=>{if(v===''||v===null||v===undefined)return null;const n=parseInt(v,10);return Number.isNaN(n)?null:n;};
+function parseValorNumerico(raw){if(raw===null||raw===undefined)return null;let t=String(raw).trim();if(!t)return null;t=t.replace('R$','').replace(/\s+/g,'');if(t.includes(',')&&t.includes('.'))t=t.replace(/\./g,'').replace(',','.');else if(t.includes(','))t=t.replace(',','.');const n=Number(t);return Number.isFinite(n)?n:null;}
+const formatarValor=v=>{const n=Number(v);return Number.isFinite(n)?n.toFixed(2):'';};
+function detectarParcelaDescricao(d){const t=String(d||'');let m=t.match(/(\d{1,2})\s*[/\-]\s*(\d{1,2})/);if(m){const n=parseInt(m[1],10),tt=parseInt(m[2],10);if(n>=1&&tt>=1&&n<=tt)return{numero_parcela:n,total_parcelas:tt,parcela:`${n}/${tt}`};}m=t.match(/parcela\s*(\d{1,2})\s*de\s*(\d{1,2})/i);if(m){const n=parseInt(m[1],10),tt=parseInt(m[2],10);if(n>=1&&tt>=1&&n<=tt)return{numero_parcela:n,total_parcelas:tt,parcela:`${n}/${tt}`};}return{numero_parcela:1,total_parcelas:1,parcela:'1/1'};}
+function nomePerfil(p){if(p===PERFIS.NUBANK)return'Nubank CSV simples';if(p===PERFIS.CAIXA)return'Caixa (Credito/Debito)';return'Manual generico';}
+function invalidarPrevia(){estado.resumoPrevia=null;const b=document.getElementById('btnImportar');if(b)b.disabled=true;const x=document.getElementById('resumoPreviaTecnica');if(x)x.innerHTML='';}
 
-// Estado global da importação
-const estado = {
-    cartoes: [],
-    categorias: [],
-    categoriasCartao: [],
-    csvData: null,
-    linhasMapeadas: []
-};
+async function carregarCartoes(){try{const r=await fetch('/api/cartoes');const cs=await r.json();if(!Array.isArray(cs))throw new Error('Resposta de cartoes invalida');estado.cartoes=cs;const s=document.getElementById('cartaoSelect');s.innerHTML='<option value="">Selecione um cartao</option>';cs.forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent=c.nome;s.appendChild(o);});}catch(e){console.error(e);alert('Erro ao carregar cartoes.');}}
+async function carregarCategorias(){try{const r1=await fetch(`${API_BASE}/categorias`);const d1=await r1.json();if(d1.success)estado.categorias=d1.categorias||[];const cartaoId=document.getElementById('cartaoSelect').value;if(cartaoId){const r2=await fetch(`${API_BASE}/categorias-cartao/${cartaoId}`);const d2=await r2.json();if(d2.success)estado.categoriasCartao=d2.categorias_cartao||[];}}catch(e){console.error(e);}}
 
-// ============================================================================
-// INICIALIZAÇÃO
-// ============================================================================
+async function proximaEtapa(n){if(n===2){const c=document.getElementById('cartaoSelect').value,comp=document.getElementById('competenciaInput').value;if(!c||!comp)return alert('Selecione cartao e competencia.');if(!/^\d{2}\/\d{4}$/.test(comp))return alert('Formato invalido. Use MM/AAAA.');}if(n===3&&!estado.csvData)return alert('Faca upload do CSV antes de continuar.');if(n===4&&!estado.csvData)return alert('CSV ainda nao carregado.');document.querySelectorAll('.step').forEach(s=>s.classList.remove('active'));document.getElementById(`step${n}`).classList.add('active');if(n===3)renderizarMapeamento();else if(n===4){await carregarCategorias();renderizarPreviaBase();abrirModalValidacao();}}
+function voltarEtapa(n){proximaEtapa(n);}
 
-document.addEventListener('DOMContentLoaded', async () => {
-    await carregarCartoes();
-    configurarUpload();
-    configurarMascaraCompetencia();
-});
+function configurarUpload(){const a=document.getElementById('uploadArea'),f=document.getElementById('csvFile');a.addEventListener('click',()=>f.click());a.addEventListener('dragover',e=>{e.preventDefault();a.classList.add('drag-over');});a.addEventListener('dragleave',()=>a.classList.remove('drag-over'));a.addEventListener('drop',e=>{e.preventDefault();a.classList.remove('drag-over');const file=e.dataTransfer.files[0];if(file)processarCSV(file);});f.addEventListener('change',e=>{const file=e.target.files[0];if(file)processarCSV(file);});}
 
-// Máscara para MM/AAAA
-function configurarMascaraCompetencia() {
-    const input = document.getElementById('competenciaInput');
+async function processarCSV(file){const fd=new FormData();fd.append('arquivo',file);try{const r=await fetch(`${API_BASE}/upload`,{method:'POST',body:fd});const d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||'Falha ao processar CSV');estado.csvData=d;estado.linhasMapeadas=[];estado.linhasInvalidasIniciais=[];invalidarPrevia();estado.perfilSelecionado=d.perfil_detectado||PERFIS.MANUAL;estado.mapeamentoAtual={data_compra:d.mapeamento_sugerido?.data_compra??null,descricao:d.mapeamento_sugerido?.descricao??null,valor:d.mapeamento_sugerido?.valor??null,parcela:d.mapeamento_sugerido?.parcela??null,credito:d.mapeamento_sugerido?.credito??null,debito:d.mapeamento_sugerido?.debito??null};const msg=d.autodeteccao_confianca==='alta'?`Perfil detectado automaticamente: <strong>${nomePerfil(d.perfil_detectado)}</strong>`:'Perfil nao identificado com confianca. Sera necessario validar manualmente.';document.getElementById('uploadResult').innerHTML=`<div class="result-message success">CSV carregado com sucesso.<br><strong>${d.total_linhas}</strong> linhas de dados detectadas.<br>Delimitador: <strong>${d.delimitador}</strong><br>${msg}</div>`;document.getElementById('btnStep3').disabled=false;}catch(e){document.getElementById('uploadResult').innerHTML=`<div class="result-message error">Erro ao processar CSV: ${e.message}</div>`;}}
 
-    input.addEventListener('input', (e) => {
-        let valor = e.target.value.replace(/\D/g, ''); // Remove não-dígitos
+function renderizarMapeamento(){const c=document.getElementById('mapeamentoContainer');c.innerHTML=`<div class="result-message success">Perfil detectado: <strong>${nomePerfil(estado.perfilSelecionado)}</strong>.<br>Na proxima etapa o modal de validacao vai permitir revisar layout e gerar sugestoes.</div><button class="btn btn-primary" onclick="proximaEtapa(4)" style="margin-top:20px">Abrir validacao do layout</button>`;document.getElementById('btnStep4').disabled=false;}
+function obterOpcoesColunas(sel){const cs=estado.csvData?.colunas||[];return `<option value="">-- Nao mapear --</option>${cs.map((c,i)=>`<option value="${i}" ${sel===i?'selected':''}>${c}</option>`).join('')}`;}
+function renderizarPreviaBase(){const c=document.getElementById('previaContainer');c.innerHTML=`<div class="result-message success">Valide o perfil e mapeamento no modal, depois revise e edite as linhas antes da pre-visualizacao tecnica.</div><div style="margin-top: 16px;"><button class="btn btn-secondary" type="button" onclick="abrirModalValidacao()">Reabrir validacao do layout</button><button class="btn btn-primary" type="button" onclick="previsualizarImportacao()">Gerar pre-visualizacao tecnica</button></div><div id="resumoConfiguracaoImportacao" style="margin-top:12px;"></div><div id="editorPrePersistencia" style="margin-top:12px;"></div><div id="resumoPreviaTecnica" style="margin-top:12px;"></div>`;const b=document.getElementById('btnImportar');if(b)b.disabled=true;}
 
-        if (valor.length >= 2) {
-            valor = valor.substring(0, 2) + '/' + valor.substring(2, 6);
-        }
+function abrirModalValidacao(){if(!estado.csvData)return alert('Carregue o CSV antes de validar.');document.getElementById('modalPerfil').innerHTML=(estado.csvData.perfis_suportados||[{id:PERFIS.NUBANK,nome:nomePerfil(PERFIS.NUBANK)},{id:PERFIS.CAIXA,nome:nomePerfil(PERFIS.CAIXA)},{id:PERFIS.MANUAL,nome:nomePerfil(PERFIS.MANUAL)}]).map(p=>`<option value="${p.id}" ${estado.perfilSelecionado===p.id?'selected':''}>${p.nome}</option>`).join('');document.getElementById('modalMapData').innerHTML=obterOpcoesColunas(estado.mapeamentoAtual.data_compra);document.getElementById('modalMapDescricao').innerHTML=obterOpcoesColunas(estado.mapeamentoAtual.descricao);document.getElementById('modalMapValor').innerHTML=obterOpcoesColunas(estado.mapeamentoAtual.valor);document.getElementById('modalMapParcela').innerHTML=obterOpcoesColunas(estado.mapeamentoAtual.parcela);document.getElementById('modalMapCredito').innerHTML=obterOpcoesColunas(estado.mapeamentoAtual.credito);document.getElementById('modalMapDebito').innerHTML=obterOpcoesColunas(estado.mapeamentoAtual.debito);document.getElementById('modalRegraNubank').value=estado.regraNubank;document.getElementById('modalRegraCaixa').value=estado.regraCaixa;document.getElementById('modalCategoriaPadrao').innerHTML=`<option value="">Selecione</option>${estado.categorias.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('')}`;const opc=`<option value="">Nenhuma</option>${estado.categoriasCartao.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('')}`;document.getElementById('modalCategoriaCartaoPadraoCaixa').innerHTML=opc;document.getElementById('modalCategoriaCartaoPadraoNubank').innerHTML=opc;document.getElementById('modalCategoriaCartaoPadraoManual').innerHTML=opc;atualizarCamposPerfilModal();renderizarAmostraModal();document.getElementById('perfilModal').style.display='flex';}
+function fecharModalValidacao(){document.getElementById('perfilModal').style.display='none';}
+function atualizarCamposPerfilModal(){const p=document.getElementById('modalPerfil').value;const c=document.getElementById('boxCamposCaixa'),n=document.getElementById('boxCamposNubank'),m=document.getElementById('boxCamposManual'),v=document.getElementById('boxCampoValor');if(p===PERFIS.CAIXA){c.style.display='grid';n.style.display='none';m.style.display='none';v.style.display='none';}else if(p===PERFIS.NUBANK){c.style.display='none';n.style.display='grid';m.style.display='none';v.style.display='grid';}else{c.style.display='none';n.style.display='none';m.style.display='grid';v.style.display='grid';}}
+function obterConfiguracaoModal(){const p=document.getElementById('modalPerfil').value;const catId=p===PERFIS.CAIXA?'modalCategoriaCartaoPadraoCaixa':(p===PERFIS.NUBANK?'modalCategoriaCartaoPadraoNubank':'modalCategoriaCartaoPadraoManual');return{perfil:p,mapeamento:{data_compra:toIntOrNull(document.getElementById('modalMapData').value),descricao:toIntOrNull(document.getElementById('modalMapDescricao').value),valor:toIntOrNull(document.getElementById('modalMapValor').value),parcela:toIntOrNull(document.getElementById('modalMapParcela').value),credito:toIntOrNull(document.getElementById('modalMapCredito').value),debito:toIntOrNull(document.getElementById('modalMapDebito').value)},regraNubank:document.getElementById('modalRegraNubank').value,regraCaixa:document.getElementById('modalRegraCaixa').value,categoriaPadrao:toIntOrNull(document.getElementById('modalCategoriaPadrao').value),categoriaCartaoPadrao:toIntOrNull(document.getElementById(catId).value)};}
 
-        e.target.value = valor;
-    });
-}
+function interpretarLinhaPorPerfil(l,cfg){const m=cfg.mapeamento;const data=m.data_compra!==null?l[m.data_compra]:null;const desc=m.descricao!==null?l[m.descricao]:null;const pCampo=m.parcela!==null?l[m.parcela]:null;if(!data||!desc)return{ok:false,erro:'Data/descricao nao mapeadas'};let valor=null;if(cfg.perfil===PERFIS.CAIXA){const cred=m.credito!==null?parseValorNumerico(l[m.credito]):null;const deb=m.debito!==null?parseValorNumerico(l[m.debito]):null;if(cfg.regraCaixa==='debito')valor=deb;else if(cfg.regraCaixa==='credito')valor=cred;else valor=(deb!==null&&deb!==0)?deb:cred;if(valor===null||valor===0)return{ok:false,erro:'Linha sem valor compativel com regra credito/debito'};valor=Math.abs(valor);}else{const vb=m.valor!==null?parseValorNumerico(l[m.valor]):null;if(vb===null||vb===0)return{ok:false,erro:'Linha sem valor valido'};if(cfg.perfil===PERFIS.NUBANK){if(cfg.regraNubank==='despesas_negativas'){if(vb>=0)return{ok:false,erro:'Valor nao negativo conforme regra Nubank'};valor=Math.abs(vb);}else if(cfg.regraNubank==='despesas_positivas'){if(vb<=0)return{ok:false,erro:'Valor nao positivo conforme regra Nubank'};valor=vb;}else valor=Math.abs(vb);}else valor=Math.abs(vb);}const pDesc=detectarParcelaDescricao(desc);const pExp=detectarParcelaDescricao(pCampo);const np=pExp.total_parcelas>1?pExp.numero_parcela:pDesc.numero_parcela;const tp=pExp.total_parcelas>1?pExp.total_parcelas:pDesc.total_parcelas;return{ok:true,linha:{data_compra:String(data).trim(),descricao:String(desc).trim(),descricao_exibida:String(desc).trim(),valor:formatarValor(valor),categoria_id:cfg.categoriaPadrao,item_agregado_id:cfg.categoriaCartaoPadrao,categoria_sugerida_origem:'fallback_lote',parcela:`${np}/${tp}`,numero_parcela:np,total_parcelas:tp,parcelado:tp>1,gerar_parcelas_futuras:false,ignorar:false}};}
+function construirLoteMapeado(cfg){const linhas=estado.csvData?.linhas_dados||[];const m=[];const inv=[];linhas.forEach((l,idx)=>{const it=interpretarLinhaPorPerfil(l,cfg);if(!it.ok){inv.push({linha:idx+1,erro:it.erro});return;}m.push({linha_origem:idx+1,...it.linha});});return{mapeadas:m,invalidas:inv};}
+async function aplicarSugestoesCategoria(ls,fallback){const descr=[...new Set(ls.map(l=>l.descricao).filter(Boolean))];if(!descr.length)return ls;try{const r=await fetch(`${API_BASE}/sugerir-categorias`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({descricoes:descr,categoria_fallback_id:fallback})});const d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||'Falha sugestao');const s=d.sugestoes||{};return ls.map(l=>{const x=s[l.descricao];if(!x)return l;return {...l,categoria_id:x.categoria_id||l.categoria_id,categoria_sugerida_origem:x.origem||l.categoria_sugerida_origem};});}catch(e){console.warn(e);return ls;}}
+function renderizarAmostraModal(){const cfg=obterConfiguracaoModal();const r=construirLoteMapeado(cfg);const a=r.mapeadas.slice(0,8);document.getElementById('modalAmostraInterpretada').innerHTML=`<div class="result-message success">Linhas validas estimadas: <strong>${r.mapeadas.length}</strong> | Invalidas estimadas: <strong>${r.invalidas.length}</strong></div><table><thead><tr><th>Data</th><th>Descricao</th><th>Valor</th><th>Parcela</th></tr></thead><tbody>${a.map(l=>`<tr><td>${l.data_compra}</td><td>${l.descricao}</td><td>${l.valor}</td><td>${l.parcela}</td></tr>`).join('')}</tbody></table>`;}
 
-async function carregarCartoes() {
-    try {
-        const response = await fetch('/api/cartoes');
-        const cartoes = await response.json();
+async function confirmarValidacaoModal(){const cfg=obterConfiguracaoModal();if(!cfg.categoriaPadrao)return alert('Categoria padrao do lote e obrigatoria.');if(cfg.mapeamento.data_compra===null||cfg.mapeamento.descricao===null)return alert('Mapeie data e descricao.');if(cfg.perfil===PERFIS.CAIXA){if(cfg.mapeamento.credito===null&&cfg.mapeamento.debito===null)return alert('No perfil Caixa, informe ao menos credito ou debito.');}else if(cfg.mapeamento.valor===null)return alert('Mapeie a coluna de valor.');const r=construirLoteMapeado(cfg);if(!r.mapeadas.length)return alert('Nenhuma linha valida encontrada com a configuracao atual.');estado.perfilSelecionado=cfg.perfil;estado.mapeamentoAtual=cfg.mapeamento;estado.regraNubank=cfg.regraNubank;estado.regraCaixa=cfg.regraCaixa;estado.linhasInvalidasIniciais=r.invalidas;estado.linhasMapeadas=await aplicarSugestoesCategoria(r.mapeadas,cfg.categoriaPadrao);invalidarPrevia();document.getElementById('resumoConfiguracaoImportacao').innerHTML=`<div class="result-message success">Perfil validado: <strong>${nomePerfil(cfg.perfil)}</strong><br>Linhas validas para edicao: <strong>${estado.linhasMapeadas.length}</strong><br>Linhas invalidas no parse inicial: <strong>${r.invalidas.length}</strong><br>Categoria sugerida automaticamente por historico/fallback e pode ser alterada antes de persistir.</div>`;renderizarEditorPrePersistencia();fecharModalValidacao();}
 
-        if (Array.isArray(cartoes)) {
-            estado.cartoes = cartoes;
-            const select = document.getElementById('cartaoSelect');
-            select.innerHTML = '<option value="">Selecione um cartão</option>';
+function opcoesCategoriaSelect(sel){return `<option value="">Selecione</option>${estado.categorias.map(c=>`<option value="${c.id}" ${Number(sel)===Number(c.id)?'selected':''}>${c.nome}</option>`).join('')}`;}
+function renderizarEditorPrePersistencia(){const box=document.getElementById('editorPrePersistencia');if(!box)return;const ls=estado.linhasMapeadas;box.innerHTML=`<div class="result-message success">Edicao pre-persistencia: ajuste linhas, marque para ignorar e habilite parcelas futuras opcionalmente.<br>Total linhas editaveis: <strong>${ls.length}</strong></div><table><thead><tr><th>Ignorar</th><th>Data</th><th>Descricao</th><th>Valor</th><th>Categoria</th><th>Origem cat.</th><th>Parcelado</th><th>Parcela</th><th>Total</th><th>Criar futuras</th></tr></thead><tbody>${ls.map((l,i)=>`<tr><td><input type="checkbox" ${l.ignorar?'checked':''} onchange="atualizarLinhaEdicao(${i},'ignorar',this.checked)"></td><td><input type="text" value="${l.data_compra||''}" onchange="atualizarLinhaEdicao(${i},'data_compra',this.value)"></td><td><input type="text" value="${(l.descricao_exibida||'').replace(/"/g,'&quot;')}" onchange="atualizarLinhaEdicao(${i},'descricao_exibida',this.value)"></td><td><input type="number" step="0.01" value="${formatarValor(l.valor)}" onchange="atualizarLinhaEdicao(${i},'valor',this.value)"></td><td><select onchange="atualizarLinhaEdicao(${i},'categoria_id',this.value)">${opcoesCategoriaSelect(l.categoria_id)}</select></td><td>${l.categoria_sugerida_origem||'-'}</td><td><input type="checkbox" ${l.parcelado?'checked':''} onchange="alternarParcelado(${i},this.checked)"></td><td><input type="number" min="1" value="${l.numero_parcela||1}" onchange="atualizarLinhaEdicao(${i},'numero_parcela',this.value)"></td><td><input type="number" min="1" value="${l.total_parcelas||1}" onchange="atualizarLinhaEdicao(${i},'total_parcelas',this.value)"></td><td><input type="checkbox" ${l.gerar_parcelas_futuras?'checked':''} ${(!l.parcelado||Number(l.total_parcelas)<=1)?'disabled':''} onchange="atualizarLinhaEdicao(${i},'gerar_parcelas_futuras',this.checked)"></td></tr>`).join('')}</tbody></table>`;}
+function alternarParcelado(i,chk){const l=estado.linhasMapeadas[i];if(!l)return;l.parcelado=chk;if(!chk){l.numero_parcela=1;l.total_parcelas=1;l.parcela='1/1';l.gerar_parcelas_futuras=false;}else if(Number(l.total_parcelas)<=1){l.numero_parcela=1;l.total_parcelas=2;l.parcela='1/2';}invalidarPrevia();renderizarEditorPrePersistencia();}
+function atualizarLinhaEdicao(i,c,v){const l=estado.linhasMapeadas[i];if(!l)return;if(c==='categoria_id')l[c]=toIntOrNull(v);else if(c==='numero_parcela'||c==='total_parcelas'){l[c]=Math.max(1,parseInt(v||'1',10));l.parcelado=l.total_parcelas>1;l.parcela=`${l.numero_parcela}/${l.total_parcelas}`;if(!l.parcelado)l.gerar_parcelas_futuras=false;}else l[c]=v;if(c==='descricao_exibida')l.descricao=v;invalidarPrevia();}
 
-            cartoes.forEach(cartao => {
-                const option = document.createElement('option');
-                option.value = cartao.id;
-                option.textContent = cartao.nome;
-                select.appendChild(option);
-            });
-        }
-    } catch (error) {
-        console.error('Erro ao carregar cartões:', error);
-        alert('Erro ao carregar cartões. Verifique o console.');
-    }
-}
+function montarPayloadImportacao(){const cartaoId=parseInt(document.getElementById('cartaoSelect').value,10);const [mes,ano]=document.getElementById('competenciaInput').value.split('/');const competencia=`${ano}-${mes}-01`;const linhas=estado.linhasMapeadas.filter(l=>!l.ignorar).map(l=>({data_compra:l.data_compra,descricao:l.descricao||l.descricao_exibida,descricao_exibida:l.descricao_exibida||l.descricao,valor:l.valor,parcela:l.parcela||`${l.numero_parcela||1}/${l.total_parcelas||1}`,numero_parcela:l.numero_parcela||1,total_parcelas:l.total_parcelas||1,gerar_parcelas_futuras:!!l.gerar_parcelas_futuras,categoria_id:l.categoria_id,item_agregado_id:l.item_agregado_id,ignorar:false}));return{cartao_id:cartaoId,competencia,linhas};}
 
-async function carregarCategorias() {
-    try {
-        const response = await fetch(`${API_BASE}/categorias`);
-        const data = await response.json();
+async function previsualizarImportacao(){if(!estado.linhasMapeadas.length)return alert('Valide perfil e mapeamento no modal antes da pre-visualizacao.');if(estado.linhasMapeadas.some(l=>!l.ignorar&&!l.categoria_id))return alert('Existem linhas sem categoria. Ajuste antes da pre-visualizacao.');try{const payload=montarPayloadImportacao();if(!payload.linhas.length)return alert('Nenhuma linha restante para importar (todas ignoradas).');const r=await fetch(`${API_BASE}/previsualizar`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||'Falha na pre-visualizacao');estado.resumoPrevia=d;renderResumoPrevia(d);const b=document.getElementById('btnImportar');if(b)b.disabled=d.inseridos===0;}catch(e){alert(`Erro na pre-visualizacao: ${e.message}`);}}
+function renderResumoPrevia(d){const e=(d.erros||[]).slice(0,10),dup=(d.amostra_duplicados||[]).slice(0,10),ign=estado.linhasMapeadas.filter(l=>l.ignorar).length,fut=estado.linhasMapeadas.filter(l=>!l.ignorar&&l.gerar_parcelas_futuras&&Number(l.total_parcelas)>1).length;document.getElementById('resumoPreviaTecnica').innerHTML=`<div class="result-message success"><h3>Pre-visualizacao concluida</h3><p>Total recebido no backend: <strong>${d.total_recebidas}</strong></p><p>Linhas validas: <strong>${d.linhas_validas}</strong></p><p>Linhas invalidas: <strong>${d.linhas_invalidas}</strong></p><p>Potencial para inserir: <strong>${d.inseridos}</strong></p><p>Duplicados detectados: <strong>${d.duplicados}</strong></p><p>Linhas ignoradas pelo usuario: <strong>${ign}</strong></p><p>Linhas com criacao de futuras: <strong>${fut}</strong></p></div>${dup.length?`<div class="result-message error"><h3>Amostra de duplicados</h3>${dup.map(x=>`<p>${x.data_compra} | ${x.descricao} | R$ ${x.valor.toFixed(2)} (${x.numero_parcela}/${x.total_parcelas}) [${x.origem}]</p>`).join('')}</div>`:''}${e.length?`<div class="result-message error"><h3>Amostra de erros</h3>${e.map(x=>`<p>Linha ${x.linha||'-'}: ${x.erro}</p>`).join('')}</div>`:''}`;}
 
-        if (data.success) {
-            estado.categorias = data.categorias;
-        }
-
-        // Carregar categorias do cartão
-        const cartaoId = document.getElementById('cartaoSelect').value;
-        if (cartaoId) {
-            const respCartao = await fetch(`${API_BASE}/categorias-cartao/${cartaoId}`);
-            const dataCartao = await respCartao.json();
-
-            if (dataCartao.success) {
-                estado.categoriasCartao = dataCartao.categorias_cartao;
-            }
-        }
-    } catch (error) {
-        console.error('Erro ao carregar categorias:', error);
-    }
-}
-
-// ============================================================================
-// NAVEGAÇÃO ENTRE ETAPAS
-// ============================================================================
-
-async function proximaEtapa(numero) {
-    // Validações por etapa
-    if (numero === 2) {
-        const cartaoId = document.getElementById('cartaoSelect').value;
-        const competencia = document.getElementById('competenciaInput').value;
-
-        if (!cartaoId || !competencia) {
-            alert('Selecione o cartão e a competência');
-            return;
-        }
-
-        // Validar formato MM/AAAA
-        if (!/^\d{2}\/\d{4}$/.test(competencia)) {
-            alert('Formato de competência inválido. Use MM/AAAA (ex: 12/2025)');
-            return;
-        }
-    }
-
-    if (numero === 3 && !estado.csvData) {
-        alert('Faça upload do arquivo CSV primeiro');
-        return;
-    }
-
-    if (numero === 4 && estado.linhasMapeadas.length === 0) {
-        alert('Mapeie as colunas antes de continuar');
-        return;
-    }
-
-    // Esconder todas as etapas
-    document.querySelectorAll('.step').forEach(step => step.classList.remove('active'));
-
-    // Mostrar etapa solicitada
-    document.getElementById(`step${numero}`).classList.add('active');
-
-    // Executar ações específicas da etapa
-    if (numero === 3) {
-        renderizarMapeamento();
-    } else if (numero === 4) {
-        await renderizarPrevia();
-    }
-}
-
-function voltarEtapa(numero) {
-    proximaEtapa(numero);
-}
-
-// ============================================================================
-// UPLOAD CSV
-// ============================================================================
-
-function configurarUpload() {
-    const uploadArea = document.getElementById('uploadArea');
-    const fileInput = document.getElementById('csvFile');
-
-    uploadArea.addEventListener('click', () => fileInput.click());
-
-    uploadArea.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        uploadArea.classList.add('drag-over');
-    });
-
-    uploadArea.addEventListener('dragleave', () => {
-        uploadArea.classList.remove('drag-over');
-    });
-
-    uploadArea.addEventListener('drop', (e) => {
-        e.preventDefault();
-        uploadArea.classList.remove('drag-over');
-
-        const file = e.dataTransfer.files[0];
-        if (file) {
-            processarCSV(file);
-        }
-    });
-
-    fileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            processarCSV(file);
-        }
-    });
-}
-
-async function processarCSV(file) {
-    const formData = new FormData();
-    formData.append('arquivo', file);
-
-    try {
-        const response = await fetch(`${API_BASE}/upload`, {
-            method: 'POST',
-            body: formData
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            estado.csvData = data;
-
-            document.getElementById('uploadResult').innerHTML = `
-                <div class="result-message success">
-                    CSV carregado com sucesso!<br>
-                    <strong>${data.total_linhas}</strong> linhas detectadas<br>
-                    Delimitador: <strong>${data.delimitador}</strong>
-                </div>
-            `;
-
-            document.getElementById('btnStep3').disabled = false;
-        } else {
-            throw new Error(data.message);
-        }
-    } catch (error) {
-        document.getElementById('uploadResult').innerHTML = `
-            <div class="result-message error">
-                Erro ao processar CSV: ${error.message}
-            </div>
-        `;
-    }
-}
-
-// ============================================================================
-// MAPEAMENTO
-// ============================================================================
-
-function renderizarMapeamento() {
-    const container = document.getElementById('mapeamentoContainer');
-
-    const camposObrigatorios = [
-        { id: 'data_compra', nome: 'Data da Compra' },
-        { id: 'descricao', nome: 'Descrição' },
-        { id: 'valor', nome: 'Valor' }
-    ];
-
-    const camposOpcionais = [
-        { id: 'parcela', nome: 'Parcela (ex: 1/12)' }
-    ];
-
-    let html = '<div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px;">';
-
-    [...camposObrigatorios, ...camposOpcionais].forEach(campo => {
-        html += `
-            <div class="form-group">
-                <label>${campo.nome} ${camposObrigatorios.includes(campo) ? '<span style="color:red">*</span>' : ''}</label>
-                <select id="map_${campo.id}">
-                    <option value="">-- Não mapear --</option>
-                    ${estado.csvData.colunas.map((col, idx) =>
-                        `<option value="${idx}">${col}</option>`
-                    ).join('')}
-                </select>
-            </div>
-        `;
-    });
-
-    html += '</div>';
-    html += '<button class="btn btn-primary" onclick="validarMapeamento()" style="margin-top:20px">Validar Mapeamento</button>';
-
-    container.innerHTML = html;
-}
-
-function validarMapeamento() {
-    const mapa = {
-        data_compra: document.getElementById('map_data_compra').value,
-        descricao: document.getElementById('map_descricao').value,
-        valor: document.getElementById('map_valor').value,
-        parcela: document.getElementById('map_parcela').value
-    };
-
-    if (!mapa.data_compra || !mapa.descricao || !mapa.valor) {
-        alert('Preencha todos os campos obrigatórios');
-        return;
-    }
-
-    // Processar linhas
-    estado.linhasMapeadas = estado.csvData.linhas_amostra.map(linha => {
-        return {
-            data_compra: linha[parseInt(mapa.data_compra)],
-            descricao: linha[parseInt(mapa.descricao)],
-            valor: linha[parseInt(mapa.valor)],
-            parcela: mapa.parcela ? linha[parseInt(mapa.parcela)] : '1/1',
-            categoria_id: null,  // Será preenchido na etapa 4
-            item_agregado_id: null,  // Opcional
-            descricao_exibida: linha[parseInt(mapa.descricao)]  // Editável
-        };
-    });
-
-    alert(`Mapeamento validado! ${estado.linhasMapeadas.length} linhas processadas.`);
-    document.getElementById('btnStep4').disabled = false;
-}
-
-// ============================================================================
-// PRÉVIA E CLASSIFICAÇÃO
-// ============================================================================
-
-async function renderizarPrevia() {
-    await carregarCategorias();
-
-    const container = document.getElementById('previaContainer');
-
-    let html = '<table><thead><tr>';
-    html += '<th>Data</th><th>Descrição</th><th>Valor</th><th>Categoria *</th><th>Cat. Cartão</th>';
-    html += '</tr></thead><tbody>';
-
-    estado.linhasMapeadas.forEach((linha, idx) => {
-        html += `<tr>
-            <td>${linha.data_compra}</td>
-            <td><input type="text" value="${linha.descricao_exibida}" onchange="estado.linhasMapeadas[${idx}].descricao_exibida = this.value" style="width:100%; padding:4px"></td>
-            <td>${linha.valor}</td>
-            <td>
-                <select onchange="estado.linhasMapeadas[${idx}].categoria_id = parseInt(this.value)" required>
-                    <option value="">Selecione</option>
-                    ${estado.categorias.map(cat => `<option value="${cat.id}">${cat.nome}</option>`).join('')}
-                </select>
-            </td>
-            <td>
-                <select onchange="estado.linhasMapeadas[${idx}].item_agregado_id = this.value ? parseInt(this.value) : null">
-                    <option value="">Nenhuma</option>
-                    ${estado.categoriasCartao.map(cat => `<option value="${cat.id}">${cat.nome}</option>`).join('')}
-                </select>
-            </td>
-        </tr>`;
-    });
-
-    html += '</tbody></table>';
-
-    container.innerHTML = html;
-}
-
-// ============================================================================
-// FINALIZAÇÃO
-// ============================================================================
-
-async function finalizarImportacao() {
-    // Validar categorias
-    const faltaCategoria = estado.linhasMapeadas.some(l => !l.categoria_id);
-    if (faltaCategoria) {
-        alert('Todas as linhas devem ter uma categoria selecionada');
-        return;
-    }
-
-    const cartaoId = parseInt(document.getElementById('cartaoSelect').value);
-    const competenciaInput = document.getElementById('competenciaInput').value; // MM/AAAA
-
-    // Converter MM/AAAA para AAAA-MM-01
-    const [mes, ano] = competenciaInput.split('/');
-    const competencia = `${ano}-${mes}-01`;
-
-    const payload = {
-        cartao_id: cartaoId,
-        competencia: competencia,
-        linhas: estado.linhasMapeadas
-    };
-
-    console.log('Payload de importação:', payload); // Debug
-
-    try {
-        const response = await fetch(`${API_BASE}/processar`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            document.getElementById('resultadoContainer').innerHTML = `
-                <div class="result-message success">
-                    <h3>Importação Concluída!</h3>
-                    <p>Lançamentos inseridos: <strong>${data.inseridos}</strong></p>
-                    <p>Duplicados ignorados: <strong>${data.duplicados}</strong></p>
-                    ${data.erros.length > 0 ? `<p>Erros: <strong>${data.erros.length}</strong></p>` : ''}
-                </div>
-            `;
-            proximaEtapa(5);
-        } else {
-            throw new Error(data.message);
-        }
-    } catch (error) {
-        alert(`Erro na importação: ${error.message}`);
-    }
-}
+async function finalizarImportacao(){if(!estado.resumoPrevia)return alert('Gere a pre-visualizacao tecnica antes de importar.');if(estado.resumoPrevia.inseridos===0)return alert('Nao ha linhas novas para importar.');const ign=estado.linhasMapeadas.filter(l=>l.ignorar).length,fut=estado.linhasMapeadas.filter(l=>!l.ignorar&&l.gerar_parcelas_futuras&&Number(l.total_parcelas)>1).length;const ok=confirm(`Confirmar importacao?\n\nInseridos esperados: ${estado.resumoPrevia.inseridos}\nDuplicados esperados: ${estado.resumoPrevia.duplicados}\nLinhas ignoradas: ${ign}\nLinhas com futuras: ${fut}`);if(!ok)return;try{const payload=montarPayloadImportacao();const r=await fetch(`${API_BASE}/processar`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||'Falha na importacao');document.getElementById('resultadoContainer').innerHTML=`<div class="result-message success"><h3>Importacao concluida</h3><p>Total recebido: <strong>${d.total_recebidas}</strong></p><p>Linhas validas: <strong>${d.linhas_validas}</strong></p><p>Linhas invalidas: <strong>${d.linhas_invalidas}</strong></p><p>Inseridos: <strong>${d.inseridos}</strong></p><p>Duplicados: <strong>${d.duplicados}</strong></p><p>Erros: <strong>${(d.erros||[]).length}</strong></p></div>`;proximaEtapa(5);}catch(e){alert(`Erro na importacao: ${e.message}`);}}

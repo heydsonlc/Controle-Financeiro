@@ -24,6 +24,23 @@ except ImportError:
 contas_bancarias_bp = Blueprint('contas_bancarias', __name__)
 
 
+def _json_error(message, status_code=400):
+    return jsonify({'success': False, 'error': message}), status_code
+
+
+def _unexpected_error():
+    return _json_error('Erro interno ao processar requisicao', 500)
+
+
+def _get_json_payload():
+    data = request.get_json(silent=True)
+    if data is None:
+        return None, _json_error('Payload JSON obrigatorio', 400)
+    if not isinstance(data, dict):
+        return None, _json_error('Payload JSON invalido', 400)
+    return data, None
+
+
 @contas_bancarias_bp.route('', methods=['GET'])
 def listar_contas():
     """
@@ -37,9 +54,13 @@ def listar_contas():
     """
     try:
         status = request.args.get('status')
+        status_permitido = {'ATIVO', 'INATIVO'}
 
         if status:
-            contas = ContaBancaria.query.filter_by(status=status.upper()).all()
+            status_normalizado = status.upper()
+            if status_normalizado not in status_permitido:
+                return _json_error('status deve ser ATIVO ou INATIVO', 400)
+            contas = ContaBancaria.query.filter_by(status=status_normalizado).all()
         else:
             contas = ContaBancaria.query.filter_by(status='ATIVO').all()
 
@@ -49,11 +70,8 @@ def listar_contas():
             'total': len(contas)
         }), 200
 
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+    except Exception:
+        return _unexpected_error()
 
 
 @contas_bancarias_bp.route('/<int:id>', methods=['GET'])
@@ -71,21 +89,15 @@ def buscar_conta(id):
         conta = ContaBancaria.query.get(id)
 
         if not conta:
-            return jsonify({
-                'success': False,
-                'error': 'Conta não encontrada'
-            }), 404
+            return _json_error('Conta nao encontrada', 404)
 
         return jsonify({
             'success': True,
             'data': conta.to_dict()
         }), 200
 
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+    except Exception:
+        return _unexpected_error()
 
 
 @contas_bancarias_bp.route('', methods=['POST'])
@@ -108,29 +120,25 @@ def criar_conta():
         JSON com dados da conta criada
     """
     try:
-        data = request.get_json()
+        data, error = _get_json_payload()
+        if error:
+            return error
 
         # Validações
         if not data.get('nome'):
-            return jsonify({
-                'success': False,
-                'error': 'Nome é obrigatório'
-            }), 400
+            return _json_error('Nome e obrigatorio', 400)
 
         if not data.get('instituicao'):
-            return jsonify({
-                'success': False,
-                'error': 'Instituição é obrigatória'
-            }), 400
+            return _json_error('Instituicao e obrigatoria', 400)
 
         if not data.get('tipo'):
-            return jsonify({
-                'success': False,
-                'error': 'Tipo é obrigatório'
-            }), 400
+            return _json_error('Tipo e obrigatorio', 400)
 
         # Criar nova conta
-        saldo_inicial = float(data.get('saldo_inicial', 0))
+        try:
+            saldo_inicial = float(data.get('saldo_inicial', 0))
+        except (TypeError, ValueError):
+            return _json_error('saldo_inicial invalido', 400)
 
         nova_conta = ContaBancaria(
             nome=data['nome'],
@@ -157,12 +165,9 @@ def criar_conta():
             'data': nova_conta.to_dict()
         }), 201
 
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return _unexpected_error()
 
 
 @contas_bancarias_bp.route('/<int:id>', methods=['PUT'])
@@ -192,12 +197,11 @@ def atualizar_conta(id):
         conta = ContaBancaria.query.get(id)
 
         if not conta:
-            return jsonify({
-                'success': False,
-                'error': 'Conta não encontrada'
-            }), 404
+            return _json_error('Conta nao encontrada', 404)
 
-        data = request.get_json()
+        data, error = _get_json_payload()
+        if error:
+            return error
 
         # Atualizar campos
         if 'nome' in data:
@@ -217,20 +221,23 @@ def atualizar_conta(id):
         if 'icone' in data:
             conta.icone = data['icone']
         if 'status' in data:
-            conta.status = data['status']
+            status = str(data['status']).upper()
+            if status not in {'ATIVO', 'INATIVO'}:
+                return _json_error('status deve ser ATIVO ou INATIVO', 400)
+            conta.status = status
 
         # Saldo inicial só pode ser alterado sem movimentos (para não "teletransportar" saldo).
         # Caso contrário, use o endpoint de ajuste, que cria MovimentoFinanceiro AJUSTE.
         if 'saldo_inicial' in data:
-            novo_saldo_inicial = float(data['saldo_inicial'])
+            try:
+                novo_saldo_inicial = float(data['saldo_inicial'])
+            except (TypeError, ValueError):
+                return _json_error('saldo_inicial invalido', 400)
             movimentos_existem = db.session.query(MovimentoFinanceiro.id).filter(
                 MovimentoFinanceiro.conta_bancaria_id == conta.id
             ).first() is not None
             if movimentos_existem and novo_saldo_inicial != float(conta.saldo_inicial or 0):
-                return jsonify({
-                    'success': False,
-                    'error': 'Não é permitido alterar saldo inicial após existirem movimentos. Use "Ajustar Saldo".'
-                }), 400
+                return _json_error('Nao e permitido alterar saldo inicial apos existirem movimentos. Use "Ajustar Saldo".', 400)
             conta.saldo_inicial = novo_saldo_inicial
             ContaBancariaService.recalcular_saldo_conta(conta.id)
 
@@ -244,12 +251,9 @@ def atualizar_conta(id):
             'data': conta.to_dict()
         }), 200
 
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return _unexpected_error()
 
 
 @contas_bancarias_bp.route('/<int:id>', methods=['DELETE'])
@@ -267,10 +271,7 @@ def inativar_conta(id):
         conta = ContaBancaria.query.get(id)
 
         if not conta:
-            return jsonify({
-                'success': False,
-                'error': 'Conta não encontrada'
-            }), 404
+            return _json_error('Conta nao encontrada', 404)
 
         # Inativar ao invés de deletar
         conta.status = 'INATIVO'
@@ -283,12 +284,9 @@ def inativar_conta(id):
             'message': 'Conta inativada com sucesso'
         }), 200
 
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return _unexpected_error()
 
 
 @contas_bancarias_bp.route('/<int:id>/ativar', methods=['PUT'])
@@ -306,10 +304,7 @@ def ativar_conta(id):
         conta = ContaBancaria.query.get(id)
 
         if not conta:
-            return jsonify({
-                'success': False,
-                'error': 'Conta não encontrada'
-            }), 404
+            return _json_error('Conta nao encontrada', 404)
 
         conta.status = 'ATIVO'
         conta.data_atualizacao = datetime.utcnow()
@@ -322,12 +317,9 @@ def ativar_conta(id):
             'data': conta.to_dict()
         }), 200
 
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return _unexpected_error()
 
 
 @contas_bancarias_bp.route('/<int:id>/movimentos', methods=['GET'])
@@ -344,15 +336,24 @@ def listar_movimentos(id):
     try:
         conta = ContaBancaria.query.get(id)
         if not conta:
-            return jsonify({'success': False, 'error': 'Conta não encontrada'}), 404
+            return _json_error('Conta nao encontrada', 404)
 
         inicio = request.args.get('inicio')
         fim = request.args.get('fim')
         limit = request.args.get('limit', default=200, type=int)
+        if limit is None or limit <= 0:
+            return _json_error('limit deve ser um inteiro maior que zero', 400)
+        if limit > 1000:
+            limit = 1000
         incluir_saldo = request.args.get('incluir_saldo', default=1, type=int) != 0
 
-        data_inicio = ContaBancariaService.parse_data(inicio) if inicio else None
-        data_fim = ContaBancariaService.parse_data(fim) if fim else None
+        try:
+            data_inicio = ContaBancariaService.parse_data(inicio) if inicio else None
+            data_fim = ContaBancariaService.parse_data(fim) if fim else None
+        except ValueError:
+            return _json_error('Formato de data invalido. Use YYYY-MM-DD', 400)
+        if data_inicio and data_fim and data_inicio > data_fim:
+            return _json_error('inicio nao pode ser maior que fim', 400)
 
         query = MovimentoFinanceiro.query.filter_by(conta_bancaria_id=id)
         if data_inicio:
@@ -403,8 +404,8 @@ def listar_movimentos(id):
                 md['saldo_apos_movimento'] = saldo_map.get(md['id'])
 
         return jsonify({'success': True, 'data': movimentos_dict}), 200
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+    except Exception:
+        return _unexpected_error()
 
 
 @contas_bancarias_bp.route('/<int:id>/ajuste-saldo', methods=['POST'])
@@ -422,10 +423,15 @@ def ajuste_saldo(id):
     try:
         conta = ContaBancaria.query.get(id)
         if not conta:
-            return jsonify({'success': False, 'error': 'Conta não encontrada'}), 404
+            return _json_error('Conta nao encontrada', 404)
 
-        data = request.get_json() or {}
-        data_movimento = ContaBancariaService.parse_data(data.get('data_movimento'))
+        data, error = _get_json_payload()
+        if error:
+            return error
+        try:
+            data_movimento = ContaBancariaService.parse_data(data.get('data_movimento'))
+        except ValueError:
+            return _json_error('Formato de data invalido. Use YYYY-MM-DD', 400)
         descricao = (data.get('descricao') or 'Ajuste manual de saldo').strip()
 
         ContaBancariaService.recalcular_saldo_conta(id)
@@ -433,12 +439,18 @@ def ajuste_saldo(id):
 
         delta = None
         if data.get('valor_final_desejado') is not None:
-            desejado = Decimal(str(data.get('valor_final_desejado')))
+            try:
+                desejado = Decimal(str(data.get('valor_final_desejado')))
+            except Exception:
+                return _json_error('valor_final_desejado invalido', 400)
             delta = desejado - saldo_atual
         elif data.get('valor_do_ajuste') is not None:
-            delta = Decimal(str(data.get('valor_do_ajuste')))
+            try:
+                delta = Decimal(str(data.get('valor_do_ajuste')))
+            except Exception:
+                return _json_error('valor_do_ajuste invalido', 400)
         else:
-            return jsonify({'success': False, 'error': 'Informe valor_final_desejado ou valor_do_ajuste'}), 400
+            return _json_error('Informe valor_final_desejado ou valor_do_ajuste', 400)
 
         if delta == 0:
             return jsonify({'success': True, 'message': 'Saldo já está no valor desejado', 'data': conta.to_dict()}), 200
@@ -465,9 +477,9 @@ def ajuste_saldo(id):
                 'movimento': movimento.to_dict(),
             }
         }), 201
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return _unexpected_error()
 
 
 @contas_bancarias_bp.route('/<int:conta_id>/movimentos/<int:mov_id>', methods=['PUT'])
@@ -478,30 +490,40 @@ def editar_movimento(conta_id, mov_id):
     try:
         mov = MovimentoFinanceiro.query.get(mov_id)
         if not mov or mov.conta_bancaria_id != conta_id:
-            return jsonify({'success': False, 'error': 'Movimento não encontrado'}), 404
+            return _json_error('Movimento nao encontrado', 404)
 
         if not mov.ajustavel:
-            return jsonify({'success': False, 'error': 'Apenas movimentos de AJUSTE podem ser editados'}), 400
+            return _json_error('Apenas movimentos de AJUSTE podem ser editados', 400)
 
-        data = request.get_json() or {}
+        data, error = _get_json_payload()
+        if error:
+            return error
         if data.get('tipo') in ('CREDITO', 'DEBITO'):
             mov.tipo = data['tipo']
+        elif data.get('tipo') is not None:
+            return _json_error('tipo deve ser CREDITO ou DEBITO', 400)
         if data.get('valor') is not None:
-            valor = Decimal(str(data.get('valor')))
+            try:
+                valor = Decimal(str(data.get('valor')))
+            except Exception:
+                return _json_error('valor invalido', 400)
             if valor <= 0:
-                return jsonify({'success': False, 'error': 'valor deve ser maior que zero'}), 400
+                return _json_error('valor deve ser maior que zero', 400)
             mov.valor = valor
         if data.get('descricao') is not None:
             mov.descricao = (data.get('descricao') or '').strip() or mov.descricao
         if data.get('data_movimento') is not None:
-            mov.data_movimento = ContaBancariaService.parse_data(data.get('data_movimento'))
+            try:
+                mov.data_movimento = ContaBancariaService.parse_data(data.get('data_movimento'))
+            except ValueError:
+                return _json_error('Formato de data invalido. Use YYYY-MM-DD', 400)
 
         ContaBancariaService.recalcular_saldo_conta(conta_id)
         db.session.commit()
         return jsonify({'success': True, 'message': 'Movimento atualizado', 'data': mov.to_dict()}), 200
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return _unexpected_error()
 
 
 @contas_bancarias_bp.route('/<int:conta_id>/movimentos/<int:mov_id>', methods=['DELETE'])
@@ -512,18 +534,18 @@ def deletar_movimento(conta_id, mov_id):
     try:
         mov = MovimentoFinanceiro.query.get(mov_id)
         if not mov or mov.conta_bancaria_id != conta_id:
-            return jsonify({'success': False, 'error': 'Movimento não encontrado'}), 404
+            return _json_error('Movimento nao encontrado', 404)
 
         if not mov.ajustavel:
-            return jsonify({'success': False, 'error': 'Apenas movimentos de AJUSTE podem ser excluídos'}), 400
+            return _json_error('Apenas movimentos de AJUSTE podem ser excluidos', 400)
 
         db.session.delete(mov)
         ContaBancariaService.recalcular_saldo_conta(conta_id)
         db.session.commit()
         return jsonify({'success': True, 'message': 'Movimento excluído'}), 200
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return _unexpected_error()
 
 
 @contas_bancarias_bp.route('/transferir', methods=['POST'])
@@ -532,20 +554,35 @@ def transferir():
     Transferência entre contas bancárias (débito + crédito atômicos).
     """
     try:
-        data = request.get_json() or {}
+        data, error = _get_json_payload()
+        if error:
+            return error
         conta_origem_id = data.get('conta_origem_id')
         conta_destino_id = data.get('conta_destino_id')
         valor = data.get('valor')
         if not conta_origem_id or not conta_destino_id or valor is None:
-            return jsonify({'success': False, 'error': 'conta_origem_id, conta_destino_id e valor são obrigatórios'}), 400
+            return _json_error('conta_origem_id, conta_destino_id e valor sao obrigatorios', 400)
+
+        try:
+            conta_origem_id = int(conta_origem_id)
+            conta_destino_id = int(conta_destino_id)
+            valor_decimal = Decimal(str(valor))
+        except Exception:
+            return _json_error('Parametros invalidos para transferencia', 400)
+
+        if valor_decimal <= 0:
+            return _json_error('valor deve ser maior que zero', 400)
 
         descricao = (data.get('descricao') or 'Transferência').strip()
-        data_movimento = ContaBancariaService.parse_data(data.get('data_movimento'))
+        try:
+            data_movimento = ContaBancariaService.parse_data(data.get('data_movimento'))
+        except ValueError:
+            return _json_error('Formato de data invalido. Use YYYY-MM-DD', 400)
 
         resultado = ContaBancariaService.gerar_transferencia(
-            int(conta_origem_id),
-            int(conta_destino_id),
-            valor=Decimal(str(valor)),
+            conta_origem_id,
+            conta_destino_id,
+            valor=valor_decimal,
             descricao=descricao,
             data_movimento=data_movimento,
         )
@@ -559,6 +596,6 @@ def transferir():
                 'credito': resultado['credito'].to_dict(),
             }
         }), 201
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return _unexpected_error()

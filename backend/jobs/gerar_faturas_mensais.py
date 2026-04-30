@@ -13,6 +13,7 @@ Executar manualmente: python backend/jobs/gerar_faturas_mensais.py
 """
 import sys
 import os
+import logging
 from datetime import date
 
 # Adicionar o diretório backend ao path
@@ -27,39 +28,39 @@ except ImportError:
     from models import db
     from services.cartao_service import CartaoService
 
+logger = logging.getLogger(__name__)
+
 
 def gerar_faturas():
     """
     Gera faturas virtuais para todos os cartões ativos no mês atual
     """
     with app.app_context():
-        print("=" * 70)
-        print(f" JOB: Geracao de Faturas Mensais - {date.today().strftime('%d/%m/%Y')}")
-        print("=" * 70)
-        print()
+        logger.info("=" * 70)
+        logger.info("JOB: Geracao de Faturas Mensais - %s", date.today().strftime('%d/%m/%Y'))
+        logger.info("=" * 70)
 
         try:
             # Gerar faturas
             faturas = CartaoService.gerar_faturas_mes_atual()
 
-            print(f"OK - {len(faturas)} fatura(s) gerada(s) com sucesso!")
-            print()
+            logger.info("OK - %s fatura(s) gerada(s) com sucesso", len(faturas))
 
             # Exibir resumo
             for fatura in faturas:
-                print(f"  - Cartao ID {fatura.item_despesa_id}: "
-                      f"{fatura.descricao} | "
-                      f"Planejado: R$ {float(fatura.valor_planejado):.2f}")
+                logger.info(
+                    "Cartao ID %s: %s | Planejado: R$ %.2f",
+                    fatura.item_despesa_id,
+                    fatura.descricao,
+                    float(fatura.valor_planejado)
+                )
 
-            print()
-            print("=" * 70)
-            print(" JOB CONCLUIDO COM SUCESSO")
-            print("=" * 70)
+            logger.info("=" * 70)
+            logger.info("JOB CONCLUIDO COM SUCESSO")
+            logger.info("=" * 70)
 
         except Exception as e:
-            print(f"ERRO ao gerar faturas: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("ERRO ao gerar faturas: %s", e)
             sys.exit(1)
 
 

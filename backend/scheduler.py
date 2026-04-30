@@ -12,6 +12,9 @@ Para usar:
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 import atexit
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Inicializar scheduler
 scheduler = BackgroundScheduler()
@@ -21,12 +24,20 @@ def job_gerar_faturas_mensais():
     Job executado no 1º dia de cada mês às 00:01
     """
     try:
-        from backend.services.cartao_service import CartaoService
-        print("Executando job: Geracao de faturas mensais...")
-        faturas = CartaoService.gerar_faturas_mes_atual()
-        print(f"OK - {len(faturas)} faturas geradas!")
+        try:
+            from backend.app import create_app
+            from backend.services.cartao_service import CartaoService
+        except ImportError:
+            from app import create_app
+            from services.cartao_service import CartaoService
+
+        app = create_app()
+        with app.app_context():
+            logger.info("Executando job: Geracao de faturas mensais")
+            faturas = CartaoService.gerar_faturas_mes_atual()
+            logger.info("Job de faturas concluido: %s fatura(s) gerada(s)", len(faturas))
     except Exception as e:
-        print(f"ERRO no job de faturas: {str(e)}")
+        logger.exception("Erro no job de geracao de faturas mensais: %s", e)
 
 # Agendar jobs
 scheduler.add_job(
@@ -52,5 +63,5 @@ def start_scheduler():
     """
     if not scheduler.running:
         scheduler.start()
-        print("Scheduler de jobs iniciado!")
-        print("Job agendado: Gerar faturas mensais (dia 1, 00:01)")
+        logger.info("Scheduler de jobs iniciado")
+        logger.info("Job agendado: Gerar faturas mensais (dia 1, 00:01)")

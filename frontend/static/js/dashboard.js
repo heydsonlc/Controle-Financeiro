@@ -2,22 +2,78 @@
 // DASHBOARD - JAVASCRIPT PRINCIPAL
 // ============================================
 
-const API_BASE = 'http://localhost:5000/api/dashboard';
+const API_BASE = '/api/dashboard';
+
+function obterMensagemErro(payload, fallback = 'Erro ao processar requisição') {
+    return payload?.error || payload?.erro || payload?.message || fallback;
+}
 
 // Instâncias dos gráficos (para poder destruir ao atualizar)
 let graficoCategorias = null;
 let graficoEvolucao = null;
 let graficoSaldo = null;
+let filtroPeriodoAtual = '';
+let preferenciasDashboard = null;
+const PALETA_CATEGORIAS_FALLBACK = [
+    '#2563eb', '#ef4444', '#16a34a', '#f59e0b', '#7c3aed',
+    '#0891b2', '#e11d48', '#65a30d', '#d97706', '#4f46e5'
+];
 
 // ============================================
 // INICIALIZAÇÃO
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
+    inicializarFiltroPeriodo();
     carregarDashboard();
 });
 
+function buildApiUrl(path, extraParams = {}) {
+    const params = new URLSearchParams();
+    if (filtroPeriodoAtual) {
+        params.set('periodo', filtroPeriodoAtual);
+    }
+
+    Object.entries(extraParams).forEach(([chave, valor]) => {
+        if (valor !== undefined && valor !== null && `${valor}` !== '') {
+            params.set(chave, valor);
+        }
+    });
+
+    const query = params.toString();
+    return `${API_BASE}${path}${query ? `?${query}` : ''}`;
+}
+
+function inicializarFiltroPeriodo() {
+    const input = document.getElementById('filtro-periodo-input');
+    const btnAplicar = document.getElementById('filtro-periodo-aplicar');
+    const btnLimpar = document.getElementById('filtro-periodo-limpar');
+
+    if (!input || !btnAplicar || !btnLimpar) return;
+
+    const agora = new Date();
+    const mes = String(agora.getMonth() + 1).padStart(2, '0');
+    input.value = `${agora.getFullYear()}-${mes}`;
+    filtroPeriodoAtual = input.value;
+
+    btnAplicar.addEventListener('click', async () => {
+        filtroPeriodoAtual = input.value || '';
+        await carregarDashboard();
+    });
+
+    btnLimpar.addEventListener('click', async () => {
+        const atual = new Date();
+        const mesAtual = String(atual.getMonth() + 1).padStart(2, '0');
+        input.value = `${atual.getFullYear()}-${mesAtual}`;
+        filtroPeriodoAtual = input.value;
+        await carregarDashboard();
+    });
+}
+
 async function carregarDashboard() {
     try {
+        await carregarPreferenciasDashboard();
+        aplicarPreferenciasDashboard();
+
         // Carregar todos os dados em paralelo
         await Promise.all([
             carregarResumoMes(),
@@ -26,7 +82,7 @@ async function carregarDashboard() {
             carregarGraficoEvolucao(),
             carregarGraficoSaldo(),
             carregarAlertas(),
-            carregarAgendaFinanceira()
+            carregarFluxoCaixaProjetado()
         ]);
 
         // Gerar leitura do mês após carregar dados
@@ -37,13 +93,60 @@ async function carregarDashboard() {
     }
 }
 
+async function carregarPreferenciasDashboard() {
+    try {
+        const response = await fetch('/api/preferencias');
+        const data = await response.json();
+        if (response.ok && data?.success) {
+            preferenciasDashboard = data.data || null;
+        }
+    } catch (error) {
+        console.error('Erro ao carregar preferências do dashboard:', error);
+    }
+}
+
+function aplicarPreferenciasDashboard() {
+    if (!preferenciasDashboard) return;
+
+    const secaoIndicadores = document.getElementById('secao-indicadores');
+    const cardCategorias = document.getElementById('card-grafico-categorias');
+    const cardEvolucao = document.getElementById('card-grafico-evolucao');
+    const cardSaldo = document.getElementById('card-grafico-saldo');
+    const cardSaldoContas = document.getElementById('card-saldo-contas');
+
+    const graficos = (preferenciasDashboard.graficos_visiveis || '')
+        .split(',')
+        .map(v => v.trim())
+        .filter(Boolean);
+
+    const mostrarCategorias = graficos.length === 0 || graficos.includes('categorias');
+    const mostrarEvolucaoPref = graficos.length === 0 || graficos.includes('evolucao');
+    const mostrarSaldoPref = graficos.length === 0 || graficos.includes('saldo');
+
+    if (cardCategorias) cardCategorias.style.display = mostrarCategorias ? '' : 'none';
+    if (cardEvolucao) {
+        const habilitado = mostrarEvolucaoPref && preferenciasDashboard.mostrar_evolucao_historica !== false;
+        cardEvolucao.style.display = habilitado ? '' : 'none';
+    }
+    if (cardSaldo) cardSaldo.style.display = mostrarSaldoPref ? '' : 'none';
+    if (cardSaldoContas) {
+        cardSaldoContas.style.display = preferenciasDashboard.mostrar_saldo_consolidado === false ? 'none' : '';
+    }
+    if (secaoIndicadores) {
+        secaoIndicadores.style.display = preferenciasDashboard.insights_inteligentes_ativo === false ? 'none' : '';
+    }
+}
+
 // ============================================
 // BLOCO 1: RESUMO FINANCEIRO DO MÊS
 // ============================================
 async function carregarResumoMes() {
     try {
-        const response = await fetch(`${API_BASE}/resumo-mes`);
+        const response = await fetch(buildApiUrl('/resumo-mes'));
         const data = await response.json();
+        if (!response.ok || data?.success === false) {
+            throw new Error(obterMensagemErro(data, 'Erro ao carregar resumo do mês'));
+        }
 
         if (data.success) {
             const resumo = data.data;
@@ -85,8 +188,11 @@ async function carregarResumoMes() {
 // ============================================
 async function carregarIndicadores() {
     try {
-        const response = await fetch(`${API_BASE}/indicadores`);
+        const response = await fetch(buildApiUrl('/indicadores'));
         const data = await response.json();
+        if (!response.ok || data?.success === false) {
+            throw new Error(obterMensagemErro(data, 'Erro ao carregar indicadores'));
+        }
 
         if (data.success) {
             const indicadores = data.data;
@@ -180,11 +286,18 @@ function criarIndicadorChip(icone, label, value, cor) {
 // Gráfico de Pizza: Despesas por Categoria
 async function carregarGraficoCategorias() {
     try {
-        const response = await fetch(`${API_BASE}/grafico-categorias`);
+        const response = await fetch(buildApiUrl('/grafico-categorias'));
         const data = await response.json();
+        if (!response.ok || data?.success === false) {
+            throw new Error(obterMensagemErro(data, 'Erro ao carregar gráfico de categorias'));
+        }
 
         if (data.success && data.data.labels.length > 0) {
             const ctx = document.getElementById('grafico-categorias').getContext('2d');
+            const labels = data.data.labels || [];
+            const valores = data.data.valores || [];
+            const cores = resolverCoresGraficoCategorias(data.data.cores || [], labels.length);
+            const corTextoLegenda = obterCorTextoDashboard();
 
             // Destruir gráfico anterior se existir
             if (graficoCategorias) {
@@ -194,12 +307,12 @@ async function carregarGraficoCategorias() {
             graficoCategorias = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
-                    labels: data.data.labels,
+                    labels,
                     datasets: [{
-                        data: data.data.valores,
-                        backgroundColor: data.data.cores,
+                        data: valores,
+                        backgroundColor: cores,
                         borderWidth: 2,
-                        borderColor: 'rgba(255, 255, 255, 0.8)'
+                        borderColor: 'rgba(255, 255, 255, 0.65)'
                     }]
                 },
                 options: {
@@ -207,13 +320,18 @@ async function carregarGraficoCategorias() {
                     maintainAspectRatio: false,
                     plugins: {
                         legend: {
-                            position: 'right',
+                            position: 'bottom',
+                            align: 'start',
                             labels: {
-                                color: 'white',
+                                color: corTextoLegenda,
                                 font: {
                                     size: 12
                                 },
-                                padding: 10
+                                padding: 12,
+                                boxWidth: 12,
+                                boxHeight: 12,
+                                usePointStyle: true,
+                                pointStyle: 'circle'
                             }
                         },
                         tooltip: {
@@ -242,8 +360,11 @@ async function carregarGraficoCategorias() {
 // Gráfico de Barras: Evolução de Gastos
 async function carregarGraficoEvolucao() {
     try {
-        const response = await fetch(`${API_BASE}/grafico-evolucao`);
+        const response = await fetch(buildApiUrl('/grafico-evolucao'));
         const data = await response.json();
+        if (!response.ok || data?.success === false) {
+            throw new Error(obterMensagemErro(data, 'Erro ao carregar gráfico de evolução'));
+        }
 
         if (data.success && data.data.labels.length > 0) {
             const ctx = document.getElementById('grafico-evolucao').getContext('2d');
@@ -316,8 +437,11 @@ async function carregarGraficoEvolucao() {
 // Gráfico de Linha: Evolução do Saldo
 async function carregarGraficoSaldo() {
     try {
-        const response = await fetch(`${API_BASE}/grafico-saldo`);
+        const response = await fetch(buildApiUrl('/grafico-saldo'));
         const data = await response.json();
+        if (!response.ok || data?.success === false) {
+            throw new Error(obterMensagemErro(data, 'Erro ao carregar gráfico de saldo'));
+        }
 
         if (data.success && data.data.labels.length > 0) {
             const ctx = document.getElementById('grafico-saldo').getContext('2d');
@@ -397,8 +521,11 @@ async function carregarGraficoSaldo() {
 // ============================================
 async function carregarAlertas() {
     try {
-        const response = await fetch(`${API_BASE}/alertas`);
+        const response = await fetch(buildApiUrl('/alertas'));
         const data = await response.json();
+        if (!response.ok || data?.success === false) {
+            throw new Error(obterMensagemErro(data, 'Erro ao carregar alertas'));
+        }
 
         if (data.success) {
             const alertas = data.data;
@@ -508,16 +635,19 @@ async function gerarLeituraDoMes() {
     try {
         // Buscar dados do resumo e indicadores
         const [resumoResponse, indicadoresResponse, categoriasResponse] = await Promise.all([
-            fetch(`${API_BASE}/resumo-mes`),
-            fetch(`${API_BASE}/indicadores`),
-            fetch(`${API_BASE}/grafico-categorias`)
+            fetch(buildApiUrl('/resumo-mes')),
+            fetch(buildApiUrl('/indicadores')),
+            fetch(buildApiUrl('/grafico-categorias'))
         ]);
 
         const resumo = await resumoResponse.json();
         const indicadores = await indicadoresResponse.json();
         const categorias = await categoriasResponse.json();
 
-        if (!resumo.success || !indicadores.success || !categorias.success) {
+        if (
+            !resumoResponse.ok || !indicadoresResponse.ok || !categoriasResponse.ok ||
+            !resumo.success || !indicadores.success || !categorias.success
+        ) {
             throw new Error('Dados incompletos');
         }
 
@@ -592,202 +722,73 @@ function mostrarErro(mensagem) {
 }
 
 // ============================================
-// FASE 6.1: AGENDA FINANCEIRA + INSIGHTS TEMPORAIS
+// UTILITARIOS DO GRAFICO DE CATEGORIAS
 // ============================================
 
-async function carregarAgendaFinanceira() {
+function obterCorTextoDashboard() {
     try {
-        const response = await fetch(`${API_BASE}/alertas`);
+        const cor = window.getComputedStyle(document.body).color;
+        return cor || '#1d1d1f';
+    } catch (_) {
+        return '#1d1d1f';
+    }
+}
+function resolverCoresGraficoCategorias(coresOriginais, quantidade) {
+    if (quantidade <= 0) return [];
+    const coresLimpas = (coresOriginais || [])
+        .map(cor => typeof cor === 'string' ? cor.trim() : '')
+        .filter(Boolean);
+    const coresUnicas = [...new Set(coresLimpas.map(cor => cor.toLowerCase()))];
+    const precisaFallback = coresLimpas.length !== quantidade || coresUnicas.length <= 1;
+    if (!precisaFallback) {
+        return coresLimpas.slice(0, quantidade);
+    }
+    const paleta = [];
+    for (let i = 0; i < quantidade; i += 1) {
+        paleta.push(PALETA_CATEGORIAS_FALLBACK[i % PALETA_CATEGORIAS_FALLBACK.length]);
+    }
+    return paleta;
+}
+
+async function carregarFluxoCaixaProjetado() {
+    try {
+        const response = await fetch(buildApiUrl('/fluxo-caixa-projetado', { meses: 4 }));
         const data = await response.json();
-
-        if (data.success) {
-            const alertas = data.data;
-
-            // Consolidar todos os itens em uma única timeline
-            const todosItens = consolidarTimeline(alertas);
-
-            // Renderizar timeline
-            renderizarTimeline(todosItens);
-
-            // Gerar insights temporais
-            gerarInsightsTemporais(todosItens);
+        if (!response.ok || data?.success === false) {
+            throw new Error(obterMensagemErro(data, 'Erro ao carregar fluxo projetado'));
         }
-    } catch (error) {
-        console.error('Erro ao carregar agenda financeira:', error);
-        document.getElementById('timeline-agenda').innerHTML =
-            '<p style="color: rgba(255,255,255,0.5);">Erro ao carregar agenda.</p>';
-        document.getElementById('insights-temporais').innerHTML =
-            '<p style="color: rgba(255,255,255,0.5);">Erro ao gerar insights.</p>';
-    }
-}
 
-function consolidarTimeline(alertas) {
-    const itens = [];
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
+        const container = document.getElementById('fluxo-projetado-lista');
+        const subtitle = document.getElementById('fluxo-projetado-subtitle');
+        if (!container || !subtitle || !data?.data) return;
 
-    // Adicionar contas comuns
-    if (alertas.contas_vencer) {
-        alertas.contas_vencer.forEach(conta => {
-            itens.push({
-                data: parseDataBR(conta.data_vencimento),
-                dataStr: conta.data_vencimento,
-                tipo: 'Conta',
-                descricao: conta.descricao,
-                valor: conta.valor,
-                status: 'Pendente',
-                categoria: conta.categoria
-            });
-        });
-    }
+        const bloco = data.data;
+        subtitle.textContent = `${bloco.horizonte_meses} mes(es) a partir de ${bloco.periodo_inicio}`;
 
-    // Adicionar faturas de cartão
-    if (alertas.faturas_cartao) {
-        alertas.faturas_cartao.forEach(cartao => {
-            if (cartao.data_vencimento && cartao.data_vencimento !== 'N/A') {
-                itens.push({
-                    data: parseDataBR(cartao.data_vencimento),
-                    dataStr: cartao.data_vencimento,
-                    tipo: 'Cartão',
-                    descricao: cartao.nome,
-                    valor: cartao.valor,
-                    status: cartao.status,
-                    categoria: 'Fatura de Cartão'
-                });
-            }
-        });
-    }
+        if (!bloco.labels || bloco.labels.length === 0) {
+            container.innerHTML = '<p class="empty">Sem dados para projecao.</p>';
+            return;
+        }
 
-    // Adicionar financiamentos
-    if (alertas.financiamentos) {
-        alertas.financiamentos.forEach(fin => {
-            // Financiamentos não têm data_vencimento específica, usar primeiro dia do mês
-            const primeiroDiaMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-            itens.push({
-                data: primeiroDiaMes,
-                dataStr: primeiroDiaMes.toLocaleDateString('pt-BR'),
-                tipo: 'Financiamento',
-                descricao: `${fin.descricao} (${fin.parcela_atual}/${fin.total_parcelas})`,
-                valor: fin.valor_parcela,
-                status: 'Pendente',
-                categoria: 'Financiamento'
-            });
-        });
-    }
-
-    // Ordenar por data (ascendente)
-    itens.sort((a, b) => a.data - b.data);
-
-    return itens;
-}
-
-function parseDataBR(dataStr) {
-    // Converte DD/MM/YYYY para Date
-    const [dia, mes, ano] = dataStr.split('/');
-    return new Date(ano, mes - 1, dia);
-}
-
-function renderizarTimeline(itens) {
-    const container = document.getElementById('timeline-agenda');
-
-    if (itens.length === 0) {
-        container.innerHTML = '<p style="color: rgba(255,255,255,0.5);">Nenhum evento financeiro no período.</p>';
-        return;
-    }
-
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-
-    let html = '<div style="display: flex; flex-direction: column; gap: 12px;">';
-
-    itens.forEach(item => {
-        const isHoje = item.data.getTime() === hoje.getTime();
-        const isPassado = item.data < hoje;
-
-        const bgColor = isHoje ? 'rgba(0, 122, 255, 0.15)' : 'rgba(255,255,255,0.05)';
-        const borderColor = isHoje ? '#007aff' : 'rgba(255,255,255,0.1)';
-        const textOpacity = isPassado ? '0.5' : '0.9';
-
-        html += `
-            <div style="
-                background: ${bgColor};
-                border-left: 3px solid ${borderColor};
-                border-radius: 6px;
-                padding: 12px 16px;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                opacity: ${textOpacity};
-            ">
-                <div style="flex: 1;">
-                    <div style="font-size: 0.85em; color: rgba(255,255,255,0.6); margin-bottom: 4px;">
-                        ${item.dataStr} ${isHoje ? '• HOJE' : ''}
-                    </div>
-                    <div style="font-weight: 500; color: white; margin-bottom: 2px;">
-                        ${item.descricao}
-                    </div>
-                    <div style="font-size: 0.85em; color: rgba(255,255,255,0.6);">
-                        ${item.tipo} ${item.categoria ? `• ${item.categoria}` : ''}
-                    </div>
-                </div>
-                <div style="font-weight: 600; color: white; white-space: nowrap; margin-left: 16px;">
-                    ${formatarMoeda(item.valor)}
-                </div>
+        container.innerHTML = bloco.labels.map((label, index) => `
+            <div class="fluxo-item">
+                <div><strong>${label}</strong></div>
+                <div>Entradas: ${formatarMoeda(bloco.entradas[index] || 0)}</div>
+                <div>Saidas: ${formatarMoeda(bloco.saidas[index] || 0)}</div>
+                <div class="saldo">Saldo proj.: ${formatarMoeda(bloco.saldo_projetado[index] || 0)}</div>
             </div>
-        `;
-    });
-
-    html += '</div>';
-    container.innerHTML = html;
-}
-
-function gerarInsightsTemporais(itens) {
-    const container = document.getElementById('insights-temporais');
-
-    if (itens.length === 0) {
-        container.innerHTML = '<p style="color: rgba(255,255,255,0.5);">Dados insuficientes para gerar insights.</p>';
-        return;
-    }
-
-    const frases = [];
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-
-    // Insight 1: Percentual já vencido
-    const itensPassados = itens.filter(item => item.data <= hoje);
-    const percentualVencido = Math.round((itensPassados.length / itens.length) * 100);
-
-    if (percentualVencido > 0) {
-        frases.push(`Até hoje, ${percentualVencido}% das despesas do mês já venceram.`);
-    }
-
-    // Insight 2: Concentração temporal
-    const primeiraDezena = itens.filter(item => item.data.getDate() <= 10).length;
-    const segundaDezena = itens.filter(item => item.data.getDate() > 10 && item.data.getDate() <= 20).length;
-    const terceiraDezena = itens.filter(item => item.data.getDate() > 20).length;
-
-    const maiorConcentracao = Math.max(primeiraDezena, segundaDezena, terceiraDezena);
-    if (maiorConcentracao === terceiraDezena && terceiraDezena > 0) {
-        frases.push('O maior volume de vencimentos ocorre na terceira dezena do mês.');
-    } else if (maiorConcentracao === segundaDezena && segundaDezena > 0) {
-        frases.push('O maior volume de vencimentos concentra-se entre os dias 11 e 20.');
-    } else if (primeiraDezena > 0) {
-        frases.push('O maior volume de vencimentos ocorre nos primeiros 10 dias do mês.');
-    }
-
-    // Insight 3: Cartões
-    const itensCartao = itens.filter(item => item.tipo === 'Cartão');
-    if (itensCartao.length > 0) {
-        const mediaDataCartao = itensCartao.reduce((acc, item) => acc + item.data.getDate(), 0) / itensCartao.length;
-        if (mediaDataCartao > 20) {
-            frases.push('As despesas de cartão concentram-se após o dia 20.');
+        `).join('');
+    } catch (error) {
+        console.error('Erro ao carregar fluxo projetado:', error);
+        const container = document.getElementById('fluxo-projetado-lista');
+        const subtitle = document.getElementById('fluxo-projetado-subtitle');
+        if (container) {
+            container.innerHTML = '<p class="empty">Erro ao carregar projecao.</p>';
+        }
+        if (subtitle) {
+            subtitle.textContent = 'Erro ao carregar projecao';
         }
     }
-
-    // Renderizar insights (máximo 3)
-    container.innerHTML = frases.slice(0, 3).map(frase =>
-        `<p style="margin: 8px 0; font-size: 14px;">${frase}</p>`
-    ).join('');
 }
 
 // Atualizar dashboard a cada 5 minutos

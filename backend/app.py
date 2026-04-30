@@ -5,6 +5,7 @@ Este arquivo inicializa a aplicação Flask e configura rotas, banco de dados e 
 """
 import os
 import sys
+import logging
 from pathlib import Path
 from flask import Flask, jsonify, render_template
 from flask_cors import CORS
@@ -45,6 +46,16 @@ def create_app(config_name=None):
         config_name = os.getenv('FLASK_ENV', 'development')
 
     app.config.from_object(get_config(config_name))
+
+    # Logging mÃ­nimo coerente por ambiente
+    if not logging.getLogger().handlers:
+        level = logging.INFO
+        if config_name in {'development', 'testing'}:
+            level = logging.DEBUG
+        logging.basicConfig(
+            level=level,
+            format='%(asctime)s %(levelname)s %(name)s: %(message)s',
+        )
 
     # Garantir encoding UTF-8 para JSON
     app.config['JSON_AS_ASCII'] = False

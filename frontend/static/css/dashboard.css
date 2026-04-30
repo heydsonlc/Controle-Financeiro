@@ -2,6 +2,33 @@
 /* DASHBOARD - ESTILOS ESPECÍFICOS             */
 /* ============================================ */
 
+.filtro-periodo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+}
+
+.filtro-periodo label {
+    color: #6e6e73;
+    font-size: 0.9em;
+    font-weight: 600;
+}
+
+.filtro-periodo input,
+.filtro-periodo button {
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 8px;
+    padding: 6px 10px;
+    background: #fff;
+    color: #1d1d1f;
+}
+
+.filtro-periodo button {
+    cursor: pointer;
+}
+
 /* ========== BLOCO 1: RESUMO FINANCEIRO ========== */
 .resumo-mes {
     display: grid;
@@ -203,6 +230,39 @@
     margin-bottom: 60px;
 }
 
+.fluxo-projetado {
+    margin-bottom: 32px;
+}
+
+.fluxo-subtitle {
+    color: #6e6e73;
+    margin-top: -12px;
+    margin-bottom: 12px;
+}
+
+.fluxo-lista {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 14px;
+}
+
+.fluxo-item {
+    display: grid;
+    grid-template-columns: 100px 1fr 1fr 1fr;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.92);
+}
+
+.fluxo-item:last-child {
+    border-bottom: none;
+}
+
+.fluxo-item .saldo {
+    font-weight: 700;
+}
+
 .alertas-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -340,6 +400,11 @@
 
     .section-title {
         font-size: 1.2em;
+    }
+
+    .fluxo-item {
+        grid-template-columns: 1fr;
+        gap: 4px;
     }
 }
 

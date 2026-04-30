@@ -188,30 +188,63 @@
             margin: 4px 0;
             color: inherit;
         }
+
+        .perfil-modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.55);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+
+        .perfil-modal-content {
+            background: #ffffff;
+            border-radius: 12px;
+            width: min(980px, 96vw);
+            max-height: 92vh;
+            overflow-y: auto;
+            padding: 20px;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+        }
+
+        .perfil-modal-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+
+        .perfil-modal-actions {
+            margin-top: 16px;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
     </style>
 </head>
 <body>
     <div class="import-container">
-        <h1>Importar Fatura de Cartão</h1>
+        <h1>Importar Fatura de Cartao</h1>
 
-        <!-- Etapa 1: Configuração Inicial -->
         <div class="step active" id="step1">
-            <div class="step-header">1. Configuração</div>
+            <div class="step-header">1. Configuracao</div>
 
             <div class="form-group">
-                <label>Selecione o Cartão</label>
+                <label>Selecione o Cartao</label>
                 <select id="cartaoSelect"></select>
             </div>
 
             <div class="form-group">
-                <label>Competência (Mês da Fatura)</label>
+                <label>Competencia (Mes da Fatura)</label>
                 <input type="text" id="competenciaInput" placeholder="MM/AAAA" maxlength="7">
             </div>
 
             <button class="btn btn-primary" onclick="proximaEtapa(2)">Continuar</button>
         </div>
 
-        <!-- Etapa 2: Upload CSV -->
         <div class="step" id="step2">
             <div class="step-header">2. Upload do CSV</div>
 
@@ -226,30 +259,120 @@
             <button class="btn btn-primary" onclick="proximaEtapa(3)" id="btnStep3" disabled>Continuar</button>
         </div>
 
-        <!-- Etapa 3: Mapeamento -->
         <div class="step" id="step3">
-            <div class="step-header">3. Mapear Colunas</div>
-            <p style="color: rgba(255,255,255,0.7); margin-bottom: 20px;">
-                Mapeie as colunas do CSV para os campos do sistema
+            <div class="step-header">3. Validacao de Layout</div>
+            <p style="color: #4b5563; margin-bottom: 20px;">
+                O perfil detectado sera validado no modal da proxima etapa antes da pre-visualizacao tecnica.
             </p>
             <div id="mapeamentoContainer"></div>
             <button class="btn btn-secondary" onclick="voltarEtapa(2)">Voltar</button>
             <button class="btn btn-primary" onclick="proximaEtapa(4)" id="btnStep4" disabled>Continuar</button>
         </div>
 
-        <!-- Etapa 4: Classificação e Prévia -->
         <div class="step" id="step4">
             <div class="step-header">4. Classificar e Revisar</div>
             <div id="previaContainer"></div>
             <button class="btn btn-secondary" onclick="voltarEtapa(3)">Voltar</button>
-            <button class="btn btn-primary" onclick="finalizarImportacao()">Importar</button>
+            <button class="btn btn-primary" id="btnImportar" onclick="finalizarImportacao()" disabled>Importar</button>
         </div>
 
-        <!-- Etapa 5: Resultado -->
         <div class="step" id="step5">
-            <div class="step-header">Resultado da Importação</div>
+            <div class="step-header">Resultado da Importacao</div>
             <div id="resultadoContainer"></div>
-            <button class="btn btn-primary" onclick="location.reload()">Nova Importação</button>
+            <button class="btn btn-primary" onclick="location.reload()">Nova Importacao</button>
+        </div>
+    </div>
+
+    <div class="perfil-modal-overlay" id="perfilModal">
+        <div class="perfil-modal-content">
+            <h2 style="margin: 0 0 12px 0;">Validar Perfil e Mapeamento do CSV</h2>
+            <p style="margin: 0 0 16px 0; color: #475569;">
+                Confirme o perfil detectado, ajuste o mapeamento principal e valide a amostra interpretada antes da pre-visualizacao tecnica.
+            </p>
+
+            <div class="perfil-modal-grid">
+                <div class="form-group">
+                    <label>Perfil de importacao</label>
+                    <select id="modalPerfil" onchange="atualizarCamposPerfilModal(); renderizarAmostraModal();"></select>
+                </div>
+
+                <div class="form-group">
+                    <label>Categoria padrao do lote *</label>
+                    <select id="modalCategoriaPadrao" onchange="renderizarAmostraModal();"></select>
+                </div>
+
+                <div class="form-group">
+                    <label>Data</label>
+                    <select id="modalMapData" onchange="renderizarAmostraModal();"></select>
+                </div>
+
+                <div class="form-group">
+                    <label>Descricao</label>
+                    <select id="modalMapDescricao" onchange="renderizarAmostraModal();"></select>
+                </div>
+
+                <div class="form-group" id="boxCampoValor">
+                    <label>Valor</label>
+                    <select id="modalMapValor" onchange="renderizarAmostraModal();"></select>
+                </div>
+
+                <div class="form-group">
+                    <label>Parcela (opcional)</label>
+                    <select id="modalMapParcela" onchange="renderizarAmostraModal();"></select>
+                </div>
+            </div>
+
+            <div class="perfil-modal-grid" id="boxCamposCaixa" style="display:none;">
+                <div class="form-group">
+                    <label>Coluna Credito</label>
+                    <select id="modalMapCredito" onchange="renderizarAmostraModal();"></select>
+                </div>
+                <div class="form-group">
+                    <label>Coluna Debito</label>
+                    <select id="modalMapDebito" onchange="renderizarAmostraModal();"></select>
+                </div>
+                <div class="form-group">
+                    <label>Regra de interpretacao Caixa</label>
+                    <select id="modalRegraCaixa" onchange="renderizarAmostraModal();">
+                        <option value="debito">Usar debito (despesas)</option>
+                        <option value="credito">Usar credito</option>
+                        <option value="auto">Auto (debito e fallback credito)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Categoria de cartao padrao (opcional)</label>
+                    <select id="modalCategoriaCartaoPadraoCaixa" onchange="renderizarAmostraModal();"></select>
+                </div>
+            </div>
+
+            <div class="perfil-modal-grid" id="boxCamposNubank" style="display:none;">
+                <div class="form-group">
+                    <label>Regra de interpretacao Nubank</label>
+                    <select id="modalRegraNubank" onchange="renderizarAmostraModal();">
+                        <option value="absoluto">Usar valor absoluto</option>
+                        <option value="despesas_negativas">Despesas sao valores negativos</option>
+                        <option value="despesas_positivas">Despesas sao valores positivos</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Categoria de cartao padrao (opcional)</label>
+                    <select id="modalCategoriaCartaoPadraoNubank" onchange="renderizarAmostraModal();"></select>
+                </div>
+            </div>
+
+            <div class="perfil-modal-grid" id="boxCamposManual">
+                <div class="form-group">
+                    <label>Categoria de cartao padrao (opcional)</label>
+                    <select id="modalCategoriaCartaoPadraoManual" onchange="renderizarAmostraModal();"></select>
+                </div>
+            </div>
+
+            <div id="modalAmostraInterpretada" style="margin-top: 10px;"></div>
+
+            <div class="perfil-modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="fecharModalValidacao()">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="confirmarValidacaoModal()">Confirmar validacao</button>
+            </div>
         </div>
     </div>
 

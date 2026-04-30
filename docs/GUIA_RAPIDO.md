@@ -1,5 +1,11 @@
 # Guia de Início Rápido
 
+## Nota de Direção Técnica
+
+Este guia descreve o fluxo local atual. A direção documentada para os próximos MVPs é evoluir o desenvolvimento para PostgreSQL local, manter SQLite apenas como legado/fallback temporário e adotar Playwright E2E como padrão de Validação. Os dados locais atuais não são considerados dados reais e podem ser recriados durante desenvolvimento, mas qualquer reset, Exclusão ou Recriação deve ser limitado a ambiente local/dev e nunca a produção, DigitalOcean ou banco remoto.
+
+Nenhuma exposição web externa deve ocorrer sem Autenticação, proteção de APIs, `DEBUG=False`, `SECRET_KEY` segura, HTTPS e revisão de CORS.
+
 ## Configuração Inicial (Primeira vez)
 
 ### 1. Criar Ambiente Virtual
@@ -72,7 +78,7 @@ Pressione `Ctrl + C` no terminal
 
 ## Resetar o Banco de Dados
 
-Se quiser começar do zero:
+Se quiser começar do zero em ambiente local/dev, confirme visualmente que o banco é local e que não há dados reais. Esta orientação não se aplica a produção, DigitalOcean, banco remoto ou qualquer `DATABASE_URL` externa.
 
 ```bash
 # 1. Deletar o banco existente
@@ -86,16 +92,19 @@ python init_db.py --sample
 
 ## Estrutura de Desenvolvimento
 
-### Desenvolvimento Local (Atual)
-- ✅ SQLite (arquivo local)
-- ✅ Não precisa de servidor de banco
-- ✅ Tudo funciona offline
-- ✅ Perfeito para desenvolvimento
+### Desenvolvimento Local
+- Fluxo atual ainda pode usar SQLite local como legado/fallback temporário.
+- A direção dos próximos MVPs é PostgreSQL local como banco oficial de desenvolvimento.
+- Dados locais de desenvolvimento são descartáveis, desde que a operação seja explicitamente local/dev.
 
 ### Produção Futura (DigitalOcean)
 - PostgreSQL (servidor remoto)
-- **Migração:** Apenas alterar variável de ambiente
-- **Código:** Permanece exatamente o mesmo
+- `DATABASE_URL` remoto somente em produção/web futura
+- Dados reais
+- Autenticação obrigatória
+- `DEBUG=False`
+- `SECRET_KEY` segura
+- HTTPS obrigatório
 
 ---
 
@@ -144,7 +153,8 @@ Próximas melhorias planejadas: ver `docs/HISTORIA_DO_PROJETO.md`.
 
 1. Não suba o arquivo `gastos.db` para o Git (já está no `.gitignore`)
 2. Não suba o arquivo `.env.local` para o Git (já está no `.gitignore`)
-3. Não se preocupe com PostgreSQL agora (foque no desenvolvimento local)
+3. Não aponte desenvolvimento para banco remoto, DigitalOcean ou produção
+4. Não execute operação destrutiva sem confirmar que o ambiente é local/dev
 
 ---
 

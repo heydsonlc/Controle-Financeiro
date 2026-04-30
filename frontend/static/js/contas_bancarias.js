@@ -2,7 +2,7 @@
  * JavaScript para o módulo de Contas Bancárias
  */
 
-const API_BASE = 'http://localhost:5000/api/contas';
+const API_BASE = '/api/contas';
 
 let contaAtual = null;
 let contaParaInativar = null;
@@ -61,7 +61,7 @@ function criarLinhaConta(conta) {
 
     const instituicao = conta.instituicao || '';
     const tipo = conta.tipo || '';
-    const subtitulo = [instituicao, tipo].filter(Boolean).join(' · ');
+    const subtitulo = [instituicao, tipo].filter(Boolean).join(' - ');
 
     const btnExtrato = `<button class="btn-icon" onclick="abrirExtrato(${conta.id})" title="Extrato" ${conta.status !== 'ATIVO' ? 'disabled' : ''}>📄</button>`;
     const btnEditar = `<button class="btn-icon" onclick="editarConta(${conta.id})" title="Editar">✏️</button>`;
@@ -380,7 +380,7 @@ async function abrirExtrato(contaId) {
         const conta = jsonConta.data;
         extratoMovimentos = jsonMov.data || [];
 
-        document.getElementById('extrato-titulo').textContent = `Extrato — ${conta.nome}`;
+        document.getElementById('extrato-titulo').textContent = `Extrato - ${conta.nome}`;
         document.getElementById('extrato-saldo').textContent = formatarMoedaDisplay(conta.saldo_atual);
         renderizarExtrato(extratoMovimentos);
     } catch (e) {
@@ -400,7 +400,7 @@ function renderizarExtrato(movimentos) {
         const tipoClass = m.tipo === 'DEBITO' ? 'debito' : 'credito';
         const sinal = m.tipo === 'DEBITO' ? '-' : '+';
         const tag = (m.origem === 'AJUSTE') ? 'AJUSTE' : (m.origem || '');
-        const meta = `${formatarDataBR(m.data_movimento)}${tag ? ' · ' + tag : ''}`;
+        const meta = `${formatarDataBR(m.data_movimento)}${tag ? ' - ' + tag : ''}`;
         const saldoApos = (m.saldo_apos_movimento != null) ? formatarMoedaDisplay(m.saldo_apos_movimento) : null;
 
         const acoes = (m.ajustavel)

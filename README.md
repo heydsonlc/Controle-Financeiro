@@ -158,7 +158,7 @@ Cada pixel tem propósito.
 
 - **Backend**: Python (Flask) + SQLAlchemy
 - **Frontend**: Vanilla JavaScript + Jinja2
-- **Database**: SQLite (desenvolvimento)
+- **Database**: PostgreSQL local como direção oficial de desenvolvimento; SQLite permanece como legado/fallback temporário
 - **Charts**: Chart.js
 
 ## Roadmap Conceitual
@@ -201,7 +201,11 @@ Possíveis evoluções após validação:
 Consulte:
 - `docs/AI_IMPLEMENTATION_STANDARD.md` → Processo obrigatório
 - `docs/MANIFESTO_TECNICO_IA.md` → Regras técnicas
+- `docs/UX_REESTRUTURACAO_NAVEGACAO.md` → Diretriz de navegação, módulos e ícones
+- `docs/WEB_MOBILE_SEGURANCA_POSTGRESQL.md` → Diretrizes web, mobile, segurança, PostgreSQL, dados descartáveis e Playwright E2E
 - `README_TECNICO.md` → Documentação técnica detalhada
+
+Documentação específica de testes E2E ainda não foi criada. Ela deve ser produzida no MVP TEST-1, quando Playwright for instalado/configurado.
 
 ### Princípio de ouro
 

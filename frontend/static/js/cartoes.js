@@ -261,7 +261,7 @@ async function carregarResumoCartao(cartaoId) {
         if (!response.ok) {
             const errorData = await response.json();
             console.error('❌ Erro do backend:', errorData);
-            throw new Error(errorData.erro || 'Erro ao carregar resumo');
+            throw new Error(errorData.error || errorData.erro || errorData.message || 'Erro ao carregar resumo');
         }
 
         const resumo = await response.json();
@@ -444,7 +444,7 @@ async function salvarItemAgregado(event) {
         const result = await response.json();
 
         if (!response.ok) {
-            throw new Error(result.erro || result.message || 'Erro ao salvar categoria');
+            throw new Error(result.error || result.erro || result.message || 'Erro ao salvar categoria');
         }
 
         fecharModal('modal-item-agregado');
@@ -486,7 +486,7 @@ async function excluirItemAgregado(itemId) {
 
         if (!response.ok) {
             // Backend retorna erro 400 se houver lançamentos
-            throw new Error(result.erro || result.message || 'Erro ao excluir categoria');
+            throw new Error(result.error || result.erro || result.message || 'Erro ao excluir categoria');
         }
 
         // Recarregar itens agregados e resumo do cartão
@@ -595,7 +595,7 @@ async function salvarOrcamento(event) {
 
         if (!response.ok) {
             const error = await response.json();
-            throw new Error(error.erro || 'Erro ao salvar orçamento');
+            throw new Error(error.error || error.erro || error.message || 'Erro ao salvar orçamento');
         }
 
         fecharModal('modal-orcamento');
@@ -1025,7 +1025,7 @@ async function pagarFatura(event) {
         const result = await response.json();
 
         if (!response.ok) {
-            throw new Error(result.erro || result.message || 'Erro ao pagar fatura');
+            throw new Error(result.error || result.erro || result.message || 'Erro ao pagar fatura');
         }
 
         fecharModal('modal-pagar-fatura');
@@ -1248,7 +1248,7 @@ async function revelarCodigoSeguranca(event) {
 
         if (!response.ok) {
             const error = await response.json();
-            throw new Error(error.erro || 'Erro ao revelar código');
+            throw new Error(error.error || error.erro || error.message || 'Erro ao revelar código');
         }
 
         const data = await response.json();
