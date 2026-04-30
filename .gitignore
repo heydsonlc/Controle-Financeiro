@@ -62,6 +62,9 @@ instance/
 .pytest_cache/
 .coverage
 htmlcov/
+node_modules/
+playwright-report/
+test-results/
 
 # Temporary files
 *.tmp
