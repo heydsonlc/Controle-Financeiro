@@ -97,6 +97,12 @@ python init_db.py --sample
 - A direção dos próximos MVPs é PostgreSQL local como banco oficial de desenvolvimento.
 - Dados locais de desenvolvimento são descartáveis, desde que a operação seja explicitamente local/dev.
 
+### PostgreSQL local em desenvolvimento
+- Para usar PostgreSQL local, crie o banco local manualmente e configure `DATABASE_URL` no `.env.local`.
+- A URL de desenvolvimento deve apontar somente para `localhost`, `127.0.0.1` ou `::1`.
+- Se `DATABASE_URL` não estiver definida, o projeto mantém SQLite como fallback temporário.
+- Nunca use URL DigitalOcean, banco remoto ou dados reais em `development`.
+
 ### Produção Futura (DigitalOcean)
 - PostgreSQL (servidor remoto)
 - `DATABASE_URL` remoto somente em produção/web futura

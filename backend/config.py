@@ -3,9 +3,53 @@ Configurações da aplicação por ambiente
 """
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 # Diretório base do projeto
 BASE_DIR = Path(__file__).resolve().parent.parent
+SQLITE_FALLBACK_URI = f"sqlite:///{BASE_DIR / 'data' / 'gastos.db'}"
+DEVELOPMENT_REMOTE_DATABASE_ERROR = (
+    'Ambiente development nao pode usar DATABASE_URL remota. '
+    'Use PostgreSQL local ou remova DATABASE_URL para fallback SQLite.'
+)
+
+
+def _is_local_database_url(database_url):
+    """Return True only for clearly local development database URLs."""
+    raw_url = (database_url or '').strip()
+    if not raw_url:
+        return False
+
+    lowered_url = raw_url.lower()
+    blocked_markers = ('digitalocean', 'ondigitalocean', 'do-user')
+    if any(marker in lowered_url for marker in blocked_markers):
+        return False
+
+    parsed = urlparse(raw_url)
+    scheme = parsed.scheme.lower()
+
+    if scheme == 'sqlite':
+        return parsed.hostname is None
+
+    if scheme in {'postgresql', 'postgres'}:
+        if parsed.hostname is None:
+            return parsed.netloc == ''
+
+        hostname = parsed.hostname.strip('[]').lower()
+        return hostname in {'localhost', '127.0.0.1', '::1'}
+
+    return False
+
+
+def _development_database_uri():
+    database_url = os.getenv('DATABASE_URL')
+    if not database_url or database_url.strip() == '':
+        return SQLITE_FALLBACK_URI
+
+    if not _is_local_database_url(database_url):
+        raise RuntimeError(DEVELOPMENT_REMOTE_DATABASE_ERROR)
+
+    return database_url.strip()
 
 
 class Config:
@@ -24,13 +68,13 @@ class Config:
 
 
 class DevelopmentConfig(Config):
-    """Configuração de desenvolvimento (SQLite local)"""
+    """Configuracao de desenvolvimento (PostgreSQL local ou SQLite fallback)"""
     DEBUG = True
     TESTING = False
     SQLALCHEMY_ECHO = True  # Log SQL queries em desenvolvimento
 
-    # SQLite local - caminho absoluto
-    SQLALCHEMY_DATABASE_URI = f"sqlite:///{BASE_DIR / 'data' / 'gastos.db'}"
+    # PostgreSQL local via DATABASE_URL; SQLite local permanece fallback temporario.
+    SQLALCHEMY_DATABASE_URI = SQLITE_FALLBACK_URI
 
 
 class ProductionConfig(Config):
@@ -75,6 +119,9 @@ def get_config(env=None):
 
     cfg = config.get(env, config['default'])
 
+    if cfg is DevelopmentConfig:
+        DevelopmentConfig.SQLALCHEMY_DATABASE_URI = _development_database_uri()
+
     # Hardening de produÃ§Ã£o: sem fallbacks inseguros
     if env == 'production':
         secret = os.getenv('SECRET_KEY')
@@ -84,5 +131,6 @@ def get_config(env=None):
         db_url = os.getenv('DATABASE_URL')
         if not db_url or db_url.strip() == '':
             raise RuntimeError('DATABASE_URL de producao ausente')
+        ProductionConfig.SQLALCHEMY_DATABASE_URI = db_url.strip()
 
     return cfg

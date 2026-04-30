@@ -232,6 +232,14 @@ O diagnóstico deve mapear:
 - estratégia para criar banco local;
 - estratégia para usar DigitalOcean apenas em produção.
 
+## DB-2A - Preparacao segura para PostgreSQL local
+
+O ambiente `development` passa a aceitar `DATABASE_URL` local para PostgreSQL, desde que a URL aponte claramente para `localhost`, `127.0.0.1` ou `::1`. URLs remotas, DigitalOcean, `ondigitalocean` ou `do-user` devem ser bloqueadas em desenvolvimento antes da aplicacao iniciar.
+
+Se `DATABASE_URL` nao estiver definida, o SQLite local permanece como fallback temporario/legado. O ambiente `testing` continua isolado com SQLite em memoria, e `production` continua exigindo `DATABASE_URL` e `SECRET_KEY` seguras.
+
+Este MVP nao cria banco PostgreSQL, nao roda migrations, nao recria schema e nao altera dados. A compatibilidade de runtime entre SQLite e PostgreSQL, incluindo pontos como `strftime`, fica para o DB-2B.
+
 ## 6. SQLite
 
 SQLite deve deixar de ser a base principal de desenvolvimento da evolução web do projeto.
