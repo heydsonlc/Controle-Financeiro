@@ -4,7 +4,8 @@
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:smoke": "playwright test tests/e2e/smoke.spec.js",
-    "test:e2e:debug": "playwright test --debug"
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:functional": "playwright test tests/e2e/functional/"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1"

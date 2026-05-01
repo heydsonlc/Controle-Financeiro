@@ -128,6 +128,51 @@ Os testes E2E do TEST-1:
 - não chamam endpoints diretamente para mutação;
 - não usam banco remoto.
 
+## TEST-2A — Testes Funcionais de Baixo Risco
+
+MVP TEST-2A implementou testes funcionais para os módulos mais seguros, sem dependências críticas e sem risco de contaminação de dados reais.
+
+### Módulos cobertos
+
+- **Categorias** (`tests/e2e/functional/categorias.spec.js`)
+- **Contas Bancárias** (`tests/e2e/functional/contas-bancarias.spec.js`)
+- **Receitas / Fontes** (`tests/e2e/functional/receitas.spec.js`)
+
+### Fluxos por módulo (2 testes cada)
+
+1. Abre o modal ao clicar no botão da action bar (sem criar dados).
+2. Cria um registro com nome prefixado `TESTE_E2E_` + timestamp e confirma que aparece na lista.
+
+### Execução
+
+```bash
+npm run test:e2e:functional
+# ou
+npx playwright test tests/e2e/functional/
+```
+
+### Helpers criados
+
+- `tests/e2e/helpers/test-data.js` — geradores `makeCategoriaNome()`, `makeContaNome()`, `makeFonteNome()` com prefixo `TESTE_E2E_` + timestamp.
+- `tests/e2e/helpers/api.js` — `ensureTestingEnvironment(request)`: verifica `GET /health` e aborta se `environment !== 'testing'`, impedindo criação de dados em banco real.
+- `tests/e2e/helpers/assertions.js` — `assertModalAberto(page, selector)` e `assertTextoVisivel(page, texto)`.
+
+### Regra de ambiente
+
+Testes que criam dados chamam `ensureTestingEnvironment(request)` como primeira instrução. Se o Playwright reutilizar um servidor de desenvolvimento (`reuseExistingServer: true`), os testes de criação falham com mensagem explícita em vez de persistir dados reais.
+
+### Cautelas aplicadas
+
+- `#fonte-recorrente` (Receitas) é desmarcado explicitamente antes de salvar, pois vem `checked` por padrão e geraria orçamentos automáticos no banco de testing.
+- `page.on('dialog', dialog => dialog.accept())` captura os `alert()` de sucesso de todos os módulos.
+- Patrimônio **excluído** deste MVP: `patrimonio.js` usa URL hardcoded `http://localhost:5000/api/patrimonio`, incompatível com ambientes de teste em porta diferente.
+
+### Comportamento esperado com servidor de desenvolvimento ativo
+
+- 3 testes de abertura de modal: **passam** (não criam dados).
+- 3 testes de criação: **falham intencionalmente** com erro `[TEST-2A] Servidor está em ambiente 'development'...`.
+- Para passar todos os 6: parar o servidor de desenvolvimento antes de rodar `npm run test:e2e:functional`.
+
 ## Próximos Testes Planejados
 
 - sidebar/topbar após UX-1A;
@@ -137,4 +182,5 @@ Os testes E2E do TEST-1:
 - abertura do modal de pagamento;
 - baixa de despesa;
 - filtros de Competência;
+- URL hardcoded em `patrimonio.js` (fix necessário antes de testar Patrimônio);
 - regressões visuais e funcionais por módulo.
