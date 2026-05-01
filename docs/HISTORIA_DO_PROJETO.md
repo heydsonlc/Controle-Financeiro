@@ -98,6 +98,14 @@ Despesas foi mantida sem redesenho. Seguro Habitacional (`/financiamentos/seguro
 
 ---
 
+## MVP UX-2 — Configurações enxuta (2026-04-30)
+
+A tela Configurações deixou de ser hub de módulos operacionais. Os atalhos para Categorias, Despesas Recorrentes, Cartões, Veículos, Financiamentos, Contas Bancárias, Receitas e Patrimônio foram removidos da tela, mantendo os módulos acessíveis pela sidebar.
+
+Configurações ficou reservada a Preferências do Sistema e futuras configurações sistêmicas, sem alteração de rotas, APIs, banco de dados ou regras financeiras.
+
+---
+
 ## Backlog — Próximas fases
 
 Ver [plano de MVPs](./../C:/Users/heydson.cardoso/.claude/plans/sleepy-floating-candy.md) para o cronograma completo (MVP 1 ao 6).

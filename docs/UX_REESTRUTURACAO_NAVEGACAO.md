@@ -180,6 +180,12 @@ Escopo:
 
 Cada item deve passar a ser acessado por menu próprio, ainda que internamente reaproveite a tela ou componente existente.
 
+### Registro de implementação - UX-2
+
+O UX-2 removeu de Configurações os atalhos de módulos operacionais e cadastros já acessíveis pela sidebar.
+
+Configurações deixa de funcionar como hub geral de módulos e passa a ficar reservada a preferências, parâmetros globais e futuras configurações sistêmicas. Os módulos removidos continuam acessíveis pela navegação lateral.
+
 ### MVP UX-3 - Faixa de ações por módulo
 
 Objetivo: padronizar a faixa de ações de cada tela.

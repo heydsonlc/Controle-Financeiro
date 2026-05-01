@@ -24,6 +24,13 @@
             opacity: 0.7;
         }
 
+        .config-intro {
+            max-width: 680px;
+            color: #6e6e73;
+            line-height: 1.5;
+            margin: 0;
+        }
+
         .config-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -45,21 +52,21 @@
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
         }
 
-        .config-card:hover {
+        a.config-card:hover {
             background: #e8e8ea;
             border-color: rgba(0, 0, 0, 0.1);
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
         }
 
-        .config-card:active {
+        a.config-card:active {
             transform: scale(0.99);
         }
 
-        .config-icon {
-            font-size: 1.5em;
-            opacity: 0.9;
-            margin-bottom: 4px;
+        .config-card.planned {
+            background: #ffffff;
+            border-style: dashed;
+            box-shadow: none;
         }
 
         .config-title {
@@ -75,10 +82,6 @@
             line-height: 1.4;
             font-weight: 400;
         }
-
-        .config-badge {
-            display: none; /* Remove badges for cleaner look */
-        }
     </style>
 {% endblock %}
 
@@ -92,78 +95,25 @@
         </header>
 
         <main>
+            <p class="config-intro">
+                Ajustes gerais do sistema, preferências de uso e parâmetros globais.
+                Os módulos operacionais e cadastros ficam disponíveis na navegação lateral.
+            </p>
+
             <div class="config-grid">
-                <!-- Categorias -->
-                <a href="/categorias" class="config-card">
-                    <div class="config-title">Categorias</div>
-                    <div class="config-description">
-                        Gerencie as categorias para organizar suas despesas
-                    </div>
-                </a>
-
-                <!-- Despesas Recorrentes -->
-                <a href="/despesas#nova-despesa" class="config-card">
-                    <div class="config-title">Despesas Recorrentes</div>
-                    <div class="config-description">
-                        Cadastre despesas fixas mensais e consórcios
-                    </div>
-                </a>
-
-                <!-- Cartões de Crédito -->
-                <a href="/cartoes" class="config-card">
-                    <div class="config-title">Cartões de Crédito</div>
-                    <div class="config-description">
-                        Configure seus cartões e defina limites
-                    </div>
-                </a>
-
-                <!-- Veículos -->
-                <a href="/veiculos" class="config-card">
-                    <div class="config-title">🚗 Veículos</div>
-                    <div class="config-description">
-                        Cadastre veículos para projetar custos de uso, manutenção e financiamento.
-                    </div>
-                </a>
-
-                <!-- Financiamentos -->
-                <a href="/financiamentos" class="config-card">
-                    <div class="config-title">Financiamentos</div>
-                    <div class="config-description">
-                        Gerencie financiamentos e amortizações SAC e PRICE
-                    </div>
-                </a>
-
-                <!-- Contas Bancárias -->
-                <a href="/contas-bancarias" class="config-card">
-                    <div class="config-title">Contas Bancárias</div>
-                    <div class="config-description">
-                        Gerencie suas contas e carteiras digitais
-                    </div>
-                </a>
-
-                <!-- Receitas -->
-                <a href="/receitas" class="config-card">
-                    <div class="config-title">Receitas</div>
-                    <div class="config-description">
-                        Gerencie fontes de receita e orçamento mensal
-                    </div>
-                </a>
-
-                <!-- Contas Patrimônio -->
-                <a href="/patrimonio" class="config-card">
-                    <div class="config-title">Patrimônio</div>
-                    <div class="config-description">
-                        Gerencie suas caixinhas e transferências
-                    </div>
-                </a>
-
-                <!-- Preferências do Sistema -->
                 <a href="/preferencias" class="config-card">
-                    <div class="config-title">Preferências</div>
+                    <div class="config-title">Preferências do Sistema</div>
                     <div class="config-description">
-                        Configure comportamento, aparência e backup
+                        Personalize aparência, comportamento, backup e preferências gerais da aplicação.
                     </div>
                 </a>
+
+                <div class="config-card planned" aria-label="Outras configurações planejadas">
+                    <div class="config-title">Outras configurações</div>
+                    <div class="config-description">
+                        Novos parâmetros sistêmicos serão adicionados aqui conforme o sistema evoluir.
+                    </div>
+                </div>
             </div>
         </main>
     </div>

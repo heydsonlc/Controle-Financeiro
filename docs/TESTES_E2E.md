@@ -102,6 +102,8 @@ Para MVPs de interface, o smoke E2E deve ser executado antes e depois das altera
 
 No UX-1C, a migração das demais telas para `base.html` deve ser validada em lotes, repetindo o smoke após cada grupo de templates. Ao final, o smoke cobre as 13 rotas principais já dentro do shell visual, mantendo `/financiamentos/seguro` e `/indexadores` como rotas diagnósticas ignoradas.
 
+No UX-2, o smoke E2E valida que Configurações continua carregando após deixar de ser hub de módulos e que as rotas removidas da tela continuam acessíveis pela sidebar e pelas rotas principais.
+
 ## Como Interpretar Falhas
 
 Falha de status HTTP indica que a página não carregou corretamente.
