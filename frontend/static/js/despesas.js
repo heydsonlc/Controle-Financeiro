@@ -777,6 +777,61 @@ function abrirModal() {
 }
 
 /**
+ * Abre o modal existente ja preparado para uma despesa recorrente.
+ */
+function abrirModalRecorrencia() {
+    abrirModal();
+
+    const recorrente = document.getElementById('recorrente');
+    const tipoRecorrencia = document.getElementById('tipo_recorrencia');
+    const tipoGroup = document.getElementById('tipo-recorrencia-group');
+    const meioPagamentoGroup = document.getElementById('meio-pagamento-group');
+
+    if (recorrente) {
+        recorrente.checked = true;
+    }
+    if (tipoRecorrencia) {
+        tipoRecorrencia.value = 'mensal';
+    }
+    if (tipoGroup) {
+        tipoGroup.style.display = 'block';
+    }
+    if (meioPagamentoGroup) {
+        meioPagamentoGroup.style.display = 'block';
+    }
+    if (typeof alternarCamposSemanal === 'function') {
+        alternarCamposSemanal();
+    }
+    if (tipoRecorrencia) {
+        tipoRecorrencia.focus();
+    }
+}
+
+/**
+ * Abre o modal existente ja preparado para cadastrar consorcio.
+ */
+function abrirModalConsorcio() {
+    abrirModal();
+
+    const titulo = document.getElementById('modal-titulo');
+    const eConsorcio = document.getElementById('e_consorcio');
+    const numeroParcelas = document.getElementById('numero_parcelas_consorcio');
+
+    if (titulo) {
+        titulo.textContent = 'Novo Consorcio';
+    }
+    if (eConsorcio) {
+        eConsorcio.checked = true;
+    }
+    if (typeof alternarCamposConsorcio === 'function') {
+        alternarCamposConsorcio();
+    }
+    if (numeroParcelas) {
+        numeroParcelas.focus();
+    }
+}
+
+/**
  * Fecha o modal
  */
 function fecharModal() {

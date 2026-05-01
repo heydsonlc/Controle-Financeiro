@@ -376,6 +376,12 @@ As renderizacoes dinamicas de Receitas e Categorias foram ajustadas apenas no HT
 
 Complemento do UX-6C aplicou o mesmo padrao estrutural em Configuracoes, Preferencias e Importar Cartao: action bar, conteudo `app-content-fluid` e paineis alinhados ao shell. Preferencias manteve as abas e Importar Cartao manteve o fluxo de assistente sem alterar APIs ou JavaScript funcional.
 
+### Registro de implementacao - RECUP-2
+
+O RECUP-2 restaurou acessos visuais seguros para funcionalidades ja existentes em Despesas. A action bar de `/despesas` voltou a oferecer atalhos para nova despesa, nova recorrencia e consorcio, reaproveitando o modal existente e preservando regras, APIs, pagamentos, listagem e cards.
+
+A navegacao lateral recebeu atalhos diretos para Recorrencias e Consorcios, ambos apontando para o modal de Despesas por hash. A tela de Configuracoes recebeu apenas um atalho discreto para Recorrencias e Obrigacoes, apontando para Despesas como orientacao temporaria. Uma central dedicada de Recorrencias/Obrigacoes permanece como etapa futura.
+
 ## 9. Regras de Preservação
 
 A reestruturação visual deve preservar integralmente:

@@ -244,6 +244,14 @@ Em complemento, Configuracoes, Preferencias e Importar Cartao tambem passaram a 
 
 ---
 
+## MVP RECUP-2 - Restauracao de acessos em Despesas (2026-05-01)
+
+O RECUP-2 restaurou atalhos visuais para funcionalidades que ja existiam, mas ficaram pouco descobriveis apos a reestruturacao de navegacao. A action bar de Despesas passou a expor Nova Despesa, Nova Recorrencia e Consorcio como acoes icon-only, e a navegacao lateral passou a exibir atalhos diretos para Recorrencias e Consorcios.
+
+O modal de Despesas foi reaproveitado sem mudanca de regra: Nova Recorrencia apenas pre-marca a despesa como recorrente, e Consorcio apenas abre os campos de consorcio ja existentes. A dica obsoleta de Despesas foi atualizada, e Configuracoes recebeu um atalho discreto para Recorrencias e Obrigacoes.
+
+---
+
 ## Backlog — Próximas fases
 
 Ver [plano de MVPs](./../C:/Users/heydson.cardoso/.claude/plans/sleepy-floating-candy.md) para o cronograma completo (MVP 1 ao 6).
