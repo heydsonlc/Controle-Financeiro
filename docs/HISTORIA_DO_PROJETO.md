@@ -182,6 +182,12 @@ O UX-4C-2 removeu a dependência hardcoded de `http://localhost:5000/api/patrimo
 
 Também padronizou ícones dinâmicos em caixinhas e transferências com SVGs inline monocromáticos e `currentColor`, sem alterar cálculos de saldo, transferências, metas, modais, APIs, banco de dados ou regras financeiras.
 
+## MVP UX-4-REVIEW FINAL — Revisão geral de ícones (2026-05-01)
+
+O UX-4-REVIEW FINAL revisou o estado final dos ícones e emojis após UX-4A, UX-4B, UX-4C-1 e UX-4C-2.
+
+Foram corrigidos resíduos pontuais em telas comuns e preservadas as exceções planejadas: Despesas, Financiamento Seguro, console/logs/comentários e alerts/confirms internos. Nenhuma regra financeira, backend, API, banco de dados ou fluxo sensível foi alterado.
+
 ## MVP DB-3C — Baseline Alembic oficial (2026-05-01)
 
 O DB-3C estabeleceu o Alembic como fonte oficial de evolução de schema do projeto.

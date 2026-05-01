@@ -319,6 +319,14 @@ Também foram padronizados ícones dinâmicos de caixinhas e transferências com
 
 Despesas e Financiamento Seguro permaneceram fora desta etapa.
 
+### Registro de revisão - UX-4-REVIEW FINAL
+
+O UX-4-REVIEW FINAL revisou templates e JavaScript principais após UX-4A, UX-4B, UX-4C-1 e UX-4C-2.
+
+A revisão confirmou que o shell, sidebar, topbar e action bars permanecem com SVGs monocromáticos. Foram corrigidos resíduos pontuais seguros fora de telas sensíveis: ajuste de saldo em Contas Bancárias, botões estáticos de Cartões, aviso de vigências em Financiamentos, loading/toasts em Cartões e mensagem vazia em Lançamentos.
+
+Permanecem preservados para etapas próprias: `/despesas`, `financiamento_seguro`, ocorrências em console/logs/comentários e alerts/confirms internos.
+
 ### MVP UX-5 - Refinamento de consultas
 
 Objetivo: criar ou consolidar padrões de consulta dentro dos módulos.

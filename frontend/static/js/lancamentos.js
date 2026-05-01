@@ -982,7 +982,7 @@ async function carregarReceitasPendentes() {
         const pendentes = orcamentosMes.filter(orc => !recebidos.has(orc.item_receita_id));
 
         if (pendentes.length === 0) {
-            container.innerHTML = '<p class="empty">✓ Todas as receitas do mês foram confirmadas</p>';
+            container.innerHTML = '<p class="empty">Todas as receitas do mês foram confirmadas</p>';
             return;
         }
 
