@@ -152,6 +152,12 @@ A tela Financiamentos passou a usar a `action_bar` para a ação global "Novo Fi
 
 Lista/cards, parcelas, pagamentos, amortizações, demonstrativo anual, evolução de saldo, seguro habitacional, regeneração de parcelas, edição, exclusão, inativação e ações contextuais permaneceram nos seus contextos originais. Não houve alteração de lógica de financiamento, APIs, JavaScript funcional, banco de dados ou regras financeiras.
 
+## MVP UX-3C-3 — Faixa de ações em Veículos (2026-04-30)
+
+A tela Veículos passou a usar a `action_bar` para as ações globais "Novo Veículo" e "Transporte por App", mantendo os mesmos modais de cadastro e fluxos existentes.
+
+Cards/listagem, comparativos, custos, manutenção, financiamento por veículo, simulações, edição, exclusão e ações contextuais permaneceram nos seus contextos originais. Não houve alteração de lógica de veículos, APIs, JavaScript funcional, banco de dados ou regras financeiras.
+
 ---
 
 ## Backlog — Próximas fases

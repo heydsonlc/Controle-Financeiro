@@ -6,6 +6,34 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/veiculos.css') }}">
 {% endblock %}
 
+{% block action_bar %}
+    <div class="module-actionbar" aria-label="Ações de Veículos">
+        <div class="module-actionbar-header">
+            <h2 class="module-actionbar-title">Veículos</h2>
+            <p class="module-actionbar-subtitle">Gerencie veículos, custos, manutenção e comparativos de mobilidade.</p>
+        </div>
+
+        <div class="module-actionbar-actions">
+            <button class="action-icon-button primary" id="btn-novo-veiculo" type="button" onclick="abrirModalNovo()">
+                <span class="action-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M12 5v14M5 12h14"/>
+                    </svg>
+                </span>
+                <span class="action-button-label">Novo Veículo</span>
+            </button>
+            <button class="action-icon-button secondary" id="btn-novo-transporte-app" type="button" onclick="abrirModalAppNovo()">
+                <span class="action-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M5 17h14M7 17l2.5-8h5L17 17M9 13h6M8 19h.1M16 19h.1"/>
+                    </svg>
+                </span>
+                <span class="action-button-label">Transporte por App</span>
+            </button>
+        </div>
+    </div>
+{% endblock %}
+
 {% block content %}
     <div class="container">
         <header>
@@ -19,7 +47,7 @@
         </header>
 
         <main>
-            <div class="actions">
+            <div class="actions" hidden>
                 <button class="btn btn-primary" onclick="abrirModalNovo()">+ Novo Veículo</button>
                 <button class="btn btn-secondary" onclick="abrirModalAppNovo()">+ Transporte por App</button>
             </div>

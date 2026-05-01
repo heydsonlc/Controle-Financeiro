@@ -267,6 +267,14 @@ A ação global "Novo Financiamento" foi movida para a `action_bar`, reaproveita
 
 Não houve alteração de JavaScript funcional, CSS de módulo, lógica de financiamento, API, banco ou regras financeiras.
 
+### Registro de implementação - UX-3C-3
+
+O UX-3C-3 aplicou a faixa de ações na tela Veículos (`/veiculos`), mantendo o padrão já validado nas telas anteriores.
+
+As ações globais "Novo Veículo" e "Transporte por App" foram movidas para a `action_bar`, reaproveitando os mesmos fluxos de abertura dos modais existentes. Lista/cards, comparativos, custos, manutenção, financiamento de veículo, simulações e demais ações contextuais permaneceram nos locais originais.
+
+Não houve alteração de JavaScript funcional, CSS de módulo, lógica de veículos, API, banco ou regras financeiras.
+
 ### MVP UX-4 - Padronização visual dos ícones e estados
 
 Objetivo: uniformizar ícones, cores, tamanhos, estados ativos e hover.
