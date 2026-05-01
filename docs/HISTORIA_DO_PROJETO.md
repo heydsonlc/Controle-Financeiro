@@ -116,6 +116,12 @@ A tela Categorias passou a usar a `action_bar` como primeira aplicação real do
 
 As ações contextuais de editar e excluir permaneceram na listagem. Nenhuma regra financeira, API, banco de dados, JavaScript funcional ou tela sensível foi alterada.
 
+## MVP UX-3B-2 — Faixa de ações em Contas Bancárias (2026-04-30)
+
+A tela Contas Bancárias passou a usar a `action_bar` para a ação primária "Nova Conta", mantendo o mesmo modal e o mesmo fluxo existente.
+
+Filtros, extrato, ajuste manual, editar, inativar e reativar foram preservados nos seus contextos originais. Não houve alteração de regra de saldo, APIs, JavaScript funcional, banco de dados ou regras financeiras.
+
 ---
 
 ## Backlog — Próximas fases

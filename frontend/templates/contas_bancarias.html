@@ -6,6 +6,26 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/contas_bancarias.css') }}">
 {% endblock %}
 
+{% block action_bar %}
+    <div class="module-actionbar" aria-label="Ações de Contas Bancárias">
+        <div class="module-actionbar-header">
+            <h2 class="module-actionbar-title">Contas Bancárias</h2>
+            <p class="module-actionbar-subtitle">Gerencie saldos, movimentações e contas usadas nos pagamentos.</p>
+        </div>
+
+        <div class="module-actionbar-actions">
+            <button class="action-icon-button primary" id="btn-nova-conta" type="button" onclick="abrirModalNovaConta()">
+                <span class="action-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M12 5v14M5 12h14"/>
+                    </svg>
+                </span>
+                <span class="action-button-label">Nova Conta</span>
+            </button>
+        </div>
+    </div>
+{% endblock %}
+
 {% block content %}
     <div class="container">
         <header>
@@ -25,9 +45,6 @@
                         <option value="">Todas</option>
                     </select>
                 </div>
-                <button class="btn btn-primary" onclick="abrirModalNovaConta()">
-                    + Nova Conta
-                </button>
             </div>
 
             <!-- Cards de Resumo -->

@@ -217,6 +217,14 @@ A ação principal "Nova Categoria" foi movida para a `action_bar`, reaproveitan
 
 Despesas, Cartões, Financiamentos e demais telas sensíveis seguem fora desta etapa.
 
+### Registro de implementação - UX-3B-2
+
+O UX-3B-2 aplicou a faixa de ações na tela Contas Bancárias (`/contas-bancarias`), usando o mesmo padrão validado em Categorias.
+
+A ação primária "Nova Conta" foi movida para a `action_bar`, reaproveitando o fluxo existente de abertura do modal. Filtros, extrato, ajuste manual, editar, inativar e reativar permaneceram nos locais originais, próximos aos seus contextos.
+
+Não houve alteração de JavaScript funcional, CSS de módulo, regra de saldo, API, banco ou regras financeiras.
+
 ### MVP UX-4 - Padronização visual dos ícones e estados
 
 Objetivo: uniformizar ícones, cores, tamanhos, estados ativos e hover.
