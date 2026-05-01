@@ -140,6 +140,12 @@ A tela Lançamentos passou a usar a `action_bar` para a ação global "Novo Lan�
 
 Filtros, receitas pendentes, confirmação de recebimento, histórico, edição, exclusão e modais permaneceram nos seus contextos originais. Preferências e Importar Cartão foram avaliadas e preservadas sem `action_bar` neste lote, por dependerem respectivamente de abas e de fluxo wizard por etapas.
 
+## MVP UX-3C-1 — Faixa de ações em Cartões (2026-04-30)
+
+A tela Cartões passou a usar a `action_bar` para a ação global "Novo Cartão", mantendo o mesmo modal de cadastro e o mesmo fluxo existente.
+
+Cards/listagem, edição de cartão, revelação de CVV, categorias internas, limites/orçamentos, faturas, lançamentos e ações contextuais permaneceram nos seus contextos originais. Não houve alteração de lógica de cartão/fatura, APIs, JavaScript funcional, banco de dados ou regras financeiras.
+
 ---
 
 ## Backlog — Próximas fases

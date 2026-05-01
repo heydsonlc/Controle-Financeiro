@@ -6,6 +6,26 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/cartoes.css') }}?v=2025010104">
 {% endblock %}
 
+{% block action_bar %}
+    <div class="module-actionbar" aria-label="Ações de Cartões">
+        <div class="module-actionbar-header">
+            <h2 class="module-actionbar-title">Cartões</h2>
+            <p class="module-actionbar-subtitle">Gerencie cartões de crédito, limites, categorias e faturas.</p>
+        </div>
+
+        <div class="module-actionbar-actions">
+            <button class="action-icon-button primary" id="btn-novo-cartao" type="button" onclick="abrirModalCartao()">
+                <span class="action-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M12 5v14M5 12h14"/>
+                    </svg>
+                </span>
+                <span class="action-button-label">Novo Cartão</span>
+            </button>
+        </div>
+    </div>
+{% endblock %}
+
 {% block content %}
     <div class="container">
         <header>
@@ -21,9 +41,6 @@
                 <div class="cartoes-container">
                     <div class="cartoes-header">
                         <h2>Meus Cartões</h2>
-                        <button class="btn btn-primary" onclick="abrirModalCartao()">
-                            Novo Cartão
-                        </button>
                     </div>
                     <div id="lista-cartoes" class="cartoes-grid">
                         <p class="loading">Carregando cartões...</p>

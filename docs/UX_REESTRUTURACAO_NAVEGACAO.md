@@ -251,6 +251,14 @@ Preferências (`/preferencias`) foi preservada sem `action_bar` neste lote porqu
 
 Não houve alteração de JavaScript funcional, CSS de módulo, lógica financeira, API, banco ou regras financeiras.
 
+### Registro de implementação - UX-3C-1
+
+O UX-3C-1 aplicou a faixa de ações na tela Cartões (`/cartoes`) como primeira tela mais complexa do ciclo UX-3C.
+
+A ação global "Novo Cartão" foi movida para a `action_bar`, reaproveitando o mesmo fluxo de abertura do modal de cartão. Cards/listagem, edição de cartão, revelação de CVV, categorias internas, limites/orçamentos, faturas, lançamentos e demais ações contextuais permaneceram nos locais originais.
+
+Não houve alteração de JavaScript funcional, CSS de módulo, lógica de cartão/fatura, API, banco ou regras financeiras.
+
 ### MVP UX-4 - Padronização visual dos ícones e estados
 
 Objetivo: uniformizar ícones, cores, tamanhos, estados ativos e hover.
