@@ -176,6 +176,14 @@ O UX-4C-1 padronizou ícones visuais dinâmicos em Financiamentos e Dashboard, c
 
 As substituições usaram SVGs inline monocromáticos com `currentColor` ou texto limpo quando o conteúdo já era suficiente. Não houve alteração de cálculo financeiro, dashboard backend, APIs, templates, modais, Chart.js, banco de dados ou regras financeiras.
 
+## MVP DB-3C — Baseline Alembic oficial (2026-05-01)
+
+O DB-3C estabeleceu o Alembic como fonte oficial de evolução de schema do projeto.
+
+O baseline foi gerado contra um banco PostgreSQL local temporário vazio (`controle_financeiro_baseline`) para contornar o cenário em que o autogenerate retornava "No changes in schema detected" no banco dev real (já criado por `db.create_all()`). As migrations anteriores foram arquivadas em `migrations/versions_archived/pre_baseline_20260501_085449/`.
+
+O banco dev real (`controle_financeiro_dev`) foi marcado com `flask db stamp head` — revision `dd1a552aec6a`, sem alteração de dados ou schema. `flask db current` confirma `dd1a552aec6a (head)`. A partir deste ponto, toda evolução de schema deve usar `flask db migrate` + `flask db upgrade`.
+
 ---
 
 ## Backlog — Próximas fases

@@ -64,6 +64,15 @@ Operações como drop de tabelas, reset de banco, exclusão de dados, recriaçã
 
 Essa autorização nunca se aplica a banco de produção, banco remoto, PostgreSQL DigitalOcean, qualquer `DATABASE_URL` externa ou qualquer ambiente com dados reais.
 
+### Alembic como fonte oficial de evolução de schema (DB-3C — 2026-05-01)
+
+O baseline Alembic oficial foi gerado via banco temporário local vazio (`controle_financeiro_baseline`) e validado com `flask db upgrade`. O banco dev real (`controle_financeiro_dev`) foi marcado com `flask db stamp head` — revision `dd1a552aec6a`.
+
+- `db.create_all()` ainda existe em `backend/app.py` e continua funcional para novos ambientes;
+- Alembic passa a ser a referência oficial para **evolução futura** de schema;
+- migrations antigas (`migrations/versions_archived/pre_baseline_20260501_085449/`) foram arquivadas fora do scan ativo do Alembic;
+- para toda alteração de schema futura: `flask db migrate -m "descricao"` + `flask db upgrade`.
+
 ### Playwright E2E como padrão de validação
 
 Playwright E2E será adotado como padrão obrigatório de Validação progressiva dos próximos MVPs. O objetivo é testar fluxos reais em navegador antes de avançar em interface, Segurança, mobile e banco.

@@ -97,6 +97,26 @@ python init_db.py --sample
 - A direção dos próximos MVPs é PostgreSQL local como banco oficial de desenvolvimento.
 - Dados locais de desenvolvimento são descartáveis, desde que a operação seja explicitamente local/dev.
 
+### Evolução de Schema (a partir do DB-3C)
+
+O Alembic é a fonte oficial de evolução de schema. Para qualquer alteração futura nos models:
+
+```bash
+# 1. Após alterar backend/models.py, gerar a migration
+flask db migrate -m "descricao_da_alteracao"
+
+# 2. Revisar o arquivo gerado em migrations/versions/
+
+# 3. Aplicar no banco local
+flask db upgrade
+
+# 4. Para novos ambientes (ex: produção futura), apenas:
+flask db upgrade  # aplica todas as migrations pendentes
+```
+
+**Não usar** scripts SQLite antigos em `backend/migrations/` ou `migrations/*.py` custom.
+**Não usar** `scripts/reset_db_dev_categorias_apenas.py` para evolução — apenas para reset total em dev.
+
 ### PostgreSQL local em desenvolvimento
 - Para usar PostgreSQL local, crie o banco local manualmente e configure `DATABASE_URL` no `.env.local`.
 - A URL de desenvolvimento deve apontar somente para `localhost`, `127.0.0.1` ou `::1`.

@@ -33,7 +33,6 @@ ENV/
 *.sqlite
 *.sqlite3
 data/gastos.db
-migrations/versions/
 
 # Environment Variables
 .env
