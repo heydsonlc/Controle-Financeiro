@@ -388,6 +388,12 @@ O RECUP-4 criou a tela propria `/recorrencias` para gerenciar cadastros-matriz d
 
 A sidebar passou a apontar Recorrencias para `/recorrencias`, sem item separado para Consorcios. A nova tela combina recorrencias simples via `/api/recorrencias` e consorcios via `/api/consorcios`, mantendo consorcio como tipo especial de recorrencia e preservando as regras financeiras existentes.
 
+### Registro de implementacao - UX-6E
+
+O UX-6E padronizou os botoes de acao em grades, listas compactas e cards de registros com a classe global `row-action-button`. As acoes por linha passaram a usar botoes pequenos, sempre visiveis, com fundo claro, borda sutil, icone monocromatico, `title` e `aria-label`.
+
+Tambem foi consolidada a regra visual das grades: cabecalhos centralizados em todas as colunas; conteudo centralizado nas colunas secundarias; primeira coluna com conteudo alinhado a esquerda para leitura da descricao. Handlers, APIs, regras financeiras, pagamentos, faturas, recorrencias e backend foram preservados.
+
 ## 9. Regras de Preservação
 
 A reestruturação visual deve preservar integralmente:

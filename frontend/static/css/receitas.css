@@ -252,9 +252,9 @@
 /* Desktop: ações só no hover (igual despesas) */
 @media (min-width: 769px) {
     .linha-receita-mes .acoes {
-        opacity: 0;
-        visibility: hidden;
-        pointer-events: none;
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
         transition: opacity 0.15s ease;
     }
 

@@ -204,9 +204,9 @@
 /* Desktop: acoes so no hover (igual despesas/receitas) */
 @media (min-width: 769px) {
     .conta-row .acoes {
-        opacity: 0;
-        visibility: hidden;
-        pointer-events: none;
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
         transition: opacity 0.15s ease;
     }
 
@@ -382,4 +382,3 @@
     opacity: 1;
     background: rgba(0, 0, 0, 0.05);
 }
-

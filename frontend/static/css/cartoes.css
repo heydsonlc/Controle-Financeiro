@@ -1139,7 +1139,7 @@ body.mobile-view .cartao-info-grid {
 }
 
 .orcamentos-lista-minimal .orcamento-acoes {
-    opacity: 0;
+    opacity: 1;
     display: flex;
     gap: 8px;
     transition: opacity 0.2s ease;
@@ -1332,4 +1332,3 @@ body.mobile-view .cartao-info-grid {
         gap: 12px;
     }
 }
-

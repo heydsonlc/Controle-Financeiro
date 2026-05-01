@@ -461,8 +461,10 @@ function renderizarLancamentos(lancamentos) {
             <td class="tbl-col-conta">${contaCelula}</td>
             <td class="tbl-col-valor ${isCredito ? 'valor-positivo' : ''}">${valorFormatado}</td>
             <td class="tbl-col-acoes">
-                <button class="btn-icon" onclick='editarLancamento(${JSON.stringify(lanc).replace(/'/g, "&#39;")})' title="Editar">${lancamentosIcon('edit')}</button>
-                <button class="btn-icon btn-delete" onclick="excluirLancamento(${lanc.id}, '${lanc.tipo}')" title="Excluir">${lancamentosIcon('remove')}</button>
+                <div class="row-actions lancamento-actions">
+                    <button class="row-action-button" onclick='editarLancamento(${JSON.stringify(lanc).replace(/'/g, "&#39;")})' title="Editar" aria-label="Editar">${lancamentosIcon('edit')}</button>
+                    <button class="row-action-button danger" onclick="excluirLancamento(${lanc.id}, '${lanc.tipo}')" title="Excluir" aria-label="Excluir">${lancamentosIcon('remove')}</button>
+                </div>
             </td>
         </tr>`;
     }).join('');
@@ -1013,7 +1015,7 @@ async function carregarReceitasPendentes() {
                     </div>
                     <div class="rp-direita">
                         <span class="rp-valor">${formatarMoeda(orc.valor_esperado)}</span>
-                        <button class="btn-icon btn-confirmar" onclick="abrirModalConfirmarReceita(${orc.item_receita_id}, ${orc.id}, '${fonte.nome}', ${orc.valor_esperado})" title="Confirmar recebimento">
+                        <button class="row-action-button success" onclick="abrirModalConfirmarReceita(${orc.item_receita_id}, ${orc.id}, '${fonte.nome}', ${orc.valor_esperado})" title="Confirmar recebimento" aria-label="Confirmar recebimento">
                             ${lancamentosIcon('check')}
                         </button>
                     </div>

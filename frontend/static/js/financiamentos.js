@@ -17,6 +17,10 @@ function financiamentosIcon(name) {
         shield: '<path d="M12 4 5 7v5c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V7l-7-3Z"/>',
         trendDown: '<path d="M4 7h5l4 5 7 7"/><path d="M17 19h3v-3"/>',
         edit: '<path d="M5 19h4L19 9a2.1 2.1 0 0 0-3-3L6 16l-1 3Z"/><path d="M14 6l4 4"/>',
+        eye: '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/>',
+        file: '<path d="M7 4h7l4 4v12H7V4Z"/><path d="M14 4v4h4"/><path d="M9 13h6M9 17h6"/>',
+        plus: '<path d="M12 5v14M5 12h14"/>',
+        trash: '<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/>',
         loading: '<path d="M12 6v6l4 2"/><path d="M20 12a8 8 0 1 1-8-8"/>',
         warning: '<path d="M12 5 3.5 19h17L12 5Z"/><path d="M12 10v4M12 17h.1"/>',
         check: '<path d="M5 12.5l4 4L19 7"/>',
@@ -152,24 +156,14 @@ function renderizarFinanciamentos(financiamentos) {
                 </div>
             </div>
 
-            <div class="financiamento-actions">
-                <button class="btn btn-primary" onclick="verDetalhes(${fin.id})">
-                    Ver Detalhes e Parcelas
-                </button>
+            <div class="row-actions financiamento-actions">
+                <button class="row-action-button" onclick="verDetalhes(${fin.id})" title="Ver detalhes e parcelas" aria-label="Ver detalhes e parcelas">${financiamentosIcon('eye')}</button>
                 ${fin.ativo ? `
-                    <button class="btn btn-success" onclick="abrirModalAmortizacao(${fin.id})">
-                        Amortização Extra
-                    </button>
+                    <button class="row-action-button success" onclick="abrirModalAmortizacao(${fin.id})" title="Amortizacao extra" aria-label="Amortizacao extra">${financiamentosIcon('plus')}</button>
                 ` : ''}
-                <button class="btn btn-info" onclick="abrirDemonstrativo(${fin.id})">
-                    Demonstrativo Anual
-                </button>
-                <button class="btn btn-secondary" onclick="editarFinanciamento(${fin.id})">
-                    Editar
-                </button>
-                <button class="btn btn-warning" onclick="tentarExcluirFinanciamento(${fin.id}, '${fin.nome.replace(/'/g, "\\'")}')">
-                    Excluir
-                </button>
+                <button class="row-action-button" onclick="abrirDemonstrativo(${fin.id})" title="Demonstrativo anual" aria-label="Demonstrativo anual">${financiamentosIcon('file')}</button>
+                <button class="row-action-button" onclick="editarFinanciamento(${fin.id})" title="Editar" aria-label="Editar">${financiamentosIcon('edit')}</button>
+                <button class="row-action-button danger" onclick="tentarExcluirFinanciamento(${fin.id}, '${fin.nome.replace(/'/g, "\\'")}')" title="Excluir" aria-label="Excluir">${financiamentosIcon('trash')}</button>
             </div>
         </div>
     `).join('');
@@ -521,7 +515,7 @@ function renderizarTabelaParcelas(parcelas, seguroTipo) {
                         <td><span class="status-badge status-${p.status}">${p.status}</span></td>
                         <td>
                             ${p.status === 'pendente' ?
-                                `<button class="btn btn-sm btn-success" onclick="abrirModalPagamento(${p.id})">Pagar</button>` :
+                                `<button class="row-action-button success" onclick="abrirModalPagamento(${p.id})" title="Pagar parcela" aria-label="Pagar parcela">${financiamentosIcon('check')}</button>` :
                                 `<small>Pago em ${formatarData(p.data_pagamento)}</small>`
                             }
                         </td>

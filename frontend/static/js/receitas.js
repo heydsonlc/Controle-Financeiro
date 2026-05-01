@@ -326,25 +326,25 @@ function renderizarReceitasMes(listaReceitas, anoMes) {
         const podeExcluirRealizada = r.status === 'REALIZADA' && r.realizada_id && r.realizadas_count === 1;
 
         const botaoEditar = (r.status === 'PREVISTA')
-            ? `<button class="btn-icon" onclick="editarReceitaPrevista(${r.item_receita_id}, '${r.origem}', ${Number(r.valor_previsto ?? r.valor).toFixed(2)})" title="Editar">${receitasIcon('edit')}</button>`
+            ? `<button class="row-action-button" onclick="editarReceitaPrevista(${r.item_receita_id}, '${r.origem}', ${Number(r.valor_previsto ?? r.valor).toFixed(2)})" title="Editar" aria-label="Editar">${receitasIcon('edit')}</button>`
             : (podeEditarRealizada
-                ? `<button class="btn-icon" onclick="editarRealizada(${r.realizada_id})" title="Editar">${receitasIcon('edit')}</button>`
-                : `<button class="btn-icon" onclick="alert('Há mais de 1 recebimento para esta receita no mês. Edite em Receitas Recebidas.')" title="Editar">${receitasIcon('edit')}</button>`);
+                ? `<button class="row-action-button" onclick="editarRealizada(${r.realizada_id})" title="Editar" aria-label="Editar">${receitasIcon('edit')}</button>`
+                : `<button class="row-action-button" onclick="alert('Há mais de 1 recebimento para esta receita no mês. Edite em Receitas Recebidas.')" title="Editar" aria-label="Editar">${receitasIcon('edit')}</button>`);
 
         const botaoExcluir = (r.status === 'PREVISTA')
-            ? `<button class="btn-icon btn-danger" onclick="excluirReceitaPrevista(${r.item_receita_id}, '${r.origem}')" title="Excluir">${receitasIcon('remove')}</button>`
+            ? `<button class="row-action-button danger" onclick="excluirReceitaPrevista(${r.item_receita_id}, '${r.origem}')" title="Excluir" aria-label="Excluir">${receitasIcon('remove')}</button>`
             : (podeExcluirRealizada
-                ? `<button class="btn-icon btn-danger" onclick="deletarRealizada(${r.realizada_id})" title="Excluir">${receitasIcon('remove')}</button>`
-                : `<button class="btn-icon btn-danger" onclick="alert('Há mais de 1 recebimento para esta receita no mês. Exclua em Receitas Recebidas.')" title="Excluir">${receitasIcon('remove')}</button>`);
+                ? `<button class="row-action-button danger" onclick="deletarRealizada(${r.realizada_id})" title="Excluir" aria-label="Excluir">${receitasIcon('remove')}</button>`
+                : `<button class="row-action-button danger" onclick="alert('Há mais de 1 recebimento para esta receita no mês. Exclua em Receitas Recebidas.')" title="Excluir" aria-label="Excluir">${receitasIcon('remove')}</button>`);
 
         const botaoConsolidar = r.podeConsolidar
-            ? `<button class="btn-icon btn-consolidar-icon" onclick="consolidarReceitaMes(${r.item_receita_id}, ${Number(r.valor_previsto ?? r.valor).toFixed(2)})" title="Consolidar">${receitasIcon('check')}</button>`
-            : `<button class="btn-icon btn-consolidar-icon" title="Consolidar" disabled>${receitasIcon('check')}</button>`;
+            ? `<button class="row-action-button success" onclick="consolidarReceitaMes(${r.item_receita_id}, ${Number(r.valor_previsto ?? r.valor).toFixed(2)})" title="Consolidar" aria-label="Consolidar">${receitasIcon('check')}</button>`
+            : `<button class="row-action-button success" title="Consolidar" aria-label="Consolidar" disabled>${receitasIcon('check')}</button>`;
 
         // Mantém sempre 3 botões no DOM (para não "pular" alinhamento). Em REALIZADA, o ✅ fica desabilitado.
         const acoes = (r.status === 'REALIZADA')
-            ? `<div class="acoes compact-actions">${botaoEditar}${botaoExcluir}<button class="btn-icon btn-consolidar-icon" title="Consolidar" disabled>${receitasIcon('check')}</button></div>`
-            : `<div class="acoes compact-actions">${botaoEditar}${botaoExcluir}${botaoConsolidar}</div>`;
+            ? `<div class="acoes row-actions">${botaoEditar}${botaoExcluir}<button class="row-action-button success" title="Consolidar" aria-label="Consolidar" disabled>${receitasIcon('check')}</button></div>`
+            : `<div class="acoes row-actions">${botaoEditar}${botaoExcluir}${botaoConsolidar}</div>`;
 
         return `
             <div class="compact-row linha-receita linha-receita-mes receitas-compact-row">

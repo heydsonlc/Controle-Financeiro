@@ -26,6 +26,19 @@ let appPerfis = [];
 let caminhosVeiculos = null;
 let caminhosApps = null;
 
+function veiculosIcon(name) {
+    const icons = {
+        edit: '<path d="M5 19h4L19 9a2.1 2.1 0 0 0-3-3L6 16l-1 3Z"/><path d="M14 6l4 4"/>',
+        eye: '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/>',
+        file: '<path d="M7 4h7l4 4v12H7V4Z"/><path d="M14 4v4h4"/><path d="M9 13h6M9 17h6"/>',
+        trash: '<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/>',
+        check: '<path d="M5 12.5l4 4L19 7"/>',
+        clock: '<path d="M12 6v6l4 2"/><path d="M20 12a8 8 0 1 1-8-8"/>',
+        remove: '<path d="M6 6l12 12M18 6 6 18"/>'
+    };
+    return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="width:1em;height:1em;display:inline-block;vertical-align:-0.125em;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">${icons[name] || icons.eye}</svg>`;
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     preencherMeses();
     carregarCaminhosAtivosLocal();
@@ -68,7 +81,7 @@ function renderEmptyCard() {
             <div class="card-header"></div>
             <div class="card-body"></div>
             <div class="card-cost"></div>
-            <div class="card-actions"></div>
+            <div class="row-actions card-actions"></div>
         </div>
     `;
 }
@@ -272,10 +285,10 @@ function renderAppCard(c) {
                 <div class="custo-hint">Leitura projetiva (não cria despesas reais).</div>
             </div>
 
-            <div class="card-actions">
-                <button class="btn btn-edit" onclick="abrirModalAppEditar(${c.id})">Editar</button>
-                <button class="btn btn-secondary" onclick="toggleProjecoesApp(${c.id})">Projeções</button>
-                <button class="btn btn-danger" onclick="removerCaminhoApp(${c.id}, '${escapeAttr(c.nome || 'Transporte por App')}')">Excluir</button>
+            <div class="row-actions card-actions">
+                <button class="row-action-button" onclick="abrirModalAppEditar(${c.id})" title="Editar" aria-label="Editar">${veiculosIcon('edit')}</button>
+                <button class="row-action-button" onclick="toggleProjecoesApp(${c.id})" title="Projecoes" aria-label="Projecoes">${veiculosIcon('eye')}</button>
+                <button class="row-action-button danger" onclick="removerCaminhoApp(${c.id}, '${escapeAttr(c.nome || 'Transporte por App')}')" title="Excluir" aria-label="Excluir">${veiculosIcon('trash')}</button>
             </div>
 
             <div class="projecoes-wrap" id="${projId}" style="display:none;">
@@ -351,7 +364,7 @@ function renderPerfisApp() {
                 </div>
             </div>
             <div class="row-actions">
-                <button type="button" class="btn btn-danger btn-sm" onclick="removerPerfilApp(${idx})">Remover</button>
+                <button type="button" class="row-action-button danger" onclick="removerPerfilApp(${idx})" title="Remover" aria-label="Remover">${veiculosIcon('trash')}</button>
             </div>
         </div>
     `).join('');
@@ -556,9 +569,9 @@ async function toggleProjecoesApp(id) {
                 const isPrevista = String(p.status || '').toUpperCase() === 'PREVISTA';
                 const actions = isPrevista ? `
                     <div class="row-actions">
-                        <button class="btn btn-primary btn-sm" onclick="confirmarPrevista(${p.id})">Confirmar</button>
-                        <button class="btn btn-secondary btn-sm" onclick="abrirModalAdiar(${p.id}, '${escapeAttr(p.data_atual_prevista || p.data_prevista)}')">Adiar</button>
-                        <button class="btn btn-danger btn-sm" onclick="ignorarPrevista(${p.id})">Ignorar</button>
+                        <button class="row-action-button success" onclick="confirmarPrevista(${p.id})" title="Confirmar" aria-label="Confirmar">${veiculosIcon('check')}</button>
+                        <button class="row-action-button" onclick="abrirModalAdiar(${p.id}, '${escapeAttr(p.data_atual_prevista || p.data_prevista)}')" title="Adiar" aria-label="Adiar">${veiculosIcon('clock')}</button>
+                        <button class="row-action-button danger" onclick="ignorarPrevista(${p.id})" title="Ignorar" aria-label="Ignorar">${veiculosIcon('remove')}</button>
                     </div>
                 ` : `<span class="small-note">—</span>`;
                 return `<tr>
@@ -628,9 +641,9 @@ async function toggleProjecoesApp(id) {
                     const isPrevista = String(p.status || '').toUpperCase() === 'PREVISTA';
                     const actions = isPrevista ? `
                         <div class="row-actions">
-                            <button class="btn btn-primary btn-sm" onclick="confirmarPrevista(${p.id})">Confirmar</button>
-                            <button class="btn btn-secondary btn-sm" onclick="abrirModalAdiar(${p.id}, '${escapeAttr(p.data_atual_prevista || p.data_prevista)}')">Adiar</button>
-                            <button class="btn btn-danger btn-sm" onclick="ignorarPrevista(${p.id})">Ignorar</button>
+                            <button class="row-action-button success" onclick="confirmarPrevista(${p.id})" title="Confirmar" aria-label="Confirmar">${veiculosIcon('check')}</button>
+                            <button class="row-action-button" onclick="abrirModalAdiar(${p.id}, '${escapeAttr(p.data_atual_prevista || p.data_prevista)}')" title="Adiar" aria-label="Adiar">${veiculosIcon('clock')}</button>
+                            <button class="row-action-button danger" onclick="ignorarPrevista(${p.id})" title="Ignorar" aria-label="Ignorar">${veiculosIcon('remove')}</button>
                         </div>
                     ` : `<span class="small-note">—</span>`;
                     return `<tr>
@@ -661,10 +674,10 @@ function renderVeiculoCard(v) {
 
     const acoesDetalhe = `
         <div class="projecoes-actions">
-            <button class="btn btn-secondary btn-sm" onclick="abrirModalFinanciamento(${v.id})">Financiamento</button>
-            <button class="btn btn-secondary btn-sm" onclick="abrirModalManutencaoKm(${v.id})">Manuten&ccedil;&atilde;o por km</button>
+            <button class="row-action-button" onclick="abrirModalFinanciamento(${v.id})" title="Financiamento" aria-label="Financiamento">${veiculosIcon('file')}</button>
+            <button class="row-action-button" onclick="abrirModalManutencaoKm(${v.id})" title="Manutencao por km" aria-label="Manutencao por km">${veiculosIcon('clock')}</button>
             ${v.status === 'SIMULADO'
-                ? `<button class="btn btn-primary btn-sm" onclick="converterVeiculo(${v.id})">Converter - ATIVO</button>`
+                ? `<button class="row-action-button success" onclick="converterVeiculo(${v.id})" title="Converter para ativo" aria-label="Converter para ativo">${veiculosIcon('check')}</button>`
                 : ''}
         </div>
     `;
@@ -694,10 +707,10 @@ function renderVeiculoCard(v) {
                 <div class="custo-hint">Leitura projetiva (n&atilde;o cria despesas reais).</div>
             </div>
 
-            <div class="card-actions">
-                <button class="btn btn-edit" onclick="abrirModalEditar(${v.id})">Editar</button>
-                <button class="btn btn-secondary" onclick="toggleProjecoes(${v.id})">Proje&ccedil;&otilde;es</button>
-                <button class="btn btn-danger" onclick="deletarVeiculo(${v.id}, '${escapeAttr(v.nome)}')">Excluir</button>
+            <div class="row-actions card-actions">
+                <button class="row-action-button" onclick="abrirModalEditar(${v.id})" title="Editar" aria-label="Editar">${veiculosIcon('edit')}</button>
+                <button class="row-action-button" onclick="toggleProjecoes(${v.id})" title="Projecoes" aria-label="Projecoes">${veiculosIcon('eye')}</button>
+                <button class="row-action-button danger" onclick="deletarVeiculo(${v.id}, '${escapeAttr(v.nome)}')" title="Excluir" aria-label="Excluir">${veiculosIcon('trash')}</button>
             </div>
 
             <div class="projecoes-wrap" id="${projId}" style="display:none;">
@@ -1215,9 +1228,9 @@ async function toggleProjecoes(id) {
             const isPrevista = p.status === 'PREVISTA';
             const actions = isPrevista ? `
                 <div class="row-actions">
-                    <button class="btn btn-primary btn-sm" onclick="confirmarPrevista(${p.id})">Confirmar</button>
-                    <button class="btn btn-secondary btn-sm" onclick="abrirModalAdiar(${p.id}, '${escapeAttr(p.data_atual_prevista || p.data_prevista)}')">Adiar</button>
-                    <button class="btn btn-danger btn-sm" onclick="ignorarPrevista(${p.id})">Ignorar</button>
+                    <button class="row-action-button success" onclick="confirmarPrevista(${p.id})" title="Confirmar" aria-label="Confirmar">${veiculosIcon('check')}</button>
+                    <button class="row-action-button" onclick="abrirModalAdiar(${p.id}, '${escapeAttr(p.data_atual_prevista || p.data_prevista)}')" title="Adiar" aria-label="Adiar">${veiculosIcon('clock')}</button>
+                    <button class="row-action-button danger" onclick="ignorarPrevista(${p.id})" title="Ignorar" aria-label="Ignorar">${veiculosIcon('remove')}</button>
                 </div>
             ` : `<span class="small-note">—</span>`;
             return `<tr>
@@ -1280,9 +1293,9 @@ async function toggleProjecoes(id) {
                 const isPrevista = String(p.status || '').toUpperCase() === 'PREVISTA';
                 const actions = isPrevista ? `
                     <div class="row-actions">
-                        <button class="btn btn-primary btn-sm" onclick="confirmarPrevista(${p.id})">Confirmar</button>
-                        <button class="btn btn-secondary btn-sm" onclick="abrirModalAdiar(${p.id}, '${escapeAttr(p.data_atual_prevista || p.data_prevista)}')">Adiar</button>
-                        <button class="btn btn-danger btn-sm" onclick="ignorarPrevista(${p.id})">Ignorar</button>
+                        <button class="row-action-button success" onclick="confirmarPrevista(${p.id})" title="Confirmar" aria-label="Confirmar">${veiculosIcon('check')}</button>
+                        <button class="row-action-button" onclick="abrirModalAdiar(${p.id}, '${escapeAttr(p.data_atual_prevista || p.data_prevista)}')" title="Adiar" aria-label="Adiar">${veiculosIcon('clock')}</button>
+                        <button class="row-action-button danger" onclick="ignorarPrevista(${p.id})" title="Ignorar" aria-label="Ignorar">${veiculosIcon('remove')}</button>
                     </div>
                 ` : `<span class="small-note">—</span>`;
                 return `<tr>
@@ -1545,7 +1558,7 @@ async function carregarManutencaoKmModal(veiculoId) {
                             <div class="small-note">A cada ${Number(r.intervalo_km || 0).toLocaleString('pt-BR')} km • ${formatarMoeda(r.custo_estimado)} • ${escapeHtml(r.categoria?.nome || 'Categoria')}</div>
                         </div>
                         <div class="row-actions">
-                            <button class="btn btn-danger btn-sm" onclick="removerRegraKm(${veiculoId}, ${r.id})">Remover</button>
+                            <button class="row-action-button danger" onclick="removerRegraKm(${veiculoId}, ${r.id})" title="Remover" aria-label="Remover">${veiculosIcon('trash')}</button>
                         </div>
                     </div>
                 `).join('');
@@ -1560,7 +1573,7 @@ async function carregarManutencaoKmModal(veiculoId) {
                     const dataEst = e.data_prevista_estimada ? formatarMesAno(e.data_prevista_estimada) : '(uso insuficiente)';
                     const btn = e.existe_evento
                         ? `<span class="small-note">Já existe uma despesa prevista/adiada/confirmada.</span>`
-                        : `<button class="btn btn-primary btn-sm" onclick="gerarManutencaoKm(${veiculoId}, ${e.regra_id})">Gerar despesa prevista</button>`;
+                        : `<button class="row-action-button success" onclick="gerarManutencaoKm(${veiculoId}, ${e.regra_id})" title="Gerar despesa prevista" aria-label="Gerar despesa prevista">${veiculosIcon('check')}</button>`;
                     return `
                         <div class="manut-card">
                             <div><strong>${escapeHtml(_labelTipoEvento(e.tipo_evento))}</strong></div>

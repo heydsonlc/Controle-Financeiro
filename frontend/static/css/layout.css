@@ -569,6 +569,26 @@ body.app-shell-body .compact-cell {
     white-space: nowrap;
 }
 
+body.app-shell-body .compact-table-header > :not(:first-child),
+body.app-shell-body .compact-row > :not(:first-child),
+body.app-shell-body .recorrencias-header > :not(:first-child),
+body.app-shell-body .recorrencias-row > :not(:first-child) {
+    text-align: center;
+    justify-content: center;
+}
+
+body.app-shell-body .compact-table-header > :first-child,
+body.app-shell-body .recorrencias-header > :first-child {
+    text-align: center;
+    justify-content: center;
+}
+
+body.app-shell-body .compact-row > :first-child,
+body.app-shell-body .recorrencias-row > :first-child {
+    text-align: left;
+    justify-content: flex-start;
+}
+
 body.app-shell-body .compact-value {
     text-align: right;
     font-variant-numeric: tabular-nums;
@@ -588,6 +608,127 @@ body.app-shell-body .compact-actions {
     justify-content: flex-end;
     gap: 4px;
     white-space: nowrap;
+}
+
+body.app-shell-body .row-actions,
+body.app-shell-body .compact-actions,
+body.app-shell-body .acoes,
+body.app-shell-body .despesa-actions,
+body.app-shell-body .lancamento-actions,
+body.app-shell-body .item-actions,
+body.app-shell-body .financiamento-actions,
+body.app-shell-body .transf-actions,
+body.app-shell-body .recorrencias-actions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+body.app-shell-body .row-action-button,
+body.app-shell-body .row-actions .btn,
+body.app-shell-body .row-actions .btn-sm,
+body.app-shell-body .compact-actions .btn-icon,
+body.app-shell-body .acoes .btn-icon,
+body.app-shell-body .despesa-actions .btn-icon,
+body.app-shell-body .lancamento-actions .btn-icon,
+body.app-shell-body .item-actions .btn-icon,
+body.app-shell-body .financiamento-actions .btn,
+body.app-shell-body .transf-actions button,
+body.app-shell-body .recorrencias-actions .row-action-button {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid rgba(29, 29, 31, 0.12);
+    border-radius: 8px;
+    background: #ffffff;
+    color: #3f3f46;
+    box-shadow: none;
+    cursor: pointer;
+    font-size: 15px;
+    line-height: 1;
+    opacity: 1;
+    visibility: visible;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+body.app-shell-body .row-action-button:hover,
+body.app-shell-body .row-actions .btn:hover,
+body.app-shell-body .row-actions .btn-sm:hover,
+body.app-shell-body .compact-actions .btn-icon:hover,
+body.app-shell-body .acoes .btn-icon:hover,
+body.app-shell-body .despesa-actions .btn-icon:hover,
+body.app-shell-body .lancamento-actions .btn-icon:hover,
+body.app-shell-body .item-actions .btn-icon:hover,
+body.app-shell-body .financiamento-actions .btn:hover,
+body.app-shell-body .transf-actions button:hover,
+body.app-shell-body .recorrencias-actions .row-action-button:hover {
+    background: #f5f5f7;
+    border-color: rgba(29, 29, 31, 0.22);
+    color: #1d1d1f;
+}
+
+body.app-shell-body .row-action-button:disabled,
+body.app-shell-body .row-actions .btn:disabled,
+body.app-shell-body .row-actions .btn-sm:disabled,
+body.app-shell-body .compact-actions .btn-icon:disabled,
+body.app-shell-body .acoes .btn-icon:disabled,
+body.app-shell-body .despesa-actions .btn-icon:disabled,
+body.app-shell-body .lancamento-actions .btn-icon:disabled,
+body.app-shell-body .item-actions .btn-icon:disabled,
+body.app-shell-body .financiamento-actions .btn:disabled,
+body.app-shell-body .transf-actions button:disabled,
+body.app-shell-body .recorrencias-actions .row-action-button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+body.app-shell-body .row-action-button.danger,
+body.app-shell-body .compact-actions .btn-danger,
+body.app-shell-body .compact-actions .btn-delete,
+body.app-shell-body .acoes .btn-danger,
+body.app-shell-body .despesa-actions .btn-danger,
+body.app-shell-body .item-actions .btn-danger,
+body.app-shell-body .financiamento-actions .btn-warning,
+body.app-shell-body .row-actions .btn-danger {
+    color: #6f1d1b;
+    border-color: rgba(111, 29, 27, 0.18);
+    background: #fff;
+}
+
+body.app-shell-body .row-action-button.success,
+body.app-shell-body .compact-actions .btn-confirmar,
+body.app-shell-body .compact-actions .btn-consolidar-icon,
+body.app-shell-body .despesa-actions .btn-pagar,
+body.app-shell-body .financiamento-actions .btn-success,
+body.app-shell-body .row-actions .btn-primary {
+    color: #1f5f3b;
+    border-color: rgba(31, 95, 59, 0.18);
+    background: #fff;
+}
+
+body.app-shell-body .row-action-button svg,
+body.app-shell-body .row-actions .btn svg,
+body.app-shell-body .row-actions .btn-sm svg,
+body.app-shell-body .compact-actions .btn-icon svg,
+body.app-shell-body .acoes .btn-icon svg,
+body.app-shell-body .despesa-actions .btn-icon svg,
+body.app-shell-body .lancamento-actions .btn-icon svg,
+body.app-shell-body .item-actions .btn-icon svg,
+body.app-shell-body .financiamento-actions .btn svg,
+body.app-shell-body .transf-actions button svg,
+body.app-shell-body .recorrencias-actions .row-action-button svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    flex: 0 0 auto;
 }
 
 body.app-shell-body .compact-pill {

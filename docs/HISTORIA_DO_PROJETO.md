@@ -260,6 +260,14 @@ Foi criado endpoint minimo `/api/recorrencias` para listar, criar, atualizar e i
 
 ---
 
+## MVP UX-6E - Botoes de acao padronizados em grades (2026-05-01)
+
+O UX-6E consolidou um padrao visual unico para acoes por linha em grades, listas compactas e cards de registros. As telas principais passaram a usar botoes pequenos, sempre visiveis, com icones monocromaticos, borda sutil, `title` e `aria-label`, preservando os handlers existentes.
+
+Tambem foi ajustado o alinhamento das grades: cabecalhos centralizados, conteudo das colunas secundarias centralizado e conteudo da primeira coluna alinhado a esquerda. Nenhuma API, backend, banco, model, migration ou regra financeira foi alterada.
+
+---
+
 ## Backlog — Próximas fases
 
 Ver [plano de MVPs](./../C:/Users/heydson.cardoso/.claude/plans/sleepy-floating-candy.md) para o cronograma completo (MVP 1 ao 6).

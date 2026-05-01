@@ -65,9 +65,9 @@ async function carregarCategorias() {
                         ${categoria.ativo ? 'Ativa' : 'Inativa'}
                     </span>
                 </div>
-                <div class="compact-cell compact-actions acoes">
-                    <button class="btn-icon" onclick="editarCategoria(${categoria.id})" title="Editar">${categoriasIcon('edit')}</button>
-                    <button class="btn-icon btn-danger" onclick="confirmarDeletar(${categoria.id}, ${JSON.stringify(categoria.nome)})" title="Excluir">${categoriasIcon('remove')}</button>
+                <div class="compact-cell row-actions acoes">
+                    <button class="row-action-button" onclick="editarCategoria(${categoria.id})" title="Editar" aria-label="Editar">${categoriasIcon('edit')}</button>
+                    <button class="row-action-button danger" onclick="confirmarDeletar(${categoria.id}, ${JSON.stringify(categoria.nome)})" title="Excluir" aria-label="Excluir">${categoriasIcon('remove')}</button>
                 </div>
             </div>
         `).join('');

@@ -77,11 +77,11 @@ function criarLinhaConta(conta) {
     const tipo = conta.tipo || '';
     const subtitulo = [instituicao, tipo].filter(Boolean).join(' - ');
 
-    const btnExtrato = `<button class="btn-icon" onclick="abrirExtrato(${conta.id})" title="Extrato" ${conta.status !== 'ATIVO' ? 'disabled' : ''}>${contasIcon('file')}</button>`;
-    const btnEditar = `<button class="btn-icon" onclick="editarConta(${conta.id})" title="Editar">${contasIcon('edit')}</button>`;
+    const btnExtrato = `<button class="row-action-button" onclick="abrirExtrato(${conta.id})" title="Extrato" aria-label="Extrato" ${conta.status !== 'ATIVO' ? 'disabled' : ''}>${contasIcon('file')}</button>`;
+    const btnEditar = `<button class="row-action-button" onclick="editarConta(${conta.id})" title="Editar" aria-label="Editar">${contasIcon('edit')}</button>`;
     const btnFinal = (conta.status === 'ATIVO')
-        ? `<button class="btn-icon btn-danger" onclick="abrirModalInativar(${conta.id})" title="Inativar">${contasIcon('remove')}</button>`
-        : `<button class="btn-icon" onclick="ativarConta(${conta.id})" title="Ativar">${contasIcon('restore')}</button>`;
+        ? `<button class="row-action-button danger" onclick="abrirModalInativar(${conta.id})" title="Inativar" aria-label="Inativar">${contasIcon('remove')}</button>`
+        : `<button class="row-action-button" onclick="ativarConta(${conta.id})" title="Ativar" aria-label="Ativar">${contasIcon('restore')}</button>`;
 
     return `
         <div class="conta-row ${conta.status === 'INATIVO' ? 'inativa' : ''}">
@@ -100,7 +100,7 @@ function criarLinhaConta(conta) {
 
             <div class="col-direita">
                 <div class="saldo ${saldoClass}">${formatarMoedaDisplay(conta.saldo_atual)}</div>
-                <div class="acoes">
+                <div class="row-actions acoes">
                     ${btnExtrato}
                     ${btnEditar}
                     ${btnFinal}
@@ -418,9 +418,9 @@ function renderizarExtrato(movimentos) {
         const saldoApos = (m.saldo_apos_movimento != null) ? formatarMoedaDisplay(m.saldo_apos_movimento) : null;
 
         const acoes = (m.ajustavel)
-            ? `<div class="acoes">
-                    <button onclick="editarAjuste(${m.id})">${contasIcon('edit')}</button>
-                    <button onclick="excluirAjuste(${m.id})">${contasIcon('trash')}</button>
+            ? `<div class="row-actions acoes">
+                    <button class="row-action-button" onclick="editarAjuste(${m.id})" title="Editar ajuste" aria-label="Editar ajuste">${contasIcon('edit')}</button>
+                    <button class="row-action-button danger" onclick="excluirAjuste(${m.id})" title="Excluir ajuste" aria-label="Excluir ajuste">${contasIcon('trash')}</button>
                </div>`
             : '';
 

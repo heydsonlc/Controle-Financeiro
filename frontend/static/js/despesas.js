@@ -10,6 +10,17 @@ let despesas = [];
 let categorias = [];
 let contasBancariasAtivas = [];
 
+function despesasIcon(name) {
+    const icons = {
+        edit: '<path d="M5 19h4L19 9a2.1 2.1 0 0 0-3-3L6 16l-1 3Z"/><path d="M14 6l4 4"/>',
+        check: '<path d="M5 12.5l4 4L19 7"/>',
+        details: '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/>',
+        expand: '<path d="m6 9 6 6 6-6"/>',
+        consolidate: '<path d="M5 12h14"/><path d="m13 6 6 6-6 6"/>'
+    };
+    return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="width:1em;height:1em;display:inline-block;vertical-align:-0.125em;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">${icons[name] || icons.details}</svg>`;
+}
+
 // Carregar dados ao iniciar a página
 document.addEventListener('DOMContentLoaded', () => {
     // Definir mês atual no filtro de competência
@@ -391,13 +402,13 @@ function renderizarAgrupadorSemanal(agrupador, index) {
                     R$ ${totais.valor_total.toFixed(2).replace('.', ',')}
                 </div>
 
-                <div class="despesa-actions">
-                    <button class="btn-icon btn-pagar" onclick="pagarTodasOcorrencias(${index})" title="${todasPagas ? 'Todas ocorrências já pagas' : 'Pagar todas as ocorrências pendentes'}" ${todasPagas ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''}>
+                <div class="row-actions despesa-actions">
+                    <button class="row-action-button success" onclick="pagarTodasOcorrencias(${index})" title="${todasPagas ? 'Todas ocorrências já pagas' : 'Pagar todas as ocorrências pendentes'}" aria-label="${todasPagas ? 'Todas ocorrências já pagas' : 'Pagar todas as ocorrências pendentes'}" ${todasPagas ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''}>
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="20 6 9 17 4 12"></polyline>
                         </svg>
                     </button>
-                    <button class="btn-icon btn-expandir" onclick="toggleAgrupadorSemanal(${index})" title="Expandir ocorrências">
+                    <button class="row-action-button" onclick="toggleAgrupadorSemanal(${index})" title="Expandir ocorrências" aria-label="Expandir ocorrencias">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="6 9 12 15 18 9"></polyline>
                         </svg>
@@ -434,12 +445,12 @@ function renderizarOcorrenciaIndividual(despesa) {
                 </div>
                 <div style="display: flex; align-items: center; gap: 12px;">
                     <span style="font-weight: 600; color: white;">R$ ${parseFloat(despesa.valor).toFixed(2).replace('.', ',')}</span>
-                    <button class="btn-icon btn-pagar" onclick="marcarComoPago(${despesa.id})" title="${pagoFlag ? 'Já pago' : 'Marcar como pago'}" ${pagoFlag ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''}>
+                    <button class="row-action-button success" onclick="marcarComoPago(${despesa.id})" title="${pagoFlag ? 'Já pago' : 'Marcar como pago'}" aria-label="${pagoFlag ? 'Já pago' : 'Marcar como pago'}" ${pagoFlag ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''}>
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="20 6 9 17 4 12"></polyline>
                         </svg>
                     </button>
-                    <button class="btn-icon" onclick="editarDespesa(${despesa.id})" title="Editar">✏️</button>
+                    <button class="row-action-button" onclick="editarDespesa(${despesa.id})" title="Editar" aria-label="Editar">${despesasIcon('edit')}</button>
                 </div>
             </div>
         </div>
@@ -628,32 +639,30 @@ function renderizarDespesas(despesasParaRenderizar) {
 
         // Ações disponíveis
         const acoesHTML = isFaturaCartao ? `
-            <div class="despesa-actions">
-                <button class="btn-icon btn-detalhes" onclick="toggleDetalhesFatura(${despesa.id}, '${despesa.cartao_id || ''}', '${despesa.mes_competencia || ''}')" title="Ver detalhes da fatura">
+            <div class="row-actions despesa-actions">
+                <button class="row-action-button" onclick="toggleDetalhesFatura(${despesa.id}, '${despesa.cartao_id || ''}', '${despesa.mes_competencia || ''}')" title="Ver detalhes da fatura" aria-label="Ver detalhes da fatura">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="6 9 12 15 18 9"></polyline>
                     </svg>
                 </button>
                 ${despesa.status_fatura === 'ABERTA' ? `
-                    <button class="btn-icon btn-consolidar" onclick="consolidarFatura(${despesa.cartao_id || despesa.id}, '${despesa.competencia || despesa.mes_competencia || ''}')" title="Consolidar fatura" style="color: #ff9500;">
+                    <button class="row-action-button success" onclick="consolidarFatura(${despesa.cartao_id || despesa.id}, '${despesa.competencia || despesa.mes_competencia || ''}')" title="Consolidar fatura" aria-label="Consolidar fatura">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M9 11l3 3L22 4"></path>
                             <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path>
                         </svg>
                     </button>
                 ` : ''}
-                <button class="btn-icon btn-pagar" onclick="marcarComoPago(${despesa.id})" title="${despesa.pago ? 'Fatura já paga' : 'Pagar fatura'}" ${despesa.pago ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''}>
+                <button class="row-action-button success" onclick="marcarComoPago(${despesa.id})" title="${despesa.pago ? 'Fatura já paga' : 'Pagar fatura'}" aria-label="${despesa.pago ? 'Fatura já paga' : 'Pagar fatura'}" ${despesa.pago ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''}>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="20 6 9 17 4 12"></polyline>
                     </svg>
                 </button>
             </div>
         ` : (isAgrupado ? '' : `
-            <div class="despesa-actions">
-                <button class="btn-icon" onclick="editarDespesa(${despesa.id})" title="Editar">
-                    ✏️
-                </button>
-                <button class="btn-icon btn-pagar" onclick="marcarComoPago(${despesa.id})" title="${despesa.pago ? 'Já pago' : 'Marcar como pago'}" ${despesa.pago ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''}>
+            <div class="row-actions despesa-actions">
+                <button class="row-action-button" onclick="editarDespesa(${despesa.id})" title="Editar" aria-label="Editar">${despesasIcon('edit')}</button>
+                <button class="row-action-button success" onclick="marcarComoPago(${despesa.id})" title="${despesa.pago ? 'Já pago' : 'Marcar como pago'}" aria-label="${despesa.pago ? 'Já pago' : 'Marcar como pago'}" ${despesa.pago ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''}>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="20 6 9 17 4 12"></polyline>
                     </svg>

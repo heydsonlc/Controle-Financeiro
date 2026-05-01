@@ -187,11 +187,11 @@ function renderizarLinha(item) {
             <span class="recorrencias-value">${valor}</span>
             <span>${escapeHtml(item.categoriaNome)}</span>
             <span><span class="compact-pill">${escapeHtml(item.statusLabel)}</span></span>
-            <span class="recorrencias-actions">
-                <button class="action-icon-button" type="button" onclick="editarRecorrencia('${item.origem}', ${item.id})" title="Editar" aria-label="Editar">
+            <span class="row-actions recorrencias-actions">
+                <button class="row-action-button" type="button" onclick="editarRecorrencia('${item.origem}', ${item.id})" title="Editar" aria-label="Editar">
                     <span class="action-icon" aria-hidden="true">${iconeEditar()}</span>
                 </button>
-                <button class="action-icon-button" type="button" onclick="inativarRecorrencia('${item.origem}', ${item.id})" title="Inativar" aria-label="Inativar">
+                <button class="row-action-button danger" type="button" onclick="inativarRecorrencia('${item.origem}', ${item.id})" title="Inativar" aria-label="Inativar">
                     <span class="action-icon" aria-hidden="true">${iconeInativar()}</span>
                 </button>
             </span>

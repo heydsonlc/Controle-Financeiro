@@ -1195,7 +1195,7 @@ body.mobile-view .despesa-valor-principal {
 /* Desktop: acoes so no hover */
 @media (min-width: 769px) {
     .despesa-card-padrao .despesa-actions {
-        opacity: 0;
+        opacity: 1;
         transition: opacity 0.15s ease;
     }
 

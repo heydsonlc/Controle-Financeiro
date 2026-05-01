@@ -320,9 +320,9 @@ function renderizarItensAgregados() {
         <div class="item-card">
             <div class="item-header">
                 <h4>${item.nome}</h4>
-                <div class="item-actions">
-                    <button class="btn-icon" onclick="editarItemAgregado(${item.id})" title="Editar">${cartoesIcon('edit')}</button>
-                    <button class="btn-icon btn-danger" onclick="excluirItemAgregado(${item.id})" title="Excluir">${cartoesIcon('remove')}</button>
+                <div class="row-actions item-actions">
+                    <button class="row-action-button" onclick="editarItemAgregado(${item.id})" title="Editar" aria-label="Editar">${cartoesIcon('edit')}</button>
+                    <button class="row-action-button danger" onclick="excluirItemAgregado(${item.id})" title="Excluir" aria-label="Excluir">${cartoesIcon('remove')}</button>
                 </div>
             </div>
             ${item.descricao ? `<p class="item-descricao">${item.descricao}</p>` : ''}
@@ -385,8 +385,8 @@ function renderizarOrcamentos(itens) {
                         `<button class="btn-text-link" onclick="editarOrcamento(${item.id}, ${item.orcamento_id})" title="Editar Limite">Editar Limite</button>` :
                         `<button class="btn-text-link" onclick="abrirModalOrcamento(${item.id})" title="Definir Limite">Definir Limite</button>`
                     }
-                    <button class="btn-icon editar" onclick="editarItemAgregado(${item.id})" title="Editar">${cartoesIcon('edit')}</button>
-                    <button class="btn-icon excluir" onclick="excluirItemAgregado(${item.id})" title="Excluir">${cartoesIcon('trash')}</button>
+                    <button class="row-action-button editar" onclick="editarItemAgregado(${item.id})" title="Editar" aria-label="Editar">${cartoesIcon('edit')}</button>
+                    <button class="row-action-button danger excluir" onclick="excluirItemAgregado(${item.id})" title="Excluir" aria-label="Excluir">${cartoesIcon('trash')}</button>
                 </div>
             </div>
         `;
@@ -707,10 +707,10 @@ function renderizarLancamentos(lancamentos) {
                                     <span class="lancamento-parcela">${lanc.numero_parcela}/${lanc.total_parcelas}</span>
                                 ` : ''}
                             </div>
-                            <div class="lancamento-actions">
+                            <div class="row-actions lancamento-actions">
                                 <span class="lancamento-valor">R$ ${formatarMoeda(lanc.valor)}</span>
-                                <button class="btn-icon" onclick="editarLancamento(${lanc.id})" title="Editar">${cartoesIcon('edit')}</button>
-                                <button class="btn-icon btn-danger" onclick="excluirLancamento(${lanc.id})" title="Excluir">${cartoesIcon('remove')}</button>
+                                <button class="row-action-button" onclick="editarLancamento(${lanc.id})" title="Editar" aria-label="Editar">${cartoesIcon('edit')}</button>
+                                <button class="row-action-button danger" onclick="excluirLancamento(${lanc.id})" title="Excluir" aria-label="Excluir">${cartoesIcon('remove')}</button>
                             </div>
                         </div>
                     `).join('')}
