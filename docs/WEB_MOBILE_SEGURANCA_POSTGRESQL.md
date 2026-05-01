@@ -190,6 +190,23 @@ Antes de qualquer deploy ou acesso externo, deve existir um MVP de segurança co
 
 Não basta proteger apenas `/despesas`. A autenticação deve ser global, porque a tela Despesas consome APIs e o restante das APIs financeiras continuaria exposto sem uma proteção abrangente.
 
+### Regra Operacional: Local/Dev vs Internet
+
+Enquanto a aplicação estiver restrita a ambiente local/dev:
+
+- pode permanecer sem login;
+- testes manuais podem ser feitos livremente;
+- dados locais são descartáveis;
+- PostgreSQL local é o banco oficial de desenvolvimento.
+
+Antes de qualquer acesso pela internet:
+
+- implementar login;
+- proteger APIs;
+- revisar CORS;
+- configurar `DEBUG=False`;
+- usar HTTPS.
+
 ## 5. Banco de Dados: PostgreSQL Local e DigitalOcean
 
 A nova diretriz de banco para a evolução do projeto é:
@@ -253,6 +270,20 @@ O ambiente local de desenvolvimento foi validado com PostgreSQL em `localhost:54
 O schema limpo foi criado pelo mecanismo atual de startup em desenvolvimento (`backend/app.py` com `db.create_all()`), sem migration, sem seed e sem insercao manual de dados. Durante a validacao, o runtime criou apenas 1 registro tecnico em `preferencia`. O SQLite permanece como fallback temporario quando `DATABASE_URL` nao estiver definida.
 
 DigitalOcean, producao e bancos remotos nao foram acessados. A consolidacao da fonte oficial de schema, Alembic e seeds fica para etapa futura.
+
+## DB-2D - Validacao funcional minima no PostgreSQL local
+
+O PostgreSQL local foi validado funcionalmente com a aplicacao em `development`, usando `controle_financeiro_dev` em `localhost:5432`. O health check respondeu `status=ok`, `database=connected` e `environment=development`.
+
+Foram criados dados locais descartaveis pelo fluxo normal de API, todos com prefixo `TESTE_DB2D_`:
+
+- `TESTE_DB2D_Categoria_20260430_210000`;
+- `TESTE_DB2D_Conta_20260430_210000`;
+- `TESTE_DB2D_Receita_20260430_210000`.
+
+As listagens de categorias, contas bancarias e receitas confirmaram os registros criados. As rotas de Despesas, Cartoes, Dashboard, Receitas, Contas Bancarias, Configuracoes e demais paginas principais foram validadas sem erro critico. Cartao e despesa complexa nao foram criados neste MVP para evitar geracao de faturas, recorrencias ou contas fora do escopo.
+
+O Playwright manteve `13 passed, 2 skipped`. DigitalOcean, producao e bancos remotos nao foram acessados. Nenhum `DROP`, reset, migration ou alteracao de schema foi executado.
 
 ## 6. SQLite
 
