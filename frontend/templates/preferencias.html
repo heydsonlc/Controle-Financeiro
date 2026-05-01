@@ -9,7 +9,7 @@
 {% block content %}
     <div class="container">
         <header>
-            <h1>⚙️ Preferências e Configurações Gerais</h1>
+            <h1>Preferências e Configurações Gerais</h1>
             <nav class="breadcrumb">
                 <a href="/">Dashboard</a> / <a href="/configuracoes">Configurações</a> / <span>Preferências</span>
             </nav>
@@ -18,11 +18,11 @@
         <main>
             <!-- Tabs de Navegação -->
             <div class="tabs">
-                <button class="tab-button active" onclick="mostrarAba('dados-pessoais')">👤 Dados Pessoais</button>
-                <button class="tab-button" onclick="mostrarAba('comportamento')">⚙️ Comportamento</button>
-                <button class="tab-button" onclick="mostrarAba('aparencia')">🎨 Aparência</button>
-                <button class="tab-button" onclick="mostrarAba('backup')">💾 Backup</button>
-                <button class="tab-button" onclick="mostrarAba('ia')">🤖 IA e Automação</button>
+                <button class="tab-button active" onclick="mostrarAba('dados-pessoais')">Dados Pessoais</button>
+                <button class="tab-button" onclick="mostrarAba('comportamento')">Comportamento</button>
+                <button class="tab-button" onclick="mostrarAba('aparencia')">Aparência</button>
+                <button class="tab-button" onclick="mostrarAba('backup')">Backup</button>
+                <button class="tab-button" onclick="mostrarAba('ia')">IA e Automação</button>
             </div>
 
             <!-- ========================================== -->
@@ -212,15 +212,15 @@
                             <div class="radio-group">
                                 <label class="radio-label">
                                     <input type="radio" name="tema_sistema" value="claro">
-                                    <span>☀️ Tema Claro</span>
+                                    <span>Tema Claro</span>
                                 </label>
                                 <label class="radio-label">
                                     <input type="radio" name="tema_sistema" value="escuro">
-                                    <span>🌙 Tema Escuro</span>
+                                    <span>Tema Escuro</span>
                                 </label>
                                 <label class="radio-label">
                                     <input type="radio" name="tema_sistema" value="auto">
-                                    <span>🔄 Automático (Sistema)</span>
+                                    <span>Automático (Sistema)</span>
                                 </label>
                             </div>
                         </div>
@@ -278,26 +278,26 @@
                     <h2>Exportar / Importar Dados</h2>
                     <div class="backup-actions">
                         <button type="button" class="btn btn-secondary" onclick="exportarDados()">
-                            📥 Exportar Dados em JSON
+                            Exportar Dados em JSON
                         </button>
                         <button type="button" class="btn btn-secondary" onclick="importarDados()">
-                            📤 Importar Backup
+                            Importar Backup
                         </button>
                     </div>
                     <p class="info-text">Funcionalidade de exportação/importação será implementada em breve.</p>
                 </div>
 
                 <div class="pref-section danger-zone">
-                    <h2>⚠️ Zona de Perigo</h2>
+                    <h2>Zona de Perigo</h2>
                     <div class="backup-actions">
                         <button type="button" class="btn btn-danger" onclick="resetarConfiguracoes()">
                             Reset Parcial das Configurações
                         </button>
                         <button type="button" class="btn btn-danger" onclick="resetarCompleto()">
-                            🔴 Reset Completo (Apagar Tudo)
+                            Reset Completo (Apagar Tudo)
                         </button>
                     </div>
-                    <p class="warning-text">⚠️ Estas ações são irreversíveis! Use com cuidado.</p>
+                    <p class="warning-text">Estas ações são irreversíveis. Use com cuidado.</p>
                 </div>
             </div>
 
@@ -356,7 +356,7 @@
                     </form>
 
                     <div class="ia-status">
-                        <p class="info-text">💡 Nota: Recursos de IA estarão disponíveis em uma atualização futura.</p>
+                        <p class="info-text">Nota: Recursos de IA estarão disponíveis em uma atualização futura.</p>
                     </div>
                 </div>
             </div>
