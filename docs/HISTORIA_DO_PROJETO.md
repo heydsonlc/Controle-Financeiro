@@ -128,6 +128,12 @@ A tela Receitas passou a usar a `action_bar` para a ação primária "Nova Fonte
 
 Filtros, cards, listagens, consolidação, registro, edição e exclusão permaneceram nos seus contextos originais. Não houve alteração de lógica de receitas previstas/realizadas, APIs, dashboard, JavaScript funcional, banco de dados ou regras financeiras.
 
+## MVP UX-3B-4 — Faixa de ações em Patrimônio (2026-04-30)
+
+A tela Patrimônio passou a usar a `action_bar` para as ações globais "Nova Caixinha" e "Nova Transferência", mantendo os mesmos modais e fluxos existentes.
+
+Abas, caixinhas, transferências, saldos, metas, edição, inativação e remoção permaneceram nos seus contextos originais. Não houve alteração de lógica patrimonial, APIs, JavaScript funcional, banco de dados ou regras financeiras.
+
 ---
 
 ## Backlog — Próximas fases

@@ -233,6 +233,14 @@ A ação primária "Nova Fonte" foi movida para a `action_bar`, reaproveitando o
 
 Não houve alteração de JavaScript funcional, CSS de módulo, lógica de receitas previstas/realizadas, API, banco, dashboard ou regras financeiras.
 
+### Registro de implementação - UX-3B-4
+
+O UX-3B-4 aplicou a faixa de ações na tela Patrimônio (`/patrimonio`), mantendo o padrão validado em Categorias, Contas Bancárias e Receitas.
+
+As ações globais "Nova Caixinha" e "Nova Transferência" foram movidas para a `action_bar`, reaproveitando os mesmos fluxos de abertura dos modais existentes. Abas, caixinhas, transferências, saldos, metas, edição, inativação e remoção permaneceram nos locais originais.
+
+Não houve alteração de JavaScript funcional, CSS de módulo, lógica patrimonial, API, banco ou regras financeiras.
+
 ### MVP UX-4 - Padronização visual dos ícones e estados
 
 Objetivo: uniformizar ícones, cores, tamanhos, estados ativos e hover.

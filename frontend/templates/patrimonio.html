@@ -6,6 +6,34 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/patrimonio.css') }}">
 {% endblock %}
 
+{% block action_bar %}
+    <div class="module-actionbar" aria-label="Ações de Patrimônio">
+        <div class="module-actionbar-header">
+            <h2 class="module-actionbar-title">Patrimônio</h2>
+            <p class="module-actionbar-subtitle">Gerencie caixinhas, metas e transferências patrimoniais.</p>
+        </div>
+
+        <div class="module-actionbar-actions">
+            <button class="action-icon-button primary" id="btn-nova-caixinha" type="button" onclick="abrirModalNovaConta()">
+                <span class="action-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M12 5v14M5 12h14"/>
+                    </svg>
+                </span>
+                <span class="action-button-label">Nova Caixinha</span>
+            </button>
+            <button class="action-icon-button secondary" id="btn-nova-transferencia" type="button" onclick="abrirModalNovaTransferencia()">
+                <span class="action-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M7 7h10M14 4l3 3-3 3M17 17H7M10 14l-3 3 3 3"/>
+                    </svg>
+                </span>
+                <span class="action-button-label">Nova Transferência</span>
+            </button>
+        </div>
+    </div>
+{% endblock %}
+
 {% block content %}
     <div class="container">
         <header>
@@ -24,12 +52,6 @@
 
             <!-- Aba: Contas (Caixinhas) -->
             <div id="aba-contas" class="tab-content active">
-                <div class="actions-bar">
-                    <button class="btn btn-primary" onclick="abrirModalNovaConta()">
-                        + Nova Caixinha
-                    </button>
-                </div>
-
                 <!-- Resumo -->
                 <div class="cards-resumo">
                     <div class="card">
@@ -50,12 +72,6 @@
 
             <!-- Aba: Transferências -->
             <div id="aba-transferencias" class="tab-content">
-                <div class="actions-bar">
-                    <button class="btn btn-primary" onclick="abrirModalNovaTransferencia()">
-                        + Nova Transferência
-                    </button>
-                </div>
-
                 <!-- Lista de Transferências -->
                 <div class="transferencias-lista" id="transferencias-lista">
                     <p class="loading">Carregando transferências...</p>
