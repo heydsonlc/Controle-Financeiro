@@ -418,23 +418,36 @@ function renderizarLancamentos(lancamentos) {
         const isCartao = lanc.tipo === 'cartao';
         const isCredito = lanc.tipo === 'credito';
 
+        // Coluna Tipo
         let tipoTexto;
         if (isCartao) tipoTexto = 'Cartão';
         else if (isCredito) tipoTexto = 'Entrada';
         else tipoTexto = 'Direto';
 
-        const statusBadge = (lanc.tipo === 'direto' && lanc.status_pagamento)
-            ? `<span class="tbl-pill pill-status-${lanc.status_pagamento.toLowerCase()}">${lanc.status_pagamento}</span>`
-            : '';
+        // Coluna Status (só despesas diretas têm status explícito)
+        let statusCelula = '—';
+        if (lanc.tipo === 'direto' && lanc.status_pagamento) {
+            const sc = lanc.status_pagamento.toLowerCase();
+            statusCelula = `<span class="tbl-pill pill-status-${sc}">${lanc.status_pagamento}</span>`;
+        } else if (isCredito) {
+            statusCelula = `<span class="tbl-pill pill-status-confirmado">Confirmado</span>`;
+        } else if (isCartao) {
+            statusCelula = '—';
+        }
 
-        const cartaoBadge = isCartao ? `<span class="tbl-pill pill-cartao">${lanc.cartao_nome}</span>` : '';
+        // Coluna Categoria / Conta
+        let contaCelula = lanc.categoria_nome || '—';
+        if (isCartao && lanc.cartao_nome) {
+            contaCelula = `<span class="tbl-pill pill-cartao">${lanc.cartao_nome}</span>`;
+        }
 
+        // Subinfo na descrição (fatura, parcelas, obs)
         const subinfo = [];
         if (isCartao) subinfo.push(`Fatura ${formatarMes(lanc.mes_fatura)}`);
         if (lanc.total_parcelas > 1) subinfo.push(`${lanc.numero_parcela}/${lanc.total_parcelas}x`);
         if (lanc.observacoes) subinfo.push(lanc.observacoes);
 
-        const valorFormatado = `${isCredito ? '+' : ''}R$ ${parseFloat(lanc.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+        const valorFormatado = `${isCredito ? '+' : ''}R$ ${parseFloat(lanc.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
 
         return `
         <tr class="tbl-row ${isCredito ? 'row-credito' : ''}">
@@ -443,12 +456,9 @@ function renderizarLancamentos(lancamentos) {
                 ${subinfo.length ? `<span class="tbl-sub">${subinfo.join(' · ')}</span>` : ''}
             </td>
             <td class="tbl-col-data">${formatarData(lanc.data_compra)}</td>
-            <td class="tbl-col-pills">
-                <span class="tbl-pill pill-tipo-${lanc.tipo}">${tipoTexto}</span>
-                ${statusBadge}
-                ${cartaoBadge}
-                <span class="tbl-pill pill-cat">${lanc.categoria_nome}</span>
-            </td>
+            <td class="tbl-col-tipo"><span class="tbl-pill pill-tipo-${lanc.tipo}">${tipoTexto}</span></td>
+            <td class="tbl-col-status">${statusCelula}</td>
+            <td class="tbl-col-conta">${contaCelula}</td>
             <td class="tbl-col-valor ${isCredito ? 'valor-positivo' : ''}">${valorFormatado}</td>
             <td class="tbl-col-acoes">
                 <button class="btn-icon" onclick='editarLancamento(${JSON.stringify(lanc).replace(/'/g, "&#39;")})' title="Editar">${lancamentosIcon('edit')}</button>
@@ -463,7 +473,9 @@ function renderizarLancamentos(lancamentos) {
                 <tr>
                     <th class="tbl-col-desc">Descrição</th>
                     <th class="tbl-col-data">Data</th>
-                    <th class="tbl-col-pills">Tipo / Conta</th>
+                    <th class="tbl-col-tipo">Tipo</th>
+                    <th class="tbl-col-status">Status</th>
+                    <th class="tbl-col-conta">Categoria / Conta</th>
                     <th class="tbl-col-valor">Valor</th>
                     <th class="tbl-col-acoes"></th>
                 </tr>
