@@ -275,6 +275,14 @@ As ações globais "Novo Veículo" e "Transporte por App" foram movidas para a `
 
 Não houve alteração de JavaScript funcional, CSS de módulo, lógica de veículos, API, banco ou regras financeiras.
 
+### Registro de revisão - UX-3-REVIEW FINAL
+
+O UX-3-REVIEW FINAL revisou as telas com `action_bar` já aplicada: Categorias, Contas Bancárias, Receitas, Patrimônio, Lançamentos, Cartões, Financiamentos e Veículos.
+
+A revisão confirmou consistência estrutural de títulos, subtítulos, botões, SVGs monocromáticos, alinhamento e responsividade básica. Foi removida a duplicidade visual residual dos botões antigos em Veículos, mantendo os mesmos handlers e fluxos de modal. Nenhuma nova tela recebeu `action_bar` nesta revisão.
+
+Não houve alteração de JavaScript funcional, CSS de módulo, rotas, APIs, banco, regras financeiras ou telas fora do escopo. Despesas, Preferências, Importar Cartão, Configurações, Seguro Habitacional e Indexadores permaneceram sem alteração.
+
 ### MVP UX-4 - Padronização visual dos ícones e estados
 
 Objetivo: uniformizar ícones, cores, tamanhos, estados ativos e hover.

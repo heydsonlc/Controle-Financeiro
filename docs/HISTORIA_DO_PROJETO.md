@@ -158,6 +158,12 @@ A tela Veículos passou a usar a `action_bar` para as ações globais "Novo Veí
 
 Cards/listagem, comparativos, custos, manutenção, financiamento por veículo, simulações, edição, exclusão e ações contextuais permaneceram nos seus contextos originais. Não houve alteração de lógica de veículos, APIs, JavaScript funcional, banco de dados ou regras financeiras.
 
+## MVP UX-3-REVIEW FINAL — Revisão geral das action bars (2026-05-01)
+
+As telas Categorias, Contas Bancárias, Receitas, Patrimônio, Lançamentos, Cartões, Financiamentos e Veículos foram revisadas quanto à consistência da `action_bar`.
+
+A revisão confirmou o padrão visual e corrigiu apenas a duplicidade visual residual dos botões antigos em Veículos. Nenhuma nova tela recebeu faixa de ações, Despesas permaneceu preservada e não houve alteração de regras financeiras, APIs, JavaScript funcional, banco de dados ou fluxos de clique.
+
 ---
 
 ## Backlog — Próximas fases
