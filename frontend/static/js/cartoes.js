@@ -14,6 +14,17 @@ const state = {
     mesSelecionado: new Date().toISOString().slice(0, 7) // YYYY-MM
 };
 
+function cartoesIcon(name) {
+    const icons = {
+        lock: '<path d="M7 11V8a5 5 0 0 1 10 0v3"/><path d="M6 11h12v9H6v-9Z"/><path d="M12 15v2"/>',
+        edit: '<path d="M5 19h4L19 9a2.1 2.1 0 0 0-3-3L6 16l-1 3Z"/><path d="M14 6l4 4"/>',
+        remove: '<path d="M6 6l12 12M18 6 6 18"/>',
+        trash: '<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/>'
+    };
+
+    return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="width:1em;height:1em;display:inline-block;vertical-align:-0.125em;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">${icons[name] || icons.edit}</svg>`;
+}
+
 // ============================================================================
 // INICIALIZAÇÃO
 // ============================================================================
@@ -98,7 +109,7 @@ function renderizarCartoes() {
                 <h3>${cartao.nome}</h3>
                 ${cartao.config?.tem_codigo ? `
                     <button class="btn-cvv" onclick="event.stopPropagation(); abrirModalRevelarCVV(${cartao.id})" title="Ver código de segurança">
-                        CVV 🔒
+                        CVV ${cartoesIcon('lock')}
                     </button>
                 ` : ''}
             </div>
@@ -306,8 +317,8 @@ function renderizarItensAgregados() {
             <div class="item-header">
                 <h4>${item.nome}</h4>
                 <div class="item-actions">
-                    <button class="btn-icon" onclick="editarItemAgregado(${item.id})" title="Editar">✎</button>
-                    <button class="btn-icon btn-danger" onclick="excluirItemAgregado(${item.id})" title="Excluir">×</button>
+                    <button class="btn-icon" onclick="editarItemAgregado(${item.id})" title="Editar">${cartoesIcon('edit')}</button>
+                    <button class="btn-icon btn-danger" onclick="excluirItemAgregado(${item.id})" title="Excluir">${cartoesIcon('remove')}</button>
                 </div>
             </div>
             ${item.descricao ? `<p class="item-descricao">${item.descricao}</p>` : ''}
@@ -370,8 +381,8 @@ function renderizarOrcamentos(itens) {
                         `<button class="btn-text-link" onclick="editarOrcamento(${item.id}, ${item.orcamento_id})" title="Editar Limite">Editar Limite</button>` :
                         `<button class="btn-text-link" onclick="abrirModalOrcamento(${item.id})" title="Definir Limite">Definir Limite</button>`
                     }
-                    <button class="btn-icon editar" onclick="editarItemAgregado(${item.id})" title="Editar">✏️</button>
-                    <button class="btn-icon excluir" onclick="excluirItemAgregado(${item.id})" title="Excluir">🗑️</button>
+                    <button class="btn-icon editar" onclick="editarItemAgregado(${item.id})" title="Editar">${cartoesIcon('edit')}</button>
+                    <button class="btn-icon excluir" onclick="excluirItemAgregado(${item.id})" title="Excluir">${cartoesIcon('trash')}</button>
                 </div>
             </div>
         `;
@@ -694,8 +705,8 @@ function renderizarLancamentos(lancamentos) {
                             </div>
                             <div class="lancamento-actions">
                                 <span class="lancamento-valor">R$ ${formatarMoeda(lanc.valor)}</span>
-                                <button class="btn-icon" onclick="editarLancamento(${lanc.id})" title="Editar">✎</button>
-                                <button class="btn-icon btn-danger" onclick="excluirLancamento(${lanc.id})" title="Excluir">×</button>
+                                <button class="btn-icon" onclick="editarLancamento(${lanc.id})" title="Editar">${cartoesIcon('edit')}</button>
+                                <button class="btn-icon btn-danger" onclick="excluirLancamento(${lanc.id})" title="Excluir">${cartoesIcon('remove')}</button>
                             </div>
                         </div>
                     `).join('')}

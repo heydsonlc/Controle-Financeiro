@@ -295,6 +295,14 @@ Escopo:
 - criar classes CSS/tokens visuais;
 - garantir consistência entre menu lateral, barra superior e ações.
 
+### Registro de implementação - UX-4B
+
+O UX-4B iniciou a padronização dos ícones gerados dinamicamente por JavaScript em telas de baixo e médio risco.
+
+Foram cobertos os arquivos `contas_bancarias.js`, `receitas.js`, `lancamentos.js` e `cartoes.js`, substituindo emojis e símbolos funcionais de botões por SVGs inline monocromáticos com `currentColor`.
+
+Despesas, Financiamentos, Patrimônio, Dashboard e Seguro Habitacional permanecem fora desta etapa e devem ser tratados apenas em MVPs específicos.
+
 ### MVP UX-5 - Refinamento de consultas
 
 Objetivo: criar ou consolidar padrões de consulta dentro dos módulos.

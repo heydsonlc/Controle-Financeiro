@@ -9,6 +9,20 @@ let contaParaInativar = null;
 let contaExtratoId = null;
 let extratoMovimentos = [];
 
+function contasIcon(name) {
+    const icons = {
+        file: '<path d="M7 4h7l4 4v12H7V4Z"/><path d="M14 4v4h4"/><path d="M9 13h6M9 17h6"/>',
+        edit: '<path d="M5 19h4L19 9a2.1 2.1 0 0 0-3-3L6 16l-1 3Z"/><path d="M14 6l4 4"/>',
+        remove: '<path d="M6 6l12 12"/><path d="M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/>',
+        restore: '<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 5v6h-6"/>',
+        scale: '<path d="M12 4v16M6 8h12"/><path d="M8 8l-4 7h8L8 8Z"/><path d="M16 8l-4 7h8l-4-7Z"/>',
+        check: '<path d="M5 12.5l4 4L19 7"/>',
+        trash: '<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/>'
+    };
+
+    return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="width:1em;height:1em;display:inline-block;vertical-align:-0.125em;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">${icons[name] || icons.file}</svg>`;
+}
+
 // Carregar contas ao iniciar a página
 document.addEventListener('DOMContentLoaded', () => {
     carregarContas();
@@ -63,11 +77,11 @@ function criarLinhaConta(conta) {
     const tipo = conta.tipo || '';
     const subtitulo = [instituicao, tipo].filter(Boolean).join(' - ');
 
-    const btnExtrato = `<button class="btn-icon" onclick="abrirExtrato(${conta.id})" title="Extrato" ${conta.status !== 'ATIVO' ? 'disabled' : ''}>📄</button>`;
-    const btnEditar = `<button class="btn-icon" onclick="editarConta(${conta.id})" title="Editar">✏️</button>`;
+    const btnExtrato = `<button class="btn-icon" onclick="abrirExtrato(${conta.id})" title="Extrato" ${conta.status !== 'ATIVO' ? 'disabled' : ''}>${contasIcon('file')}</button>`;
+    const btnEditar = `<button class="btn-icon" onclick="editarConta(${conta.id})" title="Editar">${contasIcon('edit')}</button>`;
     const btnFinal = (conta.status === 'ATIVO')
-        ? `<button class="btn-icon btn-danger" onclick="abrirModalInativar(${conta.id})" title="Inativar">❌</button>`
-        : `<button class="btn-icon" onclick="ativarConta(${conta.id})" title="Ativar">🔁</button>`;
+        ? `<button class="btn-icon btn-danger" onclick="abrirModalInativar(${conta.id})" title="Inativar">${contasIcon('remove')}</button>`
+        : `<button class="btn-icon" onclick="ativarConta(${conta.id})" title="Ativar">${contasIcon('restore')}</button>`;
 
     return `
         <div class="conta-row ${conta.status === 'INATIVO' ? 'inativa' : ''}">
@@ -142,22 +156,22 @@ function criarCardContaLegacy(conta) {
             <div class="conta-actions">
                 ${conta.status === 'ATIVO' ? `
                     <button class="btn-extrato" onclick="abrirExtrato(${conta.id})">
-                        📄 Extrato
+                        ${contasIcon('file')} Extrato
                     </button>
                     <button class="btn-ajustar" onclick="abrirAjusteSaldo(${conta.id})">
-                        ⚖ Ajustar
+                        ${contasIcon('scale')} Ajustar
                     </button>
                 ` : ''}
                 <button class="btn-editar" onclick="editarConta(${conta.id})">
-                    ✏️ Editar
+                    ${contasIcon('edit')} Editar
                 </button>
                 ${conta.status === 'ATIVO' ? `
                     <button class="btn-inativar" onclick="abrirModalInativar(${conta.id})">
-                        🚫 Inativar
+                        ${contasIcon('remove')} Inativar
                     </button>
                 ` : `
                     <button class="btn-ativar" onclick="ativarConta(${conta.id})">
-                        ✓ Ativar
+                        ${contasIcon('check')} Ativar
                     </button>
                 `}
             </div>
@@ -405,8 +419,8 @@ function renderizarExtrato(movimentos) {
 
         const acoes = (m.ajustavel)
             ? `<div class="acoes">
-                    <button onclick="editarAjuste(${m.id})">✏️</button>
-                    <button onclick="excluirAjuste(${m.id})">🗑️</button>
+                    <button onclick="editarAjuste(${m.id})">${contasIcon('edit')}</button>
+                    <button onclick="excluirAjuste(${m.id})">${contasIcon('trash')}</button>
                </div>`
             : '';
 

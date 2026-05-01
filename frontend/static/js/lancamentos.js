@@ -16,6 +16,19 @@ const state = {
     }
 };
 
+function lancamentosIcon(name) {
+    const icons = {
+        card: '<path d="M4 7h16v10H4V7Z"/><path d="M4 10h16"/>',
+        entry: '<path d="M12 5v14"/><path d="M7 10l5-5 5 5"/><path d="M6 19h12"/>',
+        cash: '<path d="M4 7h16v10H4V7Z"/><path d="M8 12h.1M16 12h.1"/><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>',
+        edit: '<path d="M5 19h4L19 9a2.1 2.1 0 0 0-3-3L6 16l-1 3Z"/><path d="M14 6l4 4"/>',
+        remove: '<path d="M6 6l12 12M18 6 6 18"/>',
+        check: '<path d="M5 12.5l4 4L19 7"/>'
+    };
+
+    return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="width:1em;height:1em;display:inline-block;vertical-align:-0.125em;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">${icons[name] || icons.cash}</svg>`;
+}
+
 // ===================================
 // INICIALIZAÇÃO
 // ===================================
@@ -407,13 +420,13 @@ function renderizarLancamentos(lancamentos) {
 
         let tipoIcon, tipoTexto;
         if (isCartao) {
-            tipoIcon = '💳';
+            tipoIcon = lancamentosIcon('card');
             tipoTexto = 'Cartão';
         } else if (isCredito) {
-            tipoIcon = '💰';
+            tipoIcon = lancamentosIcon('entry');
             tipoTexto = 'Entrada';
         } else {
-            tipoIcon = '💵';
+            tipoIcon = lancamentosIcon('cash');
             tipoTexto = 'Direto';
         }
 
@@ -447,10 +460,10 @@ function renderizarLancamentos(lancamentos) {
                 </div>
                 <div class="lancamento-actions">
                     <button class="btn-icon" onclick='editarLancamento(${JSON.stringify(lanc).replace(/'/g, "&#39;")})' title="Editar">
-                        ✏️
+                        ${lancamentosIcon('edit')}
                     </button>
                     <button class="btn-icon btn-delete" onclick="excluirLancamento(${lanc.id}, '${lanc.tipo}')" title="Excluir">
-                        ×
+                        ${lancamentosIcon('remove')}
                     </button>
                 </div>
             </div>
@@ -998,7 +1011,7 @@ async function carregarReceitasPendentes() {
                     </div>
                     <div class="receita-actions">
                         <button class="btn btn-success" onclick="abrirModalConfirmarReceita(${orc.item_receita_id}, ${orc.id}, '${fonte.nome}', ${orc.valor_esperado})">
-                            ✓ Confirmar Recebimento
+                            ${lancamentosIcon('check')} Confirmar Recebimento
                         </button>
                     </div>
                 </div>

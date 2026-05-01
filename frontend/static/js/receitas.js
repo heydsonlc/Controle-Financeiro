@@ -23,6 +23,16 @@ let estado = {
     receitasMes: []
 };
 
+function receitasIcon(name) {
+    const icons = {
+        edit: '<path d="M5 19h4L19 9a2.1 2.1 0 0 0-3-3L6 16l-1 3Z"/><path d="M14 6l4 4"/>',
+        remove: '<path d="M6 6l12 12M18 6 6 18"/>',
+        check: '<path d="M5 12.5l4 4L19 7"/>'
+    };
+
+    return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="width:1em;height:1em;display:inline-block;vertical-align:-0.125em;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">${icons[name] || icons.check}</svg>`;
+}
+
 // ============================================================================
 // INICIALIZAÇÃO
 // ============================================================================
@@ -315,24 +325,24 @@ function renderizarReceitasMes(listaReceitas, anoMes) {
         const podeExcluirRealizada = r.status === 'REALIZADA' && r.realizada_id && r.realizadas_count === 1;
 
         const botaoEditar = (r.status === 'PREVISTA')
-            ? `<button class="btn-icon" onclick="editarReceitaPrevista(${r.item_receita_id}, '${r.origem}', ${Number(r.valor_previsto ?? r.valor).toFixed(2)})" title="Editar">✏️</button>`
+            ? `<button class="btn-icon" onclick="editarReceitaPrevista(${r.item_receita_id}, '${r.origem}', ${Number(r.valor_previsto ?? r.valor).toFixed(2)})" title="Editar">${receitasIcon('edit')}</button>`
             : (podeEditarRealizada
-                ? `<button class="btn-icon" onclick="editarRealizada(${r.realizada_id})" title="Editar">✏️</button>`
-                : `<button class="btn-icon" onclick="alert('Há mais de 1 recebimento para esta receita no mês. Edite em Receitas Recebidas.')" title="Editar">✏️</button>`);
+                ? `<button class="btn-icon" onclick="editarRealizada(${r.realizada_id})" title="Editar">${receitasIcon('edit')}</button>`
+                : `<button class="btn-icon" onclick="alert('Há mais de 1 recebimento para esta receita no mês. Edite em Receitas Recebidas.')" title="Editar">${receitasIcon('edit')}</button>`);
 
         const botaoExcluir = (r.status === 'PREVISTA')
-            ? `<button class="btn-icon btn-danger" onclick="excluirReceitaPrevista(${r.item_receita_id}, '${r.origem}')" title="Excluir">X</button>`
+            ? `<button class="btn-icon btn-danger" onclick="excluirReceitaPrevista(${r.item_receita_id}, '${r.origem}')" title="Excluir">${receitasIcon('remove')}</button>`
             : (podeExcluirRealizada
-                ? `<button class="btn-icon btn-danger" onclick="deletarRealizada(${r.realizada_id})" title="Excluir">X</button>`
-                : `<button class="btn-icon btn-danger" onclick="alert('Há mais de 1 recebimento para esta receita no mês. Exclua em Receitas Recebidas.')" title="Excluir">X</button>`);
+                ? `<button class="btn-icon btn-danger" onclick="deletarRealizada(${r.realizada_id})" title="Excluir">${receitasIcon('remove')}</button>`
+                : `<button class="btn-icon btn-danger" onclick="alert('Há mais de 1 recebimento para esta receita no mês. Exclua em Receitas Recebidas.')" title="Excluir">${receitasIcon('remove')}</button>`);
 
         const botaoConsolidar = r.podeConsolidar
-            ? `<button class="btn-icon btn-consolidar-icon" onclick="consolidarReceitaMes(${r.item_receita_id}, ${Number(r.valor_previsto ?? r.valor).toFixed(2)})" title="Consolidar">✅</button>`
-            : `<button class="btn-icon btn-consolidar-icon" title="Consolidar" disabled>✅</button>`;
+            ? `<button class="btn-icon btn-consolidar-icon" onclick="consolidarReceitaMes(${r.item_receita_id}, ${Number(r.valor_previsto ?? r.valor).toFixed(2)})" title="Consolidar">${receitasIcon('check')}</button>`
+            : `<button class="btn-icon btn-consolidar-icon" title="Consolidar" disabled>${receitasIcon('check')}</button>`;
 
         // Mantém sempre 3 botões no DOM (para não "pular" alinhamento). Em REALIZADA, o ✅ fica desabilitado.
         const acoes = (r.status === 'REALIZADA')
-            ? `<div class="acoes">${botaoEditar}${botaoExcluir}<button class="btn-icon btn-consolidar-icon" title="Consolidar" disabled>✅</button></div>`
+            ? `<div class="acoes">${botaoEditar}${botaoExcluir}<button class="btn-icon btn-consolidar-icon" title="Consolidar" disabled>${receitasIcon('check')}</button></div>`
             : `<div class="acoes">${botaoEditar}${botaoExcluir}${botaoConsolidar}</div>`;
 
         return `

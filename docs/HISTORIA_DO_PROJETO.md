@@ -164,6 +164,12 @@ As telas Categorias, Contas Bancárias, Receitas, Patrimônio, Lançamentos, Car
 
 A revisão confirmou o padrão visual e corrigiu apenas a duplicidade visual residual dos botões antigos em Veículos. Nenhuma nova tela recebeu faixa de ações, Despesas permaneceu preservada e não houve alteração de regras financeiras, APIs, JavaScript funcional, banco de dados ou fluxos de clique.
 
+## MVP UX-4B — Ícones dinâmicos em JavaScript (2026-05-01)
+
+O UX-4B padronizou ícones funcionais gerados dinamicamente por JavaScript em Contas Bancárias, Receitas, Lançamentos e Cartões.
+
+Emojis e símbolos usados em botões foram substituídos por SVGs inline monocromáticos com `currentColor`, preservando handlers, IDs, classes, modais, APIs e regras financeiras. Despesas, Financiamentos, Patrimônio e Dashboard ficaram fora desta etapa.
+
 ---
 
 ## Backlog — Próximas fases
