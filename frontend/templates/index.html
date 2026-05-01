@@ -41,34 +41,28 @@
 {% endblock %}
 
 {% block content %}
-    <div class="container">
-        <header>
-            <h1>Dashboard Financeiro</h1>
-            <p class="subtitle" id="mes-atual">Carregando...</p>
-        </header>
+    <div class="container app-content-fluid dashboard-shell">
+        <div class="dashboard-period-summary" id="mes-atual">Carregando...</div>
 
-        <main>
-            <!-- ========================================== -->
-            <!-- BLOCO 1: RESUMO FINANCEIRO DO MÊS         -->
-            <!-- ========================================== -->
+        <main class="dashboard-layout">
             <section class="resumo-mes" id="secao-resumo">
                 <div class="resumo-card receitas" onclick="window.location.href='/receitas'">
                     <div class="resumo-info">
-                        <h3>RECEITAS DO MÊS</h3>
+                        <h3>RECEITAS DO MES</h3>
                         <p class="resumo-valor" id="receitas-mes">R$ 0,00</p>
                     </div>
                 </div>
 
                 <div class="resumo-card despesas" onclick="window.location.href='/despesas'">
                     <div class="resumo-info">
-                        <h3>DESPESAS DO MÊS</h3>
+                        <h3>DESPESAS DO MES</h3>
                         <p class="resumo-valor" id="despesas-mes">R$ 0,00</p>
                     </div>
                 </div>
 
                 <div class="resumo-card saldo-liquido" id="card-saldo-liquido">
                     <div class="resumo-info">
-                        <h3>SALDO LÍQUIDO</h3>
+                        <h3>SALDO LIQUIDO</h3>
                         <p class="resumo-valor" id="saldo-liquido">R$ 0,00</p>
                     </div>
                 </div>
@@ -81,116 +75,105 @@
                 </div>
             </section>
 
-            <!-- ========================================== -->
-            <!-- LEITURA DO MÊS                             -->
-            <!-- ========================================== -->
-            <section class="leitura-mes" style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; margin: 20px 0;">
-                <h2 class="section-title" style="font-size: 18px; margin-bottom: 15px;">Leitura do Mês</h2>
-                <div id="leitura-container" style="color: rgba(255,255,255,0.8); line-height: 1.6;">
-                    <p class="loading">Carregando leitura...</p>
+            <div class="dashboard-main-grid">
+                <div class="dashboard-primary-column">
+                    <section class="graficos dashboard-panel" id="secao-graficos">
+                        <div class="section-heading">
+                            <h2 class="section-title">Analise Visual</h2>
+                        </div>
+
+                        <div class="graficos-grid">
+                            <div class="grafico-card" id="card-grafico-categorias">
+                                <h3>Despesas por Categoria</h3>
+                                <div class="grafico-wrapper">
+                                    <canvas id="grafico-categorias"></canvas>
+                                </div>
+                            </div>
+
+                            <div class="grafico-card" id="card-grafico-evolucao">
+                                <h3>Receitas vs Despesas</h3>
+                                <div class="grafico-wrapper">
+                                    <canvas id="grafico-evolucao"></canvas>
+                                </div>
+                            </div>
+
+                            <div class="grafico-card wide" id="card-grafico-saldo">
+                                <h3>Fluxo de Caixa</h3>
+                                <div class="grafico-wrapper">
+                                    <canvas id="grafico-saldo"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="fluxo-projetado dashboard-panel" id="secao-fluxo-projetado">
+                        <div class="section-heading">
+                            <h2 class="section-title">Fluxo de Caixa Projetado</h2>
+                            <p class="fluxo-subtitle" id="fluxo-projetado-subtitle">Carregando...</p>
+                        </div>
+                        <div id="fluxo-projetado-lista" class="fluxo-lista">
+                            <p class="loading">Carregando projecao...</p>
+                        </div>
+                    </section>
                 </div>
-            </section>
 
-            <!-- ========================================== -->
-            <!-- BLOCO 2: INDICADORES INTELIGENTES         -->
-            <!-- ========================================== -->
-            <section class="indicadores" id="secao-indicadores">
-                <h2 class="section-title">Indicadores e Insights</h2>
-                <div class="indicadores-grid" id="indicadores-container">
-                    <div class="loading-indicator">Carregando indicadores...</div>
-                </div>
-            </section>
-
-            <!-- ========================================== -->
-            <!-- BLOCO 3: GRÁFICOS                         -->
-            <!-- ========================================== -->
-            <section class="graficos" id="secao-graficos">
-                <h2 class="section-title">Análise Visual</h2>
-
-                <div class="graficos-grid">
-                    <!-- Gráfico de Pizza: Despesas por Categoria -->
-                    <div class="grafico-card" id="card-grafico-categorias">
-                        <h3>Distribuição por Categoria</h3>
-                        <div class="grafico-wrapper">
-                            <canvas id="grafico-categorias"></canvas>
+                <aside class="dashboard-secondary-column">
+                    <section class="leitura-mes dashboard-panel">
+                        <h2 class="section-title">Leitura do Mes</h2>
+                        <div id="leitura-container">
+                            <p class="loading">Carregando leitura...</p>
                         </div>
-                    </div>
+                    </section>
 
-                    <!-- Gráfico de Barras: Evolução de Gastos -->
-                    <div class="grafico-card" id="card-grafico-evolucao">
-                        <h3>Evolução de Gastos (6 meses)</h3>
-                        <div class="grafico-wrapper">
-                            <canvas id="grafico-evolucao"></canvas>
+                    <section class="indicadores dashboard-panel" id="secao-indicadores">
+                        <h2 class="section-title">Indicadores e Insights</h2>
+                        <div class="indicadores-grid" id="indicadores-container">
+                            <div class="loading-indicator">Carregando indicadores...</div>
                         </div>
-                    </div>
+                    </section>
 
-                    <!-- Gráfico de Linha: Saldo Bancário -->
-                    <div class="grafico-card wide" id="card-grafico-saldo">
-                        <h3>Evolução Projetada do Saldo (Estimativa)</h3>
-                        <div class="grafico-wrapper">
-                            <canvas id="grafico-saldo"></canvas>
+                    <section class="alertas dashboard-panel">
+                        <h2 class="section-title">Alertas e Pendencias</h2>
+
+                        <div class="alertas-grid">
+                            <div class="alerta-card">
+                                <h3>Contas a Vencer (7 dias)</h3>
+                                <div class="alerta-lista" id="contas-vencer">
+                                    <p class="loading">Carregando...</p>
+                                </div>
+                            </div>
+
+                            <div class="alerta-card">
+                                <h3>Faturas de Cartao</h3>
+                                <div class="alerta-lista" id="cartoes-vencer">
+                                    <p class="loading">Carregando...</p>
+                                </div>
+                            </div>
+
+                            <div class="alerta-card">
+                                <h3>Financiamentos Ativos</h3>
+                                <div class="alerta-lista" id="financiamentos-mes">
+                                    <p class="loading">Carregando...</p>
+                                </div>
+                            </div>
+
+                            <div class="alerta-card">
+                                <h3>Receitas Previstas</h3>
+                                <div class="alerta-lista" id="receitas-previstas">
+                                    <p class="loading">Carregando...</p>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </div>
-            </section>
+                    </section>
+                </aside>
+            </div>
 
-            <section class="fluxo-projetado" id="secao-fluxo-projetado">
-                <h2 class="section-title">Fluxo de Caixa Projetado (Enxuto)</h2>
-                <p class="fluxo-subtitle" id="fluxo-projetado-subtitle">Carregando...</p>
-                <div id="fluxo-projetado-lista" class="fluxo-lista">
-                    <p class="loading">Carregando projeção...</p>
-                </div>
-            </section>
-
-            <!-- ========================================== -->
-            <!-- BLOCO 4: ALERTAS FINANCEIROS              -->
-            <!-- ========================================== -->
-            <section class="alertas">
-                <h2 class="section-title">Alertas Financeiros</h2>
-
-                <div class="alertas-grid">
-                    <!-- Contas a Vencer -->
-                    <div class="alerta-card">
-                        <h3>Contas a Vencer (7 dias)</h3>
-                        <div class="alerta-lista" id="contas-vencer">
-                            <p class="loading">Carregando...</p>
-                        </div>
-                    </div>
-
-                    <!-- Faturas de Cartão -->
-                    <div class="alerta-card">
-                        <h3>Faturas de Cartão</h3>
-                        <div class="alerta-lista" id="cartoes-vencer">
-                            <p class="loading">Carregando...</p>
-                        </div>
-                    </div>
-
-                    <!-- Financiamentos -->
-                    <div class="alerta-card">
-                        <h3>Financiamentos Ativos</h3>
-                        <div class="alerta-lista" id="financiamentos-mes">
-                            <p class="loading">Carregando...</p>
-                        </div>
-                    </div>
-
-                    <!-- Receitas Previstas -->
-                    <div class="alerta-card">
-                        <h3>Receitas Previstas</h3>
-                        <div class="alerta-lista" id="receitas-previstas">
-                            <p class="loading">Carregando...</p>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Espaço para bottom navigation -->
-            <div style="height: 30px;"></div>
+            <div class="dashboard-bottom-spacer" aria-hidden="true"></div>
         </main>
     </div>
 {% endblock %}
 
 {% block extra_js %}
-    <!-- Chart.js para gráficos -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 {% endblock %}

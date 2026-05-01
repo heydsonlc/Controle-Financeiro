@@ -7,65 +7,53 @@
 {% endblock %}
 
 {% block action_bar %}
-    <div class="module-actionbar" aria-label="Ações de Lançamentos">
-        <div class="module-actionbar-header">
-            <h2 class="module-actionbar-title">Lançamentos</h2>
-            <p class="module-actionbar-subtitle">Registre entradas, despesas diretas e lançamentos de cartão.</p>
-        </div>
+    <div class="module-actionbar" aria-label="Filtros e acoes de Lancamentos">
+        <div class="module-actionbar-inner">
+            <div class="module-actionbar-filters">
+                <div class="module-filter-group filter-item">
+                    <label for="filtro-tipo">Tipo</label>
+                    <select class="module-filter-control" id="filtro-tipo">
+                        <option value="">Todos os tipos</option>
+                        <option value="cartao">Cart&atilde;o de Cr&eacute;dito</option>
+                        <option value="direto">Despesa Direta</option>
+                        <option value="credito">Entrada / Cr&eacute;dito</option>
+                    </select>
+                </div>
+                <div class="module-filter-group filter-item">
+                    <label for="filtro-mes">M&ecirc;s</label>
+                    <input class="module-filter-control" type="month" id="filtro-mes">
+                </div>
+                <div class="module-filter-group filter-item" id="filter-cartao-container">
+                    <label for="filtro-cartao">Cart&atilde;o</label>
+                    <select class="module-filter-control" id="filtro-cartao">
+                        <option value="">Todos os cart&otilde;es</option>
+                    </select>
+                </div>
+                <div class="module-filter-group filter-item">
+                    <label for="filtro-categoria">Categoria</label>
+                    <select class="module-filter-control" id="filtro-categoria">
+                        <option value="">Todas as categorias</option>
+                    </select>
+                </div>
+            </div>
 
-        <div class="module-actionbar-actions">
-            <button class="action-icon-button primary" id="btn-novo-lancamento" type="button" onclick="abrirModalLancamento()">
-                <span class="action-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" focusable="false">
-                        <path d="M12 5v14M5 12h14"/>
-                    </svg>
-                </span>
-                <span class="action-button-label">Novo Lançamento</span>
-            </button>
+            <div class="module-actionbar-actions">
+                <button class="action-icon-button primary" id="btn-novo-lancamento" type="button" onclick="abrirModalLancamento()">
+                    <span class="action-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false">
+                            <path d="M12 5v14M5 12h14"/>
+                        </svg>
+                    </span>
+                    <span class="action-button-label">Novo Lan&ccedil;amento</span>
+                </button>
+            </div>
         </div>
     </div>
 {% endblock %}
 
 {% block content %}
-    <div class="container">
-        <header>
-            <h1>Lançamentos</h1>
-            <nav class="breadcrumb">
-                <a href="/">Dashboard</a> / <span>Lançamentos</span>
-            </nav>
-        </header>
-
+    <div class="container app-content-wide">
         <main>
-        <!-- Filtros -->
-        <section class="filters-section">
-            <div class="filters-grid">
-                <div class="filter-item">
-                    <label for="filtro-tipo">Tipo de Lançamento</label>
-                    <select id="filtro-tipo">
-                        <option value="">Todos os tipos</option>
-                        <option value="cartao">Cartão de Crédito</option>
-                        <option value="direto">Despesa Direta</option>
-                        <option value="credito">Entrada / Crédito</option>
-                    </select>
-                </div>
-                <div class="filter-item">
-                    <label for="filtro-mes">Mês</label>
-                    <input type="month" id="filtro-mes">
-                </div>
-                <div class="filter-item" id="filter-cartao-container">
-                    <label for="filtro-cartao">Cartão</label>
-                    <select id="filtro-cartao">
-                        <option value="">Todos os cartões</option>
-                    </select>
-                </div>
-                <div class="filter-item">
-                    <label for="filtro-categoria">Categoria</label>
-                    <select id="filtro-categoria">
-                        <option value="">Todas as categorias</option>
-                    </select>
-                </div>
-            </div>
-        </section>
 
         <!-- Receitas Pendentes -->
         <section class="receitas-pendentes-section">

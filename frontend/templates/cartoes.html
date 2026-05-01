@@ -8,11 +8,6 @@
 
 {% block action_bar %}
     <div class="module-actionbar" aria-label="Ações de Cartões">
-        <div class="module-actionbar-header">
-            <h2 class="module-actionbar-title">Cartões</h2>
-            <p class="module-actionbar-subtitle">Gerencie cartões de crédito, limites, categorias e faturas.</p>
-        </div>
-
         <div class="module-actionbar-actions">
             <button class="action-icon-button primary" id="btn-novo-cartao" type="button" onclick="abrirModalCartao()">
                 <span class="action-icon" aria-hidden="true">
@@ -28,13 +23,6 @@
 
 {% block content %}
     <div class="container">
-        <header>
-            <h1>Cartões de Crédito</h1>
-            <nav class="breadcrumb">
-                <a href="/">Dashboard</a> / <a href="/configuracoes">Configurações</a> / <span>Cartões</span>
-            </nav>
-        </header>
-
         <main>
             <!-- View: Lista de Cartões (inicial) -->
             <div id="view-lista-cartoes" class="view-cartoes">

@@ -99,7 +99,7 @@ def create_app(config_name=None):
     @app.route('/')
     def index():
         """Página inicial - Dashboard"""
-        return render_template('index.html', active_page='dashboard', page_title='Dashboard')
+        return render_template('index.html', active_page='dashboard', page_title='Dashboard Financeiro')
 
     @app.route('/categorias')
     def categorias():
@@ -109,7 +109,7 @@ def create_app(config_name=None):
     @app.route('/despesas')
     def despesas():
         """Página de gerenciamento de despesas"""
-        return render_template('despesas.html', active_page='despesas', page_title='Despesas')
+        return render_template('despesas.html', active_page='despesas', page_title='Gerenciamento de Despesas')
 
     @app.route('/cartoes')
     def cartoes():
@@ -124,7 +124,7 @@ def create_app(config_name=None):
     @app.route('/receitas')
     def receitas():
         """Página de gerenciamento de receitas"""
-        return render_template('receitas.html', active_page='receitas', page_title='Receitas')
+        return render_template('receitas.html', active_page='receitas', page_title='Gerenciamento de Receitas')
 
     @app.route('/financiamentos')
     def financiamentos():

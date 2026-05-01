@@ -350,6 +350,14 @@ O `layout.css` passou a preparar a faixa para um padrao futuro com filtros a esq
 
 Nenhum filtro foi movido nesta etapa. Nenhum template de modulo, JavaScript funcional, CSS de modulo, backend, banco, API ou regra financeira foi alterado. A tela Despesas permaneceu preservada.
 
+### Registro de implementacao - UX-5C
+
+O UX-5C aplicou a primeira evolucao real de area util ampliada apos a infraestrutura de action bar full width.
+
+O Dashboard passou a usar conteudo `app-content-fluid`, com cards superiores distribuidos em quatro colunas no desktop, area principal para graficos e fluxo de caixa, e coluna lateral para leitura do mes, indicadores e alertas. Os IDs consumidos por `dashboard.js` foram preservados e nenhum calculo financeiro foi movido para o frontend.
+
+Lancamentos, Receitas e Despesas receberam apenas largura opt-in (`app-content-wide`) no wrapper principal. Em Despesas, a mudanca foi limitada a aproveitamento de largura, preservando filtros, cards, listagem, icones pequenos, modais e logica funcional.
+
 ## 9. Regras de Preservação
 
 A reestruturação visual deve preservar integralmente:

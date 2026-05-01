@@ -6,40 +6,45 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/despesas.css') }}">
 {% endblock %}
 
-{% block content %}
-<div class="container">
-        <header>
-            <h1>Gerenciamento de Despesas</h1>
-            <nav class="breadcrumb">
-                <a href="/">Dashboard</a> / <span>Despesas</span>
-            </nav>
-        </header>
 
-        <main>
-            <!-- Filtros -->
-            <div class="actions-bar">
-                <div class="filters">
-                    <select id="filtro-categoria" class="filter-select">
+{% block action_bar %}
+    <div class="module-actionbar" aria-label="Filtros de Despesas">
+        <div class="module-actionbar-inner">
+            <div class="module-actionbar-filters">
+                <div class="module-filter-group">
+                    <label for="filtro-categoria">Categoria</label>
+                    <select id="filtro-categoria" class="module-filter-control filter-select">
                         <option value="">Todas as categorias</option>
                     </select>
-
-                    <select id="filtro-status" class="filter-select">
+                </div>
+                <div class="module-filter-group">
+                    <label for="filtro-status">Status</label>
+                    <select id="filtro-status" class="module-filter-control filter-select">
                         <option value="">Todos os status</option>
                         <option value="pendente">Pendentes</option>
                         <option value="pago">Pagas</option>
                     </select>
-
-                    <input type="date" id="filtro-vencimento-ate" class="filter-input"
-                           placeholder="Vencimento até" onchange="aplicarFiltros()"
-                           title="Filtrar despesas que vencem até esta data (dentro da competência)">
-
-                    <input type="text" id="filtro-competencia" class="filter-input"
-                           placeholder="Competência (MM/AAAA)" maxlength="7"
-                           onkeyup="mascaraMesAno(this)" onchange="aplicarFiltros()"
-                           title="Filtrar por mês de competência">
                 </div>
-
+                <div class="module-filter-group">
+                    <label for="filtro-vencimento-ate">Vencimento ate</label>
+                    <input type="date" id="filtro-vencimento-ate" class="module-filter-control filter-input"
+                           placeholder="Vencimento ate" onchange="aplicarFiltros()"
+                           title="Filtrar despesas que vencem ate esta data (dentro da competencia)">
+                </div>
+                <div class="module-filter-group">
+                    <label for="filtro-competencia">Competencia</label>
+                    <input type="text" id="filtro-competencia" class="module-filter-control filter-input"
+                           placeholder="Competencia (MM/AAAA)" maxlength="7"
+                           onkeyup="mascaraMesAno(this)" onchange="aplicarFiltros()"
+                           title="Filtrar por mes de competencia">
+                </div>
             </div>
+        </div>
+    </div>
+{% endblock %}
+{% block content %}
+<div class="container app-content-wide">
+        <main>
 
             <div class="info-text" style="background: #f5f5f7; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 0.9em; color: #6e6e73; border-left: 3px solid #007aff;">
                 💡 <strong style="color: #1d1d1f;">Dica:</strong> Esta página lista todas as despesas registradas. Para cadastrar novas despesas recorrentes, acesse Configurações → Despesas Recorrentes.

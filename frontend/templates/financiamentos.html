@@ -7,48 +7,20 @@
 {% endblock %}
 
 {% block action_bar %}
-    <div class="module-actionbar" aria-label="Ações de Financiamentos">
-        <div class="module-actionbar-header">
-            <h2 class="module-actionbar-title">Financiamentos</h2>
-            <p class="module-actionbar-subtitle">Gerencie contratos, parcelas, amortizações e demonstrativos.</p>
-        </div>
-
-        <div class="module-actionbar-actions">
-            <button class="action-icon-button primary" id="btn-novo-financiamento" type="button" onclick="abrirModalNovoFinanciamento()">
-                <span class="action-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" focusable="false">
-                        <path d="M12 5v14M5 12h14"/>
-                    </svg>
-                </span>
-                <span class="action-button-label">Novo Financiamento</span>
-            </button>
-        </div>
-    </div>
-{% endblock %}
-
-{% block content %}
-    <div class="container">
-        <header>
-            <h1>Gerenciamento de Financiamentos</h1>
-            <nav class="breadcrumb">
-                <a href="/">Dashboard</a> / <a href="/configuracoes">Configurações</a> / <span>Financiamentos</span>
-            </nav>
-        </header>
-
-        <main>
-            <!-- Filtros -->
-            <div class="filters-section">
-                <div class="filter-group">
-                    <label for="filtro-status">Status:</label>
-                    <select id="filtro-status" onchange="carregarFinanciamentos()">
+    <div class="module-actionbar" aria-label="Filtros e acoes de Financiamentos">
+        <div class="module-actionbar-inner">
+            <div class="module-actionbar-filters">
+                <div class="module-filter-group filter-group">
+                    <label for="filtro-status">Status</label>
+                    <select class="module-filter-control" id="filtro-status" onchange="carregarFinanciamentos()">
                         <option value="">Todos</option>
                         <option value="true" selected>Ativos</option>
                         <option value="false">Inativos</option>
                     </select>
                 </div>
-                <div class="filter-group">
-                    <label for="filtro-sistema">Sistema:</label>
-                    <select id="filtro-sistema" onchange="carregarFinanciamentos()">
+                <div class="module-filter-group filter-group">
+                    <label for="filtro-sistema">Sistema</label>
+                    <select class="module-filter-control" id="filtro-sistema" onchange="carregarFinanciamentos()">
                         <option value="">Todos</option>
                         <option value="SAC">SAC</option>
                         <option value="PRICE">PRICE</option>
@@ -56,6 +28,24 @@
                     </select>
                 </div>
             </div>
+
+            <div class="module-actionbar-actions">
+                <button class="action-icon-button primary" id="btn-novo-financiamento" type="button" onclick="abrirModalNovoFinanciamento()">
+                    <span class="action-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false">
+                            <path d="M12 5v14M5 12h14"/>
+                        </svg>
+                    </span>
+                    <span class="action-button-label">Novo Financiamento</span>
+                </button>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block content %}
+    <div class="container">
+        <main>
 
             <!-- Cards de Resumo -->
             <div class="cards-resumo">

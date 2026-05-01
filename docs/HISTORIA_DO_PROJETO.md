@@ -220,6 +220,14 @@ O script é idempotente, só roda em `DATABASE_URL` local e não apaga dados for
 
 ---
 
+## MVP UX-5C - Area util ampliada e Dashboard 2.0 (2026-05-01)
+
+O UX-5C reformulou a organizacao visual do Dashboard para aproveitar melhor a largura util do shell, mantendo os mesmos contratos de dados e os IDs usados por `dashboard.js`.
+
+O Dashboard passou a combinar cards superiores, graficos, fluxo de caixa, leitura do mes, indicadores e alertas em uma distribuicao mais ampla. Lancamentos, Receitas e Despesas receberam apenas largura opt-in no wrapper principal. Despesas nao foi redesenhada e preservou listagem, cards, icones pequenos, modais e regras funcionais.
+
+---
+
 ## Backlog — Próximas fases
 
 Ver [plano de MVPs](./../C:/Users/heydson.cardoso/.claude/plans/sleepy-floating-candy.md) para o cronograma completo (MVP 1 ao 6).

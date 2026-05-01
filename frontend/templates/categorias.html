@@ -8,11 +8,6 @@
 
 {% block action_bar %}
     <div class="module-actionbar" aria-label="Ações de Categorias">
-        <div class="module-actionbar-header">
-            <h2 class="module-actionbar-title">Categorias</h2>
-            <p class="module-actionbar-subtitle">Organize as categorias usadas para análise das despesas.</p>
-        </div>
-
         <div class="module-actionbar-actions">
             <button class="action-icon-button primary" id="btn-nova-categoria" type="button" onclick="abrirModal()">
                 <span class="action-icon" aria-hidden="true">
@@ -28,13 +23,6 @@
 
 {% block content %}
     <div class="container">
-        <header>
-            <h1>Gerenciamento de Categorias</h1>
-            <nav class="breadcrumb">
-                <a href="/">Dashboard</a> / <span>Categorias</span>
-            </nav>
-        </header>
-
         <main>
             <!-- Lista de categorias -->
             <div class="categorias-lista" id="categorias-lista">
