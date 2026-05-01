@@ -98,153 +98,139 @@
 /* Grid de Lançamentos */
 .lancamentos-grid {
     display: grid;
-    gap: 20px;
-}
-
-/* Card de Lançamento */
-/* Cards de Lançamento - Layout Clean e Minimalista */
-.lancamento-card {
-    background: #ffffff;
-    border-radius: 12px;
-    padding: 16px 20px;
-    border: 1px solid #e8e8ea;
-    transition: all 0.2s ease;
-    margin-bottom: 12px;
-}
-
-.lancamento-card:hover {
-    border-color: #007aff;
-    box-shadow: 0 4px 12px rgba(0, 122, 255, 0.1);
-}
-
-/* Linha 1: Nome + Data | Badges | Valor */
-.lancamento-row-1 {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    margin-bottom: 8px;
-}
-
-.lancamento-principal {
-    display: flex;
-    align-items: baseline;
     gap: 12px;
-    flex: 1;
-    min-width: 0;
 }
 
-.lancamento-nome {
-    color: #1d1d1f;
-    margin: 0;
-    font-size: 15px;
-    font-weight: 600;
-    white-space: nowrap;
+/* ===== TABELA COMPACTA DE LANÇAMENTOS ===== */
+.tbl-lancamentos {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    border-radius: 10px;
     overflow: hidden;
-    text-overflow: ellipsis;
+    border: 1px solid #e8e8ea;
 }
 
-.lancamento-data {
+.tbl-lancamentos thead tr {
+    background: #f5f5f7;
+    border-bottom: 1px solid #e8e8ea;
+}
+
+.tbl-lancamentos th {
+    padding: 10px 14px;
+    font-size: 11px;
+    font-weight: 600;
     color: #6e6e73;
-    font-size: 13px;
-    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-align: left;
 }
 
-.lancamento-badges {
-    display: flex;
-    gap: 6px;
-    align-items: center;
-    flex-wrap: nowrap;
-}
-
-.badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-size: 12px;
-    font-weight: 500;
-    white-space: nowrap;
-    border: 1px solid;
-}
-
-.badge-tipo-cartao {
-    background: rgba(52, 199, 89, 0.1);
-    color: #34c759;
-    border-color: rgba(52, 199, 89, 0.3);
-}
-
-.badge-tipo-direto {
-    background: rgba(255, 149, 0, 0.1);
-    color: #ff9500;
-    border-color: rgba(255, 149, 0, 0.3);
-}
-
-.badge-tipo-credito {
-    background: rgba(52, 199, 89, 0.15);
-    color: #34c759;
-    border-color: rgba(52, 199, 89, 0.4);
-    font-weight: 600;
-}
-
-.badge-cartao {
-    background: rgba(0, 122, 255, 0.1);
-    color: #007aff;
-    border-color: rgba(0, 122, 255, 0.3);
-}
-
-.badge-categoria {
-    background: rgba(175, 82, 222, 0.1);
-    color: #af52de;
-    border-color: rgba(175, 82, 222, 0.3);
-}
-
-.lancamento-valor {
-    color: #1d1d1f;
-    font-size: 17px;
-    font-weight: 600;
-    white-space: nowrap;
+.tbl-lancamentos th.tbl-col-valor,
+.tbl-lancamentos td.tbl-col-valor {
     text-align: right;
 }
 
-.valor-positivo {
-    color: #34c759 !important;
-    font-weight: 700;
+.tbl-lancamentos th.tbl-col-acoes,
+.tbl-lancamentos td.tbl-col-acoes {
+    text-align: right;
+    width: 72px;
 }
 
-/* Card de entrada/crédito com destaque verde sutil */
-.lancamento-credito {
+.tbl-row {
+    border-bottom: 1px solid #f2f2f4;
+    transition: background 0.15s;
+}
+
+.tbl-row:hover {
+    background: #f9f9fb;
+}
+
+.tbl-row:last-child {
+    border-bottom: none;
+}
+
+.tbl-row.row-credito {
     border-left: 3px solid #34c759;
-    background: linear-gradient(135deg, rgba(52, 199, 89, 0.03) 0%, rgba(255, 255, 255, 1) 100%);
+    background: rgba(52, 199, 89, 0.02);
 }
 
-/* Linha 2: Info Extra | Ações */
-.lancamento-row-2 {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
+.tbl-lancamentos td {
+    padding: 10px 14px;
+    vertical-align: middle;
 }
 
-.lancamento-info-extra {
-    display: flex;
-    gap: 16px;
-    flex-wrap: wrap;
-    flex: 1;
+.tbl-col-desc { min-width: 180px; }
+.tbl-col-data { white-space: nowrap; font-size: 13px; color: #6e6e73; }
+.tbl-col-pills { white-space: nowrap; }
+
+.tbl-nome {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1d1d1f;
 }
 
-.info-item {
+.tbl-sub {
+    display: block;
+    font-size: 12px;
     color: #6e6e73;
-    font-size: 13px;
-}
-
-.info-item.obs {
+    margin-top: 2px;
     font-style: italic;
-    max-width: 400px;
+    max-width: 320px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+
+.tbl-col-valor {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1d1d1f;
+    white-space: nowrap;
+}
+
+.tbl-col-valor.valor-positivo {
+    color: #34c759;
+}
+
+/* Pills genéricos */
+.tbl-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    margin-right: 3px;
+    border: 1px solid;
+}
+
+.pill-tipo-cartao  { background: rgba(52,199,89,.1);  color: #34c759; border-color: rgba(52,199,89,.3); }
+.pill-tipo-direto  { background: rgba(255,149,0,.1);  color: #ff9500; border-color: rgba(255,149,0,.3); }
+.pill-tipo-credito { background: rgba(52,199,89,.15); color: #34c759; border-color: rgba(52,199,89,.4); }
+.pill-cartao       { background: rgba(0,122,255,.1);  color: #007aff; border-color: rgba(0,122,255,.3); }
+.pill-cat          { background: rgba(175,82,222,.1); color: #af52de; border-color: rgba(175,82,222,.3); }
+
+.pill-status-pago     { background: #d1fae5; color: #059669; border-color: #a7f3d0; }
+.pill-status-pendente { background: #fef3c7; color: #d97706; border-color: #fde68a; }
+
+/* Compatibilidade legada com badges */
+.badge { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 5px; font-size: 11px; font-weight: 600; white-space: nowrap; border: 1px solid; }
+.badge-tipo-cartao  { background: rgba(52,199,89,.1);  color: #34c759; border-color: rgba(52,199,89,.3); }
+.badge-tipo-direto  { background: rgba(255,149,0,.1);  color: #ff9500; border-color: rgba(255,149,0,.3); }
+.badge-tipo-credito { background: rgba(52,199,89,.15); color: #34c759; border-color: rgba(52,199,89,.4); }
+.badge-cartao       { background: rgba(0,122,255,.1);  color: #007aff; border-color: rgba(0,122,255,.3); }
+.badge-categoria    { background: rgba(175,82,222,.1); color: #af52de; border-color: rgba(175,82,222,.3); }
+.badge-status-pago     { background: #10b981; color: #fff; border-color: #10b981; }
+.badge-status-pendente { background: #f59e0b; color: #fff; border-color: #f59e0b; }
+
+.valor-positivo { color: #34c759 !important; font-weight: 700; }
+
+/* Linhas 1/2 legadas — manter para não quebrar markup que ainda use */
+.lancamento-card { display: none; }
+.info-item { color: #6e6e73; font-size: 13px; }
 
 .lancamento-actions {
     display: flex;
@@ -500,55 +486,18 @@
         grid-template-columns: 1fr;
     }
 
-    /* Novo layout de cards */
-    .lancamento-row-1 {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 12px;
-    }
-
-    .lancamento-principal {
-        width: 100%;
-        flex-direction: column;
-        gap: 4px;
-    }
-
-    .lancamento-badges {
-        flex-wrap: wrap;
-    }
-
-    .lancamento-valor {
-        width: 100%;
-        text-align: left;
-        font-size: 20px;
-    }
-
-    .lancamento-row-2 {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 12px;
-    }
-
-    .lancamento-info-extra {
-        width: 100%;
-        flex-direction: column;
-        gap: 8px;
-    }
-
-    .lancamento-actions {
-        width: 100%;
-        justify-content: flex-end;
-    }
-
-    .btn-icon {
-        font-size: 20px;
-        padding: 8px;
-    }
+    .tbl-col-data { display: none; }
+    .tbl-col-pills .pill-cartao { display: none; }
 
     .section-header {
         flex-direction: column;
         align-items: flex-start;
         gap: 15px;
+    }
+
+    .btn-icon {
+        font-size: 20px;
+        padding: 8px;
     }
 }
 
@@ -572,102 +521,90 @@
 }
 
 .receitas-pendentes-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 20px;
-    margin-top: 20px;
-}
-
-.receita-pendente-card {
-    background: rgba(255, 255, 255, 0.15);
-    backdrop-filter: blur(10px);
-    border-radius: 12px;
-    padding: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    transition: all 0.3s ease;
-}
-
-.receita-pendente-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
-}
-
-.receita-header {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
-    padding-bottom: 15px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 12px;
 }
 
-.receita-header h3 {
+/* Linha compacta de receita pendente */
+.receita-pendente-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: rgba(255,255,255,0.12);
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.18);
+    transition: background 0.15s;
+}
+
+.receita-pendente-row:hover {
+    background: rgba(255,255,255,0.18);
+}
+
+.rp-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
+.rp-nome {
     color: white;
-    font-size: 18px;
-    margin: 0;
-}
-
-.receita-body {
-    margin-bottom: 15px;
-}
-
-.receita-body p {
-    margin: 10px 0;
-    color: rgba(255, 255, 255, 0.9);
     font-size: 14px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.receita-valor {
-    display: flex;
-    justify-content: space-between;
+.rp-pill {
+    display: inline-flex;
     align-items: center;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    white-space: nowrap;
+    letter-spacing: 0.4px;
 }
 
-.receita-valor .label {
-    color: rgba(255, 255, 255, 0.7);
+.pill-entrada { background: rgba(52,199,89,.25); color: #4ade80; }
+.pill-pendente { background: rgba(245,158,11,.25); color: #fbbf24; }
+
+.rp-dia {
+    color: rgba(255,255,255,0.55);
+    font-size: 12px;
+    white-space: nowrap;
 }
 
-.receita-valor .valor {
-    font-size: 20px;
-    font-weight: bold;
+.rp-direita {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.rp-valor {
+    color: #4ade80;
+    font-size: 15px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.btn-confirmar {
     color: #4ade80;
 }
 
-.receita-dia {
-    display: flex;
-    justify-content: space-between;
+.btn-confirmar:hover {
+    background: rgba(74,222,128,0.15);
 }
 
-.receita-dia .label {
-    color: rgba(255, 255, 255, 0.7);
-}
-
-.receita-actions {
-    margin-top: 15px;
-}
-
-.receita-actions .btn-success {
-    width: 100%;
-    background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
-    color: white;
-    padding: 12px 20px;
-    border-radius: 8px;
-    border: none;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 12px rgba(74, 222, 128, 0.3);
-}
-
-.receita-actions .btn-success:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(74, 222, 128, 0.4);
-}
-
-.receita-actions .btn-success:active {
-    transform: translateY(0);
-}
+/* Manter legado hidden */
+.receita-pendente-card { display: none; }
+.receita-header, .receita-body, .receita-actions { display: none; }
 
 /* Badge styles */
 .badge {

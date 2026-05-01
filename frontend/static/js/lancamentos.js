@@ -414,62 +414,62 @@ function renderizarLancamentos(lancamentos) {
         return;
     }
 
-    container.innerHTML = lancamentos.map(lanc => {
+    const linhas = lancamentos.map(lanc => {
         const isCartao = lanc.tipo === 'cartao';
         const isCredito = lanc.tipo === 'credito';
 
-        let tipoIcon, tipoTexto;
-        if (isCartao) {
-            tipoIcon = lancamentosIcon('card');
-            tipoTexto = 'Cartão';
-        } else if (isCredito) {
-            tipoIcon = lancamentosIcon('entry');
-            tipoTexto = 'Entrada';
-        } else {
-            tipoIcon = lancamentosIcon('cash');
-            tipoTexto = 'Direto';
-        }
+        let tipoTexto;
+        if (isCartao) tipoTexto = 'Cartão';
+        else if (isCredito) tipoTexto = 'Entrada';
+        else tipoTexto = 'Direto';
 
-        // Badge de status para despesas diretas
         const statusBadge = (lanc.tipo === 'direto' && lanc.status_pagamento)
-            ? `<span class="badge badge-status badge-status-${lanc.status_pagamento.toLowerCase()}">${lanc.status_pagamento}</span>`
+            ? `<span class="tbl-pill pill-status-${lanc.status_pagamento.toLowerCase()}">${lanc.status_pagamento}</span>`
             : '';
 
+        const cartaoBadge = isCartao ? `<span class="tbl-pill pill-cartao">${lanc.cartao_nome}</span>` : '';
+
+        const subinfo = [];
+        if (isCartao) subinfo.push(`Fatura ${formatarMes(lanc.mes_fatura)}`);
+        if (lanc.total_parcelas > 1) subinfo.push(`${lanc.numero_parcela}/${lanc.total_parcelas}x`);
+        if (lanc.observacoes) subinfo.push(lanc.observacoes);
+
+        const valorFormatado = `${isCredito ? '+' : ''}R$ ${parseFloat(lanc.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+
         return `
-        <div class="lancamento-card ${isCredito ? 'lancamento-credito' : ''}">
-            <div class="lancamento-row-1">
-                <div class="lancamento-principal">
-                    <h3 class="lancamento-nome">${lanc.descricao}</h3>
-                    <span class="lancamento-data">${formatarData(lanc.data_compra)}</span>
-                </div>
-                <div class="lancamento-badges">
-                    <span class="badge badge-tipo-${lanc.tipo}">${tipoIcon} ${tipoTexto}</span>
-                    ${statusBadge}
-                    ${isCartao ? `<span class="badge badge-cartao">${lanc.cartao_nome}</span>` : ''}
-                    <span class="badge badge-categoria">${lanc.categoria_nome}</span>
-                </div>
-                <div class="lancamento-valor ${isCredito ? 'valor-positivo' : ''}">
-                    ${isCredito ? '+' : ''}R$ ${parseFloat(lanc.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
-                </div>
-            </div>
-            <div class="lancamento-row-2">
-                <div class="lancamento-info-extra">
-                    ${isCartao ? `<span class="info-item">Fatura: ${formatarMes(lanc.mes_fatura)}</span>` : ''}
-                    ${lanc.total_parcelas > 1 ? `<span class="info-item">Parcela ${lanc.numero_parcela}/${lanc.total_parcelas}</span>` : ''}
-                    ${lanc.observacoes ? `<span class="info-item obs">${lanc.observacoes}</span>` : ''}
-                </div>
-                <div class="lancamento-actions">
-                    <button class="btn-icon" onclick='editarLancamento(${JSON.stringify(lanc).replace(/'/g, "&#39;")})' title="Editar">
-                        ${lancamentosIcon('edit')}
-                    </button>
-                    <button class="btn-icon btn-delete" onclick="excluirLancamento(${lanc.id}, '${lanc.tipo}')" title="Excluir">
-                        ${lancamentosIcon('remove')}
-                    </button>
-                </div>
-            </div>
-        </div>
-        `;
+        <tr class="tbl-row ${isCredito ? 'row-credito' : ''}">
+            <td class="tbl-col-desc">
+                <span class="tbl-nome">${lanc.descricao}</span>
+                ${subinfo.length ? `<span class="tbl-sub">${subinfo.join(' · ')}</span>` : ''}
+            </td>
+            <td class="tbl-col-data">${formatarData(lanc.data_compra)}</td>
+            <td class="tbl-col-pills">
+                <span class="tbl-pill pill-tipo-${lanc.tipo}">${tipoTexto}</span>
+                ${statusBadge}
+                ${cartaoBadge}
+                <span class="tbl-pill pill-cat">${lanc.categoria_nome}</span>
+            </td>
+            <td class="tbl-col-valor ${isCredito ? 'valor-positivo' : ''}">${valorFormatado}</td>
+            <td class="tbl-col-acoes">
+                <button class="btn-icon" onclick='editarLancamento(${JSON.stringify(lanc).replace(/'/g, "&#39;")})' title="Editar">${lancamentosIcon('edit')}</button>
+                <button class="btn-icon btn-delete" onclick="excluirLancamento(${lanc.id}, '${lanc.tipo}')" title="Excluir">${lancamentosIcon('remove')}</button>
+            </td>
+        </tr>`;
     }).join('');
+
+    container.innerHTML = `
+        <table class="tbl-lancamentos">
+            <thead>
+                <tr>
+                    <th class="tbl-col-desc">Descrição</th>
+                    <th class="tbl-col-data">Data</th>
+                    <th class="tbl-col-pills">Tipo / Conta</th>
+                    <th class="tbl-col-valor">Valor</th>
+                    <th class="tbl-col-acoes"></th>
+                </tr>
+            </thead>
+            <tbody>${linhas}</tbody>
+        </table>`;
 }
 
 function atualizarResumoMes(lancamentos) {
@@ -986,32 +986,23 @@ async function carregarReceitasPendentes() {
             return;
         }
 
-        // Renderizar receitas pendentes
+        // Renderizar receitas pendentes (lista compacta)
         container.innerHTML = pendentes.map(orc => {
             const fonte = fontesMap[orc.item_receita_id];
             if (!fonte) return '';
 
             return `
-                <div class="receita-pendente-card">
-                    <div class="receita-header">
-                        <h3>${fonte.nome}</h3>
-                        <span class="badge badge-${fonte.tipo.toLowerCase()}">${formatarTipo(fonte.tipo)}</span>
+                <div class="receita-pendente-row">
+                    <div class="rp-info">
+                        <span class="rp-nome">${fonte.nome}</span>
+                        <span class="rp-pill pill-entrada">ENTRADA</span>
+                        <span class="rp-pill pill-pendente">PENDENTE</span>
+                        ${fonte.dia_previsto_pagamento ? `<span class="rp-dia">Dia ${fonte.dia_previsto_pagamento}</span>` : ''}
                     </div>
-                    <div class="receita-body">
-                        <p class="receita-valor">
-                            <span class="label">Valor Previsto:</span>
-                            <span class="valor">${formatarMoeda(orc.valor_esperado)}</span>
-                        </p>
-                        ${fonte.dia_previsto_pagamento ? `
-                            <p class="receita-dia">
-                                <span class="label">Dia Previsto:</span>
-                                <span>${fonte.dia_previsto_pagamento}</span>
-                            </p>
-                        ` : ''}
-                    </div>
-                    <div class="receita-actions">
-                        <button class="btn btn-success" onclick="abrirModalConfirmarReceita(${orc.item_receita_id}, ${orc.id}, '${fonte.nome}', ${orc.valor_esperado})">
-                            ${lancamentosIcon('check')} Confirmar Recebimento
+                    <div class="rp-direita">
+                        <span class="rp-valor">${formatarMoeda(orc.valor_esperado)}</span>
+                        <button class="btn-icon btn-confirmar" onclick="abrirModalConfirmarReceita(${orc.item_receita_id}, ${orc.id}, '${fonte.nome}', ${orc.valor_esperado})" title="Confirmar recebimento">
+                            ${lancamentosIcon('check')}
                         </button>
                     </div>
                 </div>

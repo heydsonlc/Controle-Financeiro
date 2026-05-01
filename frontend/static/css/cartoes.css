@@ -544,86 +544,99 @@ header h1 {
 .lancamentos-lista {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 12px;
 }
 
 .lancamento-grupo {
-    background: rgba(255, 255, 255, 0.15);
-    backdrop-filter: blur(10px);
-    border-radius: 15px;
-    padding: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .grupo-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 15px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 8px 14px;
+    background: rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .grupo-header h4 {
     margin: 0;
     color: white;
-    font-size: 1.1em;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
 }
 
 .grupo-total {
-    font-size: 1.1em;
+    font-size: 13px;
     font-weight: 700;
-    color: white;
+    color: rgba(255, 255, 255, 0.9);
 }
 
 .lancamentos-items {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 0;
 }
 
 .lancamento-item {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    padding: 12px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
-    transition: all 0.3s ease;
+    padding: 8px 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    transition: background 0.15s;
+    gap: 10px;
+}
+
+.lancamento-item:last-child {
+    border-bottom: none;
 }
 
 .lancamento-item:hover {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.08);
 }
 
 .lancamento-info {
     flex: 1;
     display: flex;
-    flex-direction: column;
-    gap: 5px;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
 }
 
 .lancamento-descricao {
-    color: white;
-    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 500;
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .lancamento-data,
 .lancamento-parcela {
-    font-size: 0.85em;
-    color: rgba(255, 255, 255, 0.7);
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .lancamento-actions {
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: 6px;
+    flex-shrink: 0;
 }
 
 .lancamento-valor {
-    font-size: 1.1em;
+    font-size: 13px;
     font-weight: 700;
     color: white;
+    white-space: nowrap;
 }
 
 /* ============================================================================
