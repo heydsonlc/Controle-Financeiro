@@ -340,6 +340,16 @@ Escopo:
 - botão de limpar filtro;
 - preservação da usabilidade em telas com muitos registros.
 
+### Registro de implementacao - UX-5A-INFRA
+
+O UX-5A-INFRA ajustou a infraestrutura visual do shell para que a `action_bar` deixe de depender do container interno das paginas e passe a ocupar melhor a largura util da area principal.
+
+O `base.html` passou a envolver o bloco opcional `action_bar` em uma regiao estrutural propria (`app-actionbar-region`), posicionada abaixo da topbar e antes do conteudo.
+
+O `layout.css` passou a preparar a faixa para um padrao futuro com filtros a esquerda e acoes a direita, incluindo classes reutilizaveis para filtros (`module-actionbar-filters`, `module-filter-group`, `module-filter-control`) e para conteudo largo opt-in (`app-content-wide`, `app-content-fluid`, `content-wide`, `content-fluid`).
+
+Nenhum filtro foi movido nesta etapa. Nenhum template de modulo, JavaScript funcional, CSS de modulo, backend, banco, API ou regra financeira foi alterado. A tela Despesas permaneceu preservada.
+
 ## 9. Regras de Preservação
 
 A reestruturação visual deve preservar integralmente:

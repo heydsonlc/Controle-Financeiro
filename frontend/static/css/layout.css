@@ -190,10 +190,18 @@ body.app-shell-body .app-content {
     padding: 32px;
 }
 
+body.app-shell-body .app-actionbar-region {
+    width: 100%;
+}
+
+body.app-shell-body .app-actionbar-region:empty {
+    display: none;
+}
+
 body.app-shell-body .module-actionbar {
-    width: calc(100% - 64px);
-    max-width: 1280px;
-    margin: 24px auto 0;
+    width: auto;
+    max-width: none;
+    margin: 18px 28px 0;
     padding: 14px 16px;
     display: flex;
     align-items: center;
@@ -203,6 +211,19 @@ body.app-shell-body .module-actionbar {
     border: 1px solid rgba(29, 29, 31, 0.08);
     border-radius: 16px;
     box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+body.app-shell-body .module-actionbar-shell {
+    width: 100%;
+}
+
+body.app-shell-body .module-actionbar-inner {
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
 }
 
 body.app-shell-body .module-actionbar-header {
@@ -227,6 +248,15 @@ body.app-shell-body .module-actionbar-subtitle {
     line-height: 1.35;
 }
 
+body.app-shell-body .module-actionbar-filters {
+    min-width: 0;
+    display: flex;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 10px;
+}
+
 body.app-shell-body .module-actionbar-actions {
     display: flex;
     flex-wrap: wrap;
@@ -234,6 +264,37 @@ body.app-shell-body .module-actionbar-actions {
     justify-content: flex-end;
     gap: 8px;
     margin-left: auto;
+}
+
+body.app-shell-body .module-filter-group {
+    min-width: 140px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+body.app-shell-body .module-filter-group label {
+    color: #6e6e73;
+    font-size: 0.78rem;
+    font-weight: 620;
+    line-height: 1.2;
+}
+
+body.app-shell-body .module-filter-control {
+    min-height: 38px;
+    padding: 8px 10px;
+    color: #1d1d1f;
+    background: rgba(255, 255, 255, 0.78);
+    border: 1px solid rgba(29, 29, 31, 0.1);
+    border-radius: 10px;
+    font: inherit;
+    font-size: 0.9rem;
+}
+
+body.app-shell-body .module-filter-control:focus {
+    outline: 2px solid rgba(0, 122, 255, 0.32);
+    outline-offset: 1px;
+    border-color: rgba(0, 122, 255, 0.42);
 }
 
 body.app-shell-body .action-icon-button {
@@ -340,6 +401,18 @@ body.app-shell-body .app-content > .container {
     overflow: hidden;
 }
 
+body.app-shell-body .app-content.app-content-wide > .container,
+body.app-shell-body .app-content > .container.app-content-wide,
+body.app-shell-body .app-content > .content-wide {
+    max-width: 1600px;
+}
+
+body.app-shell-body .app-content.app-content-fluid > .container,
+body.app-shell-body .app-content > .container.app-content-fluid,
+body.app-shell-body .app-content > .content-fluid {
+    max-width: none;
+}
+
 body.app-shell-body .bottom-nav,
 body.app-shell-body .mobile-toggle {
     display: none;
@@ -371,9 +444,18 @@ body.app-shell-body .mobile-toggle {
     }
 
     body.app-shell-body .module-actionbar {
-        width: calc(100% - 32px);
-        margin-top: 16px;
+        margin: 16px 16px 0;
         padding: 12px;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    body.app-shell-body .module-actionbar-inner {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    body.app-shell-body .module-actionbar-filters {
         flex-direction: column;
         align-items: stretch;
     }

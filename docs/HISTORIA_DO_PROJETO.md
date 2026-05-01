@@ -188,6 +188,12 @@ O UX-4-REVIEW FINAL revisou o estado final dos ícones e emojis após UX-4A, UX-
 
 Foram corrigidos resíduos pontuais em telas comuns e preservadas as exceções planejadas: Despesas, Financiamento Seguro, console/logs/comentários e alerts/confirms internos. Nenhuma regra financeira, backend, API, banco de dados ou fluxo sensível foi alterado.
 
+## MVP UX-5A-INFRA — Action bar full width e estrutura de filtros (2026-05-01)
+
+O UX-5A-INFRA ajustou o shell visual para tratar a `action_bar` como regiao estrutural abaixo da topbar, com melhor aproveitamento da largura util da area principal.
+
+Foram adicionadas classes globais para suporte futuro a filtros a esquerda e acoes a direita, alem de classes opt-in para conteudo mais largo por tela. Nenhum filtro foi movido, nenhum template de modulo foi alterado e Despesas permaneceu preservada.
+
 ## MVP DB-3C — Baseline Alembic oficial (2026-05-01)
 
 O DB-3C estabeleceu o Alembic como fonte oficial de evolução de schema do projeto.

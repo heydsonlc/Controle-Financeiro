@@ -173,7 +173,9 @@
                 </button>
             </header>
 
-            {% block action_bar %}{% endblock %}
+            <div class="app-actionbar-region">
+                {% block action_bar %}{% endblock %}
+            </div>
 
             <div class="app-content" role="main">
                 {% block content %}{% endblock %}
