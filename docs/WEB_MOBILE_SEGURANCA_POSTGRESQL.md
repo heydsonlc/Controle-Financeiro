@@ -84,6 +84,15 @@ Scripts históricos fora da chain oficial foram arquivados em `migrations/legacy
 
 Esses arquivos não devem ser executados no fluxo atual. Podem conter `sqlite3`, `PRAGMA`, `sqlite_master`, caminhos `data/gastos.db`/`financeiro.db`, `ALTER TABLE` manual ou comandos destrutivos. A fonte oficial para evolução futura permanece em `migrations/versions/`, iniciando por `dd1a552aec6a`.
 
+### Seed de demonstração local (DEV-SEED-1 — 2026-05-01)
+
+O script `scripts/seed_demo_dev.py` cria dados fictícios com prefixo `DEV_DEMO_` para homologação visual das telas.
+
+- Só executa se `DATABASE_URL` aponta para `localhost` / `127.0.0.1` / `::1`.
+- Idempotente: reutiliza registros existentes com o mesmo prefixo.
+- Não apaga dados fora do prefixo `DEV_DEMO_`.
+- Para rodar: `python scripts/seed_demo_dev.py`
+
 ### Playwright E2E como padrão de validação
 
 Playwright E2E será adotado como padrão obrigatório de Validação progressiva dos próximos MVPs. O objetivo é testar fluxos reais em navegador antes de avançar em interface, Segurança, mobile e banco.

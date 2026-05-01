@@ -60,6 +60,16 @@ python backend/app.py
 http://localhost:5000
 ```
 
+### 7. Popular com dados de demonstração (opcional)
+
+Para homologação visual das telas, crie dados fictícios com prefixo `DEV_DEMO_`:
+
+```bash
+python scripts/seed_demo_dev.py
+```
+
+Só roda em ambiente local (rejeita `DATABASE_URL` remota). É idempotente.
+
 ---
 
 ## Uso Diário

@@ -204,6 +204,14 @@ Foram arquivados em `migrations/legacy_sqlite/` os scripts custom de `backend/mi
 
 Os scripts de `scripts/debug/` foram preservados no local e documentados como diagnósticos manuais/legados, não como caminho oficial de migration. Nenhum banco foi alterado, nenhuma migration foi executada e a fonte oficial permanece `migrations/versions/dd1a552aec6a_baseline_inicial_schema_completo.py` e migrations futuras.
 
+## MVP DEV-SEED-1 — Massa de Demonstração para Homologação Visual (2026-05-01)
+
+O DEV-SEED-1 criou o script `scripts/seed_demo_dev.py` para popular o banco local com dados fictícios identificados pelo prefixo `DEV_DEMO_`.
+
+O seed cria: 8 categorias, 1 conta bancária (R$5.000), 1 fonte de receita com orçamento e receita realizada (R$8.000), 1 cartão com 3 categorias internas e 5 lançamentos (incluindo compra parcelada 3x), 4 itens de despesa (Internet R$120, Diarista R$220, Consulta Médica R$300 e Conta de Luz R$280 — sendo esta última paga).
+
+O script é idempotente, só roda em `DATABASE_URL` local e não apaga dados fora do prefixo `DEV_DEMO_`.
+
 ---
 
 ## Backlog — Próximas fases
