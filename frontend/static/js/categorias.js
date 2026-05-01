@@ -5,6 +5,14 @@
 const API_URL = '/api/categorias';
 let categoriaEditando = null;
 
+function categoriasIcon(nome) {
+    const icons = {
+        edit: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19h4L19 9a2.1 2.1 0 0 0-3-3L6 16l-1 3Z"/><path d="M14 6l4 4"/></svg>',
+        remove: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v5"/><path d="M14 11v5"/></svg>'
+    };
+    return icons[nome] || '';
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     carregarCategorias();
 
@@ -35,36 +43,46 @@ async function carregarCategorias() {
             lista.innerHTML = `
                 <div class="empty-state">
                     <h3>Nenhuma categoria cadastrada</h3>
-                    <p>Clique em "Nova Categoria" para começar</p>
+                    <p>Clique em "Nova Categoria" para comecar</p>
                 </div>
             `;
             return;
         }
 
-        lista.innerHTML = categorias.map((categoria) => `
-            <div class="categoria-row">
-                <div class="col-descricao">
-                    <div class="titulo">
+        const linhas = categorias.map((categoria) => `
+            <div class="compact-row categoria-row categorias-compact-row">
+                <div class="compact-cell col-descricao">
+                    <span class="titulo">
                         <span class="categoria-dot" style="background-color: ${categoria.cor}" aria-hidden="true"></span>
                         <span class="categoria-nome-texto">${categoria.nome}</span>
-                    </div>
-                    ${categoria.descricao ? `<div class="subtitulo">${categoria.descricao}</div>` : ''}
+                    </span>
                 </div>
-
-                <div class="col-fill"></div>
-
-                <div class="col-direita">
-                    <span class="status ${categoria.ativo ? 'status-ativo' : 'status-inativo'}">
+                <div class="compact-cell compact-meta">
+                    ${categoria.descricao || '-'}
+                </div>
+                <div class="compact-cell">
+                    <span class="compact-pill status ${categoria.ativo ? 'status-ativo' : 'status-inativo'}">
                         ${categoria.ativo ? 'Ativa' : 'Inativa'}
                     </span>
-
-                    <div class="acoes">
-                        <button class="btn-icon" onclick="editarCategoria(${categoria.id})" title="Editar">✏️</button>
-                        <button class="btn-icon btn-danger" onclick="confirmarDeletar(${categoria.id}, ${JSON.stringify(categoria.nome)})" title="Excluir">❌</button>
-                    </div>
+                </div>
+                <div class="compact-cell compact-actions acoes">
+                    <button class="btn-icon" onclick="editarCategoria(${categoria.id})" title="Editar">${categoriasIcon('edit')}</button>
+                    <button class="btn-icon btn-danger" onclick="confirmarDeletar(${categoria.id}, ${JSON.stringify(categoria.nome)})" title="Excluir">${categoriasIcon('remove')}</button>
                 </div>
             </div>
         `).join('');
+
+        lista.innerHTML = `
+            <div class="compact-table categorias-compact-table">
+                <div class="compact-table-header categorias-compact-row">
+                    <div>Categoria</div>
+                    <div>Descricao</div>
+                    <div>Status</div>
+                    <div class="compact-actions">Acoes</div>
+                </div>
+                ${linhas}
+            </div>
+        `;
     } catch (error) {
         console.error('Erro ao carregar categorias:', error);
         lista.innerHTML = '<p class="empty-state">Erro ao carregar categorias. Por favor, tente novamente.</p>';
@@ -155,7 +173,7 @@ async function salvarCategoria(event) {
 }
 
 function confirmarDeletar(id, nome) {
-    if (confirm(`Tem certeza que deseja deletar a categoria "${nome}"?\n\nEsta ação não pode ser desfeita.`)) {
+    if (confirm(`Tem certeza que deseja deletar a categoria "${nome}"?\n\nEsta acao nao pode ser desfeita.`)) {
         deletarCategoria(id);
     }
 }
@@ -187,4 +205,3 @@ window.onclick = function(event) {
         fecharModal();
     }
 };
-

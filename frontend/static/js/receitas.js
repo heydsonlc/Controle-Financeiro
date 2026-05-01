@@ -318,8 +318,9 @@ function renderizarReceitasMes(listaReceitas, anoMes) {
         return;
     }
 
-    lista.innerHTML = listaReceitas.map(r => {
+    const linhas = listaReceitas.map(r => {
         const statusClass = r.status === 'REALIZADA' ? 'status-realizada' : 'status-prevista';
+        const tipoTexto = r.tipo ? String(r.tipo).replaceAll('_', ' ') : 'Receita';
 
         const podeEditarRealizada = r.status === 'REALIZADA' && r.realizada_id && r.realizadas_count === 1;
         const podeExcluirRealizada = r.status === 'REALIZADA' && r.realizada_id && r.realizadas_count === 1;
@@ -342,23 +343,38 @@ function renderizarReceitasMes(listaReceitas, anoMes) {
 
         // Mantém sempre 3 botões no DOM (para não "pular" alinhamento). Em REALIZADA, o ✅ fica desabilitado.
         const acoes = (r.status === 'REALIZADA')
-            ? `<div class="acoes">${botaoEditar}${botaoExcluir}<button class="btn-icon btn-consolidar-icon" title="Consolidar" disabled>${receitasIcon('check')}</button></div>`
-            : `<div class="acoes">${botaoEditar}${botaoExcluir}${botaoConsolidar}</div>`;
+            ? `<div class="acoes compact-actions">${botaoEditar}${botaoExcluir}<button class="btn-icon btn-consolidar-icon" title="Consolidar" disabled>${receitasIcon('check')}</button></div>`
+            : `<div class="acoes compact-actions">${botaoEditar}${botaoExcluir}${botaoConsolidar}</div>`;
 
         return `
-            <div class="linha-receita linha-receita-mes">
-                <div class="col-descricao">
-                    <div class="titulo">${r.descricao}</div>
-                    <div class="subtitulo">${r.sub} <span class="status ${statusClass}">${r.status}</span></div>
+            <div class="compact-row linha-receita linha-receita-mes receitas-compact-row">
+                <div class="compact-cell col-descricao">
+                    <span class="titulo">${r.descricao}</span>
                 </div>
-                <div class="col-fill"></div>
-                <div class="col-valor">
-                    <span class="valor">${formatarMoeda(r.valor)}</span>
-                    ${acoes}
+                <div class="compact-cell compact-meta">${r.sub}</div>
+                <div class="compact-cell compact-meta">${tipoTexto}</div>
+                <div class="compact-cell">
+                    <span class="compact-pill status ${statusClass}">${r.status}</span>
                 </div>
+                <div class="compact-cell compact-value valor">${formatarMoeda(r.valor)}</div>
+                <div class="compact-cell">${acoes}</div>
             </div>
         `;
     }).join('');
+
+    lista.innerHTML = `
+        <div class="compact-table receitas-compact-table">
+            <div class="compact-table-header receitas-compact-row">
+                <div>Fonte de Receita</div>
+                <div>Compet&ecirc;ncia</div>
+                <div>Tipo</div>
+                <div>Status</div>
+                <div class="compact-value">Valor</div>
+                <div class="compact-actions">A&ccedil;&otilde;es</div>
+            </div>
+            ${linhas}
+        </div>
+    `;
 }
 
 async function consolidarReceitaMes(itemReceitaId, valorPrevisto) {

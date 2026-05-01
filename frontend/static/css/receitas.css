@@ -205,12 +205,14 @@
     justify-content: flex-end;
 }
 
-/* Lista do mês: layout tipo despesas */
+/* Lista do mês: linha única */
 .linha-receita {
     display: flex;
     align-items: center;
-    padding: 8px 0;
+    gap: 10px;
+    padding: 9px 0;
     border-bottom: 1px solid #f1f3f5;
+    flex-wrap: nowrap;
 }
 
 .linha-receita .col-descricao {
@@ -218,29 +220,33 @@
     min-width: 0;
 }
 
+/* ocultar col-fill — não precisa de espaçador com flex */
 .linha-receita .col-fill {
-    flex: 1;
+    display: none;
 }
 
 .linha-receita .col-valor {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    min-width: 240px;
     gap: 8px;
     flex-shrink: 0;
-    margin-left: auto;
+    white-space: nowrap;
 }
 
 .linha-receita .valor {
     white-space: nowrap;
     font-weight: 600;
+    min-width: 90px;
+    text-align: right;
 }
 
 .linha-receita .acoes {
     display: flex;
-    gap: 6px;
+    gap: 4px;
     align-items: center;
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 /* Desktop: ações só no hover (igual despesas) */
@@ -336,6 +342,20 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.receitas-compact-table {
+    display: grid;
+}
+
+.receitas-compact-row {
+    grid-template-columns:
+        minmax(180px, 1.4fr)
+        minmax(140px, 1fr)
+        minmax(120px, 0.8fr)
+        minmax(100px, 0.7fr)
+        minmax(110px, 0.7fr)
+        minmax(104px, 0.5fr);
 }
 
 .status {

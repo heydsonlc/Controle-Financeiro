@@ -114,7 +114,7 @@
 }
 
 .col-fill {
-    flex: 1;
+    display: none;
 }
 
 .col-direita {

@@ -43,7 +43,7 @@
     </div>
 {% endblock %}
 {% block content %}
-<div class="container app-content-wide">
+<div class="container app-content-fluid">
         <main>
 
             <div class="info-text" style="background: #f5f5f7; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 0.9em; color: #6e6e73; border-left: 3px solid #007aff;">
@@ -67,9 +67,27 @@
             </div>
 
             <!-- Lista de despesas -->
-            <div class="despesas-lista" id="despesas-lista">
-                <p class="loading">Carregando despesas...</p>
-            </div>
+            <section class="module-data-section despesas-data-section">
+                <div class="section-title-row">
+                    <div class="section-title-main">
+                        <span class="section-title-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false">
+                                <path d="M8 6h13"/>
+                                <path d="M8 12h13"/>
+                                <path d="M8 18h13"/>
+                                <path d="M3 6h.01"/>
+                                <path d="M3 12h.01"/>
+                                <path d="M3 18h.01"/>
+                            </svg>
+                        </span>
+                        <h2 class="section-title-text">Lista de Despesas</h2>
+                    </div>
+                    <span class="section-title-meta">Agrupadas por origem e tipo</span>
+                </div>
+                <div class="despesas-lista" id="despesas-lista">
+                    <p class="loading">Carregando despesas...</p>
+                </div>
+            </section>
         </main>
     </div>
 

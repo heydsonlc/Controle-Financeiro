@@ -6,25 +6,23 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/preferencias.css') }}">
 {% endblock %}
 
-{% block content %}
-    <div class="container">
-        <header>
-            <h1>Preferências e Configurações Gerais</h1>
-            <nav class="breadcrumb">
-                <a href="/">Dashboard</a> / <a href="/configuracoes">Configurações</a> / <span>Preferências</span>
-            </nav>
-        </header>
-
-        <main>
-            <!-- Tabs de Navegação -->
-            <div class="tabs">
-                <button class="tab-button active" onclick="mostrarAba('dados-pessoais')">Dados Pessoais</button>
-                <button class="tab-button" onclick="mostrarAba('comportamento')">Comportamento</button>
-                <button class="tab-button" onclick="mostrarAba('aparencia')">Aparência</button>
-                <button class="tab-button" onclick="mostrarAba('backup')">Backup</button>
-                <button class="tab-button" onclick="mostrarAba('ia')">IA e Automação</button>
+{% block action_bar %}
+    <div class="module-actionbar" aria-label="Navegação de Preferências">
+        <div class="module-actionbar-inner">
+            <div class="module-actionbar-tabs" role="tablist" aria-label="Seções de Preferências">
+                <button class="tab-button active" type="button" onclick="mostrarAba('dados-pessoais')">Dados Pessoais</button>
+                <button class="tab-button" type="button" onclick="mostrarAba('comportamento')">Comportamento</button>
+                <button class="tab-button" type="button" onclick="mostrarAba('aparencia')">Aparência</button>
+                <button class="tab-button" type="button" onclick="mostrarAba('backup')">Backup</button>
+                <button class="tab-button" type="button" onclick="mostrarAba('ia')">IA e Automação</button>
             </div>
+        </div>
+    </div>
+{% endblock %}
 
+{% block content %}
+    <div class="container app-content-fluid">
+        <main>
             <!-- ========================================== -->
             <!-- ABA 1: DADOS PESSOAIS                      -->
             <!-- ========================================== -->

@@ -63,7 +63,7 @@
 {% endblock %}
 
 {% block content %}
-    <div class="container app-content-wide">
+    <div class="container app-content-fluid">
         <main>
 
             <!-- Cards de Resumo -->
@@ -87,9 +87,24 @@
             </div>
 
             <!-- Lista Mensal (fluxo novo) -->
-            <div class="lista" id="mes-lista">
-                <p class="loading">Carregando receitas do mês...</p>
-            </div>
+            <section class="module-data-section">
+                <div class="section-title-row">
+                    <div class="section-title-main">
+                        <span class="section-title-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false">
+                                <path d="M4 7h16"/>
+                                <path d="M4 12h16"/>
+                                <path d="M4 17h10"/>
+                            </svg>
+                        </span>
+                        <h2 class="section-title-text">Receitas do M&ecirc;s</h2>
+                    </div>
+                    <span class="section-title-meta">Previsto, realizado e diferen&ccedil;a</span>
+                </div>
+                <div class="lista" id="mes-lista">
+                    <p class="loading">Carregando receitas do m&ecirc;s...</p>
+                </div>
+            </section>
         </main>
     </div>
 

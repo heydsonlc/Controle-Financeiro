@@ -52,14 +52,23 @@
 {% endblock %}
 
 {% block content %}
-    <div class="container app-content-wide">
+    <div class="container app-content-fluid">
         <main>
 
         <!-- Receitas Pendentes -->
-        <section class="receitas-pendentes-section">
-            <div class="section-header">
-                <h2>Receitas Pendentes de Confirmação</h2>
-                <p class="section-subtitle">Confirme o recebimento das receitas previstas para este mês</p>
+        <section class="receitas-pendentes-section module-data-section">
+            <div class="section-title-row">
+                <div class="section-title-main">
+                    <span class="section-title-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false">
+                            <path d="M4 7h16"/>
+                            <path d="M4 12h16"/>
+                            <path d="M4 17h10"/>
+                        </svg>
+                    </span>
+                    <h2 class="section-title-text">Receitas Pendentes de Confirma&ccedil;&atilde;o</h2>
+                </div>
+                <p class="section-title-meta section-subtitle">Confirme o recebimento das receitas previstas para este m&ecirc;s</p>
             </div>
 
             <div id="lista-receitas-pendentes" class="receitas-pendentes-grid">
@@ -68,10 +77,22 @@
         </section>
 
         <!-- Lista de Lançamentos -->
-        <section class="lancamentos-section">
-            <div class="section-header">
-                <h2>Histórico de Lançamentos</h2>
-                <div class="resumo-mes">
+        <section class="lancamentos-section module-data-section">
+            <div class="section-title-row">
+                <div class="section-title-main">
+                    <span class="section-title-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false">
+                            <path d="M8 6h13"/>
+                            <path d="M8 12h13"/>
+                            <path d="M8 18h13"/>
+                            <path d="M3 6h.01"/>
+                            <path d="M3 12h.01"/>
+                            <path d="M3 18h.01"/>
+                        </svg>
+                    </span>
+                    <h2 class="section-title-text">Hist&oacute;rico de Lan&ccedil;amentos</h2>
+                </div>
+                <div class="resumo-mes section-title-meta">
                     <span class="resumo-label">Total do mês:</span>
                     <span class="resumo-valor" id="total-mes">R$ 0,00</span>
                 </div>

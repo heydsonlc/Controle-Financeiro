@@ -135,6 +135,7 @@
 .tbl-lancamentos td.tbl-col-acoes {
     text-align: right;
     width: 72px;
+    white-space: nowrap;
 }
 
 .tbl-row {
@@ -234,11 +235,13 @@
 
 .lancamento-actions {
     display: flex;
-    gap: 8px;
+    gap: 4px;
     align-items: center;
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
-/* Botões de Ação - Estilo Minimalista */
+/* Botões de Ação */
 .btn-icon {
     background: transparent;
     border: none;
@@ -248,6 +251,10 @@
     border-radius: 6px;
     transition: all 0.2s;
     opacity: 0.6;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
 }
 
 .btn-icon:hover {

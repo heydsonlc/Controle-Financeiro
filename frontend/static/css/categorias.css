@@ -26,6 +26,18 @@
     background: #fafafa;
 }
 
+.categorias-compact-table {
+    display: grid;
+}
+
+.categorias-compact-row {
+    grid-template-columns:
+        minmax(180px, 1.2fr)
+        minmax(180px, 1.4fr)
+        minmax(96px, 0.6fr)
+        minmax(72px, 0.4fr);
+}
+
 .col-descricao {
     flex: 1;
     min-width: 0;

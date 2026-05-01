@@ -234,6 +234,14 @@ O UX-6B compactou o padrao visual das action bars ja aplicadas. Filtros passaram
 
 A mudanca foi limitada a `layout.css` e templates de action bar. Nenhum JavaScript funcional, backend, banco, regra financeira, cards, listagens, modais ou conteudo abaixo da action bar foi alterado. Em Despesas, a intervencao ficou restrita a action bar.
 
+## MVP UX-6C - Areas de informacao em grade full width (2026-05-01)
+
+O UX-6C padronizou as principais areas de informacao com paineis full width, cabecalhos de secao com icone discreto e suporte global a grades/listas compactas.
+
+Lancamentos permaneceu como referencia visual. Despesas recebeu apenas envelope de secao e largura fluida, preservando cards, dica, pagamentos, modais e listagem funcional. Receitas e Categorias tiveram apenas o HTML renderizado dinamicamente reorganizado para grade compacta, mantendo os mesmos handlers, APIs e regras.
+
+Em complemento, Configuracoes, Preferencias e Importar Cartao tambem passaram a usar action bar e conteudo fluido no padrao do shell. Preferencias manteve as abas existentes na faixa superior e Importar Cartao preservou o assistente de importacao.
+
 ---
 
 ## Backlog — Próximas fases

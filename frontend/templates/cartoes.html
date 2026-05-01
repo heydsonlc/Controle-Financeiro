@@ -22,13 +22,21 @@
 {% endblock %}
 
 {% block content %}
-    <div class="container">
+    <div class="container app-content-fluid">
         <main>
             <!-- View: Lista de Cartões (inicial) -->
             <div id="view-lista-cartoes" class="view-cartoes">
-                <div class="cartoes-container">
-                    <div class="cartoes-header">
-                        <h2>Meus Cartões</h2>
+                <div class="cartoes-container module-data-section">
+                    <div class="cartoes-header section-title-row">
+                        <div class="section-title-main">
+                            <span class="section-title-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false">
+                                    <rect x="3" y="5" width="18" height="14" rx="2"/>
+                                    <path d="M3 10h18"/>
+                                </svg>
+                            </span>
+                            <h2 class="section-title-text">Meus Cart&otilde;es</h2>
+                        </div>
                     </div>
                     <div id="lista-cartoes" class="cartoes-grid">
                         <p class="loading">Carregando cartões...</p>

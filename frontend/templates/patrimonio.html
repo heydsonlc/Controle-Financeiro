@@ -30,7 +30,7 @@
 {% endblock %}
 
 {% block content %}
-    <div class="container">
+    <div class="container app-content-fluid">
         <main>
             <!-- Tabs -->
             <div class="tabs">
@@ -53,17 +53,48 @@
                 </div>
 
                 <!-- Lista de Caixinhas -->
-                <div class="caixinhas-grid" id="caixinhas-lista">
-                    <p class="loading">Carregando caixinhas...</p>
-                </div>
+                <section class="module-data-section">
+                    <div class="section-title-row">
+                        <div class="section-title-main">
+                            <span class="section-title-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false">
+                                    <path d="M4 7h16"/>
+                                    <path d="M4 12h16"/>
+                                    <path d="M4 17h10"/>
+                                </svg>
+                            </span>
+                            <h2 class="section-title-text">Caixinhas</h2>
+                        </div>
+                        <span class="section-title-meta">Saldos, metas e a&ccedil;&otilde;es</span>
+                    </div>
+                    <div class="caixinhas-grid" id="caixinhas-lista">
+                        <p class="loading">Carregando caixinhas...</p>
+                    </div>
+                </section>
             </div>
 
             <!-- Aba: Transferências -->
             <div id="aba-transferencias" class="tab-content">
                 <!-- Lista de Transferências -->
-                <div class="transferencias-lista" id="transferencias-lista">
+                <section class="module-data-section">
+                    <div class="section-title-row">
+                        <div class="section-title-main">
+                            <span class="section-title-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false">
+                                    <path d="M7 7h10"/>
+                                    <path d="M14 4l3 3-3 3"/>
+                                    <path d="M17 17H7"/>
+                                    <path d="M10 14l-3 3 3 3"/>
+                                </svg>
+                            </span>
+                            <h2 class="section-title-text">Transfer&ecirc;ncias</h2>
+                        </div>
+                        <span class="section-title-meta">Movimenta&ccedil;&otilde;es entre caixinhas</span>
+                    </div>
+                    <div class="transferencias-lista" id="transferencias-lista">
                     <p class="loading">Carregando transferências...</p>
-                </div>
+                    </div>
+                </section>
             </div>
         </main>
     </div>

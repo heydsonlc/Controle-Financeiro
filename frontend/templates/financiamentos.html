@@ -44,7 +44,7 @@
 {% endblock %}
 
 {% block content %}
-    <div class="container">
+    <div class="container app-content-fluid">
         <main>
 
             <!-- Cards de Resumo -->
@@ -68,9 +68,24 @@
             </div>
 
             <!-- Lista de Financiamentos -->
-            <div class="lista" id="financiamentos-lista">
-                <p class="loading">Carregando financiamentos...</p>
-            </div>
+            <section class="module-data-section">
+                <div class="section-title-row">
+                    <div class="section-title-main">
+                        <span class="section-title-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false">
+                                <path d="M4 7h16"/>
+                                <path d="M4 12h16"/>
+                                <path d="M4 17h10"/>
+                            </svg>
+                        </span>
+                        <h2 class="section-title-text">Contratos de Financiamento</h2>
+                    </div>
+                    <span class="section-title-meta">Contratos, saldo e parcelas</span>
+                </div>
+                <div class="lista" id="financiamentos-lista">
+                    <p class="loading">Carregando financiamentos...</p>
+                </div>
+            </section>
         </main>
     </div>
 

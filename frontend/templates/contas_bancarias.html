@@ -35,7 +35,7 @@
 {% endblock %}
 
 {% block content %}
-    <div class="container">
+    <div class="container app-content-fluid">
         <main>
 
             <!-- Cards de Resumo -->
@@ -55,9 +55,24 @@
             </div>
 
             <!-- Lista de Contas -->
-            <div class="contas-lista" id="contas-lista">
-                <p class="loading">Carregando contas...</p>
-            </div>
+            <section class="module-data-section">
+                <div class="section-title-row">
+                    <div class="section-title-main">
+                        <span class="section-title-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false">
+                                <path d="M4 7h16"/>
+                                <path d="M4 12h16"/>
+                                <path d="M4 17h10"/>
+                            </svg>
+                        </span>
+                        <h2 class="section-title-text">Contas Banc&aacute;rias</h2>
+                    </div>
+                    <span class="section-title-meta">Saldo e a&ccedil;&otilde;es por conta</span>
+                </div>
+                <div class="contas-lista" id="contas-lista">
+                    <p class="loading">Carregando contas...</p>
+                </div>
+            </section>
         </main>
     </div>
 

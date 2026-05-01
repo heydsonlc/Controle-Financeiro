@@ -30,7 +30,7 @@
 {% endblock %}
 
 {% block content %}
-    <div class="container">
+    <div class="container app-content-fluid">
         <main>
             <p class="hint">
                 Projeção ≠ lançamento: as despesas abaixo são <strong>previstas</strong> e não criam despesas reais automaticamente.
@@ -45,9 +45,24 @@
                 <div class="mobilidade-resumo-valor">R$ 0,00 / mÃªs</div>
                 <div class="mobilidade-resumo-sub">(0 caminhos ativos)</div>
             </div>
-<div id="caminhos-lista" class="caminhos-grid">
-                <p class="loading">Carregando caminhos...</p>
-            </div>
+            <section class="module-data-section">
+                <div class="section-title-row">
+                    <div class="section-title-main">
+                        <span class="section-title-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false">
+                                <path d="M4 7h16"/>
+                                <path d="M4 12h16"/>
+                                <path d="M4 17h10"/>
+                            </svg>
+                        </span>
+                        <h2 class="section-title-text">Caminhos de Mobilidade</h2>
+                    </div>
+                    <span class="section-title-meta">Ve&iacute;culos, custos e transporte por app</span>
+                </div>
+                <div id="caminhos-lista" class="caminhos-grid">
+                    <p class="loading">Carregando caminhos...</p>
+                </div>
+            </section>
         </main>
     </div>
 

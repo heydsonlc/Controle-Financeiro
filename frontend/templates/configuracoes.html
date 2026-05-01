@@ -5,23 +5,7 @@
 {% block extra_css %}
     <style>
         main {
-            padding: 40px;
-        }
-
-        .breadcrumb {
-            margin-bottom: 24px;
-            font-size: 0.85em;
-            color: #6e6e73;
-        }
-
-        .breadcrumb a {
-            color: #007aff;
-            text-decoration: none;
-            transition: opacity 0.2s ease;
-        }
-
-        .breadcrumb a:hover {
-            opacity: 0.7;
+            padding: 0;
         }
 
         .config-intro {
@@ -85,36 +69,65 @@
     </style>
 {% endblock %}
 
-{% block content %}
-    <div class="container">
-        <header>
-            <h1>Configurações</h1>
-            <nav class="breadcrumb">
-                <a href="/">Dashboard</a> / <span>Configurações</span>
-            </nav>
-        </header>
-
-        <main>
-            <p class="config-intro">
-                Ajustes gerais do sistema, preferências de uso e parâmetros globais.
-                Os módulos operacionais e cadastros ficam disponíveis na navegação lateral.
-            </p>
-
-            <div class="config-grid">
-                <a href="/preferencias" class="config-card">
-                    <div class="config-title">Preferências do Sistema</div>
-                    <div class="config-description">
-                        Personalize aparência, comportamento, backup e preferências gerais da aplicação.
-                    </div>
+{% block action_bar %}
+    <div class="module-actionbar" aria-label="Ações de Configurações">
+        <div class="module-actionbar-inner">
+            <div class="module-actionbar-filters"></div>
+            <div class="module-actionbar-actions">
+                <a class="action-icon-button primary" href="/preferencias" title="Preferências" aria-label="Preferências">
+                    <span class="action-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z"/>
+                            <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3a2 2 0 1 1 4 0v.1A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 .6 1 1.7 1.7 0 0 0 1.1.4h.1a2 2 0 1 1 0 4h-.1A1.7 1.7 0 0 0 19.4 15Z"/>
+                        </svg>
+                    </span>
+                    <span class="action-button-label">Preferências</span>
                 </a>
+            </div>
+        </div>
+    </div>
+{% endblock %}
 
-                <div class="config-card planned" aria-label="Outras configurações planejadas">
-                    <div class="config-title">Outras configurações</div>
-                    <div class="config-description">
-                        Novos parâmetros sistêmicos serão adicionados aqui conforme o sistema evoluir.
+{% block content %}
+    <div class="container app-content-fluid">
+        <main>
+            <section class="module-data-section">
+                <div class="section-title-row">
+                    <div class="section-title-main">
+                        <span class="section-title-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false">
+                                <path d="M4 7h16"/>
+                                <path d="M4 12h16"/>
+                                <path d="M4 17h10"/>
+                            </svg>
+                        </span>
+                        <h2 class="section-title-text">Áreas de Configuração</h2>
+                    </div>
+                    <span class="section-title-meta">Preferências e parâmetros globais</span>
+                </div>
+                <div style="padding: 20px;">
+                    <p class="config-intro">
+                        Ajustes gerais do sistema, preferências de uso e parâmetros globais.
+                        Os módulos operacionais e cadastros ficam disponíveis na navegação lateral.
+                    </p>
+
+                    <div class="config-grid">
+                        <a href="/preferencias" class="config-card">
+                            <div class="config-title">Preferências do Sistema</div>
+                            <div class="config-description">
+                                Personalize aparência, comportamento, backup e preferências gerais da aplicação.
+                            </div>
+                        </a>
+
+                        <div class="config-card planned" aria-label="Outras configurações planejadas">
+                            <div class="config-title">Outras configurações</div>
+                            <div class="config-description">
+                                Novos parâmetros sistêmicos serão adicionados aqui conforme o sistema evoluir.
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
+            </section>
         </main>
     </div>
 {% endblock %}

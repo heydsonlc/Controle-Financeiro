@@ -366,6 +366,16 @@ O `layout.css` passou a usar filtros inline, com label antes do campo, controles
 
 Foram ajustadas as action bars de Dashboard, Receitas, Contas Bancarias, Lancamentos, Despesas, Financiamentos, Categorias, Patrimonio, Cartoes e Veiculos. Nenhum JavaScript funcional, backend, banco, regra financeira, modais, cards, listagens ou conteudo abaixo da action bar foi alterado.
 
+### Registro de implementacao - UX-6C
+
+O UX-6C consolidou o padrao de areas de informacao em grade full width para as telas principais com listagens.
+
+Foram criadas classes globais reutilizaveis para paineis de dados, cabecalhos de secao com icone discreto, linhas compactas, celulas, valores, pills e paginacao discreta. As telas Lancamentos, Despesas, Receitas, Contas Bancarias, Cartoes, Financiamentos, Patrimonio, Veiculos e Categorias passaram a usar wrappers de conteudo `app-content-fluid` e secoes `module-data-section` quando aplicavel.
+
+As renderizacoes dinamicas de Receitas e Categorias foram ajustadas apenas no HTML visual gerado, preservando handlers, chamadas de API e regras de negocio. Despesas permaneceu sem alteracao de regra, pagamento, modais ou fluxo funcional.
+
+Complemento do UX-6C aplicou o mesmo padrao estrutural em Configuracoes, Preferencias e Importar Cartao: action bar, conteudo `app-content-fluid` e paineis alinhados ao shell. Preferencias manteve as abas e Importar Cartao manteve o fluxo de assistente sem alterar APIs ou JavaScript funcional.
+
 ## 9. Regras de Preservação
 
 A reestruturação visual deve preservar integralmente:
