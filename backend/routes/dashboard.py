@@ -42,6 +42,14 @@ def decimal_to_float(value):
     return float(value) if isinstance(value, Decimal) else value
 
 
+def _filtro_conta_nao_fatura_cartao():
+    """Restringe consultas gerais de Conta para nao misturar faturas de cartao."""
+    return db.or_(
+        Conta.is_fatura_cartao == False,
+        Conta.is_fatura_cartao.is_(None)
+    )
+
+
 def _deslocar_mes(ano, mes, delta):
     """
     Desloca um par (ano, mes) em `delta` meses.
@@ -238,10 +246,7 @@ def calcular_despesas_mes(mes, ano):
     despesas_comuns = db.session.query(func.sum(Conta.valor)).filter(
         extract('month', Conta.mes_referencia) == mes,
         extract('year', Conta.mes_referencia) == ano,
-        db.or_(
-            Conta.is_fatura_cartao == False,
-            Conta.is_fatura_cartao.is_(None)
-        )
+        _filtro_conta_nao_fatura_cartao()
     ).scalar() or 0
 
     # Faturas de cartão
@@ -355,14 +360,16 @@ def indicadores():
             inicio_ref, fim_ref = _periodo_mes(ano_atual, mes_atual)
             gastos_pendentes = db.session.query(func.count(Conta.id)).filter(
                 Conta.data_vencimento.between(inicio_ref, fim_ref),
-                Conta.status_pagamento == 'Pendente'
+                Conta.status_pagamento == 'Pendente',
+                _filtro_conta_nao_fatura_cartao()
             ).scalar() or 0
         else:
             hoje = date.today()
             proximos_7_dias = hoje + timedelta(days=7)
             gastos_pendentes = db.session.query(func.count(Conta.id)).filter(
                 Conta.data_vencimento.between(hoje, proximos_7_dias),
-                Conta.status_pagamento == 'Pendente'
+                Conta.status_pagamento == 'Pendente',
+                _filtro_conta_nao_fatura_cartao()
             ).scalar() or 0
 
         # 3. FATURAS DE CARTÃO PENDENTES (mês atual)
@@ -442,6 +449,7 @@ def grafico_categorias():
         ).filter(
             extract('month', Conta.mes_referencia) == mes_atual,
             extract('year', Conta.mes_referencia) == ano_atual,
+            _filtro_conta_nao_fatura_cartao(),
             Categoria.id.isnot(None)  # Apenas contas com categoria
         ).group_by(
             Categoria.id, Categoria.nome, Categoria.cor
@@ -606,7 +614,8 @@ def alertas():
             Categoria, ItemDespesa.categoria_id == Categoria.id
         ).filter(
             Conta.data_vencimento.between(data_inicio_alerta, data_fim_alerta),
-            Conta.status_pagamento == 'Pendente'
+            Conta.status_pagamento == 'Pendente',
+            _filtro_conta_nao_fatura_cartao()
         ).order_by(Conta.data_vencimento).limit(10).all()
 
         # 2. FATURAS DE CARTÃO PENDENTES (mês atual)
