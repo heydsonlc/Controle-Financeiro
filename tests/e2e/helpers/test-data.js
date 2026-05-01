@@ -19,4 +19,18 @@ function makeFonteNome() {
   return `TESTE_E2E_Fonte_${timestamp()}`;
 }
 
-module.exports = { makeCategoriaNome, makeContaNome, makeFonteNome };
+function makeVeiculoNome() {
+  return `TESTE_E2E_Veiculo_${timestamp()}`;
+}
+
+function makeCaixinhaNome() {
+  return `TESTE_E2E_Caixinha_${timestamp()}`;
+}
+
+module.exports = {
+  makeCategoriaNome,
+  makeContaNome,
+  makeFonteNome,
+  makeVeiculoNome,
+  makeCaixinhaNome
+};

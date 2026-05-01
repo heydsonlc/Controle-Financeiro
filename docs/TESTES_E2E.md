@@ -173,6 +173,42 @@ Testes que criam dados chamam `ensureTestingEnvironment(request)` como primeira 
 - 3 testes de criação: **falham intencionalmente** com erro `[TEST-2A] Servidor está em ambiente 'development'...`.
 - Para passar todos os 6: parar o servidor de desenvolvimento antes de rodar `npm run test:e2e:functional`.
 
+## TEST-2B - Testes Funcionais Complementares
+
+MVP TEST-2B ampliou a cobertura funcional em fluxos de baixo/médio risco, sem alterar a aplicação e sem tocar em banco real.
+
+### Módulos cobertos
+
+- **Veículos** (`tests/e2e/functional/veiculos.spec.js`)
+- **Patrimônio / Caixinhas** (`tests/e2e/functional/patrimonio.spec.js`)
+
+### Fluxos por módulo (2 testes cada)
+
+1. Abre o modal principal da tela a partir da action bar, sem criar dados.
+2. Cria um registro simples com nome prefixado `TESTE_E2E_` + timestamp e confirma que aparece na lista.
+
+### Regra de ambiente
+
+Os testes de criação usam `skipUnlessTestingEnvironment(test, request, 'TEST-2B')` antes de qualquer mutação. Se o Playwright reutilizar um servidor em `development`, a criação é marcada como skipped de forma explícita para evitar gravação em PostgreSQL local ou qualquer banco fora de `testing`.
+
+### Cautelas aplicadas
+
+- Veículos cria apenas um veículo `SIMULADO`, com campos obrigatórios mínimos, sem testar manutenção, financiamento, transporte por app, simulação ou exclusão.
+- Patrimônio cria apenas uma caixinha com saldo inicial zero, sem testar transferências, inativação, ajustes de saldo, metas complexas ou exclusão.
+- Patrimônio entrou no TEST-2B porque `frontend/static/js/patrimonio.js` já usa API relativa `/api/patrimonio`.
+
+### Fora do escopo do TEST-2B
+
+- Despesas;
+- Cartões;
+- Financiamentos;
+- Lançamentos;
+- pagamentos/baixas;
+- transferências patrimoniais;
+- Importar Cartão/CSV;
+- login/mobile;
+- exclusões.
+
 ## Próximos Testes Planejados
 
 - sidebar/topbar após UX-1A;
@@ -182,5 +218,4 @@ Testes que criam dados chamam `ensureTestingEnvironment(request)` como primeira 
 - abertura do modal de pagamento;
 - baixa de despesa;
 - filtros de Competência;
-- URL hardcoded em `patrimonio.js` (fix necessário antes de testar Patrimônio);
 - regressões visuais e funcionais por módulo.
