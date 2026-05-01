@@ -188,6 +188,135 @@
 .despesas-lista {
     display: grid;
     gap: 0;
+    overflow-x: auto;
+}
+
+.despesas-grade {
+    width: 100%;
+    min-width: 1120px;
+    background: #ffffff;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.despesas-grade-header,
+.despesa-linha-principal {
+    display: grid;
+    grid-template-columns: 92px minmax(260px, 1fr) 118px 112px 116px minmax(160px, 230px) 124px 104px;
+    align-items: center;
+    column-gap: 10px;
+}
+
+.despesas-grade-header {
+    min-height: 38px;
+    padding: 0 10px;
+    background: #f6f6f8;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    color: #1d1d1f;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.despesas-grade-header > div {
+    text-align: center;
+}
+
+.despesas-grupo-titulo {
+    margin: 0;
+    padding: 16px 12px 8px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.despesa-cell {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 13px;
+    color: #1d1d1f;
+}
+
+.despesa-cell-descricao {
+    justify-content: flex-start;
+    text-align: left;
+}
+
+.despesa-cell-categoria {
+    gap: 5px;
+}
+
+.despesa-cell-valor {
+    justify-content: flex-end;
+    text-align: right;
+    font-weight: 600;
+}
+
+.despesa-cell-acoes {
+    justify-content: center;
+}
+
+.despesa-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 22px;
+    padding: 2px 8px;
+    border-radius: 7px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    background: #f7f7f8;
+    color: #1d1d1f;
+    font-size: 11px;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.despesa-pill-inline {
+    margin-left: 6px;
+}
+
+.despesa-muted {
+    color: #a1a1a6;
+}
+
+.despesa-icon-inline {
+    display: inline-flex;
+    align-items: center;
+    color: #6e6e73;
+}
+
+.despesa-row-group .despesa-linha-principal {
+    background: #fbfbfc;
+    font-weight: 600;
+}
+
+.despesa-row-child .despesa-linha-principal {
+    background: #fcfcfd;
+}
+
+.despesa-row-child .despesa-cell-descricao {
+    padding-left: 20px;
+}
+
+.despesa-child-marker {
+    position: relative;
+}
+
+.despesa-child-marker::before {
+    content: '';
+    position: absolute;
+    left: -14px;
+    top: 50%;
+    width: 6px;
+    height: 1px;
+    background: #c7c7cc;
+}
+
+.agrupador-detalhes {
+    border-top: 1px solid rgba(0, 0, 0, 0.04);
 }
 
 .despesa-card {
@@ -1045,12 +1174,8 @@ body.mobile-view .breadcrumb {
 
 /* Linha principal - UMA ÚNICA LINHA horizontal */
 .despesa-linha-principal {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 9px 0;
-    min-height: auto;
-    flex-wrap: nowrap;
+    padding: 10px;
+    min-height: 54px;
 }
 
 /* Status badge */

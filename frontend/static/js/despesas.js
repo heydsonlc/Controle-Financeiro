@@ -383,26 +383,37 @@ function renderizarAgrupadorSemanal(agrupador, index) {
     const descricaoAgrupada = `${agrupador.nome} — ${competencia} — ${totais.pagas}/${totais.total_ocorrencias}`;
 
     return `
-        <div class="despesa-card despesa-card-padrao ${statusClass} tipo-recorrente agrupador-semanal" data-agrupador-index="${index}">
+        <div class="despesa-card despesa-card-padrao despesa-row-group ${statusClass} tipo-recorrente agrupador-semanal" data-agrupador-index="${index}">
             <div class="despesa-linha-principal">
-                <div class="despesa-status">
+                <div class="despesa-cell despesa-cell-status despesa-status">
                     <span class="status-badge status-badge-${statusClass}">${statusTexto}</span>
                 </div>
 
-                <div class="despesa-descricao">
+                <div class="despesa-cell despesa-cell-descricao despesa-descricao">
                     ${descricaoAgrupada}
                 </div>
 
-                <div class="despesa-meta">
-                    <span class="meta-tipo tipo-recorrente">Recorrente</span>
-                    ${categoria ? `<span class="meta-categoria">${categoriaNome}</span>` : ''}
+                <div class="despesa-cell despesa-cell-vencimento">
+                    <span class="despesa-muted">&mdash;</span>
                 </div>
 
-                <div class="despesa-valor-principal">
+                <div class="despesa-cell despesa-cell-competencia">
+                    ${competencia || '<span class="despesa-muted">&mdash;</span>'}
+                </div>
+
+                <div class="despesa-cell despesa-cell-tipo">
+                    <span class="despesa-pill tipo-recorrente">Recorrente</span>
+                </div>
+
+                <div class="despesa-cell despesa-cell-categoria">
+                    ${categoriaNome}
+                </div>
+
+                <div class="despesa-cell despesa-cell-valor despesa-valor-principal">
                     R$ ${totais.valor_total.toFixed(2).replace('.', ',')}
                 </div>
 
-                <div class="row-actions despesa-actions">
+                <div class="despesa-cell despesa-cell-acoes row-actions despesa-actions">
                     <button class="row-action-button success" onclick="pagarTodasOcorrencias(${index})" title="${todasPagas ? 'Todas ocorrências já pagas' : 'Pagar todas as ocorrências pendentes'}" aria-label="${todasPagas ? 'Todas ocorrências já pagas' : 'Pagar todas as ocorrências pendentes'}" ${todasPagas ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''}>
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="20 6 9 17 4 12"></polyline>
@@ -432,6 +443,56 @@ function renderizarOcorrenciaIndividual(despesa) {
     const statusClass = pagoFlag ? 'pago' : 'pendente';
     const statusTexto = pagoFlag ? 'Pago' : 'Pendente';
     const cancelada = despesa.cancelada || false;
+    const categoria = despesa.categoria || (despesa.categoria_id ? categorias.find(c => c.id === despesa.categoria_id) : null);
+    const categoriaNome = categoria ? categoria.nome : 'Sem categoria';
+    const competencia = despesa.mes_competencia ? formatarCompetencia(despesa.mes_competencia) : '';
+    const vencimento = despesa.data_vencimento
+        ? new Date(despesa.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR')
+        : '';
+    const descricao = despesa.nome || despesa.descricao || 'Ocorrencia';
+
+    return `
+        <div class="despesa-card despesa-card-padrao despesa-row-child ocorrencia-item ${cancelada ? 'cancelada' : ''}">
+            <div class="despesa-linha-principal">
+                <div class="despesa-cell despesa-cell-status despesa-status">
+                    <span class="status-badge status-badge-${statusClass}">${cancelada ? 'Cancelado' : statusTexto}</span>
+                </div>
+
+                <div class="despesa-cell despesa-cell-descricao despesa-descricao">
+                    <span class="despesa-child-marker">${descricao}</span>
+                </div>
+
+                <div class="despesa-cell despesa-cell-vencimento">
+                    ${vencimento || '<span class="despesa-muted">&mdash;</span>'}
+                </div>
+
+                <div class="despesa-cell despesa-cell-competencia">
+                    ${competencia || '<span class="despesa-muted">&mdash;</span>'}
+                </div>
+
+                <div class="despesa-cell despesa-cell-tipo">
+                    <span class="despesa-pill tipo-recorrente">Ocorrencia</span>
+                </div>
+
+                <div class="despesa-cell despesa-cell-categoria">
+                    ${categoriaNome}
+                </div>
+
+                <div class="despesa-cell despesa-cell-valor despesa-valor-principal">
+                    R$ ${parseFloat(despesa.valor).toFixed(2).replace('.', ',')}
+                </div>
+
+                <div class="despesa-cell despesa-cell-acoes row-actions despesa-actions">
+                    <button class="row-action-button success" onclick="marcarComoPago(${despesa.id})" title="${pagoFlag ? 'JÃ¡ pago' : 'Marcar como pago'}" aria-label="${pagoFlag ? 'JÃ¡ pago' : 'Marcar como pago'}" ${pagoFlag ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                    </button>
+                    <button class="row-action-button" onclick="editarDespesa(${despesa.id})" title="Editar" aria-label="Editar">${despesasIcon('edit')}</button>
+                </div>
+            </div>
+        </div>
+    `;
 
     return `
         <div class="ocorrencia-item ${cancelada ? 'cancelada' : ''}" style="padding: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
@@ -642,6 +703,15 @@ function renderizarDespesas(despesasParaRenderizar) {
 
         // Competência formatada
         const competencia = despesa.mes_competencia ? formatarCompetencia(despesa.mes_competencia) : '';
+        const vencimento = despesa.data_vencimento
+            ? new Date(despesa.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR')
+            : '';
+        const origemTexto = isFaturaCartao
+            ? 'Cartao de Credito'
+            : (despesa.financiamento_parcela_id != null ? 'Financiamentos' : categoriaNome);
+        const categoriaHtml = isFaturaCartao
+            ? `${origemTexto}${despesa.status_fatura ? `<span class="despesa-pill despesa-pill-inline">${despesa.status_fatura}</span>` : ''}`
+            : `${categoriaIconeHtml ? `<span class="despesa-icon-inline">${categoriaIconeHtml}</span>` : ''}${origemTexto}${meioPageIconeHtml ? `<span class="despesa-icon-inline" title="${despesa.meio_pagamento}">${meioPageIconeHtml}</span>` : ''}`;
 
         // Ações disponíveis
         const acoesHTML = isFaturaCartao ? `
@@ -677,6 +747,57 @@ function renderizarDespesas(despesasParaRenderizar) {
         `);
 
         // Layout padronizado para TODAS as despesas
+        return `
+            <div class="despesa-card despesa-card-padrao ${statusClass} ${tipoClass}" data-despesa-id="${despesa.id}">
+                <div class="despesa-linha-principal">
+                    <div class="despesa-cell despesa-cell-status despesa-status">
+                        <span class="status-badge status-badge-${statusClass}">${statusTexto}</span>
+                    </div>
+
+                    <div class="despesa-cell despesa-cell-descricao despesa-descricao">
+                        ${despesa.nome}
+                    </div>
+
+                    <div class="despesa-cell despesa-cell-vencimento">
+                        ${vencimento || '<span class="despesa-muted">&mdash;</span>'}
+                    </div>
+
+                    <div class="despesa-cell despesa-cell-competencia">
+                        ${competencia || '<span class="despesa-muted">&mdash;</span>'}
+                    </div>
+
+                    <div class="despesa-cell despesa-cell-tipo">
+                        <span class="despesa-pill ${tipoClass}">${tipoTexto}</span>
+                    </div>
+
+                    <div class="despesa-cell despesa-cell-categoria">
+                        ${categoriaHtml}
+                    </div>
+
+                    <div class="despesa-cell despesa-cell-valor despesa-valor-principal">
+                        R$ ${valorDespesa.toFixed(2).replace('.', ',')}
+                    </div>
+
+                    <div class="despesa-cell despesa-cell-acoes">
+                        ${acoesHTML}
+                    </div>
+                </div>
+
+                ${isFaturaCartao ? `
+                    <div class="fatura-detalhes" id="fatura-detalhes-${despesa.id}" style="display: none;">
+                        <div class="loading-detalhes">Carregando detalhes...</div>
+                    </div>
+                ` : ''}
+
+                ${despesa.descricao && !isFaturaCartao && despesa.financiamento_parcela_id == null ? `
+                    <div class="despesa-linha-detalhes">
+                        <span class="despesa-obs">${despesa.descricao}</span>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+
+        // Layout legado mantido sem uso abaixo.
         // Estrutura: [Status] Descrição | Competência | Tipo | Valor
         return `
             <div class="despesa-card despesa-card-padrao ${statusClass} ${tipoClass}" data-despesa-id="${despesa.id}">
@@ -732,7 +853,19 @@ function renderizarDespesas(despesasParaRenderizar) {
         grupos[g].push({ despesa, indexOriginal });
     });
 
-    const partesHTML = [];
+    const partesHTML = [`
+        <div class="despesas-grade">
+            <div class="despesas-grade-header">
+                <div>Pagamento</div>
+                <div>Descri&ccedil;&atilde;o</div>
+                <div>Vencimento</div>
+                <div>Compet&ecirc;ncia</div>
+                <div>Tipo</div>
+                <div>Categoria / Origem</div>
+                <div>Valor</div>
+                <div>A&ccedil;&otilde;es</div>
+            </div>
+    `];
     ORDEM_GRUPOS.forEach(g => {
         const itens = grupos[g] || [];
         if (!itens.length) return;
@@ -746,6 +879,8 @@ function renderizarDespesas(despesasParaRenderizar) {
             partesHTML.push(renderizarCardDespesa(despesa));
         });
     });
+
+    partesHTML.push('</div>');
 
     lista.innerHTML = partesHTML.join('');
 }

@@ -123,17 +123,24 @@
     color: #6e6e73;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    text-align: left;
+    text-align: center;
 }
 
-.tbl-lancamentos th.tbl-col-valor,
-.tbl-lancamentos td.tbl-col-valor {
-    text-align: right;
+.tbl-lancamentos th.tbl-col-desc {
+    text-align: center;
+}
+
+.tbl-lancamentos td {
+    text-align: center;
+}
+
+.tbl-lancamentos td.tbl-col-desc {
+    text-align: left;
 }
 
 .tbl-lancamentos th.tbl-col-acoes,
 .tbl-lancamentos td.tbl-col-acoes {
-    text-align: right;
+    text-align: center;
     width: 72px;
     white-space: nowrap;
 }
@@ -712,4 +719,3 @@
     background: #f59e0b;
     color: white;
 }
-
