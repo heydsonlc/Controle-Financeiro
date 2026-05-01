@@ -241,6 +241,16 @@ As ações globais "Nova Caixinha" e "Nova Transferência" foram movidas para a 
 
 Não houve alteração de JavaScript funcional, CSS de módulo, lógica patrimonial, API, banco ou regras financeiras.
 
+### Registro de implementação - UX-3B-5
+
+O UX-3B-5 avaliou telas médias para expansão da faixa de ações.
+
+A tela Lançamentos (`/lancamentos`) recebeu a `action_bar` com a ação global "Novo Lançamento", reaproveitando o mesmo fluxo de abertura do modal existente. Filtros, receitas pendentes, confirmação de recebimento, histórico, edição, exclusão e modais permaneceram nos locais originais.
+
+Preferências (`/preferencias`) foi preservada sem `action_bar` neste lote porque as ações de salvar dependem da aba ativa e há ações de backup/reset/importação com contexto específico. Importar Cartão (`/importar-cartao`) também foi preservada sem `action_bar` por funcionar como wizard por etapas, onde os botões devem permanecer dentro de cada passo.
+
+Não houve alteração de JavaScript funcional, CSS de módulo, lógica financeira, API, banco ou regras financeiras.
+
 ### MVP UX-4 - Padronização visual dos ícones e estados
 
 Objetivo: uniformizar ícones, cores, tamanhos, estados ativos e hover.

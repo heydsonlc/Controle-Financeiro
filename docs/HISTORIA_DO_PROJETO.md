@@ -134,6 +134,12 @@ A tela Patrimônio passou a usar a `action_bar` para as ações globais "Nova Ca
 
 Abas, caixinhas, transferências, saldos, metas, edição, inativação e remoção permaneceram nos seus contextos originais. Não houve alteração de lógica patrimonial, APIs, JavaScript funcional, banco de dados ou regras financeiras.
 
+## MVP UX-3B-5 — Faixa de ações em telas médias (2026-04-30)
+
+A tela Lançamentos passou a usar a `action_bar` para a ação global "Novo Lançamento", mantendo o mesmo modal e fluxo existente.
+
+Filtros, receitas pendentes, confirmação de recebimento, histórico, edição, exclusão e modais permaneceram nos seus contextos originais. Preferências e Importar Cartão foram avaliadas e preservadas sem `action_bar` neste lote, por dependerem respectivamente de abas e de fluxo wizard por etapas.
+
 ---
 
 ## Backlog — Próximas fases

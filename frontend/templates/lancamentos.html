@@ -6,6 +6,26 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/lancamentos.css') }}">
 {% endblock %}
 
+{% block action_bar %}
+    <div class="module-actionbar" aria-label="Ações de Lançamentos">
+        <div class="module-actionbar-header">
+            <h2 class="module-actionbar-title">Lançamentos</h2>
+            <p class="module-actionbar-subtitle">Registre entradas, despesas diretas e lançamentos de cartão.</p>
+        </div>
+
+        <div class="module-actionbar-actions">
+            <button class="action-icon-button primary" id="btn-novo-lancamento" type="button" onclick="abrirModalLancamento()">
+                <span class="action-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M12 5v14M5 12h14"/>
+                    </svg>
+                </span>
+                <span class="action-button-label">Novo Lançamento</span>
+            </button>
+        </div>
+    </div>
+{% endblock %}
+
 {% block content %}
     <div class="container">
         <header>
@@ -16,12 +36,6 @@
         </header>
 
         <main>
-            <div class="actions-bar">
-                <button class="btn btn-primary" onclick="abrirModalLancamento()">
-                    Novo Lançamento
-                </button>
-            </div>
-
         <!-- Filtros -->
         <section class="filters-section">
             <div class="filters-grid">
