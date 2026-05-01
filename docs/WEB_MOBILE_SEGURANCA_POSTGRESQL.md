@@ -73,6 +73,17 @@ O baseline Alembic oficial foi gerado via banco temporário local vazio (`contro
 - migrations antigas (`migrations/versions_archived/pre_baseline_20260501_085449/`) foram arquivadas fora do scan ativo do Alembic;
 - para toda alteração de schema futura: `flask db migrate -m "descricao"` + `flask db upgrade`.
 
+### Arquivamento de migrations custom/SQLite (DB-3D — 2026-05-01)
+
+Scripts históricos fora da chain oficial foram arquivados em `migrations/legacy_sqlite/`.
+
+- `backend/migrations/` foi movido para `migrations/legacy_sqlite/backend_migrations/`;
+- scripts custom soltos em `migrations/*.py` foram movidos para `migrations/legacy_sqlite/custom_scripts/`;
+- `backend/add_taxa_adm_column.py` foi arquivado junto aos scripts legados;
+- `scripts/debug/*.py` foram preservados no local e documentados como debug manual/legado, não como fluxo oficial de schema.
+
+Esses arquivos não devem ser executados no fluxo atual. Podem conter `sqlite3`, `PRAGMA`, `sqlite_master`, caminhos `data/gastos.db`/`financeiro.db`, `ALTER TABLE` manual ou comandos destrutivos. A fonte oficial para evolução futura permanece em `migrations/versions/`, iniciando por `dd1a552aec6a`.
+
 ### Playwright E2E como padrão de validação
 
 Playwright E2E será adotado como padrão obrigatório de Validação progressiva dos próximos MVPs. O objetivo é testar fluxos reais em navegador antes de avançar em interface, Segurança, mobile e banco.

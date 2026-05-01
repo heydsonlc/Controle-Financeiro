@@ -158,7 +158,7 @@ Cada pixel tem propósito.
 
 - **Backend**: Python (Flask) + SQLAlchemy
 - **Frontend**: Vanilla JavaScript + Jinja2
-- **Database**: PostgreSQL local como direção oficial de desenvolvimento; SQLite permanece como legado/fallback temporário
+- **Database**: PostgreSQL local como banco oficial de desenvolvimento; SQLite permanece como legado/fallback temporário; Alembic é a fonte oficial de evolução de schema
 - **Charts**: Chart.js
 
 ## Roadmap Conceitual
@@ -205,7 +205,7 @@ Consulte:
 - `docs/WEB_MOBILE_SEGURANCA_POSTGRESQL.md` → Diretrizes web, mobile, segurança, PostgreSQL, dados descartáveis e Playwright E2E
 - `README_TECNICO.md` → Documentação técnica detalhada
 
-Documentação específica de testes E2E ainda não foi criada. Ela deve ser produzida no MVP TEST-1, quando Playwright for instalado/configurado.
+Para testes E2E, consulte `docs/TESTES_E2E.md`. Para evolução de schema, use Alembic/Flask-Migrate a partir do baseline `dd1a552aec6a`; scripts SQLite legados ficam arquivados em `migrations/legacy_sqlite/`.
 
 ### Princípio de ouro
 

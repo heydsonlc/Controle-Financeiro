@@ -1,6 +1,6 @@
 # 💰 Sistema de Controle Financeiro
 
-Sistema completo de controle de gastos financeiros desenvolvido com Flask e SQLite, preparado para migração futura para PostgreSQL.
+Sistema completo de controle de gastos financeiros desenvolvido com Flask, SQLAlchemy e PostgreSQL local como banco oficial de desenvolvimento. SQLite permanece apenas como fallback/legado/teste temporário, e Alembic/Flask-Migrate é a fonte oficial de evolução de schema.
 
 ## 📋 Índice
 
@@ -10,7 +10,7 @@ Sistema completo de controle de gastos financeiros desenvolvido com Flask e SQLi
 - [Instalação](#instalação)
 - [Uso](#uso)
 - [Estrutura do Projeto](#estrutura-do-projeto)
-- [Migração para Produção](#migração-para-produção)
+- [Produção Futura](#produção-futura-postgresql)
 
 ---
 
@@ -217,7 +217,7 @@ Sistema completo de visualização consolidada e configurações personalizávei
 - Schema corrigido e sincronizado com os modelos
 - Tabela `receita_realizada` com coluna `valor_recebido`
 - Migração de constraints com nomes explícitos
-- Database criado via `db.create_all()` para desenvolvimento
+- Histórico inicial usou `db.create_all()` em desenvolvimento; a evolução oficial de schema agora é Alembic, a partir do baseline `dd1a552aec6a`
 
 ### Integração Financiamentos → Despesas (Dezembro 2024)
 Sincronização automática entre parcelas de financiamento e despesas:
@@ -547,10 +547,11 @@ Orçamentos individuais: Cada cartão possui seu teto próprio
   - Criar ratios entre cartões
 
 **Migration:**
-- Script: [add_grupo_agregador.py](backend/migrations/add_grupo_agregador.py)
+- Histórico arquivado: `migrations/legacy_sqlite/backend_migrations/add_grupo_agregador.py`
 - Cria tabela `grupo_agregador`
 - Adiciona coluna `grupo_agregador_id` em `item_agregado`
 - Compatível com dados existentes (campo nullable)
+- Não executar o script legado no fluxo atual; alterações futuras devem passar por Alembic.
 
 **Casos de Uso:**
 1. **Casal com 2 cartões:**
@@ -749,8 +750,10 @@ Permite identificar economias ou gastos extras em relação ao planejado, facili
 - Flask-Migrate (Migrations)
 
 **Banco de Dados:**
-- **Desenvolvimento:** SQLite (local, arquivo `data/gastos.db`)
-- **Produção:** PostgreSQL (DigitalOcean)
+- **Desenvolvimento:** PostgreSQL local (`controle_financeiro_dev`) via `DATABASE_URL` em `.env.local`
+- **Testing:** SQLite em memória para isolamento automatizado
+- **Fallback legado:** SQLite local apenas quando `DATABASE_URL` não estiver definida
+- **Produção futura:** PostgreSQL remoto/DigitalOcean somente em `production`
 
 **Frontend:**
 - HTML5 + CSS3
@@ -758,7 +761,7 @@ Permite identificar economias ou gastos extras em relação ao planejado, facili
 
 ### Estrutura do Banco de Dados
 
-**18 Tabelas organizadas em 3 módulos:**
+O baseline Alembic oficial `dd1a552aec6a` cobre 29 tabelas do schema atual. A lista abaixo resume as tabelas principais documentadas historicamente.
 
 **Orçamento (11 tabelas):**
 1. `categoria` - Agrupador de despesas
@@ -826,14 +829,14 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Passo 4: Inicializar o Banco de Dados
+### Passo 4: Configurar Banco de Desenvolvimento
 
 ```bash
-# Apenas criar as tabelas
-python init_db.py
+# Configure .env.local com DATABASE_URL local
+DATABASE_URL=postgresql://controle_financeiro:***@localhost:5432/controle_financeiro_dev
 
-# Criar tabelas + dados de exemplo
-python init_db.py --sample
+# Conferir revision Alembic atual
+flask db current
 ```
 
 ---
@@ -874,7 +877,7 @@ controle-financeiro/
 ├── backend/                    # Backend da aplicação
 │   ├── app.py                 # Aplicação Flask principal
 │   ├── config.py              # Configurações por ambiente
-│   ├── models.py              # Modelos do banco (18 tabelas)
+│   ├── models.py              # Modelos do banco (baseline Alembic cobre 29 tabelas)
 │   ├── routes/                # Rotas da API
 │   │   ├── __init__.py
 │   │   ├── categorias.py     # ✅ CRUD de categorias
@@ -905,12 +908,13 @@ controle-financeiro/
 │   └── templates/
 │       └── index.html
 │
-├── data/                       # Banco de dados SQLite
-│   └── gastos.db              # (criado automaticamente)
+├── migrations/                 # Alembic/Flask-Migrate
+│   ├── versions/              # Baseline oficial e migrations futuras
+│   ├── versions_archived/     # Revisions Alembic antigas arquivadas
+│   └── legacy_sqlite/         # Scripts SQLite/custom históricos
 │
-├── tests/                      # Testes unitários
+├── tests/                      # Testes E2E/funcionais
 │
-├── init_db.py                 # Script de inicialização do BD
 ├── requirements.txt           # Dependências Python
 ├── .env.local                 # Config de desenvolvimento
 ├── .env.example               # Template de configuração
@@ -1043,9 +1047,9 @@ O sistema está sendo construído seguindo uma arquitetura modular com foco na e
 
 ---
 
-## 🌐 Migração para Produção (PostgreSQL)
+## 🌐 Produção Futura (PostgreSQL)
 
-### Quando o sistema estiver completo localmente:
+Produção futura deve usar PostgreSQL remoto apenas em ambiente `production`, com autenticação, `DEBUG=False`, HTTPS e configuração segura. Não use DigitalOcean em `development`.
 
 ### 1. Configurar Variáveis de Ambiente
 
@@ -1068,24 +1072,21 @@ pip install psycopg2-binary
 ### 3. Executar Migrations
 
 ```bash
-# Inicializar migrations (primeira vez)
-flask db init
+# Conferir revision atual
+flask db current
 
-# Criar migration
-flask db migrate -m "Initial migration"
-
-# Aplicar no PostgreSQL
+# Aplicar migrations pendentes no ambiente correto
 FLASK_ENV=production flask db upgrade
 ```
 
 ### 4. Deploy no DigitalOcean
 
-O código **não precisa ser alterado**! O SQLAlchemy abstrai a diferença entre SQLite e PostgreSQL.
+O deploy deve usar a mesma chain Alembic oficial já iniciada pelo baseline `dd1a552aec6a`. Não execute scripts SQLite/custom arquivados.
 
 Apenas:
-1. Configure as variáveis de ambiente
-2. Execute as migrations
-3. Inicie a aplicação
+1. Configure as variáveis de ambiente seguras.
+2. Execute `flask db current` e `flask db upgrade` no ambiente correto.
+3. Inicie a aplicação com `DEBUG=False`.
 
 ---
 
@@ -1099,14 +1100,11 @@ source venv/bin/activate  # Linux/Mac
 # Instalar dependências
 pip install -r requirements.txt
 
-# Inicializar banco (limpo)
-python init_db.py
-
-# Inicializar banco (com dados de exemplo)
-python init_db.py --sample
-
 # Iniciar servidor de desenvolvimento
 python backend/app.py
+
+# Conferir revision atual do Alembic
+flask db current
 
 # Criar migration
 flask db migrate -m "Descrição da mudança"
@@ -1114,11 +1112,8 @@ flask db migrate -m "Descrição da mudança"
 # Aplicar migration
 flask db upgrade
 
-# Reverter migration
-flask db downgrade
-
-# Executar testes
-pytest
+# Validação mínima após mudanças estruturais
+npx playwright test tests/e2e/smoke.spec.js
 ```
 
 ---
@@ -1127,12 +1122,12 @@ pytest
 
 | Aspecto | Desenvolvimento (Local) | Produção (DigitalOcean) |
 |---------|------------------------|-------------------------|
-| Banco de Dados | SQLite (`data/gastos.db`) | PostgreSQL |
+| Banco de Dados | PostgreSQL local (`controle_financeiro_dev`) | PostgreSQL remoto |
 | Debug | Ativado | Desativado |
 | Arquivo Config | `.env.local` | `.env.production` |
-| Alteração de Código | **Nenhuma!** | **Nenhuma!** |
+| Schema | Alembic baseline `dd1a552aec6a` + migrations futuras | Mesma chain Alembic |
 
-**A mudança é apenas de CONFIGURAÇÃO, não de CÓDIGO!**
+SQLite permanece apenas como fallback/legado/teste temporário. Não execute scripts de `backend/migrations/`, `migrations/*.py` custom, `migrations/legacy_sqlite/` ou `scripts/debug/` como fluxo de schema.
 
 ---
 

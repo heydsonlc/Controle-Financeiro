@@ -2,7 +2,7 @@
 
 ## Nota de Direção Técnica
 
-Este guia descreve o fluxo local atual. A direção documentada para os próximos MVPs é evoluir o desenvolvimento para PostgreSQL local, manter SQLite apenas como legado/fallback temporário e adotar Playwright E2E como padrão de Validação. Os dados locais atuais não são considerados dados reais e podem ser recriados durante desenvolvimento, mas qualquer reset, Exclusão ou Recriação deve ser limitado a ambiente local/dev e nunca a produção, DigitalOcean ou banco remoto.
+Este guia descreve o fluxo local atual. PostgreSQL local é o banco oficial de desenvolvimento, SQLite permanece apenas como legado/fallback temporário e Playwright E2E é o padrão de Validação. Os dados locais atuais não são considerados dados reais, mas qualquer reset, Exclusão ou Recriação deve ser limitado a ambiente local/dev e nunca a produção, DigitalOcean ou banco remoto.
 
 Nenhuma exposição web externa deve ocorrer sem Autenticação, proteção de APIs, `DEBUG=False`, `SECRET_KEY` segura, HTTPS e revisão de CORS.
 
@@ -32,16 +32,20 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 4. Inicializar Banco de Dados
+### 4. Configurar Banco de Desenvolvimento
 
-**Com dados de exemplo (recomendado para testar):**
+Configure `.env.local` com `DATABASE_URL` apontando para o PostgreSQL local. O banco de desenvolvimento já deve existir localmente.
+
+Exemplo mascarado:
+
 ```bash
-python init_db.py --sample
+DATABASE_URL=postgresql://controle_financeiro:***@localhost:5432/controle_financeiro_dev
 ```
 
-**Ou sem dados:**
+Verifique a revision atual do Alembic quando precisar conferir o schema:
+
 ```bash
-python init_db.py
+flask db current
 ```
 
 ### 5. Iniciar o Servidor
@@ -76,25 +80,19 @@ Pressione `Ctrl + C` no terminal
 
 ---
 
-## Resetar o Banco de Dados
+## Banco de Dados Local
 
-Se quiser começar do zero em ambiente local/dev, confirme visualmente que o banco é local e que não há dados reais. Esta orientação não se aplica a produção, DigitalOcean, banco remoto ou qualquer `DATABASE_URL` externa.
+PostgreSQL local é o banco oficial de desenvolvimento. Qualquer operação de reset/recriação deve ser tratada em script próprio, com confirmação explícita de ambiente local/dev e sem apontar para DigitalOcean, produção ou banco remoto.
 
-```bash
-# 1. Deletar o banco existente
-del data\gastos.db
-
-# 2. Recriar com dados de exemplo
-python init_db.py --sample
-```
+SQLite pode existir apenas como fallback/legado/teste temporário. Não use SQLite como referência principal de evolução de schema.
 
 ---
 
 ## Estrutura de Desenvolvimento
 
 ### Desenvolvimento Local
-- Fluxo atual ainda pode usar SQLite local como legado/fallback temporário.
-- A direção dos próximos MVPs é PostgreSQL local como banco oficial de desenvolvimento.
+- PostgreSQL local é o banco oficial de desenvolvimento.
+- SQLite local pode existir apenas como legado/fallback temporário.
 - Dados locais de desenvolvimento são descartáveis, desde que a operação seja explicitamente local/dev.
 
 ### Evolução de Schema (a partir do DB-3C)
@@ -114,7 +112,9 @@ flask db upgrade
 flask db upgrade  # aplica todas as migrations pendentes
 ```
 
-**Não usar** scripts SQLite antigos em `backend/migrations/` ou `migrations/*.py` custom.
+**Não usar** scripts SQLite antigos. Eles foram arquivados em `migrations/legacy_sqlite/` e não fazem parte do fluxo oficial.
+**Não usar** `backend/migrations/` antigo ou `migrations/*.py` custom para evolução de schema.
+**Não usar** `scripts/debug/*.py` como migration; alguns são diagnósticos legados SQLite e permanecem apenas para referência manual.
 **Não usar** `scripts/reset_db_dev_categorias_apenas.py` para evolução — apenas para reset total em dev.
 
 ### PostgreSQL local em desenvolvimento
@@ -173,8 +173,8 @@ Próximas melhorias planejadas: ver `docs/HISTORIA_DO_PROJETO.md`.
 1. **Sempre ative o ambiente virtual** antes de trabalhar
 2. **Commit frequente** no Git
 3. **Teste localmente** antes de pensar em produção
-4. **Use dados de exemplo** (`--sample`) para testar funcionalidades
-5. **Use PostgreSQL local** em desenvolvimento quando `.env.local` tiver `DATABASE_URL` apontando para `localhost`
+4. **Use dados locais descartáveis** para testar funcionalidades
+5. **Use PostgreSQL local** em desenvolvimento com `.env.local` apontando para `localhost`
 
 ### ❌ Evite
 
@@ -200,14 +200,14 @@ pip install -r requirements.txt
 app.run(port=5001)  # Trocar para outra porta
 ```
 
-### Banco de dados não cria
-**Solução:** Se estiver usando SQLite fallback, certifique-se de que a pasta `data/` existe:
+### Banco de dados não conecta
+**Solução:** Se estiver usando PostgreSQL local, confirme que o serviço local está ativo, que `.env.local` aponta para `localhost` e que o banco `controle_financeiro_dev` existe. Nunca use URL DigitalOcean ou banco remoto em desenvolvimento.
+
 ```bash
-mkdir data
-python init_db.py --sample
+flask db current
 ```
 
-Se estiver usando PostgreSQL local, confirme que o servico local esta ativo, que `.env.local` aponta para `localhost` e que o banco `controle_financeiro_dev` existe. Nunca use URL DigitalOcean ou banco remoto em desenvolvimento.
+Se estiver usando SQLite fallback/legado, trate como exceção temporária e não como fluxo principal de desenvolvimento.
 
 ---
 

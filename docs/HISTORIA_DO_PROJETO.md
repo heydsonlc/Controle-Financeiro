@@ -196,6 +196,14 @@ O baseline foi gerado contra um banco PostgreSQL local temporário vazio (`contr
 
 O banco dev real (`controle_financeiro_dev`) foi marcado com `flask db stamp head` — revision `dd1a552aec6a`, sem alteração de dados ou schema. `flask db current` confirma `dd1a552aec6a (head)`. A partir deste ponto, toda evolução de schema deve usar `flask db migrate` + `flask db upgrade`.
 
+## MVP DB-3D — Arquivamento de migrations SQLite legadas (2026-05-01)
+
+O DB-3D organizou scripts históricos fora da estratégia oficial de schema.
+
+Foram arquivados em `migrations/legacy_sqlite/` os scripts custom de `backend/migrations/`, os scripts soltos de `migrations/*.py` que não pertenciam à chain Alembic oficial e o script standalone `backend/add_taxa_adm_column.py`.
+
+Os scripts de `scripts/debug/` foram preservados no local e documentados como diagnósticos manuais/legados, não como caminho oficial de migration. Nenhum banco foi alterado, nenhuma migration foi executada e a fonte oficial permanece `migrations/versions/dd1a552aec6a_baseline_inicial_schema_completo.py` e migrations futuras.
+
 ---
 
 ## Backlog — Próximas fases

@@ -11,11 +11,10 @@ backend/
 ├── app.py              # Factory Flask (create_app)
 ├── config.py           # Configuração por ambiente (dev/prod/test)
 ├── models.py           # Todos os modelos SQLAlchemy (~31 tabelas)
-├── init_database.py    # Inicialização e migrations custom
+├── init_database.py    # Inicialização legada/apoio local
 ├── scheduler.py        # Jobs automáticos (geração mensal de contas)
 ├── routes/             # 17 blueprints — um por módulo
 ├── services/           # 16 serviços — lógica de negócio
-├── migrations/         # Flask-Migrate (Alembic)
 └── utils/              # Utilitários
 
 frontend/
@@ -24,11 +23,13 @@ frontend/
     ├── js/             # 15+ arquivos JS (1 por página)
     └── css/            # 13 arquivos CSS (1 por página)
 
-data/
-└── gastos.db           # SQLite (desenvolvimento)
+migrations/
+├── versions/           # Alembic oficial (baseline dd1a552aec6a)
+├── versions_archived/  # Revisions Alembic antigas arquivadas
+└── legacy_sqlite/      # Scripts SQLite/custom históricos
 ```
 
-**Tecnologias**: Flask 3.0, SQLAlchemy 2.0, SQLite (dev) / PostgreSQL (prod), Vanilla JS, Chart.js.
+**Tecnologias**: Flask 3.0, SQLAlchemy 2.0, PostgreSQL local (dev), SQLite apenas fallback/legado/teste temporário, Vanilla JS, Chart.js.
 
 ---
 
@@ -167,9 +168,13 @@ Idempotência garantida via `compra_id` (UUID v4) + `numero_parcela`.
 
 ## Banco de Dados
 
-- **Desenvolvimento**: `data/gastos.db` (SQLite)
-- **Produção**: PostgreSQL via variável `DATABASE_URL`
-- **Migrations**: Flask-Migrate (Alembic) em `migrations/`
-- **Compat layer**: `backend/services/sqlite_schema_compat.py` para compatibilidade com schemas SQLite existentes
+- **Desenvolvimento**: PostgreSQL local via `DATABASE_URL` em `.env.local`, apontando somente para `localhost`, `127.0.0.1` ou `::1`.
+- **Produção futura**: PostgreSQL remoto/DigitalOcean somente em ambiente `production`, com autenticação, `DEBUG=False`, HTTPS e configuração segura.
+- **SQLite**: fallback/legado/teste temporário; não é mais a referência principal de desenvolvimento.
+- **Migrations oficiais**: Flask-Migrate/Alembic em `migrations/versions/`.
+- **Baseline oficial**: `migrations/versions/dd1a552aec6a_baseline_inicial_schema_completo.py`, revision `dd1a552aec6a`, cobrindo o schema atual dos models.
+- **Histórico Alembic antigo**: `migrations/versions_archived/`.
+- **Scripts custom/SQLite legados**: `migrations/legacy_sqlite/`, apenas para referência histórica.
+- **Compat layer**: `backend/services/sqlite_schema_compat.py` permanece para compatibilidade pontual com schemas SQLite existentes.
 
-**Nota**: `backend/migrations/` (migrations custom) e `migrations/` (Alembic oficial) coexistem — unificação pendente no MVP 2.
+Alterações futuras de schema devem seguir o fluxo Alembic: alterar models, gerar migration com `flask db migrate`, revisar o arquivo gerado, aplicar localmente com `flask db upgrade` e validar com Playwright smoke. Scripts antigos em `backend/migrations/`, `migrations/*.py` custom e `scripts/debug/*.py` não fazem parte do fluxo oficial.
