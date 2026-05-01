@@ -259,6 +259,14 @@ A ação global "Novo Cartão" foi movida para a `action_bar`, reaproveitando o 
 
 Não houve alteração de JavaScript funcional, CSS de módulo, lógica de cartão/fatura, API, banco ou regras financeiras.
 
+### Registro de implementação - UX-3C-2
+
+O UX-3C-2 aplicou a faixa de ações na tela Financiamentos (`/financiamentos`) como continuidade do ciclo UX-3C.
+
+A ação global "Novo Financiamento" foi movida para a `action_bar`, reaproveitando o mesmo fluxo de abertura do modal de financiamento. Lista/cards, parcelas, pagamentos, amortizações, demonstrativo anual, evolução de saldo, seguro habitacional, regeneração de parcelas e demais ações contextuais permaneceram nos locais originais.
+
+Não houve alteração de JavaScript funcional, CSS de módulo, lógica de financiamento, API, banco ou regras financeiras.
+
 ### MVP UX-4 - Padronização visual dos ícones e estados
 
 Objetivo: uniformizar ícones, cores, tamanhos, estados ativos e hover.

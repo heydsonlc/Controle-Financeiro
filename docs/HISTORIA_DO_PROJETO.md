@@ -146,6 +146,12 @@ A tela Cartões passou a usar a `action_bar` para a ação global "Novo Cartão"
 
 Cards/listagem, edição de cartão, revelação de CVV, categorias internas, limites/orçamentos, faturas, lançamentos e ações contextuais permaneceram nos seus contextos originais. Não houve alteração de lógica de cartão/fatura, APIs, JavaScript funcional, banco de dados ou regras financeiras.
 
+## MVP UX-3C-2 — Faixa de ações em Financiamentos (2026-04-30)
+
+A tela Financiamentos passou a usar a `action_bar` para a ação global "Novo Financiamento", mantendo o mesmo modal de cadastro e o mesmo fluxo existente.
+
+Lista/cards, parcelas, pagamentos, amortizações, demonstrativo anual, evolução de saldo, seguro habitacional, regeneração de parcelas, edição, exclusão, inativação e ações contextuais permaneceram nos seus contextos originais. Não houve alteração de lógica de financiamento, APIs, JavaScript funcional, banco de dados ou regras financeiras.
+
 ---
 
 ## Backlog — Próximas fases

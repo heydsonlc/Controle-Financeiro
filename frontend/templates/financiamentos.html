@@ -6,6 +6,26 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/financiamentos.css') }}">
 {% endblock %}
 
+{% block action_bar %}
+    <div class="module-actionbar" aria-label="Ações de Financiamentos">
+        <div class="module-actionbar-header">
+            <h2 class="module-actionbar-title">Financiamentos</h2>
+            <p class="module-actionbar-subtitle">Gerencie contratos, parcelas, amortizações e demonstrativos.</p>
+        </div>
+
+        <div class="module-actionbar-actions">
+            <button class="action-icon-button primary" id="btn-novo-financiamento" type="button" onclick="abrirModalNovoFinanciamento()">
+                <span class="action-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M12 5v14M5 12h14"/>
+                    </svg>
+                </span>
+                <span class="action-button-label">Novo Financiamento</span>
+            </button>
+        </div>
+    </div>
+{% endblock %}
+
 {% block content %}
     <div class="container">
         <header>
@@ -58,12 +78,6 @@
             </div>
 
             <!-- Lista de Financiamentos -->
-            <div class="actions">
-                <button class="btn btn-primary" onclick="abrirModalNovoFinanciamento()">
-                    + Novo Financiamento
-                </button>
-            </div>
-
             <div class="lista" id="financiamentos-lista">
                 <p class="loading">Carregando financiamentos...</p>
             </div>
