@@ -12,13 +12,13 @@
         <div class="module-actionbar-inner">
             <div class="module-actionbar-filters">
                 <div class="module-filter-group">
-                    <label for="filtro-categoria">Categoria</label>
+                    <label class="module-filter-label" for="filtro-categoria">Categoria</label>
                     <select id="filtro-categoria" class="module-filter-control filter-select">
                         <option value="">Todas as categorias</option>
                     </select>
                 </div>
                 <div class="module-filter-group">
-                    <label for="filtro-status">Status</label>
+                    <label class="module-filter-label" for="filtro-status">Status</label>
                     <select id="filtro-status" class="module-filter-control filter-select">
                         <option value="">Todos os status</option>
                         <option value="pendente">Pendentes</option>
@@ -26,13 +26,13 @@
                     </select>
                 </div>
                 <div class="module-filter-group">
-                    <label for="filtro-vencimento-ate">Vencimento ate</label>
+                    <label class="module-filter-label" for="filtro-vencimento-ate">Vencimento ate</label>
                     <input type="date" id="filtro-vencimento-ate" class="module-filter-control filter-input"
                            placeholder="Vencimento ate" onchange="aplicarFiltros()"
                            title="Filtrar despesas que vencem ate esta data (dentro da competencia)">
                 </div>
                 <div class="module-filter-group">
-                    <label for="filtro-competencia">Competencia</label>
+                    <label class="module-filter-label" for="filtro-competencia">Competencia</label>
                     <input type="text" id="filtro-competencia" class="module-filter-control filter-input"
                            placeholder="Competencia (MM/AAAA)" maxlength="7"
                            onkeyup="mascaraMesAno(this)" onchange="aplicarFiltros()"

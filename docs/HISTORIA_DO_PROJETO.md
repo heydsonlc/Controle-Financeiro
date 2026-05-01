@@ -228,6 +228,14 @@ O Dashboard passou a combinar cards superiores, graficos, fluxo de caixa, leitur
 
 ---
 
+## MVP UX-6B - Action bar compacta em linha unica (2026-05-01)
+
+O UX-6B compactou o padrao visual das action bars ja aplicadas. Filtros passaram a usar label inline antes do campo, os controles ficaram mais baixos e as acoes globais passaram a ser exibidas como botoes icon-only com `title` e `aria-label`.
+
+A mudanca foi limitada a `layout.css` e templates de action bar. Nenhum JavaScript funcional, backend, banco, regra financeira, cards, listagens, modais ou conteudo abaixo da action bar foi alterado. Em Despesas, a intervencao ficou restrita a action bar.
+
+---
+
 ## Backlog — Próximas fases
 
 Ver [plano de MVPs](./../C:/Users/heydson.cardoso/.claude/plans/sleepy-floating-candy.md) para o cronograma completo (MVP 1 ao 6).

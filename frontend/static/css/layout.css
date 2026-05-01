@@ -202,15 +202,16 @@ body.app-shell-body .module-actionbar {
     width: auto;
     max-width: none;
     margin: 18px 28px 0;
-    padding: 14px 16px;
+    padding: 8px 12px;
+    min-height: 50px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
+    gap: 12px;
     background: rgba(255, 255, 255, 0.88);
     border: 1px solid rgba(29, 29, 31, 0.08);
-    border-radius: 16px;
-    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+    border-radius: 12px;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
 }
 
 body.app-shell-body .module-actionbar-shell {
@@ -223,7 +224,8 @@ body.app-shell-body .module-actionbar-inner {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
+    gap: 12px;
+    flex-wrap: wrap;
 }
 
 body.app-shell-body .module-actionbar-header {
@@ -253,8 +255,8 @@ body.app-shell-body .module-actionbar-filters {
     display: flex;
     flex: 1 1 auto;
     flex-wrap: wrap;
-    align-items: flex-end;
-    gap: 10px;
+    align-items: center;
+    gap: 8px 14px;
 }
 
 body.app-shell-body .module-actionbar-actions {
@@ -262,33 +264,39 @@ body.app-shell-body .module-actionbar-actions {
     flex-wrap: wrap;
     align-items: center;
     justify-content: flex-end;
-    gap: 8px;
+    gap: 6px;
     margin-left: auto;
 }
 
 body.app-shell-body .module-filter-group {
-    min-width: 140px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+    min-width: 0;
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
 }
 
+body.app-shell-body .module-filter-label,
 body.app-shell-body .module-filter-group label {
     color: #6e6e73;
-    font-size: 0.78rem;
+    font-size: 0.8rem;
     font-weight: 620;
     line-height: 1.2;
+    white-space: nowrap;
 }
 
 body.app-shell-body .module-filter-control {
-    min-height: 38px;
-    padding: 8px 10px;
+    min-width: 112px;
+    min-height: 32px;
+    height: 32px;
+    padding: 5px 9px;
     color: #1d1d1f;
     background: rgba(255, 255, 255, 0.78);
     border: 1px solid rgba(29, 29, 31, 0.1);
-    border-radius: 10px;
+    border-radius: 8px;
     font: inherit;
-    font-size: 0.9rem;
+    font-size: 0.86rem;
 }
 
 body.app-shell-body .module-filter-control:focus {
@@ -298,16 +306,19 @@ body.app-shell-body .module-filter-control:focus {
 }
 
 body.app-shell-body .action-icon-button {
-    min-height: 38px;
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    min-height: 34px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    padding: 8px 12px;
+    gap: 0;
+    padding: 0;
     color: #1d1d1f;
     background: rgba(255, 255, 255, 0.72);
     border: 1px solid rgba(29, 29, 31, 0.1);
-    border-radius: 10px;
+    border-radius: 9px;
     font: inherit;
     font-size: 0.9rem;
     font-weight: 560;
@@ -325,7 +336,7 @@ body.app-shell-body .action-icon-button {
 body.app-shell-body .action-icon-button:hover {
     background: #ffffff;
     border-color: rgba(29, 29, 31, 0.18);
-    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+    box-shadow: 0 4px 10px rgba(15, 23, 42, 0.07);
     transform: translateY(-1px);
 }
 
@@ -362,8 +373,8 @@ body.app-shell-body .action-icon-button.danger:hover {
 }
 
 body.app-shell-body .action-icon {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     display: inline-flex;
     flex: 0 0 auto;
     align-items: center;
@@ -372,8 +383,8 @@ body.app-shell-body .action-icon {
 }
 
 body.app-shell-body .action-icon svg {
-    width: 18px;
-    height: 18px;
+    width: 17px;
+    height: 17px;
     display: block;
     fill: none;
     stroke: currentColor;
@@ -383,8 +394,27 @@ body.app-shell-body .action-icon svg {
 }
 
 body.app-shell-body .action-button-label {
-    display: inline-block;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
     white-space: nowrap;
+    border: 0;
+}
+
+body.app-shell-body .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }
 
 body.app-shell-body .actionbar-spacer {
@@ -445,7 +475,7 @@ body.app-shell-body .mobile-toggle {
 
     body.app-shell-body .module-actionbar {
         margin: 16px 16px 0;
-        padding: 12px;
+        padding: 10px;
         flex-direction: column;
         align-items: stretch;
     }
@@ -460,13 +490,13 @@ body.app-shell-body .mobile-toggle {
         align-items: stretch;
     }
 
+    body.app-shell-body .module-filter-group {
+        justify-content: space-between;
+    }
+
     body.app-shell-body .module-actionbar-actions {
         justify-content: flex-start;
         margin-left: 0;
-    }
-
-    body.app-shell-body .action-icon-button {
-        flex: 1 1 auto;
     }
 
     body.app-shell-body .app-content {

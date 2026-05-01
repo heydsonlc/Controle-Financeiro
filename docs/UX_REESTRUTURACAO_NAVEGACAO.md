@@ -358,6 +358,14 @@ O Dashboard passou a usar conteudo `app-content-fluid`, com cards superiores dis
 
 Lancamentos, Receitas e Despesas receberam apenas largura opt-in (`app-content-wide`) no wrapper principal. Em Despesas, a mudanca foi limitada a aproveitamento de largura, preservando filtros, cards, listagem, icones pequenos, modais e logica funcional.
 
+### Registro de implementacao - UX-6B
+
+O UX-6B compactou o padrao global da `action_bar` para uso em linha unica quando houver largura disponivel.
+
+O `layout.css` passou a usar filtros inline, com label antes do campo, controles mais baixos e botoes de acao em formato icon-only. Os botoes mantem texto acessivel por `action-button-label`, mas sem texto visivel, e os templates de action bar receberam `title` e `aria-label`.
+
+Foram ajustadas as action bars de Dashboard, Receitas, Contas Bancarias, Lancamentos, Despesas, Financiamentos, Categorias, Patrimonio, Cartoes e Veiculos. Nenhum JavaScript funcional, backend, banco, regra financeira, modais, cards, listagens ou conteudo abaixo da action bar foi alterado.
+
 ## 9. Regras de Preservação
 
 A reestruturação visual deve preservar integralmente:

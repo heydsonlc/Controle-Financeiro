@@ -11,7 +11,7 @@
         <div class="module-actionbar-inner">
             <div class="module-actionbar-filters">
                 <div class="module-filter-group">
-                    <label for="filtro-status">Status</label>
+                    <label class="module-filter-label" for="filtro-status">Status</label>
                     <select class="module-filter-control" id="filtro-status" onchange="carregarContas()">
                         <option value="ATIVO">Contas Ativas</option>
                         <option value="INATIVO">Contas Inativas</option>
@@ -21,9 +21,9 @@
             </div>
 
             <div class="module-actionbar-actions">
-                <button class="action-icon-button primary" id="btn-nova-conta" type="button" onclick="abrirModalNovaConta()">
+                <button class="action-icon-button primary" id="btn-nova-conta" type="button" onclick="abrirModalNovaConta()" title="Nova Conta" aria-label="Nova Conta">
                     <span class="action-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" focusable="false">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M12 5v14M5 12h14"/>
                         </svg>
                     </span>

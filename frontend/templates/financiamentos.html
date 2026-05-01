@@ -11,7 +11,7 @@
         <div class="module-actionbar-inner">
             <div class="module-actionbar-filters">
                 <div class="module-filter-group filter-group">
-                    <label for="filtro-status">Status</label>
+                    <label class="module-filter-label" for="filtro-status">Status</label>
                     <select class="module-filter-control" id="filtro-status" onchange="carregarFinanciamentos()">
                         <option value="">Todos</option>
                         <option value="true" selected>Ativos</option>
@@ -19,7 +19,7 @@
                     </select>
                 </div>
                 <div class="module-filter-group filter-group">
-                    <label for="filtro-sistema">Sistema</label>
+                    <label class="module-filter-label" for="filtro-sistema">Sistema</label>
                     <select class="module-filter-control" id="filtro-sistema" onchange="carregarFinanciamentos()">
                         <option value="">Todos</option>
                         <option value="SAC">SAC</option>
@@ -30,9 +30,9 @@
             </div>
 
             <div class="module-actionbar-actions">
-                <button class="action-icon-button primary" id="btn-novo-financiamento" type="button" onclick="abrirModalNovoFinanciamento()">
+                <button class="action-icon-button primary" id="btn-novo-financiamento" type="button" onclick="abrirModalNovoFinanciamento()" title="Novo Financiamento" aria-label="Novo Financiamento">
                     <span class="action-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" focusable="false">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M12 5v14M5 12h14"/>
                         </svg>
                     </span>

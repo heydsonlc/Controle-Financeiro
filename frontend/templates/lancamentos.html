@@ -11,7 +11,7 @@
         <div class="module-actionbar-inner">
             <div class="module-actionbar-filters">
                 <div class="module-filter-group filter-item">
-                    <label for="filtro-tipo">Tipo</label>
+                    <label class="module-filter-label" for="filtro-tipo">Tipo</label>
                     <select class="module-filter-control" id="filtro-tipo">
                         <option value="">Todos os tipos</option>
                         <option value="cartao">Cart&atilde;o de Cr&eacute;dito</option>
@@ -20,17 +20,17 @@
                     </select>
                 </div>
                 <div class="module-filter-group filter-item">
-                    <label for="filtro-mes">M&ecirc;s</label>
+                    <label class="module-filter-label" for="filtro-mes">M&ecirc;s</label>
                     <input class="module-filter-control" type="month" id="filtro-mes">
                 </div>
                 <div class="module-filter-group filter-item" id="filter-cartao-container">
-                    <label for="filtro-cartao">Cart&atilde;o</label>
+                    <label class="module-filter-label" for="filtro-cartao">Cart&atilde;o</label>
                     <select class="module-filter-control" id="filtro-cartao">
                         <option value="">Todos os cart&otilde;es</option>
                     </select>
                 </div>
                 <div class="module-filter-group filter-item">
-                    <label for="filtro-categoria">Categoria</label>
+                    <label class="module-filter-label" for="filtro-categoria">Categoria</label>
                     <select class="module-filter-control" id="filtro-categoria">
                         <option value="">Todas as categorias</option>
                     </select>
@@ -38,9 +38,9 @@
             </div>
 
             <div class="module-actionbar-actions">
-                <button class="action-icon-button primary" id="btn-novo-lancamento" type="button" onclick="abrirModalLancamento()">
+                <button class="action-icon-button primary" id="btn-novo-lancamento" type="button" onclick="abrirModalLancamento()" title="Novo Lan&ccedil;amento" aria-label="Novo Lan&ccedil;amento">
                     <span class="action-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" focusable="false">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M12 5v14M5 12h14"/>
                         </svg>
                     </span>
