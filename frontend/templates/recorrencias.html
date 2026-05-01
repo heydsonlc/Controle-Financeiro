@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+
+{% block title %}Recorrencias - Controle Financeiro{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/recorrencias.css') }}">
+{% endblock %}
+
+{% block action_bar %}
+    <div class="module-actionbar" aria-label="Filtros e acoes de Recorrencias">
+        <div class="module-actionbar-inner">
+            <div class="module-actionbar-filters">
+                <div class="module-filter-group">
+                    <label class="module-filter-label" for="filtro-tipo">Tipo</label>
+                    <select id="filtro-tipo" class="module-filter-control" onchange="aplicarFiltrosRecorrencias()">
+                        <option value="">Todos</option>
+                        <option value="recorrencia_simples">Despesa recorrente</option>
+                        <option value="consorcio">Consorcio</option>
+                    </select>
+                </div>
+                <div class="module-filter-group">
+                    <label class="module-filter-label" for="filtro-status">Status</label>
+                    <select id="filtro-status" class="module-filter-control" onchange="aplicarFiltrosRecorrencias()">
+                        <option value="">Todos</option>
+                        <option value="ativa">Ativas</option>
+                        <option value="inativa">Inativas</option>
+                    </select>
+                </div>
+                <div class="module-filter-group">
+                    <label class="module-filter-label" for="filtro-frequencia">Frequencia</label>
+                    <select id="filtro-frequencia" class="module-filter-control" onchange="aplicarFiltrosRecorrencias()">
+                        <option value="">Todas</option>
+                        <option value="mensal">Mensal</option>
+                        <option value="semanal">Semanal</option>
+                        <option value="quinzenal">Quinzenal</option>
+                        <option value="anual">Anual</option>
+                        <option value="parcelas">Parcelas</option>
+                    </select>
+                </div>
+                <div class="module-filter-group">
+                    <label class="module-filter-label" for="filtro-categoria">Categoria</label>
+                    <select id="filtro-categoria" class="module-filter-control" onchange="aplicarFiltrosRecorrencias()">
+                        <option value="">Todas</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="module-actionbar-actions">
+                <button class="action-icon-button primary" id="btn-nova-recorrencia" type="button" onclick="abrirFormularioRecorrencia()" title="Nova Recorrencia" aria-label="Nova Recorrencia">
+                    <span class="action-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 5v14M5 12h14"/>
+                        </svg>
+                    </span>
+                    <span class="action-button-label">Nova Recorrencia</span>
+                </button>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block content %}
+    <div class="container app-content-fluid">
+        <main>
+            <section class="module-data-section recorrencias-form-section" id="secao-formulario" hidden>
+                <div class="section-title-row">
+                    <div class="section-title-main">
+                        <span class="section-title-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false">
+                                <path d="M12 5v14M5 12h14"/>
+                            </svg>
+                        </span>
+                        <h2 class="section-title-text" id="form-titulo">Nova Recorrencia</h2>
+                    </div>
+                    <span class="section-title-meta">Cadastro-matriz</span>
+                </div>
+
+                <form id="form-recorrencia" class="recorrencia-form" onsubmit="salvarRecorrencia(event)">
+                    <input type="hidden" id="recorrencia-id">
+                    <input type="hidden" id="recorrencia-origem">
+
+                    <div class="recorrencia-grid">
+                        <div class="form-group">
+                            <label for="tipo-cadastro">Tipo *</label>
+                            <select id="tipo-cadastro" onchange="alternarTipoCadastro()" required>
+                                <option value="recorrencia_simples">Despesa recorrente</option>
+                                <option value="consorcio">Consorcio</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="nome">Nome *</label>
+                            <input type="text" id="nome" required placeholder="Ex: Aluguel, Diarista, Consorcio">
+                        </div>
+                        <div class="form-group">
+                            <label for="categoria-id">Categoria *</label>
+                            <select id="categoria-id" required>
+                                <option value="">Selecione...</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="valor">Valor *</label>
+                            <input type="number" id="valor" step="0.01" min="0" required placeholder="0,00">
+                        </div>
+                    </div>
+
+                    <div class="recorrencia-grid">
+                        <div class="form-group recorrencia-campo">
+                            <label for="data-vencimento">Data inicial *</label>
+                            <input type="date" id="data-vencimento">
+                        </div>
+                        <div class="form-group recorrencia-campo">
+                            <label for="frequencia">Frequencia *</label>
+                            <select id="frequencia" onchange="alternarFrequencia()">
+                                <option value="mensal">Mensal</option>
+                                <option value="semanal">Semanal</option>
+                                <option value="quinzenal">Quinzenal</option>
+                                <option value="anual">Anual</option>
+                            </select>
+                        </div>
+                        <div class="form-group recorrencia-semanal">
+                            <label for="dia-semana">Dia da semana</label>
+                            <select id="dia-semana">
+                                <option value="">Selecione...</option>
+                                <option value="0">Domingo</option>
+                                <option value="1">Segunda-feira</option>
+                                <option value="2">Terca-feira</option>
+                                <option value="3">Quarta-feira</option>
+                                <option value="4">Quinta-feira</option>
+                                <option value="5">Sexta-feira</option>
+                                <option value="6">Sabado</option>
+                            </select>
+                        </div>
+                        <div class="form-group recorrencia-campo">
+                            <label for="meio-pagamento">Meio de pagamento</label>
+                            <select id="meio-pagamento" onchange="alternarMeioPagamento()">
+                                <option value="">Nao especificado</option>
+                                <option value="boleto">Boleto</option>
+                                <option value="debito">Debito</option>
+                                <option value="pix">PIX</option>
+                                <option value="cartao">Cartao de Credito</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="recorrencia-grid recorrencia-cartao" hidden>
+                        <div class="form-group">
+                            <label for="cartao-id">Cartao</label>
+                            <select id="cartao-id" onchange="carregarCategoriasCartaoSelecionado()">
+                                <option value="">Selecione...</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="item-agregado-id">Categoria do cartao</label>
+                            <select id="item-agregado-id">
+                                <option value="">Sem categoria</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="recorrencia-grid consorcio-campos" id="campos-consorcio" hidden>
+                        <div class="form-group">
+                            <label for="numero-parcelas">Numero de parcelas *</label>
+                            <input type="number" id="numero-parcelas" min="1" placeholder="Ex: 60">
+                        </div>
+                        <div class="form-group">
+                            <label for="mes-inicio">Mes de inicio *</label>
+                            <input type="month" id="mes-inicio">
+                        </div>
+                        <div class="form-group">
+                            <label for="tipo-reajuste">Tipo de reajuste</label>
+                            <select id="tipo-reajuste">
+                                <option value="nenhum">Sem reajuste</option>
+                                <option value="percentual">Percentual</option>
+                                <option value="fixo">Fixo</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="valor-reajuste">Valor do reajuste</label>
+                            <input type="number" id="valor-reajuste" step="0.01" min="0" placeholder="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="mes-contemplacao">Mes de contemplacao</label>
+                            <input type="month" id="mes-contemplacao">
+                        </div>
+                        <div class="form-group">
+                            <label for="valor-premio">Valor do premio</label>
+                            <input type="number" id="valor-premio" step="0.01" min="0" placeholder="0,00">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="observacoes">Observacoes</label>
+                        <textarea id="observacoes" rows="2" placeholder="Detalhes opcionais"></textarea>
+                    </div>
+
+                    <div class="recorrencia-form-actions">
+                        <button type="button" class="btn btn-secondary" onclick="fecharFormularioRecorrencia()">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Salvar</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="module-data-section">
+                <div class="section-title-row">
+                    <div class="section-title-main">
+                        <span class="section-title-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false">
+                                <path d="M8 6h13"/>
+                                <path d="M8 12h13"/>
+                                <path d="M8 18h13"/>
+                                <path d="M3 6h.01"/>
+                                <path d="M3 12h.01"/>
+                                <path d="M3 18h.01"/>
+                            </svg>
+                        </span>
+                        <h2 class="section-title-text">Recorrencias Cadastradas</h2>
+                    </div>
+                    <span class="section-title-meta" id="recorrencias-total">Carregando...</span>
+                </div>
+                <div class="recorrencias-lista" id="recorrencias-lista">
+                    <p class="loading">Carregando recorrencias...</p>
+                </div>
+            </section>
+        </main>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+    <script src="{{ url_for('static', filename='js/recorrencias.js') }}"></script>
+{% endblock %}

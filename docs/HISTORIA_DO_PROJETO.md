@@ -252,6 +252,14 @@ O modal de Despesas foi reaproveitado sem mudanca de regra: Nova Recorrencia ape
 
 ---
 
+## MVP RECUP-4 - Tela propria de Recorrencias (2026-05-01)
+
+O RECUP-4 criou a rota `/recorrencias`, com tela propria para cadastros-matriz de recorrencias e consorcios. A sidebar passou a direcionar Recorrencias para a nova tela, e Consorcios deixou de ser item separado por ser tratado como tipo especial de recorrencia.
+
+Foi criado endpoint minimo `/api/recorrencias` para listar, criar, atualizar e inativar regras recorrentes baseadas em `ItemDespesa`. Consorcios continuam usando `/api/consorcios`, sem alterar regra de parcelas, contemplacao, receitas, pagamentos ou a tela Despesas.
+
+---
+
 ## Backlog — Próximas fases
 
 Ver [plano de MVPs](./../C:/Users/heydson.cardoso/.claude/plans/sleepy-floating-candy.md) para o cronograma completo (MVP 1 ao 6).

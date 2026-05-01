@@ -1,0 +1,132 @@
+.recorrencias-form-section[hidden],
+.recorrencia-cartao[hidden],
+.consorcio-campos[hidden] {
+    display: none;
+}
+
+.recorrencia-form {
+    padding: 18px;
+}
+
+.recorrencia-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 14px;
+    margin-bottom: 14px;
+}
+
+.recorrencia-form .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.recorrencia-form label {
+    color: #3f3f46;
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.recorrencia-form input,
+.recorrencia-form select,
+.recorrencia-form textarea {
+    width: 100%;
+    border: 1px solid #d7d7dc;
+    border-radius: 8px;
+    color: #1d1d1f;
+    background: #ffffff;
+    font: inherit;
+    padding: 9px 10px;
+}
+
+.recorrencia-form textarea {
+    resize: vertical;
+}
+
+.recorrencia-form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.recorrencias-table {
+    width: 100%;
+}
+
+.recorrencias-header,
+.recorrencias-row {
+    display: grid;
+    grid-template-columns: minmax(220px, 1.7fr) 130px 130px 140px 120px minmax(120px, 1fr) 100px 96px;
+    gap: 12px;
+    align-items: center;
+}
+
+.recorrencias-header {
+    color: #6b7280;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    padding: 12px 16px;
+    text-transform: uppercase;
+}
+
+.recorrencias-row {
+    border-top: 1px solid #ececf0;
+    color: #1d1d1f;
+    min-height: 54px;
+    padding: 12px 16px;
+}
+
+.recorrencias-title {
+    min-width: 0;
+}
+
+.recorrencias-title strong {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.recorrencias-title small {
+    color: #6b7280;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.recorrencias-value {
+    font-weight: 800;
+    text-align: right;
+}
+
+.recorrencias-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
+.recorrencias-empty {
+    color: #6b7280;
+    padding: 22px;
+    text-align: center;
+}
+
+@media (max-width: 1180px) {
+    .recorrencias-header {
+        display: none;
+    }
+
+    .recorrencias-row {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+
+    .recorrencias-value,
+    .recorrencias-actions {
+        justify-content: flex-start;
+        text-align: left;
+    }
+}

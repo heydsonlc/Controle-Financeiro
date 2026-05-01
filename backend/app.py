@@ -111,6 +111,11 @@ def create_app(config_name=None):
         """Página de gerenciamento de despesas"""
         return render_template('despesas.html', active_page='despesas', page_title='Gerenciamento de Despesas')
 
+    @app.route('/recorrencias')
+    def recorrencias():
+        """Pagina de gerenciamento de cadastros recorrentes"""
+        return render_template('recorrencias.html', active_page='recorrencias', page_title='Recorrencias')
+
     @app.route('/cartoes')
     def cartoes():
         """Página de gerenciamento de cartões de crédito"""
@@ -188,6 +193,7 @@ def register_blueprints(app):
     try:
         from backend.routes.categorias import categorias_bp
         from backend.routes.despesas import despesas_bp
+        from backend.routes.recorrencias import recorrencias_bp
         from backend.routes.cartoes import cartoes_bp
         from backend.routes.consorcios import consorcios_bp
         from backend.routes.receitas import receitas_bp
@@ -205,6 +211,7 @@ def register_blueprints(app):
     except ImportError:
         from routes.categorias import categorias_bp
         from routes.despesas import despesas_bp
+        from routes.recorrencias import recorrencias_bp
         from routes.cartoes import cartoes_bp
         from routes.consorcios import consorcios_bp
         from routes.receitas import receitas_bp
@@ -223,6 +230,7 @@ def register_blueprints(app):
     # Registrar blueprints
     app.register_blueprint(categorias_bp, url_prefix='/api/categorias')
     app.register_blueprint(despesas_bp, url_prefix='/api/despesas')
+    app.register_blueprint(recorrencias_bp, url_prefix='/api/recorrencias')
     app.register_blueprint(cartoes_bp, url_prefix='/api/cartoes')
     app.register_blueprint(consorcios_bp, url_prefix='/api/consorcios')
     app.register_blueprint(receitas_bp, url_prefix='/api/receitas')

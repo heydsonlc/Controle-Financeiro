@@ -382,6 +382,12 @@ O RECUP-2 restaurou acessos visuais seguros para funcionalidades ja existentes e
 
 A navegacao lateral recebeu atalhos diretos para Recorrencias e Consorcios, ambos apontando para o modal de Despesas por hash. A tela de Configuracoes recebeu apenas um atalho discreto para Recorrencias e Obrigacoes, apontando para Despesas como orientacao temporaria. Uma central dedicada de Recorrencias/Obrigacoes permanece como etapa futura.
 
+### Registro de implementacao - RECUP-4
+
+O RECUP-4 criou a tela propria `/recorrencias` para gerenciar cadastros-matriz de recorrencias e consorcios. Despesas permanece como visualizacao das despesas geradas/registradas, sem assumir novamente o papel de cadastro de regras recorrentes.
+
+A sidebar passou a apontar Recorrencias para `/recorrencias`, sem item separado para Consorcios. A nova tela combina recorrencias simples via `/api/recorrencias` e consorcios via `/api/consorcios`, mantendo consorcio como tipo especial de recorrencia e preservando as regras financeiras existentes.
+
 ## 9. Regras de Preservação
 
 A reestruturação visual deve preservar integralmente:
