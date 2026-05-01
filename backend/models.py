@@ -27,6 +27,7 @@ class Categoria(db.Model):
     nome = db.Column(db.String(100), nullable=False, unique=True)
     descricao = db.Column(db.Text)
     cor = db.Column(db.String(7), default='#6c757d')  # Código hexadecimal
+    icone = db.Column(db.String(50), nullable=True)
     ativo = db.Column(db.Boolean, default=True)
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -42,6 +43,7 @@ class Categoria(db.Model):
             'nome': self.nome,
             'descricao': self.descricao,
             'cor': self.cor,
+            'icone': self.icone,
             'ativo': self.ativo
         }
 
@@ -126,7 +128,8 @@ class ItemDespesa(db.Model):
         if self.categoria:
             result['categoria'] = {
                 'id': self.categoria.id,
-                'nome': self.categoria.nome
+                'nome': self.categoria.nome,
+                'icone': self.categoria.icone
             }
 
         # Adicionar dados do cartão se for recorrência paga via cartão

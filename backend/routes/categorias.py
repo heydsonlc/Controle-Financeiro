@@ -125,10 +125,12 @@ def criar_categoria():
             }), 400
 
         # Criar categoria
+        icone_raw = data.get('icone', '') or ''
         categoria = Categoria(
             nome=data['nome'].strip(),
             descricao=data.get('descricao', '').strip(),
             cor=data.get('cor', '#6c757d'),
+            icone=icone_raw.strip()[:50] or None,
             ativo=data.get('ativo', True)
         )
 
@@ -213,6 +215,10 @@ def atualizar_categoria(id):
 
         if 'cor' in data:
             categoria.cor = data['cor']
+
+        if 'icone' in data:
+            icone_raw = data['icone'] or ''
+            categoria.icone = icone_raw.strip()[:50] or None
 
         if 'ativo' in data:
             categoria.ativo = data['ativo']

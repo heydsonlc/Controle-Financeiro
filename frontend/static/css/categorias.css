@@ -186,3 +186,28 @@
     color: #212529;
     font-weight: 600;
 }
+
+/* Campo ícone no modal */
+.form-hint {
+    display: block;
+    margin-top: 4px;
+    font-size: 11px;
+    color: #6e6e73;
+    line-height: 1.4;
+}
+
+.icone-preview {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.05);
+    margin-top: 6px;
+    color: #1d1d1f;
+}
+
+.icone-preview:empty {
+    display: none;
+}

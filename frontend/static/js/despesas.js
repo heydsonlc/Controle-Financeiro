@@ -633,6 +633,12 @@ function renderizarDespesas(despesasParaRenderizar) {
         // Categoria (opcional, metadado)
         const categoria = despesa.categoria || (despesa.categoria_id ? categorias.find(c => c.id === despesa.categoria_id) : null);
         const categoriaNome = categoria ? categoria.nome : 'Sem categoria';
+        const categoriaIconeHtml = (typeof renderCategoryIcon === 'function' && categoria?.icone)
+            ? renderCategoryIcon(categoria, { size: '12px' })
+            : '';
+        const meioPageIconeHtml = (typeof renderPaymentIcon === 'function' && despesa.meio_pagamento)
+            ? renderPaymentIcon(despesa.meio_pagamento, { size: '12px' })
+            : '';
 
         // Competência formatada
         const competencia = despesa.mes_competencia ? formatarCompetencia(despesa.mes_competencia) : '';
@@ -687,7 +693,8 @@ function renderizarDespesas(despesasParaRenderizar) {
                         ${competencia ? `<span class="meta-competencia">${competencia}</span>` : ''}
                         <span class="meta-tipo ${tipoClass}">${tipoTexto}</span>
                         ${isFaturaCartao && despesa.status_fatura ? `<span class="meta-status-fatura" style="background: ${despesa.status_fatura === 'FECHADA' ? '#ff9500' : despesa.status_fatura === 'PAGA' ? '#34c759' : '#007aff'}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75em; font-weight: 600;">${despesa.status_fatura}</span>` : ''}
-                        ${categoria ? `<span class="meta-categoria">${categoriaNome}</span>` : ''}
+                        ${categoria ? `<span class="meta-categoria icon-chip">${categoriaIconeHtml}${categoriaNome}</span>` : ''}
+                        ${meioPageIconeHtml ? `<span class="meta-meio icon-chip" title="${despesa.meio_pagamento}">${meioPageIconeHtml}</span>` : ''}
                     </div>
 
                     <div class="despesa-valor-principal">

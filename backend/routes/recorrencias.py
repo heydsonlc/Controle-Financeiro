@@ -154,6 +154,7 @@ def _item_to_dict(item):
         'valor': float(item.valor) if item.valor is not None else None,
         'categoria_id': item.categoria_id,
         'categoria_nome': categoria.nome if categoria else None,
+        'categoria_icone': categoria.icone if categoria else None,
         'recorrente': bool(item.recorrente),
         'tipo_recorrencia': item.tipo_recorrencia,
         'frequencia': detalhes['frequencia'],

@@ -228,6 +228,12 @@ O Dashboard passou a combinar cards superiores, graficos, fluxo de caixa, leitur
 
 ---
 
+## MVP ICONES-1A — Icones por categoria e meio de pagamento (2026-05-01)
+
+O ICONES-1A criou infraestrutura de icones semanticos para o sistema. Adicionou campo `icone` em `Categoria` (migration `28ba243136e8`), criou catalogo interno de SVGs monocromaticos em `icons.js`, e renderiza icones de categoria em Lancamentos, Despesas, Recorrencias e Categorias. Meios de pagamento (cartao, pix, dinheiro, boleto, debito) recebem icone via mapa estatico no frontend. Receitas exibem icone derivado do tipo da fonte. Nenhuma regra financeira, calculo, pagamento, fatura ou dashboard foi alterado.
+
+---
+
 ## MVP UX-6B - Action bar compacta em linha unica (2026-05-01)
 
 O UX-6B compactou o padrao visual das action bars ja aplicadas. Filtros passaram a usar label inline antes do campo, os controles ficaram mais baixos e as acoes globais passaram a ser exibidas como botoes icon-only com `title` e `aria-label`.

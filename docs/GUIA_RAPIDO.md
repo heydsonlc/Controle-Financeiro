@@ -195,6 +195,44 @@ Próximas melhorias planejadas: ver `docs/HISTORIA_DO_PROJETO.md`.
 
 ---
 
+## Chaves de Ícone Disponíveis (ICONES-1A)
+
+O catálogo interno em `frontend/static/js/icons.js` define as seguintes chaves:
+
+| Chave | Uso sugerido |
+|---|---|
+| `wifi` | Internet, telefonia |
+| `home` | Moradia, aluguel |
+| `heart` | Saúde |
+| `cart` | Compras, supermercado |
+| `food` | Alimentação |
+| `car` | Veículo, transporte pessoal |
+| `bus` | Transporte público |
+| `fuel` | Combustível |
+| `cash` | Dinheiro, meio de pagamento |
+| `credit-card` | Cartão de crédito/débito |
+| `qr-code` | Pix |
+| `receipt` | Boleto, comprovante |
+| `bank` | Banco, conta bancária |
+| `briefcase` | Trabalho, empresa (ex: Kortex) |
+| `shield` | Seguro, proteção (ex: Bombeiros) |
+| `lightning` | Energia elétrica, renda extra |
+| `phone` | Telefone, comunicação |
+| `book` | Educação, cursos |
+| `gift` | Presente, lazer |
+| `tool` | Manutenção, serviços |
+| `repeat` | Recorrência, consórcio |
+| `calendar` | Agenda, evento |
+| `tag` | Outros, tag genérica |
+| `education` | Escola, faculdade |
+| `health` | Plano de saúde |
+| `travel` | Viagem, turismo |
+| `pet` | Pet, animal de estimação |
+
+Para atribuir um ícone a uma categoria, edite a categoria em `/categorias` e preencha o campo **Ícone** com uma das chaves acima.
+
+---
+
 ## Problemas Comuns
 
 ### Erro: "No module named flask"

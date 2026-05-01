@@ -316,6 +316,8 @@ async function carregarLancamentos() {
                     mes_fatura: desp.mes_competencia,
                     categoria_id: desp.categoria_id,
                     categoria_nome: desp.categoria?.nome || 'Sem categoria',
+                    categoria_icone: desp.categoria?.icone || null,
+                    meio_pagamento: desp.meio_pagamento || null,
                     observacoes: desp.descricao,
                     numero_parcela: 1,
                     total_parcelas: 1,
@@ -436,10 +438,18 @@ function renderizarLancamentos(lancamentos) {
         }
 
         // Coluna Categoria / Conta
-        let contaCelula = lanc.categoria_nome || '—';
+        const catIconeHtml = (typeof renderCategoryIcon === 'function' && lanc.categoria_icone)
+            ? `<span class="inline-icon" style="opacity:0.7">${renderCategoryIcon(lanc.categoria_icone, { size: '13px' })}</span> `
+            : '';
+        let contaCelula = lanc.categoria_nome ? `${catIconeHtml}${lanc.categoria_nome}` : '—';
         if (isCartao && lanc.cartao_nome) {
             contaCelula = `<span class="tbl-pill pill-cartao">${lanc.cartao_nome}</span>`;
         }
+
+        // Ícone de meio de pagamento
+        const meioIconeHtml = (typeof renderPaymentIcon === 'function' && lanc.meio_pagamento)
+            ? `<span class="inline-icon" style="opacity:0.65;margin-left:3px">${renderPaymentIcon(lanc.meio_pagamento, { size: '13px' })}</span>`
+            : '';
 
         // Subinfo na descrição (fatura, parcelas, obs)
         const subinfo = [];
@@ -456,7 +466,7 @@ function renderizarLancamentos(lancamentos) {
                 ${subinfo.length ? `<span class="tbl-sub">${subinfo.join(' · ')}</span>` : ''}
             </td>
             <td class="tbl-col-data">${formatarData(lanc.data_compra)}</td>
-            <td class="tbl-col-tipo"><span class="tbl-pill pill-tipo-${lanc.tipo}">${tipoTexto}</span></td>
+            <td class="tbl-col-tipo"><span class="tbl-pill pill-tipo-${lanc.tipo}">${tipoTexto}</span>${meioIconeHtml}</td>
             <td class="tbl-col-status">${statusCelula}</td>
             <td class="tbl-col-conta">${contaCelula}</td>
             <td class="tbl-col-valor ${isCredito ? 'valor-positivo' : ''}">${valorFormatado}</td>
@@ -479,7 +489,7 @@ function renderizarLancamentos(lancamentos) {
                     <th class="tbl-col-status">Status</th>
                     <th class="tbl-col-conta">Categoria / Conta</th>
                     <th class="tbl-col-valor">Valor</th>
-                    <th class="tbl-col-acoes"></th>
+                    <th class="tbl-col-acoes">Acoes</th>
                 </tr>
             </thead>
             <tbody>${linhas}</tbody>

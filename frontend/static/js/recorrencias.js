@@ -95,6 +95,8 @@ function obterItensUnificados() {
         valor: item.valor,
         categoriaId: item.categoria_id,
         categoriaNome: item.categoria_nome || '-',
+        categoriaIcone: item.categoria_icone || null,
+        meioPagamento: item.meio_pagamento || null,
         status: item.ativo ? 'ativa' : 'inativa',
         statusLabel: item.ativo ? 'Ativa' : 'Inativa',
         raw: item
@@ -181,11 +183,11 @@ function renderizarLinha(item) {
                 <strong>${escapeHtml(item.nome)}</strong>
                 <small>${escapeHtml(item.descricao || detalhe || '')}</small>
             </div>
-            <span><span class="compact-pill">${escapeHtml(item.tipoLabel)}</span></span>
+            <span><span class="compact-pill">${escapeHtml(item.tipoLabel)}</span>${(typeof renderPaymentIcon === 'function' && item.meioPagamento) ? `<span class="inline-icon" style="opacity:0.6;margin-left:4px" title="${item.meioPagamento}">${renderPaymentIcon(item.meioPagamento, { size: '12px' })}</span>` : ''}</span>
             <span>${escapeHtml(detalhe)}</span>
             <span>${vencimento}</span>
             <span class="recorrencias-value">${valor}</span>
-            <span>${escapeHtml(item.categoriaNome)}</span>
+            <span class="icon-chip">${(typeof renderCategoryIcon === 'function' && item.categoriaIcone) ? renderCategoryIcon(item.categoriaIcone, { size: '12px' }) : ''}${escapeHtml(item.categoriaNome)}</span>
             <span><span class="compact-pill">${escapeHtml(item.statusLabel)}</span></span>
             <span class="row-actions recorrencias-actions">
                 <button class="row-action-button" type="button" onclick="editarRecorrencia('${item.origem}', ${item.id})" title="Editar" aria-label="Editar">

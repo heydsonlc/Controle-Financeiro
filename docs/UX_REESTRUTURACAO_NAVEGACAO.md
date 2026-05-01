@@ -382,6 +382,26 @@ O RECUP-2 restaurou acessos visuais seguros para funcionalidades ja existentes e
 
 A navegacao lateral recebeu atalhos diretos para Recorrencias e Consorcios, ambos apontando para o modal de Despesas por hash. A tela de Configuracoes recebeu apenas um atalho discreto para Recorrencias e Obrigacoes, apontando para Despesas como orientacao temporaria. Uma central dedicada de Recorrencias/Obrigacoes permanece como etapa futura.
 
+### MVP ICONES-1A — Icones por categoria e meio de pagamento (2026-05-01)
+
+O ICONES-1A implementou suporte inicial a icones padronizados para categorias de despesa/receita e meios de pagamento.
+
+**Padrao adotado:** SVG inline monocromatico com `stroke="currentColor"` e `fill="none"`. Sem biblioteca externa. Sem Bootstrap Icons. Sem Font Awesome. Sem upload de imagem.
+
+**Campo novo no banco:** `Categoria.icone VARCHAR(50) nullable`. Migration Alembic `28ba243136e8`. Armazena apenas a chave textual (ex: `wifi`, `home`, `briefcase`).
+
+**Catalogo interno:** `frontend/static/js/icons.js` — 27 chaves de icone, funcoes `renderIcon`, `renderCategoryIcon`, `renderPaymentIcon`. Carregado globalmente via `base.html`.
+
+**Meios de pagamento:** mapa estatico `ICONES_MEIO_PAGAMENTO` no `icons.js` — `cartao`, `pix`, `dinheiro`, `boleto`, `debito` — sem banco.
+
+**Telas com icone de categoria:** Categorias (lista + modal), Lancamentos (coluna Categoria/Conta), Despesas (meta da linha), Recorrencias (coluna categoria).
+
+**Telas com icone de meio de pagamento:** Lancamentos (coluna Tipo), Despesas (meta da linha), Recorrencias (coluna tipo).
+
+**Receitas:** icone derivado do tipo da fonte de receita via mapa estatico local `ICONES_TIPO_RECEITA` (sem campo novo no banco).
+
+Nenhuma regra financeira, calculo, pagamento, fatura ou dashboard foi alterado.
+
 ### Registro de implementacao - RECUP-4
 
 O RECUP-4 criou a tela propria `/recorrencias` para gerenciar cadastros-matriz de recorrencias e consorcios. Despesas permanece como visualizacao das despesas geradas/registradas, sem assumir novamente o papel de cadastro de regras recorrentes.

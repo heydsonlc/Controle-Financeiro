@@ -23,6 +23,17 @@ document.addEventListener('DOMContentLoaded', () => {
             if (el) el.textContent = e.target.value;
         });
     }
+
+    const iconeInput = document.getElementById('icone');
+    if (iconeInput) {
+        iconeInput.addEventListener('input', (e) => {
+            const preview = document.getElementById('icone-preview');
+            if (preview) {
+                const svg = typeof renderIcon === 'function' ? renderIcon(e.target.value.trim(), { size: '22px' }) : '';
+                preview.innerHTML = svg;
+            }
+        });
+    }
 });
 
 async function carregarCategorias() {
@@ -49,11 +60,15 @@ async function carregarCategorias() {
             return;
         }
 
-        const linhas = categorias.map((categoria) => `
+        const linhas = categorias.map((categoria) => {
+            const iconeHtml = (typeof renderCategoryIcon === 'function' && categoria.icone)
+                ? `<span class="category-icon" style="color:${categoria.cor}">${renderCategoryIcon(categoria, { size: '14px' })}</span>`
+                : `<span class="categoria-dot" style="background-color: ${categoria.cor}" aria-hidden="true"></span>`;
+            return `
             <div class="compact-row categoria-row categorias-compact-row">
                 <div class="compact-cell col-descricao">
                     <span class="titulo">
-                        <span class="categoria-dot" style="background-color: ${categoria.cor}" aria-hidden="true"></span>
+                        ${iconeHtml}
                         <span class="categoria-nome-texto">${categoria.nome}</span>
                     </span>
                 </div>
@@ -70,7 +85,8 @@ async function carregarCategorias() {
                     <button class="row-action-button danger" onclick="confirmarDeletar(${categoria.id}, ${JSON.stringify(categoria.nome)})" title="Excluir" aria-label="Excluir">${categoriasIcon('remove')}</button>
                 </div>
             </div>
-        `).join('');
+        `;
+        }).join('');
 
         lista.innerHTML = `
             <div class="compact-table categorias-compact-table">
@@ -97,6 +113,10 @@ function abrirModal() {
     document.getElementById('cor').value = '#6c757d';
     document.getElementById('cor-valor').textContent = '#6c757d';
     document.getElementById('ativo').checked = true;
+    const iconeEl = document.getElementById('icone');
+    if (iconeEl) iconeEl.value = '';
+    const preview = document.getElementById('icone-preview');
+    if (preview) preview.innerHTML = '';
     document.getElementById('modal-categoria').style.display = 'block';
 }
 
@@ -125,6 +145,12 @@ async function editarCategoria(id) {
         document.getElementById('cor').value = categoria.cor;
         document.getElementById('cor-valor').textContent = categoria.cor;
         document.getElementById('ativo').checked = categoria.ativo;
+        const iconeEl = document.getElementById('icone');
+        if (iconeEl) iconeEl.value = categoria.icone || '';
+        const preview = document.getElementById('icone-preview');
+        if (preview && typeof renderIcon === 'function') {
+            preview.innerHTML = categoria.icone ? renderIcon(categoria.icone, { size: '22px' }) : '';
+        }
 
         document.getElementById('modal-categoria').style.display = 'block';
     } catch (error) {
@@ -137,10 +163,12 @@ async function salvarCategoria(event) {
     event.preventDefault();
 
     const id = document.getElementById('categoria-id').value;
+    const iconeEl = document.getElementById('icone');
     const dados = {
         nome: document.getElementById('nome').value.trim(),
         descricao: document.getElementById('descricao').value.trim(),
         cor: document.getElementById('cor').value,
+        icone: iconeEl ? (iconeEl.value.trim() || null) : null,
         ativo: document.getElementById('ativo').checked
     };
 

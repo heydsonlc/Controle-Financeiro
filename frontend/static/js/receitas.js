@@ -154,6 +154,16 @@ async function atualizarResumo() {
     }
 }
 
+// Mapa estático: tipo de receita → chave de ícone
+const ICONES_TIPO_RECEITA = {
+    'SALARIO_FIXO':          'briefcase',
+    'GRATIFICACAO':          'shield',
+    'RENDA_EXTRA':           'lightning',
+    'ALUGUEL':               'home',
+    'RENDIMENTO_FINANCEIRO': 'bank',
+    'OUTROS':                'tag'
+};
+
 // ============================================================================
 // FONTES DE RECEITA
 // ============================================================================
@@ -240,13 +250,15 @@ function montarListaReceitasMes(orcamentos, realizadas, anoMes) {
         const valor = realizado != null ? realizado : previsto;
         const realizadosFonte = realizadasPorFonte.get(itemId) || [];
 
+        const tipoFonte = fonte ? fonte.tipo : (o.item_receita?.tipo || null);
         return {
             kind: 'fonte',
             origem: 'orcamento',
             orcamento_id: o.id,
             item_receita_id: itemId,
             descricao: (fonte ? fonte.nome : (o.item_receita?.nome || 'Receita')),
-            tipo: (fonte ? fonte.tipo : (o.item_receita?.tipo || null)),
+            tipo: tipoFonte,
+            icone: ICONES_TIPO_RECEITA[tipoFonte] || null,
             sub: `${formatarMesAno(anoMes)} · Receita`,
             status,
             valor,
@@ -273,6 +285,7 @@ function montarListaReceitasMes(orcamentos, realizadas, anoMes) {
                 item_receita_id: f.id,
                 descricao: f.nome,
                 tipo: f.tipo,
+                icone: ICONES_TIPO_RECEITA[f.tipo] || null,
                 sub: `${formatarMesAno(anoMes)} · Receita`,
                 status,
                 valor,
@@ -346,10 +359,14 @@ function renderizarReceitasMes(listaReceitas, anoMes) {
             ? `<div class="acoes row-actions">${botaoEditar}${botaoExcluir}<button class="row-action-button success" title="Consolidar" aria-label="Consolidar" disabled>${receitasIcon('check')}</button></div>`
             : `<div class="acoes row-actions">${botaoEditar}${botaoExcluir}${botaoConsolidar}</div>`;
 
+        const iconeHtml = (typeof renderIcon === 'function' && r.icone)
+            ? `<span class="inline-icon" style="opacity:0.65;flex-shrink:0">${renderIcon(r.icone, { size: '14px' })}</span>`
+            : '';
+
         return `
             <div class="compact-row linha-receita linha-receita-mes receitas-compact-row">
                 <div class="compact-cell col-descricao">
-                    <span class="titulo">${r.descricao}</span>
+                    <span class="titulo icon-with-label">${iconeHtml}<span class="icon-label">${r.descricao}</span></span>
                 </div>
                 <div class="compact-cell compact-meta">${r.sub}</div>
                 <div class="compact-cell compact-meta">${tipoTexto}</div>
