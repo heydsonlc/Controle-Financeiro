@@ -170,6 +170,12 @@ O UX-4B padronizou ícones funcionais gerados dinamicamente por JavaScript em Co
 
 Emojis e símbolos usados em botões foram substituídos por SVGs inline monocromáticos com `currentColor`, preservando handlers, IDs, classes, modais, APIs e regras financeiras. Despesas, Financiamentos, Patrimônio e Dashboard ficaram fora desta etapa.
 
+## MVP UX-4C-1 — Ícones em Financiamentos e Dashboard (2026-05-01)
+
+O UX-4C-1 padronizou ícones visuais dinâmicos em Financiamentos e Dashboard, cobrindo seguro, indicadores, alertas, datas, loading e notificações.
+
+As substituições usaram SVGs inline monocromáticos com `currentColor` ou texto limpo quando o conteúdo já era suficiente. Não houve alteração de cálculo financeiro, dashboard backend, APIs, templates, modais, Chart.js, banco de dados ou regras financeiras.
+
 ---
 
 ## Backlog — Próximas fases

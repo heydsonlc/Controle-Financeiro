@@ -303,6 +303,14 @@ Foram cobertos os arquivos `contas_bancarias.js`, `receitas.js`, `lancamentos.js
 
 Despesas, Financiamentos, Patrimônio, Dashboard e Seguro Habitacional permanecem fora desta etapa e devem ser tratados apenas em MVPs específicos.
 
+### Registro de implementação - UX-4C-1
+
+O UX-4C-1 padronizou ícones dinâmicos remanescentes em `financiamentos.js` e `dashboard.js`, cobrindo casos com semântica visual de seguro, indicadores, alertas, datas, loading e notificações.
+
+Os emojis e símbolos foram substituídos por SVGs inline monocromáticos com `currentColor` ou removidos quando o texto já preservava a mensagem. Não houve alteração de cálculo financeiro, APIs, templates, gráficos, modais ou fluxos de financiamento.
+
+Despesas, Patrimônio JS e Financiamento Seguro permaneceram fora desta etapa.
+
 ### MVP UX-5 - Refinamento de consultas
 
 Objetivo: criar ou consolidar padrões de consulta dentro dos módulos.

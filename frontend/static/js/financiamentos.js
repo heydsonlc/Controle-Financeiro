@@ -12,6 +12,21 @@ const API_BASE = '/api/financiamentos';
 let financiamentoAtual = null;
 let parcelaAtualPagamento = null;
 
+function financiamentosIcon(name) {
+    const icons = {
+        shield: '<path d="M12 4 5 7v5c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V7l-7-3Z"/>',
+        trendDown: '<path d="M4 7h5l4 5 7 7"/><path d="M17 19h3v-3"/>',
+        edit: '<path d="M5 19h4L19 9a2.1 2.1 0 0 0-3-3L6 16l-1 3Z"/><path d="M14 6l4 4"/>',
+        loading: '<path d="M12 6v6l4 2"/><path d="M20 12a8 8 0 1 1-8-8"/>',
+        warning: '<path d="M12 5 3.5 19h17L12 5Z"/><path d="M12 10v4M12 17h.1"/>',
+        check: '<path d="M5 12.5l4 4L19 7"/>',
+        error: '<path d="M6 6l12 12M18 6 6 18"/>',
+        info: '<path d="M12 11v6"/><path d="M12 7h.1"/><path d="M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/>'
+    };
+
+    return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="width:1em;height:1em;display:inline-block;vertical-align:-0.125em;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">${icons[name] || icons.info}</svg>`;
+}
+
 // ============================================================================
 // TOAST NOTIFICATIONS (Feedback Visual)
 // ============================================================================
@@ -458,7 +473,7 @@ function renderizarDetalhes(dados) {
 
         <div style="margin: 20px 0; padding: 15px; background: #f5f5f7; border-radius: 8px;">
             <button class="btn btn-info" onclick="abrirModalSeguro(${dados.id})" style="width: 100%;">
-                🛡️ Gerenciar Seguro Habitacional (Vigências)
+                ${financiamentosIcon('shield')} Gerenciar Seguro Habitacional (Vigências)
             </button>
         </div>
 
@@ -484,7 +499,7 @@ function renderizarTabelaParcelas(parcelas, seguroTipo) {
                     <th>Vencimento</th>
                     <th>Amortização</th>
                     <th>Juros</th>
-                    <th class="${seguroClass}">Seguro ${seguroTipo === 'percentual_saldo' ? '📉' : ''}</th>
+                    <th class="${seguroClass}">Seguro ${seguroTipo === 'percentual_saldo' ? financiamentosIcon('trendDown') : ''}</th>
                     <th>Taxa Adm</th>
                     <th>Total</th>
                     <th>Saldo Após</th>
@@ -914,7 +929,7 @@ async function tentarExcluirFinanciamento(id, nome) {
 
             // Perguntar se quer inativar
             const inativar = confirm(
-                `❌ EXCLUSÃO BLOQUEADA\n\n${mensagem}\n\n` +
+                `EXCLUSÃO BLOQUEADA\n\n${mensagem}\n\n` +
                 `Deseja INATIVAR este financiamento?\n` +
                 `(Inativar mantém o histórico mas oculta o contrato da lista de ativos)`
             );
@@ -1092,7 +1107,7 @@ function renderizarVigenciaAtualSeguro(vigencias, competenciaAtual = null) {
     if (!vigenciaAplicavel) {
         container.innerHTML = `
             <div style="text-align: center; color: #999;">
-                <p>⚠️ Nenhuma vigência aplicável</p>
+                <p>${financiamentosIcon('warning')} Nenhuma vigência aplicável</p>
                 <p style="font-size: 13px; margin-top: 5px;">Cadastre uma nova vigência abaixo</p>
             </div>
         `;
@@ -1104,7 +1119,7 @@ function renderizarVigenciaAtualSeguro(vigencias, competenciaAtual = null) {
         console.error('Vigência aplicável com dados incompletos:', vigenciaAplicavel);
         container.innerHTML = `
             <div style="text-align: center; color: #ff3b30;">
-                <p>⚠️ Erro ao carregar vigência aplicável</p>
+                <p>${financiamentosIcon('warning')} Erro ao carregar vigência aplicável</p>
                 <p style="font-size: 13px; margin-top: 5px;">Dados incompletos</p>
             </div>
         `;
@@ -1196,7 +1211,7 @@ function renderizarHistoricoVigenciasSeguro(vigencias) {
                     <button class="btn btn-sm btn-outline-primary"
                             onclick="editarVigenciaObservacoes(${v.id}, '${(v.observacoes || '').replace(/'/g, "\\'")}', ${v.vigencia_ativa})"
                             style="font-size: 12px; padding: 4px 8px;">
-                        ✏️ Editar
+                        ${financiamentosIcon('edit')} Editar
                     </button>
                 </td>
             </tr>
@@ -1366,7 +1381,7 @@ function mostrarLoading(mensagem = 'Carregando...') {
     `;
 
     box.innerHTML = `
-        <div style="font-size: 32px; margin-bottom: 15px;">⏳</div>
+        <div style="font-size: 32px; margin-bottom: 15px;">${financiamentosIcon('loading')}</div>
         <div style="font-size: 16px; color: #1d1d1f;">${mensagem}</div>
     `;
 
@@ -1397,9 +1412,9 @@ function mostrarNotificacao(mensagem, tipo = 'info') {
     if (existente) existente.remove();
 
     const cores = {
-        'success': { bg: '#34c759', icone: '✓' },
-        'error': { bg: '#ff3b30', icone: '✕' },
-        'info': { bg: '#007aff', icone: 'ℹ' }
+        'success': { bg: '#34c759', icone: financiamentosIcon('check') },
+        'error': { bg: '#ff3b30', icone: financiamentosIcon('error') },
+        'info': { bg: '#007aff', icone: financiamentosIcon('info') }
     };
 
     const config = cores[tipo] || cores['info'];

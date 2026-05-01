@@ -19,6 +19,20 @@ const PALETA_CATEGORIAS_FALLBACK = [
     '#0891b2', '#e11d48', '#65a30d', '#d97706', '#4f46e5'
 ];
 
+function dashboardIcon(name) {
+    const icons = {
+        activity: '<path d="M4 13h4l2-6 4 10 2-4h4"/>',
+        warning: '<path d="M12 5 3.5 19h17L12 5Z"/><path d="M12 10v4M12 17h.1"/>',
+        card: '<path d="M4 7h16v10H4V7Z"/><path d="M4 10h16"/>',
+        money: '<path d="M12 4v16"/><path d="M8 8.5h6a2.5 2.5 0 0 1 0 5h-4a2.5 2.5 0 0 0 0 5h6"/>',
+        bolt: '<path d="M13 3 5 14h6l-1 7 8-11h-6l1-7Z"/>',
+        gift: '<path d="M4 10h16v10H4V10Z"/><path d="M12 10v10M4 14h16"/><path d="M8 10a2 2 0 1 1 4 0M16 10a2 2 0 1 0-4 0"/>',
+        calendar: '<path d="M7 4v3M17 4v3M5 9h14"/><path d="M5 6h14v14H5V6Z"/>'
+    };
+
+    return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="width:1em;height:1em;display:inline-block;vertical-align:-0.125em;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">${icons[name] || icons.activity}</svg>`;
+}
+
 // ============================================
 // INICIALIZAÇÃO
 // ============================================
@@ -202,7 +216,7 @@ async function carregarIndicadores() {
             // 1. Despesas acima da média
             if (indicadores.despesas_acima_media) {
                 container.appendChild(criarIndicadorChip(
-                    '🔥',
+                    dashboardIcon('activity'),
                     'Despesas acima da média',
                     `${formatarMoeda(indicadores.despesas_mes_atual)} vs ${formatarMoeda(indicadores.media_historica)}`,
                     'vermelho'
@@ -212,7 +226,7 @@ async function carregarIndicadores() {
             // 2. Gastos pendentes próximos
             if (indicadores.gastos_pendentes_proximos > 0) {
                 container.appendChild(criarIndicadorChip(
-                    '⚠️',
+                    dashboardIcon('warning'),
                     'Contas a vencer (7 dias)',
                     `${indicadores.gastos_pendentes_proximos} conta(s)`,
                     'amarelo'
@@ -222,7 +236,7 @@ async function carregarIndicadores() {
             // 3. Faturas de cartão próximas
             if (indicadores.faturas_cartao_proximas > 0) {
                 container.appendChild(criarIndicadorChip(
-                    '💳',
+                    dashboardIcon('card'),
                     'Faturas próximas',
                     `${indicadores.faturas_cartao_proximas} cartão(ões)`,
                     'azul'
@@ -232,14 +246,14 @@ async function carregarIndicadores() {
             // 4. Percentual poupado
             if (indicadores.percentual_poupado > 0) {
                 container.appendChild(criarIndicadorChip(
-                    '💰',
+                    dashboardIcon('money'),
                     'Você poupou',
                     `${indicadores.percentual_poupado}% da sua renda`,
                     'verde'
                 ));
             } else if (indicadores.percentual_poupado < 0) {
                 container.appendChild(criarIndicadorChip(
-                    '⚡',
+                    dashboardIcon('bolt'),
                     'Gastos acima da receita',
                     `${Math.abs(indicadores.percentual_poupado)}% a mais`,
                     'vermelho'
@@ -249,7 +263,7 @@ async function carregarIndicadores() {
             // 5. Receitas extras
             if (indicadores.receitas_extras > 0) {
                 container.appendChild(criarIndicadorChip(
-                    '🎁',
+                    dashboardIcon('gift'),
                     'Receitas extras',
                     formatarMoeda(indicadores.receitas_extras),
                     'roxo'
@@ -559,7 +573,7 @@ function exibirAlertasContas(contas) {
         <div class="alerta-item lancamento">
             <p class="item-titulo">${conta.descricao}</p>
             <div class="item-detalhes">
-                <span>📅 ${conta.data_vencimento} | ${conta.categoria}</span>
+                <span>${dashboardIcon('calendar')} ${conta.data_vencimento} | ${conta.categoria}</span>
                 <span class="item-valor">${formatarMoeda(conta.valor)}</span>
             </div>
         </div>
@@ -578,7 +592,7 @@ function exibirAlertasCartoes(cartoes) {
         <div class="alerta-item cartao">
             <p class="item-titulo">${cartao.nome}</p>
             <div class="item-detalhes">
-                <span>📅 ${cartao.data_vencimento} | ${cartao.status}</span>
+                <span>${dashboardIcon('calendar')} ${cartao.data_vencimento} | ${cartao.status}</span>
                 <span class="item-valor">${formatarMoeda(cartao.valor)}</span>
             </div>
         </div>
@@ -616,7 +630,7 @@ function exibirAlertasReceitas(receitas) {
         <div class="alerta-item receita">
             <p class="item-titulo">${receita.descricao}</p>
             <div class="item-detalhes">
-                <span>📅 ${receita.data_recebimento} | ${receita.fonte}</span>
+                <span>${dashboardIcon('calendar')} ${receita.data_recebimento} | ${receita.fonte}</span>
                 <span class="item-valor">${formatarMoeda(receita.valor)}</span>
             </div>
         </div>
