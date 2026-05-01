@@ -104,6 +104,12 @@ A tela Configurações deixou de ser hub de módulos operacionais. Os atalhos pa
 
 Configurações ficou reservada a Preferências do Sistema e futuras configurações sistêmicas, sem alteração de rotas, APIs, banco de dados ou regras financeiras.
 
+## MVP UX-3A — Infraestrutura da faixa de ações (2026-04-30)
+
+O shell visual recebeu o bloco opcional `action_bar` e o CSS global passou a conter classes reutilizáveis para futura faixa de ações por módulo.
+
+Esta etapa não aplicou a faixa em telas funcionais, não moveu botões existentes e manteve Despesas, Cartões, Financiamentos e demais módulos sem reorganização visual. A aplicação por tela fica para UX-3B.
+
 ---
 
 ## Backlog — Próximas fases

@@ -190,6 +190,146 @@ body.app-shell-body .app-content {
     padding: 32px;
 }
 
+body.app-shell-body .module-actionbar {
+    width: calc(100% - 64px);
+    max-width: 1280px;
+    margin: 24px auto 0;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    background: rgba(255, 255, 255, 0.88);
+    border: 1px solid rgba(29, 29, 31, 0.08);
+    border-radius: 16px;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+body.app-shell-body .module-actionbar-header {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+body.app-shell-body .module-actionbar-title {
+    margin: 0;
+    color: #1d1d1f;
+    font-size: 0.98rem;
+    font-weight: 680;
+    line-height: 1.25;
+}
+
+body.app-shell-body .module-actionbar-subtitle {
+    margin: 0;
+    color: #6e6e73;
+    font-size: 0.84rem;
+    line-height: 1.35;
+}
+
+body.app-shell-body .module-actionbar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-left: auto;
+}
+
+body.app-shell-body .action-icon-button {
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 12px;
+    color: #1d1d1f;
+    background: rgba(255, 255, 255, 0.72);
+    border: 1px solid rgba(29, 29, 31, 0.1);
+    border-radius: 10px;
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 560;
+    line-height: 1;
+    text-decoration: none;
+    cursor: pointer;
+    transition:
+        background-color 0.18s ease,
+        border-color 0.18s ease,
+        color 0.18s ease,
+        box-shadow 0.18s ease,
+        transform 0.18s ease;
+}
+
+body.app-shell-body .action-icon-button:hover {
+    background: #ffffff;
+    border-color: rgba(29, 29, 31, 0.18);
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+    transform: translateY(-1px);
+}
+
+body.app-shell-body .action-icon-button:focus-visible {
+    outline: 2px solid rgba(0, 122, 255, 0.72);
+    outline-offset: 2px;
+}
+
+body.app-shell-body .action-icon-button.primary {
+    color: #ffffff;
+    background: #1d1d1f;
+    border-color: #1d1d1f;
+}
+
+body.app-shell-body .action-icon-button.primary:hover {
+    background: #2d2d2f;
+    border-color: #2d2d2f;
+}
+
+body.app-shell-body .action-icon-button.secondary {
+    color: #1d1d1f;
+    background: #f5f5f7;
+}
+
+body.app-shell-body .action-icon-button.danger {
+    color: #b42318;
+    background: #ffffff;
+    border-color: rgba(180, 35, 24, 0.2);
+}
+
+body.app-shell-body .action-icon-button.danger:hover {
+    background: #fff7f6;
+    border-color: rgba(180, 35, 24, 0.32);
+}
+
+body.app-shell-body .action-icon {
+    width: 20px;
+    height: 20px;
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    color: currentColor;
+}
+
+body.app-shell-body .action-icon svg {
+    width: 18px;
+    height: 18px;
+    display: block;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+body.app-shell-body .action-button-label {
+    display: inline-block;
+    white-space: nowrap;
+}
+
+body.app-shell-body .actionbar-spacer {
+    flex: 1 1 auto;
+}
+
 body.app-shell-body .app-content > .container {
     max-width: 1280px;
     margin: 0 auto;
@@ -228,6 +368,23 @@ body.app-shell-body .mobile-toggle {
         grid-template-columns: 40px minmax(0, 1fr) 40px;
         min-height: 60px;
         padding: 10px 14px;
+    }
+
+    body.app-shell-body .module-actionbar {
+        width: calc(100% - 32px);
+        margin-top: 16px;
+        padding: 12px;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    body.app-shell-body .module-actionbar-actions {
+        justify-content: flex-start;
+        margin-left: 0;
+    }
+
+    body.app-shell-body .action-icon-button {
+        flex: 1 1 auto;
     }
 
     body.app-shell-body .app-content {

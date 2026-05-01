@@ -201,6 +201,14 @@ Escopo:
 
 As ações devem usar ícones monocromáticos com tooltip.
 
+### Registro de implementação - UX-3A
+
+O UX-3A criou a infraestrutura reutilizável da faixa de ações por módulo, sem aplicar a faixa em telas funcionais.
+
+O shell `base.html` passou a expor o bloco opcional `action_bar`, posicionado abaixo da topbar e antes do conteúdo principal. O `layout.css` recebeu classes globais para `module-actionbar`, grupos de ações e botões com ícones monocromáticos.
+
+Nenhuma tela sensível foi alterada, nenhum botão existente foi movido e a aplicação real da faixa em telas simples fica reservada para o UX-3B.
+
 ### MVP UX-4 - Padronização visual dos ícones e estados
 
 Objetivo: uniformizar ícones, cores, tamanhos, estados ativos e hover.

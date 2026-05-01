@@ -104,6 +104,8 @@ No UX-1C, a migração das demais telas para `base.html` deve ser validada em lo
 
 No UX-2, o smoke E2E valida que Configurações continua carregando após deixar de ser hub de módulos e que as rotas removidas da tela continuam acessíveis pela sidebar e pelas rotas principais.
 
+No UX-3A, o smoke E2E valida que a inclusão do bloco vazio `action_bar` no shell não desloca as telas existentes nem introduz erro crítico. A aplicação da faixa em telas específicas fica para etapas posteriores.
+
 ## Como Interpretar Falhas
 
 Falha de status HTTP indica que a página não carregou corretamente.
