@@ -209,6 +209,14 @@ O shell `base.html` passou a expor o bloco opcional `action_bar`, posicionado ab
 
 Nenhuma tela sensível foi alterada, nenhum botão existente foi movido e a aplicação real da faixa em telas simples fica reservada para o UX-3B.
 
+### Registro de implementação - UX-3B-1
+
+O UX-3B-1 aplicou a faixa de ações na tela Categorias (`/categorias`) como primeira validação real do padrão criado no UX-3A.
+
+A ação principal "Nova Categoria" foi movida para a `action_bar`, reaproveitando o mesmo fluxo de abertura do modal. As ações contextuais de editar e excluir categoria permaneceram na listagem, sem alteração de JavaScript, API, banco ou regras financeiras.
+
+Despesas, Cartões, Financiamentos e demais telas sensíveis seguem fora desta etapa.
+
 ### MVP UX-4 - Padronização visual dos ícones e estados
 
 Objetivo: uniformizar ícones, cores, tamanhos, estados ativos e hover.

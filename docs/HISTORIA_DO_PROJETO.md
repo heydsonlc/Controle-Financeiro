@@ -110,6 +110,12 @@ O shell visual recebeu o bloco opcional `action_bar` e o CSS global passou a con
 
 Esta etapa não aplicou a faixa em telas funcionais, não moveu botões existentes e manteve Despesas, Cartões, Financiamentos e demais módulos sem reorganização visual. A aplicação por tela fica para UX-3B.
 
+## MVP UX-3B-1 — Faixa de ações em Categorias (2026-04-30)
+
+A tela Categorias passou a usar a `action_bar` como primeira aplicação real do padrão. O botão "Nova Categoria" foi movido para a faixa superior e continua abrindo o mesmo modal.
+
+As ações contextuais de editar e excluir permaneceram na listagem. Nenhuma regra financeira, API, banco de dados, JavaScript funcional ou tela sensível foi alterada.
+
 ---
 
 ## Backlog — Próximas fases

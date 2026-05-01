@@ -6,6 +6,26 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/categorias.css') }}">
 {% endblock %}
 
+{% block action_bar %}
+    <div class="module-actionbar" aria-label="Ações de Categorias">
+        <div class="module-actionbar-header">
+            <h2 class="module-actionbar-title">Categorias</h2>
+            <p class="module-actionbar-subtitle">Organize as categorias usadas para análise das despesas.</p>
+        </div>
+
+        <div class="module-actionbar-actions">
+            <button class="action-icon-button primary" id="btn-nova-categoria" type="button" onclick="abrirModal()">
+                <span class="action-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M12 5v14M5 12h14"/>
+                    </svg>
+                </span>
+                <span class="action-button-label">Nova Categoria</span>
+            </button>
+        </div>
+    </div>
+{% endblock %}
+
 {% block content %}
     <div class="container">
         <header>
@@ -16,13 +36,6 @@
         </header>
 
         <main>
-            <!-- Botão para adicionar nova categoria -->
-            <div class="actions">
-                <button class="btn btn-primary" onclick="abrirModal()">
-                    + Nova Categoria
-                </button>
-            </div>
-
             <!-- Lista de categorias -->
             <div class="categorias-lista" id="categorias-lista">
                 <p class="loading">Carregando categorias...</p>
