@@ -6,6 +6,26 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/receitas.css') }}">
 {% endblock %}
 
+{% block action_bar %}
+    <div class="module-actionbar" aria-label="Ações de Receitas">
+        <div class="module-actionbar-header">
+            <h2 class="module-actionbar-title">Receitas</h2>
+            <p class="module-actionbar-subtitle">Gerencie fontes de receita, previsões e valores realizados.</p>
+        </div>
+
+        <div class="module-actionbar-actions">
+            <button class="action-icon-button primary" id="btn-nova-receita" type="button" onclick="abrirModalFonte()">
+                <span class="action-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M12 5v14M5 12h14"/>
+                    </svg>
+                </span>
+                <span class="action-button-label">Nova Fonte</span>
+            </button>
+        </div>
+    </div>
+{% endblock %}
+
 {% block content %}
     <div class="container">
         <header>
@@ -74,13 +94,6 @@
                     <h3>Confiabilidade</h3>
                     <p class="valor" id="confiabilidade">0%</p>
                 </div>
-            </div>
-
-            <!-- Ações (fluxo único) -->
-            <div class="actions">
-                <button class="btn btn-primary" onclick="abrirModalFonte()">
-                    + Nova Fonte de Receita
-                </button>
             </div>
 
             <!-- Lista Mensal (fluxo novo) -->

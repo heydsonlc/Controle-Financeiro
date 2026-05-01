@@ -225,6 +225,14 @@ A ação primária "Nova Conta" foi movida para a `action_bar`, reaproveitando o
 
 Não houve alteração de JavaScript funcional, CSS de módulo, regra de saldo, API, banco ou regras financeiras.
 
+### Registro de implementação - UX-3B-3
+
+O UX-3B-3 aplicou a faixa de ações na tela Receitas (`/receitas`), mantendo o padrão validado em Categorias e Contas Bancárias.
+
+A ação primária "Nova Fonte" foi movida para a `action_bar`, reaproveitando o mesmo fluxo de abertura do modal de fonte de receita. Filtros, cards, listagens, consolidação, registro, edição e exclusão permaneceram nos locais originais.
+
+Não houve alteração de JavaScript funcional, CSS de módulo, lógica de receitas previstas/realizadas, API, banco, dashboard ou regras financeiras.
+
 ### MVP UX-4 - Padronização visual dos ícones e estados
 
 Objetivo: uniformizar ícones, cores, tamanhos, estados ativos e hover.

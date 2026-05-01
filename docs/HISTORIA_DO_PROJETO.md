@@ -122,6 +122,12 @@ A tela Contas Bancárias passou a usar a `action_bar` para a ação primária "N
 
 Filtros, extrato, ajuste manual, editar, inativar e reativar foram preservados nos seus contextos originais. Não houve alteração de regra de saldo, APIs, JavaScript funcional, banco de dados ou regras financeiras.
 
+## MVP UX-3B-3 — Faixa de ações em Receitas (2026-04-30)
+
+A tela Receitas passou a usar a `action_bar` para a ação primária "Nova Fonte", mantendo o mesmo modal de fonte de receita e o mesmo fluxo existente.
+
+Filtros, cards, listagens, consolidação, registro, edição e exclusão permaneceram nos seus contextos originais. Não houve alteração de lógica de receitas previstas/realizadas, APIs, dashboard, JavaScript funcional, banco de dados ou regras financeiras.
+
 ---
 
 ## Backlog — Próximas fases
