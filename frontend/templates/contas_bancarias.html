@@ -7,21 +7,29 @@
 {% endblock %}
 
 {% block action_bar %}
-    <div class="module-actionbar" aria-label="Ações de Contas Bancárias">
-        <div class="module-actionbar-header">
-            <h2 class="module-actionbar-title">Contas Bancárias</h2>
-            <p class="module-actionbar-subtitle">Gerencie saldos, movimentações e contas usadas nos pagamentos.</p>
-        </div>
+    <div class="module-actionbar" aria-label="Filtros e acoes de Contas Bancarias">
+        <div class="module-actionbar-inner">
+            <div class="module-actionbar-filters">
+                <div class="module-filter-group">
+                    <label for="filtro-status">Status</label>
+                    <select class="module-filter-control" id="filtro-status" onchange="carregarContas()">
+                        <option value="ATIVO">Contas Ativas</option>
+                        <option value="INATIVO">Contas Inativas</option>
+                        <option value="">Todas</option>
+                    </select>
+                </div>
+            </div>
 
-        <div class="module-actionbar-actions">
-            <button class="action-icon-button primary" id="btn-nova-conta" type="button" onclick="abrirModalNovaConta()">
-                <span class="action-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" focusable="false">
-                        <path d="M12 5v14M5 12h14"/>
-                    </svg>
-                </span>
-                <span class="action-button-label">Nova Conta</span>
-            </button>
+            <div class="module-actionbar-actions">
+                <button class="action-icon-button primary" id="btn-nova-conta" type="button" onclick="abrirModalNovaConta()">
+                    <span class="action-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false">
+                            <path d="M12 5v14M5 12h14"/>
+                        </svg>
+                    </span>
+                    <span class="action-button-label">Nova Conta</span>
+                </button>
+            </div>
         </div>
     </div>
 {% endblock %}
@@ -36,16 +44,6 @@
         </header>
 
         <main>
-            <!-- Actions Bar -->
-            <div class="actions-bar">
-                <div class="filters">
-                    <select id="filtro-status" onchange="carregarContas()">
-                        <option value="ATIVO">Contas Ativas</option>
-                        <option value="INATIVO">Contas Inativas</option>
-                        <option value="">Todas</option>
-                    </select>
-                </div>
-            </div>
 
             <!-- Cards de Resumo -->
             <div class="cards-resumo">

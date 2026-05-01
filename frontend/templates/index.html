@@ -6,17 +6,45 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
 {% endblock %}
 
+{% block action_bar %}
+    <div class="module-actionbar" aria-label="Filtros do Dashboard">
+        <div class="module-actionbar-inner">
+            <div class="module-actionbar-filters">
+                <div class="module-filter-group">
+                    <label for="filtro-periodo-input">Per&iacute;odo</label>
+                    <input class="module-filter-control" type="month" id="filtro-periodo-input">
+                </div>
+            </div>
+
+            <div class="module-actionbar-actions">
+                <button class="action-icon-button primary" id="filtro-periodo-aplicar" type="button">
+                    <span class="action-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false">
+                            <path d="M5 12h14"/>
+                            <path d="m13 6 6 6-6 6"/>
+                        </svg>
+                    </span>
+                    <span class="action-button-label">Aplicar</span>
+                </button>
+                <button class="action-icon-button secondary" id="filtro-periodo-limpar" type="button">
+                    <span class="action-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false">
+                            <path d="M4 12a8 8 0 1 0 2.3-5.7"/>
+                            <path d="M4 4v5h5"/>
+                        </svg>
+                    </span>
+                    <span class="action-button-label">Atual</span>
+                </button>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
 {% block content %}
     <div class="container">
         <header>
             <h1>Dashboard Financeiro</h1>
             <p class="subtitle" id="mes-atual">Carregando...</p>
-            <div class="filtro-periodo">
-                <label for="filtro-periodo-input">Período:</label>
-                <input type="month" id="filtro-periodo-input">
-                <button id="filtro-periodo-aplicar" type="button">Aplicar</button>
-                <button id="filtro-periodo-limpar" type="button">Atual</button>
-            </div>
         </header>
 
         <main>

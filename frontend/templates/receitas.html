@@ -7,21 +7,57 @@
 {% endblock %}
 
 {% block action_bar %}
-    <div class="module-actionbar" aria-label="Ações de Receitas">
-        <div class="module-actionbar-header">
-            <h2 class="module-actionbar-title">Receitas</h2>
-            <p class="module-actionbar-subtitle">Gerencie fontes de receita, previsões e valores realizados.</p>
-        </div>
+    <div class="module-actionbar" aria-label="Filtros e acoes de Receitas">
+        <div class="module-actionbar-inner">
+            <div class="module-actionbar-filters">
+                <div class="module-filter-group">
+                    <label for="filtro-ano">Ano</label>
+                    <select class="module-filter-control" id="filtro-ano" onchange="atualizarDados()">
+                        <!-- Preenchido via JS -->
+                    </select>
+                </div>
+                <div class="module-filter-group">
+                    <label for="filtro-mes">M&ecirc;s</label>
+                    <select class="module-filter-control" id="filtro-mes" onchange="atualizarDados()">
+                        <option value="">Todos</option>
+                        <option value="01">Janeiro</option>
+                        <option value="02">Fevereiro</option>
+                        <option value="03">Mar&ccedil;o</option>
+                        <option value="04">Abril</option>
+                        <option value="05">Maio</option>
+                        <option value="06">Junho</option>
+                        <option value="07">Julho</option>
+                        <option value="08">Agosto</option>
+                        <option value="09">Setembro</option>
+                        <option value="10">Outubro</option>
+                        <option value="11">Novembro</option>
+                        <option value="12">Dezembro</option>
+                    </select>
+                </div>
+                <div class="module-filter-group">
+                    <label for="filtro-tipo">Tipo</label>
+                    <select class="module-filter-control" id="filtro-tipo" onchange="atualizarDados()">
+                        <option value="">Todos</option>
+                        <option value="SALARIO_FIXO">Sal&aacute;rio Fixo</option>
+                        <option value="GRATIFICACAO">Gratifica&ccedil;&atilde;o</option>
+                        <option value="RENDA_EXTRA">Renda Extra</option>
+                        <option value="ALUGUEL">Aluguel</option>
+                        <option value="RENDIMENTO_FINANCEIRO">Rendimento Financeiro</option>
+                        <option value="OUTROS">Outros</option>
+                    </select>
+                </div>
+            </div>
 
-        <div class="module-actionbar-actions">
-            <button class="action-icon-button primary" id="btn-nova-receita" type="button" onclick="abrirModalFonte()">
-                <span class="action-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" focusable="false">
-                        <path d="M12 5v14M5 12h14"/>
-                    </svg>
-                </span>
-                <span class="action-button-label">Nova Fonte</span>
-            </button>
+            <div class="module-actionbar-actions">
+                <button class="action-icon-button primary" id="btn-nova-receita" type="button" onclick="abrirModalFonte()">
+                    <span class="action-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false">
+                            <path d="M12 5v14M5 12h14"/>
+                        </svg>
+                    </span>
+                    <span class="action-button-label">Nova Fonte</span>
+                </button>
+            </div>
         </div>
     </div>
 {% endblock %}
@@ -36,45 +72,6 @@
         </header>
 
         <main>
-            <!-- Filtros e Resumo -->
-            <div class="filters-section">
-                <div class="filter-group">
-                    <label for="filtro-ano">Ano:</label>
-                    <select id="filtro-ano" onchange="atualizarDados()">
-                        <!-- Será preenchido via JS -->
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <label for="filtro-mes">Mês:</label>
-                    <select id="filtro-mes" onchange="atualizarDados()">
-                        <option value="">Todos</option>
-                        <option value="01">Janeiro</option>
-                        <option value="02">Fevereiro</option>
-                        <option value="03">Março</option>
-                        <option value="04">Abril</option>
-                        <option value="05">Maio</option>
-                        <option value="06">Junho</option>
-                        <option value="07">Julho</option>
-                        <option value="08">Agosto</option>
-                        <option value="09">Setembro</option>
-                        <option value="10">Outubro</option>
-                        <option value="11">Novembro</option>
-                        <option value="12">Dezembro</option>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <label for="filtro-tipo">Tipo:</label>
-                    <select id="filtro-tipo" onchange="atualizarDados()">
-                        <option value="">Todos</option>
-                        <option value="SALARIO_FIXO">Salário Fixo</option>
-                        <option value="GRATIFICACAO">Gratificação</option>
-                        <option value="RENDA_EXTRA">Renda Extra</option>
-                        <option value="ALUGUEL">Aluguel</option>
-                        <option value="RENDIMENTO_FINANCEIRO">Rendimento Financeiro</option>
-                        <option value="OUTROS">Outros</option>
-                    </select>
-                </div>
-            </div>
 
             <!-- Cards de Resumo -->
             <div class="cards-resumo">
