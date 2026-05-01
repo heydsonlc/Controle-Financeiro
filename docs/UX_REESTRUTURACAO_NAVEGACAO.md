@@ -311,6 +311,14 @@ Os emojis e símbolos foram substituídos por SVGs inline monocromáticos com `c
 
 Despesas, Patrimônio JS e Financiamento Seguro permaneceram fora desta etapa.
 
+### Registro de implementação - UX-4C-2
+
+O UX-4C-2 corrigiu `patrimonio.js` para usar API relativa (`/api/patrimonio`) em vez de `http://localhost:5000/api/patrimonio`.
+
+Também foram padronizados ícones dinâmicos de caixinhas e transferências com SVGs inline monocromáticos usando `currentColor`, preservando saldos, metas, modais, transferências, validação de saldo e contratos de API.
+
+Despesas e Financiamento Seguro permaneceram fora desta etapa.
+
 ### MVP UX-5 - Refinamento de consultas
 
 Objetivo: criar ou consolidar padrões de consulta dentro dos módulos.

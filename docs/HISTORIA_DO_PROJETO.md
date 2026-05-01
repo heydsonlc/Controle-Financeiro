@@ -176,6 +176,12 @@ O UX-4C-1 padronizou ícones visuais dinâmicos em Financiamentos e Dashboard, c
 
 As substituições usaram SVGs inline monocromáticos com `currentColor` ou texto limpo quando o conteúdo já era suficiente. Não houve alteração de cálculo financeiro, dashboard backend, APIs, templates, modais, Chart.js, banco de dados ou regras financeiras.
 
+## MVP UX-4C-2 — Patrimônio JS com API relativa e ícones dinâmicos (2026-05-01)
+
+O UX-4C-2 removeu a dependência hardcoded de `http://localhost:5000/api/patrimonio` em `patrimonio.js`, substituindo por `/api/patrimonio`.
+
+Também padronizou ícones dinâmicos em caixinhas e transferências com SVGs inline monocromáticos e `currentColor`, sem alterar cálculos de saldo, transferências, metas, modais, APIs, banco de dados ou regras financeiras.
+
 ## MVP DB-3C — Baseline Alembic oficial (2026-05-01)
 
 O DB-3C estabeleceu o Alembic como fonte oficial de evolução de schema do projeto.
