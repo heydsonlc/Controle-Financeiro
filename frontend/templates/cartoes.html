@@ -1,15 +1,12 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cartões de Crédito - Controle Financeiro</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=2025010104">
+{% extends "base.html" %}
+
+{% block title %}Cartões de Crédito - Controle Financeiro{% endblock %}
+
+{% block extra_css %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/cartoes.css') }}?v=2025010104">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme-light.css') }}?v=2025010104">
-</head>
-<body>
+{% endblock %}
+
+{% block content %}
     <div class="container">
         <header>
             <h1>Cartões de Crédito</h1>
@@ -393,37 +390,10 @@
             </form>
         </div>
     </div>
+{% endblock %}
 
-    <!-- Bottom Navigation -->
-    <nav class="bottom-nav">
-        <div class="bottom-nav-container">
-            <a href="/" class="nav-item">
-                <span class="icon">⌂</span>
-                <span class="label">Dashboard</span>
-            </a>
-            <a href="/lancamentos" class="nav-item">
-                <span class="icon">✎</span>
-                <span class="label">Lançamentos</span>
-            </a>
-            <a href="/despesas" class="nav-item">
-                <span class="icon">▬</span>
-                <span class="label">DESPESAS</span>
-            </a>
-            <a href="/configuracoes" class="nav-item">
-                <span class="icon">⚙</span>
-                <span class="label">Config</span>
-            </a>
-        </div>
-    </nav>
-
-    <!-- Botão para visualização mobile -->
-    <div class="mobile-toggle">
-        <button onclick="toggleMobileView()" id="mobile-btn">
-            Ver em Mobile
-        </button>
-    </div>
-
-    <script src="{{ url_for('static', filename='js/cartoes.js') }}?v=2025010104"></script>
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/cartoes.js') }}?v=2025010104"></script>
     <script>
         function toggleMobileView() {
             document.body.classList.toggle('mobile-view');
@@ -446,5 +416,4 @@
             document.getElementById('tab-' + tabName).classList.add('active');
         }
     </script>
-</body>
-</html>
+{% endblock %}

@@ -1,16 +1,13 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Despesas - Controle Financeiro</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/despesas.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme-light.css') }}">
-</head>
-<body>
-    <div class="container">
+{% extends "base.html" %}
+
+{% block title %}Despesas - Controle Financeiro{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/despesas.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container">
         <header>
             <h1>Gerenciamento de Despesas</h1>
             <nav class="breadcrumb">
@@ -420,38 +417,12 @@
         </div>
     </div>
 
-    <!-- Bottom Navigation -->
-    <nav class="bottom-nav">
-        <div class="bottom-nav-container">
-            <a href="/" class="nav-item">
-                <span class="icon">⌂</span>
-                <span class="label">Dashboard</span>
-            </a>
-            <a href="/lancamentos" class="nav-item">
-                <span class="icon">✎</span>
-                <span class="label">Lançamentos</span>
-            </a>
-            <a href="/despesas" class="nav-item active">
-                <span class="icon">▬</span>
-                <span class="label">DESPESAS</span>
-            </a>
-            <a href="/configuracoes" class="nav-item">
-                <span class="icon">⚙</span>
-                <span class="label">Config</span>
-            </a>
-        </div>
-    </nav>
+{% endblock %}
 
-    <!-- Botão para visualização mobile -->
-    <div class="mobile-toggle">
-        <button onclick="toggleMobileView()" id="mobile-btn">
-            Ver em Mobile
-        </button>
-    </div>
-
-    <script src="{{ url_for('static', filename='js/utils.js') }}?v=2025011801"></script>
-    <script src="{{ url_for('static', filename='js/despesas.js') }}"></script>
-    <script>
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/utils.js') }}?v=2025011801"></script>
+<script src="{{ url_for('static', filename='js/despesas.js') }}"></script>
+<script>
         function toggleMobileView() {
             document.body.classList.toggle('mobile-view');
             const btn = document.getElementById('mobile-btn');
@@ -530,5 +501,4 @@
             }
         });
     </script>
-</body>
-</html>
+{% endblock %}

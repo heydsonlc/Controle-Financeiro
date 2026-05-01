@@ -1,15 +1,12 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Financiamentos - Controle Financeiro</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+{% extends "base.html" %}
+
+{% block title %}Financiamentos - Controle Financeiro{% endblock %}
+
+{% block extra_css %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/financiamentos.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme-light.css') }}">
-</head>
-<body>
+{% endblock %}
+
+{% block content %}
     <div class="container">
         <header>
             <h1>Gerenciamento de Financiamentos</h1>
@@ -428,37 +425,10 @@
             </div>
         </div>
     </div>
+{% endblock %}
 
-    <!-- Bottom Navigation -->
-    <nav class="bottom-nav">
-        <div class="bottom-nav-container">
-            <a href="/" class="nav-item">
-                <span class="icon">⌂</span>
-                <span class="label">Dashboard</span>
-            </a>
-            <a href="/lancamentos" class="nav-item">
-                <span class="icon">✎</span>
-                <span class="label">Lançamentos</span>
-            </a>
-            <a href="/despesas" class="nav-item">
-                <span class="icon">▬</span>
-                <span class="label">DESPESAS</span>
-            </a>
-            <a href="/configuracoes" class="nav-item">
-                <span class="icon">⚙</span>
-                <span class="label">Config</span>
-            </a>
-        </div>
-    </nav>
-
-    <!-- Botão para visualização mobile -->
-    <div class="mobile-toggle">
-        <button onclick="toggleMobileView()" id="mobile-btn">
-            📱 Ver em Mobile
-        </button>
-    </div>
-
-    <script src="{{ url_for('static', filename='js/financiamentos.js') }}"></script>
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/financiamentos.js') }}"></script>
     <script>
         function toggleMobileView() {
             document.body.classList.toggle('mobile-view');
@@ -470,5 +440,4 @@
             }
         }
     </script>
-</body>
-</html>
+{% endblock %}

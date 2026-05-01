@@ -100,6 +100,8 @@ Essas rotas aparecem como testes ignorados/diagnósticos, sem correção neste M
 
 Para MVPs de interface, o smoke E2E deve ser executado antes e depois das alterações. No UX-1A, o baseline deve confirmar as 13 rotas principais passando antes da criação do shell visual, e a validação final deve repetir o smoke e a suíte Playwright completa.
 
+No UX-1C, a migração das demais telas para `base.html` deve ser validada em lotes, repetindo o smoke após cada grupo de templates. Ao final, o smoke cobre as 13 rotas principais já dentro do shell visual, mantendo `/financiamentos/seguro` e `/indexadores` como rotas diagnósticas ignoradas.
+
 ## Como Interpretar Falhas
 
 Falha de status HTTP indica que a página não carregou corretamente.

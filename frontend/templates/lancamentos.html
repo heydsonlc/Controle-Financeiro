@@ -1,15 +1,12 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lançamentos - Controle Financeiro</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+{% extends "base.html" %}
+
+{% block title %}Lançamentos - Controle Financeiro{% endblock %}
+
+{% block extra_css %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/lancamentos.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme-light.css') }}">
-</head>
-<body>
+{% endblock %}
+
+{% block content %}
     <div class="container">
         <header>
             <h1>Lançamentos</h1>
@@ -267,30 +264,9 @@
     </div>
         </main>
     </div>
+{% endblock %}
 
-    <!-- Bottom Navigation -->
-    <nav class="bottom-nav">
-        <div class="bottom-nav-container">
-            <a href="/" class="nav-item">
-                <span class="icon">⌂</span>
-                <span class="label">Dashboard</span>
-            </a>
-            <a href="/lancamentos" class="nav-item active">
-                <span class="icon">✎</span>
-                <span class="label">Lançamentos</span>
-            </a>
-            <a href="/despesas" class="nav-item">
-                <span class="icon">▬</span>
-                <span class="label">DESPESAS</span>
-            </a>
-            <a href="/configuracoes" class="nav-item">
-                <span class="icon">⚙</span>
-                <span class="label">Config</span>
-            </a>
-        </div>
-    </nav>
-
-    <script src="{{ url_for('static', filename='js/utils.js') }}?v=2025011801"></script>
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/utils.js') }}?v=2025011801"></script>
     <script src="{{ url_for('static', filename='js/lancamentos.js') }}?v=2025010101"></script>
-</body>
-</html>
+{% endblock %}

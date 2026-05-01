@@ -143,6 +143,26 @@ Páginas migradas nesta etapa:
 
 As demais telas permanecem no layout atual e devem ser migradas em etapa futura, especialmente no UX-1C. A tela Seguro Habitacional (`/financiamentos/seguro`) continua como pendência de UX-1B e não deve ser incluída no menu principal enquanto não for normalizada.
 
+### Registro de implementação - UX-1C
+
+O UX-1C migrou as demais telas do escopo para o shell visual reutilizável (`base.html`), preservando CSS/JS de módulo, IDs, classes internas e comportamento funcional.
+
+Páginas migradas nesta etapa:
+
+- Despesas (`/despesas`);
+- Cartões (`/cartoes`);
+- Receitas (`/receitas`);
+- Lançamentos (`/lancamentos`);
+- Financiamentos (`/financiamentos`);
+- Contas Bancárias (`/contas-bancarias`);
+- Patrimônio (`/patrimonio`);
+- Categorias (`/categorias`);
+- Veículos (`/veiculos`);
+- Preferências (`/preferencias`);
+- Importar Cartão (`/importar-cartao`).
+
+A tela Despesas foi preservada visual e estruturalmente, sem redesenho, sem alteração de detalhamentos, modais, filtros ou ícones pequenos de pagamento. Seguro Habitacional (`/financiamentos/seguro`) e Indexadores (`/indexadores`) seguem fora do shell principal e permanecem como pendências diagnósticas.
+
 ### MVP UX-2 - Desmembramento de Configurações
 
 Objetivo: remover de Configurações os itens que são módulos ou cadastros operacionais.

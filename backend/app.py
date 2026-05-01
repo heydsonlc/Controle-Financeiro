@@ -104,32 +104,32 @@ def create_app(config_name=None):
     @app.route('/categorias')
     def categorias():
         """Página de gerenciamento de categorias"""
-        return render_template('categorias.html')
+        return render_template('categorias.html', active_page='categorias', page_title='Categorias')
 
     @app.route('/despesas')
     def despesas():
         """Página de gerenciamento de despesas"""
-        return render_template('despesas.html')
+        return render_template('despesas.html', active_page='despesas', page_title='Despesas')
 
     @app.route('/cartoes')
     def cartoes():
         """Página de gerenciamento de cartões de crédito"""
-        return render_template('cartoes.html')
+        return render_template('cartoes.html', active_page='cartoes', page_title='Cartões')
 
     @app.route('/lancamentos')
     def lancamentos():
         """Página de lançamentos de gastos"""
-        return render_template('lancamentos.html')
+        return render_template('lancamentos.html', active_page='lancamentos', page_title='Lançamentos')
 
     @app.route('/receitas')
     def receitas():
         """Página de gerenciamento de receitas"""
-        return render_template('receitas.html')
+        return render_template('receitas.html', active_page='receitas', page_title='Receitas')
 
     @app.route('/financiamentos')
     def financiamentos():
         """Página de gerenciamento de financiamentos"""
-        return render_template('financiamentos.html')
+        return render_template('financiamentos.html', active_page='financiamentos', page_title='Financiamentos')
 
     @app.route('/financiamentos/seguro')
     def financiamento_seguro():
@@ -144,26 +144,26 @@ def create_app(config_name=None):
     @app.route('/contas-bancarias')
     def contas_bancarias():
         """Página de gerenciamento de contas bancárias"""
-        return render_template('contas_bancarias.html')
+        return render_template('contas_bancarias.html', active_page='contas_bancarias', page_title='Contas Bancárias')
 
     @app.route('/patrimonio')
     def patrimonio():
         """Página de gerenciamento de patrimônio (caixinhas)"""
-        return render_template('patrimonio.html')
+        return render_template('patrimonio.html', active_page='patrimonio', page_title='Patrimônio')
 
     @app.route('/preferencias')
     def preferencias():
         """Página de preferências e configurações gerais"""
-        return render_template('preferencias.html')
+        return render_template('preferencias.html', active_page='preferencias', page_title='Preferências')
 
     @app.route('/importar-cartao')
     def importar_cartao():
         """Página de importação de fatura de cartão (CSV)"""
-        return render_template('importar_cartao.html')
+        return render_template('importar_cartao.html', active_page='importar_cartao', page_title='Importar Cartão')
 
     @app.route('/veiculos')
     def veiculos():
-        return render_template('veiculos.html')
+        return render_template('veiculos.html', active_page='veiculos', page_title='Veículos')
 
     @app.route('/health')
     def health():

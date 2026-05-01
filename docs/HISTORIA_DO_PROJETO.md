@@ -88,6 +88,16 @@ Essas decisões não alteram regras financeiras, contratos de API, banco de dado
 
 ---
 
+## MVP UX-1C — Migração das demais telas para shell visual (2026-04-30)
+
+As telas HTML standalone restantes foram migradas para herdar `base.html`, usando o shell visual desktop/web criado no UX-1A.
+
+Foram migradas as telas Despesas, Cartões, Receitas, Lançamentos, Financiamentos, Contas Bancárias, Patrimônio, Categorias, Veículos, Preferências e Importar Cartão. A migração preservou CSS/JS de módulo, IDs, classes internas, modais, filtros e comportamento funcional.
+
+Despesas foi mantida sem redesenho. Seguro Habitacional (`/financiamentos/seguro`) e Indexadores (`/indexadores`) continuam como pendências diagnósticas fora deste MVP.
+
+---
+
 ## Backlog — Próximas fases
 
 Ver [plano de MVPs](./../C:/Users/heydson.cardoso/.claude/plans/sleepy-floating-candy.md) para o cronograma completo (MVP 1 ao 6).
