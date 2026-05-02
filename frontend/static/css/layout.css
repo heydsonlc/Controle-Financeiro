@@ -390,6 +390,16 @@ body.app-shell-body .action-icon-button.primary:hover {
     border-color: #2d2d2f;
 }
 
+body.app-shell-body button .action-icon,
+body.app-shell-body a .action-icon {
+    color: inherit !important;
+}
+
+body.app-shell-body .action-icon-button.primary .action-icon,
+body.app-shell-body .action-icon-button.primary .action-icon svg {
+    color: #ffffff !important;
+}
+
 body.app-shell-body .action-icon-button.secondary {
     color: #1d1d1f;
     background: #f5f5f7;
@@ -413,7 +423,7 @@ body.app-shell-body .action-icon {
     flex: 0 0 auto;
     align-items: center;
     justify-content: center;
-    color: currentColor;
+    color: inherit;
 }
 
 body.app-shell-body .action-icon svg {
@@ -421,7 +431,8 @@ body.app-shell-body .action-icon svg {
     height: 17px;
     display: block;
     fill: none;
-    stroke: currentColor;
+    color: inherit !important;
+    stroke: currentColor !important;
     stroke-width: 1.8;
     stroke-linecap: round;
     stroke-linejoin: round;
