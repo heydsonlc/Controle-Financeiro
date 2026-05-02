@@ -199,12 +199,19 @@
 .comp-card {
     background: #fff;
     border: 1.5px solid #e5e7eb;
-    border-radius: 12px;
-    padding: 16px;
+    border-radius: 14px;
+    padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 0;
     position: relative;
+    overflow: hidden;
+    transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.comp-card:hover {
+    box-shadow: 0 4px 16px rgba(30,64,175,0.08);
+    border-color: #c7d2fe;
 }
 
 .comp-card.ativo-global {
@@ -214,22 +221,69 @@
 
 .comp-card-badge-ativo {
     position: absolute;
-    top: 12px;
-    right: 12px;
+    top: 10px;
+    right: 10px;
     background: #1e40af;
     color: #fff;
-    font-size: 0.72rem;
+    font-size: 0.68rem;
     font-weight: 700;
     padding: 3px 8px;
     border-radius: 999px;
     text-transform: uppercase;
+    letter-spacing: 0.05em;
+    z-index: 1;
+}
+
+/* Área visual do veículo */
+.comp-card-visual {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 88px;
+    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    border-bottom: 1px solid #dbeafe;
+    flex-shrink: 0;
+}
+
+.comp-card-visual--app {
+    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+    border-bottom-color: #bbf7d0;
+}
+
+.comp-card-visual--moto {
+    background: linear-gradient(135deg, #fefce8 0%, #fef9c3 100%);
+    border-bottom-color: #fde68a;
+}
+
+.comp-card-vehicle-icon {
+    color: #3b82f6;
+    opacity: 0.75;
+}
+
+.comp-card-visual--app .comp-card-vehicle-icon { color: #16a34a; }
+.comp-card-visual--moto .comp-card-vehicle-icon { color: #ca8a04; }
+
+.comp-card-vehicle-icon svg {
+    width: 64px;
+    height: 40px;
+    display: block;
+}
+
+.comp-card-visual--app .comp-card-vehicle-icon svg {
+    width: 36px;
+    height: 56px;
+}
+
+/* Corpo do card */
+.comp-card-body {
+    padding: 14px 16px 10px;
 }
 
 .comp-card-tipo {
-    font-size: 0.78rem;
+    font-size: 0.72rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.07em;
     color: #6b7280;
 }
 
@@ -237,63 +291,92 @@
     font-size: 1.05rem;
     font-weight: 800;
     color: #111827;
-    margin-top: 2px;
+    margin-top: 3px;
+    line-height: 1.2;
 }
 
 .comp-card-sub {
-    font-size: 0.85rem;
+    font-size: 0.82rem;
     color: #6b7280;
+    margin-top: 3px;
 }
 
-.comp-card-custo-mensal {
+/* KPI de custo */
+.comp-card-kpi {
     background: #f0f4ff;
-    border: 1px solid #bfdbfe;
-    border-radius: 8px;
-    padding: 10px 12px;
+    border-top: 1px solid #dbeafe;
+    border-bottom: 1px solid #dbeafe;
+    padding: 10px 16px;
     text-align: center;
 }
 
 .comp-card-custo-label {
-    font-size: 0.8rem;
+    font-size: 0.77rem;
     color: #4b6cb7;
     font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
 }
 
 .comp-card-custo-valor {
-    font-size: 1.4rem;
+    font-size: 1.5rem;
     font-weight: 900;
     color: #1e40af;
     margin-top: 2px;
+    letter-spacing: -0.02em;
+}
+
+.comp-card.ativo-global .comp-card-custo-valor {
+    color: #1d4ed8;
 }
 
 .comp-card-custo-anual {
-    font-size: 0.82rem;
+    font-size: 0.8rem;
     color: #6b7280;
     margin-top: 2px;
 }
 
+/* Itens de detalhe */
 .comp-card-itens {
     display: grid;
     gap: 4px;
-    font-size: 0.85rem;
+    font-size: 0.84rem;
     color: #374151;
+    padding: 10px 16px;
 }
 
 .comp-card-item-linha {
     display: flex;
     justify-content: space-between;
     gap: 8px;
+    padding: 2px 0;
+    border-bottom: 1px dashed #f3f4f6;
 }
 
-.comp-card-item-nome { color: #6b7280; }
-.comp-card-item-valor { font-weight: 700; }
+.comp-card-item-linha:last-child { border-bottom: none; }
 
+.comp-card-item-nome { color: #6b7280; }
+.comp-card-item-valor { font-weight: 700; color: #1f2937; }
+
+/* Ações */
 .comp-card-acoes {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
+    padding: 10px 16px 14px;
     margin-top: auto;
+    border-top: 1px solid #f3f4f6;
 }
+
+/* KPI superiores: destaque mais pronunciado no mais econômico */
+.comp-resumo-card.destaque {
+    background: #1e40af;
+    border-color: #1e40af;
+}
+
+.comp-resumo-card.destaque .comp-resumo-label { color: #bfdbfe; }
+.comp-resumo-card.destaque .comp-resumo-valor { color: #fff; font-size: 1.15rem; }
+.comp-resumo-card.destaque .comp-resumo-sub { color: #93c5fd; }
 
 /* Tabela comparativa */
 .comp-tabela-wrap {

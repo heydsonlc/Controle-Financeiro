@@ -2008,11 +2008,25 @@ let todosOsCenarios = []; // [{tipo, id, nome, subLabel, custoMensal, custoAnual
 
 function _chaveCenario(tipo, id) { return `${tipo}_${id}`; }
 
+// Calcula custo mensal de veículo diretamente dos campos do objeto,
+// sem depender do cache assíncrono custoMensalConsolidado.
+// Usa cache como enriquecimento se já estiver disponível.
+function calcularCustoMensalVeiculoLocal(v) {
+    const cached = Number(custoMensalConsolidado?.VEICULO?.[v.id] || 0);
+    if (cached > 0) return cached;
+    let soma = 0;
+    if (v.projecao_combustivel?.valor_mensal) soma += Number(v.projecao_combustivel.valor_mensal);
+    if (v.ipva?.valor) soma += Number(v.ipva.valor) / 12;
+    if (v.seguro?.valor) soma += Number(v.seguro.valor) / 12;
+    if (v.licenciamento?.valor) soma += Number(v.licenciamento.valor) / 12;
+    return soma;
+}
+
 async function construirTodosOsCenarios(veiculos, apps) {
     const todos = [];
 
     for (const v of (veiculos || [])) {
-        let custo = Number(custoMensalConsolidado?.VEICULO?.[v.id] || 0);
+        const custo = calcularCustoMensalVeiculoLocal(v);
         const itens = [];
         if (v.projecao_combustivel?.valor_mensal) itens.push({ nome: 'Combustível/mês', valor: Number(v.projecao_combustivel.valor_mensal) });
         if (v.ipva?.valor) itens.push({ nome: 'IPVA (diluído)', valor: Number(v.ipva.valor) / 12 });
@@ -2244,15 +2258,25 @@ function renderCardsComparacao() {
             ? `onclick="abrirModalEditar(${c.id})"`
             : `onclick="abrirModalAppEditar(${c.id})"`;
 
+        const tipoRaw = c.tipo === 'VEICULO' ? (c.raw?.tipo || 'carro') : 'app';
+        const iconeSvg = tipoRaw === 'moto'
+            ? `<svg viewBox="0 0 48 32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="24" r="7"/><circle cx="39" cy="24" r="7"/><path d="M9 17l5-10h14l6 10"/><path d="M16 7h8l6 10H16z"/><path d="M23 17l3-10"/></svg>`
+            : c.tipo === 'TRANSPORTE_APP'
+            ? `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="6" width="20" height="36" rx="4"/><path d="M20 38h8"/><circle cx="24" cy="34" r="1.5" fill="currentColor" stroke="none"/></svg>`
+            : `<svg viewBox="0 0 56 32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h48M8 22l4-12h28l4 12"/><path d="M14 10l3-8h18l3 8"/><rect x="16" y="12" width="8" height="6" rx="1"/><rect x="32" y="12" width="8" height="6" rx="1"/><circle cx="12" cy="25" r="3"/><circle cx="44" cy="25" r="3"/></svg>`;
+
         return `
             <div class="comp-card${ativoGlobal ? ' ativo-global' : ''}">
                 ${ativoGlobal ? '<span class="comp-card-badge-ativo">Ativo</span>' : ''}
-                <div>
+                <div class="comp-card-visual comp-card-visual--${c.tipo === 'VEICULO' ? tipoRaw : 'app'}">
+                    <div class="comp-card-vehicle-icon">${iconeSvg}</div>
+                </div>
+                <div class="comp-card-body">
                     <div class="comp-card-tipo">${c.tipo === 'VEICULO' ? 'Veículo próprio' : 'Transporte por app'}</div>
                     <div class="comp-card-nome">${escapeHtml(c.nome)}</div>
                     <div class="comp-card-sub">${escapeHtml(c.subLabel)}</div>
                 </div>
-                <div class="comp-card-custo-mensal">
+                <div class="comp-card-kpi">
                     <div class="comp-card-custo-label">Custo mensal estimado</div>
                     <div class="comp-card-custo-valor">${formatarMoeda(c.custoMensal)}</div>
                     <div class="comp-card-custo-anual">Anual: ${formatarMoeda(c.custoAnual)}</div>
@@ -2284,6 +2308,25 @@ function renderTabelaComparativa() {
         menores[k] = Math.min(...vals);
     });
 
+    // Custo/km: km mensal é c.raw.km_mensal_estimado (app) ou estimativa por autonomia (veículo)
+    const custoKm = sel.map(c => {
+        if (c.tipo === 'TRANSPORTE_APP') {
+            const km = Number(c.raw?.km_mensal_estimado || 0);
+            return km > 0 ? c.custoMensal / km : null;
+        }
+        // veículo: custo_mensal / (combustivel_mensal / preco_medio * autonomia)
+        const preco = Number(c.raw?.preco_medio_combustivel || 0);
+        const autonomia = Number(c.raw?.autonomia_km_l || 0);
+        const comb = Number(c.raw?.projecao_combustivel?.valor_mensal || 0);
+        if (preco > 0 && autonomia > 0 && comb > 0) {
+            const kmMes = (comb / preco) * autonomia;
+            return kmMes > 0 ? c.custoMensal / kmMes : null;
+        }
+        return null;
+    });
+    const menoresCustoKm = custoKm.filter(v => v !== null);
+    const menorKm = menoresCustoKm.length ? Math.min(...menoresCustoKm) : null;
+
     const cabecalho = `<thead><tr>
         <th>Atributo</th>
         ${sel.map(c => `<th>${escapeHtml(c.nome)}</th>`).join('')}
@@ -2294,6 +2337,15 @@ function renderTabelaComparativa() {
         { label: 'Custo anual', key: 'custoAnual', fmt: formatarMoeda },
     ];
 
+    const linhaKm = `<tr>
+        <td>Custo/km</td>
+        ${custoKm.map(v => {
+            if (v === null) return `<td class="small-note">—</td>`;
+            const melhor = menorKm !== null && Math.abs(v - menorKm) < 0.001;
+            return `<td class="${melhor ? 'melhor' : ''}">${v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 })}/km</td>`;
+        }).join('')}
+    </tr>`;
+
     const corpo = `<tbody>
         ${linhas.map(({ label, key, fmt }) => `<tr>
             <td>${label}</td>
@@ -2303,6 +2355,7 @@ function renderTabelaComparativa() {
                 return `<td class="${melhor ? 'melhor' : ''}">${fmt(val)}</td>`;
             }).join('')}
         </tr>`).join('')}
+        ${linhaKm}
         <tr>
             <td>Tipo</td>
             ${sel.map(c => `<td>${c.tipo === 'VEICULO' ? 'Veículo próprio' : 'App'}</td>`).join('')}
@@ -2704,16 +2757,17 @@ function renderEfetivacaoGrade() {
     if (secTitulo) secTitulo.style.display = '';
 
     const _frequencia = (p) => {
-        const t = String(p.tipo_evento || p.metadata_json?.tipo_evento || '').toUpperCase();
-        if (['COMBUSTIVEL', 'TRANSPORTE_APP'].includes(t)) return 'Recorrencia';
+        const t = _normalizarTipoEvento(p);
+        if (['COMBUSTIVEL', 'TRANSPORTE_APP'].includes(t)) return 'Recorrência';
         if (t.includes('PARCELA')) return 'Parcela mensal';
+        if (['IPVA', 'SEGURO', 'LICENCIAMENTO'].includes(t)) return 'Anual';
         return 'Despesa prevista';
     };
 
     const _destinoFinanceiro = (p) => {
-        const t = String(p.tipo_evento || p.metadata_json?.tipo_evento || '').toUpperCase();
-        if (['COMBUSTIVEL', 'TRANSPORTE_APP'].includes(t)) return 'Recorrencia';
-        if (t.includes('PARCELA')) return 'Lancamento no cartao';
+        const t = _normalizarTipoEvento(p);
+        if (['COMBUSTIVEL', 'TRANSPORTE_APP'].includes(t)) return 'Recorrência';
+        if (t.includes('PARCELA')) return 'Lançamento no cartão';
         return 'Despesa Prevista';
     };
 
@@ -2827,12 +2881,16 @@ function fecharModalConfirmar() {
 function toggleConfirmarCartao() {
     const meio = document.getElementById('confirmar-meio')?.value;
     const wrap = document.getElementById('wrap-confirmar-cartao');
+    const wrapItem = document.getElementById('wrap-confirmar-item-agregado');
     if (!wrap) return;
     if (meio === 'cartao') {
         wrap.style.display = '';
         carregarCartoesSelect();
     } else {
         wrap.style.display = 'none';
+        if (wrapItem) wrapItem.style.display = 'none';
+        const selItem = document.getElementById('confirmar-item-agregado-id');
+        if (selItem) selItem.innerHTML = '<option value="">— Nenhuma —</option>';
     }
 }
 
@@ -2861,6 +2919,42 @@ function preencherSelectCartoes(cartoes) {
         (cartoes || []).map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
 }
 
+async function carregarItensAgregadosCartao(cartaoId) {
+    const wrap = document.getElementById('wrap-confirmar-item-agregado');
+    const sel = document.getElementById('confirmar-item-agregado-id');
+    if (!wrap || !sel) return;
+
+    if (!cartaoId) {
+        wrap.style.display = 'none';
+        sel.innerHTML = '<option value="">— Nenhuma —</option>';
+        return;
+    }
+
+    try {
+        const resp = await fetch(`${API_CARTOES}/${cartaoId}/itens`);
+        const data = await resp.json();
+        const itens = (data.success ? (data.data || []) : []).filter(i => i.ativo !== false);
+
+        if (!itens.length) {
+            wrap.style.display = 'none';
+            sel.innerHTML = '<option value="">— Nenhuma —</option>';
+            return;
+        }
+
+        sel.innerHTML = '<option value="">— Nenhuma —</option>' +
+            itens.map(i => `<option value="${i.id}">${escapeHtml(i.nome)}</option>`).join('');
+
+        // Pré-selecionar "Mobilidade" se existir neste cartão
+        const mob = itens.find(i => i.nome.toLowerCase() === 'mobilidade');
+        if (mob) sel.value = String(mob.id);
+
+        wrap.style.display = '';
+    } catch (e) {
+        console.warn('Itens agregados não carregados:', e.message);
+        wrap.style.display = 'none';
+    }
+}
+
 async function submitConfirmarPrevista() {
     const despesaId = document.getElementById('confirmar-despesa-id')?.value;
     const meio = document.getElementById('confirmar-meio')?.value;
@@ -2874,8 +2968,11 @@ async function submitConfirmarPrevista() {
     const btn = document.getElementById('btn-confirmar-submit');
     if (btn) btn.disabled = true;
 
+    const itemAgregadoId = document.getElementById('confirmar-item-agregado-id')?.value;
+
     const payload = { meio_pagamento: meio };
     if (meio === 'cartao' && cartaoId) payload.cartao_id = Number(cartaoId);
+    if (meio === 'cartao' && itemAgregadoId) payload.item_agregado_id = Number(itemAgregadoId);
     if (dataVenc) payload.data_vencimento = dataVenc;
     if (obs) payload.observacao = obs;
     if (_confirmarDadosPrevista?.categoria_id) payload.categoria_id = Number(_confirmarDadosPrevista.categoria_id);
