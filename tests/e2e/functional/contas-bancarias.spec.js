@@ -1,12 +1,12 @@
 const { test, expect } = require('@playwright/test');
 const { attachConsoleErrorTracking } = require('../helpers/console');
-const { ensureTestingEnvironment } = require('../helpers/api');
+const { skipUnlessTestingEnvironment } = require('../helpers/api');
 const { makeContaNome } = require('../helpers/test-data');
 const { assertModalAberto, assertTextoVisivel } = require('../helpers/assertions');
 
 test.describe('Contas Bancárias — fluxo funcional', () => {
 
-  test('abre modal Nova Conta ao clicar no botão', async ({ page }) => {
+  test('[safe] abre modal Nova Conta ao clicar no botão', async ({ page }) => {
     const consoleErrors = attachConsoleErrorTracking(page, '/contas-bancarias');
     await page.goto('/contas-bancarias', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle').catch(() => {});
@@ -21,8 +21,8 @@ test.describe('Contas Bancárias — fluxo funcional', () => {
     consoleErrors.assertNoCriticalErrors();
   });
 
-  test('cria nova conta bancária e confirma aparece na lista', async ({ page, request }) => {
-    await ensureTestingEnvironment(request);
+  test('[create] cria nova conta bancária e confirma aparece na lista', async ({ page, request }) => {
+    await skipUnlessTestingEnvironment(test, request, 'TEST-2A');
 
     const consoleErrors = attachConsoleErrorTracking(page, '/contas-bancarias');
     const nome = makeContaNome();

@@ -6,7 +6,7 @@ const { assertModalAberto, assertTextoVisivel } = require('../helpers/assertions
 
 test.describe('Patrimonio - fluxo funcional', () => {
 
-  test('abre modal Nova Caixinha ao clicar no botao', async ({ page }) => {
+  test('[safe] abre modal Nova Caixinha ao clicar no botao', async ({ page }) => {
     const consoleErrors = attachConsoleErrorTracking(page, '/patrimonio');
     await page.goto('/patrimonio', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle').catch(() => {});
@@ -21,7 +21,7 @@ test.describe('Patrimonio - fluxo funcional', () => {
     consoleErrors.assertNoCriticalErrors();
   });
 
-  test('cria nova caixinha e confirma aparece na lista', async ({ page, request }) => {
+  test('[create] cria nova caixinha e confirma aparece na lista', async ({ page, request }) => {
     await skipUnlessTestingEnvironment(test, request, 'TEST-2B');
 
     const consoleErrors = attachConsoleErrorTracking(page, '/patrimonio');

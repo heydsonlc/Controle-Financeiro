@@ -3,7 +3,7 @@
  * Verifica ambiente antes de criar dados para evitar contaminação em desenvolvimento.
  */
 
-const BASE_URL = 'http://localhost:5000';
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:5000';
 
 /**
  * Garante que o servidor em execução está em modo 'testing'.
@@ -26,7 +26,7 @@ async function skipUnlessTestingEnvironment(testApi, request, label = 'TEST-2B')
 
   testApi.skip(
     body.environment !== 'testing',
-    `[${label}] Testes funcionais de criaÃ§Ã£o exigem FLASK_ENV=testing. Ambiente atual: ${body.environment}.`
+    `[${label}] Testes funcionais de criacao exigem FLASK_ENV=testing. Ambiente atual: ${body.environment}.`
   );
 
   return body;

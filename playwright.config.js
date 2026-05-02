@@ -9,7 +9,7 @@ const flaskServerScript = [
   "ctx = app.app_context()",
   "ctx.push()",
   "db.create_all()",
-  "app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)"
+  "app.run(host='127.0.0.1', port=5000, debug=False, use_reloader=False)"
 ].join('; ');
 const pythonCommand = isWindows
   ? `set FLASK_ENV=testing&& set FLASK_DEBUG=0&& venv\\Scripts\\python.exe -c "${flaskServerScript}"`
@@ -27,7 +27,7 @@ module.exports = defineConfig({
     ['html', { open: 'never' }]
   ],
   use: {
-    baseURL: 'http://localhost:5000',
+    baseURL: 'http://127.0.0.1:5000',
     headless: true,
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure'
@@ -40,7 +40,7 @@ module.exports = defineConfig({
   ],
   webServer: {
     command: pythonCommand,
-    url: 'http://localhost:5000/health',
+    url: 'http://127.0.0.1:5000/health',
     reuseExistingServer: true,
     timeout: 120 * 1000,
     stdout: 'pipe',

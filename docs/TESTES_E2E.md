@@ -27,8 +27,14 @@ O MVP TEST-1 usa somente Chromium. Firefox e WebKit ficam fora deste MVP.
 ```bash
 npm run test:e2e
 npm run test:e2e:smoke
+npm run test:e2e:smoke:headed
 npm run test:e2e:headed
+npm run test:e2e:functional
+npm run test:e2e:functional:safe
+npm run test:e2e:functional:create
+npm run test:e2e:all
 npm run test:e2e:debug
+python -m pytest tests -q
 ```
 
 Comandos equivalentes:
@@ -36,13 +42,27 @@ Comandos equivalentes:
 ```bash
 npx playwright test
 npx playwright test tests/e2e/smoke.spec.js
+npx playwright test tests/e2e/smoke.spec.js --headed
+npx playwright test tests/e2e/functional/ --workers=1
 npx playwright test --headed
 npx playwright test --debug
 ```
 
+Comandos oficiais apos TEST-BASE-1:
+
+| Comando | Finalidade |
+|---------|------------|
+| `npm run test:e2e:smoke` | Smoke estavel das 13 rotas principais. Deve terminar com 13 passed e 2 skipped. |
+| `npm run test:e2e:smoke:headed` | Mesmo smoke em navegador visivel para homologacao local. |
+| `npm run test:e2e:functional` | Funcionais TEST-2A/2B com `--workers=1`; cria dados apenas se `/health` retornar `environment=testing`. |
+| `npm run test:e2e:functional:safe` | Apenas testes `[safe]`, que abrem telas/modais e nao criam dados. |
+| `npm run test:e2e:functional:create` | Apenas testes `[create]`; em `development`, devem ser skipped pelo guard de ambiente. |
+| `npm run test:e2e:all` | Smoke + funcionais em sequencia. |
+| `python -m pytest tests -q` | Valida a infraestrutura pytest com testes `test_*.py`. Scripts legados `teste_*.py` não são coletados automaticamente. |
+
 ## Servidor Flask
 
-O Playwright está configurado para subir o Flask automaticamente via `webServer`, reutilizando um servidor existente em `http://localhost:5000` quando houver.
+O Playwright está configurado para subir o Flask automaticamente via `webServer`, reutilizando um servidor existente em `http://127.0.0.1:5000` quando houver.
 
 No Windows, o comando configurado é:
 
@@ -56,9 +76,17 @@ Em Linux/Mac, a configuração usa:
 FLASK_ENV=testing FLASK_DEBUG=0 python -c "<sobe Flask em testing sem reloader>"
 ```
 
-O uso de `FLASK_ENV=testing` mantém os testes no ambiente de teste da aplicação. Os testes E2E do TEST-1 não devem usar banco remoto, DigitalOcean ou dados reais.
+O uso de `FLASK_ENV=testing` mantém os testes no ambiente de teste da aplicação. Os testes E2E não devem usar banco remoto, DigitalOcean ou dados reais.
 
-O comando usa a factory `create_app('testing')` e executa o Flask com `debug=False` e `use_reloader=False` para evitar processos residuais do reloader durante a execução do Playwright. Para uso manual fora do Playwright, o fluxo cotidiano do projeto continua sendo `venv\Scripts\python.exe backend\app.py`.
+O comando usa a factory `create_app('testing')` e executa o Flask em `127.0.0.1:5000`, com `debug=False` e `use_reloader=False`, para evitar processos residuais do reloader durante a execução do Playwright. Para uso manual fora do Playwright, o fluxo cotidiano do projeto continua sendo `venv\Scripts\python.exe backend\app.py`.
+
+### Guard de ambiente nos testes funcionais
+
+Os testes funcionais de criacao são marcados com `[create]` e chamam `skipUnlessTestingEnvironment(...)` antes de qualquer mutação. Se o Playwright reutilizar um servidor já aberto em `development`, esses testes devem ser marcados como skipped, não como falha, e nenhum dado deve ser criado.
+
+Os testes funcionais sem criacao são marcados com `[safe]`. Eles podem rodar em `development` porque apenas abrem telas/modais e validam estrutura visual mínima.
+
+O script funcional usa `--workers=1` para reduzir consumo de memória e evitar OOM/worker crash observado no baseline do TEST-BASE-1.
 
 ## Rotas Cobertas no Smoke
 
@@ -154,24 +182,24 @@ npx playwright test tests/e2e/functional/
 ### Helpers criados
 
 - `tests/e2e/helpers/test-data.js` — geradores `makeCategoriaNome()`, `makeContaNome()`, `makeFonteNome()` com prefixo `TESTE_E2E_` + timestamp.
-- `tests/e2e/helpers/api.js` — `ensureTestingEnvironment(request)`: verifica `GET /health` e aborta se `environment !== 'testing'`, impedindo criação de dados em banco real.
+- `tests/e2e/helpers/api.js` — `skipUnlessTestingEnvironment(test, request, label)`: verifica `GET /health` e marca testes de criacao como skipped se `environment !== 'testing'`, impedindo criacao de dados em banco real.
 - `tests/e2e/helpers/assertions.js` — `assertModalAberto(page, selector)` e `assertTextoVisivel(page, texto)`.
 
 ### Regra de ambiente
 
-Testes que criam dados chamam `ensureTestingEnvironment(request)` como primeira instrução. Se o Playwright reutilizar um servidor de desenvolvimento (`reuseExistingServer: true`), os testes de criação falham com mensagem explícita em vez de persistir dados reais.
+Testes que criam dados chamam `skipUnlessTestingEnvironment(...)` como primeira instrução. Se o Playwright reutilizar um servidor de desenvolvimento (`reuseExistingServer: true`), os testes de criação ficam skipped com mensagem explícita em vez de persistir dados reais.
 
 ### Cautelas aplicadas
 
 - `#fonte-recorrente` (Receitas) é desmarcado explicitamente antes de salvar, pois vem `checked` por padrão e geraria orçamentos automáticos no banco de testing.
 - `page.on('dialog', dialog => dialog.accept())` captura os `alert()` de sucesso de todos os módulos.
-- Patrimônio **excluído** deste MVP: `patrimonio.js` usa URL hardcoded `http://localhost:5000/api/patrimonio`, incompatível com ambientes de teste em porta diferente.
+- Patrimônio foi coberto posteriormente no TEST-2B.
 
 ### Comportamento esperado com servidor de desenvolvimento ativo
 
-- 3 testes de abertura de modal: **passam** (não criam dados).
-- 3 testes de criação: **falham intencionalmente** com erro `[TEST-2A] Servidor está em ambiente 'development'...`.
-- Para passar todos os 6: parar o servidor de desenvolvimento antes de rodar `npm run test:e2e:functional`.
+- 5 testes `[safe]` de abertura de modal: **passam** (não criam dados).
+- 5 testes `[create]` de criação: **skipped** quando `/health` retorna `environment=development`.
+- Para executar criação real, parar o servidor de desenvolvimento e deixar o Playwright subir o servidor `testing`.
 
 ## TEST-2B - Testes Funcionais Complementares
 
@@ -209,16 +237,20 @@ Os testes de criação usam `skipUnlessTestingEnvironment(test, request, 'TEST-2
 - login/mobile;
 - exclusões.
 
-## TEST-BASE-1 — Próxima prioridade de testes (pós-auditoria 2026-05)
+## TEST-BASE-1 — Infraestrutura de testes estabilizada (2026-05-01)
 
-A auditoria técnica de 2026-05 identificou os módulos de maior risco sem cobertura E2E adequada. O MVP TEST-BASE-1 deve ampliar a cobertura funcional nos seguintes módulos, em ordem de prioridade:
+O TEST-BASE-1 estabilizou a execucao dos testes existentes sem criar novos fluxos sensiveis. O script funcional passou a usar `--workers=1`, os testes funcionais foram classificados com tags `[safe]` e `[create]`, e os testes de criacao passaram a ser skipped em `development` em vez de falhar por guard.
+
+Tambem foi criado `pytest.ini` para estabilizar a descoberta Python usando apenas `test_*.py`. Os arquivos legados `teste_*.py` foram mantidos fora da coleta automatica porque executam codigo em tempo de import e podem mutar banco local; a conversao desses scripts para pytest seguro fica para MVP proprio.
+
+Módulos sensíveis que continuam exigindo diagnóstico antes de testes funcionais:
 
 1. **Despesas** — modal de nova despesa, edição, baixa de pagamento, filtros de competência
 2. **Cartões** — fatura consolidada, lançamentos, modal de pagamento
 3. **Financiamentos** — criação, parcelas, amortização, fluxo de pagamento
 4. **Lançamentos** — histórico unificado, filtros, confirmação de receitas
 
-Esses testes devem seguir o mesmo padrão de TEST-2A/2B: prefixo `TESTE_E2E_` + timestamp, `ensureTestingEnvironment` obrigatório, sem criar dados fora do ambiente de teste.
+Esses testes devem seguir o mesmo padrão de TEST-2A/2B: prefixo `TESTE_E2E_` + timestamp, `skipUnlessTestingEnvironment` obrigatório, sem criar dados fora do ambiente de teste.
 
 Despesas é o módulo mais crítico para o usuário final e deve ser tratado como primeira entrega do TEST-BASE-1.
 

@@ -1,12 +1,12 @@
 const { test, expect } = require('@playwright/test');
 const { attachConsoleErrorTracking } = require('../helpers/console');
-const { ensureTestingEnvironment } = require('../helpers/api');
+const { skipUnlessTestingEnvironment } = require('../helpers/api');
 const { makeFonteNome } = require('../helpers/test-data');
 const { assertModalAberto, assertTextoVisivel } = require('../helpers/assertions');
 
 test.describe('Receitas — fluxo funcional (Fonte)', () => {
 
-  test('abre modal Nova Fonte ao clicar no botão', async ({ page }) => {
+  test('[safe] abre modal Nova Fonte ao clicar no botão', async ({ page }) => {
     const consoleErrors = attachConsoleErrorTracking(page, '/receitas');
     await page.goto('/receitas', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle').catch(() => {});
@@ -20,8 +20,8 @@ test.describe('Receitas — fluxo funcional (Fonte)', () => {
     consoleErrors.assertNoCriticalErrors();
   });
 
-  test('cria nova fonte de receita (não-recorrente) e confirma aparece na lista', async ({ page, request }) => {
-    await ensureTestingEnvironment(request);
+  test('[create] cria nova fonte de receita (não-recorrente) e confirma aparece na lista', async ({ page, request }) => {
+    await skipUnlessTestingEnvironment(test, request, 'TEST-2A');
 
     const consoleErrors = attachConsoleErrorTracking(page, '/receitas');
     const nome = makeFonteNome();

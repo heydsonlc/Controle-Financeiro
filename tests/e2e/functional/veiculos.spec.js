@@ -6,7 +6,7 @@ const { assertModalAberto, assertTextoVisivel } = require('../helpers/assertions
 
 test.describe('Veiculos - fluxo funcional', () => {
 
-  test('abre modal Novo Veiculo ao clicar no botao', async ({ page }) => {
+  test('[safe] abre modal Novo Veiculo ao clicar no botao', async ({ page }) => {
     const consoleErrors = attachConsoleErrorTracking(page, '/veiculos');
     await page.goto('/veiculos', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle').catch(() => {});
@@ -22,7 +22,7 @@ test.describe('Veiculos - fluxo funcional', () => {
     consoleErrors.assertNoCriticalErrors();
   });
 
-  test('cria novo veiculo simulado e confirma aparece na lista', async ({ page, request }) => {
+  test('[create] cria novo veiculo simulado e confirma aparece na lista', async ({ page, request }) => {
     await skipUnlessTestingEnvironment(test, request, 'TEST-2B');
 
     const consoleErrors = attachConsoleErrorTracking(page, '/veiculos');

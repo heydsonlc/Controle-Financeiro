@@ -1,12 +1,12 @@
 const { test, expect } = require('@playwright/test');
 const { attachConsoleErrorTracking } = require('../helpers/console');
-const { ensureTestingEnvironment } = require('../helpers/api');
+const { skipUnlessTestingEnvironment } = require('../helpers/api');
 const { makeCategoriaNome } = require('../helpers/test-data');
 const { assertModalAberto, assertTextoVisivel } = require('../helpers/assertions');
 
 test.describe('Categorias — fluxo funcional', () => {
 
-  test('abre modal Nova Categoria ao clicar no botão', async ({ page }) => {
+  test('[safe] abre modal Nova Categoria ao clicar no botão', async ({ page }) => {
     const consoleErrors = attachConsoleErrorTracking(page, '/categorias');
     await page.goto('/categorias', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle').catch(() => {});
@@ -20,8 +20,8 @@ test.describe('Categorias — fluxo funcional', () => {
     consoleErrors.assertNoCriticalErrors();
   });
 
-  test('cria nova categoria e confirma aparece na lista', async ({ page, request }) => {
-    await ensureTestingEnvironment(request);
+  test('[create] cria nova categoria e confirma aparece na lista', async ({ page, request }) => {
+    await skipUnlessTestingEnvironment(test, request, 'TEST-2A');
 
     const consoleErrors = attachConsoleErrorTracking(page, '/categorias');
     const nome = makeCategoriaNome();

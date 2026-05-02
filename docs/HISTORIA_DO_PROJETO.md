@@ -282,6 +282,16 @@ O CORS deixou de ser aberto por wildcard e passou a aceitar apenas origens locai
 
 ---
 
+## MVP TEST-BASE-1 - Estabilizar infraestrutura de testes (2026-05-01)
+
+O TEST-BASE-1 estabilizou a execucao dos testes sem alterar aplicacao, backend funcional, frontend funcional, banco ou regras financeiras. Os scripts npm passaram a separar smoke, smoke headed, funcionais completos, funcionais `[safe]`, funcionais `[create]` e suite combinada.
+
+Os testes funcionais agora rodam com `--workers=1`, reduzindo risco de OOM/worker crash. Fluxos que criam dados usam guard de ambiente e ficam skipped quando o servidor reutilizado esta em `development`; criacao continua permitida somente quando `/health` retorna `environment=testing`.
+
+Foi criado `pytest.ini` para descoberta segura de testes Python `test_*.py`. Os scripts legados `teste_*.py` ficaram fora da coleta automatica porque executam codigo em tempo de import e podem mutar banco local; sua conversao para pytest seguro fica para MVP proprio.
+
+---
+
 ## Auditoria Técnica — Análise Sênior (2026-05-01)
 
 Uma auditoria técnica de 360° foi realizada sobre o estado atual do projeto.
@@ -302,7 +312,7 @@ Uma auditoria técnica de 360° foi realizada sobre o estado atual do projeto.
 - `numero_cartao` e `codigo_seguranca` em texto puro no banco
 
 **Ordem de trabalho definida (ver `README_TECNICO.md` para tabela completa):**
-SEC-0 ✅ → TEST-BASE-1 → ICONES-1B → DB-CLEAN-1 → CARD-SEC-1 → FIN-RULES-1 → TEST-FIN-1 → DATA-HYGIENE-1 → PERF-1 → FRONT-ARCH-1 → SEG-1 → DEPLOY-1
+SEC-0 ✅ → TEST-BASE-1 ✅ → ICONES-1B → DB-CLEAN-1 → CARD-SEC-1 → FIN-RULES-1 → TEST-FIN-1 → DATA-HYGIENE-1 → PERF-1 → FRONT-ARCH-1 → SEG-1 → DEPLOY-1
 
 ---
 
@@ -311,7 +321,7 @@ SEC-0 ✅ → TEST-BASE-1 → ICONES-1B → DB-CLEAN-1 → CARD-SEC-1 → FIN-RU
 Para o roadmap técnico completo com prioridades atualizadas, ver `README_TECNICO.md` — seção "Roadmap Técnico — Pós-Auditoria".
 
 Prioridades imediatas:
-- TEST-BASE-1: ampliar cobertura E2E em Despesas, Cartões e Financiamentos
+- TEST-FIN-1: ampliar cobertura E2E em Despesas, Cartões e Financiamentos
 - DB-CLEAN-1: corrigir débitos SQLAlchemy 2.0
 - CARD-SEC-1: remover dados sensíveis de cartão em texto puro
 - SEG-1: autenticação global (bloqueante para qualquer deploy)

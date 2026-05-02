@@ -182,6 +182,19 @@ Você verá a página inicial do sistema.
 
 ---
 
+## Comandos de Teste
+
+```bash
+npm run test:e2e:smoke
+npm run test:e2e:functional
+npm run test:e2e:functional:safe
+python -m pytest tests -q
+```
+
+O smoke deve passar sempre com 13 rotas principais e 2 rotas diagnósticas skipped. Os testes funcionais usam `--workers=1`; fluxos `[create]` só criam dados quando `/health` retorna `environment=testing`.
+
+---
+
 ## Estado Atual (v1.1 — 2026-05)
 
 O sistema está funcionalmente completo e em uso local. Módulos ativos:
@@ -198,7 +211,7 @@ O sistema está funcionalmente completo e em uso local. Módulos ativos:
 
 | # | MVP | Objetivo |
 |---|-----|----------|
-| 1 | TEST-BASE-1 | Ampliar cobertura E2E em Despesas, Cartões e Financiamentos |
+| 1 | TEST-FIN-1 | Ampliar cobertura E2E em Despesas, Cartões e Financiamentos |
 | 2 | ICONES-1B | Ícones de categoria nos lançamentos de cartão |
 | 3 | DB-CLEAN-1 | Corrigir débitos SQLAlchemy 2.0 (`lazy='dynamic'`, `utcnow`, N+1) |
 | 4 | CARD-SEC-1 | Remover `numero_cartao`/`codigo_seguranca` em texto puro |
