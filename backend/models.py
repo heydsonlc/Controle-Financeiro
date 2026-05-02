@@ -417,6 +417,139 @@ class ItemAgregado(db.Model):
         return result
 
 
+class CategoriaCartao(db.Model):
+    """
+    Categoria gerencial global usada para agrupar despesas no cartão.
+    """
+    __tablename__ = 'categoria_cartao'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False, unique=True)
+    descricao = db.Column(db.Text)
+    cor = db.Column(db.String(7), default='#6c757d')
+    icone = db.Column(db.String(50), nullable=True)
+    logo_arquivo = db.Column(db.String(255), nullable=True)
+    logo_mime = db.Column(db.String(100), nullable=True)
+    logo_tamanho = db.Column(db.Integer, nullable=True)
+    logo_original_nome = db.Column(db.String(255), nullable=True)
+    logo_criado_em = db.Column(db.DateTime, nullable=True)
+    ativo = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    despesas_vinculadas = db.relationship('CategoriaCartaoDespesa', back_populates='categoria_cartao', lazy='dynamic')
+    limites_cartao = db.relationship('CartaoCategoriaLimite', back_populates='categoria_cartao', lazy='dynamic')
+
+    def __repr__(self):
+        return f'<CategoriaCartao {self.nome}>'
+
+    @property
+    def logo_url(self):
+        if not self.logo_arquivo or not self.id:
+            return None
+        return f'/api/categorias-cartao/{self.id}/logo'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'nome': self.nome,
+            'descricao': self.descricao,
+            'cor': self.cor,
+            'icone': self.icone,
+            'logo_arquivo': self.logo_arquivo,
+            'logo_mime': self.logo_mime,
+            'logo_tamanho': self.logo_tamanho,
+            'logo_original_nome': self.logo_original_nome,
+            'logo_criado_em': self.logo_criado_em.isoformat() if self.logo_criado_em else None,
+            'logo_url': self.logo_url,
+            'ativo': bool(self.ativo),
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+
+class CategoriaCartaoDespesa(db.Model):
+    """
+    Vincula uma Categoria do Cartao global a uma Categoria da Despesa.
+    """
+    __tablename__ = 'categoria_cartao_despesa'
+
+    id = db.Column(db.Integer, primary_key=True)
+    categoria_cartao_id = db.Column(db.Integer, db.ForeignKey('categoria_cartao.id'), nullable=False)
+    categoria_id = db.Column(db.Integer, db.ForeignKey('categoria.id'), nullable=False)
+    ativo = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    categoria_cartao = db.relationship('CategoriaCartao', back_populates='despesas_vinculadas')
+    categoria = db.relationship('Categoria', foreign_keys=[categoria_id])
+
+    __table_args__ = (
+        db.UniqueConstraint('categoria_cartao_id', 'categoria_id', name='ux_categoria_cartao_despesa_par'),
+        db.Index('ix_categoria_cartao_despesa_cartao', 'categoria_cartao_id'),
+        db.Index('ix_categoria_cartao_despesa_categoria', 'categoria_id'),
+    )
+
+    def __repr__(self):
+        return f'<CategoriaCartaoDespesa Cartao:{self.categoria_cartao_id} Categoria:{self.categoria_id}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'categoria_cartao_id': self.categoria_cartao_id,
+            'categoria_cartao_nome': self.categoria_cartao.nome if self.categoria_cartao else None,
+            'categoria_id': self.categoria_id,
+            'categoria_nome': self.categoria.nome if self.categoria else None,
+            'ativo': bool(self.ativo),
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+
+class CartaoCategoriaLimite(db.Model):
+    """
+    Limite mensal de uma Categoria do Cartao global em um cartao especifico.
+    """
+    __tablename__ = 'cartao_categoria_limite'
+
+    id = db.Column(db.Integer, primary_key=True)
+    cartao_id = db.Column(db.Integer, db.ForeignKey('item_despesa.id'), nullable=False)
+    categoria_cartao_id = db.Column(db.Integer, db.ForeignKey('categoria_cartao.id'), nullable=False)
+    limite_mensal = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    vigencia_inicio = db.Column(db.Date, nullable=True)
+    vigencia_fim = db.Column(db.Date, nullable=True)
+    ativo = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    cartao = db.relationship('ItemDespesa', foreign_keys=[cartao_id])
+    categoria_cartao = db.relationship('CategoriaCartao', back_populates='limites_cartao')
+
+    __table_args__ = (
+        db.UniqueConstraint('cartao_id', 'categoria_cartao_id', name='ux_cartao_categoria_limite_cartao_categoria'),
+        db.Index('ix_cartao_categoria_limite_cartao', 'cartao_id'),
+        db.Index('ix_cartao_categoria_limite_categoria', 'categoria_cartao_id'),
+    )
+
+    def __repr__(self):
+        return f'<CartaoCategoriaLimite Cartao:{self.cartao_id} Categoria:{self.categoria_cartao_id}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'cartao_id': self.cartao_id,
+            'cartao_nome': self.cartao.nome if self.cartao else None,
+            'categoria_cartao_id': self.categoria_cartao_id,
+            'categoria_cartao_nome': self.categoria_cartao.nome if self.categoria_cartao else None,
+            'limite_mensal': float(self.limite_mensal) if self.limite_mensal is not None else 0,
+            'vigencia_inicio': self.vigencia_inicio.isoformat() if self.vigencia_inicio else None,
+            'vigencia_fim': self.vigencia_fim.isoformat() if self.vigencia_fim else None,
+            'ativo': bool(self.ativo),
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+
 class OrcamentoAgregado(db.Model):
     """
     Teto de gastos mensal para sub-itens do cartão
@@ -475,6 +608,7 @@ class LancamentoAgregado(db.Model):
     item_agregado_id = db.Column(db.Integer, db.ForeignKey('item_agregado.id'), nullable=True)
     cartao_id = db.Column(db.Integer, db.ForeignKey('item_despesa.id'), nullable=False)  # Referência direta ao cartão
     categoria_id = db.Column(db.Integer, db.ForeignKey('categoria.id'), nullable=False)  # Categoria da DESPESA (analítica)
+    categoria_cartao_id = db.Column(db.Integer, db.ForeignKey('categoria_cartao.id'), nullable=True)
     descricao = db.Column(db.String(200), nullable=False)
     valor = db.Column(db.Numeric(10, 2), nullable=False)
     data_compra = db.Column(db.Date, nullable=False)
@@ -504,6 +638,7 @@ class LancamentoAgregado(db.Model):
     # Relacionamentos
     item_agregado = db.relationship('ItemAgregado', back_populates='lancamentos_agregados')
     categoria = db.relationship('Categoria')
+    categoria_cartao = db.relationship('CategoriaCartao', foreign_keys=[categoria_cartao_id])
     item_despesa_recorrente = db.relationship(
         'ItemDespesa',
         foreign_keys=[item_despesa_id],
@@ -516,6 +651,7 @@ class LancamentoAgregado(db.Model):
         db.Index('idx_lanc_agregado_data', 'data_compra'),
         db.Index('idx_lanc_agregado_fatura', 'mes_fatura'),
         db.Index('idx_lanc_agregado_item_fatura', 'item_agregado_id', 'mes_fatura'),
+        db.Index('idx_lanc_agregado_categoria_cartao_fatura', 'categoria_cartao_id', 'mes_fatura'),
     )
 
     def __repr__(self):
@@ -525,6 +661,7 @@ class LancamentoAgregado(db.Model):
         return {
             'id': self.id,
             'item_agregado_id': self.item_agregado_id,
+            'categoria_cartao_id': self.categoria_cartao_id,
             'descricao': self.descricao,
             'valor': float(self.valor),
             'data_compra': self.data_compra.strftime('%Y-%m-%d'),
@@ -533,7 +670,13 @@ class LancamentoAgregado(db.Model):
             'total_parcelas': self.total_parcelas,
             'observacoes': self.observacoes,
             'is_recorrente': self.is_recorrente,
-            'item_despesa_id': self.item_despesa_id
+            'item_despesa_id': self.item_despesa_id,
+            'categoria_cartao': {
+                'id': self.categoria_cartao.id,
+                'nome': self.categoria_cartao.nome,
+                'icone': self.categoria_cartao.icone,
+                'logo_url': self.categoria_cartao.logo_url
+            } if self.categoria_cartao else None
         }
 
 

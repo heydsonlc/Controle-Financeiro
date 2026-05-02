@@ -212,7 +212,7 @@ def register_blueprints(app):
     """
     # Importar blueprints aqui para evitar importação circular
     try:
-        from backend.routes.categorias import categorias_bp
+        from backend.routes.categorias import categorias_bp, categorias_cartao_bp
         from backend.routes.despesas import despesas_bp
         from backend.routes.recorrencias import recorrencias_bp
         from backend.routes.cartoes import cartoes_bp
@@ -230,7 +230,7 @@ def register_blueprints(app):
         from backend.routes.despesas_previstas import despesas_previstas_bp
         from backend.routes.mobilidade_app import mobilidade_app_bp
     except ImportError:
-        from routes.categorias import categorias_bp
+        from routes.categorias import categorias_bp, categorias_cartao_bp
         from routes.despesas import despesas_bp
         from routes.recorrencias import recorrencias_bp
         from routes.cartoes import cartoes_bp
@@ -250,6 +250,7 @@ def register_blueprints(app):
 
     # Registrar blueprints
     app.register_blueprint(categorias_bp, url_prefix='/api/categorias')
+    app.register_blueprint(categorias_cartao_bp, url_prefix='/api/categorias-cartao')
     app.register_blueprint(despesas_bp, url_prefix='/api/despesas')
     app.register_blueprint(recorrencias_bp, url_prefix='/api/recorrencias')
     app.register_blueprint(cartoes_bp, url_prefix='/api/cartoes')

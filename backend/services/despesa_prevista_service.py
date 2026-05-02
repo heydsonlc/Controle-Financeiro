@@ -10,12 +10,14 @@ try:
     from backend.models import DespesaPrevistaAcaoLog
     from backend.services.despesa_prevista_cascata_service import ajustar_ciclo_um_passo
     from backend.services.cartao_service import CartaoService
+    from backend.services.categoria_cartao_service import CategoriaCartaoService
 except ImportError:
     from models import db, DespesaPrevista, ItemDespesa, Conta
     from services.veiculo_uso_service import registrar_despesa_combustivel_confirmada
     from models import DespesaPrevistaAcaoLog
     from services.despesa_prevista_cascata_service import ajustar_ciclo_um_passo
     from services.cartao_service import CartaoService
+    from services.categoria_cartao_service import CategoriaCartaoService
 
 
 STATUS_PREVISTA = 'PREVISTA'
@@ -122,13 +124,16 @@ def _criar_conta_para_prevista(desp: DespesaPrevista, meio_pagamento: str,
 
 def _criar_lancamento_para_prevista(desp: DespesaPrevista, cartao_id: int,
                                     data_vencimento: date, categoria_id: int,
-                                    observacao: str | None) -> dict:
+                                    observacao: str | None,
+                                    item_agregado_id: int | None = None,
+                                    categoria_cartao_id: int | None = None) -> dict:
     nome = _descricao_para_prevista(desp)
     valor = Decimal(str(desp.valor_previsto or 0))
 
     dados = {
         'cartao_id': cartao_id,
-        'item_agregado_id': None,
+        'item_agregado_id': item_agregado_id,
+        'categoria_cartao_id': categoria_cartao_id,
         'categoria_id': categoria_id,
         'descricao': nome,
         'valor': valor,
@@ -145,6 +150,8 @@ def _criar_lancamento_para_prevista(desp: DespesaPrevista, cartao_id: int,
         'id': lancamento.id,
         'descricao': lancamento.descricao,
         'valor': float(lancamento.valor),
+        'item_agregado_id': lancamento.item_agregado_id,
+        'categoria_cartao_id': lancamento.categoria_cartao_id,
         'data_vencimento': data_vencimento.isoformat(),
     }
 
@@ -189,7 +196,26 @@ def confirmar(despesa_id: int, payload: dict | None = None) -> tuple[DespesaPrev
             if not cartao_id_raw:
                 raise ValueError('cartao_id é obrigatório quando meio_pagamento=cartao')
             cartao_id = int(cartao_id_raw)
-            entidade_criada = _criar_lancamento_para_prevista(desp, cartao_id, data_vencimento, categoria_id, observacao)
+            item_agregado_id_raw = (payload or {}).get('item_agregado_id')
+            item_agregado_id = int(item_agregado_id_raw) if item_agregado_id_raw else None
+            categoria_cartao_id_raw = (payload or {}).get('categoria_cartao_id')
+            resolucao_cartao = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(
+                cartao_id=cartao_id,
+                categoria_id=categoria_id,
+                categoria_cartao_id=categoria_cartao_id_raw,
+            )
+            categoria_cartao_id = resolucao_cartao.get('categoria_cartao_id')
+            entidade_criada = _criar_lancamento_para_prevista(
+                desp,
+                cartao_id,
+                data_vencimento,
+                categoria_id,
+                observacao,
+                item_agregado_id=item_agregado_id,
+                categoria_cartao_id=categoria_cartao_id,
+            )
+            if entidade_criada and resolucao_cartao.get('origem'):
+                entidade_criada['categoria_cartao_origem'] = resolucao_cartao.get('origem')
         else:
             entidade_criada = _criar_conta_para_prevista(desp, meio, data_vencimento, categoria_id, observacao)
 

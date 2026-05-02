@@ -232,6 +232,10 @@ def criar_recorrencia():
         if not mes_competencia and data_vencimento:
             mes_competencia = calcular_competencia(data_vencimento)
 
+        meio_pagamento = _normalizar_meio_pagamento(dados.get('meio_pagamento'))
+        cartao_id = _to_int(dados.get('cartao_id'))
+        item_agregado_id = _to_int(dados.get('item_agregado_id'))
+
         item = ItemDespesa(
             nome=nome,
             descricao=dados.get('descricao'),
@@ -243,9 +247,9 @@ def criar_recorrencia():
             tipo_recorrencia=tipo_recorrencia,
             mes_competencia=mes_competencia,
             tipo='Simples',
-            meio_pagamento=_normalizar_meio_pagamento(dados.get('meio_pagamento')),
-            cartao_id=_to_int(dados.get('cartao_id')),
-            item_agregado_id=_to_int(dados.get('item_agregado_id')),
+            meio_pagamento=meio_pagamento,
+            cartao_id=cartao_id,
+            item_agregado_id=item_agregado_id,
         )
         db.session.add(item)
         db.session.flush()

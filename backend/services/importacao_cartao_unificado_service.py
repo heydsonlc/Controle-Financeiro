@@ -8,6 +8,7 @@ from sqlalchemy import func
 
 try:
     from backend.models import ItemDespesa, ItemAgregado, LancamentoAgregado
+    from backend.services.categoria_cartao_service import CategoriaCartaoService
     from backend.services.importacao_cartao_service import ImportacaoCartaoService
     from backend.services.parsers import (
         importacao_csv_parser,
@@ -16,6 +17,7 @@ try:
     )
 except ImportError:
     from models import ItemDespesa, ItemAgregado, LancamentoAgregado
+    from services.categoria_cartao_service import CategoriaCartaoService
     from services.importacao_cartao_service import ImportacaoCartaoService
     from services.parsers import (
         importacao_csv_parser,
@@ -190,7 +192,8 @@ class ImportacaoCartaoUnificadoService:
             descricao_normalizada = linha.get('descricao_normalizada') or descricao_original
             parcela_atual = linha.get('parcela_atual') or linha.get('numero_parcela') or 1
             total_parcelas = linha.get('total_parcelas') or 1
-            item_agregado_id = linha.get('item_agregado_id') or linha.get('categoria_cartao_id')
+            item_agregado_id = linha.get('item_agregado_id')
+            categoria_cartao_id = linha.get('categoria_cartao_id')
             categoria_id = linha.get('categoria_id') or linha.get('categoria_despesa_id')
 
             normalizadas.append({
@@ -213,8 +216,9 @@ class ImportacaoCartaoUnificadoService:
                 'categoria_detectada': linha.get('categoria_detectada'),
                 'categoria_despesa_id': categoria_id,
                 'categoria_id': categoria_id,
-                'categoria_cartao_id': item_agregado_id,
+                'categoria_cartao_id': categoria_cartao_id,
                 'item_agregado_id': item_agregado_id,
+                'categoria_cartao_origem': linha.get('categoria_cartao_origem'),
                 'confianca_categoria': linha.get('confianca_categoria') or 'baixa',
                 'categoria_sugerida_origem': linha.get('categoria_sugerida_origem'),
                 'duplicidade': linha.get('duplicidade'),
@@ -257,17 +261,28 @@ class ImportacaoCartaoUnificadoService:
                 linha['categoria_sugerida_origem'] = origem
                 linha['confianca_categoria'] = 'alta' if origem == 'historico' else 'media'
 
-            item_sugerido, origem_item = ImportacaoCartaoUnificadoService._sugerir_categoria_cartao(
-                linha,
-                cartao.id,
-                categorias_cartao,
-            )
-            if item_sugerido:
-                linha['categoria_cartao_id'] = item_sugerido.id
-                linha['item_agregado_id'] = item_sugerido.id
-                linha['categoria_cartao_sugerida_id'] = item_sugerido.id
-                linha['categoria_cartao_sugerida_nome'] = item_sugerido.nome
-                linha['categoria_cartao_sugerida_origem'] = origem_item
+            if not linha.get('categoria_cartao_id') and linha.get('categoria_id'):
+                resolucao_cartao = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(
+                    cartao_id=cartao.id,
+                    categoria_id=linha.get('categoria_id'),
+                    categoria_cartao_id=linha.get('categoria_cartao_id'),
+                )
+                categoria_cartao_id = resolucao_cartao.get('categoria_cartao_id')
+                if categoria_cartao_id:
+                    linha['categoria_cartao_id'] = int(categoria_cartao_id)
+                    linha['categoria_cartao_origem'] = resolucao_cartao.get('origem')
+                    linha['categoria_cartao_sugerida_id'] = int(categoria_cartao_id)
+                    linha['categoria_cartao_sugerida_origem'] = resolucao_cartao.get('origem')
+
+            if not linha.get('item_agregado_id'):
+                item_sugerido, origem_item = ImportacaoCartaoUnificadoService._sugerir_categoria_cartao(
+                    linha,
+                    cartao.id,
+                    categorias_cartao,
+                )
+                if item_sugerido:
+                    linha['item_agregado_id'] = item_sugerido.id
+                    linha['item_agregado_origem'] = origem_item
         return linhas
 
     @staticmethod
@@ -335,10 +350,16 @@ class ImportacaoCartaoUnificadoService:
                     item_agregado_id = None
                 if item_agregado_id not in ids_categorias_cartao:
                     linha['item_agregado_id'] = None
-                    linha['categoria_cartao_id'] = None
                     mensagens.append('Categoria do cartao nao pertence ao cartao selecionado.')
 
-            if not linha.get('item_agregado_id'):
+            if linha.get('categoria_cartao_id'):
+                try:
+                    linha['categoria_cartao_id'] = int(linha.get('categoria_cartao_id'))
+                except (TypeError, ValueError):
+                    linha['categoria_cartao_id'] = None
+                    mensagens.append('Categoria do cartao global invalida.')
+
+            if not (linha.get('item_agregado_id') or linha.get('categoria_cartao_id')):
                 linha['status'] = 'sem_categoria_cartao'
                 mensagens.append('Informe a categoria do cartao.')
 

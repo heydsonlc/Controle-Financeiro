@@ -4,6 +4,7 @@ Rotas para gerenciamento de CartÃµes de CrÃ©dito
 from flask import Blueprint, request, jsonify, current_app
 from backend.models import db, ItemDespesa, ConfigAgregador, ItemAgregado, OrcamentoAgregado, LancamentoAgregado, Categoria
 from backend.services.cartao_service import CartaoService
+from backend.services.categoria_cartao_service import CategoriaCartaoService
 from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import func, and_
@@ -313,6 +314,88 @@ def excluir_item_agregado(item_id):
 
 
 # ============================================================================
+# ROTAS PARA LIMITES POR CATEGORIA DO CARTAO GLOBAL
+# ============================================================================
+
+@cartoes_bp.route('/<int:cartao_id>/categorias-limite', methods=['GET'])
+def listar_categorias_limite(cartao_id):
+    try:
+        limites = CategoriaCartaoService.listar_limites_cartao(
+            cartao_id,
+            ativo=None if request.args.get('ativo') is None else request.args.get('ativo').lower() == 'true',
+        )
+        return jsonify({
+            'success': True,
+            'data': [limite.to_dict() for limite in limites]
+        }), 200
+    except ValueError as exc:
+        return _business_error(str(exc), 400)
+    except Exception:
+        return _internal_error('listar_categorias_limite')
+
+
+@cartoes_bp.route('/<int:cartao_id>/categorias-limite', methods=['POST'])
+def salvar_categoria_limite(cartao_id):
+    try:
+        dados = request.get_json(silent=True) or {}
+        limite, criado = CategoriaCartaoService.vincular_categoria_cartao_ao_cartao(
+            cartao_id=cartao_id,
+            categoria_cartao_id=dados.get('categoria_cartao_id'),
+            limite_mensal=dados.get('limite_mensal', 0),
+            vigencia_inicio=dados.get('vigencia_inicio'),
+            vigencia_fim=dados.get('vigencia_fim'),
+            ativo=dados.get('ativo', True),
+        )
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'data': limite.to_dict(),
+            'created': criado
+        }), 201 if criado else 200
+    except ValueError as exc:
+        db.session.rollback()
+        return _business_error(str(exc), 400)
+    except Exception:
+        db.session.rollback()
+        return _internal_error('salvar_categoria_limite')
+
+
+@cartoes_bp.route('/<int:cartao_id>/categorias-limite/<int:limite_id>', methods=['PUT'])
+def atualizar_categoria_limite(cartao_id, limite_id):
+    try:
+        dados = request.get_json(silent=True) or {}
+        limite = CategoriaCartaoService.atualizar_limite(cartao_id, limite_id, **dados)
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'data': limite.to_dict()
+        }), 200
+    except ValueError as exc:
+        db.session.rollback()
+        return _business_error(str(exc), 400)
+    except Exception:
+        db.session.rollback()
+        return _internal_error('atualizar_categoria_limite')
+
+
+@cartoes_bp.route('/<int:cartao_id>/categorias-limite/<int:limite_id>', methods=['DELETE'])
+def remover_categoria_limite(cartao_id, limite_id):
+    try:
+        limite = CategoriaCartaoService.desativar_limite(cartao_id, limite_id)
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'data': limite.to_dict()
+        }), 200
+    except ValueError as exc:
+        db.session.rollback()
+        return _business_error(str(exc), 400)
+    except Exception:
+        db.session.rollback()
+        return _internal_error('remover_categoria_limite')
+
+
+# ============================================================================
 # ROTAS PARA ORÃ‡AMENTOS AGREGADOS (PrevisÃ£o de gastos)
 # ============================================================================
 
@@ -507,6 +590,7 @@ def criar_lancamento(item_id):
         dados_lancamento = {
             'cartao_id': item_agregado.item_despesa_id,
             'item_agregado_id': item_id,
+            'categoria_cartao_id': dados.get('categoria_cartao_id'),
             'descricao': dados['descricao'],
             'valor': dados['valor'],
             'data_compra': data_compra,
@@ -602,6 +686,7 @@ def criar_lancamento_sem_categoria(cartao_id):
         dados_lancamento = {
             'cartao_id': cartao_id,
             'item_agregado_id': dados.get('item_agregado_id'),  # OPCIONAL (None se nÃ£o informado)
+            'categoria_cartao_id': dados.get('categoria_cartao_id'),
             'categoria_id': dados['categoria_id'],  # Categoria da DESPESA (obrigatÃ³ria)
             'descricao': dados['descricao'],
             'valor': dados['valor'],
@@ -668,6 +753,8 @@ def atualizar_lancamento(lancamento_id):
         lancamento.numero_parcela = dados.get('numero_parcela', lancamento.numero_parcela)
         lancamento.total_parcelas = dados.get('total_parcelas', lancamento.total_parcelas)
         lancamento.observacoes = dados.get('observacoes', lancamento.observacoes)
+        if 'categoria_cartao_id' in dados:
+            lancamento.categoria_cartao_id = dados.get('categoria_cartao_id') or None
 
         db.session.commit()
         return jsonify(lancamento.to_dict()), 200

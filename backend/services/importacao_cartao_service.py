@@ -31,8 +31,10 @@ from sqlalchemy import func
 
 try:
     from backend.models import db, ItemDespesa, LancamentoAgregado, ItemAgregado
+    from backend.services.categoria_cartao_service import CategoriaCartaoService
 except ImportError:
     from models import db, ItemDespesa, LancamentoAgregado, ItemAgregado
+    from services.categoria_cartao_service import CategoriaCartaoService
 
 
 class ImportacaoCartaoService:
@@ -265,6 +267,7 @@ class ImportacaoCartaoService:
         categoria_id,
         item_agregado_id,
         competencia_base,
+        categoria_cartao_id=None,
         compra_id=None,
         origem_importacao='csv'
     ):
@@ -282,6 +285,7 @@ class ImportacaoCartaoService:
             cartao_id (int): ID do cartÃ£o
             categoria_id (int): Categoria da despesa
             item_agregado_id (int): Categoria do cartÃ£o (opcional)
+            categoria_cartao_id (int): Categoria do cartao global (opcional)
             competencia_base (date): CompetÃªncia escolhida pelo usuÃ¡rio (YYYY-MM-01)
             compra_id (str): UUID da compra (se None, gera novo)
 
@@ -316,6 +320,7 @@ class ImportacaoCartaoService:
                 'cartao_id': cartao_id,
                 'categoria_id': categoria_id,
                 'item_agregado_id': item_agregado_id,
+                'categoria_cartao_id': categoria_cartao_id,
                 'compra_id': compra_id,
                 'is_importado': True,
                 'origem_importacao': origem_importacao
@@ -414,6 +419,7 @@ class ImportacaoCartaoService:
             parcela_str = linha.get('parcela', '1/1')  # Opcional
             categoria_id = linha.get('categoria_id')
             item_agregado_id = linha.get('item_agregado_id')  # Opcional
+            categoria_cartao_id = linha.get('categoria_cartao_id') if not item_agregado_id else None
             origem_importacao = linha.get('origem_importacao') or 'csv'
 
             # Validar obrigatÃ³rios
@@ -479,6 +485,13 @@ class ImportacaoCartaoService:
                 })
                 continue
 
+            resolucao_cartao = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(
+                cartao_id=cartao_id,
+                categoria_id=categoria_id,
+                categoria_cartao_id=categoria_cartao_id,
+            )
+            categoria_cartao_id = resolucao_cartao.get('categoria_cartao_id')
+
             # Reconhecer despesa fixa
             despesa_fixa = ImportacaoCartaoService.reconhecer_despesa_fixa(descricao_normalizada, cartao_id)
             is_recorrente = despesa_fixa is not None
@@ -499,6 +512,7 @@ class ImportacaoCartaoService:
                     categoria_id=categoria_id,
                     item_agregado_id=item_agregado_id,
                     competencia_base=competencia_alvo,
+                    categoria_cartao_id=categoria_cartao_id,
                     compra_id=None,
                     origem_importacao=origem_importacao
                 )
@@ -517,6 +531,7 @@ class ImportacaoCartaoService:
                     'cartao_id': cartao_id,
                     'categoria_id': categoria_id,
                     'item_agregado_id': item_agregado_id,
+                    'categoria_cartao_id': categoria_cartao_id,
                     'compra_id': compra_id,
                     'is_importado': True,
                     'origem_importacao': origem_importacao
@@ -638,6 +653,7 @@ class ImportacaoCartaoService:
                     cartao_id=lanc['cartao_id'],
                     categoria_id=lanc['categoria_id'],
                     item_agregado_id=lanc.get('item_agregado_id'),
+                    categoria_cartao_id=lanc.get('categoria_cartao_id'),
                     compra_id=lanc['compra_id'],
                     is_importado=lanc['is_importado'],
                     origem_importacao=lanc['origem_importacao'],

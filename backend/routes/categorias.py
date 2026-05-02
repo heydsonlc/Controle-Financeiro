@@ -16,11 +16,14 @@ from flask import Blueprint, current_app, jsonify, request, send_from_directory
 from werkzeug.utils import secure_filename
 try:
     from backend.models import db, Categoria
+    from backend.services.categoria_cartao_service import CategoriaCartaoService
 except ImportError:
     from models import db, Categoria
+    from services.categoria_cartao_service import CategoriaCartaoService
 
 # Criar blueprint
 categorias_bp = Blueprint('categorias', __name__)
+categorias_cartao_bp = Blueprint('categorias_cartao', __name__)
 
 ALLOWED_LOGO_EXTENSIONS = {'png', 'webp', 'jpg', 'jpeg'}
 ALLOWED_LOGO_MIME_TYPES = {
@@ -517,3 +520,166 @@ def deletar_categoria(id):
             'success': False,
             'error': str(e)
         }), 500
+
+
+# ============================================================================
+# CATEGORIAS DO CARTAO - NOVA ARQUITETURA
+# ============================================================================
+
+def _bool_query_arg(value):
+    if value is None:
+        return None
+    return str(value).strip().lower() in {'1', 'true', 'sim', 'yes'}
+
+
+@categorias_cartao_bp.route('', methods=['GET'])
+def listar_categorias_cartao():
+    try:
+        categorias = CategoriaCartaoService.listar_categorias(
+            ativo=_bool_query_arg(request.args.get('ativo'))
+        )
+        return jsonify({
+            'success': True,
+            'data': [categoria.to_dict() for categoria in categorias]
+        }), 200
+    except Exception:
+        return jsonify({'success': False, 'error': 'Erro interno ao listar Categorias do Cartao'}), 500
+
+
+@categorias_cartao_bp.route('', methods=['POST'])
+def criar_categoria_cartao():
+    try:
+        dados = request.get_json(silent=True) or {}
+        categoria = CategoriaCartaoService.criar_categoria(
+            nome=dados.get('nome'),
+            descricao=dados.get('descricao', ''),
+            cor=dados.get('cor', '#6c757d'),
+            icone=dados.get('icone'),
+            ativo=dados.get('ativo', True),
+        )
+        db.session.commit()
+        return jsonify({'success': True, 'data': categoria.to_dict()}), 201
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': 'Erro interno ao criar Categoria do Cartao'}), 500
+
+
+@categorias_cartao_bp.route('/resolver', methods=['GET'])
+def resolver_categoria_cartao():
+    try:
+        categoria_id = request.args.get('categoria_id')
+        cartao_id = request.args.get('cartao_id')
+        categoria_cartao_id = CategoriaCartaoService.resolver_categoria_cartao_por_categoria_despesa(categoria_id)
+        limite = None
+        vinculada = False
+        if cartao_id and categoria_cartao_id:
+            vinculada = CategoriaCartaoService.validar_categoria_cartao_disponivel_no_cartao(
+                cartao_id,
+                categoria_cartao_id,
+            )
+            limite = CategoriaCartaoService.obter_limite_cartao(cartao_id, categoria_cartao_id)
+
+        categoria = None
+        if categoria_cartao_id:
+            categoria = CategoriaCartaoService._validar_categoria_cartao(categoria_cartao_id)
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'categoria_cartao_id': categoria_cartao_id,
+                'categoria_cartao_nome': categoria.nome if categoria else None,
+                'vinculada_ao_cartao': vinculada,
+                'limite_mensal': float(limite.limite_mensal) if limite else None,
+                'origem': 'mapa_categoria_despesa' if categoria_cartao_id else None,
+            }
+        }), 200
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception:
+        return jsonify({'success': False, 'error': 'Erro interno ao resolver Categoria do Cartao'}), 500
+
+
+@categorias_cartao_bp.route('/<int:id>', methods=['PUT'])
+def atualizar_categoria_cartao(id):
+    try:
+        dados = request.get_json(silent=True) or {}
+        categoria = CategoriaCartaoService.atualizar_categoria(id, **dados)
+        db.session.commit()
+        return jsonify({'success': True, 'data': categoria.to_dict()}), 200
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': 'Erro interno ao atualizar Categoria do Cartao'}), 500
+
+
+@categorias_cartao_bp.route('/<int:id>', methods=['DELETE'])
+def desativar_categoria_cartao(id):
+    try:
+        categoria = CategoriaCartaoService.desativar_categoria(id)
+        db.session.commit()
+        return jsonify({'success': True, 'data': categoria.to_dict()}), 200
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': 'Erro interno ao desativar Categoria do Cartao'}), 500
+
+
+@categorias_cartao_bp.route('/<int:id>/despesas', methods=['GET'])
+def listar_despesas_categoria_cartao(id):
+    try:
+        vinculos = CategoriaCartaoService.listar_despesas_vinculadas(
+            id,
+            ativo=_bool_query_arg(request.args.get('ativo')),
+        )
+        return jsonify({
+            'success': True,
+            'data': [vinculo.to_dict() for vinculo in vinculos]
+        }), 200
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception:
+        return jsonify({'success': False, 'error': 'Erro interno ao listar vinculos'}), 500
+
+
+@categorias_cartao_bp.route('/<int:id>/despesas', methods=['POST'])
+def vincular_despesa_categoria_cartao(id):
+    try:
+        dados = request.get_json(silent=True) or {}
+        vinculo, criado = CategoriaCartaoService.vincular_categoria_despesa(
+            categoria_cartao_id=id,
+            categoria_id=dados.get('categoria_id'),
+            ativo=dados.get('ativo', True),
+        )
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'data': vinculo.to_dict(),
+            'created': criado
+        }), 201 if criado else 200
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': 'Erro interno ao vincular categoria de despesa'}), 500
+
+
+@categorias_cartao_bp.route('/<int:id>/despesas/<int:categoria_id>', methods=['DELETE'])
+def desvincular_despesa_categoria_cartao(id, categoria_id):
+    try:
+        vinculo = CategoriaCartaoService.desvincular_categoria_despesa(id, categoria_id)
+        db.session.commit()
+        return jsonify({'success': True, 'data': vinculo.to_dict()}), 200
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': 'Erro interno ao desvincular categoria de despesa'}), 500

@@ -12,9 +12,11 @@ from sqlalchemy import func
 try:
     from backend.models import db, ItemDespesa, Categoria, LancamentoAgregado, ItemAgregado, OrcamentoAgregado, Conta
     from backend.services.cartao_service import CartaoService
+    from backend.services.categoria_cartao_service import CategoriaCartaoService
 except ImportError:
     from models import db, ItemDespesa, Categoria, LancamentoAgregado, ItemAgregado, OrcamentoAgregado, Conta
     from services.cartao_service import CartaoService
+    from services.categoria_cartao_service import CategoriaCartaoService
 
 despesas_bp = Blueprint('despesas', __name__, url_prefix='/api/despesas')
 logger = logging.getLogger(__name__)
@@ -1220,9 +1222,16 @@ def gerar_lancamentos_cartao_recorrente(item_despesa_id, meses_futuros=12, mes_r
         if existente:
             return  # JÃ¡ existe, nÃ£o cria duplicado
         
+        resolucao_cartao = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(
+            cartao_id=item.cartao_id,
+            categoria_id=item.categoria_id,
+            categoria_cartao_id=None,
+        )
+
         novo = LancamentoAgregado(
             cartao_id=item.cartao_id,
-            item_agregado_id=item.item_agregado_id,  # Opcional - categoria do cartÃ£o
+            item_agregado_id=item.item_agregado_id,  # Opcional - categoria do cartÃ£o legado
+            categoria_cartao_id=resolucao_cartao.get('categoria_cartao_id'),
             categoria_id=item.categoria_id,  # Categoria analÃ­tica obrigatÃ³ria
             descricao=item.nome,
             valor=item.valor,

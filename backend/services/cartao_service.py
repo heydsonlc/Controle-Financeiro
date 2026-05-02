@@ -18,9 +18,11 @@ import logging
 try:
     from backend.models import (db, Conta, ItemDespesa, ItemAgregado,
                                 OrcamentoAgregado, LancamentoAgregado, ConfigAgregador)
+    from backend.services.categoria_cartao_service import CategoriaCartaoService
 except ImportError:
     from models import (db, Conta, ItemDespesa, ItemAgregado,
                        OrcamentoAgregado, LancamentoAgregado, ConfigAgregador)
+    from services.categoria_cartao_service import CategoriaCartaoService
 
 logger = logging.getLogger(__name__)
 
@@ -363,7 +365,16 @@ class CartaoService:
         # ID do cartÃ£o (agora obrigatÃ³rio nos dados)
         cartao_id = dados_lancamento['cartao_id']
 
-        # Item agregado Ã© OPCIONAL
+        categoria_cartao_id = dados_lancamento.get('categoria_cartao_id')
+        if dados_lancamento.get('categoria_id'):
+            resolucao = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(
+                cartao_id=cartao_id,
+                categoria_id=dados_lancamento.get('categoria_id'),
+                categoria_cartao_id=categoria_cartao_id,
+            )
+            categoria_cartao_id = resolucao.get('categoria_cartao_id')
+
+        # Item agregado e opcional e permanece apenas para compatibilidade.
         item_agregado_id = dados_lancamento.get('item_agregado_id')
         if item_agregado_id:
             item_agregado = ItemAgregado.query.get(item_agregado_id)
@@ -434,6 +445,7 @@ class CartaoService:
             lancamento = LancamentoAgregado(
                 cartao_id=cartao_id,
                 item_agregado_id=item_agregado_id,  # Pode ser None
+                categoria_cartao_id=categoria_cartao_id,
                 categoria_id=dados_lancamento['categoria_id'],  # Categoria da DESPESA (obrigatÃ³ria)
                 valor=valor_parcela,  # â† CORREÃ‡ÃƒO: valor com distribuiÃ§Ã£o correta de centavos
                 descricao=dados_lancamento['descricao'],
