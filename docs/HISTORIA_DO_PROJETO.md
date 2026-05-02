@@ -352,6 +352,36 @@ O fluxo CSV existente foi preservado sem alteração de backend, APIs, serviços
 
 ---
 
+## MVP IMPORT-2B — Motor Unificado CSV/XLSX/PDF de Cartão (2026-05-02)
+
+Foi implementado o endpoint `POST /api/importacao-cartao/analisar`, que recebe CSV, XLSX ou PDF e retorna um payload intermediário comum para a tela `/importar-cartao`.
+
+O fluxo preserva os endpoints legados (`/upload`, `/previsualizar`, `/processar`) e mantém a persistência final em `LancamentoAgregado`, sem criar Conta, migration ou nova regra financeira externa ao importador.
+
+O parser PDF inicial atende faturas Caixa com texto extraível, capturando vencimento, valor total, cartões detectados, grupos ANUIDADE, COMPRAS, COMPRAS PARCELADAS e COMPRAS INTERNACIONAIS, débitos, créditos ignorados, parcelas e totais de conferência. OCR e PDF escaneado permanecem fora do escopo.
+
+Categoria da Despesa (`categoria_id`) e Categoria do Cartão (`item_agregado_id`) seguem separadas. A Categoria do Cartão é obrigatória no fluxo de importação e linhas sem ela ficam bloqueadas/pendentes antes da confirmação.
+
+---
+
+## MVP VEIC-2 — Módulo de Mobilidade com comparação de cenários (2026-05-02)
+
+O VEIC-2 reestruturou `/veiculos` como módulo de mobilidade completo, com 3 blocos: Comparação de Cenários, Configuração das Modalidades e Efetivação das Despesas.
+
+**Comparação de Cenários:** suporta até 3 cenários simultâneos (veículo próprio, assinatura, app de transporte), com seletor de cenários, 4 KPIs (mais econômico, custo médio, custo estimado, cenário ativo), cards comparativos e tabela comparativa por linha de custo.
+
+**Configuração das Modalidades:** lista veículos e apps configurados com destaque visual para o cenário ativo. Botão "Definir ativo" persiste a seleção no backend via `data/mobilidade_cenario_ativo.json` (sem migration), com fallback em localStorage.
+
+**Efetivação das Despesas:** lista `DespesaPrevista` do cenário ativo com status PREVISTA/CONFIRMADA/ADIADA/IGNORADA, grade de efetivação e modal de confirmação com seleção de meio de pagamento (cartão, pix, boleto, dinheiro, débito).
+
+**Backend:** `confirmar()` em `despesa_prevista_service.py` foi estendido para aceitar payload opcional com `meio_pagamento`, `categoria_id`, `data_vencimento`, `observacao` e `cartao_id`. Quando o payload é fornecido: meio=`cartao` cria `LancamentoAgregado` via `CartaoService.adicionar_lancamento()`; demais meios criam `ItemDespesa(tipo='Simples')` + `Conta`. Quando o payload é omitido, o comportamento legado é preservado (apenas muda status). Dois novos endpoints: `GET/POST /api/veiculos/cenario-ativo`.
+
+**Regra de idempotência:** guard `status == 'PREVISTA'` + transação atômica — se a criação da entidade falhar, o rollback mantém o status como PREVISTA.
+
+Sem migrations, sem alterações de models, sem impacto no dashboard. Smoke E2E manteve 13 passed, 2 skipped.
+
+---
+
 ## Backlog — Próximas fases
 
 Para o roadmap técnico completo com prioridades atualizadas, ver `README_TECNICO.md` — seção "Roadmap Técnico — Pós-Auditoria".

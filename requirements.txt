@@ -16,6 +16,8 @@ python-dotenv==1.0.0
 # Utilities
 python-dateutil==2.8.2
 APScheduler==3.10.4
+openpyxl==3.1.5
+pdfplumber==0.11.5
 
 # Development
 pytest==7.4.3

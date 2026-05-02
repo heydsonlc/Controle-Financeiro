@@ -7,6 +7,8 @@ IMPORTANTE:
 - Veículo é origem da despesa (origem_tipo='VEICULO', origem_id=veiculo.id).
 """
 
+import json
+import os
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -498,4 +500,39 @@ def deletar_financiamento_veiculo(veiculo_id):
         return jsonify({'success': True, 'message': 'Financiamento removido (simulação)'}), 200
     except Exception as e:
         db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+# Cenário ativo de mobilidade — persistência leve via arquivo local
+# ---------------------------------------------------------------------------
+
+def _cenario_ativo_path():
+    base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    return os.path.join(base, 'data', 'mobilidade_cenario_ativo.json')
+
+
+@veiculos_bp.route('/cenario-ativo', methods=['GET'])
+def get_cenario_ativo():
+    try:
+        path = _cenario_ativo_path()
+        if not os.path.exists(path):
+            return jsonify({'success': True, 'data': {}}), 200
+        with open(path, encoding='utf-8') as f:
+            data = json.load(f)
+        return jsonify({'success': True, 'data': data}), 200
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@veiculos_bp.route('/cenario-ativo', methods=['POST'])
+def set_cenario_ativo():
+    try:
+        payload = _ler_payload_request()
+        path = _cenario_ativo_path()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        return jsonify({'success': True, 'message': 'Cenário ativo salvo', 'data': payload}), 200
+    except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500

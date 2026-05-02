@@ -23,6 +23,7 @@ import re
 import csv
 import io
 import uuid
+import unicodedata
 from datetime import datetime, date
 from decimal import Decimal, InvalidOperation
 from dateutil.relativedelta import relativedelta
@@ -47,10 +48,10 @@ class ImportacaoCartaoService:
     def _normalizar_coluna(coluna):
         texto = str(coluna or '').strip().lower()
         texto = texto.replace('\ufeff', '')
-        texto = texto.replace('Ã§', 'c').replace('Ã£', 'a').replace('Ã¡', 'a').replace('Ã¢', 'a')
-        texto = texto.replace('Ã©', 'e').replace('Ãª', 'e').replace('Ã­', 'i').replace('Ã³', 'o').replace('Ã´', 'o')
-        texto = texto.replace('Ãº', 'u')
-        return texto
+        texto = unicodedata.normalize('NFKD', texto)
+        texto = ''.join(char for char in texto if not unicodedata.combining(char))
+        texto = re.sub(r'\s+', ' ', texto)
+        return texto.strip()
 
     @staticmethod
     def detectar_perfil_csv(colunas):
@@ -191,7 +192,16 @@ class ImportacaoCartaoService:
         """
         # Ler conteÃºdo
         if hasattr(arquivo_csv, 'read'):
-            conteudo = arquivo_csv.read().decode('utf-8', errors='ignore')
+            conteudo_bytes = arquivo_csv.read()
+            conteudo = None
+            for encoding in ('utf-8-sig', 'utf-8', 'cp1252', 'latin-1'):
+                try:
+                    conteudo = conteudo_bytes.decode(encoding)
+                    break
+                except UnicodeDecodeError:
+                    continue
+            if conteudo is None:
+                conteudo = conteudo_bytes.decode('utf-8', errors='ignore')
             arquivo_csv.seek(0)  # Resetar para leitura posterior
         else:
             conteudo = arquivo_csv
@@ -255,7 +265,8 @@ class ImportacaoCartaoService:
         categoria_id,
         item_agregado_id,
         competencia_base,
-        compra_id=None
+        compra_id=None,
+        origem_importacao='csv'
     ):
         """
         Gera todas as parcelas (passadas, atual, futuras) de uma compra
@@ -307,7 +318,7 @@ class ImportacaoCartaoService:
                 'item_agregado_id': item_agregado_id,
                 'compra_id': compra_id,
                 'is_importado': True,
-                'origem_importacao': 'csv'
+                'origem_importacao': origem_importacao
             }
 
             parcelas.append(parcela)
@@ -403,6 +414,7 @@ class ImportacaoCartaoService:
             parcela_str = linha.get('parcela', '1/1')  # Opcional
             categoria_id = linha.get('categoria_id')
             item_agregado_id = linha.get('item_agregado_id')  # Opcional
+            origem_importacao = linha.get('origem_importacao') or 'csv'
 
             # Validar obrigatÃ³rios
             if not all([data_compra_str, descricao_bruta, valor_str, categoria_id]):
@@ -487,7 +499,8 @@ class ImportacaoCartaoService:
                     categoria_id=categoria_id,
                     item_agregado_id=item_agregado_id,
                     competencia_base=competencia_alvo,
-                    compra_id=None
+                    compra_id=None,
+                    origem_importacao=origem_importacao
                 )
             else:
                 compra_id = str(uuid.uuid4())
@@ -506,7 +519,7 @@ class ImportacaoCartaoService:
                     'item_agregado_id': item_agregado_id,
                     'compra_id': compra_id,
                     'is_importado': True,
-                    'origem_importacao': 'csv'
+                    'origem_importacao': origem_importacao
                 }]
 
             # Adicionar flag de recorrÃªncia

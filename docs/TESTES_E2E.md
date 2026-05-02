@@ -60,6 +60,19 @@ Comandos oficiais apos TEST-BASE-1:
 | `npm run test:e2e:all` | Smoke + funcionais em sequencia. |
 | `python -m pytest tests -q` | Valida a infraestrutura pytest com testes `test_*.py`. Scripts legados `teste_*.py` não são coletados automaticamente. |
 
+### Validação IMPORT-2B
+
+Para o motor unificado de importação de cartão, a validação mínima é:
+
+```bash
+python -m py_compile backend/routes/importacao_cartao.py backend/services/importacao_cartao_service.py backend/services/importacao_cartao_unificado_service.py backend/services/parsers/importacao_csv_parser.py backend/services/parsers/importacao_xlsx_parser.py backend/services/parsers/importacao_pdf_caixa_parser.py
+node --check frontend/static/js/importar_cartao.js
+python -m pytest tests/test_importacao_cartao_parsers.py -q
+npm run test:e2e:smoke
+```
+
+O teste unitário usa texto sintético anonimizado para o parser Caixa. O PDF real de fatura não deve ser commitado como fixture sem anonimização/autorização explícita.
+
 ## Servidor Flask
 
 O Playwright está configurado para subir o Flask automaticamente via `webServer`, reutilizando um servidor existente em `http://127.0.0.1:5000` quando houver.

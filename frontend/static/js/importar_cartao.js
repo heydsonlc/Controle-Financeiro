@@ -12,6 +12,8 @@ const estado = {
     arquivoSelecionado: null,
     formatoSelecionado: 'auto',
     csvData: null,
+    payloadUnificado: null,
+    usaMapeamentoManual: false,
     linhasMapeadas: [],
     linhasInvalidasIniciais: [],
     resumoPrevia: null,
@@ -83,8 +85,6 @@ function configurarFormatoArquivo() {
 
             if (estado.arquivoSelecionado) {
                 selecionarArquivo(estado.arquivoSelecionado);
-            } else if (estado.formatoSelecionado === 'pdf') {
-                setFeedback('uploadResult', 'PDF está preparado visualmente. Importação PDF será implementada no próximo MVP.', 'warning');
             } else {
                 limparFeedback('uploadResult');
             }
@@ -208,17 +208,24 @@ function limparFeedback(id) {
     if (elemento) elemento.innerHTML = '';
 }
 
-function validarConfiguracaoBasica() {
+function competenciaApi() {
+    const valor = document.getElementById('competenciaInput')?.value || '';
+    if (!/^\d{2}\/\d{4}$/.test(valor)) return null;
+    const [mes, ano] = valor.split('/');
+    return `${ano}-${mes}`;
+}
+
+function validarConfiguracaoBasica(silencioso = false) {
     const cartaoId = document.getElementById('cartaoSelect')?.value;
     const competencia = document.getElementById('competenciaInput')?.value || '';
 
     if (!cartaoId || !competencia) {
-        alert('Selecione cartão e competência antes de validar a importação.');
+        if (!silencioso) alert('Selecione cartão e competência antes de validar a importação.');
         return false;
     }
 
     if (!/^\d{2}\/\d{4}$/.test(competencia)) {
-        alert('Formato de competência inválido. Use MM/AAAA.');
+        if (!silencioso) alert('Formato de competência inválido. Use MM/AAAA.');
         return false;
     }
 
@@ -350,6 +357,8 @@ function removerArquivoSelecionado(event) {
 
 function limparDadosImportacao() {
     estado.csvData = null;
+    estado.payloadUnificado = null;
+    estado.usaMapeamentoManual = false;
     estado.linhasMapeadas = [];
     estado.linhasInvalidasIniciais = [];
     estado.resumoPrevia = null;
@@ -389,26 +398,157 @@ function selecionarArquivo(file) {
     }
 
     if (formato === 'csv' && tipo === 'pdf') {
-        setFeedback('uploadResult', 'O formato selecionado é CSV/XLSX. PDF será implementado no próximo MVP.', 'warning');
+        setFeedback('uploadResult', 'O formato selecionado é CSV/XLSX. Escolha um arquivo CSV ou XLSX, ou altere para PDF.', 'warning');
         return;
     }
 
-    if (tipo === 'pdf') {
-        setFeedback('uploadResult', 'Importação PDF será implementada no próximo MVP.', 'warning');
-        return;
-    }
-
-    if (tipo === 'xlsx') {
-        setFeedback('uploadResult', 'XLSX está preparado visualmente, mas o contrato atual desta tela processa CSV. Use CSV para concluir neste MVP.', 'warning');
-        return;
-    }
-
-    if (tipo !== 'csv') {
+    if (!['csv', 'xlsx', 'pdf'].includes(tipo)) {
         setFeedback('uploadResult', 'Formato não reconhecido. Use CSV, XLSX ou PDF.', 'error');
         return;
     }
 
-    processarCSV(file);
+    analisarArquivo(file);
+}
+
+function formatoBackend(file) {
+    const tipo = formatoArquivo(file);
+    if (estado.formatoSelecionado === 'pdf') return 'pdf';
+    if (estado.formatoSelecionado === 'csv') return tipo === 'xlsx' ? 'xlsx' : 'csv';
+    return 'automatico';
+}
+
+async function analisarArquivo(file) {
+    const tipo = formatoArquivo(file);
+    if (!validarConfiguracaoBasica(true)) {
+        if (tipo === 'csv') {
+            processarCSV(file);
+            return;
+        }
+        setFeedback('uploadResult', 'Selecione cartão e competência antes de analisar PDF ou XLSX.', 'warning');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('arquivo', file);
+    formData.append('cartao_id', document.getElementById('cartaoSelect').value);
+    formData.append('competencia', competenciaApi());
+    formData.append('formato', formatoBackend(file));
+
+    try {
+        setFeedback('uploadResult', 'Analisando arquivo...', 'warning');
+        await carregarCategorias();
+
+        const resposta = await fetch(`${API_BASE}/analisar`, {
+            method: 'POST',
+            body: formData
+        });
+        const dados = await resposta.json();
+        if (!resposta.ok || !dados.success) {
+            throw new Error(dados.error || dados.message || 'Falha ao analisar arquivo');
+        }
+
+        if (dados.data?.requer_mapeamento && tipo === 'csv') {
+            processarCSV(file);
+            return;
+        }
+
+        aplicarPayloadUnificado(dados.data);
+    } catch (error) {
+        if (tipo === 'csv') {
+            processarCSV(file);
+            return;
+        }
+        setFeedback('uploadResult', `Erro ao analisar arquivo: ${escapeHtml(error.message)}`, 'error');
+        atualizarResumoPainel();
+    }
+}
+
+function converterLinhaIntermediaria(linha) {
+    const parcelaAtual = linha.parcela_atual || linha.numero_parcela || 1;
+    const totalParcelas = linha.total_parcelas || 1;
+    return {
+        linha_id: linha.linha_id,
+        linha_origem: linha.linha_origem,
+        status: linha.status,
+        data_compra: linha.data_compra,
+        descricao: linha.descricao_normalizada || linha.descricao_original || linha.descricao_exibida,
+        descricao_original: linha.descricao_original,
+        descricao_exibida: linha.descricao_exibida || linha.descricao_normalizada || linha.descricao_original,
+        valor: formatarValor(linha.valor),
+        categoria_id: toIntOrNull(linha.categoria_id || linha.categoria_despesa_id),
+        categoria_despesa_id: toIntOrNull(linha.categoria_despesa_id || linha.categoria_id),
+        item_agregado_id: toIntOrNull(linha.item_agregado_id || linha.categoria_cartao_id),
+        categoria_cartao_id: toIntOrNull(linha.categoria_cartao_id || linha.item_agregado_id),
+        categoria_sugerida_origem: linha.categoria_sugerida_origem || linha.categoria_cartao_sugerida_origem,
+        categoria_detectada_label: linha.categoria_detectada,
+        cartao_final: linha.cartao_final,
+        grupo: linha.grupo,
+        tipo_movimento: linha.tipo_movimento || 'debito',
+        duplicidade: linha.duplicidade,
+        mensagens: linha.mensagens || [],
+        metadados: linha.metadados || {},
+        origem_importacao: linha.origem_importacao || estado.payloadUnificado?.origem || 'csv',
+        parcela: linha.parcela || `${parcelaAtual}/${totalParcelas}`,
+        numero_parcela: parcelaAtual,
+        parcela_atual: parcelaAtual,
+        total_parcelas: totalParcelas,
+        parcelado: Number(totalParcelas) > 1,
+        gerar_parcelas_futuras: !!linha.gerar_parcelas_futuras,
+        ignorar: !!linha.ignorar || ['ignorado', 'duplicado'].includes(linha.status)
+    };
+}
+
+function aplicarPayloadUnificado(data) {
+    estado.payloadUnificado = data;
+    estado.usaMapeamentoManual = false;
+    estado.csvData = {
+        total_linhas: data?.validacoes?.total_linhas || data?.linhas?.length || 0,
+        origem: data?.origem,
+        fatura: data?.fatura || {}
+    };
+    estado.linhasMapeadas = (data?.linhas || []).map(converterLinhaIntermediaria);
+    estado.linhasInvalidasIniciais = [];
+    estado.resumoPrevia = null;
+
+    const origemLabel = (data?.origem || '').toUpperCase();
+    setFeedback(
+        'uploadResult',
+        `${origemLabel} analisado com sucesso. <strong>${estado.linhasMapeadas.length}</strong> linhas normalizadas.`,
+        'success'
+    );
+
+    document.getElementById('btnStep3').disabled = true;
+    document.getElementById('btnStep4').disabled = false;
+    document.getElementById('btnImportar').disabled = true;
+    renderizarResumoAnalise(data);
+    renderizarMapeamento();
+    renderizarEditorPrePersistencia();
+    atualizarResumoPainel();
+}
+
+function renderizarResumoAnalise(data) {
+    const container = document.getElementById('resumoConfiguracaoImportacao');
+    if (!container || !data) return;
+
+    const fatura = data.fatura || {};
+    const validacoes = data.validacoes || {};
+    const cartoes = (fatura.cartoes_detectados || []).join(', ') || '-';
+    const vencimento = fatura.vencimento || '-';
+    const totalFatura = fatura.valor_total !== null && fatura.valor_total !== undefined
+        ? formatarMoeda(fatura.valor_total)
+        : '-';
+    const diferenca = Number(validacoes.diferenca || 0);
+
+    container.innerHTML = `
+        <div class="import-feedback ${validacoes.revisar_totais ? 'warning' : 'success'}">
+            <strong>Motor unificado:</strong> ${escapeHtml((data.origem || '').toUpperCase())}.
+            Vencimento: <strong>${escapeHtml(vencimento)}</strong>.
+            Total da fatura: <strong>${totalFatura}</strong>.
+            Cartões detectados: <strong>${escapeHtml(cartoes)}</strong>.
+            Total importável: <strong>${formatarMoeda(validacoes.total_importavel || 0)}</strong>.
+            Diferença: <strong>${formatarMoeda(diferenca)}</strong>.
+        </div>
+    `;
 }
 
 async function processarCSV(file) {
@@ -426,6 +566,8 @@ async function processarCSV(file) {
         }
 
         estado.csvData = dados;
+        estado.payloadUnificado = null;
+        estado.usaMapeamentoManual = true;
         estado.linhasMapeadas = [];
         estado.linhasInvalidasIniciais = [];
         estado.resumoPrevia = null;
@@ -467,11 +609,17 @@ async function proximaEtapa(numero) {
 
     if (numero === 3) {
         if (!estado.csvData) {
-            alert('Faça upload de um CSV antes de validar o layout.');
+            alert('Faça upload de um arquivo antes de validar o layout.');
             return false;
         }
         if (!validarConfiguracaoBasica()) return false;
         await carregarCategorias();
+        if (estado.payloadUnificado && !estado.usaMapeamentoManual) {
+            renderizarMapeamento();
+            renderizarEditorPrePersistencia();
+            rolarParaSecao('step3');
+            return true;
+        }
         renderizarMapeamento();
         abrirModalValidacao();
         rolarParaSecao('step3');
@@ -480,7 +628,7 @@ async function proximaEtapa(numero) {
 
     if (numero === 4) {
         if (!estado.linhasMapeadas.length) {
-            alert('Valide o perfil e o mapeamento antes de gerar a prévia.');
+            alert('Analise o arquivo ou valide o perfil antes de gerar a prévia.');
             return false;
         }
         await previsualizarImportacao();
@@ -525,6 +673,15 @@ function renderizarMapeamento() {
 
     if (!estado.csvData) {
         container.innerHTML = '';
+        return;
+    }
+
+    if (estado.payloadUnificado && !estado.usaMapeamentoManual) {
+        container.innerHTML = `
+            <div class="import-feedback success">
+                Arquivo normalizado pelo motor unificado. Revise as linhas, confirme Categoria da Despesa e Categoria do Cartão, e gere a prévia técnica.
+            </div>
+        `;
         return;
     }
 
@@ -852,8 +1009,14 @@ function opcoesCategoriaCartaoSelect(selecionado) {
 }
 
 function statusLinha(linha) {
+    if (linha.status === 'duplicado') {
+        return { texto: 'Duplicado', classe: 'duplicate' };
+    }
     if (linha.ignorar) {
-        return { texto: 'Ignorado', classe: 'ignored' };
+        return { texto: linha.tipo_movimento === 'credito' ? 'Crédito ignorado' : 'Ignorado', classe: 'ignored' };
+    }
+    if (linha.status === 'revisar') {
+        return { texto: 'Revisar', classe: 'review' };
     }
     if (!linha.item_agregado_id) {
         return { texto: 'Sem categoria do cartão', classe: 'missing' };
@@ -920,6 +1083,9 @@ function renderizarLinhaPrevia(linha, index) {
     const status = statusLinha(linha);
     const baixaConfianca = status.classe === 'low-confidence';
     const futurasDisabled = (!linha.parcelado || Number(linha.total_parcelas) <= 1) ? 'disabled' : '';
+    const detalheOrigem = [linha.cartao_final ? `Cartão ${linha.cartao_final}` : null, linha.grupo]
+        .filter(Boolean)
+        .join(' | ');
 
     return `
         <tr class="${linha.ignorar ? 'is-ignored' : ''}">
@@ -929,6 +1095,7 @@ function renderizarLinhaPrevia(linha, index) {
             </td>
             <td class="import-description-cell">
                 <input class="import-inline-input" type="text" value="${escapeAttr(linha.descricao_exibida || '')}" onchange="atualizarLinhaEdicao(${index}, 'descricao_exibida', this.value)">
+                ${detalheOrigem ? `<span class="import-detected-note">${escapeHtml(detalheOrigem)}</span>` : ''}
             </td>
             <td>
                 <input class="import-inline-input" type="text" value="${escapeAttr(linha.parcela || '1/1')}" onchange="atualizarParcelaTexto(${index}, this.value)">
@@ -984,6 +1151,8 @@ function atualizarLinhaEdicao(index, campo, valor) {
 
     if (campo === 'categoria_id' || campo === 'item_agregado_id') {
         linha[campo] = toIntOrNull(valor);
+        if (campo === 'categoria_id') linha.categoria_despesa_id = linha[campo];
+        if (campo === 'item_agregado_id') linha.categoria_cartao_id = linha[campo];
     } else if (campo === 'numero_parcela' || campo === 'total_parcelas') {
         linha[campo] = Math.max(1, parseInt(valor || '1', 10));
         linha.parcelado = Number(linha.total_parcelas) > 1;
@@ -997,6 +1166,11 @@ function atualizarLinhaEdicao(index, campo, valor) {
 
     if (campo === 'descricao_exibida') {
         linha.descricao = valor;
+    }
+    if ((campo === 'categoria_id' || campo === 'item_agregado_id') && !['duplicado', 'ignorado'].includes(linha.status)) {
+        if (!linha.item_agregado_id) linha.status = 'sem_categoria_cartao';
+        else if (!linha.categoria_id) linha.status = 'revisar';
+        else linha.status = 'valido';
     }
 
     invalidarPrevia();
@@ -1054,6 +1228,8 @@ function calcularResumoLocal() {
     const validas = ativas.filter((linha) => linha.categoria_id && linha.item_agregado_id).length;
     const baixaConfianca = ativas.filter((linha) => statusLinha(linha).classe === 'low-confidence').length;
     const ignoradas = linhas.filter((linha) => linha.ignorar).length;
+    const duplicadas = linhas.filter((linha) => linha.status === 'duplicado').length;
+    const creditos = linhas.filter((linha) => linha.tipo_movimento === 'credito').length;
     const parceladas = linhas.filter((linha) => Number(linha.total_parcelas) > 1).length;
     const totalPrevisto = ativas.reduce((acc, linha) => acc + (parseValorNumerico(linha.valor) || 0), 0);
 
@@ -1065,6 +1241,8 @@ function calcularResumoLocal() {
         validas,
         revisar: pendentesCartao + pendentesDespesa + baixaConfianca + estado.linhasInvalidasIniciais.length,
         ignoradas,
+        duplicadas,
+        creditos,
         parceladas,
         totalPrevisto
     };
@@ -1073,7 +1251,7 @@ function calcularResumoLocal() {
 function atualizarResumoPainel() {
     const resumo = calcularResumoLocal();
     const totalDetectado = estado.csvData?.total_linhas || resumo.linhas.length || 0;
-    const duplicados = estado.resumoPrevia?.duplicados || 0;
+    const duplicados = estado.resumoPrevia?.duplicados ?? resumo.duplicadas;
     const novos = estado.resumoPrevia ? estado.resumoPrevia.inseridos : resumo.ativas.length;
     const confirmadasCartao = resumo.ativas.filter((linha) => linha.item_agregado_id).length;
 
@@ -1149,7 +1327,7 @@ function montarPayloadImportacao() {
     const [mes, ano] = document.getElementById('competenciaInput').value.split('/');
     const competencia = `${ano}-${mes}-01`;
     const linhas = estado.linhasMapeadas
-        .filter((linha) => !linha.ignorar)
+        .filter((linha) => !linha.ignorar && linha.tipo_movimento !== 'credito' && linha.status !== 'duplicado')
         .map((linha) => {
             const payload = {
                 data_compra: linha.data_compra,
@@ -1161,6 +1339,7 @@ function montarPayloadImportacao() {
                 total_parcelas: linha.total_parcelas || 1,
                 gerar_parcelas_futuras: !!linha.gerar_parcelas_futuras,
                 categoria_id: linha.categoria_id,
+                origem_importacao: linha.origem_importacao || estado.payloadUnificado?.origem || 'csv',
                 ignorar: false
             };
 
@@ -1180,15 +1359,16 @@ function montarPayloadImportacao() {
 
 function validarPendenciasObrigatorias() {
     const resumo = calcularResumoLocal();
-    if (!resumo.ativas.length) {
+    const importaveis = resumo.ativas.filter((linha) => linha.tipo_movimento !== 'credito' && linha.status !== 'duplicado');
+    if (!importaveis.length) {
         alert('Nenhuma linha restante para importar.');
         return false;
     }
-    if (resumo.pendentesDespesa > 0) {
+    if (importaveis.some((linha) => !linha.categoria_id)) {
         alert('Existem linhas sem Categoria da Despesa. Ajuste antes da prévia.');
         return false;
     }
-    if (resumo.pendentesCartao > 0) {
+    if (importaveis.some((linha) => !linha.item_agregado_id)) {
         alert('Existem linhas sem Categoria do Cartão. Confirme a categoria do cartão em cada linha antes de importar.');
         return false;
     }

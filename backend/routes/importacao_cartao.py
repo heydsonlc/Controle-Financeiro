@@ -11,9 +11,46 @@ Endpoints:
 from flask import Blueprint, request, jsonify
 from datetime import datetime
 from backend.services.importacao_cartao_service import ImportacaoCartaoService
+from backend.services.importacao_cartao_unificado_service import ImportacaoCartaoUnificadoService
 from backend.models import db, ItemDespesa, Categoria, ItemAgregado
 
 bp = Blueprint('importacao_cartao', __name__, url_prefix='/api/importacao-cartao')
+
+
+@bp.route('/analisar', methods=['POST'])
+def analisar_importacao_cartao():
+    """
+    Analisa CSV/XLSX/PDF e retorna payload intermediario unico.
+    Nao persiste lancamentos.
+    """
+    try:
+        arquivo = request.files.get('arquivo')
+        cartao_id = request.form.get('cartao_id')
+        competencia = request.form.get('competencia')
+        formato = request.form.get('formato') or 'automatico'
+
+        if not arquivo or arquivo.filename == '':
+            return jsonify({'success': False, 'error': 'Nenhum arquivo enviado'}), 400
+        if not cartao_id:
+            return jsonify({'success': False, 'error': 'cartao_id obrigatorio'}), 400
+        if not competencia:
+            return jsonify({'success': False, 'error': 'competencia obrigatoria'}), 400
+
+        payload = ImportacaoCartaoUnificadoService.analisar_arquivo_cartao(
+            file_storage=arquivo,
+            cartao_id=cartao_id,
+            competencia=competencia,
+            formato=formato
+        )
+
+        return jsonify({
+            'success': True,
+            'data': payload
+        })
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except Exception:
+        return jsonify({'success': False, 'error': 'Falha ao analisar arquivo de cartao'}), 500
 
 
 @bp.route('/upload', methods=['POST'])
@@ -88,6 +125,23 @@ def _validar_payload_importacao(data):
     cartao = ItemDespesa.query.get(cartao_id)
     if not cartao or cartao.tipo != 'Agregador':
         return None, ('Cartao invalido', 400)
+    cartao_id = cartao.id
+
+    categorias_cartao_ids = {
+        item.id for item in ItemAgregado.query.filter_by(item_despesa_id=cartao_id, ativo=True).all()
+    }
+    for idx, linha in enumerate(linhas, start=1):
+        if linha.get('ignorar'):
+            continue
+        item_agregado_id = linha.get('item_agregado_id')
+        if not item_agregado_id:
+            return None, (f'Linha {idx} sem Categoria do Cartao', 400)
+        try:
+            item_agregado_id = int(item_agregado_id)
+        except (TypeError, ValueError):
+            return None, (f'Linha {idx} com Categoria do Cartao invalida', 400)
+        if item_agregado_id not in categorias_cartao_ids:
+            return None, (f'Linha {idx} usa Categoria do Cartao que nao pertence ao cartao selecionado', 400)
 
     try:
         competencia = datetime.strptime(competencia_str, '%Y-%m-%d').date().replace(day=1)

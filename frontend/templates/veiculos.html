@@ -1,15 +1,15 @@
 {% extends "base.html" %}
 
-{% block title %}Veículos - Controle Financeiro{% endblock %}
+{% block title %}Veículos e Mobilidade - Controle Financeiro{% endblock %}
 
 {% block extra_css %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/veiculos.css') }}">
 {% endblock %}
 
 {% block action_bar %}
-    <div class="module-actionbar" aria-label="Ações de Veículos">
+    <div class="module-actionbar" aria-label="Ações de Mobilidade">
         <div class="module-actionbar-actions">
-            <button class="action-icon-button primary" id="btn-novo-veiculo" type="button" onclick="abrirModalNovo()" title="Novo Ve&iacute;culo" aria-label="Novo Ve&iacute;culo">
+            <button class="action-icon-button primary" type="button" onclick="abrirModalNovo()" title="Novo Veículo" aria-label="Novo Veículo">
                 <span class="action-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M12 5v14M5 12h14"/>
@@ -17,7 +17,7 @@
                 </span>
                 <span class="action-button-label">Novo Veículo</span>
             </button>
-            <button class="action-icon-button secondary" id="btn-novo-transporte-app" type="button" onclick="abrirModalAppNovo()" title="Transporte por App" aria-label="Transporte por App">
+            <button class="action-icon-button secondary" type="button" onclick="abrirModalAppNovo()" title="Transporte por App" aria-label="Transporte por App">
                 <span class="action-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M5 17h14M7 17l2.5-8h5L17 17M9 13h6M8 19h.1M16 19h.1"/>
@@ -30,369 +30,496 @@
 {% endblock %}
 
 {% block content %}
-    <div class="container app-content-fluid">
-        <main>
-            <p class="hint">
-                Projeção ≠ lançamento: as despesas abaixo são <strong>previstas</strong> e não criam despesas reais automaticamente.
-            </p>
-            <div class="actions" hidden style="display: none;">
-                <button class="btn btn-primary" onclick="abrirModalNovo()">+ Novo Veículo</button>
-                <button class="btn btn-secondary" onclick="abrirModalAppNovo()">+ Transporte por App</button>
+<div class="container app-content-fluid">
+    <main>
+
+        <!-- ============================================================ -->
+        <!-- ABAS DOS 3 BLOCOS                                            -->
+        <!-- ============================================================ -->
+        <div class="mob-tabs" role="tablist" aria-label="Módulo de mobilidade">
+            <button class="mob-tab active" id="tab-comparacao" role="tab" aria-selected="true" aria-controls="bloco-comparacao" onclick="ativarAba('comparacao')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M3 12h12M3 18h8"/></svg>
+                Comparação
+            </button>
+            <button class="mob-tab" id="tab-configuracao" role="tab" aria-selected="false" aria-controls="bloco-configuracao" onclick="ativarAba('configuracao')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                Configuração
+            </button>
+            <button class="mob-tab" id="tab-efetivacao" role="tab" aria-selected="false" aria-controls="bloco-efetivacao" onclick="ativarAba('efetivacao')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4 4L19 7"/></svg>
+                Efetivação
+            </button>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- BLOCO 1 — COMPARAÇÃO DE CENÁRIOS                             -->
+        <!-- ============================================================ -->
+        <section id="bloco-comparacao" class="mob-bloco" role="tabpanel" aria-labelledby="tab-comparacao">
+
+            <div class="mob-bloco-header">
+                <div>
+                    <h2 class="mob-bloco-titulo">Comparação de Cenários</h2>
+                    <p class="mob-bloco-sub">Compare até 3 cenários de mobilidade lado a lado. Selecione quais comparar.</p>
+                </div>
+                <div class="mob-bloco-acoes">
+                    <label class="mob-label-small">Horizonte:</label>
+                    <select id="comp-horizonte" class="mob-select-sm" onchange="renderizarComparacao()">
+                        <option value="12">12 meses</option>
+                        <option value="24" selected>24 meses</option>
+                        <option value="36">36 meses</option>
+                    </select>
+                </div>
             </div>
 
-            <div id="mobilidade-ativa-resumo" class="mobilidade-resumo">
-                <div class="mobilidade-resumo-label">Mobilidade ativa</div>
-                <div class="mobilidade-resumo-valor">R$ 0,00 / mÃªs</div>
-                <div class="mobilidade-resumo-sub">(0 caminhos ativos)</div>
-            </div>
-            <section class="module-data-section">
-                <div class="section-title-row">
-                    <div class="section-title-main">
-                        <span class="section-title-icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" focusable="false">
-                                <path d="M4 7h16"/>
-                                <path d="M4 12h16"/>
-                                <path d="M4 17h10"/>
-                            </svg>
-                        </span>
-                        <h2 class="section-title-text">Caminhos de Mobilidade</h2>
-                    </div>
-                    <span class="section-title-meta">Ve&iacute;culos, custos e transporte por app</span>
+            <!-- Seletor de cenários para comparar -->
+            <div class="comp-seletor-wrap">
+                <div id="comp-seletor-lista" class="comp-seletor-lista">
+                    <p class="loading">Carregando cenários...</p>
                 </div>
-                <div id="caminhos-lista" class="caminhos-grid">
-                    <p class="loading">Carregando caminhos...</p>
+            </div>
+
+            <!-- Resumo superior (melhor opção) -->
+            <div id="comp-resumo-superior" class="comp-resumo-superior" style="display:none;"></div>
+
+            <!-- Cards de comparação -->
+            <div id="comp-cards" class="comp-cards-grid"></div>
+
+            <!-- Tabela comparativa -->
+            <div id="comp-tabela-wrap" class="comp-tabela-wrap" style="display:none;">
+                <h3 class="comp-tabela-titulo">Comparativo detalhado</h3>
+                <div class="comp-tabela-scroll">
+                    <table id="comp-tabela" class="comp-tabela"></table>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- BLOCO 2 — CONFIGURAÇÃO DAS MODALIDADES                       -->
+        <!-- ============================================================ -->
+        <section id="bloco-configuracao" class="mob-bloco" role="tabpanel" aria-labelledby="tab-configuracao" style="display:none;">
+
+            <div class="mob-bloco-header">
+                <div>
+                    <h2 class="mob-bloco-titulo">Configuração das Modalidades</h2>
+                    <p class="mob-bloco-sub">Cadastre e configure seus cenários de veículo, assinatura e transporte por app.</p>
+                </div>
+            </div>
+
+            <!-- Veículos Próprios -->
+            <div class="conf-secao">
+                <div class="conf-secao-header">
+                    <div class="conf-secao-titulo-wrap">
+                        <span class="conf-secao-icone" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M7 17l2.5-8h5L17 17M9 13h6"/><circle cx="8" cy="19" r="1"/><circle cx="16" cy="19" r="1"/></svg>
+                        </span>
+                        <h3 class="conf-secao-titulo">Veículos Próprios</h3>
+                    </div>
+                    <button class="action-icon-button secondary btn-sm" type="button" onclick="abrirModalNovo()">+ Novo veículo</button>
+                </div>
+                <div id="conf-veiculos-lista" class="conf-lista">
+                    <p class="loading">Carregando...</p>
+                </div>
+            </div>
+
+            <!-- Transporte por App -->
+            <div class="conf-secao">
+                <div class="conf-secao-header">
+                    <div class="conf-secao-titulo-wrap">
+                        <span class="conf-secao-icone" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
+                        </span>
+                        <h3 class="conf-secao-titulo">Transporte por App</h3>
+                    </div>
+                    <button class="action-icon-button secondary btn-sm" type="button" onclick="abrirModalAppNovo()">+ Novo cenário</button>
+                </div>
+                <div id="conf-apps-lista" class="conf-lista">
+                    <p class="loading">Carregando...</p>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- BLOCO 3 — EFETIVAÇÃO DAS DESPESAS                            -->
+        <!-- ============================================================ -->
+        <section id="bloco-efetivacao" class="mob-bloco" role="tabpanel" aria-labelledby="tab-efetivacao" style="display:none;">
+
+            <div class="mob-bloco-header">
+                <div>
+                    <h2 class="mob-bloco-titulo">Efetivação das Despesas</h2>
+                    <p class="mob-bloco-sub">Revise as despesas previstas do cenário ativo e confirme-as como lançamentos reais.</p>
+                </div>
+                <div class="mob-bloco-acoes">
+                    <select id="efet-cenario-select" class="mob-select-sm" onchange="carregarEfetivacao()">
+                        <option value="">Selecione um cenário...</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Resumo de totais -->
+            <div id="efet-resumo" class="efet-resumo-bar" style="display:none;"></div>
+
+            <!-- Grade de despesas previstas -->
+            <div id="efet-grade-wrap">
+                <div id="efet-grade" class="efet-grade">
+                    <div class="empty-state">
+                        <p>Selecione um cenário acima para ver as despesas previstas.</p>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+</div>
+
+<!-- ================================================================ -->
+<!-- MODAL — Confirmar DespesaPrevista (converter em Conta ou Cartão)  -->
+<!-- ================================================================ -->
+<div id="modal-confirmar-prevista" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Confirmar despesa prevista</h2>
+            <span class="close" onclick="fecharModalConfirmar()">&times;</span>
+        </div>
+        <input type="hidden" id="confirmar-despesa-id">
+        <div id="confirmar-preview" class="confirmar-preview"></div>
+        <div class="form-grid" style="margin-top:14px;">
+            <div class="form-group span-2">
+                <label for="confirmar-meio">Meio de pagamento *</label>
+                <select id="confirmar-meio" required onchange="toggleConfirmarCartao()">
+                    <option value="">Selecione...</option>
+                    <option value="pix">PIX</option>
+                    <option value="boleto">Boleto</option>
+                    <option value="debito">Débito em conta</option>
+                    <option value="dinheiro">Dinheiro</option>
+                    <option value="cartao">Cartão de crédito</option>
+                </select>
+            </div>
+            <div class="form-group span-2" id="wrap-confirmar-cartao" style="display:none;">
+                <label for="confirmar-cartao-id">Cartão *</label>
+                <select id="confirmar-cartao-id">
+                    <option value="">Carregando cartões...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="confirmar-data-vencimento">Data de vencimento</label>
+                <input type="date" id="confirmar-data-vencimento">
+            </div>
+            <div class="form-group">
+                <label for="confirmar-observacao">Observação (opcional)</label>
+                <input type="text" id="confirmar-observacao" placeholder="Ex: pago via app do banco">
+            </div>
+        </div>
+        <div class="form-actions">
+            <button type="button" class="btn btn-secondary" onclick="fecharModalConfirmar()">Cancelar</button>
+            <button type="button" id="btn-confirmar-submit" class="btn btn-primary" onclick="submitConfirmarPrevista()">Confirmar e gerar lançamento</button>
+        </div>
+    </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- MODAL — Novo / Editar Veículo                                     -->
+<!-- ================================================================ -->
+<div id="modal-veiculo" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="modal-titulo">Novo Veículo</h2>
+            <span class="close" onclick="fecharModal()">&times;</span>
+        </div>
+
+        <form id="form-veiculo" onsubmit="salvarVeiculo(event)">
+            <input type="hidden" id="veiculo-id">
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="nome">Nome *</label>
+                    <input type="text" id="nome" required placeholder="Ex: Carro da família">
+                </div>
+                <div class="form-group">
+                    <label for="tipo">Tipo *</label>
+                    <select id="tipo" required>
+                        <option value="carro">Carro</option>
+                        <option value="moto">Moto</option>
+                        <option value="outro">Outro</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="combustivel">Combustível *</label>
+                    <select id="combustivel" required>
+                        <option value="gasolina">Gasolina</option>
+                        <option value="etanol">Etanol</option>
+                        <option value="diesel">Diesel</option>
+                        <option value="gnv">GNV</option>
+                        <option value="eletrico">Elétrico</option>
+                        <option value="outro">Outro</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="autonomia_km_l">Autonomia (km/L) *</label>
+                    <input type="number" step="0.01" id="autonomia_km_l" required placeholder="Ex: 12">
+                </div>
+                <div class="form-group" id="status-group">
+                    <label for="status">Status *</label>
+                    <select id="status" required onchange="toggleDataInicio()">
+                        <option value="SIMULADO">SIMULADO</option>
+                        <option value="ATIVO">ATIVO</option>
+                    </select>
+                </div>
+                <div class="form-group" id="wrap-data-inicio" style="display:none;">
+                    <label for="data_inicio">Data de início (ATIVO) *</label>
+                    <input type="date" id="data_inicio">
+                </div>
+            </div>
+
+            <hr class="divider">
+
+            <h3>Projeções MVP (despesas previstas)</h3>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Combustível (mensal)</label>
+                    <input type="number" step="0.01" id="combustivel_valor_mensal" placeholder="Valor mensal (ex: 500)">
+                </div>
+                <div class="form-group">
+                    <label>Preço médio combustível (R$/L)</label>
+                    <input type="number" step="0.01" id="preco_medio_combustivel" placeholder="Opcional (ex: 5.79)">
+                    <small class="hint">Usado apenas para estimar km via consumo.</small>
+                </div>
+                <div class="form-group">
+                    <label>IPVA (anual)</label>
+                    <div class="inline">
+                        <select id="ipva_mes" class="small"></select>
+                        <input type="number" step="0.01" id="ipva_valor" placeholder="Valor">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Seguro (anual)</label>
+                    <div class="inline">
+                        <select id="seguro_mes" class="small"></select>
+                        <input type="number" step="0.01" id="seguro_valor" placeholder="Valor">
+                    </div>
+                </div>
+                <div class="form-group span-2">
+                    <label>Licenciamento (anual)</label>
+                    <div class="inline">
+                        <select id="licenciamento_mes" class="small"></select>
+                        <input type="number" step="0.01" id="licenciamento_valor" placeholder="Valor">
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="fecharModal()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- MODAL — Adiar DespesaPrevista                                     -->
+<!-- ================================================================ -->
+<div id="modal-adiar" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Adiar despesa prevista</h2>
+            <span class="close" onclick="fecharModalAdiar()">&times;</span>
+        </div>
+        <form onsubmit="confirmarAdiar(event)">
+            <input type="hidden" id="adiar-despesa-id">
+            <p class="hint">Esta ação afeta apenas esta despesa. Outras projeções não serão alteradas.</p>
+            <div class="form-group">
+                <label for="adiar-nova-data">Nova data (mês/ano)</label>
+                <input type="month" id="adiar-nova-data" required>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="fecharModalAdiar()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Adiar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- MODAL — Financiamento (simulação)                                 -->
+<!-- ================================================================ -->
+<div id="modal-financiamento" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Financiamento (simulação)</h2>
+            <span class="close" onclick="fecharModalFinanciamento()">&times;</span>
+        </div>
+        <form onsubmit="salvarFinanciamento(event)">
+            <input type="hidden" id="fin-veiculo-id">
+            <p class="hint">Simulação baseada em taxas médias de mercado. Não cria lançamentos reais automaticamente.</p>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="fin-valor-bem">Valor do veículo *</label>
+                    <input type="number" step="0.01" id="fin-valor-bem" required>
+                </div>
+                <div class="form-group">
+                    <label for="fin-entrada">Entrada</label>
+                    <input type="number" step="0.01" id="fin-entrada" value="0">
+                </div>
+                <div class="form-group">
+                    <label for="fin-numero-parcelas">Número de parcelas *</label>
+                    <input type="number" id="fin-numero-parcelas" min="24" max="72" value="48" required>
+                </div>
+                <div class="form-group">
+                    <label for="fin-taxa-juros">Taxa de juros mensal (% a.m.) *</label>
+                    <input type="number" step="0.001" id="fin-taxa-juros" value="2.02" required>
+                    <small class="hint">Modelo simples (sem SAC/PRICE).</small>
+                </div>
+                <div class="form-group">
+                    <label for="fin-indexador">Indexador</label>
+                    <select id="fin-indexador"></select>
+                </div>
+                <div class="form-group">
+                    <label for="fin-iof">IOF (% sobre valor financiado)</label>
+                    <input type="number" step="0.001" id="fin-iof" value="0.38">
+                </div>
+            </div>
+            <div class="uso-resumo" id="fin-resumo" style="margin-top:10px; display:none;"></div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="fecharModalFinanciamento()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Salvar simulação</button>
+                <button type="button" class="btn btn-danger" onclick="removerFinanciamento()">Remover</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- MODAL — Manutenção por km                                         -->
+<!-- ================================================================ -->
+<div id="modal-manutencao-km" class="modal">
+    <div class="modal-content modal-lg">
+        <div class="modal-header">
+            <h2>Manutenção por uso (estimativa)</h2>
+            <span class="close" onclick="fecharModalManutencaoKm()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <p class="hint">Baseado no uso estimado do veículo. Não cria despesas automaticamente.</p>
+
+            <section class="manut-section">
+                <h3>Uso estimado (leitura)</h3>
+                <div id="manut-uso" class="uso-resumo"><p class="loading">Carregando uso...</p></div>
+            </section>
+
+            <section class="manut-section">
+                <h3>Próximas manutenções estimadas</h3>
+                <div id="manut-estimativas" class="manut-grid"></div>
+                <div id="manut-estimativas-vazio" class="empty-state" style="display:none;">
+                    <p>Nenhuma regra cadastrada.</p>
+                    <p class="small-note">Cadastre uma regra abaixo para o sistema estimar.</p>
                 </div>
             </section>
-        </main>
-    </div>
 
-    <!-- Modal -->
-    <div id="modal-veiculo" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="modal-titulo">Novo Veículo</h2>
-                <span class="close" onclick="fecharModal()">&times;</span>
-            </div>
-
-            <form id="form-veiculo" onsubmit="salvarVeiculo(event)">
-                <input type="hidden" id="veiculo-id">
-
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label for="nome">Nome *</label>
-                        <input type="text" id="nome" required placeholder="Ex: Carro da família">
-                    </div>
-                    <div class="form-group">
-                        <label for="tipo">Tipo *</label>
-                        <select id="tipo" required>
-                            <option value="carro">Carro</option>
-                            <option value="moto">Moto</option>
-                            <option value="outro">Outro</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="combustivel">Combustível *</label>
-                        <select id="combustivel" required>
-                            <option value="gasolina">Gasolina</option>
-                            <option value="etanol">Etanol</option>
-                            <option value="diesel">Diesel</option>
-                            <option value="gnv">GNV</option>
-                            <option value="eletrico">Elétrico</option>
-                            <option value="outro">Outro</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="autonomia_km_l">Autonomia (km/L) *</label>
-                        <input type="number" step="0.01" id="autonomia_km_l" required placeholder="Ex: 12">
-                    </div>
-                    <div class="form-group" id="status-group">
-                        <label for="status">Status *</label>
-                        <select id="status" required onchange="toggleDataInicio()">
-                            <option value="SIMULADO">SIMULADO</option>
-                            <option value="ATIVO">ATIVO</option>
-                        </select>
-                    </div>
-                    <div class="form-group" id="wrap-data-inicio" style="display:none;">
-                        <label for="data_inicio">Data de início (ATIVO) *</label>
-                        <input type="date" id="data_inicio">
-                    </div>
+            <section class="manut-section">
+                <div class="manut-regras-header">
+                    <h3>Regras de manutenção</h3>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="toggleFormNovaRegraKm(true)">+ Nova regra</button>
                 </div>
-
-                <hr class="divider">
-
-                <h3>Projeções MVP (despesas previstas)</h3>
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label>Combustível (mensal)</label>
-                        <input type="number" step="0.01" id="combustivel_valor_mensal" placeholder="Valor mensal (ex: 500)">
-                    </div>
-                    <div class="form-group">
-                        <label>Preço médio combustível (R$/L)</label>
-                        <input type="number" step="0.01" id="preco_medio_combustivel" placeholder="Opcional (ex: 5.79)">
-                        <small class="hint">Usado apenas para estimar km via consumo (não exige hodômetro).</small>
-                    </div>
-                    <div class="form-group">
-                        <label>IPVA (anual)</label>
-                        <div class="inline">
-                            <select id="ipva_mes" class="small"></select>
-                            <input type="number" step="0.01" id="ipva_valor" placeholder="Valor">
+                <div id="manut-regras" class="manut-regras-lista"><p class="loading">Carregando regras...</p></div>
+                <form id="form-regra-km" class="manut-regra-form" onsubmit="criarRegraKm(event)" style="display:none;">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="regra-tipo-evento">Tipo</label>
+                            <select id="regra-tipo-evento" required onchange="toggleTipoCustomRegraKm()">
+                                <option value="TROCA_OLEO">Troca de óleo</option>
+                                <option value="REVISAO_GERAL">Revisão geral</option>
+                                <option value="TROCA_PNEUS">Troca de pneus</option>
+                                <option value="ALINHAMENTO_BALANCEAMENTO">Alinhamento / Balanceamento</option>
+                                <option value="OUTRO">Outro (custom)</option>
+                            </select>
+                            <input type="text" id="regra-tipo-custom" placeholder="Ex: pastilhas de freio" style="display:none; margin-top:8px;">
+                            <small class="hint">Isso é uma estimativa, não uma agenda.</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="regra-intervalo-km">Intervalo (km)</label>
+                            <input type="number" id="regra-intervalo-km" min="1" step="1" required placeholder="Ex: 10000">
+                        </div>
+                        <div class="form-group">
+                            <label for="regra-intervalo-meses">Intervalo (meses) (opcional)</label>
+                            <input type="number" id="regra-intervalo-meses" min="1" step="1" placeholder="Ex: 8">
+                        </div>
+                        <div class="form-group">
+                            <label for="regra-custo">Custo estimado</label>
+                            <input type="number" id="regra-custo" min="0.01" step="0.01" required placeholder="Ex: 350">
+                        </div>
+                        <div class="form-group">
+                            <label for="regra-categoria">Categoria</label>
+                            <select id="regra-categoria" required></select>
                         </div>
                     </div>
-
-                    <div class="form-group">
-                        <label>Seguro (anual)</label>
-                        <div class="inline">
-                            <select id="seguro_mes" class="small"></select>
-                            <input type="number" step="0.01" id="seguro_valor" placeholder="Valor">
-                        </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" onclick="toggleFormNovaRegraKm(false)">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Salvar regra</button>
                     </div>
+                </form>
+            </section>
 
-                    <div class="form-group span-2">
-                        <label>Licenciamento (anual)</label>
-                        <div class="inline">
-                            <select id="licenciamento_mes" class="small"></select>
-                            <input type="number" step="0.01" id="licenciamento_valor" placeholder="Valor">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="fecharModal()">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Salvar</button>
-                </div>
-            </form>
+            <section class="manut-section">
+                <h3>Impacto no custo mensal (educacional)</h3>
+                <div id="manut-impacto" class="uso-resumo"><p class="loading">Calculando impacto...</p></div>
+                <p class="small-note">Esse valor é uma aproximação. Não cria nenhuma despesa automaticamente.</p>
+            </section>
         </div>
     </div>
+</div>
 
-    <!-- Modal Adiar Despesa Prevista (FASE 2) -->
-    <div id="modal-adiar" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Adiar despesa prevista</h2>
-                <span class="close" onclick="fecharModalAdiar()">&times;</span>
-            </div>
-            <form onsubmit="confirmarAdiar(event)">
-                <input type="hidden" id="adiar-despesa-id">
-                <p class="hint">
-                    Esta ação afeta apenas esta despesa. Outras projeções não serão alteradas.
-                </p>
+<!-- ================================================================ -->
+<!-- MODAL — Transporte por App                                        -->
+<!-- ================================================================ -->
+<div id="modal-app" class="modal">
+    <div class="modal-content modal-lg">
+        <div class="modal-header">
+            <h2 id="modal-app-titulo">Transporte por App</h2>
+            <span class="close" onclick="fecharModalApp()">&times;</span>
+        </div>
+        <form id="form-app" onsubmit="salvarCaminhoApp(event)">
+            <input type="hidden" id="app-id">
+            <div class="form-grid">
+                <div class="form-group span-2">
+                    <label for="app-nome">Nome</label>
+                    <input type="text" id="app-nome" placeholder="Ex: Uber/99 (uso pessoal)">
+                </div>
                 <div class="form-group">
-                    <label for="adiar-nova-data">Nova data (mês/ano)</label>
-                    <input type="month" id="adiar-nova-data" required>
+                    <label for="app-km-mensal">Km mensal estimado *</label>
+                    <input type="number" step="0.01" id="app-km-mensal" required placeholder="Ex: 250">
                 </div>
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="fecharModalAdiar()">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Adiar</button>
+                <div class="form-group">
+                    <label for="app-preco-km">Preço médio por km (R$/km) *</label>
+                    <input type="number" step="0.01" id="app-preco-km" required placeholder="Ex: 2.80">
                 </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Modal Financiamento (FASE 6) -->
-    <div id="modal-financiamento" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Financiamento (simulação)</h2>
-                <span class="close" onclick="fecharModalFinanciamento()">&times;</span>
             </div>
-            <form onsubmit="salvarFinanciamento(event)">
-                <input type="hidden" id="fin-veiculo-id">
-
-                <p class="hint">
-                    Simulação financeira baseada em taxas médias de mercado e indexadores econômicos.
-                    Os valores podem diferir das condições oferecidas por instituições financeiras.
-                </p>
-
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label for="fin-valor-bem">Valor do veículo *</label>
-                        <input type="number" step="0.01" id="fin-valor-bem" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="fin-entrada">Entrada</label>
-                        <input type="number" step="0.01" id="fin-entrada" value="0">
-                    </div>
-                    <div class="form-group">
-                        <label for="fin-numero-parcelas">Número de parcelas *</label>
-                        <input type="number" id="fin-numero-parcelas" min="24" max="72" value="48" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="fin-taxa-juros">Taxa de juros mensal (% a.m.) *</label>
-                        <input type="number" step="0.001" id="fin-taxa-juros" value="2.02" required>
-                        <small class="hint">Modelo simples (sem SAC/PRICE).</small>
-                    </div>
-                    <div class="form-group">
-                        <label for="fin-indexador">Indexador</label>
-                        <select id="fin-indexador"></select>
-                    </div>
-                    <div class="form-group">
-                        <label for="fin-iof">IOF (% sobre valor financiado)</label>
-                        <input type="number" step="0.001" id="fin-iof" value="0.38">
-                    </div>
+            <hr class="divider">
+            <h3>Perfis (opcional)</h3>
+            <p class="hint">Perfis explicam o valor, mas não criam previsões separadas.</p>
+            <div id="app-perfis" class="manut-regras-lista"></div>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="adicionarPerfilApp()">+ Adicionar perfil</button>
+            <small class="hint">Regra: soma dos km dos perfis deve ser &lt;= km mensal total.</small>
+            <hr class="divider">
+            <h3>Métricas (opcional)</h3>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="app-corridas-mes">Corridas/mês</label>
+                    <input type="number" step="1" id="app-corridas-mes" placeholder="Ex: 18">
                 </div>
-
-                <div class="uso-resumo" id="fin-resumo" style="margin-top:10px; display:none;"></div>
-
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="fecharModalFinanciamento()">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Salvar simulação</button>
-                    <button type="button" class="btn btn-danger" onclick="removerFinanciamento()">Remover</button>
+                <div class="form-group">
+                    <label for="app-km-corrida">Km médio por corrida</label>
+                    <input type="number" step="0.01" id="app-km-corrida" placeholder="Ex: 8.5">
                 </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Modal Manutenção por km (tela narrativa) -->
-    <div id="modal-manutencao-km" class="modal">
-        <div class="modal-content modal-lg">
-            <div class="modal-header">
-                <h2>Manutenção por uso (estimativa)</h2>
-                <span class="close" onclick="fecharModalManutencaoKm()">&times;</span>
             </div>
-
-            <div class="modal-body">
-                <p class="hint">
-                    Baseado no uso estimado do veículo. Ajuda a prever gastos comuns como troca de óleo,
-                    pneus e revisões. Não cria despesas automaticamente.
-                </p>
-
-                <section class="manut-section">
-                    <h3>Uso estimado (leitura)</h3>
-                    <div id="manut-uso" class="uso-resumo">
-                        <p class="loading">Carregando uso...</p>
-                    </div>
-                </section>
-
-                <section class="manut-section">
-                    <h3>Próximas manutenções estimadas</h3>
-                    <div id="manut-estimativas" class="manut-grid"></div>
-                    <div id="manut-estimativas-vazio" class="empty-state" style="display:none;">
-                        <p>Nenhuma regra cadastrada.</p>
-                        <p class="small-note">Cadastre uma regra abaixo para o sistema estimar.</p>
-                    </div>
-                </section>
-
-                <section class="manut-section">
-                    <div class="manut-regras-header">
-                        <h3>Regras de manutenção</h3>
-                        <button type="button" class="btn btn-primary btn-sm" onclick="toggleFormNovaRegraKm(true)">+ Nova regra</button>
-                    </div>
-
-                    <div id="manut-regras" class="manut-regras-lista">
-                        <p class="loading">Carregando regras...</p>
-                    </div>
-
-                    <form id="form-regra-km" class="manut-regra-form" onsubmit="criarRegraKm(event)" style="display:none;">
-                        <div class="form-grid">
-                            <div class="form-group">
-                                <label for="regra-tipo-evento">Tipo</label>
-                                <select id="regra-tipo-evento" required onchange="toggleTipoCustomRegraKm()">
-                                    <option value="TROCA_OLEO">Troca de óleo</option>
-                                    <option value="REVISAO_GERAL">Revisão geral</option>
-                                    <option value="TROCA_PNEUS">Troca de pneus</option>
-                                    <option value="ALINHAMENTO_BALANCEAMENTO">Alinhamento / Balanceamento</option>
-                                    <option value="OUTRO">Outro (custom)</option>
-                                </select>
-                                <input type="text" id="regra-tipo-custom" placeholder="Ex: pastilhas de freio" style="display:none; margin-top:8px;">
-                                <small class="hint">Isso é uma estimativa, não uma agenda.</small>
-                            </div>
-                            <div class="form-group">
-                                <label for="regra-intervalo-km">Intervalo (km)</label>
-                                <input type="number" id="regra-intervalo-km" min="1" step="1" required placeholder="Ex: 10000">
-                            </div>
-                            <div class="form-group">
-                                <label for="regra-intervalo-meses">Intervalo (meses) (opcional)</label>
-                                <input type="number" id="regra-intervalo-meses" min="1" step="1" placeholder="Ex: 8">
-                                <small class="hint">Usado como fallback para calcular impacto mensal quando nÇœo houver uso real/projetado suficiente.</small>
-                            </div>
-                            <div class="form-group">
-                                <label for="regra-custo">Custo estimado</label>
-                                <input type="number" id="regra-custo" min="0.01" step="0.01" required placeholder="Ex: 350">
-                            </div>
-                            <div class="form-group">
-                                <label for="regra-categoria">Categoria</label>
-                                <select id="regra-categoria" required></select>
-                                <small class="hint">Categoria é do sistema (unificada). O veículo é a origem.</small>
-                            </div>
-                        </div>
-                        <div class="form-actions">
-                            <button type="button" class="btn btn-secondary" onclick="toggleFormNovaRegraKm(false)">Cancelar</button>
-                            <button type="submit" class="btn btn-primary">Salvar regra</button>
-                        </div>
-                    </form>
-                </section>
-
-                <section class="manut-section">
-                    <h3>Impacto no custo mensal (educacional)</h3>
-                    <div id="manut-impacto" class="uso-resumo">
-                        <p class="loading">Calculando impacto...</p>
-                    </div>
-                    <p class="small-note">
-                        Esse valor é uma aproximação baseada no uso estimado. O custo mensal consolidado do veículo
-                        já considera as regras de manutenção (estimativa) e não cria nenhuma despesa automaticamente.
-                    </p>
-                </section>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="fecharModalApp()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Salvar simulação</button>
+                <button type="button" class="btn btn-danger" onclick="removerCaminhoApp()">Remover</button>
             </div>
-        </div>
+        </form>
     </div>
-
-    <!-- Bottom Navigation (mínima) -->
-    <!-- Modal Transporte por App (caminho de mobilidade) -->
-    <div id="modal-app" class="modal">
-        <div class="modal-content modal-lg">
-            <div class="modal-header">
-                <h2 id="modal-app-titulo">Transporte por App</h2>
-                <span class="close" onclick="fecharModalApp()">&times;</span>
-            </div>
-
-            <form id="form-app" onsubmit="salvarCaminhoApp(event)">
-                <input type="hidden" id="app-id">
-
-                <div class="form-grid">
-                    <div class="form-group span-2">
-                        <label for="app-nome">Nome</label>
-                        <input type="text" id="app-nome" placeholder="Ex: Uber/99 (uso pessoal)">
-                    </div>
-                    <div class="form-group">
-                        <label for="app-km-mensal">Km mensal estimado *</label>
-                        <input type="number" step="0.01" id="app-km-mensal" required placeholder="Ex: 250">
-                    </div>
-                    <div class="form-group">
-                        <label for="app-preco-km">PreÇõo mÇ¸dio por km (R$/km) *</label>
-                        <input type="number" step="0.01" id="app-preco-km" required placeholder="Ex: 2.80">
-                    </div>
-                </div>
-
-                <hr class="divider">
-
-                <h3>Perfis (opcional)</h3>
-                <p class="hint">Perfis explicam o valor, mas nÇœo criam previsÇõÇæes separadas.</p>
-                <div id="app-perfis" class="manut-regras-lista"></div>
-                <button type="button" class="btn btn-secondary btn-sm" onclick="adicionarPerfilApp()">+ Adicionar perfil</button>
-                <small class="hint">Regra: soma dos km dos perfis deve ser <= km mensal total.</small>
-
-                <hr class="divider">
-
-                <h3>MÇ¸tricas (opcional, sem efeito no valor)</h3>
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label for="app-corridas-mes">Corridas/mÇ¦s</label>
-                        <input type="number" step="1" id="app-corridas-mes" placeholder="Ex: 18">
-                    </div>
-                    <div class="form-group">
-                        <label for="app-km-corrida">Km mÇ¸dio por corrida</label>
-                        <input type="number" step="0.01" id="app-km-corrida" placeholder="Ex: 8.5">
-                    </div>
-                </div>
-
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="fecharModalApp()">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Salvar simulaÇõÇœo</button>
-                    <button type="button" class="btn btn-danger" onclick="removerCaminhoApp()">Remover</button>
-                </div>
-            </form>
-        </div>
-    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}

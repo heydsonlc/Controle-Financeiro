@@ -107,6 +107,16 @@ Pressione `Ctrl + C` no terminal
 
 ---
 
+## Importar Fatura de Cartão
+
+A tela `/importar-cartao` aceita CSV, XLSX e PDF no fluxo assistido. Selecione o cartão, informe a competência em `MM/AAAA`, escolha o arquivo e revise a prévia antes de confirmar.
+
+O backend usa `POST /api/importacao-cartao/analisar` para detectar o tipo real do arquivo e normalizar os lançamentos. CSV com layout não reconhecido continua usando o mapeamento manual legado. PDF Caixa funciona somente quando o PDF tem texto extraível; OCR e PDF escaneado estão fora do escopo.
+
+Categoria da Despesa e Categoria do Cartão são campos diferentes. A Categoria do Cartão corresponde a `item_agregado_id` e deve ser confirmada por linha antes da importação.
+
+---
+
 ## Banco de Dados Local
 
 PostgreSQL local é o banco oficial de desenvolvimento. Qualquer operação de reset/recriação deve ser tratada em script próprio, com confirmação explícita de ambiente local/dev e sem apontar para DigitalOcean, produção ou banco remoto.

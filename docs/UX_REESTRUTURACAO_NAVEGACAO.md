@@ -158,10 +158,19 @@ Páginas migradas nesta etapa:
 - Patrimônio (`/patrimonio`);
 - Categorias (`/categorias`);
 - Veículos (`/veiculos`);
+
 - Preferências (`/preferencias`);
 - Importar Cartão (`/importar-cartao`).
 
 A tela Despesas foi preservada visual e estruturalmente, sem redesenho, sem alteração de detalhamentos, modais, filtros ou ícones pequenos de pagamento. Seguro Habitacional (`/financiamentos/seguro`) e Indexadores (`/indexadores`) seguem fora do shell principal e permanecem como pendências diagnósticas.
+
+### Registro de implementação - IMPORT-2B
+
+A tela `/importar-cartao` passou a consumir o motor unificado de análise para CSV, XLSX e PDF. O painel continua full width e mantém as etapas visuais existentes, mas PDF e XLSX agora geram prévia real quando o backend reconhece o layout.
+
+O fluxo visual preserva a distinção entre Categoria da Despesa e Categoria do Cartão. Categoria da Despesa é sugestão/editável; Categoria do Cartão corresponde a `item_agregado_id`, aparece como select por linha e bloqueia a confirmação quando ausente.
+
+O parser PDF Caixa considera apenas PDF com texto extraível. A página de demonstrativo alimenta a prévia; boleto, opções de pagamento, parcelamento de fatura, limites, propaganda e conteúdo informativo não viram lançamentos importáveis. OCR segue fora do escopo.
 
 ### MVP UX-2 - Desmembramento de Configurações
 
@@ -485,7 +494,21 @@ A reestruturação visual deve considerar também as diretrizes registradas em [
 
 A execução dos MVPs de UX deve respeitar a ordem recomendada no documento complementar: primeiro documentação, depois base Playwright E2E, em seguida UX-1A. Essa ordem protege a evolução visual contra regressões de Navegação e carregamento das rotas principais.
 
-## Status do Ciclo UX (2026-05-01)
+### Registro de implementação - VEIC-2 (Módulo de Mobilidade)
+
+O VEIC-2 reestruturou a tela `/veiculos` como módulo de mobilidade completo, substituindo o layout anterior por uma interface com 3 blocos: Comparação de Cenários, Configuração das Modalidades e Efetivação das Despesas.
+
+A navegação entre blocos usa abas (`tab-comparacao`, `tab-configuracao`, `tab-efetivacao`) dentro da mesma rota, sem novas rotas HTML.
+
+**Bloco Comparação:** grid com seletor de até 3 cenários (veículo próprio, assinatura, app de transporte), 4 KPIs (mais econômico, custo médio, custo estimado, cenário ativo), cards comparativos e tabela comparativa por linha de custo. Botão "Definir ativo" persiste no backend via `GET/POST /api/veiculos/cenario-ativo`.
+
+**Bloco Configuração:** lista veículos e apps com destaque visual para o cenário ativo. Ações de cadastro (Novo Veículo, Transporte por App) continuam acessíveis via `action_bar` existente.
+
+**Bloco Efetivação:** exibe `DespesaPrevista` do cenário ativo, com grade de status (PREVISTA/CONFIRMADA/ADIADA/IGNORADA) e modal de confirmação com seleção de meio de pagamento. Meio=cartão cria `LancamentoAgregado`; demais meios criam `Conta`.
+
+Sem novas rotas, sem migrations, sem alteração de models, sem impacto no dashboard. Smoke E2E: 13 passed, 2 skipped.
+
+## Status do Ciclo UX (2026-05-02)
 
 O ciclo de reestruturação visual foi concluído na sua fase principal. Todos os MVPs de UX planejados até a auditoria técnica foram implementados:
 
@@ -497,6 +520,7 @@ O ciclo de reestruturação visual foi concluído na sua fase principal. Todos o
 - ✅ UX-6B, UX-6C, UX-6E — Compactação, grades full width, botões padronizados
 - ✅ ICONES-1A — Ícones por categoria e meio de pagamento
 - ✅ RECUP-2, RECUP-4 — Tela de Recorrências, acessos restaurados em Despesas
+- ✅ VEIC-2 — Módulo de Mobilidade com 3 blocos e efetivação de despesas
 
 **Pendências visuais em aberto:**
 - UX-1B — Normalização da tela Seguro Habitacional (`/financiamentos/seguro`)

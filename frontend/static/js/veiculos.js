@@ -1683,18 +1683,9 @@ async function removerRegraKm(veiculoId, regraId) {
     }
 }
 
-async function confirmarPrevista(despesaId) {
-    if (!confirm('Confirmar esta despesa prevista?\n\nIsso não cria lançamento real automaticamente.')) return;
-    try {
-        const resp = await fetch(`${API_DESPESAS_PREVISTAS}/${despesaId}/confirmar`, { method: 'POST' });
-        const data = await resp.json();
-        if (!data.success) throw new Error(data.error || 'Falha ao confirmar');
-        alert(data.message || 'Confirmada');
-        await carregarVeiculos();
-    } catch (e) {
-        console.error(e);
-        alert('Erro ao confirmar: ' + e.message);
-    }
+// confirmarPrevista: abre modal de confirmação com escolha de meio de pagamento
+function confirmarPrevista(despesaId, dadosPrevista) {
+    abrirModalConfirmar(despesaId, dadosPrevista || null);
 }
 
 function abrirModalAdiar(despesaId, dataAtualIso) {
@@ -1924,3 +1915,746 @@ window.addEventListener('click', function(event) {
         fecharModalFinanciamento();
     }
 });
+
+// ================================================================
+// VEIC-2 — SISTEMA DE ABAS
+// ================================================================
+
+const API_CARTOES = '/api/cartoes';
+const API_CENARIO_ATIVO = `${API_VEICULOS}/cenario-ativo`;
+
+let abaAtiva = 'comparacao';
+let cenarioAtivoState = {}; // { tipo: 'VEICULO'|'TRANSPORTE_APP', id: N }
+let cartoesCacheGlobal = null;
+
+function ativarAba(nome) {
+    abaAtiva = nome;
+    const abas = ['comparacao', 'configuracao', 'efetivacao'];
+    abas.forEach(a => {
+        const tab = document.getElementById(`tab-${a}`);
+        const bloco = document.getElementById(`bloco-${a}`);
+        if (tab) {
+            tab.classList.toggle('active', a === nome);
+            tab.setAttribute('aria-selected', a === nome ? 'true' : 'false');
+        }
+        if (bloco) bloco.style.display = a === nome ? '' : 'none';
+    });
+
+    if (nome === 'comparacao') renderizarComparacao();
+    if (nome === 'configuracao') renderizarConfiguracao();
+    if (nome === 'efetivacao') iniciarEfetivacao();
+}
+
+// ================================================================
+// CENÁRIO ATIVO (persistência backend + localStorage fallback)
+// ================================================================
+
+async function carregarCenarioAtivo() {
+    try {
+        const resp = await fetch(API_CENARIO_ATIVO);
+        const data = await resp.json();
+        if (data.success && data.data && data.data.tipo) {
+            cenarioAtivoState = data.data;
+            return;
+        }
+    } catch (e) {
+        // fallback localStorage legado
+    }
+    // fallback: ler do localStorage legado
+    try {
+        const raw = localStorage.getItem(STORAGE_MOBILIDADE_ATIVA);
+        if (raw) {
+            const obj = JSON.parse(raw);
+            const vIds = (obj.VEICULO || []).map(Number).filter(Number.isFinite);
+            const aIds = (obj.TRANSPORTE_APP || []).map(Number).filter(Number.isFinite);
+            if (vIds.length) cenarioAtivoState = { tipo: 'VEICULO', id: vIds[0] };
+            else if (aIds.length) cenarioAtivoState = { tipo: 'TRANSPORTE_APP', id: aIds[0] };
+        }
+    } catch (e) { /* sem fallback */ }
+}
+
+async function salvarCenarioAtivo(tipo, id) {
+    cenarioAtivoState = { tipo, id };
+    try {
+        await fetch(API_CENARIO_ATIVO, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tipo, id }),
+        });
+    } catch (e) {
+        console.warn('Falha ao salvar cenário ativo no backend:', e);
+    }
+    // Também mantém localStorage legado
+    if (tipo === 'VEICULO') {
+        mobilidadeAtiva.VEICULO = new Set([id]);
+        mobilidadeAtiva.TRANSPORTE_APP = new Set();
+    } else {
+        mobilidadeAtiva.VEICULO = new Set();
+        mobilidadeAtiva.TRANSPORTE_APP = new Set([id]);
+    }
+    salvarCaminhosAtivosLocal();
+}
+
+function isCenarioAtivo(tipo, id) {
+    return cenarioAtivoState.tipo === tipo && Number(cenarioAtivoState.id) === Number(id);
+}
+
+// ================================================================
+// BLOCO 1 — COMPARAÇÃO
+// ================================================================
+
+let cenariosSelecionados = new Set(); // Set de chaves "TIPO_ID"
+let todosOsCenarios = []; // [{tipo, id, nome, subLabel, custoMensal, custoAnual, itens}]
+
+function _chaveCenario(tipo, id) { return `${tipo}_${id}`; }
+
+async function construirTodosOsCenarios(veiculos, apps) {
+    const todos = [];
+
+    for (const v of (veiculos || [])) {
+        let custo = Number(custoMensalConsolidado?.VEICULO?.[v.id] || 0);
+        const itens = [];
+        if (v.projecao_combustivel?.valor_mensal) itens.push({ nome: 'Combustível/mês', valor: Number(v.projecao_combustivel.valor_mensal) });
+        if (v.ipva?.valor) itens.push({ nome: 'IPVA (diluído)', valor: Number(v.ipva.valor) / 12 });
+        if (v.seguro?.valor) itens.push({ nome: 'Seguro (diluído)', valor: Number(v.seguro.valor) / 12 });
+        if (v.licenciamento?.valor) itens.push({ nome: 'Licenciamento (diluído)', valor: Number(v.licenciamento.valor) / 12 });
+
+        todos.push({
+            tipo: 'VEICULO',
+            id: v.id,
+            nome: v.nome,
+            subLabel: `${v.tipo} · ${v.combustivel} · ${v.autonomia_km_l} km/L`,
+            statusLabel: v.status,
+            custoMensal: custo,
+            custoAnual: custo * 12,
+            itens,
+            raw: v,
+        });
+    }
+
+    for (const c of (apps || [])) {
+        const custo = Number(c.valor_mensal || 0);
+        todos.push({
+            tipo: 'TRANSPORTE_APP',
+            id: c.id,
+            nome: c.nome || 'Transporte por App',
+            subLabel: `${Number(c.km_mensal_estimado || 0).toLocaleString('pt-BR')} km/mês · ${formatarMoeda(c.preco_medio_por_km || 0)} /km`,
+            statusLabel: 'APP',
+            custoMensal: custo,
+            custoAnual: custo * 12,
+            itens: [{ nome: 'Custo mensal', valor: custo }],
+            raw: c,
+        });
+    }
+
+    todosOsCenarios = todos;
+
+    // Selecionar os primeiros 3 automaticamente se nenhum selecionado ainda
+    if (cenariosSelecionados.size === 0) {
+        todos.slice(0, 3).forEach(c => cenariosSelecionados.add(_chaveCenario(c.tipo, c.id)));
+    }
+}
+
+async function renderizarComparacao() {
+    if (!caminhosVeiculos || !caminhosApps) return;
+    await construirTodosOsCenarios(caminhosVeiculos, caminhosApps);
+
+    renderSeletorCenarios();
+    renderResumoSuperior();
+    renderCardsComparacao();
+    renderTabelaComparativa();
+}
+
+function renderSeletorCenarios() {
+    const el = document.getElementById('comp-seletor-lista');
+    if (!el) return;
+
+    if (!todosOsCenarios.length) {
+        el.innerHTML = `<div class="empty-state"><p class="small-note">Nenhum cenário cadastrado. Crie um veículo ou transporte por app na aba Configuração.</p></div>`;
+        return;
+    }
+
+    el.innerHTML = todosOsCenarios.map(c => {
+        const chave = _chaveCenario(c.tipo, c.id);
+        const selecionado = cenariosSelecionados.has(chave);
+        return `
+            <label class="comp-seletor-item${selecionado ? ' selecionado' : ''}" onclick="toggleSelecaoCenario('${chave}', this)">
+                <input type="checkbox" ${selecionado ? 'checked' : ''} style="pointer-events:none;">
+                <span>${escapeHtml(c.nome)}</span>
+                <span class="small-note" style="margin-left:4px;">${formatarMoeda(c.custoMensal)}/mês</span>
+            </label>
+        `;
+    }).join('');
+}
+
+function toggleSelecaoCenario(chave, labelEl) {
+    if (cenariosSelecionados.has(chave)) {
+        cenariosSelecionados.delete(chave);
+        labelEl.classList.remove('selecionado');
+        labelEl.querySelector('input').checked = false;
+    } else {
+        if (cenariosSelecionados.size >= 3) {
+            alert('Selecione no máximo 3 cenários para comparar.');
+            return;
+        }
+        cenariosSelecionados.add(chave);
+        labelEl.classList.add('selecionado');
+        labelEl.querySelector('input').checked = true;
+    }
+    renderResumoSuperior();
+    renderCardsComparacao();
+    renderTabelaComparativa();
+}
+
+function getCenariosSelecionados() {
+    return todosOsCenarios.filter(c => cenariosSelecionados.has(_chaveCenario(c.tipo, c.id)));
+}
+
+function renderResumoSuperior() {
+    const el = document.getElementById('comp-resumo-superior');
+    if (!el) return;
+    const sel = getCenariosSelecionados();
+    if (!sel.length) { el.style.display = 'none'; return; }
+
+    const horizonte = Number(document.getElementById('comp-horizonte')?.value || 24);
+    const mensal = sel.map(c => c.custoMensal);
+    const mediaGeral = mensal.reduce((a, b) => a + b, 0) / mensal.length;
+    const maisEconomico = sel.reduce((a, b) => a.custoMensal < b.custoMensal ? a : b);
+    const melhorKm = sel.reduce((a, b) => {
+        const kma = Number(a.raw?.km_mensal_estimado || a.raw?.autonomia_km_l && 1200 / a.raw.autonomia_km_l && a.custoMensal / (1200 / (a.raw?.autonomia_km_l || 1)) || 0);
+        const kmb = Number(b.raw?.km_mensal_estimado || b.raw?.autonomia_km_l && 1200 / b.raw.autonomia_km_l && b.custoMensal / (1200 / (b.raw?.autonomia_km_l || 1)) || 0);
+        return kma <= kmb ? a : b;
+    });
+
+    el.style.display = 'grid';
+    el.innerHTML = `
+        <div class="comp-resumo-card destaque">
+            <div class="comp-resumo-label">Mais econômico</div>
+            <div class="comp-resumo-valor destaque">${escapeHtml(maisEconomico.nome)}</div>
+            <div class="comp-resumo-sub">${formatarMoeda(maisEconomico.custoMensal)} / mês</div>
+        </div>
+        <div class="comp-resumo-card">
+            <div class="comp-resumo-label">Custo médio mensal</div>
+            <div class="comp-resumo-valor">${formatarMoeda(mediaGeral)} / mês</div>
+            <div class="comp-resumo-sub">Entre os ${sel.length} cenários</div>
+        </div>
+        <div class="comp-resumo-card">
+            <div class="comp-resumo-label">Custo estimado (${horizonte}m)</div>
+            <div class="comp-resumo-valor">${formatarMoeda(mediaGeral * horizonte)}</div>
+            <div class="comp-resumo-sub">Média anual: ${formatarMoeda(mediaGeral * 12)}</div>
+        </div>
+        <div class="comp-resumo-card">
+            <div class="comp-resumo-label">Cenário ativo</div>
+            <div class="comp-resumo-valor">${cenarioAtivoState.tipo ? escapeHtml(todosOsCenarios.find(c => c.tipo === cenarioAtivoState.tipo && Number(c.id) === Number(cenarioAtivoState.id))?.nome || '—') : '—'}</div>
+            <div class="comp-resumo-sub">Clique em "Definir ativo" nos cards</div>
+        </div>
+    `;
+}
+
+function renderCardsComparacao() {
+    const el = document.getElementById('comp-cards');
+    if (!el) return;
+    const sel = getCenariosSelecionados();
+
+    if (!sel.length) {
+        el.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p class="small-note">Selecione cenários acima para comparar.</p></div>`;
+        return;
+    }
+
+    el.innerHTML = sel.map(c => {
+        const ativoGlobal = isCenarioAtivo(c.tipo, c.id);
+        const itensHtml = c.itens.slice(0, 4).map(i => `
+            <div class="comp-card-item-linha">
+                <span class="comp-card-item-nome">${escapeHtml(i.nome)}</span>
+                <span class="comp-card-item-valor">${formatarMoeda(i.valor)}</span>
+            </div>
+        `).join('');
+
+        const editAction = c.tipo === 'VEICULO'
+            ? `onclick="abrirModalEditar(${c.id})"`
+            : `onclick="abrirModalAppEditar(${c.id})"`;
+
+        return `
+            <div class="comp-card${ativoGlobal ? ' ativo-global' : ''}">
+                ${ativoGlobal ? '<span class="comp-card-badge-ativo">Ativo</span>' : ''}
+                <div>
+                    <div class="comp-card-tipo">${c.tipo === 'VEICULO' ? 'Veículo próprio' : 'Transporte por app'}</div>
+                    <div class="comp-card-nome">${escapeHtml(c.nome)}</div>
+                    <div class="comp-card-sub">${escapeHtml(c.subLabel)}</div>
+                </div>
+                <div class="comp-card-custo-mensal">
+                    <div class="comp-card-custo-label">Custo mensal estimado</div>
+                    <div class="comp-card-custo-valor">${formatarMoeda(c.custoMensal)}</div>
+                    <div class="comp-card-custo-anual">Anual: ${formatarMoeda(c.custoAnual)}</div>
+                </div>
+                <div class="comp-card-itens">${itensHtml || '<span class="small-note">Sem detalhamento configurado.</span>'}</div>
+                <div class="comp-card-acoes">
+                    <button class="btn btn-secondary btn-sm" ${editAction}>Editar</button>
+                    ${!ativoGlobal ? `<button class="btn btn-primary btn-sm" onclick="definirCenarioAtivo('${c.tipo}', ${c.id})">Definir ativo</button>` : `<button class="btn btn-secondary btn-sm" disabled>Ativo</button>`}
+                    <button class="btn btn-secondary btn-sm" onclick="ativarAba('efetivacao'); selecionarCenarioEfetivacao('${c.tipo}', ${c.id})">Efetivar</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderTabelaComparativa() {
+    const wrap = document.getElementById('comp-tabela-wrap');
+    const tabela = document.getElementById('comp-tabela');
+    if (!wrap || !tabela) return;
+
+    const sel = getCenariosSelecionados();
+    if (sel.length < 2) { wrap.style.display = 'none'; return; }
+
+    wrap.style.display = '';
+    const menores = {};
+    const atributos = ['custoMensal', 'custoAnual'];
+    atributos.forEach(k => {
+        const vals = sel.map(c => c[k]);
+        menores[k] = Math.min(...vals);
+    });
+
+    const cabecalho = `<thead><tr>
+        <th>Atributo</th>
+        ${sel.map(c => `<th>${escapeHtml(c.nome)}</th>`).join('')}
+    </tr></thead>`;
+
+    const linhas = [
+        { label: 'Custo mensal', key: 'custoMensal', fmt: formatarMoeda },
+        { label: 'Custo anual', key: 'custoAnual', fmt: formatarMoeda },
+    ];
+
+    const corpo = `<tbody>
+        ${linhas.map(({ label, key, fmt }) => `<tr>
+            <td>${label}</td>
+            ${sel.map(c => {
+                const val = c[key];
+                const melhor = val === menores[key];
+                return `<td class="${melhor ? 'melhor' : ''}">${fmt(val)}</td>`;
+            }).join('')}
+        </tr>`).join('')}
+        <tr>
+            <td>Tipo</td>
+            ${sel.map(c => `<td>${c.tipo === 'VEICULO' ? 'Veículo próprio' : 'App'}</td>`).join('')}
+        </tr>
+    </tbody>`;
+
+    tabela.innerHTML = cabecalho + corpo;
+}
+
+async function definirCenarioAtivo(tipo, id) {
+    await salvarCenarioAtivo(tipo, id);
+    renderCardsComparacao();
+    renderResumoSuperior();
+    renderizarConfiguracao();
+}
+
+// ================================================================
+// BLOCO 2 — CONFIGURAÇÃO
+// ================================================================
+
+function renderizarConfiguracao() {
+    renderConfVeiculos();
+    renderConfApps();
+}
+
+function renderConfVeiculos() {
+    const el = document.getElementById('conf-veiculos-lista');
+    if (!el) return;
+    const lista = caminhosVeiculos || [];
+    if (!lista.length) {
+        el.innerHTML = `<div class="empty-state"><p class="small-note">Nenhum veículo cadastrado.</p></div>`;
+        return;
+    }
+    el.innerHTML = lista.map(v => {
+        const ativo = isCenarioAtivo('VEICULO', v.id);
+        const custo = custoMensalConsolidado?.VEICULO?.[v.id] || 0;
+        return `
+            <div class="conf-item${ativo ? ' cenario-ativo-global' : ''}">
+                <div class="conf-item-info">
+                    <div class="conf-item-nome">${escapeHtml(v.nome)} <span class="card-badge ${v.status === 'ATIVO' ? 'status-ativo' : 'status-simulado'}">${escapeHtml(v.status)}</span></div>
+                    <div class="conf-item-sub">${escapeHtml(v.tipo)} · ${escapeHtml(v.combustivel)} · ${v.autonomia_km_l} km/L</div>
+                </div>
+                <div class="conf-item-custo">${formatarMoeda(custo)}/mês</div>
+                <div class="conf-item-acoes">
+                    <button class="row-action-button" onclick="abrirModalEditar(${v.id})" title="Editar" aria-label="Editar">${veiculosIcon('edit')}</button>
+                    <button class="row-action-button" onclick="toggleProjecoes(${v.id})" title="Projeções" aria-label="Projeções">${veiculosIcon('eye')}</button>
+                    <button class="row-action-button" onclick="abrirModalFinanciamento(${v.id})" title="Financiamento" aria-label="Financiamento">${veiculosIcon('file')}</button>
+                    <button class="row-action-button" onclick="abrirModalManutencaoKm(${v.id})" title="Manutenção" aria-label="Manutenção">${veiculosIcon('clock')}</button>
+                    <button class="row-action-button danger" onclick="deletarVeiculo(${v.id}, '${escapeAttr(v.nome)}')" title="Excluir" aria-label="Excluir">${veiculosIcon('trash')}</button>
+                </div>
+            </div>
+            <div id="projecoes-${v.id}" class="projecoes-wrap" style="display:none;">
+                <div class="projecoes-header">
+                    <strong>Despesas previstas</strong>
+                    <span class="small-note">Não são lançamentos reais.</span>
+                </div>
+                <div class="projecoes-actions">
+                    <button class="row-action-button" onclick="abrirModalFinanciamento(${v.id})" title="Financiamento" aria-label="Financiamento">${veiculosIcon('file')}</button>
+                    <button class="row-action-button" onclick="abrirModalManutencaoKm(${v.id})" title="Manutencao por km" aria-label="Manutencao por km">${veiculosIcon('clock')}</button>
+                    ${v.status === 'SIMULADO' ? `<button class="row-action-button success" onclick="converterVeiculo(${v.id})" title="Converter para ativo" aria-label="Converter para ativo">${veiculosIcon('check')}</button>` : ''}
+                </div>
+                <div class="projecoes-body"><p class="loading">Carregando projeções...</p></div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderConfApps() {
+    const el = document.getElementById('conf-apps-lista');
+    if (!el) return;
+    const lista = caminhosApps || [];
+    if (!lista.length) {
+        el.innerHTML = `<div class="empty-state"><p class="small-note">Nenhum cenário de transporte por app cadastrado.</p></div>`;
+        return;
+    }
+    el.innerHTML = lista.map(c => {
+        const ativo = isCenarioAtivo('TRANSPORTE_APP', c.id);
+        return `
+            <div class="conf-item${ativo ? ' cenario-ativo-global' : ''}">
+                <div class="conf-item-info">
+                    <div class="conf-item-nome">${escapeHtml(c.nome || 'Transporte por App')}</div>
+                    <div class="conf-item-sub">${Number(c.km_mensal_estimado || 0).toLocaleString('pt-BR')} km/mês · ${formatarMoeda(c.preco_medio_por_km || 0)} /km</div>
+                </div>
+                <div class="conf-item-custo">${formatarMoeda(c.valor_mensal || 0)}/mês</div>
+                <div class="conf-item-acoes">
+                    <button class="row-action-button" onclick="abrirModalAppEditar(${c.id})" title="Editar" aria-label="Editar">${veiculosIcon('edit')}</button>
+                    <button class="row-action-button" onclick="toggleProjecoesApp(${c.id})" title="Projeções" aria-label="Projeções">${veiculosIcon('eye')}</button>
+                    <button class="row-action-button danger" onclick="removerCaminhoApp(${c.id}, '${escapeAttr(c.nome || 'App')}')" title="Excluir" aria-label="Excluir">${veiculosIcon('trash')}</button>
+                </div>
+            </div>
+            <div class="projecoes-wrap" id="app-projecoes-${c.id}" style="display:none;">
+                <div class="projecoes-header">
+                    <strong>Despesas previstas</strong>
+                    <span class="small-note">Não são lançamentos reais.</span>
+                </div>
+                <div class="projecoes-body"><p class="loading">Carregando projeções...</p></div>
+            </div>
+        `;
+    }).join('');
+}
+
+// ================================================================
+// BLOCO 3 — EFETIVAÇÃO
+// ================================================================
+
+let efetCenarioTipo = null;
+let efetCenarioId = null;
+let efetProjecoes = [];
+
+async function iniciarEfetivacao() {
+    // Popular select de cenários
+    const sel = document.getElementById('efet-cenario-select');
+    if (!sel) return;
+
+    const opcoes = todosOsCenarios.map(c => {
+        const label = `${c.tipo === 'VEICULO' ? '🚗' : '📱'} ${c.nome} — ${formatarMoeda(c.custoMensal)}/mês`;
+        const selected = (efetCenarioTipo === c.tipo && Number(efetCenarioId) === Number(c.id));
+        return `<option value="${c.tipo}|${c.id}" ${selected ? 'selected' : ''}>${label}</option>`;
+    });
+    sel.innerHTML = `<option value="">Selecione um cenário...</option>` + opcoes.join('');
+
+    if (efetCenarioTipo && efetCenarioId) {
+        await carregarEfetivacao();
+    }
+}
+
+function selecionarCenarioEfetivacao(tipo, id) {
+    efetCenarioTipo = tipo;
+    efetCenarioId = id;
+    const sel = document.getElementById('efet-cenario-select');
+    if (sel) sel.value = `${tipo}|${id}`;
+    carregarEfetivacao();
+}
+
+async function carregarEfetivacao() {
+    const sel = document.getElementById('efet-cenario-select');
+    const val = sel?.value || '';
+    if (!val) {
+        document.getElementById('efet-resumo').style.display = 'none';
+        document.getElementById('efet-grade').innerHTML = `<div class="empty-state"><p>Selecione um cenário acima.</p></div>`;
+        return;
+    }
+
+    const [tipo, idStr] = val.split('|');
+    efetCenarioTipo = tipo;
+    efetCenarioId = Number(idStr);
+
+    document.getElementById('efet-grade').innerHTML = `<p class="loading" style="padding:16px;">Carregando projeções...</p>`;
+
+    try {
+        let url;
+        if (tipo === 'VEICULO') {
+            url = `${API_VEICULOS}/${efetCenarioId}/projecoes?meses=24`;
+        } else {
+            url = `${API_MOBILIDADE_APP}/${efetCenarioId}/projecoes?meses=24`;
+        }
+        const resp = await fetch(url);
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'Falha ao carregar projeções');
+
+        efetProjecoes = data.data || [];
+        projecoesIndex = {};
+        efetProjecoes.forEach(p => {
+            projecoesIndex[p.id] = { tipo_evento: _normalizarTipoEvento(p) || null };
+        });
+
+        renderEfetivacaoResumo();
+        renderEfetivacaoGrade();
+    } catch (e) {
+        console.error(e);
+        document.getElementById('efet-grade').innerHTML = `<div class="empty-state"><p>Erro: ${escapeHtml(e.message)}</p></div>`;
+    }
+}
+
+function renderEfetivacaoResumo() {
+    const el = document.getElementById('efet-resumo');
+    if (!el) return;
+
+    const previstas = efetProjecoes.filter(p => p.status === 'PREVISTA');
+    const confirmadas = efetProjecoes.filter(p => p.status === 'CONFIRMADA');
+    const adiadas = efetProjecoes.filter(p => p.status === 'ADIADA');
+    const ignoradas = efetProjecoes.filter(p => p.status === 'IGNORADA');
+
+    const totalPrevisto = previstas.reduce((a, p) => a + Number(p.valor_previsto || 0), 0);
+
+    el.style.display = 'grid';
+    el.innerHTML = `
+        <div class="efet-resumo-card">
+            <div class="efet-resumo-label">Total previsto</div>
+            <div class="efet-resumo-valor">${formatarMoeda(totalPrevisto)}</div>
+            <div class="efet-resumo-sub">${previstas.length} despesa(s) PREVISTA</div>
+        </div>
+        <div class="efet-resumo-card">
+            <div class="efet-resumo-label">Confirmadas</div>
+            <div class="efet-resumo-valor">${confirmadas.length}</div>
+            <div class="efet-resumo-sub">Já convertidas em lançamento</div>
+        </div>
+        <div class="efet-resumo-card">
+            <div class="efet-resumo-label">Adiadas</div>
+            <div class="efet-resumo-valor">${adiadas.length}</div>
+            <div class="efet-resumo-sub">Aguardando nova data</div>
+        </div>
+        <div class="efet-resumo-card">
+            <div class="efet-resumo-label">Ignoradas</div>
+            <div class="efet-resumo-valor">${ignoradas.length}</div>
+            <div class="efet-resumo-sub">Descartadas manualmente</div>
+        </div>
+    `;
+}
+
+function renderEfetivacaoGrade() {
+    const el = document.getElementById('efet-grade');
+    if (!el) return;
+
+    if (!efetProjecoes.length) {
+        el.innerHTML = `<div class="empty-state"><p class="small-note">Nenhuma despesa prevista para este cenário.</p></div>`;
+        return;
+    }
+
+    const linhas = efetProjecoes.map(p => {
+        const mes = formatarMesAno(p.data_atual_prevista || p.data_prevista);
+        const tipo = _rotuloDetalheTipo(p);
+        const catNome = p.categoria?.nome || `Cat. #${p.categoria_id}`;
+        const valor = formatarMoeda(p.valor_previsto);
+        const status = String(p.status || '').toLowerCase();
+        const badgeClass = { prevista: 'prevista', confirmada: 'confirmada', adiada: 'adiada', ignorada: 'ignorada' }[status] || 'prevista';
+
+        let acoes = `<span class="small-note">—</span>`;
+        if (p.status === 'PREVISTA') {
+            acoes = `
+                <div class="row-actions">
+                    <button class="row-action-button success" onclick="confirmarPrevista(${p.id}, ${JSON.stringify({ id: p.id, descricao: tipo, valor: p.valor_previsto, data: p.data_atual_prevista || p.data_prevista, categoria: catNome, categoria_id: p.categoria_id }).replace(/"/g, '&quot;')})" title="Confirmar e gerar lançamento" aria-label="Confirmar">${veiculosIcon('check')}</button>
+                    <button class="row-action-button" onclick="abrirModalAdiar(${p.id}, '${escapeAttr(p.data_atual_prevista || p.data_prevista)}')" title="Adiar" aria-label="Adiar">${veiculosIcon('clock')}</button>
+                    <button class="row-action-button danger" onclick="ignorarPrevista(${p.id})" title="Ignorar" aria-label="Ignorar">${veiculosIcon('remove')}</button>
+                </div>
+            `;
+        }
+
+        return `<tr>
+            <td>${mes}</td>
+            <td>${escapeHtml(tipo)}</td>
+            <td>${escapeHtml(catNome)}</td>
+            <td style="text-align:right;font-weight:700;">${valor}</td>
+            <td><span class="efet-status-badge ${badgeClass}">${escapeHtml(p.status)}</span></td>
+            <td>${acoes}</td>
+        </tr>`;
+    }).join('');
+
+    el.innerHTML = `
+        <table>
+            <thead>
+                <tr>
+                    <th>Mês</th>
+                    <th>Tipo</th>
+                    <th>Categoria</th>
+                    <th style="text-align:right;">Valor</th>
+                    <th>Status</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>${linhas}</tbody>
+        </table>
+    `;
+}
+
+// ================================================================
+// MODAL DE CONFIRMAÇÃO COM MEIO DE PAGAMENTO
+// ================================================================
+
+let _confirmarDadosPrevista = null;
+
+async function abrirModalConfirmar(despesaId, dadosPrevista) {
+    _confirmarDadosPrevista = dadosPrevista || null;
+    document.getElementById('confirmar-despesa-id').value = despesaId;
+
+    // Preview
+    const preview = document.getElementById('confirmar-preview');
+    if (dadosPrevista) {
+        preview.innerHTML = `
+            <div class="confirmar-preview-row"><span class="confirmar-preview-label">Descrição:</span><span class="confirmar-preview-valor">${escapeHtml(dadosPrevista.descricao || '—')}</span></div>
+            <div class="confirmar-preview-row"><span class="confirmar-preview-label">Valor:</span><span class="confirmar-preview-valor">${formatarMoeda(dadosPrevista.valor || 0)}</span></div>
+            <div class="confirmar-preview-row"><span class="confirmar-preview-label">Data prevista:</span><span class="confirmar-preview-valor">${formatarMesAno(dadosPrevista.data || '')}</span></div>
+            <div class="confirmar-preview-row"><span class="confirmar-preview-label">Categoria:</span><span class="confirmar-preview-valor">${escapeHtml(dadosPrevista.categoria || '—')}</span></div>
+        `;
+        // Pré-preenche data de vencimento
+        const dataInput = document.getElementById('confirmar-data-vencimento');
+        if (dataInput && dadosPrevista.data) {
+            dataInput.value = String(dadosPrevista.data).slice(0, 10);
+        }
+    } else {
+        preview.innerHTML = `<div class="confirmar-preview-row"><span class="confirmar-preview-label">Despesa prevista #${despesaId}</span></div>`;
+        const dataInput = document.getElementById('confirmar-data-vencimento');
+        if (dataInput) dataInput.value = new Date().toISOString().slice(0, 10);
+    }
+
+    // Reset meio de pagamento
+    const meiSel = document.getElementById('confirmar-meio');
+    if (meiSel) meiSel.value = '';
+    toggleConfirmarCartao();
+
+    // Habilitar botão
+    const btn = document.getElementById('btn-confirmar-submit');
+    if (btn) btn.disabled = false;
+
+    document.getElementById('modal-confirmar-prevista').style.display = 'block';
+}
+
+function fecharModalConfirmar() {
+    document.getElementById('modal-confirmar-prevista').style.display = 'none';
+    _confirmarDadosPrevista = null;
+}
+
+function toggleConfirmarCartao() {
+    const meio = document.getElementById('confirmar-meio')?.value;
+    const wrap = document.getElementById('wrap-confirmar-cartao');
+    if (!wrap) return;
+    if (meio === 'cartao') {
+        wrap.style.display = '';
+        carregarCartoesSelect();
+    } else {
+        wrap.style.display = 'none';
+    }
+}
+
+async function carregarCartoesSelect() {
+    if (cartoesCacheGlobal) {
+        preencherSelectCartoes(cartoesCacheGlobal);
+        return;
+    }
+    try {
+        const resp = await fetch(API_CARTOES);
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'Falha ao carregar cartões');
+        cartoesCacheGlobal = (data.data || []).filter(c => c.ativo !== false);
+        preencherSelectCartoes(cartoesCacheGlobal);
+    } catch (e) {
+        console.error(e);
+        const sel = document.getElementById('confirmar-cartao-id');
+        if (sel) sel.innerHTML = `<option value="">Erro ao carregar cartões</option>`;
+    }
+}
+
+function preencherSelectCartoes(cartoes) {
+    const sel = document.getElementById('confirmar-cartao-id');
+    if (!sel) return;
+    sel.innerHTML = `<option value="">Selecione o cartão...</option>` +
+        (cartoes || []).map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
+}
+
+async function submitConfirmarPrevista() {
+    const despesaId = document.getElementById('confirmar-despesa-id')?.value;
+    const meio = document.getElementById('confirmar-meio')?.value;
+    const cartaoId = document.getElementById('confirmar-cartao-id')?.value;
+    const dataVenc = document.getElementById('confirmar-data-vencimento')?.value;
+    const obs = document.getElementById('confirmar-observacao')?.value?.trim();
+
+    if (!meio) { alert('Selecione o meio de pagamento.'); return; }
+    if (meio === 'cartao' && !cartaoId) { alert('Selecione o cartão.'); return; }
+
+    const btn = document.getElementById('btn-confirmar-submit');
+    if (btn) btn.disabled = true;
+
+    const payload = { meio_pagamento: meio };
+    if (meio === 'cartao' && cartaoId) payload.cartao_id = Number(cartaoId);
+    if (dataVenc) payload.data_vencimento = dataVenc;
+    if (obs) payload.observacao = obs;
+    if (_confirmarDadosPrevista?.categoria_id) payload.categoria_id = Number(_confirmarDadosPrevista.categoria_id);
+
+    try {
+        const resp = await fetch(`${API_DESPESAS_PREVISTAS}/${despesaId}/confirmar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'Falha ao confirmar');
+
+        const criada = data.data?.entidade_criada;
+        let msg = 'Despesa prevista confirmada.';
+        if (criada) {
+            msg += criada.tipo === 'lancamento_agregado'
+                ? `\n\nLançamento no cartão criado: ${criada.descricao} — ${formatarMoeda(criada.valor)}`
+                : `\nConta gerada: ${criada.descricao} — ${formatarMoeda(criada.valor)} (venc. ${criada.data_vencimento})`;
+        }
+        alert(msg);
+        fecharModalConfirmar();
+
+        // Recarregar conforme aba ativa
+        if (abaAtiva === 'efetivacao') {
+            await carregarEfetivacao();
+        } else {
+            await carregarVeiculos();
+            await carregarCaminhosApp();
+        }
+    } catch (e) {
+        console.error(e);
+        alert('Erro ao confirmar: ' + e.message);
+        if (btn) btn.disabled = false;
+    }
+}
+
+// Fechar modal confirmar ao clicar fora
+window.addEventListener('click', function(event) {
+    if (event.target === document.getElementById('modal-confirmar-prevista')) fecharModalConfirmar();
+});
+
+// ================================================================
+// OVERRIDE DO DOMContentLoaded para carregar cenário ativo e aba inicial
+// ================================================================
+
+// O DOMContentLoaded original já existe e carrega veículos/apps.
+// Estendemos ao final para inicializar abas após os dados carregarem.
+
+const _originalInit = document.addEventListener;
+(function _veic2Init() {
+    // Aguarda carregamento dos dados (que ocorre no DOMContentLoaded original)
+    // e então inicializa as abas e cenário ativo.
+    document.addEventListener('DOMContentLoaded', async () => {
+        await carregarCenarioAtivo();
+        // Renderiza a aba ativa (comparação por padrão, já ativada pelo HTML)
+        // Os dados de veículos/apps já são carregados pelo DOMContentLoaded original
+        // Aqui apenas garantimos que as abas respondem após o carregamento inicial.
+        // A função ativarAba('comparacao') será chamada após carregarVeiculos/carregarCaminhosApp terminarem.
+    });
+})();

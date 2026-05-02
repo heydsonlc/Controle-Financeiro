@@ -1,3 +1,596 @@
+/* ================================================================
+   VEIC-2 — Módulo de Mobilidade: 3 blocos (Comparação, Configuração, Efetivação)
+   ================================================================ */
+
+/* Abas dos 3 blocos */
+.mob-tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 2px solid #e5e7eb;
+    margin-bottom: 20px;
+}
+
+.mob-tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #6b7280;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    border-radius: 6px 6px 0 0;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.mob-tab svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
+.mob-tab:hover {
+    color: #1e40af;
+    background: #f0f4ff;
+}
+
+.mob-tab.active {
+    color: #1e40af;
+    border-bottom-color: #1e40af;
+    background: #f0f4ff;
+}
+
+/* Cabeçalho de bloco */
+.mob-bloco-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.mob-bloco-titulo {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #111827;
+    margin: 0 0 4px;
+}
+
+.mob-bloco-sub {
+    font-size: 0.9rem;
+    color: #6b7280;
+    margin: 0;
+}
+
+.mob-bloco-acoes {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.mob-label-small {
+    font-size: 0.85rem;
+    color: #6b7280;
+    white-space: nowrap;
+}
+
+.mob-select-sm {
+    font-size: 0.9rem;
+    padding: 6px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #fff;
+    cursor: pointer;
+}
+
+/* ----------------------------------------------------------------
+   BLOCO 1 — COMPARAÇÃO
+   ---------------------------------------------------------------- */
+
+.comp-seletor-wrap {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+}
+
+.comp-seletor-lista {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.comp-seletor-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border: 1.5px solid #d1d5db;
+    border-radius: 8px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: border-color 0.15s, background 0.15s;
+    user-select: none;
+}
+
+.comp-seletor-item.selecionado {
+    border-color: #1e40af;
+    background: #eff6ff;
+    color: #1e40af;
+    font-weight: 700;
+}
+
+.comp-seletor-item input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+.comp-resumo-superior {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.comp-resumo-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 14px 16px;
+}
+
+.comp-resumo-card.destaque {
+    border-color: #1e40af;
+    background: #eff6ff;
+}
+
+.comp-resumo-label {
+    font-size: 0.8rem;
+    color: #6b7280;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 4px;
+}
+
+.comp-resumo-valor {
+    font-size: 1.2rem;
+    font-weight: 900;
+    color: #111827;
+}
+
+.comp-resumo-valor.destaque {
+    color: #1e40af;
+}
+
+.comp-resumo-sub {
+    font-size: 0.82rem;
+    color: #6b7280;
+    margin-top: 2px;
+}
+
+/* Cards de comparação lado a lado */
+.comp-cards-grid {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-bottom: 20px;
+}
+
+@media (max-width: 900px) {
+    .comp-cards-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .comp-resumo-superior { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 600px) {
+    .comp-cards-grid { grid-template-columns: 1fr; }
+    .comp-resumo-superior { grid-template-columns: 1fr; }
+}
+
+.comp-card {
+    background: #fff;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    position: relative;
+}
+
+.comp-card.ativo-global {
+    border-color: #1e40af;
+    box-shadow: 0 0 0 2px #bfdbfe;
+}
+
+.comp-card-badge-ativo {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: #1e40af;
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 999px;
+    text-transform: uppercase;
+}
+
+.comp-card-tipo {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #6b7280;
+}
+
+.comp-card-nome {
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: #111827;
+    margin-top: 2px;
+}
+
+.comp-card-sub {
+    font-size: 0.85rem;
+    color: #6b7280;
+}
+
+.comp-card-custo-mensal {
+    background: #f0f4ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    padding: 10px 12px;
+    text-align: center;
+}
+
+.comp-card-custo-label {
+    font-size: 0.8rem;
+    color: #4b6cb7;
+    font-weight: 600;
+}
+
+.comp-card-custo-valor {
+    font-size: 1.4rem;
+    font-weight: 900;
+    color: #1e40af;
+    margin-top: 2px;
+}
+
+.comp-card-custo-anual {
+    font-size: 0.82rem;
+    color: #6b7280;
+    margin-top: 2px;
+}
+
+.comp-card-itens {
+    display: grid;
+    gap: 4px;
+    font-size: 0.85rem;
+    color: #374151;
+}
+
+.comp-card-item-linha {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.comp-card-item-nome { color: #6b7280; }
+.comp-card-item-valor { font-weight: 700; }
+
+.comp-card-acoes {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: auto;
+}
+
+/* Tabela comparativa */
+.comp-tabela-wrap {
+    margin-top: 8px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.comp-tabela-titulo {
+    font-size: 0.95rem;
+    font-weight: 700;
+    padding: 12px 16px;
+    border-bottom: 1px solid #e5e7eb;
+    margin: 0;
+}
+
+.comp-tabela-scroll {
+    overflow-x: auto;
+}
+
+.comp-tabela {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.comp-tabela th,
+.comp-tabela td {
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid #f3f4f6;
+    white-space: nowrap;
+}
+
+.comp-tabela th {
+    font-weight: 700;
+    font-size: 0.82rem;
+    color: #6b7280;
+    background: #f9fafb;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.comp-tabela td:first-child {
+    font-weight: 600;
+    color: #374151;
+}
+
+.comp-tabela .melhor {
+    color: #15803d;
+    font-weight: 700;
+}
+
+/* ----------------------------------------------------------------
+   BLOCO 2 — CONFIGURAÇÃO
+   ---------------------------------------------------------------- */
+
+.conf-secao {
+    margin-bottom: 24px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.conf-secao-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid #f3f4f6;
+    background: #f9fafb;
+}
+
+.conf-secao-titulo-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.conf-secao-icone {
+    display: flex;
+    align-items: center;
+    color: #1e40af;
+}
+
+.conf-secao-icone svg {
+    width: 20px;
+    height: 20px;
+}
+
+.conf-secao-titulo {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #111827;
+    margin: 0;
+}
+
+.conf-lista {
+    padding: 12px;
+    display: grid;
+    gap: 8px;
+}
+
+.conf-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+}
+
+.conf-item.cenario-ativo-global {
+    border-color: #1e40af;
+    background: #f0f4ff;
+}
+
+.conf-item-info {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.conf-item-nome {
+    font-weight: 700;
+    font-size: 0.95rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.conf-item-sub {
+    font-size: 0.85rem;
+    color: #6b7280;
+    margin-top: 2px;
+}
+
+.conf-item-custo {
+    font-weight: 800;
+    color: #1e40af;
+    font-size: 0.95rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.conf-item-acoes {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+/* ----------------------------------------------------------------
+   BLOCO 3 — EFETIVAÇÃO
+   ---------------------------------------------------------------- */
+
+.efet-resumo-bar {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+@media (max-width: 800px) {
+    .efet-resumo-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.efet-resumo-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 12px 14px;
+}
+
+.efet-resumo-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.efet-resumo-valor {
+    font-size: 1.1rem;
+    font-weight: 900;
+    color: #111827;
+    margin-top: 4px;
+}
+
+.efet-resumo-sub {
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin-top: 2px;
+}
+
+.efet-grade {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.efet-grade table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.efet-grade table th {
+    padding: 10px 12px;
+    text-align: left;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+    white-space: nowrap;
+}
+
+.efet-grade table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #f3f4f6;
+    vertical-align: middle;
+}
+
+.efet-grade table tr:last-child td {
+    border-bottom: none;
+}
+
+.efet-grade table tr:hover td {
+    background: #f9fafb;
+}
+
+.efet-status-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.efet-status-badge.prevista {
+    background: #e9f1ff;
+    color: #1b5bbf;
+}
+
+.efet-status-badge.confirmada {
+    background: #e7f7ee;
+    color: #1e7d46;
+}
+
+.efet-status-badge.adiada {
+    background: #fff7e6;
+    color: #9a6b00;
+}
+
+.efet-status-badge.ignorada {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+
+/* Modal de confirmação preview */
+.confirmar-preview {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 0.9rem;
+    display: grid;
+    gap: 4px;
+}
+
+.confirmar-preview-row {
+    display: flex;
+    gap: 8px;
+}
+
+.confirmar-preview-label {
+    color: #6b7280;
+    min-width: 90px;
+    font-weight: 600;
+}
+
+.confirmar-preview-valor {
+    color: #111827;
+    font-weight: 700;
+}
+
+/* ----------------------------------------------------------------
+   ESTILOS LEGADOS PRESERVADOS
+   ---------------------------------------------------------------- */
+
 .hint {
     margin-top: 8px;
     color: #555;

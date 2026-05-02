@@ -31,9 +31,14 @@ def _ler_payload_request():
 @despesas_previstas_bp.route('/<int:despesa_id>/confirmar', methods=['POST'])
 def confirmar_despesa_prevista(despesa_id):
     try:
-        desp = confirmar(despesa_id)
+        payload = _ler_payload_request()
+        desp, entidade_criada = confirmar(despesa_id, payload or None)
         db.session.commit()
-        return jsonify({'success': True, 'message': 'Despesa prevista confirmada', 'data': desp.to_dict()}), 200
+        resp_data = {
+            'despesa_prevista': {'id': desp.id, 'status': desp.status},
+            'entidade_criada': entidade_criada,
+        }
+        return jsonify({'success': True, 'message': 'Despesa prevista confirmada', 'data': resp_data}), 200
     except ValueError as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 400
