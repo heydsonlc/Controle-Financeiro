@@ -58,30 +58,37 @@
 
             <div class="mob-bloco-header">
                 <div>
-                    <h2 class="mob-bloco-titulo">Comparação de Cenários</h2>
-                    <p class="mob-bloco-sub">Compare até 3 cenários de mobilidade lado a lado. Selecione quais comparar.</p>
+                    <h2 class="mob-bloco-titulo">Comparador de Mobilidade</h2>
+                    <p class="mob-bloco-sub">Compare veículos, assinaturas e uso de app para encontrar a opção mais econômica.</p>
                 </div>
-                <div class="mob-bloco-acoes">
-                    <label class="mob-label-small">Horizonte:</label>
+            </div>
+
+            <!-- Barra de filtros -->
+            <div class="comp-filtros-bar">
+                <div class="comp-filtro-grupo">
+                    <span class="comp-filtro-label">Horizonte</span>
                     <select id="comp-horizonte" class="mob-select-sm" onchange="renderizarComparacao()">
                         <option value="12">12 meses</option>
                         <option value="24" selected>24 meses</option>
                         <option value="36">36 meses</option>
                     </select>
                 </div>
+                <div class="comp-filtros-bar-sep"></div>
+                <button class="btn btn-primary btn-sm" onclick="renderizarComparacao()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:13px;height:13px;margin-right:5px;"><path d="M3 6h18M3 12h12M3 18h8"/></svg>
+                    Comparar opções
+                </button>
             </div>
 
             <!-- Seletor de cenários para comparar -->
-            <div class="comp-seletor-wrap">
-                <div id="comp-seletor-lista" class="comp-seletor-lista">
-                    <p class="loading">Carregando cenários...</p>
-                </div>
+            <div class="comp-seletor-wrap" id="comp-seletor-wrap" style="display:none;">
+                <div id="comp-seletor-lista" class="comp-seletor-lista"></div>
             </div>
 
             <!-- Resumo superior (melhor opção) -->
             <div id="comp-resumo-superior" class="comp-resumo-superior" style="display:none;"></div>
 
-            <!-- Cards de comparação -->
+            <!-- Cards de comparação (ou estado vazio rico) -->
             <div id="comp-cards" class="comp-cards-grid"></div>
 
             <!-- Tabela comparativa -->
@@ -101,40 +108,120 @@
 
             <div class="mob-bloco-header">
                 <div>
-                    <h2 class="mob-bloco-titulo">Configuração das Modalidades</h2>
+                    <h2 class="mob-bloco-titulo">Cadastro de Modalidades de Mobilidade</h2>
                     <p class="mob-bloco-sub">Cadastre e configure seus cenários de veículo, assinatura e transporte por app.</p>
                 </div>
             </div>
 
-            <!-- Veículos Próprios -->
-            <div class="conf-secao">
-                <div class="conf-secao-header">
-                    <div class="conf-secao-titulo-wrap">
-                        <span class="conf-secao-icone" aria-hidden="true">
+            <div class="conf-layout">
+                <!-- Coluna principal: sub-abas + listas -->
+                <div>
+                    <!-- Sub-abas de modalidade -->
+                    <div class="conf-subtabs" role="tablist">
+                        <button class="conf-subtab active" id="conf-subtab-veiculo" onclick="ativarConfSubtab('veiculo')">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M7 17l2.5-8h5L17 17M9 13h6"/><circle cx="8" cy="19" r="1"/><circle cx="16" cy="19" r="1"/></svg>
-                        </span>
-                        <h3 class="conf-secao-titulo">Veículos Próprios</h3>
-                    </div>
-                    <button class="action-icon-button secondary btn-sm" type="button" onclick="abrirModalNovo()">+ Novo veículo</button>
-                </div>
-                <div id="conf-veiculos-lista" class="conf-lista">
-                    <p class="loading">Carregando...</p>
-                </div>
-            </div>
-
-            <!-- Transporte por App -->
-            <div class="conf-secao">
-                <div class="conf-secao-header">
-                    <div class="conf-secao-titulo-wrap">
-                        <span class="conf-secao-icone" aria-hidden="true">
+                            Veículo Próprio
+                        </button>
+                        <button class="conf-subtab" id="conf-subtab-app" onclick="ativarConfSubtab('app')">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
-                        </span>
-                        <h3 class="conf-secao-titulo">Transporte por App</h3>
+                            Transporte por App
+                        </button>
                     </div>
-                    <button class="action-icon-button secondary btn-sm" type="button" onclick="abrirModalAppNovo()">+ Novo cenário</button>
+
+                    <!-- Painel Veículo Próprio -->
+                    <div id="conf-painel-veiculo">
+                        <div class="conf-secao">
+                            <div class="conf-secao-header">
+                                <div class="conf-secao-titulo-wrap">
+                                    <span class="conf-secao-icone" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M7 17l2.5-8h5L17 17M9 13h6"/><circle cx="8" cy="19" r="1"/><circle cx="16" cy="19" r="1"/></svg>
+                                    </span>
+                                    <h3 class="conf-secao-titulo">Veículos Próprios</h3>
+                                </div>
+                                <button class="btn btn-primary btn-sm" type="button" onclick="abrirModalNovo()">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:13px;height:13px;margin-right:4px;"><path d="M12 5v14M5 12h14"/></svg>
+                                    Novo veículo
+                                </button>
+                            </div>
+                            <div id="conf-veiculos-lista" class="conf-lista">
+                                <p class="loading">Carregando...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Painel Transporte por App -->
+                    <div id="conf-painel-app" style="display:none;">
+                        <div class="conf-secao">
+                            <div class="conf-secao-header">
+                                <div class="conf-secao-titulo-wrap">
+                                    <span class="conf-secao-icone" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
+                                    </span>
+                                    <h3 class="conf-secao-titulo">Transporte por App</h3>
+                                </div>
+                                <button class="btn btn-primary btn-sm" type="button" onclick="abrirModalAppNovo()">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:13px;height:13px;margin-right:4px;"><path d="M12 5v14M5 12h14"/></svg>
+                                    Novo cenário
+                                </button>
+                            </div>
+                            <div id="conf-apps-lista" class="conf-lista">
+                                <p class="loading">Carregando...</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div id="conf-apps-lista" class="conf-lista">
-                    <p class="loading">Carregando...</p>
+
+                <!-- Coluna lateral: resumo + destino dos lançamentos -->
+                <div class="conf-resumo-lateral">
+                    <!-- Resumo mensal estimado -->
+                    <div class="conf-resumo-card">
+                        <p class="conf-resumo-card-titulo">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                            Resumo mensal estimado
+                        </p>
+                        <div id="conf-resumo-mensal">
+                            <div class="conf-vazio-card" style="padding:20px 12px;">
+                                <p class="conf-vazio-sub">Selecione um cenário ativo para ver o resumo de custos.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Destino dos lançamentos -->
+                    <div class="conf-resumo-card">
+                        <p class="conf-resumo-card-titulo">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                            Destino dos lançamentos
+                        </p>
+                        <div class="conf-destino-lista">
+                            <div class="conf-destino-item">
+                                <div class="conf-destino-icone">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73L13 2.27a2 2 0 0 0-2 0L4 6.27A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73L11 21.73a2 2 0 0 0 2 0L20 17.73A2 2 0 0 0 21 16z"/></svg>
+                                </div>
+                                <div class="conf-destino-info">
+                                    <div class="conf-destino-nome">Recorrência</div>
+                                    <div class="conf-destino-desc">Custos frequentes (combustível, seguro) serão criados como recorrências e lançados automaticamente.</div>
+                                </div>
+                            </div>
+                            <div class="conf-destino-item">
+                                <div class="conf-destino-icone">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                                </div>
+                                <div class="conf-destino-info">
+                                    <div class="conf-destino-nome">Despesa prevista</div>
+                                    <div class="conf-destino-desc">Custos programados (IPVA, revisão) serão cadastrados como despesas previstas na data do evento.</div>
+                                </div>
+                            </div>
+                            <div class="conf-destino-item">
+                                <div class="conf-destino-icone">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/></svg>
+                                </div>
+                                <div class="conf-destino-info">
+                                    <div class="conf-destino-nome">Lançamento no cartão</div>
+                                    <div class="conf-destino-desc">Pagamentos com cartão serão lançados automaticamente no cartão vinculado na data de vencimento.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -147,7 +234,7 @@
 
             <div class="mob-bloco-header">
                 <div>
-                    <h2 class="mob-bloco-titulo">Efetivação das Despesas</h2>
+                    <h2 class="mob-bloco-titulo">Efetivação das Despesas de Mobilidade</h2>
                     <p class="mob-bloco-sub">Revise as despesas previstas do cenário ativo e confirme-as como lançamentos reais.</p>
                 </div>
                 <div class="mob-bloco-acoes">
@@ -157,16 +244,32 @@
                 </div>
             </div>
 
-            <!-- Resumo de totais -->
+            <!-- Banner de cenário ativo -->
+            <div id="efet-banner"></div>
+
+            <!-- Cards de resumo -->
             <div id="efet-resumo" class="efet-resumo-bar" style="display:none;"></div>
+
+            <!-- Título da seção de revisão -->
+            <p class="efet-secao-titulo" id="efet-secao-titulo" style="display:none;">Revise e confirme como as despesas serão criadas</p>
 
             <!-- Grade de despesas previstas -->
             <div id="efet-grade-wrap">
-                <div id="efet-grade" class="efet-grade">
-                    <div class="empty-state">
-                        <p>Selecione um cenário acima para ver as despesas previstas.</p>
-                    </div>
-                </div>
+                <div id="efet-grade"></div>
+            </div>
+
+            <!-- Nota informativa -->
+            <div id="efet-nota" style="display:none;" class="efet-nota">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+                Após a confirmação, os lançamentos serão criados em Despesas, Recorrências e Cartões conforme a configuração escolhida.
+            </div>
+
+            <!-- Rodapé de ações -->
+            <div id="efet-rodape" class="efet-rodape" style="display:none;">
+                <button class="btn btn-secondary" onclick="ativarAba('comparacao')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:13px;height:13px;margin-right:5px;"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+                    Voltar para edição
+                </button>
             </div>
 
         </section>

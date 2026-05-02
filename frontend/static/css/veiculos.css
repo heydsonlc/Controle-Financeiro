@@ -588,6 +588,557 @@
 }
 
 /* ----------------------------------------------------------------
+   VEIC-2B — ESTADOS VAZIOS RICOS + LAYOUT MELHORADO
+   ---------------------------------------------------------------- */
+
+/* Estado vazio rico — container central */
+.veic-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 48px 24px 40px;
+    gap: 12px;
+}
+
+.veic-empty-state--inline {
+    padding: 24px 16px;
+}
+
+.veic-empty-icon {
+    width: 64px;
+    height: 64px;
+    color: #9ca3af;
+    margin-bottom: 4px;
+}
+
+.veic-empty-icon svg {
+    width: 64px;
+    height: 64px;
+}
+
+.veic-empty-titulo {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #374151;
+    margin: 0;
+}
+
+.veic-empty-sub {
+    font-size: 0.9rem;
+    color: #6b7280;
+    max-width: 420px;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.veic-empty-acoes {
+    margin-top: 8px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+/* Cards placeholder skeleton (estado vazio comparação) */
+.veic-empty-cards-placeholder {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    width: 100%;
+    max-width: 760px;
+    margin-top: 20px;
+}
+
+@media (max-width: 700px) {
+    .veic-empty-cards-placeholder { grid-template-columns: 1fr; }
+}
+
+.veic-placeholder-card {
+    background: #f9fafb;
+    border: 1.5px dashed #d1d5db;
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    opacity: 0.7;
+}
+
+.veic-placeholder-tipo {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #9ca3af;
+}
+
+.veic-placeholder-nome {
+    height: 14px;
+    background: #e5e7eb;
+    border-radius: 4px;
+    width: 75%;
+}
+
+.veic-placeholder-custo {
+    height: 36px;
+    background: #e5e7eb;
+    border-radius: 8px;
+}
+
+.veic-placeholder-linhas {
+    display: grid;
+    gap: 6px;
+}
+
+.veic-placeholder-linhas div {
+    height: 10px;
+    background: #e5e7eb;
+    border-radius: 3px;
+}
+
+.veic-placeholder-linhas div:nth-child(2) { width: 80%; }
+.veic-placeholder-linhas div:nth-child(3) { width: 60%; }
+
+/* Cards resumo vazios (estado vazio efetivação / comparação) */
+.veic-resumo-vazio {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+@media (max-width: 800px) {
+    .veic-resumo-vazio { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.veic-resumo-vazio-card {
+    background: #f9fafb;
+    border: 1px dashed #d1d5db;
+    border-radius: 10px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    opacity: 0.7;
+}
+
+.veic-resumo-vazio-label {
+    height: 10px;
+    background: #e5e7eb;
+    border-radius: 3px;
+    width: 60%;
+}
+
+.veic-resumo-vazio-valor {
+    height: 22px;
+    background: #e5e7eb;
+    border-radius: 4px;
+    width: 80%;
+}
+
+.veic-resumo-vazio-sub {
+    height: 8px;
+    background: #f3f4f6;
+    border-radius: 3px;
+    width: 70%;
+}
+
+/* Banner de efetivação */
+.efet-banner {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.efet-banner--vazio {
+    background: #f9fafb;
+    border-style: dashed;
+    opacity: 0.85;
+}
+
+.efet-banner-icone {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: #eff6ff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: #1e40af;
+}
+
+.efet-banner-icone svg {
+    width: 22px;
+    height: 22px;
+}
+
+.efet-banner-info {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.efet-banner-titulo {
+    font-weight: 800;
+    font-size: 1rem;
+    color: #111827;
+    margin: 0 0 2px;
+}
+
+.efet-banner-sub {
+    font-size: 0.85rem;
+    color: #6b7280;
+    margin: 0;
+}
+
+.efet-banner-meta {
+    display: flex;
+    gap: 16px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.efet-banner-meta-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.efet-banner-meta-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.efet-banner-meta-valor {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #111827;
+}
+
+/* Seção de titulo dentro do bloco efetivação */
+.efet-secao-titulo {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #374151;
+    margin: 0 0 10px;
+}
+
+/* Nota informativa */
+.efet-nota {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.85rem;
+    color: #1e40af;
+    margin-top: 16px;
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.efet-nota svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+/* Rodapé de efetivação */
+.efet-rodape {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 10px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+}
+
+/* Estado vazio tabela efetivação */
+.efet-grade-vazio {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.efet-grade-vazio table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.efet-grade-vazio table th {
+    padding: 10px 12px;
+    text-align: left;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+    white-space: nowrap;
+}
+
+.efet-grade-vazio-msg {
+    padding: 40px 24px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    color: #6b7280;
+}
+
+.efet-grade-vazio-msg svg {
+    width: 36px;
+    height: 36px;
+    color: #d1d5db;
+    margin-bottom: 4px;
+}
+
+/* Filtros comparação */
+.comp-filtros-bar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 10px 14px;
+}
+
+.comp-filtro-grupo {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.comp-filtro-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.comp-filtros-bar .mob-select-sm {
+    min-width: 120px;
+}
+
+.comp-filtros-bar-sep {
+    flex: 1;
+}
+
+/* Conf subtabs (Veículo / Assinatura / App) */
+.conf-subtabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid #e5e7eb;
+    margin-bottom: 16px;
+}
+
+.conf-subtab {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 14px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #6b7280;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    border-radius: 6px 6px 0 0;
+    transition: color 0.15s, border-color 0.15s;
+    white-space: nowrap;
+}
+
+.conf-subtab svg {
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+}
+
+.conf-subtab:hover { color: #1e40af; }
+
+.conf-subtab.active {
+    color: #1e40af;
+    border-bottom-color: #1e40af;
+    background: #f0f4ff;
+}
+
+/* Painel de resumo lateral da Configuração */
+.conf-layout {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 20px;
+    align-items: start;
+}
+
+@media (max-width: 900px) {
+    .conf-layout { grid-template-columns: 1fr; }
+}
+
+.conf-resumo-lateral {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.conf-resumo-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 14px 16px;
+}
+
+.conf-resumo-card-titulo {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 0 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.conf-resumo-card-titulo svg {
+    width: 14px;
+    height: 14px;
+    color: #1e40af;
+}
+
+.conf-resumo-linha {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 0.85rem;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.conf-resumo-linha:last-child { border-bottom: none; }
+
+.conf-resumo-linha-label { color: #6b7280; }
+
+.conf-resumo-linha-valor {
+    font-weight: 700;
+    color: #111827;
+}
+
+.conf-resumo-total {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 0 0;
+    font-size: 0.92rem;
+    font-weight: 700;
+    border-top: 2px solid #e5e7eb;
+    margin-top: 4px;
+}
+
+.conf-resumo-total .valor { color: #1e40af; }
+
+/* Destino dos lançamentos */
+.conf-destino-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.conf-destino-item {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+}
+
+.conf-destino-icone {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #eff6ff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: #1e40af;
+}
+
+.conf-destino-icone svg {
+    width: 13px;
+    height: 13px;
+}
+
+.conf-destino-info {}
+
+.conf-destino-nome {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #374151;
+}
+
+.conf-destino-desc {
+    font-size: 0.8rem;
+    color: #6b7280;
+    line-height: 1.3;
+}
+
+/* Estado vazio conf secao */
+.conf-vazio-card {
+    padding: 32px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 10px;
+}
+
+.conf-vazio-icon {
+    width: 40px;
+    height: 40px;
+    color: #d1d5db;
+}
+
+.conf-vazio-icon svg {
+    width: 40px;
+    height: 40px;
+}
+
+.conf-vazio-titulo {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #6b7280;
+    margin: 0;
+}
+
+.conf-vazio-sub {
+    font-size: 0.83rem;
+    color: #9ca3af;
+    max-width: 280px;
+    margin: 0;
+    line-height: 1.4;
+}
+
+/* ----------------------------------------------------------------
    ESTILOS LEGADOS PRESERVADOS
    ---------------------------------------------------------------- */
 

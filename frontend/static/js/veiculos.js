@@ -2059,10 +2059,71 @@ async function renderizarComparacao() {
     if (!caminhosVeiculos || !caminhosApps) return;
     await construirTodosOsCenarios(caminhosVeiculos, caminhosApps);
 
+    const seletorWrap = document.getElementById('comp-seletor-wrap');
+
+    if (!todosOsCenarios.length) {
+        if (seletorWrap) seletorWrap.style.display = 'none';
+        _renderComparacaoVazio();
+        return;
+    }
+
+    if (seletorWrap) seletorWrap.style.display = '';
     renderSeletorCenarios();
     renderResumoSuperior();
     renderCardsComparacao();
     renderTabelaComparativa();
+}
+
+function _renderComparacaoVazio() {
+    const seletor = document.getElementById('comp-seletor-lista');
+    const resumo = document.getElementById('comp-resumo-superior');
+    const cards = document.getElementById('comp-cards');
+    const tabelaWrap = document.getElementById('comp-tabela-wrap');
+
+    if (resumo) resumo.style.display = 'none';
+    if (tabelaWrap) tabelaWrap.style.display = 'none';
+
+    if (seletor) seletor.innerHTML = '';
+
+    if (cards) cards.innerHTML = `
+        <div class="veic-empty-state">
+            <div class="veic-empty-icon" aria-hidden="true">
+                <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M10 46h44M14 46l5-16h10L32 46M32 30l3-16h10l5 16M20 38h8M36 38h8"/>
+                    <circle cx="18" cy="49" r="2"/><circle cx="28" cy="49" r="2"/>
+                    <circle cx="36" cy="49" r="2"/><circle cx="46" cy="49" r="2"/>
+                </svg>
+            </div>
+            <h3 class="veic-empty-titulo">Nenhum cenário cadastrado ainda</h3>
+            <p class="veic-empty-sub">Cadastre veículos, assinaturas ou transporte por app para comparar custos lado a lado.</p>
+            <div class="veic-empty-acoes">
+                <button class="btn btn-primary" onclick="ativarAba('configuracao')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:14px;height:14px;margin-right:6px;"><path d="M12 5v14M5 12h14"/></svg>
+                    Ir para Configuração
+                </button>
+            </div>
+            <div class="veic-empty-cards-placeholder">
+                <div class="veic-placeholder-card">
+                    <div class="veic-placeholder-tipo">Veículo próprio</div>
+                    <div class="veic-placeholder-nome"></div>
+                    <div class="veic-placeholder-custo"></div>
+                    <div class="veic-placeholder-linhas"><div></div><div></div><div></div></div>
+                </div>
+                <div class="veic-placeholder-card">
+                    <div class="veic-placeholder-tipo">Carro por assinatura</div>
+                    <div class="veic-placeholder-nome"></div>
+                    <div class="veic-placeholder-custo"></div>
+                    <div class="veic-placeholder-linhas"><div></div><div></div><div></div></div>
+                </div>
+                <div class="veic-placeholder-card">
+                    <div class="veic-placeholder-tipo">Transporte por App</div>
+                    <div class="veic-placeholder-nome"></div>
+                    <div class="veic-placeholder-custo"></div>
+                    <div class="veic-placeholder-linhas"><div></div><div></div><div></div></div>
+                </div>
+            </div>
+        </div>
+    `;
 }
 
 function renderSeletorCenarios() {
@@ -2070,8 +2131,7 @@ function renderSeletorCenarios() {
     if (!el) return;
 
     if (!todosOsCenarios.length) {
-        el.innerHTML = `<div class="empty-state"><p class="small-note">Nenhum cenário cadastrado. Crie um veículo ou transporte por app na aba Configuração.</p></div>`;
-        return;
+        return; // estado vazio já tratado por _renderComparacaoVazio()
     }
 
     el.innerHTML = todosOsCenarios.map(c => {
@@ -2114,7 +2174,17 @@ function renderResumoSuperior() {
     const el = document.getElementById('comp-resumo-superior');
     if (!el) return;
     const sel = getCenariosSelecionados();
-    if (!sel.length) { el.style.display = 'none'; return; }
+    if (!sel.length) {
+        // Mostrar 4 KPIs em skeleton quando há cenários mas nenhum está selecionado
+        el.style.display = 'grid';
+        el.innerHTML = `
+            <div class="comp-resumo-card"><div class="comp-resumo-label">Mais economico</div><div class="comp-resumo-valor" style="color:#9ca3af;">—</div><div class="comp-resumo-sub">Selecione cenarios acima</div></div>
+            <div class="comp-resumo-card"><div class="comp-resumo-label">Custo medio mensal</div><div class="comp-resumo-valor" style="color:#9ca3af;">—</div><div class="comp-resumo-sub">Entre os cenarios</div></div>
+            <div class="comp-resumo-card"><div class="comp-resumo-label">Custo estimado (${document.getElementById('comp-horizonte')?.value || 24}m)</div><div class="comp-resumo-valor" style="color:#9ca3af;">—</div><div class="comp-resumo-sub">Selecione para calcular</div></div>
+            <div class="comp-resumo-card"><div class="comp-resumo-label">Cenario ativo</div><div class="comp-resumo-valor" style="color:#9ca3af;">${cenarioAtivoState.tipo ? escapeHtml(todosOsCenarios.find(c => c.tipo === cenarioAtivoState.tipo && Number(c.id) === Number(cenarioAtivoState.id))?.nome || '—') : '—'}</div><div class="comp-resumo-sub">Clique em "Definir ativo"</div></div>
+        `;
+        return;
+    }
 
     const horizonte = Number(document.getElementById('comp-horizonte')?.value || 24);
     const mensal = sel.map(c => c.custoMensal);
@@ -2157,7 +2227,7 @@ function renderCardsComparacao() {
     const sel = getCenariosSelecionados();
 
     if (!sel.length) {
-        el.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p class="small-note">Selecione cenários acima para comparar.</p></div>`;
+        el.innerHTML = `<div class="veic-empty-state veic-empty-state--inline" style="grid-column:1/-1"><p class="veic-empty-sub">Selecione cenários acima para comparar lado a lado.</p></div>`;
         return;
     }
 
@@ -2253,9 +2323,51 @@ async function definirCenarioAtivo(tipo, id) {
 // BLOCO 2 — CONFIGURAÇÃO
 // ================================================================
 
+let confSubtabAtiva = 'veiculo';
+
+function ativarConfSubtab(nome) {
+    confSubtabAtiva = nome;
+    ['veiculo', 'app'].forEach(t => {
+        const btn = document.getElementById(`conf-subtab-${t}`);
+        const painel = document.getElementById(`conf-painel-${t}`);
+        if (btn) btn.classList.toggle('active', t === nome);
+        if (painel) painel.style.display = t === nome ? '' : 'none';
+    });
+}
+
 function renderizarConfiguracao() {
     renderConfVeiculos();
     renderConfApps();
+    renderConfResumoLateral();
+}
+
+function renderConfResumoLateral() {
+    const el = document.getElementById('conf-resumo-mensal');
+    if (!el) return;
+
+    // Encontra o cenário ativo para mostrar resumo
+    const c = todosOsCenarios.find(c => isCenarioAtivo(c.tipo, c.id));
+    if (!c) {
+        el.innerHTML = `<div class="conf-vazio-card" style="padding:20px 12px;"><p class="conf-vazio-sub">Selecione um cenário ativo para ver o resumo de custos.</p></div>`;
+        return;
+    }
+
+    const itens = c.itens.length ? c.itens : [{ nome: 'Custo mensal', valor: c.custoMensal }];
+    const total = c.custoMensal;
+
+    el.innerHTML = `
+        <div class="conf-resumo-linha" style="padding:2px 0 6px;font-size:0.78rem;color:#6b7280;">${escapeHtml(c.nome)}</div>
+        ${itens.map(i => `
+            <div class="conf-resumo-linha">
+                <span class="conf-resumo-linha-label">${escapeHtml(i.nome)}</span>
+                <span class="conf-resumo-linha-valor">${formatarMoeda(i.valor)}</span>
+            </div>
+        `).join('')}
+        <div class="conf-resumo-total">
+            <span>Total mensal</span>
+            <span class="valor">${formatarMoeda(total)}</span>
+        </div>
+    `;
 }
 
 function renderConfVeiculos() {
@@ -2263,7 +2375,19 @@ function renderConfVeiculos() {
     if (!el) return;
     const lista = caminhosVeiculos || [];
     if (!lista.length) {
-        el.innerHTML = `<div class="empty-state"><p class="small-note">Nenhum veículo cadastrado.</p></div>`;
+        el.innerHTML = `
+            <div class="conf-vazio-card">
+                <div class="conf-vazio-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M7 17l2.5-8h5L17 17M9 13h6"/><circle cx="8" cy="19" r="1"/><circle cx="16" cy="19" r="1"/></svg>
+                </div>
+                <h4 class="conf-vazio-titulo">Nenhum veículo cadastrado</h4>
+                <p class="conf-vazio-sub">Cadastre pelo menos um veículo para iniciar a comparação de custos.</p>
+                <button class="btn btn-primary btn-sm" style="margin-top:8px;" onclick="abrirModalNovo()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:13px;height:13px;margin-right:4px;"><path d="M12 5v14M5 12h14"/></svg>
+                    Novo veículo
+                </button>
+            </div>
+        `;
         return;
     }
     el.innerHTML = lista.map(v => {
@@ -2305,7 +2429,19 @@ function renderConfApps() {
     if (!el) return;
     const lista = caminhosApps || [];
     if (!lista.length) {
-        el.innerHTML = `<div class="empty-state"><p class="small-note">Nenhum cenário de transporte por app cadastrado.</p></div>`;
+        el.innerHTML = `
+            <div class="conf-vazio-card">
+                <div class="conf-vazio-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
+                </div>
+                <h4 class="conf-vazio-titulo">Nenhum cenário de app cadastrado</h4>
+                <p class="conf-vazio-sub">Cadastre um cenário de transporte por app (Uber, 99, etc.) para comparar com veículo próprio.</p>
+                <button class="btn btn-primary btn-sm" style="margin-top:8px;" onclick="abrirModalAppNovo()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:13px;height:13px;margin-right:4px;"><path d="M12 5v14M5 12h14"/></svg>
+                    Novo cenário de app
+                </button>
+            </div>
+        `;
         return;
     }
     el.innerHTML = lista.map(c => {
@@ -2347,15 +2483,20 @@ async function iniciarEfetivacao() {
     const sel = document.getElementById('efet-cenario-select');
     if (!sel) return;
 
+    const tipoLabel = (c) => c.tipo === 'VEICULO' ? 'Veiculo' : 'App';
     const opcoes = todosOsCenarios.map(c => {
-        const label = `${c.tipo === 'VEICULO' ? '🚗' : '📱'} ${c.nome} — ${formatarMoeda(c.custoMensal)}/mês`;
+        const label = `[${tipoLabel(c)}] ${c.nome} — ${formatarMoeda(c.custoMensal)}/mes`;
         const selected = (efetCenarioTipo === c.tipo && Number(efetCenarioId) === Number(c.id));
         return `<option value="${c.tipo}|${c.id}" ${selected ? 'selected' : ''}>${label}</option>`;
     });
-    sel.innerHTML = `<option value="">Selecione um cenário...</option>` + opcoes.join('');
+    sel.innerHTML = `<option value="">Selecione um cenario...</option>` + opcoes.join('');
 
     if (efetCenarioTipo && efetCenarioId) {
         await carregarEfetivacao();
+    } else {
+        _renderEfetivacaoBannerVazio();
+        _renderEfetivacaoGradeVazia();
+        document.getElementById('efet-resumo').style.display = 'none';
     }
 }
 
@@ -2367,12 +2508,95 @@ function selecionarCenarioEfetivacao(tipo, id) {
     carregarEfetivacao();
 }
 
+function _renderEfetivacaoBannerVazio() {
+    const banner = document.getElementById('efet-banner');
+    if (banner) banner.innerHTML = `
+        <div class="efet-banner efet-banner--vazio">
+            <div class="efet-banner-icone">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M7 17l2.5-8h5L17 17M9 13h6"/><circle cx="8" cy="19" r="1"/><circle cx="16" cy="19" r="1"/></svg>
+            </div>
+            <div class="efet-banner-info">
+                <h3 class="efet-banner-titulo">Nenhuma modalidade selecionada</h3>
+                <p class="efet-banner-sub">Selecione um cenário no menu acima para revisar as despesas que serão geradas.</p>
+            </div>
+        </div>
+    `;
+}
+
+function _renderEfetivacaoBanner(cenario) {
+    const banner = document.getElementById('efet-banner');
+    if (!banner || !cenario) return;
+    const tipoLabel = cenario.tipo === 'VEICULO' ? 'Veículo Próprio' : 'Transporte por App';
+    banner.innerHTML = `
+        <div class="efet-banner">
+            <div class="efet-banner-icone">
+                ${cenario.tipo === 'VEICULO'
+                    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M7 17l2.5-8h5L17 17M9 13h6"/><circle cx="8" cy="19" r="1"/><circle cx="16" cy="19" r="1"/></svg>'
+                    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>'
+                }
+            </div>
+            <div class="efet-banner-info">
+                <h3 class="efet-banner-titulo">Modalidade ativa: ${escapeHtml(tipoLabel)} — ${escapeHtml(cenario.nome)}</h3>
+                <p class="efet-banner-sub">Todas as despesas listadas abaixo serão criadas conforme a configuração escolhida.</p>
+            </div>
+            <div class="efet-banner-meta">
+                <div class="efet-banner-meta-item">
+                    <span class="efet-banner-meta-label">Custo mensal</span>
+                    <span class="efet-banner-meta-valor">${formatarMoeda(cenario.custoMensal)}</span>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function _renderEfetivacaoGradeVazia() {
+    const secTitulo = document.getElementById('efet-secao-titulo');
+    const nota = document.getElementById('efet-nota');
+    const rodape = document.getElementById('efet-rodape');
+    if (secTitulo) secTitulo.style.display = 'none';
+    if (nota) nota.style.display = 'none';
+    if (rodape) rodape.style.display = 'none';
+
+    const el = document.getElementById('efet-grade');
+    if (!el) return;
+    el.innerHTML = `
+        <div class="efet-grade-vazio">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tipo de custo</th>
+                        <th>Descricao</th>
+                        <th>Frequencia</th>
+                        <th>Proximo lancamento</th>
+                        <th>Destino financeiro</th>
+                        <th>Forma de pagamento</th>
+                        <th>Cartao / Conta</th>
+                        <th style="text-align:right;">Valor estimado</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+            </table>
+            <div class="efet-grade-vazio-msg">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/></svg>
+                <p style="font-size:0.9rem;font-weight:600;color:#374151;margin:0;">Nenhum cenario selecionado para efetivacao</p>
+                <p style="font-size:0.83rem;color:#6b7280;margin:0;">Selecione um cenario na aba Comparacao para revisar as despesas que serao criadas.</p>
+                <button class="btn btn-secondary btn-sm" style="margin-top:8px;" onclick="ativarAba('comparacao')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:13px;height:13px;margin-right:4px;"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+                    Voltar para Comparacao
+                </button>
+            </div>
+        </div>
+    `;
+}
+
 async function carregarEfetivacao() {
     const sel = document.getElementById('efet-cenario-select');
     const val = sel?.value || '';
+
     if (!val) {
         document.getElementById('efet-resumo').style.display = 'none';
-        document.getElementById('efet-grade').innerHTML = `<div class="empty-state"><p>Selecione um cenário acima.</p></div>`;
+        _renderEfetivacaoBannerVazio();
+        _renderEfetivacaoGradeVazia();
         return;
     }
 
@@ -2380,7 +2604,11 @@ async function carregarEfetivacao() {
     efetCenarioTipo = tipo;
     efetCenarioId = Number(idStr);
 
-    document.getElementById('efet-grade').innerHTML = `<p class="loading" style="padding:16px;">Carregando projeções...</p>`;
+    // Mostrar banner com dados do cenário
+    const cenario = todosOsCenarios.find(c => c.tipo === tipo && Number(c.id) === Number(idStr));
+    _renderEfetivacaoBanner(cenario);
+
+    document.getElementById('efet-grade').innerHTML = `<p class="loading" style="padding:16px;">Carregando projecoes...</p>`;
 
     try {
         let url;
@@ -2391,7 +2619,7 @@ async function carregarEfetivacao() {
         }
         const resp = await fetch(url);
         const data = await resp.json();
-        if (!data.success) throw new Error(data.error || 'Falha ao carregar projeções');
+        if (!data.success) throw new Error(data.error || 'Falha ao carregar projecoes');
 
         efetProjecoes = data.data || [];
         projecoesIndex = {};
@@ -2401,9 +2629,14 @@ async function carregarEfetivacao() {
 
         renderEfetivacaoResumo();
         renderEfetivacaoGrade();
+
+        const nota = document.getElementById('efet-nota');
+        const rodape = document.getElementById('efet-rodape');
+        if (nota) nota.style.display = efetProjecoes.length ? 'flex' : 'none';
+        if (rodape) rodape.style.display = efetProjecoes.length ? 'flex' : 'none';
     } catch (e) {
         console.error(e);
-        document.getElementById('efet-grade').innerHTML = `<div class="empty-state"><p>Erro: ${escapeHtml(e.message)}</p></div>`;
+        document.getElementById('efet-grade').innerHTML = `<div class="efet-grade-vazio"><div class="efet-grade-vazio-msg"><p>Erro ao carregar: ${escapeHtml(e.message)}</p></div></div>`;
     }
 }
 
@@ -2445,56 +2678,102 @@ function renderEfetivacaoResumo() {
 
 function renderEfetivacaoGrade() {
     const el = document.getElementById('efet-grade');
+    const secTitulo = document.getElementById('efet-secao-titulo');
     if (!el) return;
 
     if (!efetProjecoes.length) {
-        el.innerHTML = `<div class="empty-state"><p class="small-note">Nenhuma despesa prevista para este cenário.</p></div>`;
+        if (secTitulo) secTitulo.style.display = 'none';
+        el.innerHTML = `
+            <div class="efet-grade-vazio">
+                <table><thead><tr>
+                    <th>Tipo de custo</th><th>Descricao</th><th>Frequencia</th>
+                    <th>Proximo lancamento</th><th>Destino financeiro</th>
+                    <th>Forma de pagamento</th><th>Cartao / Conta</th>
+                    <th style="text-align:right;">Valor estimado</th><th>Status</th>
+                </tr></thead></table>
+                <div class="efet-grade-vazio-msg">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                    <p style="font-size:0.9rem;font-weight:600;color:#374151;margin:0;">Nenhuma despesa prevista para este cenario.</p>
+                    <p style="font-size:0.83rem;color:#6b7280;margin:0;">Configure custos no cadastro do cenario para gerar projecoes.</p>
+                </div>
+            </div>
+        `;
         return;
     }
 
+    if (secTitulo) secTitulo.style.display = '';
+
+    const _frequencia = (p) => {
+        const t = String(p.tipo_evento || p.metadata_json?.tipo_evento || '').toUpperCase();
+        if (['COMBUSTIVEL', 'TRANSPORTE_APP'].includes(t)) return 'Recorrencia';
+        if (t.includes('PARCELA')) return 'Parcela mensal';
+        return 'Despesa prevista';
+    };
+
+    const _destinoFinanceiro = (p) => {
+        const t = String(p.tipo_evento || p.metadata_json?.tipo_evento || '').toUpperCase();
+        if (['COMBUSTIVEL', 'TRANSPORTE_APP'].includes(t)) return 'Recorrencia';
+        if (t.includes('PARCELA')) return 'Lancamento no cartao';
+        return 'Despesa Prevista';
+    };
+
     const linhas = efetProjecoes.map(p => {
-        const mes = formatarMesAno(p.data_atual_prevista || p.data_prevista);
+        const data = p.data_atual_prevista || p.data_prevista;
+        const mes = formatarMesAno(data);
         const tipo = _rotuloDetalheTipo(p);
         const catNome = p.categoria?.nome || `Cat. #${p.categoria_id}`;
         const valor = formatarMoeda(p.valor_previsto);
         const status = String(p.status || '').toLowerCase();
         const badgeClass = { prevista: 'prevista', confirmada: 'confirmada', adiada: 'adiada', ignorada: 'ignorada' }[status] || 'prevista';
+        const freq = _frequencia(p);
+        const destino = _destinoFinanceiro(p);
 
         let acoes = `<span class="small-note">—</span>`;
         if (p.status === 'PREVISTA') {
             acoes = `
                 <div class="row-actions">
-                    <button class="row-action-button success" onclick="confirmarPrevista(${p.id}, ${JSON.stringify({ id: p.id, descricao: tipo, valor: p.valor_previsto, data: p.data_atual_prevista || p.data_prevista, categoria: catNome, categoria_id: p.categoria_id }).replace(/"/g, '&quot;')})" title="Confirmar e gerar lançamento" aria-label="Confirmar">${veiculosIcon('check')}</button>
-                    <button class="row-action-button" onclick="abrirModalAdiar(${p.id}, '${escapeAttr(p.data_atual_prevista || p.data_prevista)}')" title="Adiar" aria-label="Adiar">${veiculosIcon('clock')}</button>
+                    <button class="row-action-button success" onclick="confirmarPrevista(${p.id}, ${JSON.stringify({ id: p.id, descricao: tipo, valor: p.valor_previsto, data: data, categoria: catNome, categoria_id: p.categoria_id }).replace(/"/g, '&quot;')})" title="Confirmar e gerar lancamento" aria-label="Confirmar">${veiculosIcon('check')}</button>
+                    <button class="row-action-button" onclick="abrirModalAdiar(${p.id}, '${escapeAttr(data)}')" title="Adiar" aria-label="Adiar">${veiculosIcon('clock')}</button>
                     <button class="row-action-button danger" onclick="ignorarPrevista(${p.id})" title="Ignorar" aria-label="Ignorar">${veiculosIcon('remove')}</button>
                 </div>
             `;
         }
 
         return `<tr>
-            <td>${mes}</td>
             <td>${escapeHtml(tipo)}</td>
             <td>${escapeHtml(catNome)}</td>
+            <td><span class="small-note">${escapeHtml(freq)}</span></td>
+            <td>${mes}</td>
+            <td><span class="small-note">${escapeHtml(destino)}</span></td>
+            <td>—</td>
+            <td>—</td>
             <td style="text-align:right;font-weight:700;">${valor}</td>
-            <td><span class="efet-status-badge ${badgeClass}">${escapeHtml(p.status)}</span></td>
-            <td>${acoes}</td>
+            <td>
+                <span class="efet-status-badge ${badgeClass}">${escapeHtml(p.status)}</span>
+                ${p.status === 'PREVISTA' ? acoes : ''}
+            </td>
         </tr>`;
     }).join('');
 
     el.innerHTML = `
-        <table>
-            <thead>
-                <tr>
-                    <th>Mês</th>
-                    <th>Tipo</th>
-                    <th>Categoria</th>
-                    <th style="text-align:right;">Valor</th>
-                    <th>Status</th>
-                    <th>Ações</th>
-                </tr>
-            </thead>
-            <tbody>${linhas}</tbody>
-        </table>
+        <div class="efet-grade">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tipo de custo</th>
+                        <th>Descricao</th>
+                        <th>Frequencia</th>
+                        <th>Proximo lancamento</th>
+                        <th>Destino financeiro</th>
+                        <th>Forma de pagamento</th>
+                        <th>Cartao / Conta</th>
+                        <th style="text-align:right;">Valor estimado</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>${linhas}</tbody>
+            </table>
+        </div>
     `;
 }
 
