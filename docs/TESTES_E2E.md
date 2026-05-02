@@ -209,13 +209,26 @@ Os testes de criação usam `skipUnlessTestingEnvironment(test, request, 'TEST-2
 - login/mobile;
 - exclusões.
 
+## TEST-BASE-1 — Próxima prioridade de testes (pós-auditoria 2026-05)
+
+A auditoria técnica de 2026-05 identificou os módulos de maior risco sem cobertura E2E adequada. O MVP TEST-BASE-1 deve ampliar a cobertura funcional nos seguintes módulos, em ordem de prioridade:
+
+1. **Despesas** — modal de nova despesa, edição, baixa de pagamento, filtros de competência
+2. **Cartões** — fatura consolidada, lançamentos, modal de pagamento
+3. **Financiamentos** — criação, parcelas, amortização, fluxo de pagamento
+4. **Lançamentos** — histórico unificado, filtros, confirmação de receitas
+
+Esses testes devem seguir o mesmo padrão de TEST-2A/2B: prefixo `TESTE_E2E_` + timestamp, `ensureTestingEnvironment` obrigatório, sem criar dados fora do ambiente de teste.
+
+Despesas é o módulo mais crítico para o usuário final e deve ser tratado como primeira entrega do TEST-BASE-1.
+
 ## Próximos Testes Planejados
 
-- sidebar/topbar após UX-1A;
+- Despesas: nova despesa, edição, baixa (TEST-BASE-1);
+- Cartões: fatura, lançamentos, pagamento (TEST-BASE-1);
+- Financiamentos: parcelas, amortização (TEST-BASE-1);
 - login/logout após SEG-1;
 - proteção de rotas sem login;
 - tela Despesas em viewport mobile;
-- abertura do modal de pagamento;
-- baixa de despesa;
 - filtros de Competência;
 - regressões visuais e funcionais por módulo.

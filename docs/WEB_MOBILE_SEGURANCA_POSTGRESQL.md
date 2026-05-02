@@ -20,6 +20,18 @@ Durante a fase atual de desenvolvimento, os dados locais não são considerados 
 
 Essa diretriz não autoriza exposição web aberta. Mesmo com dados descartáveis, qualquer acesso externo real continua bloqueado até existir autenticação, proteção de APIs, `DEBUG=False`, `SECRET_KEY` segura, HTTPS e revisão de CORS.
 
+### SEC-0 - Travar exposicao acidental local (2026-05-01)
+
+O servidor local passa a iniciar com postura mais segura por padrao:
+
+- `FLASK_HOST` padrao: `127.0.0.1`;
+- `FLASK_PORT` padrao: `5000`;
+- `FLASK_DEBUG` padrao: `false`;
+- CORS restrito por padrao a `http://localhost:5000` e `http://127.0.0.1:5000`;
+- `CORS_ORIGINS` pode definir uma lista explicita de origens locais separadas por virgula.
+
+Expor a aplicacao na rede local exige configuracao explicita, por exemplo `FLASK_HOST=0.0.0.0`, e continua sendo excecao controlada. Isso nao implementa login, nao prepara producao e nao autoriza exposicao pela internet. A exposicao web real permanece dependente de SEG-1: autenticacao, protecao de APIs, HTTPS, `SECRET_KEY` segura e revisao completa de CORS.
+
 ### Banco oficial de desenvolvimento
 
 A direção do projeto passa a ser:
@@ -327,108 +339,33 @@ Ele pode permanecer temporariamente como:
 
 SQLite não deve ser removido sem diagnóstico próprio, não deve ser apagado automaticamente e não deve ser usado como referência final da evolução web.
 
-## 7. Sequência Recomendada de MVPs
+## 7. Status dos MVPs e Próximas Prioridades
 
-### 1. DOCS - Atualização das diretrizes web/mobile/segurança/PostgreSQL/testes
+### Concluídos
 
-Escopo:
+- ✅ SEC-0 — Postura segura local por padrão (`127.0.0.1`, CORS restrito)
+- ✅ TEST-1 — Base Playwright E2E (smoke 13 passed, testes funcionais em 5 módulos)
+- ✅ UX-1A/1C — Shell visual desktop + migração de todas as telas para `base.html`
+- ✅ UX-2/3/4/5/6 — Configurações enxuta, faixa de ações, ícones, área útil ampliada
+- ✅ DB-1 a DB-3D — PostgreSQL local validado, Alembic como fonte oficial de schema
+- ✅ ICONES-1A — Ícones por categoria e meio de pagamento
 
-- registrar as decisões atuais;
-- consolidar status de desenvolvimento, PostgreSQL local, Segurança e testes;
-- status: imediato.
+### Próximas prioridades (ordem definida em auditoria 2026-05)
 
-### 2. TEST-1 - Base Playwright E2E
+1. **TEST-BASE-1** — Ampliar cobertura E2E nos módulos de maior risco (Despesas, Cartões, Financiamentos)
+2. **ICONES-1B** — Ícones de categoria nos lançamentos de cartão (pendência do ICONES-1A)
+3. **DB-CLEAN-1** — Corrigir `lazy='dynamic'`, `utcnow` depreciado e N+1 queries no SQLAlchemy 2.0
+4. **CARD-SEC-1** — Remover `numero_cartao` e `codigo_seguranca` em texto puro no banco
+5. **FIN-RULES-1** — Testes de regressão para regras de financiamento SAC/PRICE
+6. **DATA-HYGIENE-1** — `SENHA_MESTRE` hardcoded, limpeza de rotas sem uso
+7. **SEG-1** — Autenticação global (bloqueante para qualquer acesso externo)
+8. **UX-MOBILE-1** — Despesas mobile (após SEG-1)
+9. **DEPLOY-1** — Publicação web controlada (depende de SEG-1)
 
-Escopo:
+### Pendências UX em aberto
 
-- criar infraestrutura mínima de testes E2E;
-- validar páginas principais;
-- detectar erros críticos no console;
-- preparar proteção contra regressão;
-- preparar base para Autenticação, Despesas mobile e baixa de pagamento.
-
-### 3. UX-1A - Shell visual desktop/web
-
-Escopo:
-
-- `base.html`;
-- `layout.css`;
-- sidebar;
-- topbar;
-- Dashboard;
-- Configurações;
-- sem mexer em Despesas;
-- sem mexer em banco;
-- sem mexer em autenticação.
-
-### 4. DB-1 - PostgreSQL local como banco oficial de desenvolvimento
-
-Escopo:
-
-- diagnóstico/implementação controlada;
-- criar ambiente local PostgreSQL;
-- ajustar ambiente local;
-- validar schema limpo;
-- dados locais podem ser recriados;
-- não apontar para DigitalOcean em desenvolvimento.
-
-### 5. SEG-1 - Autenticação mínima e proteção global
-
-Escopo:
-
-- login/sessão;
-- proteção de rotas HTML;
-- proteção de APIs;
-- preparo mínimo para acesso web seguro.
-
-### 6. UX-MOBILE-1 - Despesas mobile
-
-Escopo:
-
-- mesma rota `/despesas`;
-- layout em cards;
-- botão de pagamento adequado ao toque;
-- filtros simplificados;
-- sidebar oculta/drawer no mobile;
-- preservação integral das regras financeiras.
-
-### 7. UX-1B - Normalização da tela Seguro Habitacional
-
-Escopo:
-
-- corrigir `financiamento_seguro.html`;
-- remover Bootstrap/Font Awesome órfãos;
-- integrar ao padrão visual.
-
-### 8. UX-1C - Migração das demais telas para base.html
-
-Escopo:
-
-- migrar módulos restantes para o shell visual;
-- preservar contratos de API e regras financeiras.
-
-### 9. UX-2 - Desmembramento de Configurações
-
-Escopo:
-
-- retirar módulos operacionais de Configurações;
-- deixar Configurações apenas para preferências/parâmetros globais.
-
-### 10. UX-3 - Faixa de ações por módulo
-
-Padronizar ações por módulo.
-
-### 11. UX-4 - Padronização completa de ícones
-
-Padronizar biblioteca, estados visuais, tamanhos e cores.
-
-### 12. UX-5 - Consultas e filtros avançados
-
-Consolidar busca, filtros, listagens, estados vazios e limpeza de filtros.
-
-### 13. DEPLOY-1 - Publicação web controlada
-
-Somente quando houver decisão de publicar. Depende de Autenticação, PostgreSQL, configuração segura e nenhuma exposição externa sem proteção.
+- UX-1B — Normalização da tela Seguro Habitacional (Bootstrap/Font Awesome órfãos)
+- Tela `/indexadores` — validação visual/asset dedicada
 
 ## 8. Regras Preservadas
 

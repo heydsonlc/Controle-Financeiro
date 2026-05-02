@@ -54,10 +54,27 @@ flask db current
 python backend/app.py
 ```
 
+Por padrao, o servidor sobe somente na interface local:
+
+```bash
+http://127.0.0.1:5000
+```
+
+Variaveis locais opcionais:
+
+```bash
+FLASK_HOST=127.0.0.1
+FLASK_PORT=5000
+FLASK_DEBUG=false
+CORS_ORIGINS=http://localhost:5000,http://127.0.0.1:5000
+```
+
+Para expor temporariamente na rede local, use `FLASK_HOST=0.0.0.0` apenas em ambiente controlado. Nao exponha pela internet sem autenticacao, protecao de APIs, HTTPS e revisao de CORS.
+
 ### 6. Abrir no Navegador
 
 ```
-http://localhost:5000
+http://127.0.0.1:5000
 ```
 
 ### 7. Popular com dados de demonstração (opcional)
@@ -147,7 +164,7 @@ flask db upgrade  # aplica todas as migrations pendentes
 ## Verificar se está Funcionando
 
 ### 1. Health Check
-Abra: `http://localhost:5000/health`
+Abra: `http://127.0.0.1:5000/health`
 
 Deve retornar:
 ```json
@@ -159,20 +176,35 @@ Deve retornar:
 ```
 
 ### 2. Dashboard
-Abra: `http://localhost:5000`
+Abra: `http://127.0.0.1:5000`
 
 Você verá a página inicial do sistema.
 
 ---
 
-## Estado Atual (v1.1 — 2026-03)
+## Estado Atual (v1.1 — 2026-05)
 
-O sistema está funcionalmente completo. Módulos ativos:
+O sistema está funcionalmente completo e em uso local. Módulos ativos:
 - Dashboard, Despesas, Receitas, Cartões, Lançamentos
 - Financiamentos, Consórcios, Patrimônio, Veículos
-- Contas Bancárias (em finalização — MVP 1)
+- Contas Bancárias, Recorrências
+- Shell visual desktop: sidebar, topbar, faixa de ações por módulo
+- Ícones monocromáticos por categoria e meio de pagamento
+- Playwright E2E: smoke (13 rotas) + testes funcionais (5 módulos)
 
-Próximas melhorias planejadas: ver `docs/HISTORIA_DO_PROJETO.md`.
+**Nota**: o sistema roda exclusivamente em `127.0.0.1:5000`. Qualquer acesso externo exige SEG-1 (autenticação global) antes.
+
+### Próximas prioridades técnicas (pós-auditoria 2026-05)
+
+| # | MVP | Objetivo |
+|---|-----|----------|
+| 1 | TEST-BASE-1 | Ampliar cobertura E2E em Despesas, Cartões e Financiamentos |
+| 2 | ICONES-1B | Ícones de categoria nos lançamentos de cartão |
+| 3 | DB-CLEAN-1 | Corrigir débitos SQLAlchemy 2.0 (`lazy='dynamic'`, `utcnow`, N+1) |
+| 4 | CARD-SEC-1 | Remover `numero_cartao`/`codigo_seguranca` em texto puro |
+| 5 | SEG-1 | Autenticação global (bloqueante para deploy) |
+
+Para o roadmap completo: ver `README_TECNICO.md` e `docs/HISTORIA_DO_PROJETO.md`.
 
 ---
 

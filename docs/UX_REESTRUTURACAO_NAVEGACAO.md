@@ -456,3 +456,23 @@ A reestruturação visual deve considerar também as diretrizes registradas em [
 - PostgreSQL local em desenvolvimento e PostgreSQL DigitalOcean em produção.
 
 A execução dos MVPs de UX deve respeitar a ordem recomendada no documento complementar: primeiro documentação, depois base Playwright E2E, em seguida UX-1A. Essa ordem protege a evolução visual contra regressões de Navegação e carregamento das rotas principais.
+
+## Status do Ciclo UX (2026-05-01)
+
+O ciclo de reestruturação visual foi concluído na sua fase principal. Todos os MVPs de UX planejados até a auditoria técnica foram implementados:
+
+- ✅ UX-1A/1C — Shell visual + migração de todas as telas para `base.html`
+- ✅ UX-2 — Configurações enxuta
+- ✅ UX-3A a UX-3-REVIEW — Faixa de ações padronizada em todos os módulos
+- ✅ UX-4B a UX-4-REVIEW — Ícones monocromáticos em todo o sistema
+- ✅ UX-5A-INFRA, UX-5C — Área útil ampliada e Dashboard 2.0
+- ✅ UX-6B, UX-6C, UX-6E — Compactação, grades full width, botões padronizados
+- ✅ ICONES-1A — Ícones por categoria e meio de pagamento
+- ✅ RECUP-2, RECUP-4 — Tela de Recorrências, acessos restaurados em Despesas
+
+**Pendências visuais em aberto:**
+- UX-1B — Normalização da tela Seguro Habitacional (`/financiamentos/seguro`)
+- ICONES-1B — Ícones de categoria nos lançamentos de cartão
+- Tela `/indexadores` — validação visual/asset dedicada
+
+O próximo ciclo de trabalho é técnico, não visual: débitos SQLAlchemy 2.0 (DB-CLEAN-1), dados sensíveis de cartão (CARD-SEC-1) e cobertura de testes E2E (TEST-BASE-1). Ver `README_TECNICO.md` para o roadmap completo.

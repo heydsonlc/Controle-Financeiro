@@ -274,13 +274,44 @@ Tambem foi ajustado o alinhamento das grades: cabecalhos centralizados, conteudo
 
 ---
 
+## MVP SEC-0 - Travar exposicao acidental local (2026-05-01)
+
+O SEC-0 reduziu o risco de exposicao acidental durante desenvolvimento local. O servidor passou a usar `FLASK_HOST`, `FLASK_PORT` e `FLASK_DEBUG`, com padrao seguro em `127.0.0.1:5000` e debug desativado quando a variavel nao e definida.
+
+O CORS deixou de ser aberto por wildcard e passou a aceitar apenas origens locais por padrao (`localhost:5000` e `127.0.0.1:5000`), com `CORS_ORIGINS` para configuracao explicita. O MVP nao implementou login, CSRF, producao, HTTPS ou exposicao externa.
+
+---
+
+## Auditoria Técnica — Análise Sênior (2026-05-01)
+
+Uma auditoria técnica de 360° foi realizada sobre o estado atual do projeto.
+
+**Pontos fortes confirmados:**
+- Arquitetura de backend sólida com separação clara de responsabilidades
+- Regras financeiras (SAC/PRICE/SIMPLES, fatura, previsto/executado) corretamente implementadas
+- Shell visual desktop completo e padronizado
+- Playwright E2E como barreira de regressão funcional
+- Alembic consolidado como fonte oficial de evolução de schema
+
+**Débitos técnicos identificados:**
+- `lazy='dynamic'` depreciado: ~12 relacionamentos em `models.py`
+- `datetime.utcnow` depreciado: ~20 ocorrências
+- N+1 queries em `to_dict()` com lazy load
+- `Query.get()` legacy API SQLAlchemy 2.0
+- Zero autenticação nas 18 rotas de API; `CORS(app)` irrestrito
+- `numero_cartao` e `codigo_seguranca` em texto puro no banco
+
+**Ordem de trabalho definida (ver `README_TECNICO.md` para tabela completa):**
+SEC-0 ✅ → TEST-BASE-1 → ICONES-1B → DB-CLEAN-1 → CARD-SEC-1 → FIN-RULES-1 → TEST-FIN-1 → DATA-HYGIENE-1 → PERF-1 → FRONT-ARCH-1 → SEG-1 → DEPLOY-1
+
+---
+
 ## Backlog — Próximas fases
 
-Ver [plano de MVPs](./../C:/Users/heydson.cardoso/.claude/plans/sleepy-floating-candy.md) para o cronograma completo (MVP 1 ao 6).
+Para o roadmap técnico completo com prioridades atualizadas, ver `README_TECNICO.md` — seção "Roadmap Técnico — Pós-Auditoria".
 
-Itens pendentes de maior relevância:
-- Fechar módulo Contas Bancárias (MVP 1)
-- Remover SENHA_MESTRE hardcoded, ativar scheduler (MVP 2)
-- Completar Dashboard com saldo de contas e projeção (MVP 3)
-- Autenticação simples via `.env` (MVP 4)
-- Exportação CSV e backup do banco (MVP 5)
+Prioridades imediatas:
+- TEST-BASE-1: ampliar cobertura E2E em Despesas, Cartões e Financiamentos
+- DB-CLEAN-1: corrigir débitos SQLAlchemy 2.0
+- CARD-SEC-1: remover dados sensíveis de cartão em texto puro
+- SEG-1: autenticação global (bloqueante para qualquer deploy)

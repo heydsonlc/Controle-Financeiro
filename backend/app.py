@@ -27,6 +27,27 @@ except ImportError:
 load_dotenv('.env.local')  # Para desenvolvimento
 
 
+def _parse_bool_env(value, default=False):
+    """Converte flags simples de ambiente para boolean."""
+    if value is None:
+        return default
+    return str(value).strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+def _cors_origins_from_env():
+    """Retorna origens CORS permitidas; por padrao, apenas origens locais."""
+    raw_origins = os.getenv('CORS_ORIGINS')
+    if raw_origins:
+        origins = [origin.strip() for origin in raw_origins.split(',') if origin.strip()]
+        if origins:
+            return origins
+
+    return [
+        'http://localhost:5000',
+        'http://127.0.0.1:5000',
+    ]
+
+
 def create_app(config_name=None):
     """
     Factory para criar a aplicação Flask
@@ -68,7 +89,7 @@ def create_app(config_name=None):
 
     # Inicializar extensões
     db.init_app(app)
-    CORS(app)
+    CORS(app, origins=_cors_origins_from_env())
 
     # Inicializar Flask-Migrate
     migrate = Migrate(app, db)
@@ -288,12 +309,21 @@ if __name__ == '__main__':
         #     from scheduler import start_scheduler
         #     start_scheduler()
 
-        print("=> Servidor iniciando em http://localhost:5000")
+        flask_host = os.getenv('FLASK_HOST', '127.0.0.1')
+        flask_port = int(os.getenv('FLASK_PORT', '5000'))
+        flask_debug = _parse_bool_env(
+            os.getenv('FLASK_DEBUG'),
+            default=False
+        )
+
+        print(f"=> Servidor iniciando em http://{flask_host}:{flask_port}")
+        print(f"=> Ambiente: {os.getenv('FLASK_ENV', 'development')}")
+        print(f"=> Debug: {'ativado' if flask_debug else 'desativado'}")
         print("=> Pressione CTRL+C para parar")
 
     # Executar servidor
     app.run(
-        host='0.0.0.0',
-        port=5000,
-        debug=True
+        host=flask_host,
+        port=flask_port,
+        debug=flask_debug
     )

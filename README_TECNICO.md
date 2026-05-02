@@ -849,11 +849,11 @@ flask db current
 python backend/app.py
 ```
 
-O servidor estará disponível em: `http://localhost:5000`
+O servidor local fica restrito por padrão a: `http://127.0.0.1:5000`
 
 ### Verificar Status da Aplicação
 
-Acesse: `http://localhost:5000/health`
+Acesse: `http://127.0.0.1:5000/health`
 
 Deve retornar:
 ```json
@@ -866,7 +866,7 @@ Deve retornar:
 
 ### Acessar o Dashboard
 
-Abra no navegador: `http://localhost:5000`
+Abra no navegador: `http://127.0.0.1:5000`
 
 ---
 
@@ -924,44 +924,44 @@ controle-financeiro/
 
 ---
 
-## 🔄 Próximos Passos de Desenvolvimento
+## 🔄 Roadmap Técnico — Pós-Auditoria (2026-05)
 
-### Fase 1: API Backend (CRUD Básico) ✅
-1. ✅ Estrutura base criada
-2. ✅ Rotas de Categorias implementadas
-3. ✅ Rotas de Itens de Despesa implementadas
-4. ✅ Rotas de Cartões de Crédito implementadas
-5. ✅ **Rotas de Consórcios implementadas**
-6. ✅ **Rotas de Receitas implementadas** (15 endpoints completos)
-7. ✅ **Rotas de Financiamentos implementadas** (11 endpoints completos)
-8. ⏳ Implementar rotas de Patrimônio
+A auditoria técnica de 2026-05 identificou os principais riscos e definiu a ordem de trabalho:
 
-### Fase 2: Lógica de Negócio 🔄
-1. ✅ **Sistema de Consórcios (geração automática de parcelas e contemplação)**
-2. ✅ **Rastreamento de Pagamentos (Previsto vs Realizado)**
-3. ✅ **Serviço de Receitas completo** (ItemReceita, Orçamento, Realizadas, KPIs)
-4. ✅ **Serviço de Financiamentos completo** (SAC, PRICE, SIMPLES, amortizações, demonstrativos)
-5. ⏳ Serviço de Orçamento (lançamento em lote)
-6. ⏳ Serviço de Cartão (ciclo de faturamento completo)
-7. ⏳ Serviço de Parcelamentos
-8. ⏳ Serviço de Dashboard (Projeção vs Real completo)
+| MVP | Título | Tipo | Prioridade | Dependência |
+|-----|--------|------|-----------|-------------|
+| SEC-0 | Postura segura local por padrão | Segurança | ✅ Concluído | — |
+| TEST-BASE-1 | Ampliar cobertura E2E nos módulos de maior risco | Qualidade | Alta | — |
+| ICONES-1B | Ícones de categoria nos lançamentos de cartão | UX | Média | ICONES-1A ✅ |
+| DB-CLEAN-1 | `lazy='dynamic'`, `utcnow` depreciado, N+1 queries | Débito técnico | Alta | — |
+| CARD-SEC-1 | Remover `numero_cartao`/`codigo_seguranca` em texto puro | Segurança | Alta | — |
+| FIN-RULES-1 | Testes de regressão para SAC/PRICE e amortizações | Qualidade | Alta | TEST-BASE-1 |
+| TEST-FIN-1 | Ampliar cobertura E2E em Despesas e Financiamentos | Qualidade | Média | TEST-BASE-1 |
+| DATA-HYGIENE-1 | `SENHA_MESTRE` hardcoded, rotas sem uso, limpeza geral | Débito técnico | Média | — |
+| PERF-1 | Eager loading, índices de query críticos | Performance | Baixa | DB-CLEAN-1 |
+| FRONT-ARCH-1 | Extrair helpers JS comuns, eliminar duplicação de código | Débito técnico | Baixa | — |
+| SEG-1 | Autenticação global (Flask-Login ativo, proteção de rotas e APIs) | Segurança | Bloqueante para deploy | — |
+| DEPLOY-1 | Publicação web controlada no DigitalOcean | Infra | Depende de SEG-1 | SEG-1 |
 
-### Fase 3: Frontend
-1. ✅ **Modal de Nova Despesa com suporte a Consórcios**
-2. ✅ **Modal minimalista de Rastreamento de Pagamentos**
-3. ✅ **Interface completa de Financiamentos** (5 modais especializados)
-4. ⏳ Interface do Dashboard principal
-5. ⏳ Visualizações e gráficos de análise
-6. ⏳ Interface de gerenciamento de consórcios cadastrados
-7. ⏳ Tabelas interativas com filtros
+**Regra de ouro**: Qualquer acesso externo à internet exige SEG-1 completo antes.
 
-### Fase 4: Funcionalidades Avançadas
-1. ✅ **Automação de consórcios com reajuste inteligente**
-2. ✅ **Sistema completo de financiamentos com 3 métodos de amortização**
-3. ⏳ Relatórios e exportações (PDF/Excel)
-4. ⏳ Gráficos de análise financeira
-5. ⏳ Notificações de vencimento
-6. ⏳ Comparativo mensal (tendências)
+### Pontos fortes identificados na auditoria
+
+- Arquitetura de backend sólida: serviços bem separados, lógica financeira correta
+- Regras soberanas de fatura consistentemente aplicadas (SAC/PRICE/SIMPLES)
+- Shell visual desktop completo com sidebar, topbar e faixa de ações
+- Playwright E2E como padrão de validação progressiva
+- Alembic como fonte oficial de evolução de schema (baseline `dd1a552aec6a`)
+
+### Débitos técnicos críticos identificados
+
+- `lazy='dynamic'` depreciado: ~12 relacionamentos em `models.py`
+- `datetime.utcnow` depreciado: ~20 campos em models e rotas
+- N+1 queries em `to_dict()` com lazy load de relacionamentos
+- `Query.get()` legacy API SQLAlchemy 2.0: múltiplos usos
+- Zero autenticação nas 18 rotas de API
+- CORS agora fica restrito localmente por padrão no SEC-0, mas deve ser revisado novamente antes de qualquer deploy
+- `numero_cartao` e `codigo_seguranca` em texto puro no banco
 
 ---
 
@@ -1368,15 +1368,19 @@ POST /api/financiamentos/indexadores
 
 ## 👨‍💻 Desenvolvimento
 
-**Status:** Em desenvolvimento ativo
+**Status:** Em desenvolvimento ativo (retomado em 2026-03-30)
 
-**Prioridade atual:**
-- ✅ Sistema de Consórcios implementado
-- ✅ Rastreamento de Pagamentos implementado
-- ✅ **Módulo de Receitas Completo implementado**
-- 🔄 Finalização do JavaScript do frontend de receitas
-- ⏳ Implementação do dashboard principal
-- ⏳ Integração de receitas com o dashboard
+**Estado atual (2026-05):**
+- ✅ Sistema funcional completo — Dashboard, Despesas, Receitas, Cartões, Lançamentos, Financiamentos, Contas Bancárias, Patrimônio, Veículos, Categorias
+- ✅ Shell visual desktop com sidebar, topbar e faixa de ações padronizada
+- ✅ Playwright E2E: smoke (13 passed) + testes funcionais em 5 módulos
+- ✅ Alembic como fonte oficial de schema (baseline `dd1a552aec6a`)
+- ✅ PostgreSQL local como banco oficial de desenvolvimento
+- ✅ Ícones monocromáticos por categoria e meio de pagamento
+- ⏳ Próxima prioridade: DB-CLEAN-1 (débitos SQLAlchemy 2.0) e CARD-SEC-1 (dados sensíveis em texto puro)
+- ⏳ SEG-1 (autenticação) é bloqueante para qualquer acesso externo
+
+Para a ordem completa de trabalho, ver tabela de Roadmap acima.
 
 ---
 

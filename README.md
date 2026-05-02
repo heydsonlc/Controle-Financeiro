@@ -170,24 +170,26 @@ Cada pixel tem propósito.
 - Cartões com recorrência
 - Financiamentos
 - Agenda financeira + Insights temporais
+- Shell visual desktop (sidebar, topbar, faixa de ações por módulo)
+- Ícones monocromáticos por categoria e meio de pagamento
+- Tela própria de Recorrências
+- Contas Bancárias (MVP 1)
 
-### 🔒 Congelamento Intencional (2 meses)
-**Status atual**: Teste no mundo real
+### Próximas prioridades técnicas
 
-O sistema está **completo** para sua proposta inicial.
-Agora precisa de **uso real** para validar decisões de produto.
+A ordem de trabalho foi definida em auditoria técnica realizada em 2026-05:
 
-**Não adicionar features.**
-**Apenas corrigir bugs críticos.**
+1. **SEC-0** — Postura segura local: `127.0.0.1` por padrão, CORS restrito, `debug=False` (já implementado)
+2. **TEST-BASE-1** — Ampliar cobertura de testes E2E para módulos de maior risco
+3. **ICONES-1B** — Ícones de categoria nos lançamentos de cartão
+4. **DB-CLEAN-1** — Corrigir `lazy='dynamic'`, `utcnow` depreciado e N+1 queries
+5. **CARD-SEC-1** — Remover `numero_cartao` e `codigo_seguranca` em texto puro
+6. **FIN-RULES-1** — Validar regras de negócio de financiamento SAC/PRICE com testes
+7. **DATA-HYGIENE-1** — `SENHA_MESTRE` hardcoded, limpeza de rotas sem uso
+8. **SEG-1** — Autenticação global (bloqueante para qualquer acesso externo)
+9. **DEPLOY-1** — Publicação web controlada (depende de SEG-1)
 
-### 🔮 Fase 7 (Futuro)
-Possíveis evoluções após validação:
-- Alertas inteligentes (ainda descritivos, nunca prescritivos)
-- Comparações temporais (mês atual vs anterior)
-- Exportação de dados
-- Multi-moeda (se necessário)
-
-**Critério para evolução**: Necessidade comprovada, não "seria legal ter".
+Antes de qualquer acesso pela internet: implementar SEG-1 completo.
 
 ## Para Desenvolvedores
 
@@ -223,9 +225,10 @@ Se você chegou aqui:
 
 ---
 
-**Versão**: 1.0
-**Data de congelamento**: 2025-12-27
-**Próxima revisão**: Após 2 meses de uso real
+**Versão**: 1.1
+**Data de congelamento original**: 2025-12-27
+**Retomada do desenvolvimento**: 2026-03-30
+**Última revisão técnica**: 2026-05-01
 
 ---
 
