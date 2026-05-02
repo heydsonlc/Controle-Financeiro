@@ -273,8 +273,12 @@ O catálogo interno em `frontend/static/js/icons.js` define as seguintes chaves:
 | `health` | Plano de saúde |
 | `travel` | Viagem, turismo |
 | `pet` | Pet, animal de estimação |
+| `kortex-logo` | Logo especial Kortex |
+| `cbmgo-logo` | Logo especial Corpo de Bombeiros / CBMGO |
 
-Para atribuir um ícone a uma categoria, edite a categoria em `/categorias` e preencha o campo **Ícone** com uma das chaves acima.
+Para atribuir um ícone a uma categoria, edite a categoria em `/categorias` e escolha uma opção no seletor visual de ícones. O campo **Ícone** continua existindo como fallback técnico e armazena a chave textual.
+
+Os logos especiais continuam usando o campo `Categoria.icone`; nao ha entidade, campo de banco ou API nova. Esta etapa prepara o caminho para um futuro fluxo de logos personalizados por upload.
 
 ---
 

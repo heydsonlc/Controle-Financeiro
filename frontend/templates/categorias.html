@@ -79,10 +79,19 @@
 
                 <div class="form-group">
                     <label for="icone">Ícone</label>
-                    <input type="text" id="icone" name="icone" maxlength="50"
-                           placeholder="Ex: home, cart, heart, briefcase, shield...">
-                    <small class="form-hint">Chave do ícone: wifi, home, heart, cart, food, car, bus, fuel, cash, credit-card, qr-code, receipt, bank, briefcase, shield, lightning, phone, book, gift, tool, repeat, calendar, tag, education, health, travel, pet</small>
-                    <div id="icone-preview" class="icone-preview" aria-hidden="true"></div>
+                    <div class="icone-picker-preview-row">
+                        <div id="icone-preview" class="icone-preview" aria-hidden="true"></div>
+                        <input type="text" id="icone" name="icone" maxlength="50"
+                               class="icone-picker-input"
+                               placeholder="Sem icone selecionado">
+                    </div>
+                    <small class="form-hint">Escolha um icone do catalogo interno ou mantenha vazio. Use logos especiais para fontes como Kortex ou Corpo de Bombeiros.</small>
+                    <div class="icone-picker" aria-label="Seletor de icones da categoria">
+                        <button type="button" class="icone-picker-empty" id="icone-limpar">
+                            Sem icone
+                        </button>
+                        <div id="icone-picker-grid" class="icone-picker-grid"></div>
+                    </div>
                 </div>
 
                 <div class="form-group">

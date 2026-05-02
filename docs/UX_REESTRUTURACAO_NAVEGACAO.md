@@ -402,6 +402,18 @@ O ICONES-1A implementou suporte inicial a icones padronizados para categorias de
 
 Nenhuma regra financeira, calculo, pagamento, fatura ou dashboard foi alterado.
 
+### MVP ICONES-1C — Seletor visual de icones em Categorias (2026-05-01)
+
+O ICONES-1C adicionou um seletor visual ao modal de Categorias. O usuario passa a escolher o icone em uma grade baseada no catalogo interno `icons.js`, com preview e opcao "Sem icone", sem precisar digitar manualmente chaves como `home`, `cart` ou `wifi`.
+
+O campo `Categoria.icone` foi preservado como chave textual, o payload das APIs de Categorias nao mudou e nenhuma regra financeira, backend, banco ou migration foi alterado.
+
+### MVP ICONES-1D — Logos especiais no catalogo de icones (2026-05-01)
+
+O ICONES-1D ampliou o catalogo interno com `kortex-logo` e `cbmgo-logo`, voltados a fontes de receita/categorias especiais. As chaves continuam sendo selecionadas no modal de Categorias e persistidas em `Categoria.icone`, sem nova entidade, campo, API ou migration.
+
+Esta etapa mantem a renderizacao SVG existente e prepara uma futura evolucao para logos personalizados por upload.
+
 ### Registro de implementacao - RECUP-4
 
 O RECUP-4 criou a tela propria `/recorrencias` para gerenciar cadastros-matriz de recorrencias e consorcios. Despesas permanece como visualizacao das despesas geradas/registradas, sem assumir novamente o papel de cadastro de regras recorrentes.

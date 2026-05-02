@@ -31,6 +31,8 @@ const ICONS_CATALOG = {
     'health':        '<path d="M12 20c-.5 0-9-5.5-9-11a5 5 0 0 1 9-3 5 5 0 0 1 9 3c0 5.5-8.5 11-9 11Z"/>',
     'travel':        '<path d="M3 12h18M12 3a9 9 0 0 1 0 18M12 3a9 9 0 0 0 0 18M5 5.5A15 15 0 0 1 12 3M5 18.5A15 15 0 0 0 12 21M19 5.5A15 15 0 0 0 12 3M19 18.5A15 15 0 0 1 12 21"/>',
     'pet':           '<path d="M10 5.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM14 5.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM6 9.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM18 9.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM12 22c-3 0-6-2-6-5 0-2 1-4 4-5h4c3 1 4 3 4 5 0 3-3 5-6 5Z"/>',
+    'kortex-logo':   '<path d="M5 4v16M19 4 8 12l11 8M10.5 10l7.5-6M10.5 14l7.5 6"/><path d="M5 12h3.5"/>',
+    'cbmgo-logo':    '<path d="M12 3 5 6.5v5.8c0 4 2.8 7.5 7 8.7 4.2-1.2 7-4.7 7-8.7V6.5L12 3Z"/><path d="M12 7.2c2.2 2.3 3.2 4.1 3.2 5.8A3.2 3.2 0 0 1 12 16.3 3.2 3.2 0 0 1 8.8 13c0-1.3.8-2.5 1.9-3.8-.1 1 .3 1.8 1.3 2.5.7-1.2.7-2.5 0-4.5Z"/><path d="M8.8 18h6.4"/>',
     'default':       '<rect x="4" y="4" width="16" height="16" rx="3"/>'
 };
 
@@ -90,4 +92,13 @@ function renderCategoryIcon(categoriaOuChave, opts = {}) {
         ? categoriaOuChave
         : (categoriaOuChave.icone || null);
     return key ? renderIcon(key, opts) : '';
+}
+
+function getIconKeys() {
+    return Object.keys(ICONS_CATALOG).filter(key => key !== 'default').sort();
+}
+
+if (typeof window !== 'undefined') {
+    window.ICONS_CATALOG = ICONS_CATALOG;
+    window.getIconKeys = getIconKeys;
 }

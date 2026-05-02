@@ -234,6 +234,22 @@ O ICONES-1A criou infraestrutura de icones semanticos para o sistema. Adicionou 
 
 ---
 
+## MVP ICONES-1C - Seletor visual de icones em Categorias (2026-05-01)
+
+O ICONES-1C substituiu a escolha manual de chaves de icone por um seletor visual no modal de Categorias. A grade usa o catalogo interno `icons.js`, permite selecionar, visualizar preview e limpar o icone, mantendo o campo `Categoria.icone` como chave textual.
+
+Nenhum backend, banco, migration, API ou regra financeira foi alterado.
+
+---
+
+## MVP ICONES-1D - Logos especiais no catalogo de icones (2026-05-01)
+
+O ICONES-1D adicionou logos especiais reutilizaveis ao catalogo interno: `kortex-logo` e `cbmgo-logo`. Eles sao selecionados pelo mesmo modal de Categorias, persistem no campo `Categoria.icone` e renderizam pelo mesmo mecanismo SVG ja usado nas telas consumidoras.
+
+Nenhum backend, banco, migration, API ou regra financeira foi alterado. A etapa prepara o caminho para uma evolucao futura com logos personalizados por upload.
+
+---
+
 ## MVP UX-6B - Action bar compacta em linha unica (2026-05-01)
 
 O UX-6B compactou o padrao visual das action bars ja aplicadas. Filtros passaram a usar label inline antes do campo, os controles ficaram mais baixos e as acoes globais passaram a ser exibidas como botoes icon-only com `title` e `aria-label`.
