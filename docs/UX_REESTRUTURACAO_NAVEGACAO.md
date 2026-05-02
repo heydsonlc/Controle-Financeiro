@@ -434,6 +434,14 @@ O UX-6E padronizou os botoes de acao em grades, listas compactas e cards de regi
 
 Tambem foi consolidada a regra visual das grades: cabecalhos centralizados em todas as colunas; conteudo centralizado nas colunas secundarias; primeira coluna com conteudo alinhado a esquerda para leitura da descricao. Handlers, APIs, regras financeiras, pagamentos, faturas, recorrencias e backend foram preservados.
 
+### Registro de implementação - IMPORT-1
+
+O IMPORT-1 redesenhou a tela Importar Cartão (`/importar-cartao`) de wizard por etapas para painel único, mantendo todas as áreas visíveis: Configuração, Documento, Validação, Classificação e Revisão e Resultado.
+
+A tela passou a usar chips compactos de etapas, upload em área larga, prévia em tabela compacta e painéis inferiores para classificação e resultado. A validação diferencia explicitamente Categoria da Despesa e Categoria do Cartão. Categoria da Despesa permanece como categoria geral/sugestão ajustável; Categoria do Cartão passa a ser o select principal por linha e é bloqueante para prévia/importação quando ausente.
+
+O fluxo CSV existente foi preservado com os mesmos endpoints e o mesmo parser. PDF e XLSX aparecem preparados visualmente, mas não ganharam parser novo neste MVP. Nenhum backend, banco, migration, model, service, API ou regra financeira foi alterado.
+
 ## 9. Regras de Preservação
 
 A reestruturação visual deve preservar integralmente:

@@ -1,418 +1,303 @@
 {% extends "base.html" %}
 
-{% block title %}Importar Fatura - Controle Financeiro{% endblock %}
+{% block title %}Importar Cartão - Controle Financeiro{% endblock %}
 
 {% block extra_css %}
-    <style>
-        .import-container {
-            width: 100%;
-            max-width: none;
-            margin: 0;
-            padding: 0;
-        }
-
-        .step {
-            display: none;
-            background: #ffffff;
-            border-radius: 12px;
-            padding: 24px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-            border: 1px solid rgba(0, 0, 0, 0.06);
-        }
-
-        .step.active {
-            display: block;
-        }
-
-        .step-header {
-            font-size: 20px;
-            font-weight: 600;
-            margin-bottom: 20px;
-            color: #1d1d1f;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .step-header::before {
-            content: "";
-            width: 18px;
-            height: 18px;
-            display: inline-block;
-            border-radius: 999px;
-            border: 2px solid #6e6e73;
-            box-shadow: inset 0 0 0 4px #ffffff;
-            background: #1d1d1f;
-        }
-
-        .import-step-list {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .import-step-chip {
-            min-height: 32px;
-            display: inline-flex;
-            align-items: center;
-            padding: 6px 10px;
-            border: 1px solid rgba(29, 29, 31, 0.1);
-            border-radius: 999px;
-            background: rgba(255, 255, 255, 0.72);
-            color: #49494d;
-            font-size: 0.82rem;
-            font-weight: 650;
-            white-space: nowrap;
-        }
-
-        .import-step-chip.active {
-            color: #ffffff;
-            background: #1d1d1f;
-            border-color: #1d1d1f;
-        }
-
-        .upload-area {
-            border: 2px dashed rgba(0, 0, 0, 0.2);
-            border-radius: 12px;
-            padding: 60px 20px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            background: #fafafa;
-        }
-
-        .upload-area:hover {
-            border-color: #3b82f6;
-            background: #f0f9ff;
-        }
-
-        .upload-area.drag-over {
-            border-color: #3b82f6;
-            background: #dbeafe;
-        }
-
-        .upload-area p {
-            color: #6e6e73;
-            font-size: 14px;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-size: 14px;
-            color: #1d1d1f;
-            font-weight: 500;
-        }
-
-        .form-group select,
-        .form-group input {
-            width: 100%;
-            padding: 12px;
-            border-radius: 8px;
-            border: 1px solid rgba(0, 0, 0, 0.15);
-            background: #ffffff;
-            color: #1d1d1f;
-            font-size: 14px;
-        }
-
-        .form-group select:focus,
-        .form-group input:focus {
-            outline: none;
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-        }
-
-        th, td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-        }
-
-        th {
-            background: #fafafa;
-            font-weight: 600;
-            color: #1d1d1f;
-        }
-
-        td {
-            color: #1d1d1f;
-        }
-
-        .btn {
-            padding: 12px 24px;
-            border-radius: 8px;
-            border: none;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.2s ease;
-            margin-right: 10px;
-        }
-
-        .btn-primary {
-            background: #3b82f6;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: #2563eb;
-        }
-
-        .btn-primary:disabled {
-            background: #cbd5e1;
-            cursor: not-allowed;
-        }
-
-        .btn-secondary {
-            background: #e5e7eb;
-            color: #1d1d1f;
-        }
-
-        .btn-secondary:hover {
-            background: #d1d5db;
-        }
-
-        .result-message {
-            padding: 16px;
-            border-radius: 8px;
-            margin-top: 20px;
-        }
-
-        .result-message.success {
-            background: #d1fae5;
-            border: 1px solid #10b981;
-            color: #065f46;
-        }
-
-        .result-message.error {
-            background: #fee2e2;
-            border: 1px solid #ef4444;
-            color: #991b1b;
-        }
-
-        .result-message h3 {
-            margin-bottom: 8px;
-            color: inherit;
-        }
-
-        .result-message p {
-            margin: 4px 0;
-            color: inherit;
-        }
-
-        .perfil-modal-overlay {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(15, 23, 42, 0.55);
-            z-index: 9999;
-            align-items: center;
-            justify-content: center;
-            padding: 16px;
-        }
-
-        .perfil-modal-content {
-            background: #ffffff;
-            border-radius: 12px;
-            width: min(980px, 96vw);
-            max-height: 92vh;
-            overflow-y: auto;
-            padding: 20px;
-            border: 1px solid rgba(0, 0, 0, 0.08);
-            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
-        }
-
-        .perfil-modal-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 14px;
-        }
-
-        .perfil-modal-actions {
-            margin-top: 16px;
-            display: flex;
-            gap: 10px;
-            justify-content: flex-end;
-        }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/importar_cartao.css') }}">
 {% endblock %}
 
 {% block action_bar %}
-    <div class="module-actionbar" aria-label="Etapas de Importação de Cartão">
+    <div class="module-actionbar import-actionbar" aria-label="Etapas de importação de cartão">
         <div class="module-actionbar-inner">
-            <div class="module-actionbar-tabs import-step-list" aria-label="Etapas do assistente">
-                <span class="import-step-chip">1. Configuração</span>
-                <span class="import-step-chip">2. Upload</span>
+            <div class="module-actionbar-tabs import-steps" aria-label="Etapas do painel">
+                <span class="import-step-chip is-active">1. Configuração</span>
+                <span class="import-step-chip">2. Documento</span>
                 <span class="import-step-chip">3. Validação</span>
-                <span class="import-step-chip">4. Revisão</span>
-                <span class="import-step-chip">5. Resultado</span>
+                <span class="import-step-chip">4. Classificação</span>
+                <span class="import-step-chip">5. Revisão e Resultado</span>
             </div>
         </div>
     </div>
 {% endblock %}
 
 {% block content %}
-    <div class="container app-content-fluid">
-    <div class="import-container">
-        <div class="step active" id="step1">
-            <div class="step-header">1. Configuracao</div>
+<div class="content-fluid import-page">
+    <section class="import-section import-configuration-panel" id="step1">
+        <div class="import-section-title">
+            <span class="import-section-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false"><path d="M12 8.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Zm0-4v2M12 17.5v2M5.6 7.1 7 8.5M17 15.5l1.4 1.4M4 12h2M18 12h2M5.6 16.9 7 15.5M17 8.5l1.4-1.4"/></svg>
+            </span>
+            <h2>1. Configuração</h2>
+        </div>
 
-            <div class="form-group">
-                <label>Selecione o Cartao</label>
+        <div class="import-config-grid">
+            <div class="import-field">
+                <label for="cartaoSelect">Cartão</label>
                 <select id="cartaoSelect"></select>
             </div>
 
-            <div class="form-group">
-                <label>Competencia (Mes da Fatura)</label>
-                <input type="text" id="competenciaInput" placeholder="MM/AAAA" maxlength="7">
+            <div class="import-field">
+                <label for="competenciaInput">Competência</label>
+                <input type="text" id="competenciaInput" placeholder="MM/AAAA" maxlength="7" inputmode="numeric">
             </div>
 
-            <button class="btn btn-primary" onclick="proximaEtapa(2)">Continuar</button>
-        </div>
-
-        <div class="step" id="step2">
-            <div class="step-header">2. Upload do CSV</div>
-
-            <div class="upload-area" id="uploadArea">
-                <input type="file" id="csvFile" accept=".csv" style="display:none">
-                <p>Clique ou arraste o arquivo CSV aqui</p>
+            <div class="import-field import-format-field">
+                <span class="import-field-label">Formato</span>
+                <div class="import-segmented-control" role="radiogroup" aria-label="Formato do arquivo">
+                    <button type="button" class="import-format-option is-selected" data-format="auto" aria-pressed="true">Automático</button>
+                    <button type="button" class="import-format-option" data-format="csv" aria-pressed="false">CSV/XLSX</button>
+                    <button type="button" class="import-format-option" data-format="pdf" aria-pressed="false">PDF</button>
+                </div>
             </div>
 
-            <div id="uploadResult"></div>
+            <p class="import-help-text">O sistema identifica automaticamente se o arquivo é CSV/XLSX ou PDF.</p>
+        </div>
+    </section>
 
-            <button class="btn btn-secondary" onclick="voltarEtapa(1)">Voltar</button>
-            <button class="btn btn-primary" onclick="proximaEtapa(3)" id="btnStep3" disabled>Continuar</button>
+    <section class="import-section import-document-panel" id="step2">
+        <div class="import-section-title">
+            <span class="import-section-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false"><path d="M6 3h8l4 4v14H6V3Z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></svg>
+            </span>
+            <h2>2. Documento</h2>
         </div>
 
-        <div class="step" id="step3">
-            <div class="step-header">3. Validacao de Layout</div>
-            <p style="color: #4b5563; margin-bottom: 20px;">
-                O perfil detectado sera validado no modal da proxima etapa antes da pre-visualizacao tecnica.
-            </p>
-            <div id="mapeamentoContainer"></div>
-            <button class="btn btn-secondary" onclick="voltarEtapa(2)">Voltar</button>
-            <button class="btn btn-primary" onclick="proximaEtapa(4)" id="btnStep4" disabled>Continuar</button>
+        <div class="import-upload-zone" id="uploadArea">
+            <input type="file" id="csvFile" accept=".csv,.xlsx,.pdf" hidden>
+            <div class="import-upload-copy">
+                <span class="import-upload-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false"><path d="M12 16V4M8 8l4-4 4 4"/><path d="M4 16.5A4.5 4.5 0 0 0 8.5 21h7a4.5 4.5 0 0 0 1.2-8.8A6 6 0 0 0 5.1 13"/></svg>
+                </span>
+                <div>
+                    <strong>Clique ou arraste o arquivo aqui</strong>
+                    <span>Formatos aceitos: CSV, XLSX ou PDF</span>
+                </div>
+            </div>
+            <div class="import-file-chip" id="selectedFileInfo" hidden></div>
         </div>
 
-        <div class="step" id="step4">
-            <div class="step-header">4. Classificar e Revisar</div>
-            <div id="previaContainer"></div>
-            <button class="btn btn-secondary" onclick="voltarEtapa(3)">Voltar</button>
-            <button class="btn btn-primary" id="btnImportar" onclick="finalizarImportacao()" disabled>Importar</button>
+        <div id="uploadResult" class="import-feedback-slot"></div>
+
+        <div class="import-summary-row" aria-label="Resumo do documento">
+            <div class="import-summary-card">
+                <span class="summary-icon success" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5l4 4L19 7"/></svg></span>
+                <strong id="detectedCount">0</strong>
+                <span>lançamentos detectados</span>
+            </div>
+            <div class="import-summary-card">
+                <span class="summary-icon warning" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4V7Z"/><path d="M7 11h10"/></svg></span>
+                <strong id="parceladoCount">0</strong>
+                <span>parcelados</span>
+            </div>
+            <div class="import-summary-card">
+                <span class="summary-icon info" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 17h.1M12 13a3 3 0 1 0-3-3"/><path d="M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg></span>
+                <strong id="duplicateCount">0</strong>
+                <span>possível duplicado</span>
+            </div>
+        </div>
+    </section>
+
+    <section class="import-section import-validation-panel" id="step3">
+        <div class="import-section-title">
+            <span class="import-section-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false"><path d="M12 3 4 7v5c0 4.5 3.5 8.7 8 10 4.5-1.3 8-5.5 8-10V7l-8-4Z"/><path d="M8.5 12.5 11 15l4.5-5"/></svg>
+            </span>
+            <h2>3. Validação</h2>
         </div>
 
-        <div class="step" id="step5">
-            <div class="step-header">Resultado da Importacao</div>
-            <div id="resultadoContainer"></div>
-            <button class="btn btn-primary" onclick="location.reload()">Nova Importacao</button>
+        <div class="import-validation-actions">
+            <button class="btn btn-secondary" type="button" id="btnStep3" onclick="proximaEtapa(3)" disabled>Validar layout</button>
+            <button class="btn btn-primary" type="button" id="btnStep4" onclick="proximaEtapa(4)" disabled>Gerar prévia</button>
+        </div>
+
+        <div class="import-summary-row import-validation-summary" aria-label="Resumo da validação">
+            <div class="import-summary-card">
+                <span class="summary-icon success" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5l4 4L19 7"/></svg></span>
+                <span>Válidos</span>
+                <strong id="validCount">0</strong>
+            </div>
+            <div class="import-summary-card">
+                <span class="summary-icon warning" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 8v5M12 17h.1"/><path d="M12 3 3.5 19h17L12 3Z"/></svg></span>
+                <span>Revisar</span>
+                <strong id="reviewCount">0</strong>
+            </div>
+            <div class="import-summary-card">
+                <span class="summary-icon info" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 17h.1M12 13a3 3 0 1 0-3-3"/><path d="M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg></span>
+                <span>Sem categoria do cartão</span>
+                <strong id="missingCardCategoryCount">0</strong>
+            </div>
+            <div class="import-summary-card">
+                <span class="summary-icon neutral" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 8h8v8H8V8Z"/><path d="M4 4h8v8H4V4ZM12 12h8v8h-8v-8Z"/></svg></span>
+                <span>Duplicados</span>
+                <strong id="validationDuplicateCount">0</strong>
+            </div>
+        </div>
+
+        <div id="mapeamentoContainer" class="import-inline-status"></div>
+        <div id="resumoConfiguracaoImportacao" class="import-inline-status"></div>
+        <div id="previaContainer">
+            <div class="import-empty-state">Carregue um documento para validar o layout e revisar os lançamentos.</div>
+        </div>
+        <div id="editorPrePersistencia"></div>
+        <div id="resumoPreviaTecnica" class="import-inline-status"></div>
+    </section>
+
+    <div class="import-bottom-grid">
+        <section class="import-section import-classification-panel" id="step4">
+            <div class="import-section-title">
+                <span class="import-section-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false"><path d="M20 7.5V4a1 1 0 0 0-1-1h-3.5a1 1 0 0 0-.7.3l-9 9a2 2 0 0 0 0 2.8l4.1 4.1a2 2 0 0 0 2.8 0l9-9a1 1 0 0 0 .3-.7ZM15 7h.1"/></svg>
+                </span>
+                <h2>4. Classificação</h2>
+            </div>
+
+            <div class="import-classification-content">
+                <div class="import-category-list" id="classificationList">
+                    <div class="import-empty-state compact">As categorias do cartão aparecem após selecionar o cartão.</div>
+                </div>
+                <div class="import-info-box">
+                    <span class="summary-icon info" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 11v6M12 7h.1"/><path d="M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg></span>
+                    <p>As categorias detectadas são sugestões. A confirmação final é manual.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="import-section import-result-panel" id="step5">
+            <div class="import-section-title">
+                <span class="import-section-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false"><path d="M6 3h12v18H6V3Z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
+                </span>
+                <h2>5. Revisão e Resultado</h2>
+            </div>
+
+            <div class="import-result-summary" aria-label="Revisão da importação">
+                <div class="import-summary-card">
+                    <span>Total importado previsto</span>
+                    <strong id="plannedTotal">R$ 0,00</strong>
+                </div>
+                <div class="import-summary-card">
+                    <span>Novos lançamentos</span>
+                    <strong id="newCount">0</strong>
+                </div>
+                <div class="import-summary-card">
+                    <span>Ignorados</span>
+                    <strong id="ignoredCount">0</strong>
+                </div>
+                <div class="import-summary-card">
+                    <span>Categorias confirmadas</span>
+                    <strong id="confirmedCardCategoryCount">0/0</strong>
+                    <small id="pendingCardCategoryCount">0 pendentes</small>
+                </div>
+            </div>
+
+            <div id="resultadoContainer" class="import-result-output"></div>
+
+            <div class="import-result-actions">
+                <button class="btn btn-secondary" type="button" id="btnDraft" disabled title="Rascunho será implementado em MVP futuro">
+                    <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 4v12M8 12l4 4 4-4"/><path d="M5 20h14"/></svg></span>
+                    Salvar rascunho
+                </button>
+                <button class="btn btn-primary" id="btnImportar" type="button" onclick="finalizarImportacao()" disabled>
+                    Confirmar Importação
+                    <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12h14M15 8l4 4-4 4"/></svg></span>
+                </button>
+            </div>
+        </section>
+    </div>
+</div>
+
+<div class="perfil-modal-overlay" id="perfilModal">
+    <div class="perfil-modal-content">
+        <div class="perfil-modal-header">
+            <h2>Validar perfil e mapeamento do CSV</h2>
+            <p>Confirme o perfil detectado, ajuste o mapeamento principal e valide a amostra interpretada antes da prévia técnica.</p>
+        </div>
+
+        <div class="perfil-modal-grid">
+            <div class="import-field">
+                <label for="modalPerfil">Perfil de importação</label>
+                <select id="modalPerfil" onchange="atualizarCamposPerfilModal(); renderizarAmostraModal();"></select>
+            </div>
+
+            <div class="import-field">
+                <label for="modalCategoriaPadrao">Categoria da despesa padrão *</label>
+                <select id="modalCategoriaPadrao" onchange="renderizarAmostraModal();"></select>
+            </div>
+
+            <div class="import-field">
+                <label for="modalMapData">Data</label>
+                <select id="modalMapData" onchange="renderizarAmostraModal();"></select>
+            </div>
+
+            <div class="import-field">
+                <label for="modalMapDescricao">Descrição</label>
+                <select id="modalMapDescricao" onchange="renderizarAmostraModal();"></select>
+            </div>
+
+            <div class="import-field" id="boxCampoValor">
+                <label for="modalMapValor">Valor</label>
+                <select id="modalMapValor" onchange="renderizarAmostraModal();"></select>
+            </div>
+
+            <div class="import-field">
+                <label for="modalMapParcela">Parcela (opcional)</label>
+                <select id="modalMapParcela" onchange="renderizarAmostraModal();"></select>
+            </div>
+        </div>
+
+        <div class="perfil-modal-grid" id="boxCamposCaixa" hidden>
+            <div class="import-field">
+                <label for="modalMapCredito">Coluna crédito</label>
+                <select id="modalMapCredito" onchange="renderizarAmostraModal();"></select>
+            </div>
+            <div class="import-field">
+                <label for="modalMapDebito">Coluna débito</label>
+                <select id="modalMapDebito" onchange="renderizarAmostraModal();"></select>
+            </div>
+            <div class="import-field">
+                <label for="modalRegraCaixa">Regra de interpretação Caixa</label>
+                <select id="modalRegraCaixa" onchange="renderizarAmostraModal();">
+                    <option value="debito">Usar débito (despesas)</option>
+                    <option value="credito">Usar crédito</option>
+                    <option value="auto">Auto (débito e fallback crédito)</option>
+                </select>
+            </div>
+            <div class="import-field">
+                <label for="modalCategoriaCartaoPadraoCaixa">Categoria do cartão padrão</label>
+                <select id="modalCategoriaCartaoPadraoCaixa" onchange="renderizarAmostraModal();"></select>
+            </div>
+        </div>
+
+        <div class="perfil-modal-grid" id="boxCamposNubank" hidden>
+            <div class="import-field">
+                <label for="modalRegraNubank">Regra de interpretação Nubank</label>
+                <select id="modalRegraNubank" onchange="renderizarAmostraModal();">
+                    <option value="absoluto">Usar valor absoluto</option>
+                    <option value="despesas_negativas">Despesas são valores negativos</option>
+                    <option value="despesas_positivas">Despesas são valores positivos</option>
+                </select>
+            </div>
+            <div class="import-field">
+                <label for="modalCategoriaCartaoPadraoNubank">Categoria do cartão padrão</label>
+                <select id="modalCategoriaCartaoPadraoNubank" onchange="renderizarAmostraModal();"></select>
+            </div>
+        </div>
+
+        <div class="perfil-modal-grid" id="boxCamposManual">
+            <div class="import-field">
+                <label for="modalCategoriaCartaoPadraoManual">Categoria do cartão padrão</label>
+                <select id="modalCategoriaCartaoPadraoManual" onchange="renderizarAmostraModal();"></select>
+            </div>
+        </div>
+
+        <div id="modalAmostraInterpretada" class="modal-sample"></div>
+
+        <div class="perfil-modal-actions">
+            <button type="button" class="btn btn-secondary" onclick="fecharModalValidacao()">Cancelar</button>
+            <button type="button" class="btn btn-primary" onclick="confirmarValidacaoModal()">Confirmar validação</button>
         </div>
     </div>
-    </div>
-
-    <div class="perfil-modal-overlay" id="perfilModal">
-        <div class="perfil-modal-content">
-            <h2 style="margin: 0 0 12px 0;">Validar Perfil e Mapeamento do CSV</h2>
-            <p style="margin: 0 0 16px 0; color: #475569;">
-                Confirme o perfil detectado, ajuste o mapeamento principal e valide a amostra interpretada antes da pre-visualizacao tecnica.
-            </p>
-
-            <div class="perfil-modal-grid">
-                <div class="form-group">
-                    <label>Perfil de importacao</label>
-                    <select id="modalPerfil" onchange="atualizarCamposPerfilModal(); renderizarAmostraModal();"></select>
-                </div>
-
-                <div class="form-group">
-                    <label>Categoria padrao do lote *</label>
-                    <select id="modalCategoriaPadrao" onchange="renderizarAmostraModal();"></select>
-                </div>
-
-                <div class="form-group">
-                    <label>Data</label>
-                    <select id="modalMapData" onchange="renderizarAmostraModal();"></select>
-                </div>
-
-                <div class="form-group">
-                    <label>Descricao</label>
-                    <select id="modalMapDescricao" onchange="renderizarAmostraModal();"></select>
-                </div>
-
-                <div class="form-group" id="boxCampoValor">
-                    <label>Valor</label>
-                    <select id="modalMapValor" onchange="renderizarAmostraModal();"></select>
-                </div>
-
-                <div class="form-group">
-                    <label>Parcela (opcional)</label>
-                    <select id="modalMapParcela" onchange="renderizarAmostraModal();"></select>
-                </div>
-            </div>
-
-            <div class="perfil-modal-grid" id="boxCamposCaixa" style="display:none;">
-                <div class="form-group">
-                    <label>Coluna Credito</label>
-                    <select id="modalMapCredito" onchange="renderizarAmostraModal();"></select>
-                </div>
-                <div class="form-group">
-                    <label>Coluna Debito</label>
-                    <select id="modalMapDebito" onchange="renderizarAmostraModal();"></select>
-                </div>
-                <div class="form-group">
-                    <label>Regra de interpretacao Caixa</label>
-                    <select id="modalRegraCaixa" onchange="renderizarAmostraModal();">
-                        <option value="debito">Usar debito (despesas)</option>
-                        <option value="credito">Usar credito</option>
-                        <option value="auto">Auto (debito e fallback credito)</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Categoria de cartao padrao (opcional)</label>
-                    <select id="modalCategoriaCartaoPadraoCaixa" onchange="renderizarAmostraModal();"></select>
-                </div>
-            </div>
-
-            <div class="perfil-modal-grid" id="boxCamposNubank" style="display:none;">
-                <div class="form-group">
-                    <label>Regra de interpretacao Nubank</label>
-                    <select id="modalRegraNubank" onchange="renderizarAmostraModal();">
-                        <option value="absoluto">Usar valor absoluto</option>
-                        <option value="despesas_negativas">Despesas sao valores negativos</option>
-                        <option value="despesas_positivas">Despesas sao valores positivos</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Categoria de cartao padrao (opcional)</label>
-                    <select id="modalCategoriaCartaoPadraoNubank" onchange="renderizarAmostraModal();"></select>
-                </div>
-            </div>
-
-            <div class="perfil-modal-grid" id="boxCamposManual">
-                <div class="form-group">
-                    <label>Categoria de cartao padrao (opcional)</label>
-                    <select id="modalCategoriaCartaoPadraoManual" onchange="renderizarAmostraModal();"></select>
-                </div>
-            </div>
-
-            <div id="modalAmostraInterpretada" style="margin-top: 10px;"></div>
-
-            <div class="perfil-modal-actions">
-                <button type="button" class="btn btn-secondary" onclick="fecharModalValidacao()">Cancelar</button>
-                <button type="button" class="btn btn-primary" onclick="confirmarValidacaoModal()">Confirmar validacao</button>
-            </div>
-        </div>
-    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}

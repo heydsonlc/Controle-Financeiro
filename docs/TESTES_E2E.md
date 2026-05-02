@@ -254,6 +254,16 @@ Esses testes devem seguir o mesmo padrão de TEST-2A/2B: prefixo `TESTE_E2E_` + 
 
 Despesas é o módulo mais crítico para o usuário final e deve ser tratado como primeira entrega do TEST-BASE-1.
 
+## IMPORT-1 - Validação do painel Importar Cartão (2026-05-02)
+
+O IMPORT-1 manteve a validação obrigatória com `npm run test:e2e:smoke` antes e depois da alteração visual em `/importar-cartao`. O smoke continua sendo a barreira de regressão para carregamento da rota, ausência de erro crítico de JavaScript e preservação do shell.
+
+Checagens específicas da tela:
+
+- `node --check frontend/static/js/importar_cartao.js`
+- `npm run test:e2e:smoke`
+- `git diff --check`
+
 ## Próximos Testes Planejados
 
 - Despesas: nova despesa, edição, baixa (TEST-BASE-1);

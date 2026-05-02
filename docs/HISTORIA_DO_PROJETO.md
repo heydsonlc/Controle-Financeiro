@@ -342,6 +342,16 @@ SEC-0 ✅ → TEST-BASE-1 ✅ → ICONES-1B → DB-CLEAN-1 → CARD-SEC-1 → FI
 
 ---
 
+## MVP IMPORT-1 - Redesenho da tela Importar Cartão (2026-05-02)
+
+O IMPORT-1 transformou `/importar-cartao` de assistente em etapas para um painel único full width, com Configuração, Documento, Validação, Classificação e Revisão e Resultado visíveis ao mesmo tempo.
+
+A prévia agora separa Categoria da Despesa e Categoria do Cartão. Categoria da Despesa continua como categoria geral/sugestão ajustável; Categoria do Cartão é select por lançamento, alimenta a classificação do cartão e bloqueia prévia/importação quando fica vazia.
+
+O fluxo CSV existente foi preservado sem alteração de backend, APIs, serviços, banco, migrations, models, parser ou regras financeiras. PDF e XLSX ficaram preparados visualmente, sem implementação de parser neste MVP.
+
+---
+
 ## Backlog — Próximas fases
 
 Para o roadmap técnico completo com prioridades atualizadas, ver `README_TECNICO.md` — seção "Roadmap Técnico — Pós-Auditoria".
