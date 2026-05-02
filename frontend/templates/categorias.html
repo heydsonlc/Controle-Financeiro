@@ -94,6 +94,22 @@
                     </div>
                 </div>
 
+                <div class="form-group logo-upload-panel" id="logo-upload-panel">
+                    <label for="logo-upload-input">Logo personalizado</label>
+                    <div class="logo-preview-row">
+                        <div id="logo-preview" class="logo-preview" aria-hidden="true"></div>
+                        <div class="logo-upload-fields">
+                            <input type="file" id="logo-upload-input" accept="image/png,image/jpeg,image/webp">
+                            <small class="form-hint">Logo personalizado tem prioridade sobre o &iacute;cone do cat&aacute;logo. Formatos aceitos: PNG, JPG, WebP.</small>
+                            <small class="form-hint logo-upload-status" id="logo-upload-status">Salve a categoria antes de enviar logo.</small>
+                        </div>
+                    </div>
+                    <div class="logo-upload-actions">
+                        <button type="button" class="btn btn-secondary" id="logo-enviar">Enviar logo</button>
+                        <button type="button" class="btn btn-secondary" id="logo-remover">Remover logo</button>
+                    </div>
+                </div>
+
                 <div class="form-group">
                     <label class="checkbox-label">
                         <input type="checkbox" id="ativo" name="ativo" checked>

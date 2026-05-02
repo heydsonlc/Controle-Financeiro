@@ -278,7 +278,15 @@ O catálogo interno em `frontend/static/js/icons.js` define as seguintes chaves:
 
 Para atribuir um ícone a uma categoria, edite a categoria em `/categorias` e escolha uma opção no seletor visual de ícones. O campo **Ícone** continua existindo como fallback técnico e armazena a chave textual.
 
-Os logos especiais continuam usando o campo `Categoria.icone`; nao ha entidade, campo de banco ou API nova. Esta etapa prepara o caminho para um futuro fluxo de logos personalizados por upload.
+Os logos especiais do catalogo continuam usando o campo `Categoria.icone`.
+
+### Logos personalizados por upload (ICONES-2B)
+
+Em `/categorias`, edite uma categoria existente e use o bloco **Logo personalizado** para enviar um arquivo PNG, JPG ou WebP. SVG enviado pelo usuario nao e aceito.
+
+O logo personalizado tem prioridade visual sobre `Categoria.icone`. Se o logo for removido, o icone do catalogo volta a ser usado como fallback.
+
+Os arquivos ficam fora do frontend estatico, em `data/uploads/logos/categorias/`, e devem entrar no backup junto com o banco local.
 
 ---
 

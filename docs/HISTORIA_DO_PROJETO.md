@@ -250,6 +250,16 @@ Nenhum backend, banco, migration, API ou regra financeira foi alterado. A etapa 
 
 ---
 
+## MVP ICONES-2B - Upload seguro de logos por Categoria (2026-05-01)
+
+O ICONES-2B adicionou upload seguro de logos personalizados vinculados a `Categoria`. Foram criados campos de metadados de logo na tabela `categoria` pela migration `ea039138b34d`, mantendo `Categoria.icone` como fallback.
+
+Os arquivos sao salvos fora do frontend estatico em `data/uploads/logos/categorias/`, com nome UUID, limite de tamanho, validacao de extensao, MIME e magic bytes. PNG, JPG/JPEG e WebP sao aceitos; SVG enviado pelo usuario e bloqueado.
+
+O modal de Categorias passou a permitir envio, preview e remocao do logo. A renderizacao prioriza `logo_url`, depois `icone`, depois fallback/default. Nenhuma regra financeira, pagamento, fatura ou dashboard foi alterado.
+
+---
+
 ## MVP UX-6B - Action bar compacta em linha unica (2026-05-01)
 
 O UX-6B compactou o padrao visual das action bars ja aplicadas. Filtros passaram a usar label inline antes do campo, os controles ficaram mais baixos e as acoes globais passaram a ser exibidas como botoes icon-only com `title` e `aria-label`.

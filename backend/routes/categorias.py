@@ -8,7 +8,12 @@ Endpoints:
 - PUT    /api/categorias/<id>     - Atualizar categoria
 - DELETE /api/categorias/<id>     - Deletar categoria
 """
-from flask import Blueprint, request, jsonify
+from datetime import datetime
+from pathlib import Path
+from uuid import uuid4
+
+from flask import Blueprint, current_app, jsonify, request, send_from_directory
+from werkzeug.utils import secure_filename
 try:
     from backend.models import db, Categoria
 except ImportError:
@@ -16,6 +21,95 @@ except ImportError:
 
 # Criar blueprint
 categorias_bp = Blueprint('categorias', __name__)
+
+ALLOWED_LOGO_EXTENSIONS = {'png', 'webp', 'jpg', 'jpeg'}
+ALLOWED_LOGO_MIME_TYPES = {
+    'png': 'image/png',
+    'webp': 'image/webp',
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+}
+
+
+def _logos_dir():
+    return Path(current_app.config['UPLOAD_LOGOS_DIR']).resolve()
+
+
+def _max_logo_size():
+    return int(current_app.config.get('MAX_LOGO_SIZE', 1024 * 1024))
+
+
+def _path_dentro_diretorio(base_dir, path):
+    try:
+        path.resolve().relative_to(base_dir.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _extensao_logo(filename):
+    nome = filename or ''
+    if '.' not in nome:
+        return ''
+    return nome.rsplit('.', 1)[1].lower()
+
+
+def _assinatura_logo_valida(conteudo, extensao):
+    if extensao == 'png':
+        return conteudo.startswith(b'\x89PNG\r\n\x1a\n')
+    if extensao in {'jpg', 'jpeg'}:
+        return conteudo.startswith(b'\xff\xd8\xff')
+    if extensao == 'webp':
+        return len(conteudo) >= 12 and conteudo[:4] == b'RIFF' and conteudo[8:12] == b'WEBP'
+    return False
+
+
+def _validar_logo_upload(arquivo):
+    if not arquivo:
+        raise ValueError('Arquivo de logo nao fornecido')
+
+    if not arquivo.filename:
+        raise ValueError('Nome de arquivo vazio')
+
+    extensao = _extensao_logo(arquivo.filename)
+    if extensao not in ALLOWED_LOGO_EXTENSIONS:
+        raise ValueError('Formato invalido. Use PNG, JPG ou WebP')
+
+    mimetype = (arquivo.mimetype or '').lower()
+    if mimetype != ALLOWED_LOGO_MIME_TYPES[extensao]:
+        raise ValueError('Tipo MIME invalido para o arquivo enviado')
+
+    limite = _max_logo_size()
+    conteudo = arquivo.stream.read(limite + 1)
+    arquivo.stream.seek(0)
+
+    if not conteudo:
+        raise ValueError('Arquivo vazio')
+
+    if len(conteudo) > limite:
+        raise ValueError('Arquivo acima do limite de tamanho')
+
+    if not _assinatura_logo_valida(conteudo, extensao):
+        raise ValueError('Assinatura do arquivo invalida')
+
+    nome_original = secure_filename(Path(arquivo.filename).name)[:255] or None
+    return conteudo, extensao, mimetype, nome_original
+
+
+def _remover_arquivo_logo(nome_arquivo):
+    if not nome_arquivo:
+        return
+
+    base_dir = _logos_dir()
+    caminho = (base_dir / Path(nome_arquivo).name).resolve()
+    if not _path_dentro_diretorio(base_dir, caminho):
+        return
+
+    try:
+        if caminho.is_file():
+            caminho.unlink()
+    except OSError:
+        current_app.logger.warning('Nao foi possivel remover logo antigo: %s', caminho)
 
 
 @categorias_bp.route('', methods=['GET'])
@@ -239,6 +333,147 @@ def atualizar_categoria(id):
         }), 500
 
 
+@categorias_bp.route('/<int:id>/logo', methods=['POST'])
+def enviar_logo_categoria(id):
+    """
+    Envia ou substitui o logo personalizado de uma categoria.
+    """
+    categoria = Categoria.query.get(id)
+
+    if not categoria:
+        return jsonify({
+            'success': False,
+            'error': 'Categoria nao encontrada'
+        }), 404
+
+    try:
+        arquivo = request.files.get('file')
+        conteudo, extensao, mimetype, nome_original = _validar_logo_upload(arquivo)
+    except ValueError as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 400
+
+    upload_dir = _logos_dir()
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    nome_arquivo = f'{uuid4().hex}.{extensao}'
+    caminho = (upload_dir / nome_arquivo).resolve()
+
+    if not _path_dentro_diretorio(upload_dir, caminho):
+        return jsonify({
+            'success': False,
+            'error': 'Caminho de upload invalido'
+        }), 400
+
+    logo_antigo = categoria.logo_arquivo
+
+    try:
+        caminho.write_bytes(conteudo)
+
+        categoria.logo_arquivo = nome_arquivo
+        categoria.logo_mime = mimetype
+        categoria.logo_tamanho = len(conteudo)
+        categoria.logo_original_nome = nome_original
+        categoria.logo_criado_em = datetime.utcnow()
+
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        _remover_arquivo_logo(nome_arquivo)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+    _remover_arquivo_logo(logo_antigo)
+
+    return jsonify({
+        'success': True,
+        'message': 'Logo atualizado com sucesso',
+        'data': categoria.to_dict()
+    }), 200
+
+
+@categorias_bp.route('/<int:id>/logo', methods=['DELETE'])
+def remover_logo_categoria(id):
+    """
+    Remove o logo personalizado de uma categoria.
+    """
+    try:
+        categoria = Categoria.query.get(id)
+
+        if not categoria:
+            return jsonify({
+                'success': False,
+                'error': 'Categoria nao encontrada'
+            }), 404
+
+        logo_antigo = categoria.logo_arquivo
+        categoria.logo_arquivo = None
+        categoria.logo_mime = None
+        categoria.logo_tamanho = None
+        categoria.logo_original_nome = None
+        categoria.logo_criado_em = None
+
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+    _remover_arquivo_logo(logo_antigo)
+
+    return jsonify({
+        'success': True,
+        'message': 'Logo removido com sucesso',
+        'data': categoria.to_dict()
+    }), 200
+
+
+@categorias_bp.route('/<int:id>/logo', methods=['GET'])
+def servir_logo_categoria(id):
+    """
+    Serve o logo personalizado de uma categoria.
+    """
+    categoria = Categoria.query.get(id)
+
+    if not categoria or not categoria.logo_arquivo:
+        return jsonify({
+            'success': False,
+            'error': 'Logo nao encontrado'
+        }), 404
+
+    upload_dir = _logos_dir()
+    nome_arquivo = Path(categoria.logo_arquivo).name
+    caminho = (upload_dir / nome_arquivo).resolve()
+
+    if nome_arquivo != categoria.logo_arquivo or not _path_dentro_diretorio(upload_dir, caminho):
+        return jsonify({
+            'success': False,
+            'error': 'Logo invalido'
+        }), 404
+
+    if not caminho.is_file():
+        return jsonify({
+            'success': False,
+            'error': 'Arquivo de logo nao encontrado'
+        }), 404
+
+    response = send_from_directory(
+        str(upload_dir),
+        nome_arquivo,
+        mimetype=categoria.logo_mime,
+        conditional=True,
+        max_age=3600
+    )
+    response.headers['Cache-Control'] = 'private, max-age=3600'
+    return response
+
+
 @categorias_bp.route('/<int:id>', methods=['DELETE'])
 def deletar_categoria(id):
     """
@@ -266,8 +501,10 @@ def deletar_categoria(id):
                 'error': 'Não é possível deletar categoria com itens de despesa vinculados'
             }), 400
 
+        logo_antigo = categoria.logo_arquivo
         db.session.delete(categoria)
         db.session.commit()
+        _remover_arquivo_logo(logo_antigo)
 
         return jsonify({
             'success': True,

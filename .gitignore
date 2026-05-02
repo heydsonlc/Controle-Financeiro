@@ -33,6 +33,7 @@ ENV/
 *.sqlite
 *.sqlite3
 data/gastos.db
+data/uploads/
 
 # Environment Variables
 .env

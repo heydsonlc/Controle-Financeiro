@@ -94,6 +94,35 @@ function renderCategoryIcon(categoriaOuChave, opts = {}) {
     return key ? renderIcon(key, opts) : '';
 }
 
+function escapeIconAttr(value) {
+    return String(value || '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[char]));
+}
+
+function renderCategoryVisual(categoriaOuChave, opts = {}) {
+    if (!categoriaOuChave) return '';
+
+    if (typeof categoriaOuChave === 'object' && categoriaOuChave.logo_url) {
+        const size = opts.size || '16px';
+        const alt = opts.alt !== undefined ? opts.alt : (categoriaOuChave.nome || '');
+        const fallback = renderCategoryIcon(categoriaOuChave, opts) || renderIcon('default', opts);
+        const cls = opts.cssClass ? ` ${escapeIconAttr(opts.cssClass)}` : '';
+        const src = escapeIconAttr(categoriaOuChave.logo_url);
+
+        return `<span class="category-visual category-visual-logo" style="width:${size};height:${size};display:inline-flex;align-items:center;justify-content:center;vertical-align:-0.125em;flex-shrink:0;">` +
+            `<img class="category-logo${cls}" src="${src}" alt="${escapeIconAttr(alt)}" loading="lazy" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:4px;display:block;" onerror="this.hidden=true;this.nextElementSibling.hidden=false;">` +
+            `<span class="category-logo-fallback" hidden>${fallback}</span>` +
+            `</span>`;
+    }
+
+    return renderCategoryIcon(categoriaOuChave, opts) || renderIcon('default', opts);
+}
+
 function getIconKeys() {
     return Object.keys(ICONS_CATALOG).filter(key => key !== 'default').sort();
 }
@@ -101,4 +130,5 @@ function getIconKeys() {
 if (typeof window !== 'undefined') {
     window.ICONS_CATALOG = ICONS_CATALOG;
     window.getIconKeys = getIconKeys;
+    window.renderCategoryVisual = renderCategoryVisual;
 }

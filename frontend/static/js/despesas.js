@@ -694,8 +694,8 @@ function renderizarDespesas(despesasParaRenderizar) {
         // Categoria (opcional, metadado)
         const categoria = despesa.categoria || (despesa.categoria_id ? categorias.find(c => c.id === despesa.categoria_id) : null);
         const categoriaNome = categoria ? categoria.nome : 'Sem categoria';
-        const categoriaIconeHtml = (typeof renderCategoryIcon === 'function' && categoria?.icone)
-            ? renderCategoryIcon(categoria, { size: '12px' })
+        const categoriaIconeHtml = (typeof renderCategoryVisual === 'function' && categoria)
+            ? renderCategoryVisual(categoria, { size: '12px', alt: categoriaNome })
             : '';
         const meioPageIconeHtml = (typeof renderPaymentIcon === 'function' && despesa.meio_pagamento)
             ? renderPaymentIcon(despesa.meio_pagamento, { size: '12px' })

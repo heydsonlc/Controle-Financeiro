@@ -414,6 +414,14 @@ O ICONES-1D ampliou o catalogo interno com `kortex-logo` e `cbmgo-logo`, voltado
 
 Esta etapa mantem a renderizacao SVG existente e prepara uma futura evolucao para logos personalizados por upload.
 
+### MVP ICONES-2B - Upload seguro de logos por Categoria (2026-05-01)
+
+O ICONES-2B adicionou uma camada de logo personalizado no modal de Categorias. O usuario pode enviar PNG, JPG/JPEG ou WebP para uma categoria existente, com preview e remocao pelo proprio modal.
+
+O padrao visual ficou: `logo_url` tem prioridade; se nao houver logo, o sistema usa `Categoria.icone`; se tambem nao houver icone, usa fallback/default. Os uploads ficam em `data/uploads/logos/categorias/`, fora de `frontend/static`, e devem ser considerados no backup.
+
+SVG enviado pelo usuario e bloqueado. A etapa nao altera dashboard, pagamentos, faturas, regras financeiras nem o catalogo SVG existente.
+
 ### Registro de implementacao - RECUP-4
 
 O RECUP-4 criou a tela propria `/recorrencias` para gerenciar cadastros-matriz de recorrencias e consorcios. Despesas permanece como visualizacao das despesas geradas/registradas, sem assumir novamente o papel de cadastro de regras recorrentes.

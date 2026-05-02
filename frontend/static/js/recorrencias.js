@@ -83,24 +83,28 @@ async function carregarRecorrencias() {
 }
 
 function obterItensUnificados() {
-    const recorrencias = estadoRecorrencias.recorrencias.map(item => ({
-        origem: 'recorrencia',
-        id: item.id,
-        nome: item.nome,
-        descricao: item.descricao,
-        tipo: 'recorrencia_simples',
-        tipoLabel: 'Despesa recorrente',
-        frequencia: item.frequencia || item.tipo_recorrencia || 'mensal',
-        proximoVencimento: item.proximo_vencimento,
-        valor: item.valor,
-        categoriaId: item.categoria_id,
-        categoriaNome: item.categoria_nome || '-',
-        categoriaIcone: item.categoria_icone || null,
-        meioPagamento: item.meio_pagamento || null,
-        status: item.ativo ? 'ativa' : 'inativa',
-        statusLabel: item.ativo ? 'Ativa' : 'Inativa',
-        raw: item
-    }));
+    const recorrencias = estadoRecorrencias.recorrencias.map(item => {
+        const categoria = estadoRecorrencias.categorias.find(cat => String(cat.id) === String(item.categoria_id)) || null;
+        return {
+            origem: 'recorrencia',
+            id: item.id,
+            nome: item.nome,
+            descricao: item.descricao,
+            tipo: 'recorrencia_simples',
+            tipoLabel: 'Despesa recorrente',
+            frequencia: item.frequencia || item.tipo_recorrencia || 'mensal',
+            proximoVencimento: item.proximo_vencimento,
+            valor: item.valor,
+            categoriaId: item.categoria_id,
+            categoriaNome: item.categoria_nome || categoria?.nome || '-',
+            categoriaIcone: item.categoria_icone || categoria?.icone || null,
+            categoriaLogoUrl: item.categoria_logo_url || categoria?.logo_url || null,
+            meioPagamento: item.meio_pagamento || null,
+            status: item.ativo ? 'ativa' : 'inativa',
+            statusLabel: item.ativo ? 'Ativa' : 'Inativa',
+            raw: item
+        };
+    });
 
     const consorcios = estadoRecorrencias.consorcios.map(item => ({
         origem: 'consorcio',
@@ -176,6 +180,14 @@ function renderizarLinha(item) {
     const valor = formatarMoeda(item.valor);
     const vencimento = item.proximoVencimento ? formatarData(item.proximoVencimento) : '-';
     const detalhe = item.detalhe || formatarFrequencia(item.frequencia, item.raw);
+    const categoriaVisual = {
+        nome: item.categoriaNome,
+        icone: item.categoriaIcone,
+        logo_url: item.categoriaLogoUrl
+    };
+    const categoriaVisualHtml = (typeof renderCategoryVisual === 'function' && (item.categoriaLogoUrl || item.categoriaIcone))
+        ? renderCategoryVisual(categoriaVisual, { size: '12px', alt: item.categoriaNome })
+        : '';
 
     return `
         <div class="recorrencias-row">
@@ -187,7 +199,7 @@ function renderizarLinha(item) {
             <span>${escapeHtml(detalhe)}</span>
             <span>${vencimento}</span>
             <span class="recorrencias-value">${valor}</span>
-            <span class="icon-chip">${(typeof renderCategoryIcon === 'function' && item.categoriaIcone) ? renderCategoryIcon(item.categoriaIcone, { size: '12px' }) : ''}${escapeHtml(item.categoriaNome)}</span>
+            <span class="icon-chip">${categoriaVisualHtml}${escapeHtml(item.categoriaNome)}</span>
             <span><span class="compact-pill">${escapeHtml(item.statusLabel)}</span></span>
             <span class="row-actions recorrencias-actions">
                 <button class="row-action-button" type="button" onclick="editarRecorrencia('${item.origem}', ${item.id})" title="Editar" aria-label="Editar">

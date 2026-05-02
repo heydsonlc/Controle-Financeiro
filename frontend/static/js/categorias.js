@@ -4,6 +4,7 @@
 
 const API_URL = '/api/categorias';
 let categoriaEditando = null;
+let categoriaAtual = null;
 
 function categoriasIcon(nome) {
     const icons = {
@@ -15,6 +16,7 @@ function categoriasIcon(nome) {
 
 document.addEventListener('DOMContentLoaded', () => {
     carregarCategorias();
+    montarSeletorIcones();
 
     const corInput = document.getElementById('cor');
     if (corInput) {
@@ -27,14 +29,177 @@ document.addEventListener('DOMContentLoaded', () => {
     const iconeInput = document.getElementById('icone');
     if (iconeInput) {
         iconeInput.addEventListener('input', (e) => {
-            const preview = document.getElementById('icone-preview');
-            if (preview) {
-                const svg = typeof renderIcon === 'function' ? renderIcon(e.target.value.trim(), { size: '22px' }) : '';
-                preview.innerHTML = svg;
-            }
+            atualizarIconeSelecionado(e.target.value.trim());
         });
     }
+
+    const limparIcone = document.getElementById('icone-limpar');
+    if (limparIcone) {
+        limparIcone.addEventListener('click', () => {
+            definirIconeCategoria('');
+        });
+    }
+
+    const enviarLogo = document.getElementById('logo-enviar');
+    if (enviarLogo) {
+        enviarLogo.addEventListener('click', enviarLogoCategoria);
+    }
+
+    const removerLogo = document.getElementById('logo-remover');
+    if (removerLogo) {
+        removerLogo.addEventListener('click', removerLogoCategoria);
+    }
 });
+
+function montarSeletorIcones() {
+    const grid = document.getElementById('icone-picker-grid');
+    if (!grid || typeof getIconKeys !== 'function' || typeof renderIcon !== 'function') return;
+
+    const keys = getIconKeys();
+    grid.innerHTML = keys.map((key) => `
+        <button type="button" class="icone-picker-option" data-icon-key="${key}" title="${key}" aria-label="Selecionar icone ${key}">
+            <span class="icone-picker-option-icon" aria-hidden="true">${renderIcon(key, { size: '18px' })}</span>
+            <span class="icone-picker-option-label">${key}</span>
+        </button>
+    `).join('');
+
+    grid.querySelectorAll('.icone-picker-option').forEach((button) => {
+        button.addEventListener('click', () => {
+            definirIconeCategoria(button.dataset.iconKey || '');
+        });
+    });
+}
+
+function definirIconeCategoria(key) {
+    const iconeInput = document.getElementById('icone');
+    if (iconeInput) {
+        iconeInput.value = key || '';
+    }
+    atualizarIconeSelecionado(key || '');
+}
+
+function atualizarIconeSelecionado(key) {
+    const chave = (key || '').trim();
+    const preview = document.getElementById('icone-preview');
+    if (preview) {
+        preview.innerHTML = chave && typeof renderIcon === 'function'
+            ? renderIcon(chave, { size: '22px' })
+            : '';
+    }
+
+    document.querySelectorAll('.icone-picker-option').forEach((button) => {
+        const ativo = button.dataset.iconKey === chave;
+        button.classList.toggle('active', ativo);
+        button.setAttribute('aria-pressed', ativo ? 'true' : 'false');
+    });
+
+    const limparIcone = document.getElementById('icone-limpar');
+    if (limparIcone) {
+        limparIcone.classList.toggle('active', !chave);
+        limparIcone.setAttribute('aria-pressed', !chave ? 'true' : 'false');
+    }
+}
+
+function atualizarLogoPanel(categoria) {
+    const temCategoria = Boolean(categoria && categoria.id);
+    const preview = document.getElementById('logo-preview');
+    const input = document.getElementById('logo-upload-input');
+    const enviar = document.getElementById('logo-enviar');
+    const remover = document.getElementById('logo-remover');
+    const status = document.getElementById('logo-upload-status');
+
+    if (preview) {
+        preview.innerHTML = categoria?.logo_url
+            ? `<img src="${categoria.logo_url}" alt="" loading="lazy" onerror="this.remove()">`
+            : '';
+    }
+
+    if (input) {
+        input.value = '';
+        input.disabled = !temCategoria;
+    }
+
+    if (enviar) {
+        enviar.disabled = !temCategoria;
+    }
+
+    if (remover) {
+        remover.disabled = !temCategoria || !categoria?.logo_url;
+    }
+
+    if (status) {
+        if (!temCategoria) {
+            status.textContent = 'Salve a categoria antes de enviar logo.';
+        } else if (categoria?.logo_url) {
+            status.textContent = 'Logo personalizado ativo. Ao remover, o icone do catalogo volta a aparecer.';
+        } else {
+            status.textContent = 'Nenhum logo personalizado. O icone do catalogo sera usado como fallback.';
+        }
+    }
+}
+
+async function enviarLogoCategoria() {
+    if (!categoriaEditando) {
+        alert('Salve a categoria antes de enviar logo.');
+        return;
+    }
+
+    const input = document.getElementById('logo-upload-input');
+    const arquivo = input?.files?.[0];
+    if (!arquivo) {
+        alert('Selecione um arquivo PNG, JPG ou WebP.');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', arquivo);
+
+    try {
+        const response = await fetch(`${API_URL}/${categoriaEditando}/logo`, {
+            method: 'POST',
+            body: formData
+        });
+        const data = await response.json();
+
+        if (!data.success) {
+            alert('Erro ao enviar logo: ' + data.error);
+            return;
+        }
+
+        categoriaAtual = data.data;
+        atualizarLogoPanel(categoriaAtual);
+        carregarCategorias();
+    } catch (error) {
+        console.error('Erro ao enviar logo:', error);
+        alert('Erro ao enviar logo. Por favor, tente novamente.');
+    }
+}
+
+async function removerLogoCategoria() {
+    if (!categoriaEditando) {
+        alert('Salve a categoria antes de remover logo.');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/${categoriaEditando}/logo`, {
+            method: 'DELETE'
+        });
+        const data = await response.json();
+
+        if (!data.success) {
+            alert('Erro ao remover logo: ' + data.error);
+            return;
+        }
+
+        categoriaAtual = data.data;
+        atualizarLogoPanel(categoriaAtual);
+        carregarCategorias();
+    } catch (error) {
+        console.error('Erro ao remover logo:', error);
+        alert('Erro ao remover logo. Por favor, tente novamente.');
+    }
+}
 
 async function carregarCategorias() {
     const lista = document.getElementById('categorias-lista');
@@ -61,8 +226,11 @@ async function carregarCategorias() {
         }
 
         const linhas = categorias.map((categoria) => {
-            const iconeHtml = (typeof renderCategoryIcon === 'function' && categoria.icone)
-                ? `<span class="category-icon" style="color:${categoria.cor}">${renderCategoryIcon(categoria, { size: '14px' })}</span>`
+            const visualHtml = typeof renderCategoryVisual === 'function'
+                ? renderCategoryVisual(categoria, { size: '16px', alt: categoria.nome })
+                : '';
+            const iconeHtml = visualHtml
+                ? `<span class="category-icon" style="color:${categoria.cor}">${visualHtml}</span>`
                 : `<span class="categoria-dot" style="background-color: ${categoria.cor}" aria-hidden="true"></span>`;
             return `
             <div class="compact-row categoria-row categorias-compact-row">
@@ -107,6 +275,7 @@ async function carregarCategorias() {
 
 function abrirModal() {
     categoriaEditando = null;
+    categoriaAtual = null;
     document.getElementById('modal-titulo').textContent = 'Nova Categoria';
     document.getElementById('form-categoria').reset();
     document.getElementById('categoria-id').value = '';
@@ -115,14 +284,15 @@ function abrirModal() {
     document.getElementById('ativo').checked = true;
     const iconeEl = document.getElementById('icone');
     if (iconeEl) iconeEl.value = '';
-    const preview = document.getElementById('icone-preview');
-    if (preview) preview.innerHTML = '';
+    atualizarIconeSelecionado('');
+    atualizarLogoPanel(null);
     document.getElementById('modal-categoria').style.display = 'block';
 }
 
 function fecharModal() {
     document.getElementById('modal-categoria').style.display = 'none';
     categoriaEditando = null;
+    categoriaAtual = null;
 }
 
 async function editarCategoria(id) {
@@ -137,6 +307,7 @@ async function editarCategoria(id) {
 
         const categoria = data.data;
         categoriaEditando = id;
+        categoriaAtual = categoria;
 
         document.getElementById('modal-titulo').textContent = 'Editar Categoria';
         document.getElementById('categoria-id').value = categoria.id;
@@ -147,10 +318,8 @@ async function editarCategoria(id) {
         document.getElementById('ativo').checked = categoria.ativo;
         const iconeEl = document.getElementById('icone');
         if (iconeEl) iconeEl.value = categoria.icone || '';
-        const preview = document.getElementById('icone-preview');
-        if (preview && typeof renderIcon === 'function') {
-            preview.innerHTML = categoria.icone ? renderIcon(categoria.icone, { size: '22px' }) : '';
-        }
+        atualizarIconeSelecionado(categoria.icone || '');
+        atualizarLogoPanel(categoria);
 
         document.getElementById('modal-categoria').style.display = 'block';
     } catch (error) {

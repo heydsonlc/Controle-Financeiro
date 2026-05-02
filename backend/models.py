@@ -28,6 +28,11 @@ class Categoria(db.Model):
     descricao = db.Column(db.Text)
     cor = db.Column(db.String(7), default='#6c757d')  # Código hexadecimal
     icone = db.Column(db.String(50), nullable=True)
+    logo_arquivo = db.Column(db.String(255), nullable=True)
+    logo_mime = db.Column(db.String(100), nullable=True)
+    logo_tamanho = db.Column(db.Integer, nullable=True)
+    logo_original_nome = db.Column(db.String(255), nullable=True)
+    logo_criado_em = db.Column(db.DateTime, nullable=True)
     ativo = db.Column(db.Boolean, default=True)
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -37,6 +42,12 @@ class Categoria(db.Model):
     def __repr__(self):
         return f'<Categoria {self.nome}>'
 
+    @property
+    def logo_url(self):
+        if not self.logo_arquivo or not self.id:
+            return None
+        return f'/api/categorias/{self.id}/logo'
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -44,6 +55,12 @@ class Categoria(db.Model):
             'descricao': self.descricao,
             'cor': self.cor,
             'icone': self.icone,
+            'logo_arquivo': self.logo_arquivo,
+            'logo_mime': self.logo_mime,
+            'logo_tamanho': self.logo_tamanho,
+            'logo_original_nome': self.logo_original_nome,
+            'logo_criado_em': self.logo_criado_em.isoformat() if self.logo_criado_em else None,
+            'logo_url': self.logo_url,
             'ativo': self.ativo
         }
 
@@ -129,7 +146,8 @@ class ItemDespesa(db.Model):
             result['categoria'] = {
                 'id': self.categoria.id,
                 'nome': self.categoria.nome,
-                'icone': self.categoria.icone
+                'icone': self.categoria.icone,
+                'logo_url': self.categoria.logo_url
             }
 
         # Adicionar dados do cartão se for recorrência paga via cartão

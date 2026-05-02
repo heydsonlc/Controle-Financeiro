@@ -317,6 +317,7 @@ async function carregarLancamentos() {
                     categoria_id: desp.categoria_id,
                     categoria_nome: desp.categoria?.nome || 'Sem categoria',
                     categoria_icone: desp.categoria?.icone || null,
+                    categoria_logo_url: desp.categoria?.logo_url || null,
                     meio_pagamento: desp.meio_pagamento || null,
                     observacoes: desp.descricao,
                     numero_parcela: 1,
@@ -438,8 +439,13 @@ function renderizarLancamentos(lancamentos) {
         }
 
         // Coluna Categoria / Conta
-        const catIconeHtml = (typeof renderCategoryIcon === 'function' && lanc.categoria_icone)
-            ? `<span class="inline-icon" style="opacity:0.7">${renderCategoryIcon(lanc.categoria_icone, { size: '13px' })}</span> `
+        const categoriaVisual = {
+            nome: lanc.categoria_nome,
+            icone: lanc.categoria_icone,
+            logo_url: lanc.categoria_logo_url
+        };
+        const catIconeHtml = (typeof renderCategoryVisual === 'function' && (lanc.categoria_logo_url || lanc.categoria_icone))
+            ? `<span class="inline-icon" style="opacity:0.7">${renderCategoryVisual(categoriaVisual, { size: '13px', alt: lanc.categoria_nome })}</span> `
             : '';
         let contaCelula = lanc.categoria_nome ? `${catIconeHtml}${lanc.categoria_nome}` : '—';
         if (isCartao && lanc.cartao_nome) {

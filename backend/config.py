@@ -58,6 +58,8 @@ class Config:
     CARTOES_CVV_MASTER_PASSWORD = os.getenv('CARTOES_CVV_MASTER_PASSWORD')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ECHO = False
+    UPLOAD_LOGOS_DIR = BASE_DIR / 'data' / 'uploads' / 'logos' / 'categorias'
+    MAX_LOGO_SIZE = 1024 * 1024
 
     # JSON
     JSON_AS_ASCII = False
