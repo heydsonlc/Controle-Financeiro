@@ -9,7 +9,10 @@ const estadoCartoes = {
     cartoes: [],
     categoriasCartao: [],
     limitesPorCartao: new Map(),
+    faturasPorCartao: new Map(),
+    lancamentosFatura: new Map(),
     cartaoSelecionadoId: null,
+    filtroLancamentosFatura: 'todos',
     buscaGeral: '',
     buscaLateral: '',
     status: 'ativos',
@@ -115,12 +118,11 @@ function configurarEventosCartoes() {
     document.getElementById('lista-cartoes')?.addEventListener('click', (event) => {
         const item = event.target.closest('[data-cartao-id]');
         if (!item) return;
-        estadoCartoes.cartaoSelecionadoId = Number(item.dataset.cartaoId);
-        renderizarListaCartoes();
-        renderizarDetalheCartao();
+        selecionarCartao(Number(item.dataset.cartaoId));
     });
 
     document.getElementById('cartao-detalhe')?.addEventListener('click', tratarCliqueDetalhe);
+    document.getElementById('cartao-detalhe')?.addEventListener('change', tratarMudancaDetalhe);
     document.getElementById('form-cartao')?.addEventListener('submit', salvarCartao);
     document.getElementById('form-categoria-limite')?.addEventListener('submit', salvarCategoriaLimite);
     document.getElementById('form-revelar-cvv')?.addEventListener('submit', revelarCodigoSeguranca);
@@ -156,6 +158,8 @@ async function carregarTelaCartoes() {
         await Promise.all(estadoCartoes.cartoes.map((cartao) => carregarLimitesCartao(cartao.id)));
         ajustarSelecaoCartao();
         renderizarTelaCartoes();
+        await carregarFaturaSelecionada();
+        renderizarDetalheCartao();
     } catch (error) {
         console.error('Erro ao carregar tela de cartoes:', error);
         mostrarErro(`Erro ao carregar cart\u00f5es: ${error.message}`);
@@ -165,6 +169,47 @@ async function carregarTelaCartoes() {
 async function carregarLimitesCartao(cartaoId) {
     const resp = await fetchJson(`${API_CARTOES}/${cartaoId}/categorias-limite?mes_referencia=${estadoCartoes.mesSelecionado}`);
     estadoCartoes.limitesPorCartao.set(Number(cartaoId), resp.data || []);
+}
+
+function chaveFatura(cartaoId, filtro = 'todos') {
+    return `${Number(cartaoId)}:${estadoCartoes.mesSelecionado}:${filtro}`;
+}
+
+async function carregarResumoFaturaCartao(cartaoId) {
+    const resp = await fetchJson(`${API_CARTOES}/${cartaoId}/fatura-categorias?mes_referencia=${estadoCartoes.mesSelecionado}`);
+    estadoCartoes.faturasPorCartao.set(chaveFatura(cartaoId), resp.data || null);
+}
+
+async function carregarLancamentosFaturaCartao(cartaoId, filtro = estadoCartoes.filtroLancamentosFatura || 'todos') {
+    const resp = await fetchJson(`${API_CARTOES}/${cartaoId}/fatura-lancamentos?mes_referencia=${estadoCartoes.mesSelecionado}&categoria_cartao_id=${encodeURIComponent(filtro)}`);
+    estadoCartoes.lancamentosFatura.set(chaveFatura(cartaoId, filtro), resp.data?.lancamentos || []);
+}
+
+async function carregarFaturaCartao(cartaoId) {
+    if (!cartaoId) return;
+    await Promise.all([
+        carregarResumoFaturaCartao(cartaoId),
+        carregarLancamentosFaturaCartao(cartaoId, estadoCartoes.filtroLancamentosFatura || 'todos')
+    ]);
+}
+
+async function carregarFaturaSelecionada() {
+    if (!estadoCartoes.cartaoSelecionadoId) return;
+    await carregarFaturaCartao(estadoCartoes.cartaoSelecionadoId);
+}
+
+async function selecionarCartao(cartaoId) {
+    estadoCartoes.cartaoSelecionadoId = Number(cartaoId);
+    estadoCartoes.filtroLancamentosFatura = 'todos';
+    renderizarListaCartoes();
+    renderizarDetalheCartao();
+    try {
+        await carregarFaturaSelecionada();
+        renderizarDetalheCartao();
+    } catch (error) {
+        console.error('Erro ao carregar fatura do cartao:', error);
+        mostrarErro(`Erro ao carregar fatura: ${error.message}`);
+    }
 }
 
 function renderizarTelaCartoes() {
@@ -227,6 +272,14 @@ function obterCategoriaCartao(categoriaCartaoId) {
 
 function obterLimitesAtivos(cartaoId) {
     return obterLimitesCartao(cartaoId).filter((limite) => limite.ativo);
+}
+
+function obterResumoFatura(cartaoId) {
+    return estadoCartoes.faturasPorCartao.get(chaveFatura(cartaoId)) || null;
+}
+
+function obterLancamentosFatura(cartaoId, filtro = estadoCartoes.filtroLancamentosFatura || 'todos') {
+    return estadoCartoes.lancamentosFatura.get(chaveFatura(cartaoId, filtro)) || [];
 }
 
 function obterCategoriasDisponiveis(cartaoId) {
@@ -293,6 +346,7 @@ function renderizarDetalheCartao() {
     const disponiveis = obterCategoriasDisponiveis(cartao.id);
     const totalLimite = limitesAtivos.reduce((sum, limite) => sum + Number(limite.limite_mensal || 0), 0);
     const totalGasto = limitesAtivos.reduce((sum, limite) => sum + Number(limite.gasto_atual || 0), 0);
+    const resumoFatura = obterResumoFatura(cartao.id);
     const final = obterFinalCartao(cartao);
 
     detalhe.innerHTML = `
@@ -350,9 +404,202 @@ function renderizarDetalheCartao() {
             ${renderizarCategoriasDisponiveis(disponiveis)}
         </section>
 
+        ${renderizarFaturaPorCategoria(cartao, resumoFatura)}
+
         <section class="operational-rule">
             <h3>Regra operacional</h3>
             <p>As despesas pagas neste cart&atilde;o s&atilde;o agrupadas automaticamente pela Categoria do Cart&atilde;o com base na Categoria de Despesa.</p>
+        </section>
+    `;
+}
+
+function renderizarFaturaPorCategoria(cartao, resumoFatura) {
+    if (!resumoFatura) {
+        return `
+            <section class="detail-card fatura-categorias-card">
+                <div class="fatura-card-header">
+                    <div>
+                        <h3>Fatura por Categoria do Cart&atilde;o</h3>
+                        <p>Carregando consumo da fatura...</p>
+                    </div>
+                    ${renderizarSeletorMesFatura()}
+                </div>
+            </section>
+        `;
+    }
+
+    return `
+        <section class="detail-card fatura-categorias-card">
+            <div class="fatura-card-header">
+                <div>
+                    <h3>Fatura por Categoria do Cart&atilde;o</h3>
+                    <p>Consumo agrupado por Categoria do Cart&atilde;o em ${escapeHtml(resumoFatura.mes_referencia)}.</p>
+                </div>
+                ${renderizarSeletorMesFatura()}
+            </div>
+
+            <div class="fatura-metrics">
+                <article>
+                    <span>Total da fatura</span>
+                    <strong>${formatarMoeda(resumoFatura.total_fatura)}</strong>
+                </article>
+                <article>
+                    <span>Limite total</span>
+                    <strong>${formatarMoeda(resumoFatura.limite_total)}</strong>
+                </article>
+                <article>
+                    <span>Dispon&iacute;vel</span>
+                    <strong class="${Number(resumoFatura.disponivel_total || 0) < 0 ? 'negative' : 'positive'}">${formatarMoeda(resumoFatura.disponivel_total)}</strong>
+                </article>
+                <article>
+                    <span>Consumo</span>
+                    <strong>${Math.round(Number(resumoFatura.percentual_total || 0))}%</strong>
+                </article>
+            </div>
+
+            ${renderizarTabelaFaturaCategorias(resumoFatura.categorias || [])}
+            ${renderizarLancamentosFatura(cartao)}
+        </section>
+    `;
+}
+
+function renderizarSeletorMesFatura() {
+    return `
+        <label class="fatura-mes-field">
+            <span>M&ecirc;s da fatura</span>
+            <input type="month" value="${escapeHtml(estadoCartoes.mesSelecionado)}" data-action="alterar-mes-fatura">
+        </label>
+    `;
+}
+
+function classeStatusFatura(status) {
+    const normalizado = normalizarBusca(status);
+    if (normalizado.includes('estourado')) return 'status-estourado';
+    if (normalizado.includes('atencao')) return 'status-atencao';
+    if (normalizado.includes('revisar')) return 'status-revisar';
+    return 'status-normal';
+}
+
+function rotuloStatusFatura(status) {
+    if (status === 'Atencao') return 'Aten&ccedil;&atilde;o';
+    return escapeHtml(status || 'Normal');
+}
+
+function valorOuTraco(valor) {
+    return valor === null || valor === undefined ? '&mdash;' : formatarMoeda(valor);
+}
+
+function percentualOuTraco(valor) {
+    return valor === null || valor === undefined ? '&mdash;' : `${Math.round(Number(valor || 0))}%`;
+}
+
+function filtroCategoriaFatura(categoria) {
+    if (categoria.sem_categoria) return 'sem_categoria';
+    if (categoria.categoria_cartao_id) return String(categoria.categoria_cartao_id);
+    return 'todos';
+}
+
+function renderizarTabelaFaturaCategorias(categorias) {
+    if (!categorias.length) {
+        return `
+            <div class="table-empty">
+                <h4>Nenhum lan&ccedil;amento na fatura</h4>
+                <p>Configure as Categorias do Cart&atilde;o para acompanhar limites e consumo.</p>
+            </div>
+        `;
+    }
+
+    return `
+        <div class="fatura-table">
+            <div class="fatura-table-header">
+                <div>Categoria do Cart&atilde;o</div>
+                <div>Limite</div>
+                <div>Gasto</div>
+                <div>Dispon&iacute;vel</div>
+                <div>Status</div>
+                <div>A&ccedil;&otilde;es</div>
+            </div>
+            ${categorias.map((categoria) => {
+                const filtro = filtroCategoriaFatura(categoria);
+                const percentual = categoria.percentual;
+                const cor = categoria.categoria_cartao_cor || (categoria.sem_categoria ? '#f97316' : '#2563eb');
+                return `
+                    <div class="fatura-table-row ${categoria.sem_categoria ? 'sem-categoria-row' : ''}">
+                        <div class="table-category">
+                            <span class="categoria-icon" style="color:${escapeHtml(cor)}">${renderizarIconeCategoriaCartao({
+                                icone: categoria.categoria_cartao_icone,
+                                cor
+                            }, '18px')}</span>
+                            <span>${escapeHtml(categoria.categoria_cartao_nome)}</span>
+                        </div>
+                        <div>${valorOuTraco(categoria.limite_mensal)}</div>
+                        <div class="usage-cell">
+                            <strong>${formatarMoeda(categoria.gasto_atual)}</strong>
+                            <small>${percentualOuTraco(percentual)}</small>
+                            <span class="progress-track"><span class="${classeStatusFatura(categoria.status)}" style="width:${Math.min(Number(percentual || 0), 100)}%"></span></span>
+                        </div>
+                        <div class="${Number(categoria.disponivel || 0) < 0 ? 'negative' : 'positive'}">${valorOuTraco(categoria.disponivel)}</div>
+                        <div>
+                            <span class="compact-pill ${classeStatusFatura(categoria.status)}">${rotuloStatusFatura(categoria.status)}</span>
+                        </div>
+                        <div>
+                            <button class="cf-button cf-button-secondary fatura-action" type="button" data-action="ver-lancamentos-fatura" data-filtro-fatura="${escapeHtml(filtro)}">
+                                Ver lan&ccedil;amentos
+                            </button>
+                        </div>
+                        ${categoria.avisos?.length ? `<div class="fatura-row-warning">${escapeHtml(categoria.avisos[0])}</div>` : ''}
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
+}
+
+function renderizarLancamentosFatura(cartao) {
+    const filtro = estadoCartoes.filtroLancamentosFatura || 'todos';
+    const lancamentos = obterLancamentosFatura(cartao.id, filtro);
+    const titulo = filtro === 'todos'
+        ? 'Lan&ccedil;amentos da fatura'
+        : (filtro === 'sem_categoria' ? 'Lan&ccedil;amentos sem Categoria do Cart&atilde;o' : 'Lan&ccedil;amentos da categoria selecionada');
+
+    return `
+        <section class="fatura-lancamentos">
+            <div class="fatura-lancamentos-header">
+                <div>
+                    <h4>${titulo}</h4>
+                    <p>Categoria de Despesa e Categoria do Cart&atilde;o aparecem separadas.</p>
+                </div>
+                <button class="cf-button cf-button-secondary" type="button" data-action="ver-lancamentos-fatura" data-filtro-fatura="todos">Todos</button>
+            </div>
+            ${lancamentos.length ? `
+                <div class="fatura-lancamentos-list">
+                    ${lancamentos.map((lancamento) => `
+                        <article class="fatura-lancamento-item ${lancamento.status_classificacao !== 'classificado' ? 'needs-review' : ''}">
+                            <div>
+                                <strong>${escapeHtml(lancamento.descricao)}</strong>
+                                <span>${escapeHtml(lancamento.data || '-')} &bull; ${escapeHtml(lancamento.origem || '-')}</span>
+                            </div>
+                            <div>
+                                <span>Categoria de Despesa</span>
+                                <strong>${escapeHtml(lancamento.categoria_nome || '-')}</strong>
+                            </div>
+                            <div>
+                                <span>Categoria do Cart&atilde;o</span>
+                                <strong>${escapeHtml(lancamento.categoria_cartao_nome || 'Sem Categoria do Cart&atilde;o')}</strong>
+                            </div>
+                            <div class="lancamento-value">
+                                <strong>${formatarMoeda(lancamento.valor)}</strong>
+                                <span>${escapeHtml(lancamento.parcela_atual || 1)}/${escapeHtml(lancamento.parcelas_total || 1)}</span>
+                            </div>
+                        </article>
+                    `).join('')}
+                </div>
+            ` : `
+                <div class="table-empty">
+                    <h4>Nenhum lan&ccedil;amento nesta sele&ccedil;&atilde;o</h4>
+                    <p>Nenhum movimento foi encontrado para o filtro atual.</p>
+                </div>
+            `}
         </section>
     `;
 }
@@ -454,6 +701,32 @@ async function tratarCliqueDetalhe(event) {
         await alternarLimite(Number(button.dataset.limiteId));
     } else if (action === 'vincular-disponivel') {
         abrirModalLimite(null, Number(button.dataset.categoriaCartaoId));
+    } else if (action === 'ver-lancamentos-fatura') {
+        const cartao = obterCartaoSelecionado();
+        if (!cartao) return;
+        estadoCartoes.filtroLancamentosFatura = button.dataset.filtroFatura || 'todos';
+        await carregarLancamentosFaturaCartao(cartao.id, estadoCartoes.filtroLancamentosFatura);
+        renderizarDetalheCartao();
+    }
+}
+
+async function tratarMudancaDetalhe(event) {
+    const campo = event.target.closest('[data-action="alterar-mes-fatura"]');
+    if (!campo) return;
+
+    const cartao = obterCartaoSelecionado();
+    if (!cartao || !campo.value) return;
+
+    estadoCartoes.mesSelecionado = campo.value;
+    estadoCartoes.filtroLancamentosFatura = 'todos';
+    renderizarDetalheCartao();
+    try {
+        await carregarLimitesCartao(cartao.id);
+        await carregarFaturaSelecionada();
+        renderizarTelaCartoes();
+    } catch (error) {
+        console.error('Erro ao alterar mes da fatura:', error);
+        mostrarErro(`Erro ao carregar fatura: ${error.message}`);
     }
 }
 
@@ -597,6 +870,7 @@ async function salvarCategoriaLimite(event) {
         );
         fecharModal('modal-categoria-limite');
         await carregarLimitesCartao(cartao.id);
+        await carregarFaturaCartao(cartao.id);
         renderizarTelaCartoes();
         mostrarSucesso('Limite salvo.');
     } catch (error) {
@@ -623,6 +897,7 @@ async function alternarLimite(limiteId) {
             });
         }
         await carregarLimitesCartao(cartao.id);
+        await carregarFaturaCartao(cartao.id);
         renderizarTelaCartoes();
         mostrarSucesso(limite.ativo ? 'V\u00ednculo desativado.' : 'V\u00ednculo reativado.');
     } catch (error) {

@@ -417,6 +417,41 @@ def remover_categoria_limite(cartao_id, limite_id):
         return _internal_error('remover_categoria_limite')
 
 
+@cartoes_bp.route('/<int:cartao_id>/fatura-categorias', methods=['GET'])
+def obter_fatura_categorias(cartao_id):
+    try:
+        mes_referencia = request.args.get('mes_referencia', datetime.now().strftime('%Y-%m'))
+        resumo = CartaoService.obter_resumo_fatura_por_categoria_cartao(cartao_id, mes_referencia)
+        return jsonify({
+            'success': True,
+            'data': resumo
+        }), 200
+    except ValueError as exc:
+        return _business_error(str(exc), 400)
+    except Exception:
+        return _internal_error('obter_fatura_categorias')
+
+
+@cartoes_bp.route('/<int:cartao_id>/fatura-lancamentos', methods=['GET'])
+def listar_fatura_lancamentos(cartao_id):
+    try:
+        mes_referencia = request.args.get('mes_referencia', datetime.now().strftime('%Y-%m'))
+        categoria_cartao_id = request.args.get('categoria_cartao_id') or 'todos'
+        resultado = CartaoService.listar_lancamentos_fatura_por_categoria_cartao(
+            cartao_id,
+            mes_referencia,
+            categoria_cartao_id=categoria_cartao_id,
+        )
+        return jsonify({
+            'success': True,
+            'data': resultado
+        }), 200
+    except ValueError as exc:
+        return _business_error(str(exc), 400)
+    except Exception:
+        return _internal_error('listar_fatura_lancamentos')
+
+
 # ============================================================================
 # ROTAS PARA ORÃ‡AMENTOS AGREGADOS (PrevisÃ£o de gastos)
 # ============================================================================

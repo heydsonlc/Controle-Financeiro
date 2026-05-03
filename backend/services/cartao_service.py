@@ -125,7 +125,7 @@ class CartaoService:
     @staticmethod
     def calcular_planejado(cartao_id, competencia):
         """
-        Calcula valor planejado da fatura = soma dos orÃ§amentos das categorias
+        Calcula valor planejado da fatura = soma dos limites por Categoria do Cartao.
 
         Args:
             cartao_id (int): ID do cartÃ£o
@@ -136,7 +136,14 @@ class CartaoService:
         """
         comp_primeiro_dia = CartaoService._primeiro_dia_mes(competencia)
 
-        # Buscar todos os itens agregados (categorias) do cartÃ£o
+        limites_categoria_cartao = CategoriaCartaoService.listar_limites_cartao(cartao_id, ativo=True)
+        if limites_categoria_cartao:
+            return sum(
+                (Decimal(str(limite.limite_mensal or 0)) for limite in limites_categoria_cartao),
+                Decimal('0')
+            )
+
+        # Compatibilidade transitÃ³ria: cartÃµes antigos podem ainda ter apenas OrcamentoAgregado.
         itens_agregados = ItemAgregado.query.filter_by(
             item_despesa_id=cartao_id
         ).all()
@@ -163,7 +170,7 @@ class CartaoService:
     @staticmethod
     def calcular_executado(cartao_id, competencia):
         """
-        Calcula valor executado da fatura = soma real dos lanÃ§amentos
+        Calcula valor executado da fatura = soma real dos lanÃ§amentos do cartao.
 
         Args:
             cartao_id (int): ID do cartÃ£o
@@ -174,24 +181,253 @@ class CartaoService:
         """
         comp_primeiro_dia, proximo_mes = CartaoService._intervalo_mes(competencia)
 
-        # Buscar todos os itens agregados do cartÃ£o
-        itens_agregados_ids = [item.id for item in ItemAgregado.query.filter_by(
-            item_despesa_id=cartao_id
-        ).all()]
-
-        if not itens_agregados_ids:
-            return Decimal('0')
-
-        # Somar lanÃ§amentos do mÃªs por intervalo, compatÃ­vel com SQLite/PostgreSQL.
+        # Soma por cartao_id para incluir a nova arquitetura e o grupo sem Categoria do Cartao.
         total_executado = db.session.query(
             func.coalesce(func.sum(LancamentoAgregado.valor), 0)
         ).filter(
-            LancamentoAgregado.item_agregado_id.in_(itens_agregados_ids),
+            LancamentoAgregado.cartao_id == cartao_id,
             LancamentoAgregado.mes_fatura >= comp_primeiro_dia,
             LancamentoAgregado.mes_fatura < proximo_mes
         ).scalar()
 
         return Decimal(str(total_executado or 0))
+
+    @staticmethod
+    def _status_consumo(gasto, limite):
+        gasto_decimal = Decimal(str(gasto or 0))
+        limite_decimal = Decimal(str(limite or 0))
+
+        if limite_decimal <= 0:
+            return 'Estourado' if gasto_decimal > 0 else 'Normal'
+
+        percentual = (gasto_decimal / limite_decimal) * Decimal('100')
+        if percentual > 100:
+            return 'Estourado'
+        if percentual > 80:
+            return 'Atencao'
+        return 'Normal'
+
+    @staticmethod
+    def _calcular_percentual(gasto, limite):
+        gasto_decimal = Decimal(str(gasto or 0))
+        limite_decimal = Decimal(str(limite or 0))
+        if limite_decimal <= 0:
+            return 0
+        return round(float((gasto_decimal / limite_decimal) * Decimal('100')), 2)
+
+    @staticmethod
+    def obter_resumo_fatura_por_categoria_cartao(cartao_id, mes_referencia):
+        """
+        Retorna consumo da fatura agrupado por Categoria do Cartao global.
+        """
+        cartao = ItemDespesa.query.filter_by(id=cartao_id, tipo='Agregador').first()
+        if not cartao:
+            raise ValueError('Cartao nao encontrado')
+
+        mes_ref, proximo_mes = CartaoService._intervalo_mes(mes_referencia)
+        limites = CategoriaCartaoService.listar_limites_cartao(cartao_id, ativo=True)
+
+        grupos = {}
+        ordem_grupos = []
+        limite_total = Decimal('0')
+
+        for limite in limites:
+            categoria = limite.categoria_cartao
+            key = f'categoria:{limite.categoria_cartao_id}'
+            limite_mensal = Decimal(str(limite.limite_mensal or 0))
+            limite_total += limite_mensal
+            grupos[key] = {
+                'categoria_cartao_id': limite.categoria_cartao_id,
+                'categoria_cartao_nome': categoria.nome if categoria else 'Categoria do Cartao',
+                'categoria_cartao_cor': categoria.cor if categoria else None,
+                'categoria_cartao_icone': categoria.icone if categoria else None,
+                'limite_mensal': limite_mensal,
+                'gasto_atual': Decimal('0'),
+                'quantidade_lancamentos': 0,
+                'vinculada_ao_cartao': True,
+                'sem_categoria': False,
+                'categoria_sem_limite': False,
+                'avisos': [],
+                'tipo_grupo': 'categoria_cartao',
+            }
+            ordem_grupos.append(key)
+
+        lancamentos = LancamentoAgregado.query.filter(
+            LancamentoAgregado.cartao_id == cartao_id,
+            LancamentoAgregado.mes_fatura >= mes_ref,
+            LancamentoAgregado.mes_fatura < proximo_mes,
+        ).all()
+
+        total_fatura = Decimal('0')
+        total_com_categoria = Decimal('0')
+        total_sem_categoria_cartao = Decimal('0')
+        total_categorias_vinculadas = Decimal('0')
+        sem_categoria_key = 'sem_categoria'
+
+        for lancamento in lancamentos:
+            valor = Decimal(str(lancamento.valor or 0))
+            total_fatura += valor
+
+            if lancamento.categoria_cartao_id:
+                total_com_categoria += valor
+                key = f'categoria:{lancamento.categoria_cartao_id}'
+                if key not in grupos:
+                    categoria = lancamento.categoria_cartao
+                    key = f'categoria_sem_limite:{lancamento.categoria_cartao_id}'
+                    if key not in grupos:
+                        grupos[key] = {
+                            'categoria_cartao_id': lancamento.categoria_cartao_id,
+                            'categoria_cartao_nome': categoria.nome if categoria else 'Categoria sem limite neste cartao',
+                            'categoria_cartao_cor': categoria.cor if categoria else None,
+                            'categoria_cartao_icone': categoria.icone if categoria else None,
+                            'limite_mensal': Decimal('0'),
+                            'gasto_atual': Decimal('0'),
+                            'quantidade_lancamentos': 0,
+                            'vinculada_ao_cartao': False,
+                            'sem_categoria': False,
+                            'categoria_sem_limite': True,
+                            'avisos': ['Categoria sem limite neste cartao.'],
+                            'tipo_grupo': 'categoria_sem_limite',
+                        }
+                        ordem_grupos.append(key)
+                elif grupos[key]['vinculada_ao_cartao']:
+                    total_categorias_vinculadas += valor
+            else:
+                total_sem_categoria_cartao += valor
+                key = sem_categoria_key
+                if key not in grupos:
+                    grupos[key] = {
+                        'categoria_cartao_id': None,
+                        'categoria_cartao_nome': 'Sem Categoria do Cartao',
+                        'categoria_cartao_cor': None,
+                        'categoria_cartao_icone': None,
+                        'limite_mensal': None,
+                        'gasto_atual': Decimal('0'),
+                        'quantidade_lancamentos': 0,
+                        'vinculada_ao_cartao': False,
+                        'sem_categoria': True,
+                        'categoria_sem_limite': False,
+                        'avisos': ['Lancamentos sem Categoria do Cartao devem ser revisados.'],
+                        'tipo_grupo': 'sem_categoria',
+                    }
+                    ordem_grupos.append(key)
+
+            grupos[key]['gasto_atual'] += valor
+            grupos[key]['quantidade_lancamentos'] += 1
+
+        categorias = []
+        for key in ordem_grupos:
+            grupo = grupos[key]
+            limite_mensal = grupo['limite_mensal']
+            gasto_atual = grupo['gasto_atual']
+            if grupo['sem_categoria'] or grupo['categoria_sem_limite']:
+                disponivel = None
+                percentual = None
+                status = 'Revisar'
+            else:
+                disponivel = limite_mensal - gasto_atual
+                percentual = CartaoService._calcular_percentual(gasto_atual, limite_mensal)
+                status = CartaoService._status_consumo(gasto_atual, limite_mensal)
+
+            categorias.append({
+                'categoria_cartao_id': grupo['categoria_cartao_id'],
+                'categoria_cartao_nome': grupo['categoria_cartao_nome'],
+                'categoria_cartao_cor': grupo['categoria_cartao_cor'],
+                'categoria_cartao_icone': grupo['categoria_cartao_icone'],
+                'limite_mensal': float(limite_mensal) if limite_mensal is not None else None,
+                'gasto_atual': float(gasto_atual),
+                'disponivel': float(disponivel) if disponivel is not None else None,
+                'percentual': percentual,
+                'percentual_utilizado': percentual,
+                'status': status,
+                'quantidade_lancamentos': grupo['quantidade_lancamentos'],
+                'vinculada_ao_cartao': grupo['vinculada_ao_cartao'],
+                'sem_categoria': grupo['sem_categoria'],
+                'categoria_sem_limite': grupo['categoria_sem_limite'],
+                'avisos': grupo['avisos'],
+                'tipo_grupo': grupo['tipo_grupo'],
+            })
+
+        disponivel_total = limite_total - total_categorias_vinculadas
+        return {
+            'cartao_id': cartao.id,
+            'mes_referencia': mes_ref.strftime('%Y-%m'),
+            'total_fatura': float(total_fatura),
+            'total_com_categoria': float(total_com_categoria),
+            'total_sem_categoria_cartao': float(total_sem_categoria_cartao),
+            'limite_total': float(limite_total),
+            'disponivel_total': float(disponivel_total),
+            'percentual_total': CartaoService._calcular_percentual(total_categorias_vinculadas, limite_total),
+            'status_total': CartaoService._status_consumo(total_categorias_vinculadas, limite_total),
+            'categorias': categorias,
+        }
+
+    @staticmethod
+    def listar_lancamentos_fatura_por_categoria_cartao(cartao_id, mes_referencia, categoria_cartao_id=None):
+        """
+        Lista lancamentos da fatura com Categoria de Despesa e Categoria do Cartao.
+        """
+        cartao = ItemDespesa.query.filter_by(id=cartao_id, tipo='Agregador').first()
+        if not cartao:
+            raise ValueError('Cartao nao encontrado')
+
+        mes_ref, proximo_mes = CartaoService._intervalo_mes(mes_referencia)
+        filtro = str(categoria_cartao_id or 'todos').strip()
+
+        query = LancamentoAgregado.query.filter(
+            LancamentoAgregado.cartao_id == cartao_id,
+            LancamentoAgregado.mes_fatura >= mes_ref,
+            LancamentoAgregado.mes_fatura < proximo_mes,
+        )
+
+        if filtro == 'sem_categoria':
+            query = query.filter(LancamentoAgregado.categoria_cartao_id == None)
+        elif filtro and filtro != 'todos':
+            try:
+                query = query.filter(LancamentoAgregado.categoria_cartao_id == int(filtro))
+            except (TypeError, ValueError):
+                raise ValueError('categoria_cartao_id invalido')
+
+        vinculadas = {
+            limite.categoria_cartao_id
+            for limite in CategoriaCartaoService.listar_limites_cartao(cartao_id, ativo=True)
+        }
+        lancamentos = query.order_by(
+            LancamentoAgregado.data_compra.asc(),
+            LancamentoAgregado.id.asc(),
+        ).all()
+
+        resultado = []
+        for lancamento in lancamentos:
+            if not lancamento.categoria_cartao_id:
+                status_classificacao = 'sem_categoria_cartao'
+            elif lancamento.categoria_cartao_id not in vinculadas:
+                status_classificacao = 'categoria_sem_limite'
+            else:
+                status_classificacao = 'classificado'
+
+            resultado.append({
+                'id': lancamento.id,
+                'data': lancamento.data_compra.isoformat() if lancamento.data_compra else None,
+                'descricao': lancamento.descricao_exibida or lancamento.descricao,
+                'descricao_original': lancamento.descricao_original or lancamento.descricao,
+                'valor': float(lancamento.valor or 0),
+                'categoria_id': lancamento.categoria_id,
+                'categoria_nome': lancamento.categoria.nome if lancamento.categoria else None,
+                'categoria_cartao_id': lancamento.categoria_cartao_id,
+                'categoria_cartao_nome': lancamento.categoria_cartao.nome if lancamento.categoria_cartao else None,
+                'origem': lancamento.origem_importacao or ('recorrencia' if lancamento.is_recorrente else 'manual'),
+                'parcela_atual': lancamento.numero_parcela,
+                'parcelas_total': lancamento.total_parcelas,
+                'status_classificacao': status_classificacao,
+            })
+
+        return {
+            'cartao_id': cartao.id,
+            'mes_referencia': mes_ref.strftime('%Y-%m'),
+            'categoria_cartao_id': filtro,
+            'lancamentos': resultado,
+        }
 
     # ==========================================================
     # FUTURO (FASE 3): Pagamento parcial de fatura
