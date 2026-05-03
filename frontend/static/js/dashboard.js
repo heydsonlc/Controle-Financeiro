@@ -10,8 +10,10 @@ const ICONS = {
     refresh: '<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/>',
     calendar: '<path d="M7 4v3M17 4v3M5 9h14"/><path d="M5 6h14v14H5z"/>',
     clock: '<path d="M12 6v6l4 2"/><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>',
+    entry: '<path d="M5 6h14M5 12h14M5 18h9"/><path d="m17 16 2 2 3-4"/>',
     alert: '<path d="M12 5 3.5 19h17z"/><path d="M12 10v4M12 17h.1"/>',
     car: '<path d="M5 16h14l-1.4-5A2 2 0 0 0 15.7 9H8.3a2 2 0 0 0-1.9 2L5 16Z"/><path d="M7 16v3M17 16v3M8 19h.1M16 19h.1"/>',
+    phone: '<path d="M8 3h8a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M11 18h2"/>',
     import: '<path d="M12 4v10M8 10l4 4 4-4M5 18h14"/>',
     category: '<path d="M5 6h14M5 12h14M5 18h14"/>',
     check: '<path d="m5 12 4 4L19 6"/>',
@@ -22,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     preencherIcones();
     inicializarPeriodo();
     bindDashboardEvents();
+    renderAcoesRapidas();
     carregarDashboardOperacional();
 });
 
@@ -214,21 +217,42 @@ function renderCategoriasCartao(categorias) {
         return;
     }
 
-    container.innerHTML = categorias.map((item) => `
+    const total = categorias.reduce((acc, item) => {
+        acc.limite += Number(item.limite || 0);
+        acc.gasto += Number(item.gasto || 0);
+        acc.disponivel += Number(item.disponivel || 0);
+        return acc;
+    }, { limite: 0, gasto: 0, disponivel: 0 });
+
+    const linhas = categorias.map((item) => {
+        const percentual = Math.max(0, Math.min(item.percentual || 0, 100));
+        return `
         <div class="table-row category-row">
             <span class="category-cell">
                 <i style="--item-color:${escapeAttr(item.cor || '#2563eb')}"></i>
                 ${escapeHtml(item.nome)}
             </span>
-            <span>${formatarMoeda(item.limite)}</span>
-            <span>
-                ${formatarMoeda(item.gasto)}
-                <small>${item.percentual || 0}%</small>
-                <b class="progress-line"><em style="width:${Math.min(item.percentual || 0, 100)}%"></em></b>
+            <span class="category-progress-cell">
+                <b class="progress-line" aria-label="Consumo ${percentual}%">
+                    <em style="width:${percentual}%"></em>
+                </b>
             </span>
+            <span>${formatarMoeda(item.limite)}</span>
+            <span>${formatarMoeda(item.gasto)}</span>
             <span class="positive">${formatarMoeda(item.disponivel)}</span>
         </div>
-    `).join('');
+        `;
+    }).join('');
+
+    container.innerHTML = `${linhas}
+        <div class="table-row category-row category-total-row">
+            <strong>Total</strong>
+            <span class="category-progress-cell"></span>
+            <strong>${formatarMoeda(total.limite)}</strong>
+            <strong>${formatarMoeda(total.gasto)}</strong>
+            <strong class="positive">${formatarMoeda(total.disponivel)}</strong>
+        </div>
+    `;
 }
 
 function renderProximosVencimentos(vencimentos) {
@@ -285,35 +309,85 @@ function renderMobilidade(mobilidade) {
     const container = document.getElementById('mobilidade-resumo');
     if (!container) return;
 
-    const principal = `
-        <article class="mobility-option active">
-            <strong>${escapeHtml(mobilidade.nome || 'Sem modalidade ativa')}</strong>
-            <span>Custo mensal</span>
-            <b>${formatarMoeda(mobilidade.custo_mensal)}</b>
-            <em>${mobilidade.status === 'ativa' ? 'Ativo' : 'Pendente'}</em>
-        </article>
+    const modalidades = [
+        { tipo: 'VEICULO', nome: 'Ve\u00edculo pr\u00f3prio', icon: 'car' },
+        { tipo: 'ASSINATURA', nome: 'Assinatura', icon: 'card' },
+        { tipo: 'TRANSPORTE_APP', nome: 'Transporte por app', icon: 'phone' },
+    ];
+    const tipoAtivo = mobilidade.status === 'ativa' ? normalizarTipoMobilidade(mobilidade.tipo) : '';
+    const alternativas = new Map();
+
+    (mobilidade.alternativas || []).forEach((item) => {
+        const tipo = normalizarTipoMobilidade(item.tipo);
+        if (tipo && !alternativas.has(tipo)) alternativas.set(tipo, item);
+    });
+
+    const cards = modalidades.map((modalidade) => {
+        const itemAlternativo = alternativas.get(modalidade.tipo);
+        const item = tipoAtivo === modalidade.tipo ? mobilidade : itemAlternativo;
+        const status = definirStatusMobilidade(modalidade.tipo, tipoAtivo, itemAlternativo);
+        const valor = item && item.custo_mensal !== undefined && item.custo_mensal !== null
+            ? formatarMoeda(item.custo_mensal)
+            : '&mdash;';
+
+        return `
+            <article class="mobility-option ${status.classe}">
+                <div class="mobility-option-header">
+                    <span class="mobility-option-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false">${ICONS[modalidade.icon]}</svg>
+                    </span>
+                    <strong>${escapeHtml(modalidade.nome)}</strong>
+                </div>
+                <span>Custo mensal</span>
+                <b>${valor}</b>
+                <em>${status.rotulo}</em>
+            </article>
+        `;
+    }).join('');
+
+    container.innerHTML = `
+        ${tipoAtivo ? '' : '<p class="mobility-empty-note">Nenhuma modalidade ativa</p>'}
+        <div class="mobility-options-grid">
+            ${cards}
+        </div>
     `;
-
-    const alternativas = (mobilidade.alternativas || []).slice(0, 2).map((item) => `
-        <article class="mobility-option">
-            <strong>${escapeHtml(item.nome)}</strong>
-            <span>${escapeHtml(item.tipo || 'Alternativa')}</span>
-            <b>${formatarMoeda(item.custo_mensal)}</b>
-            <em>Alternativa</em>
-        </article>
-    `).join('');
-
-    container.innerHTML = principal + (alternativas || '');
 }
 
-function renderAcoesRapidas(acoes) {
+function normalizarTipoMobilidade(tipo) {
+    return String(tipo || '').toUpperCase();
+}
+
+function definirStatusMobilidade(tipo, tipoAtivo, itemAlternativo) {
+    if (tipoAtivo === tipo) {
+        return { rotulo: 'Ativo', classe: 'active' };
+    }
+
+    if (itemAlternativo) {
+        return { rotulo: 'Alternativa', classe: 'alternative' };
+    }
+
+    if (!tipoAtivo) {
+        return { rotulo: 'Pendente', classe: 'pending' };
+    }
+
+    return { rotulo: 'N\u00e3o configurado', classe: 'not-configured' };
+}
+
+function renderAcoesRapidas() {
     const container = document.getElementById('acoes-rapidas');
     if (!container) return;
 
-    const iconMap = ['check', 'import', 'category', 'refresh', 'dots'];
-    container.innerHTML = (acoes || []).map((acao, index) => `
+    const acoes = [
+        { label: 'Confirmar despesas previstas', url: '/despesas', icon: 'check' },
+        { label: 'Importar fatura', url: '/importar-cartao', icon: 'import' },
+        { label: 'Lan\u00e7amentos', url: '/lancamentos', icon: 'entry' },
+        { label: 'Revisar recorr\u00eancias', url: '/recorrencias', icon: 'refresh' },
+        { label: 'Gerenciar mobilidade', url: '/veiculos', icon: 'car' },
+    ];
+
+    container.innerHTML = acoes.map((acao, index) => `
         <a href="${escapeAttr(acao.url || '#')}" class="quick-action-link tone-${index % 5}">
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICONS[iconMap[index] || 'dots']}</svg>
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICONS[acao.icon] || ICONS.dots}</svg>
             ${escapeHtml(acao.label)}
         </a>
     `).join('');
@@ -326,12 +400,12 @@ function renderErroDashboard() {
         'proximos-vencimentos',
         'cartoes-limites-lista',
         'mobilidade-resumo',
-        'acoes-rapidas',
     ];
     containers.forEach((id) => {
         const el = document.getElementById(id);
         if (el) el.innerHTML = estadoVazio('Nao foi possivel carregar os dados agora.');
     });
+    renderAcoesRapidas();
 }
 
 function setText(id, value) {

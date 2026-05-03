@@ -8,37 +8,38 @@
 
 {% block content %}
 <div class="dashboard-operacional-shell">
-    <header class="dashboard-hero">
-        <div>
+    <header class="dashboard-action-strip" aria-label="A&ccedil;&otilde;es do dashboard">
+        <div class="dashboard-context">
             <nav class="dashboard-breadcrumb" aria-label="Breadcrumb">
                 <span>Financeiro</span>
                 <span aria-hidden="true">/</span>
                 <strong>Dashboard</strong>
             </nav>
-            <h1>Dashboard Financeiro</h1>
-            <p>Vis&atilde;o consolidada da opera&ccedil;&atilde;o financeira, cart&otilde;es, recorr&ecirc;ncias e mobilidade</p>
         </div>
 
-        <div class="dashboard-controls" aria-label="Controles do dashboard">
-            <label class="dashboard-period-button" for="dashboard-periodo">
-                <span class="control-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24"><path d="M7 4v3M17 4v3M5 9h14M5 6h14v14H5z"/></svg>
-                </span>
-                <span>Per&iacute;odo:</span>
-                <input type="month" id="dashboard-periodo">
-            </label>
-            <button class="dashboard-control-button" id="dashboard-atualizar" type="button">
-                <span class="control-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></svg>
-                </span>
-                Atualizar
-            </button>
-            <button class="dashboard-control-button" id="dashboard-filtros" type="button">
-                <span class="control-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
-                </span>
-                Filtros
-            </button>
+        <div class="dashboard-action-groups">
+            <div class="dashboard-controls" aria-label="Controles do dashboard">
+                <label class="dashboard-period-button" for="dashboard-periodo">
+                    <span class="control-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><path d="M7 4v3M17 4v3M5 9h14M5 6h14v14H5z"/></svg>
+                    </span>
+                    <span>Per&iacute;odo:</span>
+                    <input type="month" id="dashboard-periodo">
+                </label>
+                <button class="dashboard-control-button" id="dashboard-atualizar" type="button">
+                    <span class="control-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></svg>
+                    </span>
+                    Atualizar
+                </button>
+                <button class="dashboard-control-button" id="dashboard-filtros" type="button">
+                    <span class="control-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+                    </span>
+                    Filtros
+                </button>
+            </div>
+            <div class="dashboard-quick-actions" id="acoes-rapidas" aria-label="A&ccedil;&otilde;es r&aacute;pidas"></div>
         </div>
     </header>
 
@@ -163,12 +164,36 @@
             </div>
         </section>
 
+        <section class="dashboard-bottom-grid">
+            <article class="dashboard-panel">
+                <h2>Cart&otilde;es e limites</h2>
+                <div class="dashboard-table cards-table">
+                    <div class="table-row table-head">
+                        <span>Cart&atilde;o</span>
+                        <span>Limite total</span>
+                        <span>Utilizado</span>
+                        <span>Dispon&iacute;vel</span>
+                        <span>Status</span>
+                    </div>
+                    <div id="cartoes-limites-lista"></div>
+                </div>
+                <a class="panel-link" href="/cartoes">Gerenciar cart&otilde;es e limites</a>
+            </article>
+
+            <article class="dashboard-panel mobility-panel">
+                <h2>Resumo de mobilidade <span class="info-dot">i</span></h2>
+                <div class="mobility-cards" id="mobilidade-resumo"></div>
+                <a class="panel-link" href="/veiculos">Ver compara&ccedil;&atilde;o completa</a>
+            </article>
+        </section>
+
         <aside class="dashboard-side-stack">
             <section class="dashboard-panel">
                 <h2>Consumo por Categoria do Cart&atilde;o</h2>
                 <div class="dashboard-table category-table">
                     <div class="table-row table-head">
                         <span>Categoria</span>
+                        <span class="category-bar-head" aria-label="Barra de consumo"></span>
                         <span>Limite</span>
                         <span>Gasto</span>
                         <span>Dispon&iacute;vel</span>
@@ -184,39 +209,6 @@
             </section>
         </aside>
     </main>
-
-    <section class="dashboard-bottom-grid">
-        <article class="dashboard-panel">
-            <h2>Cart&otilde;es e limites</h2>
-            <div class="dashboard-table cards-table">
-                <div class="table-row table-head">
-                    <span>Cart&atilde;o</span>
-                    <span>Limite total</span>
-                    <span>Utilizado</span>
-                    <span>Dispon&iacute;vel</span>
-                    <span>Status</span>
-                </div>
-                <div id="cartoes-limites-lista"></div>
-            </div>
-            <a class="panel-link" href="/cartoes">Gerenciar cart&otilde;es e limites</a>
-        </article>
-
-        <article class="dashboard-panel mobility-panel">
-            <h2>Resumo de mobilidade <span class="info-dot">i</span></h2>
-            <div class="mobility-cards" id="mobilidade-resumo"></div>
-            <a class="panel-link" href="/veiculos">Ver compara&ccedil;&atilde;o completa</a>
-        </article>
-    </section>
-
-    <section class="quick-actions" aria-label="A&ccedil;&otilde;es r&aacute;pidas">
-        <div class="quick-title">
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path d="M13 3 5 14h6l-1 7 8-11h-6l1-7Z"/>
-            </svg>
-            A&ccedil;&otilde;es r&aacute;pidas
-        </div>
-        <div class="quick-actions-list" id="acoes-rapidas"></div>
-    </section>
 </div>
 {% endblock %}
 
