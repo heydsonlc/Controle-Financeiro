@@ -109,11 +109,10 @@ def test_resolucao_operacional_service_retorna_categoria_cartao_com_limite(app_c
         categoria_id=categoria.id,
     )
 
-    assert resultado == {
-        'categoria_cartao_id': categoria_cartao.id,
-        'origem': 'mapa_categoria_despesa',
-        'vinculada_ao_cartao': True,
-    }
+    assert resultado['categoria_cartao_id'] == categoria_cartao.id
+    assert resultado['categoria_cartao_nome'] == categoria_cartao.nome
+    assert resultado['origem'] == 'mapa_categoria_despesa'
+    assert resultado['vinculada_ao_cartao'] is True
 
 
 def test_importacao_preserva_categoria_cartao_manual(app_context):

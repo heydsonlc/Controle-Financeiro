@@ -294,7 +294,7 @@
 }
 
 .import-validation-summary {
-    grid-template-columns: repeat(4, minmax(150px, 1fr));
+    grid-template-columns: repeat(5, minmax(140px, 1fr));
 }
 
 .import-summary-card {
@@ -487,6 +487,11 @@
 
 .import-detected-note.low-confidence {
     color: #b45309;
+}
+
+.import-detected-note.warning-note {
+    color: #b45309;
+    max-width: 180px;
 }
 
 .import-card-category-select {

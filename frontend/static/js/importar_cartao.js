@@ -479,9 +479,14 @@ function converterLinhaIntermediaria(linha) {
         valor: formatarValor(linha.valor),
         categoria_id: toIntOrNull(linha.categoria_id || linha.categoria_despesa_id),
         categoria_despesa_id: toIntOrNull(linha.categoria_despesa_id || linha.categoria_id),
+        categoria_nome: linha.categoria_nome,
+        categoria_origem: linha.categoria_origem || linha.categoria_sugerida_origem,
         item_agregado_id: toIntOrNull(linha.item_agregado_id),
         categoria_cartao_id: toIntOrNull(linha.categoria_cartao_id),
+        categoria_cartao_nome: linha.categoria_cartao_nome,
         categoria_cartao_origem: linha.categoria_cartao_origem || linha.categoria_cartao_sugerida_origem,
+        categoria_cartao_vinculada_ao_cartao: linha.categoria_cartao_vinculada_ao_cartao,
+        status_classificacao: linha.status_classificacao,
         categoria_sugerida_origem: linha.categoria_sugerida_origem,
         categoria_detectada_label: linha.categoria_detectada,
         cartao_final: linha.cartao_final,
@@ -489,6 +494,7 @@ function converterLinhaIntermediaria(linha) {
         tipo_movimento: linha.tipo_movimento || 'debito',
         duplicidade: linha.duplicidade,
         mensagens: linha.mensagens || [],
+        avisos: linha.avisos || [],
         metadados: linha.metadados || {},
         origem_importacao: linha.origem_importacao || estado.payloadUnificado?.origem || 'csv',
         parcela: linha.parcela || `${parcelaAtual}/${totalParcelas}`,
@@ -891,21 +897,104 @@ async function aplicarSugestoesCategoria(linhas, fallback) {
         }
 
         const sugestoes = dados.sugestoes || {};
-        return linhas.map((linha) => {
+        const linhasComCategoria = linhas.map((linha) => {
             const sugestao = sugestoes[linha.descricao];
             if (!sugestao) return linha;
             const origem = sugestao.origem || linha.categoria_sugerida_origem;
             return {
                 ...linha,
                 categoria_id: sugestao.categoria_id || linha.categoria_id,
+                categoria_despesa_id: sugestao.categoria_id || linha.categoria_despesa_id || linha.categoria_id,
+                categoria_origem: origem,
                 categoria_sugerida_origem: origem,
                 categoria_detectada_label: origem === 'historico' ? 'histórico' : 'fallback'
             };
         });
+        return resolverCategoriasCartaoLote(linhasComCategoria);
     } catch (error) {
         console.warn(error);
-        return linhas;
+        return resolverCategoriasCartaoLote(linhas);
     }
+}
+
+async function resolverCategoriasCartaoLote(linhas) {
+    const cartaoId = parseInt(document.getElementById('cartaoSelect')?.value || '', 10);
+    if (!cartaoId) return linhas;
+
+    const cache = new Map();
+    const resolvidas = [];
+
+    for (const linha of linhas) {
+        const categoriaId = toIntOrNull(linha.categoria_id || linha.categoria_despesa_id);
+        if (!categoriaId || categoriaCartaoIdLinha(linha)) {
+            resolvidas.push(linha);
+            continue;
+        }
+
+        if (!cache.has(categoriaId)) {
+            cache.set(categoriaId, buscarResolucaoCategoriaCartao(categoriaId, cartaoId));
+        }
+
+        try {
+            const resolucao = await cache.get(categoriaId);
+            resolvidas.push(aplicarResolucaoCategoriaCartaoLinha(linha, resolucao));
+        } catch (error) {
+            console.warn('Falha ao resolver Categoria do Cartao:', error);
+            resolvidas.push(linha);
+        }
+    }
+
+    return resolvidas;
+}
+
+async function buscarResolucaoCategoriaCartao(categoriaId, cartaoId) {
+    const resp = await fetch(`/api/categorias-cartao/resolver?categoria_id=${encodeURIComponent(categoriaId)}&cartao_id=${encodeURIComponent(cartaoId)}`);
+    const payload = await resp.json();
+    if (!resp.ok || !payload.success) {
+        throw new Error(payload.error || payload.message || 'Falha ao resolver Categoria do Cartao');
+    }
+    return payload.data || payload;
+}
+
+function aplicarResolucaoCategoriaCartaoLinha(linha, resolucao = {}) {
+    const avisos = [...(linha.avisos || []), ...(linha.mensagens || [])];
+    const categoriaCartaoId = toIntOrNull(resolucao.categoria_cartao_id);
+    const vinculada = resolucao.vinculada_ao_cartao !== false;
+    const proxima = {
+        ...linha,
+        avisos,
+        mensagens: avisos,
+        categoria_cartao_nome: resolucao.categoria_cartao_nome || linha.categoria_cartao_nome,
+        categoria_cartao_vinculada_ao_cartao: categoriaCartaoId ? vinculada : false
+    };
+
+    if (categoriaCartaoId && vinculada) {
+        proxima.categoria_cartao_id = categoriaCartaoId;
+        proxima.item_agregado_id = null;
+        proxima.categoria_cartao_origem = resolucao.origem || 'mapa_categoria_despesa';
+        proxima.status_classificacao = proxima.categoria_id ? 'classificada' : proxima.status_classificacao;
+        return proxima;
+    }
+
+    proxima.categoria_cartao_id = null;
+    proxima.item_agregado_id = null;
+
+    const temCategoriaResolvida = toIntOrNull(resolucao.categoria_cartao_resolvida_id || resolucao.categoria_cartao_id);
+    if (temCategoriaResolvida && resolucao.vinculada_ao_cartao === false) {
+        proxima.categoria_cartao_origem = 'nao_vinculada_ao_cartao';
+        proxima.status_classificacao = 'categoria_cartao_nao_vinculada';
+        const aviso = 'Esta Categoria do Cartao ainda nao esta vinculada ao cartao selecionado.';
+        if (!proxima.avisos.includes(aviso)) proxima.avisos.push(aviso);
+        proxima.mensagens = proxima.avisos;
+        return proxima;
+    }
+
+    proxima.categoria_cartao_origem = 'nao_configurada';
+    proxima.status_classificacao = 'categoria_cartao_pendente';
+    const aviso = 'Categoria do Cartao ainda nao configurada para esta Categoria de Despesa.';
+    if (!proxima.avisos.includes(aviso)) proxima.avisos.push(aviso);
+    proxima.mensagens = proxima.avisos;
+    return proxima;
 }
 
 function renderizarAmostraModal() {
@@ -1001,14 +1090,15 @@ function nomeCategoriaCartao(id) {
 }
 
 function categoriaCartaoIdLinha(linha) {
-    return toIntOrNull(linha.categoria_cartao_id || linha.item_agregado_id);
+    return toIntOrNull(linha.categoria_cartao_id);
 }
 
 function origemCategoriaCartaoLabel(linha) {
     const origem = linha.categoria_cartao_origem;
     if (origem === 'manual') return 'Origem: manual';
     if (origem === 'mapa_categoria_despesa') return 'Origem: resolvida por categoria de despesa';
-    if (origem === 'categoria_cartao_nao_vinculada') return 'Categoria sem limite neste cartao';
+    if (origem === 'categoria_cartao_nao_vinculada' || origem === 'nao_vinculada_ao_cartao') return 'Categoria sem limite neste cartao';
+    if (origem === 'nao_configurada') return 'Categoria do Cartao nao configurada';
     return 'Categoria do Cartao nao configurada';
 }
 
@@ -1025,6 +1115,27 @@ function opcoesCategoriaCartaoSelect(selecionado) {
 }
 
 function statusLinha(linha) {
+    if (linha.status_classificacao === 'duplicada') {
+        return { texto: 'Duplicado', classe: 'duplicate' };
+    }
+    if (linha.status_classificacao === 'ignorada') {
+        return { texto: linha.tipo_movimento === 'credito' ? 'Crédito ignorado' : 'Ignorado', classe: 'ignored' };
+    }
+    if (linha.status_classificacao === 'erro') {
+        return { texto: 'Erro', classe: 'review' };
+    }
+    if (linha.status_classificacao === 'categoria_despesa_pendente') {
+        return { texto: 'Categoria da despesa pendente', classe: 'review' };
+    }
+    if (linha.status_classificacao === 'categoria_cartao_nao_vinculada') {
+        return { texto: 'Sem limite no cartao', classe: 'missing' };
+    }
+    if (linha.status_classificacao === 'categoria_cartao_pendente') {
+        return { texto: 'Categoria do cartao pendente', classe: 'missing' };
+    }
+    if (linha.status_classificacao === 'classificada') {
+        return { texto: 'Classificada', classe: 'valid' };
+    }
     if (linha.status === 'duplicado') {
         return { texto: 'Duplicado', classe: 'duplicate' };
     }
@@ -1047,8 +1158,11 @@ function statusLinha(linha) {
 }
 
 function origemCategoriaLabel(linha) {
-    const origem = linha.categoria_sugerida_origem || '-';
+    const origem = linha.categoria_origem || linha.categoria_sugerida_origem || '-';
+    if (origem === 'manual') return 'Sugestão: manual';
     if (origem === 'historico') return 'Sugestão: histórico';
+    if (origem === 'descricao') return 'Sugestão: descrição';
+    if (origem === 'sem_sugestao') return 'Sem sugestão';
     if (origem === 'fallback' || origem === 'fallback_lote') return 'Sugestão: fallback do lote';
     return `Sugestão: ${origem}`;
 }
@@ -1099,13 +1213,17 @@ function renderizarLinhaPrevia(linha, index) {
     const status = statusLinha(linha);
     const baixaConfianca = status.classe === 'low-confidence';
     const futurasDisabled = (!linha.parcelado || Number(linha.total_parcelas) <= 1) ? 'disabled' : '';
+    const avisos = [...new Set([...(linha.avisos || []), ...(linha.mensagens || [])].filter(Boolean))];
     const detalheOrigem = [linha.cartao_final ? `Cartão ${linha.cartao_final}` : null, linha.grupo]
         .filter(Boolean)
         .join(' | ');
 
     return `
         <tr class="${linha.ignorar ? 'is-ignored' : ''}">
-            <td><span class="import-status-pill ${status.classe}">${escapeHtml(status.texto)}</span></td>
+            <td>
+                <span class="import-status-pill ${status.classe}">${escapeHtml(status.texto)}</span>
+                ${avisos.length ? `<span class="import-detected-note warning-note">${escapeHtml(avisos[0])}</span>` : ''}
+            </td>
             <td>
                 <input class="import-inline-input" type="text" value="${escapeAttr(linha.data_compra || '')}" onchange="atualizarLinhaEdicao(${index}, 'data_compra', this.value)">
             </td>
@@ -1168,10 +1286,23 @@ function atualizarLinhaEdicao(index, campo, valor) {
 
     if (campo === 'categoria_id' || campo === 'categoria_cartao_id' || campo === 'item_agregado_id') {
         linha[campo] = toIntOrNull(valor);
-        if (campo === 'categoria_id') linha.categoria_despesa_id = linha[campo];
+        if (campo === 'categoria_id') {
+            linha.categoria_despesa_id = linha[campo];
+            linha.categoria_origem = linha[campo] ? 'manual' : 'sem_sugestao';
+            linha.categoria_sugerida_origem = linha.categoria_origem;
+            if (linha.categoria_cartao_origem !== 'manual') {
+                linha.categoria_cartao_id = null;
+                linha.item_agregado_id = null;
+                linha.categoria_cartao_origem = null;
+                linha.categoria_cartao_nome = null;
+                linha.categoria_cartao_vinculada_ao_cartao = false;
+            }
+        }
         if (campo === 'categoria_cartao_id') {
             linha.item_agregado_id = null;
             linha.categoria_cartao_origem = linha[campo] ? 'manual' : null;
+            linha.categoria_cartao_vinculada_ao_cartao = !!linha[campo];
+            if (linha[campo] && linha.categoria_id) linha.status_classificacao = 'classificada';
         }
         if (campo === 'item_agregado_id') linha.categoria_cartao_id = linha[campo];
     } else if (campo === 'numero_parcela' || campo === 'total_parcelas') {
@@ -1205,19 +1336,10 @@ async function resolverCategoriaCartaoLinha(index) {
     const cartaoId = parseInt(document.getElementById('cartaoSelect')?.value || '', 10);
     if (!linha || !linha.categoria_id || !cartaoId) return;
     try {
-        const resp = await fetch(`/api/categorias-cartao/resolver?categoria_id=${encodeURIComponent(linha.categoria_id)}&cartao_id=${encodeURIComponent(cartaoId)}`);
-        const data = await resp.json();
-        if (!data.success) return;
-        linha.categoria_cartao_id = toIntOrNull(data.categoria_cartao_id);
-        linha.item_agregado_id = null;
-        linha.categoria_cartao_origem = data.origem || (linha.categoria_cartao_id ? 'mapa_categoria_despesa' : null);
-        if (!linha.categoria_cartao_id) {
-            linha.mensagens = linha.mensagens || [];
-            const aviso = data.vinculada_ao_cartao === false
-                ? 'Esta Categoria do Cartao ainda nao possui limite definido neste cartao.'
-                : 'Categoria do Cartao ainda nao configurada para esta Categoria de Despesa.';
-            if (!linha.mensagens.includes(aviso)) linha.mensagens.push(aviso);
-        }
+        estado.linhasMapeadas[index] = aplicarResolucaoCategoriaCartaoLinha(
+            linha,
+            await buscarResolucaoCategoriaCartao(linha.categoria_id, cartaoId)
+        );
         invalidarPrevia();
         renderizarEditorPrePersistencia();
     } catch (error) {
@@ -1280,6 +1402,9 @@ function calcularResumoLocal() {
     const creditos = linhas.filter((linha) => linha.tipo_movimento === 'credito').length;
     const parceladas = linhas.filter((linha) => Number(linha.total_parcelas) > 1).length;
     const totalPrevisto = ativas.reduce((acc, linha) => acc + (parseValorNumerico(linha.valor) || 0), 0);
+    const valorSemCategoriaCartao = ativas
+        .filter((linha) => !categoriaCartaoIdLinha(linha))
+        .reduce((acc, linha) => acc + (parseValorNumerico(linha.valor) || 0), 0);
 
     return {
         linhas,
@@ -1292,7 +1417,8 @@ function calcularResumoLocal() {
         duplicadas,
         creditos,
         parceladas,
-        totalPrevisto
+        totalPrevisto,
+        valorSemCategoriaCartao
     };
 }
 
@@ -1311,6 +1437,7 @@ function atualizarResumoPainel() {
     setText('missingCardCategoryCount', resumo.pendentesCartao);
     setText('validationDuplicateCount', duplicados);
     setText('plannedTotal', formatarMoeda(resumo.totalPrevisto));
+    setText('uncategorizedCardValue', formatarMoeda(resumo.valorSemCategoriaCartao));
     setText('newCount', novos);
     setText('ignoredCount', resumo.ignoradas);
     setText('confirmedCardCategoryCount', `${confirmadasCartao}/${resumo.ativas.length}`);
@@ -1457,6 +1584,8 @@ async function previsualizarImportacao() {
 function renderResumoPrevia(dados) {
     const erros = (dados.erros || []).slice(0, 10);
     const duplicados = (dados.amostra_duplicados || []).slice(0, 10);
+    const pendencias = dados.pendencias || {};
+    const avisosLinhas = (dados.avisos_linhas || []).slice(0, 5);
     const resumo = calcularResumoLocal();
     const futuras = estado.linhasMapeadas.filter((linha) => !linha.ignorar && linha.gerar_parcelas_futuras && Number(linha.total_parcelas) > 1).length;
 
@@ -1468,7 +1597,16 @@ function renderResumoPrevia(dados) {
             Duplicados detectados: <strong>${dados.duplicados}</strong>.
             Linhas ignoradas: <strong>${resumo.ignoradas}</strong>.
             Linhas com criação de futuras: <strong>${futuras}</strong>.
+            Pendentes de Categoria da Despesa: <strong>${pendencias.categoria_despesa || resumo.pendentesDespesa}</strong>.
+            Pendentes de Categoria do Cartão: <strong>${pendencias.categoria_cartao || resumo.pendentesCartao}</strong>.
+            Valor sem Categoria do Cartão: <strong>${formatarMoeda(resumo.valorSemCategoriaCartao)}</strong>.
         </div>
+        ${avisosLinhas.length ? `
+            <div class="import-feedback warning">
+                <strong>Avisos de classificação</strong>
+                ${avisosLinhas.map((item) => `<div>Linha ${escapeHtml(item.linha || '-')}: ${(item.avisos || []).map(escapeHtml).join(' | ')}</div>`).join('')}
+            </div>
+        ` : ''}
         ${duplicados.length ? `
             <div class="import-feedback warning">
                 <strong>Amostra de duplicados</strong>

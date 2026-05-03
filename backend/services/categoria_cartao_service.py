@@ -249,9 +249,10 @@ class CategoriaCartaoService:
     def resolver_categoria_cartao_para_lancamento(cartao_id, categoria_id=None, categoria_cartao_id=None):
         categoria_cartao_id = CategoriaCartaoService._to_int(categoria_cartao_id)
         if categoria_cartao_id:
-            CategoriaCartaoService._validar_categoria_cartao(categoria_cartao_id)
+            categoria = CategoriaCartaoService._validar_categoria_cartao(categoria_cartao_id)
             return {
                 'categoria_cartao_id': categoria_cartao_id,
+                'categoria_cartao_nome': categoria.nome,
                 'origem': 'manual',
                 'vinculada_ao_cartao': CategoriaCartaoService.validar_categoria_cartao_disponivel_no_cartao(
                     cartao_id,
@@ -263,20 +264,25 @@ class CategoriaCartaoService:
         if not resolvida:
             return {
                 'categoria_cartao_id': None,
+                'categoria_cartao_nome': None,
                 'origem': None,
                 'vinculada_ao_cartao': False,
             }
 
         vinculada = CategoriaCartaoService.validar_categoria_cartao_disponivel_no_cartao(cartao_id, resolvida)
+        categoria_resolvida = CategoriaCartaoService._validar_categoria_cartao(resolvida)
         if not vinculada:
             return {
                 'categoria_cartao_id': None,
+                'categoria_cartao_resolvida_id': resolvida,
+                'categoria_cartao_nome': categoria_resolvida.nome,
                 'origem': 'categoria_cartao_nao_vinculada',
                 'vinculada_ao_cartao': False,
             }
 
         return {
             'categoria_cartao_id': resolvida,
+            'categoria_cartao_nome': categoria_resolvida.nome,
             'origem': 'mapa_categoria_despesa',
             'vinculada_ao_cartao': True,
         }

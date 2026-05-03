@@ -151,7 +151,7 @@ def _validar_payload_importacao(data):
                 return None, (f'Linha {idx} com Categoria do Cartao global invalida', 400)
             if not CategoriaCartaoService.validar_categoria_cartao_disponivel_no_cartao(cartao_id, categoria_cartao_id):
                 linha.setdefault('avisos', []).append(
-                    'Esta Categoria do Cartao ainda nao possui limite definido neste cartao.'
+                    'Esta Categoria do Cartao ainda nao esta vinculada ao cartao selecionado.'
                 )
             linha['categoria_cartao_id'] = categoria_cartao_id
         elif not item_agregado_id:
@@ -196,6 +196,24 @@ def _executar_importacao(data, dry_run=False):
             'erro': item.get('erro')
         })
 
+    linhas_processaveis = [
+        linha for linha in validado['linhas']
+        if not linha.get('ignorar') and linha.get('tipo_movimento') != 'credito'
+    ]
+    sem_categoria_despesa = sum(1 for linha in linhas_processaveis if not linha.get('categoria_id'))
+    sem_categoria_cartao = sum(
+        1 for linha in linhas_processaveis
+        if not linha.get('categoria_cartao_id')
+    )
+    avisos_linhas = []
+    for idx, linha in enumerate(validado['linhas'], start=1):
+        for aviso in linha.get('avisos') or linha.get('mensagens') or []:
+            avisos_linhas.append({
+                'linha': idx,
+                'aviso': aviso,
+                'avisos': [aviso]
+            })
+
     payload = {
         'success': True,
         'modo': 'previsualizacao' if dry_run else 'persistencia',
@@ -205,6 +223,12 @@ def _executar_importacao(data, dry_run=False):
         'inseridos': resultado.get('inseridos', 0),
         'duplicados': resultado.get('duplicados', 0),
         'erros': erros,
+        'pendencias': {
+            'categoria_despesa': sem_categoria_despesa,
+            'categoria_cartao': sem_categoria_cartao,
+            'avisos': len(avisos_linhas),
+        },
+        'avisos_linhas': avisos_linhas[:50],
         'amostra_duplicados': resultado.get('amostra_duplicados', []),
         'amostra_erros': resultado.get('amostra_erros', []),
         'amostra_validos': [
@@ -213,7 +237,9 @@ def _executar_importacao(data, dry_run=False):
                 'valor': float(l.get('valor', 0)),
                 'data_compra': l.get('data_compra').isoformat() if l.get('data_compra') else None,
                 'numero_parcela': l.get('numero_parcela'),
-                'total_parcelas': l.get('total_parcelas')
+                'total_parcelas': l.get('total_parcelas'),
+                'categoria_id': l.get('categoria_id'),
+                'categoria_cartao_id': l.get('categoria_cartao_id'),
             }
             for l in lancamentos[:20]
         ]
