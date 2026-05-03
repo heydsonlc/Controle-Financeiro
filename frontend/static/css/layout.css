@@ -134,6 +134,12 @@ body.app-shell-body .app-nav-text {
     line-height: 1.2;
 }
 
+body.app-shell-body .app-nav-link:not([href="/"]) .app-nav-text {
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 650;
+}
+
 body.app-shell-body .app-main {
     min-width: 0;
     display: flex;

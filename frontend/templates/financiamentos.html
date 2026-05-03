@@ -1,462 +1,575 @@
 {% extends "base.html" %}
 
-{% block title %}Financiamentos - Controle Financeiro{% endblock %}
+{% block title %}Financiamentos{% endblock %}
 
 {% block extra_css %}
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/financiamentos.css') }}">
-{% endblock %}
-
-{% block action_bar %}
-    <div class="module-actionbar" aria-label="Filtros e acoes de Financiamentos">
-        <div class="module-actionbar-inner">
-            <div class="module-actionbar-filters">
-                <div class="module-filter-group filter-group">
-                    <label class="module-filter-label" for="filtro-status">Status</label>
-                    <select class="module-filter-control" id="filtro-status" onchange="carregarFinanciamentos()">
-                        <option value="">Todos</option>
-                        <option value="true" selected>Ativos</option>
-                        <option value="false">Inativos</option>
-                    </select>
-                </div>
-                <div class="module-filter-group filter-group">
-                    <label class="module-filter-label" for="filtro-sistema">Sistema</label>
-                    <select class="module-filter-control" id="filtro-sistema" onchange="carregarFinanciamentos()">
-                        <option value="">Todos</option>
-                        <option value="SAC">SAC</option>
-                        <option value="PRICE">PRICE</option>
-                        <option value="SIMPLES">SIMPLES</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="module-actionbar-actions">
-                <button class="action-icon-button primary" id="btn-novo-financiamento" type="button" onclick="abrirModalNovoFinanciamento()" title="Novo Financiamento" aria-label="Novo Financiamento">
-                    <span class="action-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M12 5v14M5 12h14"/>
-                        </svg>
-                    </span>
-                    <span class="action-button-label">Novo Financiamento</span>
-                </button>
-            </div>
-        </div>
-    </div>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/financiamentos.css') }}">
 {% endblock %}
 
 {% block content %}
-    <div class="container app-content-fluid">
-        <main>
-
-            <!-- Cards de Resumo -->
-            <div class="cards-resumo">
-                <div class="card">
-                    <h3>Total Financiado</h3>
-                    <p class="valor" id="total-financiado">R$ 0,00</p>
-                </div>
-                <div class="card">
-                    <h3>Saldo Devedor</h3>
-                    <p class="valor" id="saldo-devedor">R$ 0,00</p>
-                </div>
-                <div class="card">
-                    <h3>Parcelas Pagas</h3>
-                    <p class="valor" id="parcelas-pagas">0 / 0</p>
-                </div>
-                <div class="card">
-                    <h3>Contratos Ativos</h3>
-                    <p class="valor" id="contratos-ativos">0</p>
-                </div>
-            </div>
-
-            <!-- Lista de Financiamentos -->
-            <section class="module-data-section">
-                <div class="section-title-row">
-                    <div class="section-title-main">
-                        <span class="section-title-icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" focusable="false">
-                                <path d="M4 7h16"/>
-                                <path d="M4 12h16"/>
-                                <path d="M4 17h10"/>
-                            </svg>
-                        </span>
-                        <h2 class="section-title-text">Contratos de Financiamento</h2>
-                    </div>
-                    <span class="section-title-meta">Contratos, saldo e parcelas</span>
-                </div>
-                <div class="lista" id="financiamentos-lista">
-                    <p class="loading">Carregando financiamentos...</p>
-                </div>
-            </section>
-        </main>
-    </div>
-
-    <!-- Modal: Novo Financiamento -->
-    <div id="modal-financiamento" class="modal">
-        <div class="modal-content modal-large">
-            <div class="modal-header">
-                <h2>Novo Financiamento</h2>
-                <span class="close" onclick="fecharModal('modal-financiamento')">&times;</span>
-            </div>
-            <form id="form-financiamento" onsubmit="salvarFinanciamento(event)">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="fin-nome">Nome do Contrato *</label>
-                        <input type="text" id="fin-nome" required
-                               placeholder="Ex: Financiamento Imóvel - Caixa">
-                    </div>
-                    <div class="form-group">
-                        <label for="fin-produto">Produto</label>
-                        <input type="text" id="fin-produto"
-                               placeholder="Ex: Imóvel, Veículo, Empréstimo">
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="fin-sistema">Sistema de Amortização *</label>
-                        <select id="fin-sistema" required onchange="atualizarInfoSistema()">
-                            <option value="">Selecione...</option>
-                            <option value="SAC">SAC - Sistema de Amortização Constante</option>
-                            <option value="PRICE">PRICE - Tabela Price (parcelas fixas)</option>
-                            <option value="SIMPLES">SIMPLES - Juros simples</option>
-                        </select>
-                        <small id="info-sistema" class="form-help"></small>
-                    </div>
-                    <div class="form-group">
-                        <label for="fin-indexador">Indexador do Saldo</label>
-                        <select id="fin-indexador">
-                            <option value="">Nenhum</option>
-                            <option value="TR">TR - Taxa Referencial</option>
-                            <option value="IPCA">IPCA - Índice de Preços</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="fin-valor">Valor Financiado *</label>
-                        <input type="text" id="fin-valor" required
-                               placeholder="R$ 0,00" onkeyup="formatarMoeda(this)">
-                    </div>
-                    <div class="form-group">
-                        <label for="fin-prazo">Prazo Total (meses) *</label>
-                        <input type="number" id="fin-prazo" required min="1"
-                               placeholder="360">
-                    </div>
-                    <div class="form-group">
-                        <label for="fin-taxa">Taxa de Juros Anual (%) *</label>
-                        <input type="text" id="fin-taxa" required
-                               placeholder="8.50" onkeyup="formatarPercentual(this)">
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="fin-data-contrato">Data do Contrato *</label>
-                        <input type="date" id="fin-data-contrato" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="fin-data-primeira">Data 1ª Parcela *</label>
-                        <input type="date" id="fin-data-primeira" required>
-                    </div>
-                </div>
-
-                <!-- Vigências de Seguro (Apenas no modo CRIAÇÃO) -->
-                <div id="secao-vigencias-seguro">
-                    <h3 style="margin: 20px; font-size: 16px; color: #1d1d1f;">Vigências de Seguro Habitacional</h3>
-
-                    <div class="alert alert-info" style="margin: 10px 20px; padding: 12px; background: #e8f4fd; border-left: 4px solid #007aff; font-size: 13px;">
-                        <strong>Vigências:</strong> Cadastre os valores do seguro ao longo do tempo. Mínimo 1 vigência (inicial) obrigatória.
-                        Você pode adicionar até 3 vigências agora, e mais vigências depois no modal de gerenciamento.
-                    </div>
-
-                    <!-- Vigência 1 (Obrigatória) -->
-                    <div class="form-row" style="background: #f5f5f7; padding: 15px; margin: 10px 20px; border-radius: 8px;">
-                        <div class="form-group">
-                            <label for="seg-data-1">Vigência 1 - Data Início *</label>
-                            <input type="month" id="seg-data-1" required>
-                            <small class="form-help">Primeiro mês do contrato (ex: 2024-05 ou use o seletor)</small>
-                        </div>
-                        <div class="form-group">
-                            <label for="seg-valor-1">Valor Mensal (R$) *</label>
-                            <input type="text" id="seg-valor-1" required
-                                   placeholder="R$ 0,00" onkeyup="formatarMoeda(this)">
-                        </div>
-                        <div class="form-group">
-                            <label for="seg-obs-1">Observações</label>
-                            <input type="text" id="seg-obs-1" maxlength="200"
-                                   placeholder="Ex: Tabela Caixa 2024">
-                        </div>
-                    </div>
-
-                    <!-- Vigência 2 (Opcional) -->
-                    <div class="form-row" style="padding: 15px; margin: 10px 20px; border-radius: 8px; border: 1px dashed #ccc;">
-                        <div class="form-group">
-                            <label for="seg-data-2">Vigência 2 - Data Início</label>
-                            <input type="month" id="seg-data-2">
-                            <small class="form-help">Opcional (ex: 2025-01 ou use o seletor)</small>
-                        </div>
-                        <div class="form-group">
-                            <label for="seg-valor-2">Valor Mensal (R$)</label>
-                            <input type="text" id="seg-valor-2"
-                                   placeholder="R$ 0,00" onkeyup="formatarMoeda(this)">
-                        </div>
-                        <div class="form-group">
-                            <label for="seg-obs-2">Observações</label>
-                            <input type="text" id="seg-obs-2" maxlength="200"
-                                   placeholder="Ex: Atualização anual">
-                        </div>
-                    </div>
-
-                    <!-- Vigência 3 (Opcional) -->
-                    <div class="form-row" style="padding: 15px; margin: 10px 20px; border-radius: 8px; border: 1px dashed #ccc;">
-                        <div class="form-group">
-                            <label for="seg-data-3">Vigência 3 - Data Início</label>
-                            <input type="month" id="seg-data-3">
-                            <small class="form-help">Opcional (ex: 2026-01 ou use o seletor)</small>
-                        </div>
-                        <div class="form-group">
-                            <label for="seg-valor-3">Valor Mensal (R$)</label>
-                            <input type="text" id="seg-valor-3"
-                                   placeholder="R$ 0,00" onkeyup="formatarMoeda(this)">
-                        </div>
-                        <div class="form-group">
-                            <label for="seg-obs-3">Observações</label>
-                            <input type="text" id="seg-obs-3" maxlength="200"
-                                   placeholder="Ex: Mudança de faixa etária">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Taxa Administrativa -->
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="fin-taxa-adm">Taxa Administrativa Mensal</label>
-                        <input type="text" id="fin-taxa-adm"
-                               placeholder="R$ 0,00" onkeyup="formatarMoeda(this)">
-                    </div>
-                </div>
-
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="fecharModal('modal-financiamento')">
-                        Cancelar
-                    </button>
-                    <button type="submit" class="btn btn-primary">
-                        Criar e Gerar Parcelas
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Modal: Detalhes do Financiamento -->
-    <div id="modal-detalhes" class="modal">
-        <div class="modal-content modal-xlarge">
-            <div class="modal-header">
-                <h2 id="detalhes-titulo">Detalhes do Financiamento</h2>
-                <span class="close" onclick="fecharModal('modal-detalhes')">&times;</span>
-            </div>
-            <div id="detalhes-conteudo">
-                <!-- Será preenchido via JS -->
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal: Pagar Parcela -->
-    <div id="modal-pagar" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Registrar Pagamento de Parcela</h2>
-                <span class="close" onclick="fecharModal('modal-pagar')">&times;</span>
-            </div>
-            <form id="form-pagar" onsubmit="salvarPagamento(event)">
-                <input type="hidden" id="pagar-parcela-id">
-
-                <div id="pagar-info" class="info-box">
-                    <!-- Informações da parcela -->
-                </div>
-
-                <div class="form-group">
-                    <label for="pagar-data">Data do Pagamento *</label>
-                    <input type="date" id="pagar-data" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="pagar-valor">Valor Pago *</label>
-                    <input type="text" id="pagar-valor" required
-                           placeholder="R$ 0,00" onkeyup="formatarMoeda(this)">
-                </div>
-
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="fecharModal('modal-pagar')">
-                        Cancelar
-                    </button>
-                    <button type="submit" class="btn btn-primary">
-                        Confirmar Pagamento
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Modal: Amortização Extra -->
-    <div id="modal-amortizacao" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Amortização Extraordinária</h2>
-                <span class="close" onclick="fecharModal('modal-amortizacao')">&times;</span>
-            </div>
-            <form id="form-amortizacao" onsubmit="salvarAmortizacao(event)">
-                <input type="hidden" id="amort-financiamento-id">
-
-                <div class="form-group">
-                    <label for="amort-data">Data *</label>
-                    <input type="date" id="amort-data" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="amort-valor">Valor da Amortização *</label>
-                    <input type="text" id="amort-valor" required
-                           placeholder="R$ 0,00" onkeyup="formatarMoeda(this)">
-                </div>
-
-                <div class="form-group">
-                    <label for="amort-tipo">Tipo de Redução *</label>
-                    <select id="amort-tipo" required onchange="atualizarInfoAmortizacao()">
-                        <option value="">Selecione...</option>
-                        <option value="reduzir_parcela">Reduzir valor da parcela (manter prazo)</option>
-                        <option value="reduzir_prazo">Reduzir prazo (manter valor da parcela)</option>
-                    </select>
-                    <small id="info-amortizacao" class="form-help"></small>
-                </div>
-
-                <div class="form-group">
-                    <label for="amort-obs">Observações</label>
-                    <textarea id="amort-obs" rows="3"
-                              placeholder="Ex: FGTS, Décimo terceiro, etc."></textarea>
-                </div>
-
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="fecharModal('modal-amortizacao')">
-                        Cancelar
-                    </button>
-                    <button type="submit" class="btn btn-primary">
-                        Registrar Amortização
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Modal: Demonstrativo Anual -->
-    <div id="modal-demonstrativo" class="modal">
-        <div class="modal-content modal-xlarge">
-            <div class="modal-header">
-                <h2 id="demo-titulo">Demonstrativo Anual</h2>
-                <span class="close" onclick="fecharModal('modal-demonstrativo')">&times;</span>
-            </div>
-            <div class="form-group" style="margin: 0 20px 20px 20px;">
-                <label for="demo-ano">Selecione o Ano:</label>
-                <select id="demo-ano" onchange="carregarDemonstrativo()">
-                    <!-- Será preenchido via JS -->
+<div class="financiamentos-shell">
+    <section id="fin-list-view" class="fin-view is-active" aria-label="Financiamentos">
+        <div class="fin-toolbar-card">
+            <div class="fin-filter-group">
+                <label for="filtro-status">Status</label>
+                <select id="filtro-status" class="fin-select" onchange="carregarFinanciamentos()">
+                    <option value="ativos" selected>Ativos</option>
+                    <option value="inativos">Inativos</option>
+                    <option value="todos">Todos</option>
                 </select>
             </div>
-            <div id="demonstrativo-conteudo">
-                <p class="loading">Carregando demonstrativo...</p>
+            <div class="fin-filter-group">
+                <label for="filtro-sistema">Sistema</label>
+                <select id="filtro-sistema" class="fin-select" onchange="carregarFinanciamentos()">
+                    <option value="todos" selected>Todos</option>
+                    <option value="SAC">SAC</option>
+                    <option value="PRICE">PRICE</option>
+                    <option value="SFH">SFH</option>
+                    <option value="SIMPLES">Simples</option>
+                </select>
+            </div>
+            <button type="button" class="fin-primary-btn fin-toolbar-primary" onclick="abrirTelaNovoFinanciamento()">
+                <span aria-hidden="true">+</span>
+                Novo financiamento
+            </button>
+        </div>
+
+        <div class="fin-kpi-grid" aria-label="Resumo de financiamentos">
+            <article class="fin-kpi-card">
+                <span class="fin-kpi-icon fin-kpi-icon-blue" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M12 3v18M17 7.5c-.8-1-2.3-1.6-4-1.6-2.3 0-4 1.1-4 2.8 0 4 8 1.8 8 5.9 0 1.8-1.8 3-4.2 3-1.9 0-3.4-.7-4.3-1.8"/></svg>
+                </span>
+                <div>
+                    <span class="fin-kpi-label">Total financiado</span>
+                    <strong id="total-financiado">R$ 0,00</strong>
+                    <small>Valor total dos contratos ativos</small>
+                </div>
+            </article>
+            <article class="fin-kpi-card">
+                <span class="fin-kpi-icon fin-kpi-icon-green" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M4 7h16v10H4V7Zm0 3h16M8 15h3"/></svg>
+                </span>
+                <div>
+                    <span class="fin-kpi-label">Saldo devedor</span>
+                    <strong id="saldo-devedor">R$ 0,00</strong>
+                    <small>Saldo total em aberto</small>
+                </div>
+            </article>
+            <article class="fin-kpi-card">
+                <span class="fin-kpi-icon fin-kpi-icon-purple" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M5 12.5 9 16l10-10M5 19h14M5 5h8"/></svg>
+                </span>
+                <div>
+                    <span class="fin-kpi-label">Parcelas pagas</span>
+                    <strong id="parcelas-pagas">0 / 0</strong>
+                    <small id="parcelas-pagas-sub">0,00% do total de parcelas</small>
+                </div>
+            </article>
+            <article class="fin-kpi-card">
+                <span class="fin-kpi-icon fin-kpi-icon-yellow" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7V3Zm7 0v5h5M10 13h6M10 17h6"/></svg>
+                </span>
+                <div>
+                    <span class="fin-kpi-label">Contratos ativos</span>
+                    <strong id="contratos-ativos">0</strong>
+                    <small>Contratos em andamento</small>
+                </div>
+            </article>
+        </div>
+
+        <section class="fin-contracts-panel">
+            <div class="fin-panel-header">
+                <div class="fin-panel-title-row">
+                    <h2>Contratos de financiamento</h2>
+                    <span id="contratos-count" class="fin-count-badge">0</span>
+                </div>
+                <button type="button" class="fin-secondary-btn" onclick="alternarModoTabela()">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4V5Zm0 5h16M9 5v14"/></svg>
+                    Ver em tabela
+                </button>
+            </div>
+            <div id="financiamentos-lista" class="fin-contract-list">
+                <div class="fin-loading-state">Carregando financiamentos...</div>
+            </div>
+            <div class="fin-panel-footer">
+                <span id="financiamentos-pagination">Mostrando 0 contratos</span>
+                <div class="fin-pagination" aria-hidden="true">
+                    <button type="button" disabled>&lt;</button>
+                    <button type="button" class="active">1</button>
+                    <button type="button" disabled>&gt;</button>
+                </div>
+            </div>
+        </section>
+    </section>
+
+    <section id="fin-form-view" class="fin-view" aria-label="Novo financiamento">
+        <div class="fin-page-heading fin-heading-with-actions">
+            <div>
+                <span id="form-title" class="fin-hidden-title">Novo financiamento</span>
+                <div class="fin-breadcrumb">
+                    <button type="button" onclick="voltarLista()">Financiamentos</button>
+                    <span aria-hidden="true">›</span>
+                    <span id="form-breadcrumb-current">Novo financiamento</span>
+                </div>
+            </div>
+            <div class="fin-heading-actions">
+                <button type="button" class="fin-secondary-btn" onclick="cancelarFormulario()">Cancelar</button>
+                <button type="submit" form="form-financiamento" class="fin-primary-btn">Salvar financiamento</button>
             </div>
         </div>
-    </div>
 
-    <!-- Modal: Gerenciar Seguro Habitacional -->
-    <div id="modal-seguro" class="modal">
-        <div class="modal-content modal-large">
-            <div class="modal-header">
-                <h2>Seguro Habitacional - Vigências</h2>
-                <span class="close" onclick="fecharModal('modal-seguro')">&times;</span>
-            </div>
+        <div class="fin-form-layout">
+            <form id="form-financiamento" class="fin-form-card" onsubmit="salvarFinanciamento(event)">
+                <input type="hidden" id="fin-id">
+                <input type="hidden" id="fin-sistema" value="SAC">
 
-            <div style="padding: 20px;">
-                <!-- Vigência Atual (Card Destaque) -->
-                <h3 style="margin-bottom: 15px; font-size: 16px; color: #1d1d1f;">Vigência Atual</h3>
-                <div id="seguro-vigencia-atual" style="background: #f5f5f7; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
-                    <p class="loading">Carregando vigência atual...</p>
+                <section class="fin-form-section">
+                    <div class="fin-section-title">
+                        <span>1</span>
+                        <h2>Dados principais</h2>
+                    </div>
+                    <div class="fin-form-grid fin-main-grid">
+                        <label class="fin-field fin-field-wide">
+                            <span>Nome do financiamento <em>*</em></span>
+                            <input id="fin-nome" type="text" required placeholder="Ex.: Financiamento Residencial - João Silva">
+                        </label>
+                        <label class="fin-field">
+                            <span>Tipo <em>*</em></span>
+                            <select id="fin-produto" required>
+                                <option value="Habitacional">Habitacional</option>
+                                <option value="SFH">SFH</option>
+                                <option value="Veículo">Veículo</option>
+                                <option value="Pessoal">Pessoal</option>
+                                <option value="Outro">Outro</option>
+                            </select>
+                        </label>
+                        <div class="fin-field">
+                            <span>Sistema de amortização <em>*</em></span>
+                            <div class="fin-segmented" role="group" aria-label="Sistema de amortização">
+                                <button type="button" class="active" data-sistema="SAC" onclick="selecionarSistema('SAC')">SAC</button>
+                                <button type="button" data-sistema="PRICE" onclick="selecionarSistema('PRICE')">PRICE</button>
+                                <button type="button" data-sistema="SFH" onclick="selecionarSistema('SFH')">SFH</button>
+                            </div>
+                        </div>
+                        <label class="fin-field">
+                            <span>Finalidade <em>*</em></span>
+                            <select id="fin-finalidade" required>
+                                <option value="Aquisição de imóvel">Aquisição de imóvel</option>
+                                <option value="Construção">Construção</option>
+                                <option value="Veículo">Veículo</option>
+                                <option value="Capital de giro">Capital de giro</option>
+                                <option value="Outro">Outro</option>
+                            </select>
+                        </label>
+                        <label class="fin-field">
+                            <span>Status <em>*</em></span>
+                            <select id="fin-status" required>
+                                <option value="ativo">Ativo</option>
+                                <option value="inativo">Inativo</option>
+                            </select>
+                        </label>
+                    </div>
+                </section>
+
+                <section class="fin-form-section">
+                    <div class="fin-section-title">
+                        <span>2</span>
+                        <h2>Valores e prazo</h2>
+                    </div>
+                    <div class="fin-form-grid fin-form-grid-four">
+                        <label class="fin-field fin-money-field">
+                            <span>Valor financiado <em>*</em></span>
+                            <div><span>R$</span><input id="fin-valor" type="text" required placeholder="0,00" inputmode="decimal"></div>
+                        </label>
+                        <label class="fin-field fin-money-field">
+                            <span>Entrada</span>
+                            <div><span>R$</span><input id="fin-entrada" type="text" placeholder="0,00" inputmode="decimal"></div>
+                        </label>
+                        <label class="fin-field fin-money-field">
+                            <span>Saldo inicial <em>*</em></span>
+                            <div><span>R$</span><input id="fin-saldo-inicial" type="text" required placeholder="0,00" inputmode="decimal"></div>
+                        </label>
+                        <label class="fin-field">
+                            <span>Prazo (meses) <em>*</em></span>
+                            <input id="fin-prazo" type="number" min="1" required placeholder="Ex.: 360">
+                        </label>
+                        <label class="fin-field">
+                            <span>Taxa de juros anual (%) <em>*</em></span>
+                            <div class="fin-percent-input"><input id="fin-taxa" type="text" required placeholder="0,00" inputmode="decimal"><span>%</span></div>
+                        </label>
+                        <label class="fin-field">
+                            <span>Data de contratação <em>*</em></span>
+                            <input id="fin-data-contrato" type="date" required>
+                        </label>
+                    </div>
+                </section>
+
+                <section class="fin-form-section">
+                    <div class="fin-section-title">
+                        <span>3</span>
+                        <h2>Encargos</h2>
+                    </div>
+                    <div class="fin-form-grid">
+                        <label class="fin-field fin-money-field">
+                            <span>Seguro habitacional (mensal) <em>*</em></span>
+                            <div><span>R$</span><input id="fin-seguro" type="text" required placeholder="0,00" inputmode="decimal"></div>
+                        </label>
+                        <label class="fin-field fin-money-field">
+                            <span>Taxa administrativa (mensal)</span>
+                            <div><span>R$</span><input id="fin-taxa-adm" type="text" placeholder="0,00" inputmode="decimal"></div>
+                        </label>
+                        <label class="fin-field">
+                            <span>Indexador</span>
+                            <select id="fin-indexador">
+                                <option value="">Selecione</option>
+                                <option value="TR">TR</option>
+                                <option value="IPCA">IPCA</option>
+                                <option value="CDI">CDI</option>
+                                <option value="PREFIXADO">Prefixado</option>
+                            </select>
+                        </label>
+                        <label class="fin-field fin-field-full">
+                            <span>Observações</span>
+                            <textarea id="fin-observacoes" rows="3" maxlength="500" placeholder="Informações adicionais sobre o financiamento (opcional)"></textarea>
+                            <small><span id="fin-observacoes-count">0</span>/500</small>
+                        </label>
+                    </div>
+                </section>
+
+                <section class="fin-form-section">
+                    <div class="fin-section-title">
+                        <span>4</span>
+                        <h2>Configuração inicial do cronograma <small>(opcional)</small></h2>
+                    </div>
+                    <div class="fin-form-grid fin-schedule-grid">
+                        <label class="fin-switch-field">
+                            <input id="fin-gerar-cronograma" type="checkbox" checked>
+                            <span></span>
+                            <strong>Gerar cronograma automaticamente</strong>
+                            <small>Cria as parcelas automaticamente a partir da data da 1ª parcela.</small>
+                        </label>
+                        <label class="fin-field">
+                            <span>Data da 1ª parcela <em>*</em></span>
+                            <input id="fin-data-primeira" type="date" required>
+                        </label>
+                        <label class="fin-field">
+                            <span>Dia de vencimento <em>*</em></span>
+                            <select id="fin-dia-vencimento" required>
+                                <option value="">Selecione o dia</option>
+                                {% for dia in range(1, 32) %}
+                                <option value="{{ dia }}">{{ dia }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                    </div>
+                </section>
+            </form>
+
+            <aside class="fin-summary-card" aria-label="Resumo e simulação">
+                <div class="fin-summary-heading">
+                    <h2>Resumo e simulação</h2>
+                    <span>Prévia</span>
                 </div>
-
-                <!-- Formulário: Nova Vigência -->
-                <h3 style="margin-bottom: 15px; font-size: 16px; color: #1d1d1f;">Criar Nova Vigência</h3>
-                <form id="form-nova-vigencia-modal" onsubmit="salvarNovaVigencia(event)">
-                    <input type="hidden" id="seguro-financiamento-id">
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="seguro-competencia">Competência de Início *</label>
-                            <input type="month" id="seguro-competencia" required>
-                            <small class="form-help">Mês/Ano de início (ex: 2025-08 ou use o seletor)</small>
-                        </div>
-                        <div class="form-group">
-                            <label for="seguro-valor">Valor Mensal (R$) *</label>
-                            <input type="text" id="seguro-valor" required
-                                   placeholder="R$ 0,00" onkeyup="formatarMoeda(this)">
-                        </div>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="seguro-saldo-devedor">Saldo Devedor de Referência (R$)</label>
-                            <input type="text" id="seguro-saldo-devedor" readonly
-                                   style="background: #f5f5f7; cursor: not-allowed;">
-                            <small class="form-help">Preenchido automaticamente (informativo)</small>
-                        </div>
-                        <div class="form-group">
-                            <label for="seguro-observacoes">Observações</label>
-                            <input type="text" id="seguro-observacoes" maxlength="200"
-                                   placeholder="Ex: Mudança de faixa etária">
-                        </div>
-                    </div>
-
-                    <div class="form-actions">
-                        <button type="submit" class="btn btn-primary">
-                            Criar Vigência
-                        </button>
-                    </div>
-                </form>
-
-                <!-- Histórico de Vigências -->
-                <h3 style="margin: 25px 0 15px 0; font-size: 16px; color: #1d1d1f;">Histórico de Vigências</h3>
-                <div id="seguro-historico" style="overflow-x: auto;">
-                    <table class="parcelas-tabela">
-                        <thead>
-                            <tr>
-                                <th>Início</th>
-                                <th>Fim</th>
-                                <th>Valor Mensal</th>
-                                <th>Status</th>
-                                <th>Observações</th>
-                                <th>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody id="seguro-tbody-vigencias">
-                            <tr>
-                                <td colspan="6" class="text-center">Carregando...</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <div class="fin-estimate-alert">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v5M12 17h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+                    <p>Valores estimados com base nas informações inseridas. O cronograma definitivo será gerado após salvar o financiamento.</p>
                 </div>
+                <dl class="fin-summary-list">
+                    <div>
+                        <dt>Parcela estimada</dt>
+                        <dd id="sim-parcela">R$ 0,00</dd>
+                    </div>
+                    <div>
+                        <dt>Custo total estimado</dt>
+                        <dd id="sim-custo-total">R$ 0,00</dd>
+                    </div>
+                    <div>
+                        <dt>1ª parcela (vencimento)</dt>
+                        <dd id="sim-primeira">--</dd>
+                    </div>
+                    <div>
+                        <dt>Sistema</dt>
+                        <dd><span id="sim-sistema" class="fin-soft-badge">SAC</span></dd>
+                    </div>
+                    <div>
+                        <dt>Prazo</dt>
+                        <dd id="sim-prazo">0 meses</dd>
+                    </div>
+                </dl>
+                <button type="button" class="fin-full-link" onclick="selecionarAbaDetalheOuAvisar('amortizacao')">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 14 4-4 4 3 7-8M18 5h1v6"/></svg>
+                    Ver simulação detalhada
+                    <span aria-hidden="true">›</span>
+                </button>
+                <div class="fin-tips">
+                    <h3>Dicas</h3>
+                    <ul>
+                        <li>O sistema SAC reduz o saldo devedor a cada parcela.</li>
+                        <li>Revise taxa de juros e prazo para simular diferentes cenários.</li>
+                        <li>Encargos mensais são somados ao valor da parcela.</li>
+                    </ul>
+                </div>
+            </aside>
+        </div>
+    </section>
+
+    <section id="fin-detail-view" class="fin-view" aria-label="Detalhe do financiamento">
+        <div class="fin-detail-header fin-detail-actions-only">
+            <div class="fin-heading-actions">
+                <button type="button" class="fin-secondary-btn" onclick="abrirMenuMaisAcoes()">
+                    Mais ações
+                    <span aria-hidden="true">⋮</span>
+                </button>
+                <button type="button" class="fin-primary-btn" onclick="abrirModalPagamentoProxima()">
+                    <span aria-hidden="true">+</span>
+                    Registrar pagamento
+                </button>
             </div>
         </div>
+
+        <div class="fin-detail-grid">
+            <main>
+                <div class="fin-detail-kpis">
+                    <article class="fin-kpi-card">
+                        <span class="fin-kpi-icon fin-kpi-icon-blue" aria-hidden="true">
+                            <svg viewBox="0 0 24 24"><path d="M12 3v18M17 7.5c-.8-1-2.3-1.6-4-1.6-2.3 0-4 1.1-4 2.8 0 4 8 1.8 8 5.9 0 1.8-1.8 3-4.2 3-1.9 0-3.4-.7-4.3-1.8"/></svg>
+                        </span>
+                        <div>
+                            <span class="fin-kpi-label">Valor financiado</span>
+                            <strong id="detalhe-valor-financiado">R$ 0,00</strong>
+                            <small>Valor original do contrato</small>
+                        </div>
+                    </article>
+                    <article class="fin-kpi-card">
+                        <span class="fin-kpi-icon fin-kpi-icon-green" aria-hidden="true">
+                            <svg viewBox="0 0 24 24"><path d="M4 7h16v10H4V7Zm0 3h16M8 15h3"/></svg>
+                        </span>
+                        <div>
+                            <span class="fin-kpi-label">Saldo devedor atual</span>
+                            <strong id="detalhe-saldo-devedor">R$ 0,00</strong>
+                            <small id="detalhe-data-base">Atualizado</small>
+                        </div>
+                    </article>
+                    <article class="fin-kpi-card">
+                        <span class="fin-kpi-icon fin-kpi-icon-purple" aria-hidden="true">
+                            <svg viewBox="0 0 24 24"><path d="M5 12.5 9 16l10-10M5 19h14M5 5h8"/></svg>
+                        </span>
+                        <div>
+                            <span class="fin-kpi-label">Parcelas pagas</span>
+                            <strong id="detalhe-parcelas-pagas">0 / 0</strong>
+                            <small id="detalhe-parcelas-sub">0,00% do total de parcelas</small>
+                        </div>
+                    </article>
+                    <article class="fin-kpi-card">
+                        <span class="fin-kpi-icon fin-kpi-icon-yellow" aria-hidden="true">
+                            <svg viewBox="0 0 24 24"><path d="M7 3v4M17 3v4M4 9h16M6 5h12a2 2 0 0 1 2 2v12H4V7a2 2 0 0 1 2-2Z"/></svg>
+                        </span>
+                        <div>
+                            <span class="fin-kpi-label">Próxima parcela</span>
+                            <strong id="detalhe-proxima-data">--</strong>
+                            <small id="detalhe-proxima-valor">R$ 0,00</small>
+                        </div>
+                    </article>
+                </div>
+
+                <nav class="fin-tabs" aria-label="Abas do financiamento">
+                    <button type="button" data-tab="resumo" onclick="selecionarAba('resumo')">Resumo</button>
+                    <button type="button" data-tab="parcelas" class="active" onclick="selecionarAba('parcelas')">Parcelas</button>
+                    <button type="button" data-tab="extrato" onclick="selecionarAba('extrato')">Extrato</button>
+                    <button type="button" data-tab="amortizacao" onclick="selecionarAba('amortizacao')">Amortização</button>
+                    <button type="button" data-tab="quitacao" onclick="selecionarAba('quitacao')">Quitação</button>
+                    <button type="button" data-tab="documentos" onclick="selecionarAba('documentos')">Documentos</button>
+                    <button type="button" data-tab="dados" onclick="selecionarAba('dados')">Dados do contrato</button>
+                </nav>
+
+                <section class="fin-tab-panel">
+                    <div class="fin-tab-header">
+                        <h2 id="detalhe-tab-title">Cronograma de Parcelas</h2>
+                        <div class="fin-table-actions">
+                            <button type="button" class="fin-secondary-btn" onclick="abrirDemonstrativo()">
+                                Exportar
+                                <span aria-hidden="true">⌄</span>
+                            </button>
+                            <button type="button" class="fin-secondary-btn" onclick="focarFiltroParcelas()">Filtros</button>
+                        </div>
+                    </div>
+                    <div id="detalhe-tab-content">
+                        <div class="fin-table-wrap">
+                            <table class="fin-schedule-table">
+                                <thead>
+                                    <tr>
+                                        <th>Nº</th>
+                                        <th>Vencimento</th>
+                                        <th>Amortização</th>
+                                        <th>Juros</th>
+                                        <th>Seguro</th>
+                                        <th>Taxa adm</th>
+                                        <th>Total</th>
+                                        <th>Saldo após</th>
+                                        <th>Status</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="detalhe-parcelas-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="fin-panel-footer">
+                        <span id="detalhe-parcelas-footer">Mostrando parcelas</span>
+                        <div class="fin-pagination" aria-hidden="true">
+                            <button type="button" disabled>&lt;</button>
+                            <button type="button" class="active">1</button>
+                            <button type="button">2</button>
+                            <button type="button">3</button>
+                            <span>...</span>
+                            <button type="button">24</button>
+                            <button type="button">&gt;</button>
+                        </div>
+                    </div>
+                </section>
+            </main>
+
+            <aside class="fin-side-stack">
+                <section class="fin-side-card">
+                    <div class="fin-side-heading">
+                        <h2>Simular amortização</h2>
+                        <span>Recomendado</span>
+                    </div>
+                    <label class="fin-field">
+                        <span>Valor extra</span>
+                        <input id="sim-amort-valor" type="text" value="R$ 10.000,00" inputmode="decimal">
+                    </label>
+                    <div class="fin-field">
+                        <span>Estratégia</span>
+                        <div class="fin-strategy-grid">
+                            <label class="fin-strategy active">
+                                <input type="radio" name="sim-estrategia" value="reduzir_prazo" checked>
+                                <strong>Reduzir prazo</strong>
+                                <small>Mantém o valor da parcela</small>
+                            </label>
+                            <label class="fin-strategy">
+                                <input type="radio" name="sim-estrategia" value="reduzir_parcela">
+                                <strong>Reduzir parcela</strong>
+                                <small>Mantém o prazo atual</small>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="fin-result-box">
+                        <h3>Resultado estimado</h3>
+                        <dl>
+                            <div><dt>Redução no prazo</dt><dd id="sim-amort-prazo">-</dd></div>
+                            <div><dt>Nova data de quitação</dt><dd id="sim-amort-data">--</dd></div>
+                            <div><dt>Economia total de juros</dt><dd id="sim-amort-economia">R$ 0,00</dd></div>
+                        </dl>
+                    </div>
+                    <button type="button" class="fin-primary-btn fin-full-btn" onclick="simularAmortizacaoDetalhe()">Simular agora</button>
+                </section>
+
+                <section class="fin-side-card">
+                    <div class="fin-side-heading">
+                        <h2>Simular quitação</h2>
+                    </div>
+                    <div class="fin-payoff-box">
+                        <span>Valor para quitação</span>
+                        <strong id="sim-quitacao-valor">R$ 0,00</strong>
+                        <small id="sim-quitacao-data">Data base: --</small>
+                    </div>
+                    <button type="button" class="fin-full-link" onclick="selecionarAba('quitacao')">
+                        Ver detalhes
+                        <span aria-hidden="true">⌄</span>
+                    </button>
+                    <button type="button" class="fin-secondary-btn fin-full-btn" onclick="registrarPendenciaQuitacao()">Gerar boleto de quitação</button>
+                </section>
+
+                <section class="fin-side-card fin-quick-actions">
+                    <button type="button" onclick="abrirModalAmortizacao()">Amortizar</button>
+                    <button type="button" onclick="abrirDemonstrativo()">Gerar extrato</button>
+                    <button type="button" onclick="editarFinanciamentoAtual()">Alterar dados</button>
+                    <button type="button" onclick="selecionarAba('extrato')">Histórico</button>
+                </section>
+            </aside>
+        </div>
+    </section>
+</div>
+
+<div id="modal-pagar" class="fin-modal" aria-hidden="true">
+    <div class="fin-modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-pagar-title">
+        <div class="fin-modal-header">
+            <h2 id="modal-pagar-title">Registrar pagamento</h2>
+            <button type="button" onclick="fecharModal('modal-pagar')" aria-label="Fechar">×</button>
+        </div>
+        <form id="form-pagar" onsubmit="salvarPagamento(event)">
+            <input type="hidden" id="pagar-parcela-id">
+            <div id="pagar-info" class="fin-modal-info"></div>
+            <label class="fin-field">
+                <span>Data do pagamento</span>
+                <input id="pagar-data" type="date" required>
+            </label>
+            <label class="fin-field fin-money-field">
+                <span>Valor pago</span>
+                <div><span>R$</span><input id="pagar-valor" type="text" required inputmode="decimal"></div>
+            </label>
+            <div class="fin-modal-actions">
+                <button type="button" class="fin-secondary-btn" onclick="fecharModal('modal-pagar')">Cancelar</button>
+                <button type="submit" class="fin-primary-btn">Confirmar pagamento</button>
+            </div>
+        </form>
     </div>
+</div>
+
+<div id="modal-amortizacao" class="fin-modal" aria-hidden="true">
+    <div class="fin-modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-amortizacao-title">
+        <div class="fin-modal-header">
+            <h2 id="modal-amortizacao-title">Registrar amortização</h2>
+            <button type="button" onclick="fecharModal('modal-amortizacao')" aria-label="Fechar">×</button>
+        </div>
+        <form id="form-amortizacao" onsubmit="salvarAmortizacao(event)">
+            <input type="hidden" id="amort-financiamento-id">
+            <label class="fin-field">
+                <span>Data</span>
+                <input id="amort-data" type="date" required>
+            </label>
+            <label class="fin-field fin-money-field">
+                <span>Valor extra</span>
+                <div><span>R$</span><input id="amort-valor" type="text" required inputmode="decimal"></div>
+            </label>
+            <label class="fin-field">
+                <span>Estratégia</span>
+                <select id="amort-tipo" required>
+                    <option value="reduzir_prazo">Reduzir prazo</option>
+                    <option value="reduzir_parcela">Reduzir parcela</option>
+                </select>
+            </label>
+            <label class="fin-field">
+                <span>Observações</span>
+                <textarea id="amort-obs" rows="3"></textarea>
+            </label>
+            <div id="info-amortizacao" class="fin-modal-info"></div>
+            <div class="fin-modal-actions">
+                <button type="button" class="fin-secondary-btn" onclick="fecharModal('modal-amortizacao')">Cancelar</button>
+                <button type="submit" class="fin-primary-btn">Registrar amortização</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="modal-demonstrativo" class="fin-modal" aria-hidden="true">
+    <div class="fin-modal-box fin-modal-wide" role="dialog" aria-modal="true" aria-labelledby="demo-titulo">
+        <div class="fin-modal-header">
+            <h2 id="demo-titulo">Extrato do financiamento</h2>
+            <button type="button" onclick="fecharModal('modal-demonstrativo')" aria-label="Fechar">×</button>
+        </div>
+        <div class="fin-modal-toolbar">
+            <label class="fin-field">
+                <span>Ano</span>
+                <select id="demo-ano" onchange="carregarDemonstrativo()"></select>
+            </label>
+        </div>
+        <div id="demonstrativo-conteudo" class="fin-demo-content"></div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/financiamentos.js') }}"></script>
-    <script>
-        function toggleMobileView() {
-            document.body.classList.toggle('mobile-view');
-            const btn = document.getElementById('mobile-btn');
-            if (document.body.classList.contains('mobile-view')) {
-                btn.innerHTML = '💻 Ver em Desktop';
-            } else {
-                btn.innerHTML = '📱 Ver em Mobile';
-            }
-        }
-    </script>
 {% endblock %}
