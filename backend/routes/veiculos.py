@@ -29,6 +29,9 @@ try:
         previsualizar_ativacao_modalidade,
         ativar_modalidade,
         obter_modalidade_ativa,
+        listar_assinaturas,
+        criar_assinatura,
+        atualizar_assinatura,
     )
 except ImportError:
     from models import db, Veiculo, DespesaPrevista, VeiculoRegraManutencaoKm
@@ -44,6 +47,9 @@ except ImportError:
         previsualizar_ativacao_modalidade,
         ativar_modalidade,
         obter_modalidade_ativa,
+        listar_assinaturas,
+        criar_assinatura,
+        atualizar_assinatura,
     )
 
 
@@ -599,6 +605,50 @@ def ativar_mobilidade():
         resultado = ativar_modalidade(payload)
         db.session.commit()
         return jsonify({'success': True, 'message': 'Modalidade ativada', 'data': resultado}), 200
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+# VEIC-2B: CRUD de assinaturas de mobilidade
+# ---------------------------------------------------------------------------
+
+@veiculos_bp.route('/mobilidade/assinaturas', methods=['GET'])
+def get_assinaturas():
+    apenas_ativas = request.args.get('apenas_ativas', '').lower() in ('1', 'true', 'yes')
+    try:
+        dados = listar_assinaturas(apenas_ativas=apenas_ativas)
+        return jsonify({'success': True, 'data': dados}), 200
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@veiculos_bp.route('/mobilidade/assinaturas', methods=['POST'])
+def post_assinatura():
+    try:
+        payload = _ler_payload_request()
+        ass = criar_assinatura(payload)
+        db.session.commit()
+        return jsonify({'success': True, 'data': ass.to_dict()}), 201
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@veiculos_bp.route('/mobilidade/assinaturas/<int:assinatura_id>', methods=['PUT', 'PATCH'])
+def put_assinatura(assinatura_id):
+    try:
+        payload = _ler_payload_request()
+        ass = atualizar_assinatura(assinatura_id, payload)
+        db.session.commit()
+        return jsonify({'success': True, 'data': ass.to_dict()}), 200
     except ValueError as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 400

@@ -1950,17 +1950,25 @@ function ativarAba(nome) {
 // ================================================================
 
 async function carregarCenarioAtivo() {
+    // Fonte primária: banco via /api/veiculos/mobilidade/ativo
     try {
-        const resp = await fetch(API_CENARIO_ATIVO);
+        const resp = await fetch(`${API_VEICULOS}/mobilidade/ativo`);
         const data = await resp.json();
-        if (data.success && data.data && data.data.tipo) {
-            cenarioAtivoState = data.data;
+        if (data.success && data.data) {
+            const c = data.data;
+            cenarioAtivoState = {
+                tipo: c.tipo_modalidade,
+                id: c.origem_id,
+                nome_origem: c.nome_origem,
+                recorrencia: c.recorrencia || null,
+            };
+            _sincronizarMobilidadeAtivaLocal(c.tipo_modalidade, c.origem_id);
             return;
         }
     } catch (e) {
-        // fallback localStorage legado
+        console.warn('Falha ao carregar cenário ativo do banco:', e);
     }
-    // fallback: ler do localStorage legado
+    // Fallback: localStorage legado (leitura apenas — não grava mais)
     try {
         const raw = localStorage.getItem(STORAGE_MOBILIDADE_ATIVA);
         if (raw) {
@@ -1973,26 +1981,24 @@ async function carregarCenarioAtivo() {
     } catch (e) { /* sem fallback */ }
 }
 
-async function salvarCenarioAtivo(tipo, id) {
-    cenarioAtivoState = { tipo, id };
-    try {
-        await fetch(API_CENARIO_ATIVO, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tipo, id }),
-        });
-    } catch (e) {
-        console.warn('Falha ao salvar cenário ativo no backend:', e);
-    }
-    // Também mantém localStorage legado
+function _sincronizarMobilidadeAtivaLocal(tipo, id) {
     if (tipo === 'VEICULO') {
         mobilidadeAtiva.VEICULO = new Set([id]);
         mobilidadeAtiva.TRANSPORTE_APP = new Set();
-    } else {
+    } else if (tipo === 'TRANSPORTE_APP') {
         mobilidadeAtiva.VEICULO = new Set();
         mobilidadeAtiva.TRANSPORTE_APP = new Set([id]);
+    } else {
+        mobilidadeAtiva.VEICULO = new Set();
+        mobilidadeAtiva.TRANSPORTE_APP = new Set();
     }
-    salvarCaminhosAtivosLocal();
+}
+
+async function salvarCenarioAtivo(tipo, id) {
+    // Chamado apenas para tipos sem modal de ativação (TRANSPORTE_APP legado, etc.)
+    // Para VEICULO e ASSINATURA: o fluxo passa pelo modal que chama /mobilidade/ativar.
+    cenarioAtivoState = { tipo, id };
+    _sincronizarMobilidadeAtivaLocal(tipo, id);
 }
 
 function isCenarioAtivo(tipo, id) {
@@ -2366,16 +2372,8 @@ function renderTabelaComparativa() {
 }
 
 async function definirCenarioAtivo(tipo, id) {
-    // VEIC-2: para veículo próprio, abrir modal de ativação com prévia.
-    // Para outros tipos, mantém fluxo legado (JSON file).
-    if (tipo === 'VEICULO') {
-        await abrirModalAtivacaoMobilidade(tipo, id);
-        return;
-    }
-    await salvarCenarioAtivo(tipo, id);
-    renderCardsComparacao();
-    renderResumoSuperior();
-    renderizarConfiguracao();
+    // VEIC-2B: todos os tipos passam pelo modal de ativação (banco).
+    await abrirModalAtivacaoMobilidade(tipo, id);
 }
 
 // ================================================================
@@ -2424,6 +2422,24 @@ async function abrirModalAtivacaoMobilidade(tipo, origemId) {
     document.getElementById('ativar-mob-origem-id').value = origemId;
     document.getElementById('ativar-mob-resultado').innerHTML = '';
     _ativacaoPrevia = null;
+
+    // Ajustar rótulos conforme tipo
+    const tituloEl = document.getElementById('ativar-mob-titulo');
+    const meioLabel = document.getElementById('ativar-mob-meio-label');
+    const recLabel = document.getElementById('ativar-mob-criar-recorrencia-label');
+    if (tipo === 'VEICULO') {
+        if (tituloEl) tituloEl.textContent = 'Ativar veículo próprio';
+        if (meioLabel) meioLabel.textContent = 'Meio de pagamento do combustível';
+        if (recLabel) recLabel.textContent = 'Criar recorrência mensal de combustível';
+    } else if (tipo === 'TRANSPORTE_APP') {
+        if (tituloEl) tituloEl.textContent = 'Ativar transporte por app';
+        if (meioLabel) meioLabel.textContent = 'Meio de pagamento do app';
+        if (recLabel) recLabel.textContent = 'Criar recorrência mensal de transporte por app';
+    } else if (tipo === 'ASSINATURA') {
+        if (tituloEl) tituloEl.textContent = 'Ativar assinatura de mobilidade';
+        if (meioLabel) meioLabel.textContent = 'Meio de pagamento da assinatura';
+        if (recLabel) recLabel.textContent = 'Criar recorrência mensal de assinatura';
+    }
 
     modal.style.display = 'flex';
 }

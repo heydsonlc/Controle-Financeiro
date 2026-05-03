@@ -629,7 +629,7 @@
         </form>
     </div>
 </div>
-<!-- VEIC-2: Modal de ativação de modalidade de mobilidade -->
+<!-- VEIC-2 / VEIC-2B: Modal de ativação de modalidade de mobilidade -->
 <div id="modal-ativar-mobilidade" class="modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="ativar-mob-titulo">
     <div class="modal-content" style="max-width:520px;">
         <div class="modal-header">
@@ -640,7 +640,7 @@
         <input type="hidden" id="ativar-mob-origem-id" value="">
         <div class="modal-body">
             <div class="form-group">
-                <label for="ativar-mob-meio">Meio de pagamento do combustível</label>
+                <label for="ativar-mob-meio" id="ativar-mob-meio-label">Meio de pagamento</label>
                 <select id="ativar-mob-meio" class="form-control" onchange="document.getElementById('ativar-mob-cartao-wrap').style.display=this.value==='cartao'?'':'none'">
                     <option value="">— Sem recorrência —</option>
                     <option value="pix">Pix</option>
@@ -677,7 +677,7 @@
             </div>
             <div class="form-group" style="display:flex;align-items:center;gap:8px;">
                 <input type="checkbox" id="ativar-mob-criar-recorrencia" checked>
-                <label for="ativar-mob-criar-recorrencia" style="margin:0;">Criar recorrência mensal de combustível</label>
+                <label for="ativar-mob-criar-recorrencia" id="ativar-mob-criar-recorrencia-label" style="margin:0;">Criar recorrência mensal</label>
             </div>
             <div style="margin-top:8px;">
                 <button type="button" class="btn btn-secondary btn-sm" onclick="previsualizarAtivacaoMobilidade()">Ver prévia</button>

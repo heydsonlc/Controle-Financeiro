@@ -1,5 +1,5 @@
 """
-VEIC-2: Service de mobilidade — ativação de modalidade e criação de recorrências.
+VEIC-2 / VEIC-2B: Service de mobilidade — ativação de modalidade e criação de recorrências.
 
 Regras:
 - Apenas uma modalidade ATIVA por vez (a anterior é inativada).
@@ -7,6 +7,7 @@ Regras:
 - categoria_cartao_id resolvido via CategoriaCartaoService quando meio=cartão.
 - item_agregado_id NUNCA usado como regra nova; compatibilidade transitória apenas.
 - IPVA, seguro, licenciamento e parcelas de financiamento permanecem como DespesaPrevista.
+- VEIC-2B: suporte a TRANSPORTE_APP e ASSINATURA; supressão de DespesaPrevista redundante.
 """
 from __future__ import annotations
 
@@ -15,13 +16,15 @@ from datetime import date, datetime
 from decimal import Decimal
 
 try:
-    from backend.models import db, ItemDespesa, MobilidadeCenarioAtivo, Veiculo
+    from backend.models import db, DespesaPrevista, ItemDespesa, MobilidadeAssinatura, MobilidadeCenarioAtivo, Veiculo
     from backend.services.categoria_cartao_service import CategoriaCartaoService
     from backend.services.categoria_default import get_categoria_padrao_veiculos
+    from backend.services.transporte_app_service import obter_config_transporte_app, parse_config as parse_transporte_config
 except ImportError:
-    from models import db, ItemDespesa, MobilidadeCenarioAtivo, Veiculo
+    from models import db, DespesaPrevista, ItemDespesa, MobilidadeAssinatura, MobilidadeCenarioAtivo, Veiculo
     from services.categoria_cartao_service import CategoriaCartaoService
     from services.categoria_default import get_categoria_padrao_veiculos
+    from services.transporte_app_service import obter_config_transporte_app, parse_config as parse_transporte_config
 
 
 MEIOS_VALIDOS = ('cartao', 'pix', 'boleto', 'dinheiro', 'debito')
@@ -216,6 +219,182 @@ def criar_recorrencia_combustivel(
 
 
 # ---------------------------------------------------------------------------
+# Criação de recorrência de transporte por app (VEIC-2B)
+# ---------------------------------------------------------------------------
+
+def criar_recorrencia_transporte_app(
+    caminho_id: int,
+    nome: str,
+    valor_mensal: Decimal,
+    meio_pagamento: str,
+    cartao_id: int | None,
+    categoria_id: int | None,
+    categoria_cartao_id: int | None,
+    data_inicio: date | None = None,
+) -> tuple[ItemDespesa, list[str]]:
+    avisos: list[str] = []
+
+    if not valor_mensal or valor_mensal <= 0:
+        raise ValueError('valor_mensal deve ser > 0 para recorrencia de transporte por app')
+
+    if not categoria_id:
+        try:
+            categoria_id = get_categoria_padrao_veiculos()
+        except ValueError:
+            avisos.append('Categoria padrao de veiculos nao encontrada — recorrencia sem categoria.')
+
+    cc_id_resolvido, aviso_cc = resolver_categoria_cartao_para_mobilidade(
+        categoria_id=categoria_id,
+        cartao_id=cartao_id,
+        categoria_cartao_id_manual=categoria_cartao_id,
+    )
+    if aviso_cc:
+        avisos.append(aviso_cc)
+
+    existente = _buscar_recorrencia_existente('TRANSPORTE_APP', caminho_id, 'transporte_app_mensal')
+    if existente:
+        existente.valor = valor_mensal
+        existente.meio_pagamento = meio_pagamento
+        existente.cartao_id = cartao_id
+        existente.categoria_id = categoria_id
+        existente.categoria_cartao_id = cc_id_resolvido
+        existente.ativo = True
+        db.session.add(existente)
+        return existente, avisos
+
+    data_venc = data_inicio or date.today().replace(day=1)
+    mes_comp = data_venc.strftime('%Y-%m')
+
+    recorrencia = ItemDespesa(
+        nome=f'Transporte por app - {nome}',
+        tipo='Simples',
+        recorrente=True,
+        tipo_recorrencia='mensal',
+        valor=valor_mensal,
+        categoria_id=categoria_id,
+        categoria_cartao_id=cc_id_resolvido,
+        meio_pagamento=meio_pagamento,
+        cartao_id=cartao_id,
+        data_vencimento=data_venc,
+        mes_competencia=mes_comp,
+        ativo=True,
+        pago=False,
+        origem_tipo='TRANSPORTE_APP',
+        origem_id=caminho_id,
+        origem_contexto='transporte_app_mensal',
+    )
+    db.session.add(recorrencia)
+    return recorrencia, avisos
+
+
+# ---------------------------------------------------------------------------
+# Criação de recorrência de assinatura (VEIC-2B)
+# ---------------------------------------------------------------------------
+
+def criar_recorrencia_assinatura(
+    assinatura: MobilidadeAssinatura,
+    meio_pagamento: str,
+    cartao_id: int | None,
+    categoria_cartao_id: int | None,
+    data_inicio: date | None = None,
+) -> tuple[ItemDespesa, list[str]]:
+    avisos: list[str] = []
+
+    valor = _to_decimal(assinatura.valor_mensal)
+    if not valor or valor <= 0:
+        raise ValueError('MobilidadeAssinatura sem valor_mensal configurado')
+
+    cat_id = assinatura.categoria_id
+    if not cat_id:
+        try:
+            cat_id = get_categoria_padrao_veiculos()
+        except ValueError:
+            avisos.append('Categoria padrao de veiculos nao encontrada — recorrencia sem categoria.')
+
+    cc_id_resolvido, aviso_cc = resolver_categoria_cartao_para_mobilidade(
+        categoria_id=cat_id,
+        cartao_id=cartao_id,
+        categoria_cartao_id_manual=categoria_cartao_id,
+    )
+    if aviso_cc:
+        avisos.append(aviso_cc)
+
+    existente = _buscar_recorrencia_existente('ASSINATURA', assinatura.id, 'assinatura_mensal')
+    if existente:
+        existente.valor = valor
+        existente.meio_pagamento = meio_pagamento
+        existente.cartao_id = cartao_id
+        existente.categoria_id = cat_id
+        existente.categoria_cartao_id = cc_id_resolvido
+        existente.ativo = True
+        db.session.add(existente)
+        return existente, avisos
+
+    data_venc = data_inicio or date.today().replace(day=1)
+    mes_comp = data_venc.strftime('%Y-%m')
+
+    recorrencia = ItemDespesa(
+        nome=f'Assinatura - {assinatura.nome}',
+        tipo='Simples',
+        recorrente=True,
+        tipo_recorrencia='mensal',
+        valor=valor,
+        categoria_id=cat_id,
+        categoria_cartao_id=cc_id_resolvido,
+        meio_pagamento=meio_pagamento,
+        cartao_id=cartao_id,
+        data_vencimento=data_venc,
+        mes_competencia=mes_comp,
+        ativo=True,
+        pago=False,
+        origem_tipo='ASSINATURA',
+        origem_id=assinatura.id,
+        origem_contexto='assinatura_mensal',
+    )
+    db.session.add(recorrencia)
+    return recorrencia, avisos
+
+
+# ---------------------------------------------------------------------------
+# Supressão de DespesaPrevista redundante (VEIC-2B)
+# ---------------------------------------------------------------------------
+
+def suprimir_despesas_previstas_por_recorrencia(
+    origem_tipo: str,
+    origem_id: int,
+    tipo_evento: str,
+) -> int:
+    """
+    Marca como SUPRIMIDA toda DespesaPrevista PREVISTA futura para esta origem.
+    Não toca CONFIRMADA, ADIADA ou IGNORADA.
+    Retorna o número de registros suprimidos.
+    """
+    hoje = date.today().replace(day=1)
+    candidatas = DespesaPrevista.query.filter(
+        DespesaPrevista.origem_tipo == origem_tipo,
+        DespesaPrevista.origem_id == origem_id,
+        DespesaPrevista.status == 'PREVISTA',
+        DespesaPrevista.data_prevista >= hoje,
+    ).all()
+
+    suprimidas = 0
+    for desp in candidatas:
+        raw = getattr(desp, 'metadata_json', None)
+        if raw:
+            try:
+                md = json.loads(raw) or {}
+            except Exception:
+                md = {}
+            if md.get('tipo_evento') != tipo_evento:
+                continue
+        desp.status = 'SUPRIMIDA'
+        db.session.add(desp)
+        suprimidas += 1
+
+    return suprimidas
+
+
+# ---------------------------------------------------------------------------
 # Inativação da modalidade atual
 # ---------------------------------------------------------------------------
 
@@ -300,7 +479,95 @@ def previsualizar_ativacao_modalidade(payload: dict) -> dict:
             'avisos': avisos,
         }
 
-    raise ValueError(f'Previa nao implementada para tipo_modalidade={tipo} nesta versao (VEIC-2)')
+    if tipo == 'TRANSPORTE_APP':
+        if not origem_id:
+            raise ValueError('origem_id (caminho_id) e obrigatorio para tipo_modalidade=TRANSPORTE_APP')
+        caminho = obter_config_transporte_app(origem_id)
+        if not caminho:
+            raise ValueError('Caminho de transporte por app nao encontrado')
+
+        try:
+            config = parse_transporte_config(caminho)
+            valor_mensal = config.valor_mensal
+            nome_origem = config.nome
+        except Exception:
+            valor_mensal = Decimal(str(caminho.get('valor_mensal') or 0))
+            nome_origem = caminho.get('nome') or f'Caminho {origem_id}'
+
+        cc_id_resolvido, aviso_cc = resolver_categoria_cartao_para_mobilidade(
+            categoria_id=categoria_id,
+            cartao_id=cartao_id,
+            categoria_cartao_id_manual=categoria_cartao_id_manual,
+        )
+        if aviso_cc:
+            avisos.append(aviso_cc)
+
+        if valor_mensal > 0:
+            recorrencia_previa = {
+                'nome': f'Transporte por app - {nome_origem}',
+                'valor': float(valor_mensal),
+                'tipo_recorrencia': 'mensal',
+                'categoria_id': categoria_id,
+                'categoria_cartao_id': cc_id_resolvido,
+                'meio_pagamento': meio or None,
+                'cartao_id': cartao_id,
+                'origem_tipo': 'TRANSPORTE_APP',
+                'origem_id': origem_id,
+                'origem_contexto': 'transporte_app_mensal',
+            }
+        else:
+            avisos.append('Caminho sem valor mensal calculado — recorrencia nao sera criada.')
+
+        return {
+            'tipo_modalidade': tipo,
+            'origem_id': origem_id,
+            'nome_origem': nome_origem,
+            'recorrencia': recorrencia_previa,
+            'despesas_previstas': [],
+            'avisos': avisos,
+        }
+
+    if tipo == 'ASSINATURA':
+        if not origem_id:
+            raise ValueError('origem_id (assinatura.id) e obrigatorio para tipo_modalidade=ASSINATURA')
+        assinatura = MobilidadeAssinatura.query.get(origem_id)
+        if not assinatura:
+            raise ValueError('MobilidadeAssinatura nao encontrada')
+        if assinatura.status != 'ATIVO':
+            avisos.append('Assinatura esta INATIVA.')
+
+        cat_id = categoria_id or assinatura.categoria_id
+        cc_id_resolvido, aviso_cc = resolver_categoria_cartao_para_mobilidade(
+            categoria_id=cat_id,
+            cartao_id=cartao_id,
+            categoria_cartao_id_manual=categoria_cartao_id_manual,
+        )
+        if aviso_cc:
+            avisos.append(aviso_cc)
+
+        recorrencia_previa = {
+            'nome': f'Assinatura - {assinatura.nome}',
+            'valor': float(assinatura.valor_mensal),
+            'tipo_recorrencia': 'mensal',
+            'categoria_id': cat_id,
+            'categoria_cartao_id': cc_id_resolvido,
+            'meio_pagamento': meio or None,
+            'cartao_id': cartao_id,
+            'origem_tipo': 'ASSINATURA',
+            'origem_id': origem_id,
+            'origem_contexto': 'assinatura_mensal',
+        }
+
+        return {
+            'tipo_modalidade': tipo,
+            'origem_id': origem_id,
+            'nome_origem': assinatura.nome,
+            'recorrencia': recorrencia_previa,
+            'despesas_previstas': [],
+            'avisos': avisos,
+        }
+
+    raise ValueError(f'Previa nao implementada para tipo_modalidade={tipo}')
 
 
 # ---------------------------------------------------------------------------
@@ -336,6 +603,9 @@ def ativar_modalidade(payload: dict) -> dict:
     anterior = inativar_modalidade_atual()
 
     # 2. Criar recorrência
+    cat_id = categoria_id
+    cc_id_resolvido = _to_int(payload.get('categoria_cartao_id'))
+
     if tipo == 'VEICULO':
         if not origem_id:
             raise ValueError('origem_id (veiculo.id) e obrigatorio')
@@ -369,6 +639,79 @@ def ativar_modalidade(payload: dict) -> dict:
         elif criar_recorrencia and valor_comb <= 0:
             avisos.append('Veiculo sem valor de combustivel — recorrencia nao criada.')
 
+    elif tipo == 'TRANSPORTE_APP':
+        if not origem_id:
+            raise ValueError('origem_id (caminho_id) e obrigatorio')
+        caminho = obter_config_transporte_app(origem_id)
+        if not caminho:
+            raise ValueError('Caminho de transporte por app nao encontrado')
+
+        try:
+            config = parse_transporte_config(caminho)
+            valor_app = config.valor_mensal
+            nome_app = config.nome
+        except Exception:
+            valor_app = _to_decimal(caminho.get('valor_mensal') or 0) or Decimal('0')
+            nome_app = caminho.get('nome') or f'Caminho {origem_id}'
+
+        cc_id_resolvido, aviso_cc = resolver_categoria_cartao_para_mobilidade(
+            categoria_id=cat_id,
+            cartao_id=cartao_id,
+            categoria_cartao_id_manual=categoria_cartao_id_manual,
+        )
+        if aviso_cc:
+            avisos.append(aviso_cc)
+
+        if criar_recorrencia and valor_app > 0 and meio:
+            recorrencia, avisos_rec = criar_recorrencia_transporte_app(
+                caminho_id=origem_id,
+                nome=nome_app,
+                valor_mensal=valor_app,
+                meio_pagamento=meio,
+                cartao_id=cartao_id,
+                categoria_id=cat_id,
+                categoria_cartao_id=cc_id_resolvido,
+                data_inicio=data_inicio,
+            )
+            avisos.extend(avisos_rec)
+            db.session.flush()
+            n_sup = suprimir_despesas_previstas_por_recorrencia('TRANSPORTE_APP', origem_id, 'TRANSPORTE_APP')
+            if n_sup:
+                avisos.append(f'{n_sup} DespesaPrevista(s) suprimida(s) por recorrencia ativa.')
+        elif criar_recorrencia and valor_app > 0 and not meio:
+            avisos.append('meio_pagamento nao informado — recorrencia de transporte por app nao foi criada.')
+        elif criar_recorrencia and valor_app <= 0:
+            avisos.append('Caminho sem valor mensal — recorrencia nao criada.')
+
+    elif tipo == 'ASSINATURA':
+        if not origem_id:
+            raise ValueError('origem_id (assinatura.id) e obrigatorio')
+        assinatura = MobilidadeAssinatura.query.get(origem_id)
+        if not assinatura:
+            raise ValueError('MobilidadeAssinatura nao encontrada')
+
+        cat_id = categoria_id or assinatura.categoria_id
+        cc_id_resolvido, aviso_cc = resolver_categoria_cartao_para_mobilidade(
+            categoria_id=cat_id,
+            cartao_id=cartao_id,
+            categoria_cartao_id_manual=categoria_cartao_id_manual,
+        )
+        if aviso_cc:
+            avisos.append(aviso_cc)
+
+        if criar_recorrencia and meio:
+            recorrencia, avisos_rec = criar_recorrencia_assinatura(
+                assinatura=assinatura,
+                meio_pagamento=meio,
+                cartao_id=cartao_id,
+                categoria_cartao_id=cc_id_resolvido,
+                data_inicio=data_inicio,
+            )
+            avisos.extend(avisos_rec)
+            db.session.flush()
+        elif criar_recorrencia and not meio:
+            avisos.append('meio_pagamento nao informado — recorrencia de assinatura nao foi criada.')
+
     # 3. Gravar cenário ativo
     cenario = MobilidadeCenarioAtivo(
         tipo_modalidade=tipo,
@@ -376,8 +719,8 @@ def ativar_modalidade(payload: dict) -> dict:
         ativo_desde=data_inicio,
         meio_pagamento=meio,
         cartao_id=cartao_id,
-        categoria_id=cat_id if tipo == 'VEICULO' else categoria_id,
-        categoria_cartao_id=cc_id_resolvido if tipo == 'VEICULO' else _to_int(payload.get('categoria_cartao_id')),
+        categoria_id=cat_id,
+        categoria_cartao_id=cc_id_resolvido,
         recorrencia_id=recorrencia.id if recorrencia else None,
         status='ATIVO',
     )
@@ -404,7 +747,68 @@ def obter_modalidade_ativa() -> dict | None:
     if cenario.tipo_modalidade == 'VEICULO' and cenario.origem_id:
         v = Veiculo.query.get(cenario.origem_id)
         resultado['nome_origem'] = v.nome if v else None
+    elif cenario.tipo_modalidade == 'TRANSPORTE_APP' and cenario.origem_id:
+        caminho = obter_config_transporte_app(cenario.origem_id)
+        resultado['nome_origem'] = (caminho or {}).get('nome') or f'Caminho {cenario.origem_id}'
+    elif cenario.tipo_modalidade == 'ASSINATURA' and cenario.origem_id:
+        ass = MobilidadeAssinatura.query.get(cenario.origem_id)
+        resultado['nome_origem'] = ass.nome if ass else None
     if cenario.recorrencia_id:
         rec = ItemDespesa.query.get(cenario.recorrencia_id)
         resultado['recorrencia'] = rec.to_dict() if rec else None
     return resultado
+
+
+# ---------------------------------------------------------------------------
+# CRUD de MobilidadeAssinatura (VEIC-2B)
+# ---------------------------------------------------------------------------
+
+def listar_assinaturas(apenas_ativas: bool = False) -> list[dict]:
+    q = MobilidadeAssinatura.query
+    if apenas_ativas:
+        q = q.filter_by(status='ATIVO')
+    return [a.to_dict() for a in q.order_by(MobilidadeAssinatura.nome).all()]
+
+
+def criar_assinatura(payload: dict) -> MobilidadeAssinatura:
+    nome = (payload.get('nome') or '').strip()
+    if not nome:
+        raise ValueError('nome e obrigatorio')
+    valor = _to_decimal(payload.get('valor_mensal'))
+    if not valor or valor <= 0:
+        raise ValueError('valor_mensal deve ser > 0')
+
+    ass = MobilidadeAssinatura(
+        nome=nome,
+        valor_mensal=valor,
+        categoria_id=_to_int(payload.get('categoria_id')),
+        status='ATIVO',
+        metadata_json=payload.get('metadata_json'),
+    )
+    db.session.add(ass)
+    db.session.flush()
+    return ass
+
+
+def atualizar_assinatura(assinatura_id: int, payload: dict) -> MobilidadeAssinatura:
+    ass = MobilidadeAssinatura.query.get(assinatura_id)
+    if not ass:
+        raise ValueError('MobilidadeAssinatura nao encontrada')
+
+    if 'nome' in payload:
+        ass.nome = (payload['nome'] or '').strip() or ass.nome
+    if 'valor_mensal' in payload:
+        v = _to_decimal(payload['valor_mensal'])
+        if v and v > 0:
+            ass.valor_mensal = v
+    if 'categoria_id' in payload:
+        ass.categoria_id = _to_int(payload['categoria_id'])
+    if 'status' in payload and payload['status'] in ('ATIVO', 'INATIVO'):
+        ass.status = payload['status']
+    if 'metadata_json' in payload:
+        ass.metadata_json = payload['metadata_json']
+
+    ass.updated_at = datetime.utcnow()
+    db.session.add(ass)
+    db.session.flush()
+    return ass
