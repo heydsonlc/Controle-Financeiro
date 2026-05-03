@@ -42,54 +42,216 @@
         </div>
     </div>
 {% endblock %}
+
 {% block content %}
 <div class="container app-content-fluid">
-        <main>
+    <main>
 
-            <div class="info-text" style="background: #f5f5f7; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 0.9em; color: #6e6e73; border-left: 3px solid #007aff;">
-                <strong style="color: #1d1d1f;">Dica:</strong> Esta pagina lista todas as despesas registradas e geradas. Cadastros de regras recorrentes ficam na tela Recorrencias.
+        <!-- Page header -->
+        <div class="despesas-page-header">
+            <h1>Gerenciamento de Despesas</h1>
+            <p class="page-subtitle">Composicao mensal por grupo e categoria</p>
+        </div>
+
+        <!-- Filter bar compacta com busca e botoes -->
+        <div class="despesas-filters-bar" role="toolbar" aria-label="Acoes rapidas de despesas">
+            <div class="despesas-search-wrapper">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                </svg>
+                <input type="search" id="despesas-busca" class="despesas-search-input" placeholder="Buscar despesa..." oninput="filtrarBusca(this.value)" autocomplete="off">
             </div>
 
-            <!-- Resumo -->
-            <div class="resumo-cards">
-                <div class="resumo-card">
-                    <div class="resumo-label">Total</div>
-                    <div class="resumo-valor" id="total-geral">R$ 0,00</div>
-                </div>
-                <div class="resumo-card pendente">
-                    <div class="resumo-label">Pendentes</div>
-                    <div class="resumo-valor" id="total-pendentes">R$ 0,00</div>
-                </div>
-                <div class="resumo-card pago">
-                    <div class="resumo-label">Pagas</div>
-                    <div class="resumo-valor" id="total-pagas">R$ 0,00</div>
-                </div>
-            </div>
+            <button type="button" class="btn-filtros-adv" onclick="carregarDespesas()" title="Atualizar lista">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/>
+                </svg>
+                Atualizar
+            </button>
 
-            <!-- Lista de despesas -->
-            <section class="module-data-section despesas-data-section">
-                <div class="section-title-row">
-                    <div class="section-title-main">
-                        <span class="section-title-icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" focusable="false">
-                                <path d="M8 6h13"/>
-                                <path d="M8 12h13"/>
-                                <path d="M8 18h13"/>
-                                <path d="M3 6h.01"/>
-                                <path d="M3 12h.01"/>
-                                <path d="M3 18h.01"/>
-                            </svg>
-                        </span>
-                        <h2 class="section-title-text">Lista de Despesas</h2>
+            <button type="button" class="btn-nova-despesa" onclick="abrirModal()" aria-label="Nova despesa">
+                <span aria-hidden="true">+</span>
+                Nova despesa
+            </button>
+        </div>
+
+        <!-- Cards de resumo (6 cards) -->
+        <div class="despesas-summary-cards" id="summary-cards" aria-label="Resumo financeiro do mes">
+            <article class="summary-card">
+                <div class="summary-card-icon blue" aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                </div>
+                <div class="summary-card-body">
+                    <div class="summary-card-label">Total do mes</div>
+                    <div class="summary-card-value" id="total-geral">R$ 0,00</div>
+                    <div class="summary-card-sub" id="summary-total-sub">todas as despesas</div>
+                </div>
+            </article>
+
+            <article class="summary-card">
+                <div class="summary-card-icon orange" aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                </div>
+                <div class="summary-card-body">
+                    <div class="summary-card-label">Pendentes</div>
+                    <div class="summary-card-value" id="total-pendentes">R$ 0,00</div>
+                    <div class="summary-card-sub" id="summary-pendentes-sub">aguardando pagamento</div>
+                </div>
+            </article>
+
+            <article class="summary-card">
+                <div class="summary-card-icon green" aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <div class="summary-card-body">
+                    <div class="summary-card-label">Pagas</div>
+                    <div class="summary-card-value" id="total-pagas">R$ 0,00</div>
+                    <div class="summary-card-sub" id="summary-pagas-sub">liquidadas</div>
+                </div>
+            </article>
+
+            <article class="summary-card">
+                <div class="summary-card-icon red" aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                </div>
+                <div class="summary-card-body">
+                    <div class="summary-card-label">Vencendo em 7 dias</div>
+                    <div class="summary-card-value" id="total-vencendo-7d">R$ 0,00</div>
+                    <div class="summary-card-sub" id="summary-vencendo-sub">0 despesas</div>
+                </div>
+            </article>
+
+            <article class="summary-card">
+                <div class="summary-card-icon purple" aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+                </div>
+                <div class="summary-card-body">
+                    <div class="summary-card-label">Recorrentes</div>
+                    <div class="summary-card-value" id="total-recorrentes">R$ 0,00</div>
+                    <div class="summary-card-sub" id="summary-recorrentes-sub">0 despesas</div>
+                </div>
+            </article>
+
+            <article class="summary-card">
+                <div class="summary-card-icon teal" aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                </div>
+                <div class="summary-card-body">
+                    <div class="summary-card-label">Cartoes / Faturas</div>
+                    <div class="summary-card-value" id="total-cartoes">R$ 0,00</div>
+                    <div class="summary-card-sub" id="summary-cartoes-sub">0 faturas</div>
+                </div>
+            </article>
+        </div>
+
+        <!-- Layout 70/30: lista principal + sidebar -->
+        <div class="despesas-page-layout">
+
+            <!-- Main: lista agrupada -->
+            <section class="despesas-main">
+                <div class="module-data-section despesas-data-section despesas-list-container">
+                    <div class="section-title-row">
+                        <div class="section-title-main">
+                            <span class="section-title-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false">
+                                    <path d="M8 6h13"/>
+                                    <path d="M8 12h13"/>
+                                    <path d="M8 18h13"/>
+                                    <path d="M3 6h.01"/>
+                                    <path d="M3 12h.01"/>
+                                    <path d="M3 18h.01"/>
+                                </svg>
+                            </span>
+                            <h2 class="section-title-text">Lista de Despesas</h2>
+                        </div>
+                        <span class="section-title-meta">Agrupadas por origem e tipo</span>
                     </div>
-                    <span class="section-title-meta">Agrupadas por origem e tipo</span>
-                </div>
-                <div class="despesas-lista" id="despesas-lista">
-                    <p class="loading">Carregando despesas...</p>
+                    <!-- LISTA PRESERVADA: mesmo id, mesma estrutura JS -->
+                    <div class="despesas-lista" id="despesas-lista">
+                        <p class="loading">Carregando despesas...</p>
+                    </div>
                 </div>
             </section>
-        </main>
-    </div>
+
+            <!-- Sidebar: composicao mensal -->
+            <aside class="despesas-sidebar" aria-label="Composicao mensal e indicadores">
+
+                <!-- Composicao mensal (donut) -->
+                <div class="sidebar-card" id="sidebar-composicao">
+                    <div class="sidebar-card-header">
+                        <span class="sidebar-card-title">Composicao Mensal</span>
+                    </div>
+                    <div class="sidebar-card-body">
+                        <div class="sidebar-donut-wrapper">
+                            <div class="sidebar-donut" id="sidebar-donut" role="img" aria-label="Grafico de composicao mensal">
+                                <div class="sidebar-donut-center">
+                                    <span class="sidebar-donut-center-value" id="donut-center-value">—</span>
+                                    <span class="sidebar-donut-center-label">total</span>
+                                </div>
+                            </div>
+                            <div class="sidebar-donut-legend" id="donut-legend" aria-label="Legenda do grafico">
+                                <span style="font-size:11px;color:#86868b;">Carregando...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Por categoria -->
+                <div class="sidebar-card" id="sidebar-por-categoria">
+                    <div class="sidebar-card-header">
+                        <span class="sidebar-card-title">Por Categoria</span>
+                    </div>
+                    <div class="sidebar-card-body">
+                        <div class="categoria-bar-list" id="categoria-bar-list" aria-label="Gastos por categoria">
+                            <span style="font-size:11px;color:#86868b;">Carregando...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Indicadores rapidos -->
+                <div class="sidebar-card" id="sidebar-indicadores">
+                    <div class="sidebar-card-header">
+                        <span class="sidebar-card-title">Indicadores Rapidos</span>
+                    </div>
+                    <div class="sidebar-card-body">
+                        <div class="indicadores-grid" id="indicadores-grid">
+                            <div class="indicador-rapido">
+                                <span class="indicador-label">Recorrentes</span>
+                                <span class="indicador-value purple" id="ind-recorrentes-count">—</span>
+                            </div>
+                            <div class="indicador-rapido">
+                                <span class="indicador-label">Vencendo 7d</span>
+                                <span class="indicador-value red" id="ind-vencendo-count">—</span>
+                            </div>
+                            <div class="indicador-rapido">
+                                <span class="indicador-label">Cartoes</span>
+                                <span class="indicador-value teal" id="ind-cartoes-count">—</span>
+                            </div>
+                            <div class="indicador-rapido">
+                                <span class="indicador-label">% Pago</span>
+                                <span class="indicador-value green" id="ind-pct-pago">—</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Proximos vencimentos -->
+                <div class="sidebar-card" id="sidebar-proximos">
+                    <div class="sidebar-card-header">
+                        <span class="sidebar-card-title">Proximos Vencimentos</span>
+                    </div>
+                    <div class="sidebar-card-body" style="padding-top:6px;padding-bottom:6px;">
+                        <div class="proximos-vencimentos-list" id="proximos-vencimentos-list" aria-label="Proximos vencimentos">
+                            <span class="pv-empty">Carregando...</span>
+                        </div>
+                    </div>
+                </div>
+
+            </aside>
+        </div><!-- .despesas-page-layout -->
+
+    </main>
+</div>
 
     <!-- Modal para adicionar/editar despesa -->
     <div id="modal-despesa" class="modal">
@@ -216,7 +378,7 @@
                             <label for="frequencia_semanas">Frequência (semanas)</label>
                             <input type="number" id="frequencia_semanas" name="frequencia_semanas"
                                    min="1" max="52" value="1" placeholder="1">
-                            <small style="color: rgba(255,255,255,0.7); font-size: 0.85em; display: block; margin-top: 5px;">
+                            <small style="color: #666; font-size: 0.85em; display: block; margin-top: 5px;">
                                 1 = toda semana, 2 = a cada 2 semanas, etc.
                             </small>
                         </div>

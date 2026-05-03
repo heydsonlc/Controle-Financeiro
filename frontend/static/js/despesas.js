@@ -242,6 +242,11 @@ async function carregarDespesas() {
         despesas = data.data;
         aplicarFiltros();
 
+        // Renderizar sidebar se os dados estiverem presentes
+        if (data.sidebar) {
+            renderizarSidebar(data.sidebar);
+        }
+
     } catch (error) {
         console.error('Erro ao carregar despesas:', error);
         mostrarErro('Erro ao carregar despesas. Por favor, tente novamente.');
@@ -927,6 +932,185 @@ function atualizarResumo(despesasParaResumir) {
     document.getElementById('total-geral').textContent = `R$ ${total.toFixed(2).replace('.', ',')}`;
     document.getElementById('total-pendentes').textContent = `R$ ${totalPendentes.toFixed(2).replace('.', ',')}`;
     document.getElementById('total-pagas').textContent = `R$ ${totalPagas.toFixed(2).replace('.', ',')}`;
+}
+
+/**
+ * Filtra a lista de despesas pelo campo de busca (texto livre)
+ * Nao altera logica de pagamento nem recorrencia
+ */
+function filtrarBusca(texto) {
+    if (!texto || texto.trim() === '') {
+        aplicarFiltros();
+        return;
+    }
+    const lower = texto.toLowerCase().trim();
+    const filtradas = despesas.filter(d => {
+        const nome = (d.nome || '').toLowerCase();
+        const descricao = (d.descricao || '').toLowerCase();
+        const categoria = (d.categoria && d.categoria.nome) ? d.categoria.nome.toLowerCase() : '';
+        return nome.includes(lower) || descricao.includes(lower) || categoria.includes(lower);
+    });
+    renderizarDespesas(filtradas);
+    atualizarResumo(filtradas);
+}
+
+// Paleta de cores para composicao por categoria (sidebar)
+const SIDEBAR_COLORS = [
+    '#007aff', '#34c759', '#ff9500', '#af52de', '#32ade6',
+    '#ff3b30', '#ff6b35', '#5856d6', '#64d2ff', '#30b0c7',
+];
+
+/**
+ * Renderiza o painel lateral com dados de composicao mensal
+ * Chamado apos carregarDespesas() com os dados do campo sidebar
+ */
+function renderizarSidebar(sidebar) {
+    if (!sidebar) return;
+
+    // Cards extras (vencendo 7d, recorrentes, cartoes)
+    const elV7d = document.getElementById('total-vencendo-7d');
+    const elV7dSub = document.getElementById('summary-vencendo-sub');
+    const elRec = document.getElementById('total-recorrentes');
+    const elRecSub = document.getElementById('summary-recorrentes-sub');
+    const elCart = document.getElementById('total-cartoes');
+    const elCartSub = document.getElementById('summary-cartoes-sub');
+
+    if (elV7d) elV7d.textContent = `R$ ${(sidebar.vencendo_7d_valor || 0).toFixed(2).replace('.', ',')}`;
+    if (elV7dSub) elV7dSub.textContent = `${sidebar.vencendo_7d_count || 0} despesa(s)`;
+    if (elRec) elRec.textContent = `R$ ${(sidebar.recorrentes_valor || 0).toFixed(2).replace('.', ',')}`;
+    if (elRecSub) elRecSub.textContent = `${sidebar.recorrentes_count || 0} despesa(s)`;
+    if (elCart) elCart.textContent = `R$ ${(sidebar.cartoes_valor || 0).toFixed(2).replace('.', ',')}`;
+    if (elCartSub) elCartSub.textContent = `${sidebar.cartoes_count || 0} fatura(s)`;
+
+    // Subtitulos dos 3 primeiros cards
+    const elTotalSub = document.getElementById('summary-total-sub');
+    const elPendentesSub = document.getElementById('summary-pendentes-sub');
+    const elPagasSub = document.getElementById('summary-pagas-sub');
+    if (elTotalSub) elTotalSub.textContent = 'todas as despesas';
+    if (elPendentesSub) elPendentesSub.textContent = 'aguardando pagamento';
+    if (elPagasSub) elPagasSub.textContent = 'liquidadas';
+
+    // Indicadores rapidos
+    const indRec = document.getElementById('ind-recorrentes-count');
+    const indVenc = document.getElementById('ind-vencendo-count');
+    const indCart = document.getElementById('ind-cartoes-count');
+    const indPct = document.getElementById('ind-pct-pago');
+
+    if (indRec) indRec.textContent = sidebar.recorrentes_count || 0;
+    if (indVenc) indVenc.textContent = sidebar.vencendo_7d_count || 0;
+    if (indCart) indCart.textContent = sidebar.cartoes_count || 0;
+    if (indPct) {
+        const total = (sidebar.total_mes || 0);
+        const pagas = (sidebar.total_pagas || 0);
+        const pct = total > 0 ? Math.round((pagas / total) * 100) : 0;
+        indPct.textContent = `${pct}%`;
+    }
+
+    // Donut chart (composicao por categoria via conic-gradient)
+    const composicao = sidebar.composicao_categoria || [];
+    const donut = document.getElementById('sidebar-donut');
+    const donutLegend = document.getElementById('donut-legend');
+    const donutCenterValue = document.getElementById('donut-center-value');
+    const totalMes = sidebar.total_mes || 0;
+
+    if (donutCenterValue) {
+        if (totalMes >= 1000) {
+            donutCenterValue.textContent = `R$ ${(totalMes / 1000).toFixed(1)}k`;
+        } else {
+            donutCenterValue.textContent = `R$ ${totalMes.toFixed(0)}`;
+        }
+    }
+
+    if (donut && composicao.length > 0) {
+        // Gerar conic-gradient
+        let cumulativo = 0;
+        const stops = [];
+        const topN = composicao.slice(0, SIDEBAR_COLORS.length);
+        topN.forEach((cat, i) => {
+            const pct = totalMes > 0 ? (cat.valor / totalMes) * 100 : 0;
+            const cor = cat.cor && cat.cor !== '#6e6e73' ? cat.cor : SIDEBAR_COLORS[i % SIDEBAR_COLORS.length];
+            stops.push(`${cor} ${cumulativo.toFixed(1)}% ${(cumulativo + pct).toFixed(1)}%`);
+            cumulativo += pct;
+        });
+        if (cumulativo < 100) {
+            stops.push(`#e5e5ea ${cumulativo.toFixed(1)}% 100%`);
+        }
+        donut.style.background = `conic-gradient(${stops.join(', ')})`;
+
+        // Legenda
+        if (donutLegend) {
+            const legendItems = topN.slice(0, 4).map((cat, i) => {
+                const pct = totalMes > 0 ? Math.round((cat.valor / totalMes) * 100) : 0;
+                const cor = cat.cor && cat.cor !== '#6e6e73' ? cat.cor : SIDEBAR_COLORS[i % SIDEBAR_COLORS.length];
+                return `<div class="donut-legend-item">
+                    <span class="donut-legend-dot" style="background:${cor};"></span>
+                    <span class="donut-legend-name" title="${cat.nome}">${cat.nome}</span>
+                    <span class="donut-legend-pct">${pct}%</span>
+                </div>`;
+            });
+            donutLegend.innerHTML = legendItems.join('');
+        }
+    } else if (donut) {
+        donut.style.background = '#e5e5ea';
+        if (donutLegend) donutLegend.innerHTML = '<span style="font-size:11px;color:#86868b;">Sem dados</span>';
+    }
+
+    // Barras por categoria
+    const barList = document.getElementById('categoria-bar-list');
+    if (barList) {
+        if (composicao.length === 0) {
+            barList.innerHTML = '<span style="font-size:11px;color:#86868b;">Sem dados</span>';
+        } else {
+            const maxVal = composicao[0] ? composicao[0].valor : 1;
+            const itens = composicao.slice(0, 8).map((cat, i) => {
+                const pct = maxVal > 0 ? Math.round((cat.valor / maxVal) * 100) : 0;
+                const cor = cat.cor && cat.cor !== '#6e6e73' ? cat.cor : SIDEBAR_COLORS[i % SIDEBAR_COLORS.length];
+                return `<div class="categoria-bar-item">
+                    <div class="categoria-bar-row">
+                        <span class="categoria-bar-name" title="${cat.nome}">${cat.nome}</span>
+                        <span class="categoria-bar-value">R$ ${cat.valor.toFixed(2).replace('.', ',')}</span>
+                    </div>
+                    <div class="categoria-bar-track">
+                        <div class="categoria-bar-fill" style="width:${pct}%;background:${cor};"></div>
+                    </div>
+                </div>`;
+            });
+            barList.innerHTML = itens.join('');
+        }
+    }
+
+    // Proximos vencimentos
+    const pvList = document.getElementById('proximos-vencimentos-list');
+    if (pvList) {
+        const proximos = sidebar.proximos_vencimentos || [];
+        if (proximos.length === 0) {
+            pvList.innerHTML = '<span class="pv-empty">Nenhum vencimento proximo</span>';
+        } else {
+            const hoje = new Date();
+            hoje.setHours(0, 0, 0, 0);
+            const itens = proximos.map(pv => {
+                const dt = new Date(pv.data_vencimento + 'T00:00:00');
+                const diffDias = Math.round((dt - hoje) / (1000 * 60 * 60 * 24));
+                const dia = String(dt.getDate()).padStart(2, '0');
+                const mes = dt.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
+                let chipClass = '';
+                if (diffDias <= 3) chipClass = 'urgente';
+                else if (diffDias <= 7) chipClass = 'proximo';
+                return `<div class="proximo-vencimento-item">
+                    <div class="pv-date-chip ${chipClass}" aria-label="${pv.data_vencimento}">
+                        <span class="pv-date-day">${dia}</span>
+                        <span class="pv-date-month">${mes}</span>
+                    </div>
+                    <div class="pv-info">
+                        <div class="pv-nome" title="${pv.nome}">${pv.nome}</div>
+                        <div class="pv-categoria">${pv.categoria || pv.status_pagamento || ''}</div>
+                    </div>
+                    <div class="pv-valor">R$ ${parseFloat(pv.valor).toFixed(2).replace('.', ',')}</div>
+                </div>`;
+            });
+            pvList.innerHTML = itens.join('');
+        }
+    }
 }
 
 /**

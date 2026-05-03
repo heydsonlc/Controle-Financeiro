@@ -340,9 +340,92 @@ def listar_despesas():
         # Ordenar por data de vencimento (mais recente primeiro)
         resultado.sort(key=lambda x: x.get('data_vencimento', ''), reverse=True)
 
+        # ============================================================
+        # SIDEBAR SUMMARY DATA — apenas leitura dos dados ja buscados
+        # Nenhuma logica de pagamento e alterada aqui
+        # ============================================================
+        hoje = datetime.now().date()
+        sete_dias = hoje + timedelta(days=7)
+
+        total_mes = sum(float(d.get('valor', 0)) for d in resultado)
+        total_pendentes = sum(float(d.get('valor', 0)) for d in resultado if not d.get('pago'))
+        total_pagas = sum(float(d.get('valor', 0)) for d in resultado if d.get('pago'))
+
+        # Vencendo em 7 dias (pendentes com vencimento entre hoje e hoje+7)
+        vencendo_7d = [
+            d for d in resultado
+            if not d.get('pago')
+            and d.get('data_vencimento')
+            and hoje.isoformat() <= d['data_vencimento'] <= sete_dias.isoformat()
+        ]
+        vencendo_7d_count = len(vencendo_7d)
+        vencendo_7d_valor = sum(float(d.get('valor', 0)) for d in vencendo_7d)
+
+        # Recorrentes
+        recorrentes = [d for d in resultado if d.get('recorrente') and not d.get('is_fatura_cartao')]
+        recorrentes_count = len(recorrentes)
+        recorrentes_valor = sum(float(d.get('valor', 0)) for d in recorrentes)
+
+        # Cartoes / faturas
+        cartoes_faturas = [d for d in resultado if d.get('is_fatura_cartao')]
+        cartoes_count = len(cartoes_faturas)
+        cartoes_valor = sum(float(d.get('valor', 0)) for d in cartoes_faturas)
+
+        # Composicao por categoria (para grafico)
+        composicao_categoria = {}
+        for d in resultado:
+            cat = d.get('categoria')
+            if cat:
+                nome_cat = cat.get('nome', 'Sem categoria')
+                cor_cat = cat.get('cor', '#6e6e73')
+            else:
+                nome_cat = 'Sem categoria'
+                cor_cat = '#6e6e73'
+            if nome_cat not in composicao_categoria:
+                composicao_categoria[nome_cat] = {'valor': 0.0, 'cor': cor_cat}
+            composicao_categoria[nome_cat]['valor'] += float(d.get('valor', 0))
+
+        composicao_lista = sorted(
+            [{'nome': k, 'valor': v['valor'], 'cor': v['cor']} for k, v in composicao_categoria.items()],
+            key=lambda x: x['valor'],
+            reverse=True
+        )
+
+        # Proximos vencimentos (pendentes, mais proximos primeiro, limite 5)
+        proximos = sorted(
+            [d for d in resultado if not d.get('pago') and d.get('data_vencimento')],
+            key=lambda x: x['data_vencimento']
+        )[:5]
+        proximos_vencimentos = [
+            {
+                'id': d['id'],
+                'nome': d['nome'],
+                'valor': d['valor'],
+                'data_vencimento': d['data_vencimento'],
+                'status_pagamento': d.get('status_pagamento', 'Pendente'),
+                'categoria': d.get('categoria', {}).get('nome', '') if d.get('categoria') else '',
+            }
+            for d in proximos
+        ]
+
+        sidebar = {
+            'total_mes': total_mes,
+            'total_pendentes': total_pendentes,
+            'total_pagas': total_pagas,
+            'vencendo_7d_count': vencendo_7d_count,
+            'vencendo_7d_valor': vencendo_7d_valor,
+            'recorrentes_count': recorrentes_count,
+            'recorrentes_valor': recorrentes_valor,
+            'cartoes_count': cartoes_count,
+            'cartoes_valor': cartoes_valor,
+            'composicao_categoria': composicao_lista,
+            'proximos_vencimentos': proximos_vencimentos,
+        }
+
         return jsonify({
             'success': True,
-            'data': resultado
+            'data': resultado,
+            'sidebar': sidebar,
         })
     except Exception:
         return _internal_error('despesas')

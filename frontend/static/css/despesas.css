@@ -1586,3 +1586,622 @@ body.mobile-view .despesa-valor-principal {
         min-width: auto;
     }
 }
+
+/* ============================================================
+   DESPESAS-UX-1: Layout 70/30 com Sidebar de Composicao Mensal
+   ============================================================ */
+
+/* Page header */
+.despesas-page-header {
+    margin-bottom: 20px;
+}
+
+.despesas-page-header h1 {
+    font-size: 1.5em;
+    font-weight: 700;
+    color: #1d1d1f;
+    letter-spacing: -0.02em;
+    margin: 0 0 4px 0;
+}
+
+.despesas-page-header .page-subtitle {
+    font-size: 0.9em;
+    color: #6e6e73;
+    margin: 0;
+}
+
+/* Layout principal 70/30 */
+.despesas-page-layout {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+.despesas-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.despesas-sidebar {
+    width: 320px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+/* Filter bar */
+.despesas-filters-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    background: #ffffff;
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 16px;
+}
+
+.despesas-filters-bar .module-filter-group {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.despesas-filters-bar .module-filter-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6e6e73;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+}
+
+.despesas-filters-bar .module-filter-control {
+    height: 32px;
+    padding: 0 8px;
+    font-size: 13px;
+    border: 1px solid rgba(0,0,0,0.12);
+    border-radius: 7px;
+    background: #f5f5f7;
+    color: #1d1d1f;
+    transition: border-color 0.2s;
+}
+
+.despesas-filters-bar .module-filter-control:focus {
+    outline: none;
+    border-color: #007aff;
+    background: #fff;
+}
+
+.despesas-filters-bar .filter-sep {
+    flex: 1;
+}
+
+.despesas-filters-bar .btn-filtros-adv {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 32px;
+    padding: 0 12px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #1d1d1f;
+    background: #f5f5f7;
+    border: 1px solid rgba(0,0,0,0.1);
+    border-radius: 7px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.despesas-filters-bar .btn-filtros-adv:hover {
+    background: #e8e8ea;
+}
+
+.despesas-filters-bar .btn-nova-despesa {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 32px;
+    padding: 0 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    background: #007aff;
+    border: none;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.despesas-filters-bar .btn-nova-despesa:hover {
+    background: #0051d5;
+}
+
+/* Summary cards - 6 cards em grid responsivo */
+.despesas-summary-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.summary-card {
+    background: #ffffff;
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 10px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    transition: box-shadow 0.15s, transform 0.15s;
+}
+
+.summary-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    transform: translateY(-1px);
+}
+
+.summary-card-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 16px;
+}
+
+.summary-card-icon.blue { background: rgba(0,122,255,0.1); color: #007aff; }
+.summary-card-icon.orange { background: rgba(255,149,0,0.1); color: #ff9500; }
+.summary-card-icon.green { background: rgba(52,199,89,0.1); color: #34c759; }
+.summary-card-icon.red { background: rgba(255,59,48,0.1); color: #ff3b30; }
+.summary-card-icon.purple { background: rgba(175,82,222,0.1); color: #af52de; }
+.summary-card-icon.teal { background: rgba(90,200,250,0.1); color: #32ade6; }
+
+.summary-card-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.summary-card-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: #6e6e73;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-bottom: 2px;
+}
+
+.summary-card-value {
+    font-size: 1.15em;
+    font-weight: 700;
+    color: #1d1d1f;
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.summary-card-sub {
+    font-size: 11px;
+    color: #86868b;
+    margin-top: 1px;
+}
+
+/* List container */
+.despesas-list-container {
+    background: #ffffff;
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+/* ============================================================
+   SIDEBAR CARDS
+   ============================================================ */
+
+.sidebar-card {
+    background: #ffffff;
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.sidebar-card-header {
+    padding: 12px 16px 10px;
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.sidebar-card-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #1d1d1f;
+    letter-spacing: -0.01em;
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.4px;
+    color: #6e6e73;
+}
+
+.sidebar-card-body {
+    padding: 14px 16px;
+}
+
+/* Donut chart - CSS puro com conic-gradient */
+.sidebar-donut-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.sidebar-donut {
+    width: 90px;
+    height: 90px;
+    border-radius: 50%;
+    background: conic-gradient(#007aff 0% 33%, #34c759 33% 66%, #ff9500 66% 100%);
+    position: relative;
+    flex-shrink: 0;
+    transition: background 0.3s;
+}
+
+.sidebar-donut::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    background: #ffffff;
+}
+
+.sidebar-donut-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1;
+    text-align: center;
+    pointer-events: none;
+}
+
+.sidebar-donut-center-value {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    color: #1d1d1f;
+    letter-spacing: -0.01em;
+    line-height: 1.1;
+}
+
+.sidebar-donut-center-label {
+    display: block;
+    font-size: 9px;
+    color: #6e6e73;
+    line-height: 1;
+}
+
+.sidebar-donut-legend {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.donut-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #1d1d1f;
+}
+
+.donut-legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.donut-legend-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #3a3a3c;
+}
+
+.donut-legend-pct {
+    font-weight: 600;
+    color: #1d1d1f;
+    min-width: 32px;
+    text-align: right;
+}
+
+/* Category bars */
+.categoria-bar-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.categoria-bar-item {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.categoria-bar-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+}
+
+.categoria-bar-name {
+    color: #3a3a3c;
+    font-weight: 500;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.categoria-bar-value {
+    font-weight: 600;
+    color: #1d1d1f;
+    min-width: 72px;
+    text-align: right;
+    font-size: 12px;
+}
+
+.categoria-bar-track {
+    height: 5px;
+    background: #f0f0f2;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.categoria-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: #007aff;
+    transition: width 0.4s ease;
+}
+
+/* Indicadores rapidos */
+.indicadores-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.indicador-rapido {
+    background: #f5f5f7;
+    border-radius: 9px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.indicador-label {
+    font-size: 10px;
+    font-weight: 500;
+    color: #6e6e73;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.indicador-value {
+    font-size: 13px;
+    font-weight: 700;
+    color: #1d1d1f;
+    letter-spacing: -0.01em;
+}
+
+.indicador-value.red { color: #ff3b30; }
+.indicador-value.orange { color: #ff9500; }
+.indicador-value.green { color: #34c759; }
+.indicador-value.blue { color: #007aff; }
+.indicador-value.purple { color: #af52de; }
+
+/* Proximos vencimentos */
+.proximos-vencimentos-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.proximo-vencimento-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 0;
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+}
+
+.proximo-vencimento-item:last-child {
+    border-bottom: none;
+}
+
+.pv-date-chip {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: #f5f5f7;
+    flex-shrink: 0;
+}
+
+.pv-date-chip.urgente {
+    background: rgba(255,59,48,0.1);
+}
+
+.pv-date-chip.proximo {
+    background: rgba(255,149,0,0.1);
+}
+
+.pv-date-day {
+    font-size: 14px;
+    font-weight: 700;
+    color: #1d1d1f;
+    line-height: 1;
+}
+
+.pv-date-chip.urgente .pv-date-day { color: #ff3b30; }
+.pv-date-chip.proximo .pv-date-day { color: #ff9500; }
+
+.pv-date-month {
+    font-size: 9px;
+    font-weight: 500;
+    color: #6e6e73;
+    text-transform: uppercase;
+    line-height: 1;
+}
+
+.pv-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.pv-nome {
+    font-size: 12px;
+    font-weight: 500;
+    color: #1d1d1f;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pv-categoria {
+    font-size: 11px;
+    color: #6e6e73;
+}
+
+.pv-valor {
+    font-size: 12px;
+    font-weight: 700;
+    color: #1d1d1f;
+    white-space: nowrap;
+}
+
+.pv-empty {
+    text-align: center;
+    font-size: 12px;
+    color: #86868b;
+    padding: 16px 0;
+    font-style: italic;
+}
+
+/* Badge status na lista */
+.badge-pendente {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 500;
+    color: #ff9500;
+    background: rgba(255,149,0,0.1);
+    border-radius: 5px;
+    padding: 1px 6px;
+}
+
+.badge-pago {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 500;
+    color: #34c759;
+    background: rgba(52,199,89,0.1);
+    border-radius: 5px;
+    padding: 1px 6px;
+}
+
+.badge-vencido {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 500;
+    color: #ff3b30;
+    background: rgba(255,59,48,0.1);
+    border-radius: 5px;
+    padding: 1px 6px;
+}
+
+/* Search input na filter bar */
+.despesas-search-input {
+    height: 32px;
+    padding: 0 10px 0 30px;
+    font-size: 13px;
+    border: 1px solid rgba(0,0,0,0.12);
+    border-radius: 7px;
+    background: #f5f5f7;
+    color: #1d1d1f;
+    width: 160px;
+    transition: width 0.2s, border-color 0.2s;
+}
+
+.despesas-search-input:focus {
+    outline: none;
+    border-color: #007aff;
+    background: #fff;
+    width: 200px;
+}
+
+.despesas-search-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.despesas-search-wrapper svg {
+    position: absolute;
+    left: 8px;
+    color: #6e6e73;
+    pointer-events: none;
+}
+
+/* Responsividade: sidebar desce abaixo em telas menores */
+@media (max-width: 1100px) {
+    .despesas-page-layout {
+        flex-direction: column;
+    }
+
+    .despesas-sidebar {
+        width: 100%;
+        position: static;
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    .despesas-sidebar .sidebar-card {
+        flex: 1 1 280px;
+    }
+
+    .despesas-summary-cards {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 700px) {
+    .despesas-summary-cards {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .despesas-filters-bar {
+        gap: 6px;
+    }
+
+    .despesas-search-input {
+        width: 120px;
+    }
+}
