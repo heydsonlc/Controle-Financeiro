@@ -1949,3 +1949,33 @@ class MobilidadeCenarioAtivo(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }
+
+
+class MobilidadeAssinatura(db.Model):
+    """
+    VEIC-2B: Carro por assinatura ou plano mensal estável de mobilidade.
+    Ao ativar, gera recorrência mensal com origem_tipo='ASSINATURA'.
+    """
+    __tablename__ = 'mobilidade_assinatura'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False)
+    valor_mensal = db.Column(db.Numeric(10, 2), nullable=False)
+    categoria_id = db.Column(db.Integer, db.ForeignKey('categoria.id'), nullable=True)
+    status = db.Column(db.String(10), nullable=False, default='ATIVO')  # ATIVO | INATIVO
+    metadata_json = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    categoria = db.relationship('Categoria', foreign_keys=[categoria_id])
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'nome': self.nome,
+            'valor_mensal': float(self.valor_mensal) if self.valor_mensal is not None else None,
+            'categoria_id': self.categoria_id,
+            'status': self.status,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
