@@ -214,3 +214,53 @@ def test_categoria_cartao_manual_prevalece_sobre_resolucao(app_context):
 
     assert mobilidade.id != casa.id
     assert lancamento.categoria_cartao_id == casa.id
+
+
+def test_endpoint_lista_categorias_limite_com_gasto_atual(app_context):
+    categoria, _extra, cartao = _base_cartao()
+    categoria_cartao = _mapear_e_vincular(cartao, categoria)
+    db.session.add(LancamentoAgregado(
+        cartao_id=cartao.id,
+        categoria_id=categoria.id,
+        categoria_cartao_id=categoria_cartao.id,
+        descricao='Posto Teste',
+        valor=250,
+        data_compra=date(2026, 5, 1),
+        mes_fatura=date(2026, 5, 1),
+    ))
+    db.session.commit()
+
+    with app_context.test_client() as client:
+        resp = client.get(f'/api/cartoes/{cartao.id}/categorias-limite?ativo=true&mes_referencia=2026-05')
+
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data['success'] is True
+    assert data['data'][0]['categoria_cartao_id'] == categoria_cartao.id
+    assert data['data'][0]['gasto_atual'] == 250.0
+    assert data['data'][0]['disponivel'] == 1750.0
+    assert data['data'][0]['percentual_utilizado'] == 12.5
+
+
+def test_endpoint_cria_edita_e_desativa_categoria_limite(app_context):
+    _categoria, _extra, cartao = _base_cartao()
+    categoria_cartao = _categoria_cartao('Alimentacao')
+
+    with app_context.test_client() as client:
+        criar_resp = client.post(
+            f'/api/cartoes/{cartao.id}/categorias-limite',
+            json={'categoria_cartao_id': categoria_cartao.id, 'limite_mensal': '1500.00'},
+        )
+        limite_id = criar_resp.get_json()['data']['id']
+
+        editar_resp = client.put(
+            f'/api/cartoes/{cartao.id}/categorias-limite/{limite_id}',
+            json={'limite_mensal': '1750.00'},
+        )
+        remover_resp = client.delete(f'/api/cartoes/{cartao.id}/categorias-limite/{limite_id}')
+
+    assert criar_resp.status_code == 201
+    assert editar_resp.status_code == 200
+    assert editar_resp.get_json()['data']['limite_mensal'] == 1750.0
+    assert remover_resp.status_code == 200
+    assert remover_resp.get_json()['data']['ativo'] is False

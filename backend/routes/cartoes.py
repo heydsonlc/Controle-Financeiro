@@ -320,13 +320,35 @@ def excluir_item_agregado(item_id):
 @cartoes_bp.route('/<int:cartao_id>/categorias-limite', methods=['GET'])
 def listar_categorias_limite(cartao_id):
     try:
+        mes_referencia = request.args.get('mes_referencia', datetime.now().strftime('%Y-%m'))
+        try:
+            mes_ref_date = datetime.strptime(f'{mes_referencia[:7]}-01', '%Y-%m-%d').date()
+        except ValueError:
+            return _business_error('mes_referencia invalido. Use YYYY-MM', 400)
+
         limites = CategoriaCartaoService.listar_limites_cartao(
             cartao_id,
             ativo=None if request.args.get('ativo') is None else request.args.get('ativo').lower() == 'true',
         )
+        resultado = []
+        for limite in limites:
+            item = limite.to_dict()
+            gasto_atual = db.session.query(func.sum(LancamentoAgregado.valor)).filter(
+                LancamentoAgregado.cartao_id == cartao_id,
+                LancamentoAgregado.categoria_cartao_id == limite.categoria_cartao_id,
+                LancamentoAgregado.mes_fatura == mes_ref_date,
+            ).scalar() or 0
+            gasto_atual = float(gasto_atual)
+            limite_mensal = float(limite.limite_mensal or 0)
+            item['gasto_atual'] = gasto_atual
+            item['disponivel'] = limite_mensal - gasto_atual
+            item['percentual_utilizado'] = round((gasto_atual / limite_mensal * 100) if limite_mensal > 0 else 0, 2)
+            item['mes_referencia'] = mes_referencia[:7]
+            resultado.append(item)
+
         return jsonify({
             'success': True,
-            'data': [limite.to_dict() for limite in limites]
+            'data': resultado
         }), 200
     except ValueError as exc:
         return _business_error(str(exc), 400)

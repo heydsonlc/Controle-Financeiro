@@ -1,413 +1,291 @@
 {% extends "base.html" %}
 
-{% block title %}Cartões de Crédito - Controle Financeiro{% endblock %}
+{% block title %}Cart&otilde;es - Controle Financeiro{% endblock %}
 
 {% block extra_css %}
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/cartoes.css') }}?v=2025010104">
-{% endblock %}
-
-{% block action_bar %}
-    <div class="module-actionbar" aria-label="Ações de Cartões">
-        <div class="module-actionbar-actions">
-            <button class="action-icon-button primary" id="btn-novo-cartao" type="button" onclick="abrirModalCartao()" title="Novo Cart&atilde;o" aria-label="Novo Cart&atilde;o">
-                <span class="action-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M12 5v14M5 12h14"/>
-                    </svg>
-                </span>
-                <span class="action-button-label">Novo Cartão</span>
-            </button>
-        </div>
-    </div>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/cartoes.css') }}">
 {% endblock %}
 
 {% block content %}
     <div class="container app-content-fluid">
-        <main>
-            <!-- View: Lista de Cartões (inicial) -->
-            <div id="view-lista-cartoes" class="view-cartoes">
-                <div class="cartoes-container module-data-section">
-                    <div class="cartoes-header section-title-row">
-                        <div class="section-title-main">
-                            <span class="section-title-icon" aria-hidden="true">
+        <main class="cartoes-page">
+            <header class="cartoes-hero">
+                <div class="cartoes-title-block">
+                    <nav class="breadcrumb cartoes-breadcrumb" aria-label="Caminho">
+                        <span>Financeiro</span>
+                        <span aria-hidden="true">/</span>
+                        <span>Cart&otilde;es</span>
+                    </nav>
+                    <h1>Cart&otilde;es</h1>
+                    <p>Vincule categorias do cart&atilde;o globais e defina limites por cart&atilde;o.</p>
+                </div>
+
+                <section class="cartoes-summary" aria-label="Resumo dos cart&otilde;es">
+                    <article class="summary-item">
+                        <span class="summary-icon summary-icon-card" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false">
+                                <rect x="3" y="6" width="18" height="12" rx="2"/>
+                                <path d="M3 10h18"/>
+                            </svg>
+                        </span>
+                        <span class="summary-label">Cart&otilde;es ativos</span>
+                        <strong id="summary-cartoes-ativos">0</strong>
+                    </article>
+                    <article class="summary-item">
+                        <span class="summary-icon summary-icon-link" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false">
+                                <path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/>
+                                <path d="M14 11a5 5 0 0 0-7.1 0l-2 2a5 5 0 0 0 7.1 7.1l1.1-1.1"/>
+                            </svg>
+                        </span>
+                        <span class="summary-label">Categorias vinculadas</span>
+                        <strong id="summary-categorias-vinculadas">0</strong>
+                    </article>
+                    <article class="summary-item">
+                        <span class="summary-icon summary-icon-limit" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false">
+                                <path d="M4 7h16v10H4V7Z"/>
+                                <path d="M7 11h6"/>
+                                <path d="M16 14h1"/>
+                            </svg>
+                        </span>
+                        <span class="summary-label">Limite total</span>
+                        <strong id="summary-limite-total">R$ 0,00</strong>
+                    </article>
+                </section>
+            </header>
+
+            <section class="cartoes-toolbar" aria-label="A&ccedil;&otilde;es de cart&otilde;es">
+                <button class="cf-button cf-button-primary" id="btn-novo-cartao" type="button">
+                    <span aria-hidden="true">+</span>
+                    <span>Novo cart&atilde;o</span>
+                </button>
+                <button class="cf-button cf-button-secondary" id="btn-vincular-categoria" type="button">
+                    <span aria-hidden="true">+</span>
+                    <span>Vincular categoria</span>
+                </button>
+                <label class="toolbar-search" for="cartoes-pesquisa">
+                    <span aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false">
+                            <circle cx="11" cy="11" r="7"/>
+                            <path d="m20 20-3.5-3.5"/>
+                        </svg>
+                    </span>
+                    <input type="search" id="cartoes-pesquisa" placeholder="Pesquisar">
+                </label>
+                <label class="toolbar-status" for="cartoes-status">
+                    <span>Status:</span>
+                    <select id="cartoes-status">
+                        <option value="ativos">Ativos</option>
+                        <option value="inativos">Inativos</option>
+                        <option value="todos">Todos</option>
+                    </select>
+                </label>
+            </section>
+
+            <section class="cartoes-shell" aria-label="Configura&ccedil;&atilde;o de limites por cart&atilde;o">
+                <aside class="cartoes-sidebar" aria-label="Lista de cart&otilde;es">
+                    <div class="sidebar-title-row">
+                        <h2>Lista de cart&otilde;es</h2>
+                    </div>
+                    <label class="workspace-search" for="cartoes-busca-lateral">
+                        <span aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false">
+                                <circle cx="11" cy="11" r="7"/>
+                                <path d="m20 20-3.5-3.5"/>
+                            </svg>
+                        </span>
+                        <input id="cartoes-busca-lateral" type="search" placeholder="Buscar cart&atilde;o...">
+                    </label>
+                    <div class="cartoes-list" id="lista-cartoes">
+                        <p class="loading">Carregando cart&otilde;es...</p>
+                    </div>
+                </aside>
+
+                <section class="cartao-main" id="cartao-detalhe" aria-live="polite">
+                    <div class="detail-empty">
+                        <h2>Selecione um cart&atilde;o</h2>
+                        <p>Escolha um cart&atilde;o para vincular Categorias do Cart&atilde;o globais e definir limites mensais.</p>
+                    </div>
+                </section>
+
+                <aside class="hierarchy-panel" aria-label="Como funciona">
+                    <section class="how-card">
+                        <h2>Como funciona</h2>
+                        <p>A hierarquia aplicada &agrave;s despesas neste cart&atilde;o segue esta estrutura.</p>
+                        <div class="hierarchy-step">
+                            <span class="hierarchy-icon hierarchy-doc" aria-hidden="true">
                                 <svg viewBox="0 0 24 24" focusable="false">
-                                    <rect x="3" y="5" width="18" height="14" rx="2"/>
-                                    <path d="M3 10h18"/>
+                                    <path d="M6 3h9l3 3v15H6V3Z"/>
+                                    <path d="M14 3v4h4"/>
+                                    <path d="M9 12h6M9 16h4"/>
                                 </svg>
                             </span>
-                            <h2 class="section-title-text">Meus Cart&otilde;es</h2>
+                            <div>
+                                <strong>Categoria de Despesa</strong>
+                                <span>Classifica&ccedil;&atilde;o original da despesa.</span>
+                            </div>
                         </div>
-                    </div>
-                    <div id="lista-cartoes" class="cartoes-grid">
-                        <p class="loading">Carregando cartões...</p>
-                    </div>
-                </div>
-            </div>
+                        <span class="hierarchy-arrow" aria-hidden="true">&darr;</span>
+                        <div class="hierarchy-step">
+                            <span class="hierarchy-icon hierarchy-category" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false">
+                                    <rect x="4" y="5" width="16" height="14" rx="2"/>
+                                    <path d="M8 10h8M8 14h5"/>
+                                </svg>
+                            </span>
+                            <div>
+                                <strong>Categoria do Cart&atilde;o</strong>
+                                <span>Agrupamento global configurado em Categorias.</span>
+                            </div>
+                        </div>
+                        <span class="hierarchy-arrow" aria-hidden="true">&darr;</span>
+                        <div class="hierarchy-step">
+                            <span class="hierarchy-icon hierarchy-limit" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false">
+                                    <path d="M4 7h16v10H4V7Z"/>
+                                    <path d="M7 11h6"/>
+                                    <path d="M16 14h1"/>
+                                </svg>
+                            </span>
+                            <div>
+                                <strong>Limite do Cart&atilde;o</strong>
+                                <span>Limite mensal definido para cada categoria vinculada.</span>
+                            </div>
+                        </div>
+                    </section>
 
-            <!-- View: Detalhes do Cartão -->
-            <div id="view-detalhes-cartao" class="view-detalhes" style="display: none;">
-                <!-- Cabeçalho do Cartão (Minimalista) -->
-                <div class="cartao-header-minimal">
-                    <button class="btn-voltar" onclick="voltarListaCartoes()">
-                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="width:1em;height:1em;display:inline-block;vertical-align:-0.125em;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">
-                            <path d="M19 12H5"/>
-                            <path d="m11 6-6 6 6 6"/>
-                        </svg>
-                        Voltar
-                    </button>
-                    <div class="cartao-identity">
-                        <h2 id="cartao-nome-detalhe">Nome do Cartão</h2>
-                        <p id="cartao-descricao-detalhe" class="cartao-meta"></p>
-                    </div>
-                    <div class="row-actions cartao-actions">
-                        <button class="row-action-button" onclick="abrirModalEditarCartao()" title="Editar" aria-label="Editar">
-                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="width:1em;height:1em;display:inline-block;vertical-align:-0.125em;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">
-                                <path d="M5 19h4L19 9a2.1 2.1 0 0 0-3-3L6 16l-1 3Z"/>
-                                <path d="M14 6l4 4"/>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Categorias do Cartão (sem tabs - única seção) -->
-                <div class="tab-header-inline">
-                    <div class="header-info-inline">
-                        <h3>Categorias do Cartão</h3>
-                        <span class="separator">-</span>
-                        <p class="tab-description-inline">Limites de gasto mensais para organização do cartão</p>
-                    </div>
-                    <button class="btn-minimal-primary" onclick="abrirModalItemAgregado()">
-                        + Nova Categoria
-                    </button>
-                </div>
-                <div id="lista-orcamentos" class="orcamentos-lista-minimal">
-                    <p class="loading">Carregando categorias...</p>
-                </div>
-            </div>
+                    <section class="hint-card">
+                        <h3>Dica</h3>
+                        <p>Defina limites realistas para cada categoria e acompanhe o consumo mensal pelo cart&atilde;o selecionado.</p>
+                    </section>
+                </aside>
+            </section>
         </main>
     </div>
 
-    <!-- Modal: Criar/Editar Cartão -->
     <div id="modal-cartao" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 id="modal-cartao-titulo">Novo Cartão de Crédito</h2>
-                <span class="close" onclick="fecharModal('modal-cartao')">&times;</span>
+                <h2 id="modal-cartao-titulo">Novo Cart&atilde;o</h2>
+                <button class="modal-close" type="button" data-close-modal="modal-cartao" aria-label="Fechar">&times;</button>
             </div>
 
-            <form id="form-cartao" onsubmit="salvarCartao(event)">
+            <form id="form-cartao">
                 <input type="hidden" id="cartao-id">
 
                 <div class="form-group">
-                    <label for="cartao-nome">Nome do Cartão *</label>
-                    <input type="text" id="cartao-nome" required
-                           placeholder="Ex: VISA Platinum, Mastercard Gold">
+                    <label for="cartao-nome">Nome do Cart&atilde;o *</label>
+                    <input type="text" id="cartao-nome" required placeholder="Ex: Nubank, Inter, Banco do Brasil">
                 </div>
 
                 <div class="form-group">
-                    <label for="cartao-descricao">Descrição</label>
-                    <textarea id="cartao-descricao" rows="2"
-                              placeholder="Descrição opcional do cartão"></textarea>
+                    <label for="cartao-descricao">Banco / Emissor</label>
+                    <textarea id="cartao-descricao" rows="2" placeholder="Ex: Nubank S.A."></textarea>
                 </div>
 
                 <div class="form-row">
                     <div class="form-group">
                         <label for="cartao-dia-vencimento">Dia do Vencimento *</label>
-                        <input type="number" id="cartao-dia-vencimento" required
-                               min="1" max="31" placeholder="Ex: 15">
+                        <input type="number" id="cartao-dia-vencimento" required min="1" max="31" placeholder="Ex: 10">
                     </div>
 
                     <div class="form-group">
-                        <label for="cartao-limite">Limite de Crédito</label>
-                        <input type="number" id="cartao-limite"
-                               step="0.01" min="0" placeholder="0,00">
+                        <label for="cartao-limite">Limite de Cr&eacute;dito</label>
+                        <input type="number" id="cartao-limite" step="0.01" min="0" placeholder="0,00">
                     </div>
                 </div>
 
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="cartao-numero">Número do Cartão</label>
-                        <input type="text" id="cartao-numero" maxlength="19"
-                               placeholder="1234 5678 9012 3456">
+                        <label for="cartao-numero">N&uacute;mero do Cart&atilde;o</label>
+                        <input type="text" id="cartao-numero" maxlength="19" placeholder="1234 5678 9012 3456">
                     </div>
 
                     <div class="form-group">
                         <label for="cartao-data-validade">Data de Validade</label>
-                        <input type="text" id="cartao-data-validade" maxlength="7"
-                               placeholder="MM/AAAA" oninput="mascaraMesAno(this)">
+                        <input type="text" id="cartao-data-validade" maxlength="7" placeholder="MM/AAAA">
                     </div>
                 </div>
 
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="cartao-cvv">Código de Segurança (CVV)</label>
-                        <input type="password" id="cartao-cvv" maxlength="4"
-                               placeholder="***">
+                        <label for="cartao-cvv">C&oacute;digo de Seguran&ccedil;a</label>
+                        <input type="password" id="cartao-cvv" maxlength="4" placeholder="***">
                     </div>
 
-                    <div class="form-group">
-                        <label>
+                    <div class="form-group checkbox-field">
+                        <label class="checkbox-label">
                             <input type="checkbox" id="cartao-tem-codigo">
-                            Possui código de segurança
+                            <span>Possui c&oacute;digo de seguran&ccedil;a</span>
                         </label>
                     </div>
                 </div>
 
                 <div class="form-group">
-                    <label for="cartao-observacoes">Observações</label>
-                    <textarea id="cartao-observacoes" rows="2"
-                              placeholder="Observações adicionais"></textarea>
+                    <label for="cartao-observacoes">Observa&ccedil;&otilde;es</label>
+                    <textarea id="cartao-observacoes" rows="2"></textarea>
                 </div>
 
                 <div class="form-actions">
-                    <button type="button" onclick="fecharModal('modal-cartao')" style="padding: 12px 24px; background: rgba(255, 255, 255, 0.2); color: white; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 10px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">
-                        Cancelar
-                    </button>
-                    <button type="submit" style="padding: 12px 24px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; border-radius: 10px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);">
-                        Salvar
-                    </button>
+                    <button type="button" class="cf-button cf-button-secondary" data-close-modal="modal-cartao">Cancelar</button>
+                    <button type="submit" class="cf-button cf-button-primary">Salvar</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Modal: Revelar Código de Segurança -->
+    <div id="modal-categoria-limite" class="modal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2 id="modal-limite-titulo">Vincular Categoria</h2>
+                <button class="modal-close" type="button" data-close-modal="modal-categoria-limite" aria-label="Fechar">&times;</button>
+            </div>
+
+            <form id="form-categoria-limite">
+                <input type="hidden" id="limite-id">
+                <div class="form-group">
+                    <label for="limite-categoria-cartao">Categoria do Cart&atilde;o *</label>
+                    <select id="limite-categoria-cartao" required></select>
+                </div>
+                <div class="form-group">
+                    <label for="limite-valor">Limite mensal *</label>
+                    <input type="number" id="limite-valor" required min="0" step="0.01" placeholder="0,00">
+                </div>
+                <div class="form-group checkbox-field">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="limite-ativo" checked>
+                        <span>V&iacute;nculo ativo</span>
+                    </label>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="cf-button cf-button-secondary" data-close-modal="modal-categoria-limite">Cancelar</button>
+                    <button type="submit" class="cf-button cf-button-primary">Salvar limite</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div id="modal-revelar-cvv" class="modal">
         <div class="modal-content modal-sm">
             <div class="modal-header">
-                <h2>Código de Segurança</h2>
-                <span class="close" onclick="fecharModal('modal-revelar-cvv')">&times;</span>
+                <h2>C&oacute;digo de Seguran&ccedil;a</h2>
+                <button class="modal-close" type="button" data-close-modal="modal-revelar-cvv" aria-label="Fechar">&times;</button>
             </div>
 
-            <form id="form-revelar-cvv" onsubmit="revelarCodigoSeguranca(event)">
+            <form id="form-revelar-cvv">
                 <input type="hidden" id="cvv-cartao-id">
-
                 <div class="form-group">
-                    <label for="cvv-senha">Digite a senha para visualizar:</label>
-                    <input type="password" id="cvv-senha" required
-                           placeholder="Senha de proteção">
+                    <label for="cvv-senha">Digite a senha para visualizar</label>
+                    <input type="password" id="cvv-senha" required placeholder="Senha de prote&ccedil;&atilde;o">
                 </div>
-
-                <div id="cvv-resultado" style="display: none; margin-top: 20px; padding: 20px; background: rgba(255, 255, 255, 0.1); border-radius: 10px; text-align: center;">
-                    <p style="color: rgba(255, 255, 255, 0.8); margin: 0 0 10px 0; font-size: 0.9em;">Código de Segurança:</p>
-                    <p id="cvv-codigo" style="color: white; font-size: 2em; font-weight: 700; margin: 0; letter-spacing: 5px;"></p>
+                <div id="cvv-resultado" class="cvv-result" hidden>
+                    <span>C&oacute;digo de Seguran&ccedil;a</span>
+                    <strong id="cvv-codigo">***</strong>
                 </div>
-
                 <div class="form-actions">
-                    <button type="button" onclick="fecharModal('modal-revelar-cvv')" style="padding: 12px 24px; background: rgba(255, 255, 255, 0.2); color: white; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 10px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">
-                        Fechar
-                    </button>
-                    <button type="submit" id="btn-revelar" style="padding: 12px 24px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; border-radius: 10px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);">
-                        Revelar
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Modal: Nova Categoria do Cartão (ItemAgregado) -->
-    <div id="modal-item-agregado" class="modal">
-        <div class="modal-content modal-sm">
-            <div class="modal-header">
-                <h2 id="modal-item-agregado-titulo">Nova Categoria do Cartão</h2>
-                <span class="close" onclick="fecharModal('modal-item-agregado')">&times;</span>
-            </div>
-
-            <form id="form-item-agregado" onsubmit="salvarItemAgregado(event)">
-                <input type="hidden" id="item-agregado-id">
-
-                <div class="form-group">
-                    <label for="item-agregado-nome">Nome *</label>
-                    <input type="text" id="item-agregado-nome" required maxlength="100" placeholder="Ex: Supermercado">
-                </div>
-
-                <div class="form-group">
-                    <label for="item-agregado-descricao">Descrição (opcional)</label>
-                    <textarea id="item-agregado-descricao" rows="2" maxlength="255" placeholder="Ex: Compras de alimentos"></textarea>
-                </div>
-
-                <div class="form-actions">
-                    <button type="button" onclick="fecharModal('modal-item-agregado')" style="padding: 12px 24px; background: rgba(255, 255, 255, 0.2); color: white; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 10px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">
-                        Cancelar
-                    </button>
-                    <button type="submit" style="padding: 12px 24px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; border-radius: 10px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);">
-                        Salvar
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Modal: Orçamento -->
-    <div id="modal-orcamento" class="modal">
-        <div class="modal-content modal-sm">
-            <div class="modal-header">
-                <h2 id="modal-orcamento-titulo">Definir Orçamento</h2>
-                <span class="close" onclick="fecharModal('modal-orcamento')">&times;</span>
-            </div>
-
-            <form id="form-orcamento" onsubmit="salvarOrcamento(event)">
-                <input type="hidden" id="orcamento-id">
-                <input type="hidden" id="orcamento-item-id">
-
-                <div class="form-group">
-                    <label for="orcamento-categoria">Categoria *</label>
-                    <select id="orcamento-categoria" required>
-                        <option value="">Selecione...</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label for="orcamento-mes">Mês de Referência *</label>
-                    <input type="text" id="orcamento-mes" placeholder="MM/AAAA" maxlength="7" oninput="mascaraMesAno(this)" required>
-                    <small style="color: rgba(255, 255, 255, 0.7); font-size: 12px; display: block; margin-top: 5px;">
-                        O limite será aplicado a partir deste mês para todas as faturas futuras
-                    </small>
-                </div>
-
-                <div class="form-group">
-                    <label for="orcamento-valor">Valor Orçado *</label>
-                    <input type="number" id="orcamento-valor" required
-                           step="0.01" min="0" placeholder="0,00">
-                </div>
-
-                <div class="form-group">
-                    <label for="orcamento-observacoes">Observações</label>
-                    <textarea id="orcamento-observacoes" rows="2"></textarea>
-                </div>
-
-                <div class="form-actions">
-                    <button type="button" onclick="fecharModal('modal-orcamento')" style="padding: 12px 24px; background: rgba(255, 255, 255, 0.2); color: white; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 10px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">
-                        Cancelar
-                    </button>
-                    <button type="submit" style="padding: 12px 24px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; border-radius: 10px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);">
-                        Salvar
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Modal: Lançamento (Gasto) -->
-    <div id="modal-lancamento" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="modal-lancamento-titulo">Novo Gasto</h2>
-                <span class="close" onclick="fecharModal('modal-lancamento')">&times;</span>
-            </div>
-
-            <form id="form-lancamento" onsubmit="salvarLancamento(event)">
-                <input type="hidden" id="lancamento-id">
-                <input type="hidden" id="lancamento-item-id">
-
-                <div class="form-group">
-                    <label for="lancamento-categoria-despesa">Categoria da Despesa *</label>
-                    <select id="lancamento-categoria-despesa" required>
-                        <option value="">Selecione...</option>
-                    </select>
-                    <small style="color: #6e6e73; font-size: 12px; display: block; margin-top: 5px;">
-                        Categoria para análise de gastos (Alimentação, Transporte, etc.)
-                    </small>
-                </div>
-
-                <div class="form-group">
-                    <label for="lancamento-categoria-cartao">Categoria do Cartão (opcional)</label>
-                    <select id="lancamento-categoria-cartao">
-                        <option value="">Sem categoria (não controla limite)</option>
-                    </select>
-                    <small style="color: #6e6e73; font-size: 12px; display: block; margin-top: 5px;">
-                        Categoria para controle de limite do cartão (Supermercado, Farmácia, etc.)
-                    </small>
-                </div>
-
-                <div class="form-group">
-                    <label for="lancamento-descricao">Descrição *</label>
-                    <input type="text" id="lancamento-descricao" required
-                           placeholder="Ex: Compras no supermercado ABC">
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="lancamento-valor">Valor *</label>
-                        <input type="number" id="lancamento-valor" required
-                               step="0.01" min="0" placeholder="0,00">
-                    </div>
-
-                    <div class="form-group">
-                        <label for="lancamento-data">Data da Compra *</label>
-                        <input type="date" id="lancamento-data" required>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label for="lancamento-fatura">Mês da Fatura *</label>
-                    <input type="text" id="lancamento-fatura" placeholder="MM/AAAA" maxlength="7" oninput="mascaraMesAno(this)" required>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="lancamento-parcela">Parcela Atual</label>
-                        <input type="number" id="lancamento-parcela" min="1" value="1">
-                    </div>
-
-                    <div class="form-group">
-                        <label for="lancamento-total-parcelas">Total de Parcelas</label>
-                        <input type="number" id="lancamento-total-parcelas" min="1" value="1">
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label for="lancamento-observacoes">Observações</label>
-                    <textarea id="lancamento-observacoes" rows="2"></textarea>
-                </div>
-
-                <div class="form-actions">
-                    <button type="button" onclick="fecharModal('modal-lancamento')" style="padding: 12px 24px; background: rgba(255, 255, 255, 0.2); color: white; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 10px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">
-                        Cancelar
-                    </button>
-                    <button type="submit" style="padding: 12px 24px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; border-radius: 10px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);">
-                        Salvar
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Modal: Pagar Fatura -->
-    <div id="modal-pagar-fatura" class="modal">
-        <div class="modal-content modal-sm">
-            <div class="modal-header">
-                <h2>Pagar Fatura</h2>
-                <span class="close" onclick="fecharModal('modal-pagar-fatura')">&times;</span>
-            </div>
-
-            <form id="form-pagar-fatura" onsubmit="pagarFatura(event)">
-                <input type="hidden" id="fatura-despesa-id">
-
-                <div id="fatura-info" class="info-box" style="background: #f5f5f7; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                    <!-- Informações da fatura serão preenchidas aqui -->
-                </div>
-
-                <div class="form-group">
-                    <label for="fatura-data-pagamento">Data do Pagamento *</label>
-                    <input type="date" id="fatura-data-pagamento" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="fatura-conta-bancaria">Conta Bancaria *</label>
-                    <select id="fatura-conta-bancaria" required>
-                        <option value="">Selecione...</option>
-                    </select>
-                    <small class="form-help">Obrigatorio para gerar debito no extrato da conta.</small>
-                </div>
-
-                <div class="form-actions">
-                    <button type="button" onclick="fecharModal('modal-pagar-fatura')" style="padding: 12px 24px; background: rgba(255, 255, 255, 0.2); color: #1d1d1f; border: 1px solid rgba(0, 0, 0, 0.1); border-radius: 10px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">
-                        Cancelar
-                    </button>
-                    <button type="submit" style="padding: 12px 24px; background: linear-gradient(135deg, #34c759, #28a745); color: white; border: none; border-radius: 10px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(52, 199, 89, 0.4);">
-                        Confirmar Pagamento
-                    </button>
+                    <button type="button" class="cf-button cf-button-secondary" data-close-modal="modal-revelar-cvv">Fechar</button>
+                    <button type="submit" class="cf-button cf-button-primary" id="btn-revelar">Revelar</button>
                 </div>
             </form>
         </div>
@@ -415,27 +293,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='js/cartoes.js') }}?v=2025010104"></script>
-    <script>
-        function toggleMobileView() {
-            document.body.classList.toggle('mobile-view');
-            const btn = document.getElementById('mobile-btn');
-            if (document.body.classList.contains('mobile-view')) {
-                btn.innerHTML = 'Ver em Desktop';
-            } else {
-                btn.innerHTML = 'Ver em Mobile';
-            }
-        }
-
-        // Trocar tabs
-        function trocarTab(tabName) {
-            // Remover active de todos
-            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-
-            // Adicionar active no selecionado
-            event.target.classList.add('active');
-            document.getElementById('tab-' + tabName).classList.add('active');
-        }
-    </script>
+    <script src="{{ url_for('static', filename='js/cartoes.js') }}"></script>
 {% endblock %}

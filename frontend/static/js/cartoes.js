@@ -1,178 +1,501 @@
 /**
- * JavaScript para gerenciamento de Cartões de Crédito
+ * Tela Cartoes - limites por Categoria do Cartao global.
  */
 
-// ============================================================================
-// ESTADO GLOBAL
-// ============================================================================
+const API_CARTOES = '/api/cartoes';
+const API_CATEGORIAS_CARTAO = '/api/categorias-cartao';
 
-const state = {
+const estadoCartoes = {
     cartoes: [],
-    categorias: [],
-    cartaoAtual: null,
-    itensAgregados: [],
-    mesSelecionado: new Date().toISOString().slice(0, 7) // YYYY-MM
+    categoriasCartao: [],
+    limitesPorCartao: new Map(),
+    cartaoSelecionadoId: null,
+    buscaGeral: '',
+    buscaLateral: '',
+    status: 'ativos',
+    mesSelecionado: new Date().toISOString().slice(0, 7)
 };
 
 function cartoesIcon(name) {
     const icons = {
-        lock: '<path d="M7 11V8a5 5 0 0 1 10 0v3"/><path d="M6 11h12v9H6v-9Z"/><path d="M12 15v2"/>',
+        card: '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/>',
         edit: '<path d="M5 19h4L19 9a2.1 2.1 0 0 0-3-3L6 16l-1 3Z"/><path d="M14 6l4 4"/>',
+        link: '<path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.1 0l-2 2a5 5 0 0 0 7.1 7.1l1.1-1.1"/>',
+        lock: '<path d="M7 11V8a5 5 0 0 1 10 0v3"/><path d="M6 11h12v9H6v-9Z"/><path d="M12 15v2"/>',
         remove: '<path d="M6 6l12 12M18 6 6 18"/>',
-        trash: '<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/>',
-        loading: '<path d="M12 6v6l4 2"/><path d="M20 12a8 8 0 1 1-8-8"/>',
         check: '<path d="M5 12.5l4 4L19 7"/>',
+        more: '<path d="M12 5h.1M12 12h.1M12 19h.1"/>',
         info: '<path d="M12 11v6"/><path d="M12 7h.1"/><path d="M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/>',
-        warning: '<path d="M12 5 3.5 19h17L12 5Z"/><path d="M12 10v4M12 17h.1"/>'
+        alert: '<path d="M12 5 3.5 19h17L12 5Z"/><path d="M12 10v4M12 17h.1"/>',
+        default: '<rect x="4" y="4" width="16" height="16" rx="3"/>'
     };
-
-    return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="width:1em;height:1em;display:inline-block;vertical-align:-0.125em;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">${icons[name] || icons.edit}</svg>`;
+    return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${icons[name] || icons.default}</svg>`;
 }
 
-// ============================================================================
-// INICIALIZAÇÃO
-// ============================================================================
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[char]));
+}
+
+function normalizarBusca(value) {
+    return String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+}
+
+function formatarMoeda(valor) {
+    const numero = Number(valor || 0);
+    return numero.toLocaleString('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+    });
+}
+
+function formatarMoedaCompacta(valor) {
+    const numero = Number(valor || 0);
+    return numero.toLocaleString('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+}
+
+function obterFinalCartao(cartao) {
+    const numero = String(cartao?.config?.numero_cartao || '').replace(/\D/g, '');
+    return numero.length >= 4 ? numero.slice(-4) : '----';
+}
+
+async function fetchJson(url, options = {}) {
+    const response = await fetch(url, options);
+    const data = await response.json().catch(() => null);
+    if (!response.ok || data?.success === false) {
+        throw new Error(data?.error || data?.erro || data?.message || `Erro HTTP ${response.status}`);
+    }
+    return data;
+}
 
 document.addEventListener('DOMContentLoaded', () => {
-    inicializar();
+    inicializarTelaCartoes();
 });
 
-async function inicializar() {
-    // Mês atual já definido no state (linha 14)
-    // Não há mais seletor de mês na tela de Cartões (tela estrutural, não temporal)
-
-    // Carregar dados iniciais
-    await carregarCategorias();
-    await carregarCartoes();
+function inicializarTelaCartoes() {
+    configurarEventosCartoes();
+    carregarTelaCartoes();
 }
 
-// ============================================================================
-// CARREGAR CATEGORIAS
-// ============================================================================
+function configurarEventosCartoes() {
+    document.getElementById('btn-novo-cartao')?.addEventListener('click', abrirModalCartao);
+    document.getElementById('btn-vincular-categoria')?.addEventListener('click', () => abrirModalLimite());
 
-async function carregarCategorias() {
-    try {
-        const response = await fetch('/api/categorias');
-        if (!response.ok) throw new Error('Erro ao carregar categorias');
+    document.getElementById('cartoes-pesquisa')?.addEventListener('input', (event) => {
+        estadoCartoes.buscaGeral = event.target.value;
+        ajustarSelecaoCartao();
+        renderizarTelaCartoes();
+    });
 
-        const data = await response.json();
-        state.categorias = Array.isArray(data) ? data : [];
+    document.getElementById('cartoes-busca-lateral')?.addEventListener('input', (event) => {
+        estadoCartoes.buscaLateral = event.target.value;
+        ajustarSelecaoCartao();
+        renderizarListaCartoes();
+        renderizarDetalheCartao();
+    });
 
-        // Preencher selects de categoria de DESPESA (analítica)
-        const selects = [
-            document.getElementById('cartao-categoria'),
-            document.getElementById('lancamento-categoria-despesa')
-        ];
+    document.getElementById('cartoes-status')?.addEventListener('change', (event) => {
+        estadoCartoes.status = event.target.value;
+        ajustarSelecaoCartao();
+        renderizarTelaCartoes();
+    });
 
-        selects.forEach(select => {
-            if (select) {
-                select.innerHTML = '<option value="">Selecione...</option>';
-                state.categorias.forEach(cat => {
-                    if (cat.ativo) {
-                        select.innerHTML += `<option value="${cat.id}">${cat.nome}</option>`;
-                    }
-                });
-            }
+    document.getElementById('lista-cartoes')?.addEventListener('click', (event) => {
+        const item = event.target.closest('[data-cartao-id]');
+        if (!item) return;
+        estadoCartoes.cartaoSelecionadoId = Number(item.dataset.cartaoId);
+        renderizarListaCartoes();
+        renderizarDetalheCartao();
+    });
+
+    document.getElementById('cartao-detalhe')?.addEventListener('click', tratarCliqueDetalhe);
+    document.getElementById('form-cartao')?.addEventListener('submit', salvarCartao);
+    document.getElementById('form-categoria-limite')?.addEventListener('submit', salvarCategoriaLimite);
+    document.getElementById('form-revelar-cvv')?.addEventListener('submit', revelarCodigoSeguranca);
+
+    document.querySelectorAll('[data-close-modal]').forEach((button) => {
+        button.addEventListener('click', () => fecharModal(button.dataset.closeModal));
+    });
+
+    document.querySelectorAll('.modal').forEach((modal) => {
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) fecharModal(modal.id);
         });
-    } catch (error) {
-        console.error('Erro ao carregar categorias:', error);
-        state.categorias = [];
-        mostrarErro('Erro ao carregar categorias');
-    }
+    });
+
+    document.getElementById('cartao-numero')?.addEventListener('input', (event) => {
+        const valor = event.target.value.replace(/\D/g, '');
+        event.target.value = valor.match(/.{1,4}/g)?.join(' ') || valor;
+    });
+
+    document.getElementById('cartao-data-validade')?.addEventListener('input', (event) => mascaraMesAno(event.target));
 }
 
-// ============================================================================
-// CRUD DE CARTÕES
-// ============================================================================
-
-async function carregarCartoes() {
+async function carregarTelaCartoes() {
     try {
-        const response = await fetch('/api/cartoes');
-        if (!response.ok) throw new Error('Erro ao carregar cartões');
+        const [cartoesResp, categoriasResp] = await Promise.all([
+            fetchJson(API_CARTOES),
+            fetchJson(`${API_CATEGORIAS_CARTAO}?ativo=true`)
+        ]);
 
-        state.cartoes = await response.json();
-        renderizarCartoes();
-        atualizarFiltroCartoes();
+        estadoCartoes.cartoes = Array.isArray(cartoesResp) ? cartoesResp : (cartoesResp.data || []);
+        estadoCartoes.categoriasCartao = categoriasResp.data || [];
+
+        await Promise.all(estadoCartoes.cartoes.map((cartao) => carregarLimitesCartao(cartao.id)));
+        ajustarSelecaoCartao();
+        renderizarTelaCartoes();
     } catch (error) {
-        console.error('Erro ao carregar cartões:', error);
-        mostrarErro('Erro ao carregar cartões');
+        console.error('Erro ao carregar tela de cartoes:', error);
+        mostrarErro(`Erro ao carregar cart\u00f5es: ${error.message}`);
     }
 }
 
-function renderizarCartoes() {
-    const container = document.getElementById('lista-cartoes');
+async function carregarLimitesCartao(cartaoId) {
+    const resp = await fetchJson(`${API_CARTOES}/${cartaoId}/categorias-limite?mes_referencia=${estadoCartoes.mesSelecionado}`);
+    estadoCartoes.limitesPorCartao.set(Number(cartaoId), resp.data || []);
+}
 
-    if (state.cartoes.length === 0) {
-        container.innerHTML = '<p class="empty-state">Nenhum cartão cadastrado. Clique em "Novo Cartão" para começar.</p>';
+function renderizarTelaCartoes() {
+    renderizarResumo();
+    renderizarListaCartoes();
+    renderizarDetalheCartao();
+}
+
+function renderizarResumo() {
+    const cartoesAtivos = estadoCartoes.cartoes.filter((cartao) => cartao.ativo !== false);
+    let categoriasVinculadas = 0;
+    let limiteTotal = 0;
+
+    estadoCartoes.limitesPorCartao.forEach((limites) => {
+        limites.filter((limite) => limite.ativo).forEach((limite) => {
+            categoriasVinculadas += 1;
+            limiteTotal += Number(limite.limite_mensal || 0);
+        });
+    });
+
+    setText('summary-cartoes-ativos', cartoesAtivos.length);
+    setText('summary-categorias-vinculadas', categoriasVinculadas);
+    setText('summary-limite-total', formatarMoeda(limiteTotal));
+}
+
+function setText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+}
+
+function filtrarCartoes() {
+    const busca = normalizarBusca(`${estadoCartoes.buscaGeral} ${estadoCartoes.buscaLateral}`);
+    return estadoCartoes.cartoes.filter((cartao) => {
+        if (estadoCartoes.status === 'ativos' && cartao.ativo === false) return false;
+        if (estadoCartoes.status === 'inativos' && cartao.ativo !== false) return false;
+        if (!busca) return true;
+        return normalizarBusca(`${cartao.nome} ${cartao.descricao || ''} ${obterFinalCartao(cartao)}`).includes(busca);
+    });
+}
+
+function ajustarSelecaoCartao() {
+    const cartoes = filtrarCartoes();
+    const selecionadoExiste = cartoes.some((cartao) => cartao.id === estadoCartoes.cartaoSelecionadoId);
+    estadoCartoes.cartaoSelecionadoId = selecionadoExiste
+        ? estadoCartoes.cartaoSelecionadoId
+        : (cartoes[0]?.id || null);
+}
+
+function obterCartaoSelecionado() {
+    return estadoCartoes.cartoes.find((cartao) => cartao.id === estadoCartoes.cartaoSelecionadoId) || null;
+}
+
+function obterLimitesCartao(cartaoId) {
+    return estadoCartoes.limitesPorCartao.get(Number(cartaoId)) || [];
+}
+
+function obterCategoriaCartao(categoriaCartaoId) {
+    return estadoCartoes.categoriasCartao.find((categoria) => categoria.id === Number(categoriaCartaoId)) || null;
+}
+
+function obterLimitesAtivos(cartaoId) {
+    return obterLimitesCartao(cartaoId).filter((limite) => limite.ativo);
+}
+
+function obterCategoriasDisponiveis(cartaoId) {
+    const vinculadasAtivas = new Set(obterLimitesAtivos(cartaoId).map((limite) => limite.categoria_cartao_id));
+    return estadoCartoes.categoriasCartao
+        .filter((categoria) => categoria.ativo && !vinculadasAtivas.has(categoria.id))
+        .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+}
+
+function renderizarListaCartoes() {
+    const lista = document.getElementById('lista-cartoes');
+    if (!lista) return;
+
+    const cartoes = filtrarCartoes();
+    if (!cartoes.length) {
+        lista.innerHTML = `
+            <div class="empty-inline">
+                <h3>Nenhum cart&atilde;o encontrado</h3>
+                <p>Ajuste a busca ou cadastre um novo cart&atilde;o.</p>
+            </div>
+        `;
         return;
     }
 
-    container.innerHTML = state.cartoes.map(cartao => `
-        <div class="cartao-card" onclick="visualizarCartao(${JSON.stringify(cartao).replace(/"/g, '&quot;')})">
-            <div class="cartao-card-header">
-                <h3>${cartao.nome}</h3>
-                ${cartao.config?.tem_codigo ? `
-                    <button class="btn-cvv" onclick="event.stopPropagation(); abrirModalRevelarCVV(${cartao.id})" title="Ver código de segurança">
-                        CVV ${cartoesIcon('lock')}
-                    </button>
-                ` : ''}
-            </div>
-            <div class="cartao-card-body">
-                ${cartao.descricao ? `<p class="cartao-descricao">${cartao.descricao}</p>` : ''}
-                ${cartao.config?.numero_cartao ? `
-                    <div class="cartao-numero-display">
-                        <span class="numero-cartao">${cartao.config.numero_cartao}</span>
-                    </div>
-                ` : ''}
-                <div class="cartao-info-grid">
-                    ${cartao.config?.data_validade ? `
-                        <div class="info-item">
-                            <span class="label">Validade:</span>
-                            <span class="value">${cartao.config.data_validade}</span>
-                        </div>
-                    ` : ''}
-                    <div class="info-item">
-                        <span class="label">Vencimento:</span>
-                        <span class="value">Dia ${cartao.config?.dia_vencimento || '-'}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="label">Limite:</span>
-                        <span class="value">R$ ${formatarMoeda(cartao.config?.limite_credito || 0)}</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `).join('');
+    lista.innerHTML = cartoes.map((cartao) => {
+        const selecionado = cartao.id === estadoCartoes.cartaoSelecionadoId;
+        const limitesAtivos = obterLimitesAtivos(cartao.id);
+        const final = obterFinalCartao(cartao);
+        return `
+            <button class="cartao-list-item ${selecionado ? 'selected' : ''}" type="button" data-cartao-id="${cartao.id}">
+                <span class="cartao-brand">${renderizarMarcaCartao(cartao)}</span>
+                <span class="cartao-list-main">
+                    <strong>${escapeHtml(cartao.nome)}</strong>
+                    <small>**** ${escapeHtml(final)}</small>
+                </span>
+                <span class="cartao-list-meta">
+                    <span class="status-dot active"></span>
+                    <small>Ativo</small>
+                    <small>${limitesAtivos.length} ${limitesAtivos.length === 1 ? 'categoria vinculada' : 'categorias vinculadas'}</small>
+                </span>
+                <span class="cartao-list-check" aria-hidden="true">${selecionado ? cartoesIcon('check') : ''}</span>
+            </button>
+        `;
+    }).join('');
 }
 
-function atualizarFiltroCartoes() {
-    // Função removida - não há mais seletor de cartão na tela
-    // Cartões são visualizados clicando nos cards
+function renderizarDetalheCartao() {
+    const detalhe = document.getElementById('cartao-detalhe');
+    if (!detalhe) return;
+
+    const cartao = obterCartaoSelecionado();
+    if (!cartao) {
+        detalhe.innerHTML = `
+            <div class="detail-empty">
+                <h2>Selecione um cart&atilde;o</h2>
+                <p>Escolha um cart&atilde;o para vincular Categorias do Cart&atilde;o globais e definir limites mensais.</p>
+            </div>
+        `;
+        return;
+    }
+
+    const limites = filtrarLimitesPorStatus(obterLimitesCartao(cartao.id));
+    const limitesAtivos = obterLimitesAtivos(cartao.id);
+    const disponiveis = obterCategoriasDisponiveis(cartao.id);
+    const totalLimite = limitesAtivos.reduce((sum, limite) => sum + Number(limite.limite_mensal || 0), 0);
+    const totalGasto = limitesAtivos.reduce((sum, limite) => sum + Number(limite.gasto_atual || 0), 0);
+    const final = obterFinalCartao(cartao);
+
+    detalhe.innerHTML = `
+        <header class="cartao-detail-header">
+            <div class="cartao-detail-identity">
+                <span class="cartao-detail-brand">${renderizarMarcaCartao(cartao)}</span>
+                <div>
+                    <h2>${escapeHtml(cartao.nome)}</h2>
+                    <p>**** ${escapeHtml(final)} ${final !== '----' ? `(Final ${escapeHtml(final)})` : ''}</p>
+                </div>
+                <span class="compact-pill status-ativo">Ativo</span>
+            </div>
+            <div class="cartao-detail-actions">
+                <button class="cf-button cf-button-secondary" type="button" data-action="editar-cartao">${cartoesIcon('edit')} <span>Editar cart&atilde;o</span></button>
+                <button class="cf-button cf-button-primary" type="button" data-action="abrir-limite">Salvar limites</button>
+            </div>
+        </header>
+
+        <section class="detail-card cartao-resumo-card">
+            <h3>Resumo do Cart&atilde;o</h3>
+            <div class="resumo-grid">
+                <div>
+                    <span>Nome do cart&atilde;o</span>
+                    <strong>${escapeHtml(cartao.nome)}</strong>
+                </div>
+                <div>
+                    <span>Banco / Emissor</span>
+                    <strong>${escapeHtml(cartao.descricao || '-')}</strong>
+                </div>
+                <div>
+                    <span>Final do cart&atilde;o</span>
+                    <strong>**** ${escapeHtml(final)}</strong>
+                </div>
+                <div>
+                    <span>Vencimento da fatura</span>
+                    <strong>Dia ${escapeHtml(cartao.config?.dia_vencimento || '-')}</strong>
+                </div>
+            </div>
+        </section>
+
+        <section class="detail-card categorias-vinculadas-card">
+            <h3>Categorias do Cart&atilde;o Vinculadas</h3>
+            ${renderizarTabelaLimites(limites)}
+            <div class="limite-total-row">
+                <strong>Total</strong>
+                <strong>${formatarMoeda(totalLimite)}</strong>
+                <span>${formatarMoeda(totalGasto)}</span>
+                <span>${formatarMoeda(totalLimite - totalGasto)}</span>
+                <span>${totalLimite > 0 ? Math.round((totalGasto / totalLimite) * 100) : 0}%</span>
+            </div>
+        </section>
+
+        <section class="detail-card categorias-disponiveis-card">
+            <h3>Categorias dispon&iacute;veis para vincular</h3>
+            ${renderizarCategoriasDisponiveis(disponiveis)}
+        </section>
+
+        <section class="operational-rule">
+            <h3>Regra operacional</h3>
+            <p>As despesas pagas neste cart&atilde;o s&atilde;o agrupadas automaticamente pela Categoria do Cart&atilde;o com base na Categoria de Despesa.</p>
+        </section>
+    `;
+}
+
+function filtrarLimitesPorStatus(limites) {
+    if (estadoCartoes.status === 'ativos') return limites.filter((limite) => limite.ativo);
+    if (estadoCartoes.status === 'inativos') return limites.filter((limite) => !limite.ativo);
+    return limites;
+}
+
+function renderizarTabelaLimites(limites) {
+    if (!limites.length) {
+        return `
+            <div class="table-empty">
+                <h4>Nenhuma Categoria do Cart&atilde;o vinculada</h4>
+                <p>Use Vincular categoria para associar uma categoria global e definir o limite mensal.</p>
+            </div>
+        `;
+    }
+
+    const linhas = limites.map((limite) => {
+        const categoria = obterCategoriaCartao(limite.categoria_cartao_id);
+        const limiteMensal = Number(limite.limite_mensal || 0);
+        const gastoAtual = Number(limite.gasto_atual || 0);
+        const disponivel = Number(limite.disponivel ?? (limiteMensal - gastoAtual));
+        const percentual = Math.min(Number(limite.percentual_utilizado || 0), 999);
+        return `
+            <div class="limites-table-row">
+                <div class="table-category">
+                    <span class="categoria-icon" style="color:${escapeHtml(categoria?.cor || '#2563eb')}">${renderizarIconeCategoriaCartao(categoria, '18px')}</span>
+                    <span>${escapeHtml(categoria?.nome || limite.categoria_cartao_nome || 'Categoria')}</span>
+                </div>
+                <div>${formatarMoeda(limiteMensal)}</div>
+                <div class="usage-cell">
+                    <strong>${formatarMoeda(gastoAtual)}</strong>
+                    <small>${Math.round(percentual)}%</small>
+                    <span class="progress-track"><span style="width:${Math.min(percentual, 100)}%"></span></span>
+                </div>
+                <div class="${disponivel < 0 ? 'negative' : 'positive'}">${formatarMoeda(disponivel)}</div>
+                <div>
+                    <span class="compact-pill ${limite.ativo ? 'status-ativo' : 'status-inativo'}">${limite.ativo ? 'Ativa' : 'Inativa'}</span>
+                </div>
+                <div class="row-actions">
+                    <button class="row-action-button" type="button" data-action="editar-limite" data-limite-id="${limite.id}" title="Editar limite" aria-label="Editar limite">${cartoesIcon('edit')}</button>
+                    <button class="row-action-button danger" type="button" data-action="toggle-limite" data-limite-id="${limite.id}" title="${limite.ativo ? 'Desativar' : 'Reativar'}" aria-label="${limite.ativo ? 'Desativar' : 'Reativar'}">${limite.ativo ? cartoesIcon('remove') : cartoesIcon('check')}</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    return `
+        <div class="limites-table">
+            <div class="limites-table-header">
+                <div>Categoria do Cart&atilde;o</div>
+                <div>Limite mensal</div>
+                <div>Gasto atual</div>
+                <div>Dispon&iacute;vel</div>
+                <div>Status</div>
+                <div>A&ccedil;&otilde;es</div>
+            </div>
+            ${linhas}
+        </div>
+    `;
+}
+
+function renderizarCategoriasDisponiveis(disponiveis) {
+    if (!disponiveis.length) {
+        return '<div class="empty-inline">Todas as Categorias do Cart&atilde;o ativas j&aacute; est&atilde;o vinculadas a este cart&atilde;o.</div>';
+    }
+
+    return `
+        <div class="available-grid">
+            ${disponiveis.map((categoria) => `
+                <article class="available-category">
+                    <span class="categoria-icon" style="color:${escapeHtml(categoria.cor || '#2563eb')}">${renderizarIconeCategoriaCartao(categoria, '20px')}</span>
+                    <strong>${escapeHtml(categoria.nome)}</strong>
+                    <button class="cf-button cf-button-secondary" type="button" data-action="vincular-disponivel" data-categoria-cartao-id="${categoria.id}">
+                        <span aria-hidden="true">+</span>
+                        <span>Vincular</span>
+                    </button>
+                </article>
+            `).join('')}
+        </div>
+    `;
+}
+
+async function tratarCliqueDetalhe(event) {
+    const button = event.target.closest('[data-action]');
+    if (!button) return;
+
+    const action = button.dataset.action;
+    if (action === 'editar-cartao') {
+        abrirModalEditarCartao();
+    } else if (action === 'abrir-limite') {
+        abrirModalLimite();
+    } else if (action === 'editar-limite') {
+        abrirModalLimite(Number(button.dataset.limiteId));
+    } else if (action === 'toggle-limite') {
+        await alternarLimite(Number(button.dataset.limiteId));
+    } else if (action === 'vincular-disponivel') {
+        abrirModalLimite(null, Number(button.dataset.categoriaCartaoId));
+    }
+}
+
+function renderizarMarcaCartao(cartao) {
+    const nome = String(cartao?.nome || 'CC').trim();
+    const partes = nome.split(/\s+/);
+    const sigla = partes.length > 1
+        ? `${partes[0][0] || ''}${partes[1][0] || ''}`
+        : nome.slice(0, 2);
+    return `<span>${escapeHtml(sigla.toUpperCase())}</span>`;
+}
+
+function renderizarIconeCategoriaCartao(categoria, size = '18px') {
+    if (typeof renderIcon === 'function') {
+        return renderIcon(categoria?.icone || 'credit-card', { size });
+    }
+    return cartoesIcon('card');
 }
 
 function abrirModalCartao() {
-    document.getElementById('modal-cartao-titulo').textContent = 'Novo Cartão de Crédito';
+    document.getElementById('modal-cartao-titulo').textContent = 'Novo Cart\u00e3o';
     document.getElementById('form-cartao').reset();
     document.getElementById('cartao-id').value = '';
+    document.getElementById('cartao-tem-codigo').checked = true;
     abrirModal('modal-cartao');
 }
 
 function abrirModalEditarCartao() {
-    if (!state.cartaoAtual) return;
+    const cartao = obterCartaoSelecionado();
+    if (!cartao) return;
 
-    const cartao = state.cartaoAtual;
-    document.getElementById('modal-cartao-titulo').textContent = 'Editar Cartão de Crédito';
+    document.getElementById('modal-cartao-titulo').textContent = 'Editar Cart\u00e3o';
     document.getElementById('cartao-id').value = cartao.id;
-    document.getElementById('cartao-nome').value = cartao.nome;
+    document.getElementById('cartao-nome').value = cartao.nome || '';
     document.getElementById('cartao-descricao').value = cartao.descricao || '';
     document.getElementById('cartao-dia-vencimento').value = cartao.config?.dia_vencimento || '';
     document.getElementById('cartao-limite').value = cartao.config?.limite_credito || '';
     document.getElementById('cartao-numero').value = cartao.config?.numero_cartao || '';
     document.getElementById('cartao-data-validade').value = cartao.config?.data_validade || '';
-    document.getElementById('cartao-cvv').value = '';  // Não mostra o CVV por segurança
-    document.getElementById('cartao-tem-codigo').checked = cartao.config?.tem_codigo || false;
+    document.getElementById('cartao-cvv').value = '';
+    document.getElementById('cartao-tem-codigo').checked = cartao.config?.tem_codigo !== false;
     document.getElementById('cartao-observacoes').value = cartao.config?.observacoes || '';
-
     abrirModal('modal-cartao');
 }
 
@@ -180,12 +503,11 @@ async function salvarCartao(event) {
     event.preventDefault();
 
     const id = document.getElementById('cartao-id').value;
-    const diaVencimento = parseInt(document.getElementById('cartao-dia-vencimento').value);
-
+    const diaVencimento = Number(document.getElementById('cartao-dia-vencimento').value);
     const dados = {
-        nome: document.getElementById('cartao-nome').value,
-        descricao: document.getElementById('cartao-descricao').value,
-        dia_fechamento: diaVencimento, // Mesmo dia do vencimento
+        nome: document.getElementById('cartao-nome').value.trim(),
+        descricao: document.getElementById('cartao-descricao').value.trim(),
+        dia_fechamento: diaVencimento,
         dia_vencimento: diaVencimento,
         limite_credito: parseFloat(document.getElementById('cartao-limite').value) || null,
         numero_cartao: document.getElementById('cartao-numero').value || null,
@@ -195,1139 +517,187 @@ async function salvarCartao(event) {
         observacoes: document.getElementById('cartao-observacoes').value
     };
 
-    try {
-        const url = id ? `/api/cartoes/${id}` : '/api/cartoes';
-        const method = id ? 'PUT' : 'POST';
+    if (!dados.nome || !diaVencimento) {
+        mostrarErro('Informe nome e vencimento do cart\u00e3o.');
+        return;
+    }
 
-        const response = await fetch(url, {
-            method: method,
+    try {
+        const response = await fetchJson(id ? `${API_CARTOES}/${id}` : API_CARTOES, {
+            method: id ? 'PUT' : 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(dados)
         });
-
-        if (!response.ok) throw new Error('Erro ao salvar cartão');
-
         fecharModal('modal-cartao');
-        await carregarCartoes();
-        mostrarSucesso(id ? 'Cartão atualizado com sucesso!' : 'Cartão criado com sucesso!');
-
-        // Se estava editando, atualizar a visualização
-        if (id && state.cartaoAtual && state.cartaoAtual.id == id) {
-            const cartao = state.cartoes.find(c => c.id == id);
-            if (cartao) {
-                visualizarCartao(cartao);
-            }
-        }
+        await carregarTelaCartoes();
+        estadoCartoes.cartaoSelecionadoId = Number(response.id || id || estadoCartoes.cartaoSelecionadoId);
+        ajustarSelecaoCartao();
+        renderizarTelaCartoes();
+        mostrarSucesso(id ? 'Cart\u00e3o atualizado.' : 'Cart\u00e3o criado.');
     } catch (error) {
-        console.error('Erro ao salvar cartão:', error);
-        mostrarErro('Erro ao salvar cartão');
+        console.error('Erro ao salvar cartao:', error);
+        mostrarErro(`Erro ao salvar cart\u00e3o: ${error.message}`);
     }
 }
 
-async function excluirCartao(id) {
-    if (!confirm('Tem certeza que deseja excluir este cartão?')) return;
-
-    try {
-        const response = await fetch(`/api/cartoes/${id}`, {
-            method: 'DELETE'
-        });
-
-        if (!response.ok) throw new Error('Erro ao excluir cartão');
-
-        voltarListaCartoes();
-        await carregarCartoes();
-        mostrarSucesso('Cartão excluído com sucesso!');
-    } catch (error) {
-        console.error('Erro ao excluir cartão:', error);
-        mostrarErro('Erro ao excluir cartão');
-    }
-}
-
-// ============================================================================
-// VISUALIZAÇÃO DO CARTÃO
-// ============================================================================
-
-function visualizarCartao(cartao) {
-    state.cartaoAtual = cartao;
-
-    // Atualizar informações do header
-    document.getElementById('cartao-nome-detalhe').textContent = cartao.nome;
-    document.getElementById('cartao-descricao-detalhe').textContent = cartao.descricao || '';
-
-    // Mostrar view de detalhes
-    document.getElementById('view-lista-cartoes').style.display = 'none';
-    document.getElementById('view-detalhes-cartao').style.display = 'block';
-
-    // Carregar dados
-    carregarItensAgregados(cartao.id);
-    carregarResumoCartao(cartao.id);
-}
-
-function voltarListaCartoes() {
-    state.cartaoAtual = null;
-    document.getElementById('view-lista-cartoes').style.display = 'block';
-    document.getElementById('view-detalhes-cartao').style.display = 'none';
-}
-
-async function carregarResumoCartao(cartaoId) {
-    try {
-        const response = await fetch(`/api/cartoes/${cartaoId}/resumo?mes_referencia=${state.mesSelecionado}`);
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            console.error('❌ Erro do backend:', errorData);
-            throw new Error(errorData.error || errorData.erro || errorData.message || 'Erro ao carregar resumo');
-        }
-
-        const resumo = await response.json();
-        console.log('✅ Resumo carregado:', resumo);
-
-        // Renderizar orçamentos com os dados do resumo
-        renderizarOrcamentos(resumo.itens);
-
-    } catch (error) {
-        console.error('Erro ao carregar resumo:', error);
-        mostrarErro('Erro ao carregar resumo do cartão');
-    }
-}
-
-// ============================================================================
-// CRUD DE ITENS AGREGADOS (Categorias do cartão)
-// ============================================================================
-
-async function carregarItensAgregados(cartaoId) {
-    try {
-        const response = await fetch(`/api/cartoes/${cartaoId}/itens`);
-        if (!response.ok) throw new Error('Erro ao carregar itens');
-
-        state.itensAgregados = await response.json();
-        atualizarSelectsItensAgregados();
-    } catch (error) {
-        console.error('Erro ao carregar itens agregados:', error);
-        mostrarErro('Erro ao carregar categorias do cartão');
-    }
-}
-
-function renderizarItensAgregados() {
-    const container = document.getElementById('lista-itens-agregados');
-
-    if (state.itensAgregados.length === 0) {
-        container.innerHTML = '<p class="empty-state">Nenhuma categoria cadastrada. Adicione categorias para organizar seus gastos.</p>';
+function abrirModalLimite(limiteId = null, categoriaPreSelecionadaId = null) {
+    const cartao = obterCartaoSelecionado();
+    if (!cartao) {
+        mostrarErro('Selecione um cart\u00e3o primeiro.');
         return;
     }
 
-    container.innerHTML = state.itensAgregados.map(item => `
-        <div class="item-card">
-            <div class="item-header">
-                <h4>${item.nome}</h4>
-                <div class="row-actions item-actions">
-                    <button class="row-action-button" onclick="editarItemAgregado(${item.id})" title="Editar" aria-label="Editar">${cartoesIcon('edit')}</button>
-                    <button class="row-action-button danger" onclick="excluirItemAgregado(${item.id})" title="Excluir" aria-label="Excluir">${cartoesIcon('remove')}</button>
-                </div>
-            </div>
-            ${item.descricao ? `<p class="item-descricao">${item.descricao}</p>` : ''}
-        </div>
-    `).join('');
-}
-
-function atualizarSelectsItensAgregados() {
-    // Select de orçamento: categoria obrigatória
-    const selectOrcamento = document.getElementById('orcamento-categoria');
-    if (selectOrcamento) {
-        selectOrcamento.innerHTML = '<option value="">Selecione...</option>';
-        state.itensAgregados.forEach(item => {
-            selectOrcamento.innerHTML += `<option value="${item.id}">${item.nome}</option>`;
-        });
-    }
-
-    // Select de lançamento (CATEGORIA DO CARTÃO): opcional
-    const selectLancamento = document.getElementById('lancamento-categoria-cartao');
-    if (selectLancamento) {
-        selectLancamento.innerHTML = '<option value="">Sem categoria (não controla limite)</option>';
-        state.itensAgregados.forEach(item => {
-            selectLancamento.innerHTML += `<option value="${item.id}">${item.nome}</option>`;
-        });
-    }
-}
-
-// ============================================================================
-// CRUD DE ORÇAMENTOS
-// ============================================================================
-
-function renderizarOrcamentos(itens) {
-    const container = document.getElementById('lista-orcamentos');
-
-    if (!itens || itens.length === 0) {
-        container.innerHTML = '<p class="empty-state">Nenhuma categoria definida. Clique em "Nova Categoria" para começar.</p>';
-        return;
-    }
-
-    container.innerHTML = itens.map(item => {
-        const percentual = item.percentual_utilizado || 0;
-        const valorOrcado = item.valor_orcado || 0;
-        const valorGasto = item.valor_gasto || 0;
-        const saldo = item.saldo || 0;
-
-        return `
-            <div class="categoria-linha">
-                <div class="categoria-info">
-                    <strong>${item.nome}</strong>
-                    ${item.descricao ? `<span class="descricao">${item.descricao}</span>` : ''}
-                </div>
-
-                <div class="categoria-metricas">
-                    <span class="percentual">${percentual.toFixed(0)}%</span>
-                    <span class="utilizado">Utilizado: R$ ${formatarMoeda(valorGasto)}</span>
-                    <span class="disponivel">Disponível: R$ ${formatarMoeda(saldo)}</span>
-                    ${valorOrcado > 0 ? `<span class="limite">Limite: R$ ${formatarMoeda(valorOrcado)}</span>` : ''}
-
-                    ${item.orcamento_id ?
-                        `<button class="btn-text-link" onclick="editarOrcamento(${item.id}, ${item.orcamento_id})" title="Editar Limite">Editar Limite</button>` :
-                        `<button class="btn-text-link" onclick="abrirModalOrcamento(${item.id})" title="Definir Limite">Definir Limite</button>`
-                    }
-                    <button class="row-action-button editar" onclick="editarItemAgregado(${item.id})" title="Editar" aria-label="Editar">${cartoesIcon('edit')}</button>
-                    <button class="row-action-button danger excluir" onclick="excluirItemAgregado(${item.id})" title="Excluir" aria-label="Excluir">${cartoesIcon('trash')}</button>
-                </div>
-            </div>
-        `;
-    }).join('');
-}
-
-// ========== CRUD DE ITEMAGREGADO (CATEGORIA DO CARTÃO) ==========
-
-function abrirModalItemAgregado() {
-    if (!state.cartaoAtual) {
-        mostrarErro('Selecione um cartão primeiro');
-        return;
-    }
-
-    document.getElementById('modal-item-agregado-titulo').textContent = 'Nova Categoria do Cartão';
-    document.getElementById('form-item-agregado').reset();
-    document.getElementById('item-agregado-id').value = '';
-    abrirModal('modal-item-agregado');
-}
-
-async function editarItemAgregado(itemId) {
-    try {
-        const item = state.itensAgregados.find(i => i.id === itemId);
-        if (!item) throw new Error('Categoria não encontrada');
-
-        document.getElementById('modal-item-agregado-titulo').textContent = 'Editar Categoria do Cartão';
-        document.getElementById('item-agregado-id').value = item.id;
-        document.getElementById('item-agregado-nome').value = item.nome;
-        document.getElementById('item-agregado-descricao').value = item.descricao || '';
-
-        abrirModal('modal-item-agregado');
-    } catch (error) {
-        console.error('Erro ao editar categoria:', error);
-        mostrarErro(error.message);
-    }
-}
-
-async function salvarItemAgregado(event) {
-    event.preventDefault();
-
-    if (!state.cartaoAtual) {
-        mostrarErro('Selecione um cartão primeiro');
-        return;
-    }
-
-    const itemId = document.getElementById('item-agregado-id').value;
-    const nome = document.getElementById('item-agregado-nome').value;
-    const descricao = document.getElementById('item-agregado-descricao').value;
-
-    const dados = {
-        nome: nome.trim(),
-        descricao: descricao.trim() || null
-    };
-
-    const isEdicao = !!itemId;
-    const url = isEdicao
-        ? `/api/cartoes/itens/${itemId}`
-        : `/api/cartoes/${state.cartaoAtual.id}/itens`;
-    const method = isEdicao ? 'PUT' : 'POST';
-
-    mostrarLoading(isEdicao ? 'Atualizando categoria...' : 'Criando categoria...');
-
-    try {
-        const response = await fetch(url, {
-            method: method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(dados)
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-            throw new Error(result.error || result.erro || result.message || 'Erro ao salvar categoria');
-        }
-
-        fecharModal('modal-item-agregado');
-
-        // Recarregar itens agregados e resumo do cartão
-        await carregarItensAgregados(state.cartaoAtual.id);
-        await carregarResumoCartao(state.cartaoAtual.id);
-
-        mostrarSucesso(isEdicao ? 'Categoria atualizada!' : 'Categoria do cartão criada!');
-
-    } catch (error) {
-        console.error('Erro ao salvar categoria:', error);
-        mostrarErro(error.message);
-    } finally {
-        esconderLoading();
-    }
-}
-
-async function excluirItemAgregado(itemId) {
-    const item = state.itensAgregados.find(i => i.id === itemId);
-    if (!item) {
-        mostrarErro('Categoria não encontrada');
-        return;
-    }
-
-    // Confirmação
-    if (!confirm(`Tem certeza que deseja excluir a categoria "${item.nome}"?\n\nAtenção: Esta ação não pode ser desfeita.`)) {
-        return;
-    }
-
-    mostrarLoading('Excluindo categoria...');
-
-    try {
-        const response = await fetch(`/api/cartoes/itens/${itemId}`, {
-            method: 'DELETE'
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-            // Backend retorna erro 400 se houver lançamentos
-            throw new Error(result.error || result.erro || result.message || 'Erro ao excluir categoria');
-        }
-
-        // Recarregar itens agregados e resumo do cartão
-        await carregarItensAgregados(state.cartaoAtual.id);
-        await carregarResumoCartao(state.cartaoAtual.id);
-
-        mostrarSucesso('Categoria excluída com sucesso!');
-
-    } catch (error) {
-        console.error('Erro ao excluir categoria:', error);
-        mostrarErro(error.message);
-    } finally {
-        esconderLoading();
-    }
-}
-
-// ========== ORÇAMENTO (LIMITE MENSAL) ==========
-
-function abrirModalOrcamento(itemId = null) {
-    // Validar se existem categorias cadastradas
-    if (!state.itensAgregados || state.itensAgregados.length === 0) {
-        if (confirm('Nenhuma categoria cadastrada.\n\nCrie uma nova categoria do cartão para continuar.\n\nDeseja criar agora?')) {
-            abrirModalItemAgregado();
-        }
-        return;
-    }
-
-    document.getElementById('modal-orcamento-titulo').textContent = 'Definir Limite da Categoria';
-    document.getElementById('form-orcamento').reset();
-    document.getElementById('orcamento-id').value = '';
-
-    // Se itemId foi passado, pré-selecionar a categoria
-    if (itemId) {
-        document.getElementById('orcamento-item-id').value = itemId;
-        const selectCategoria = document.getElementById('orcamento-categoria');
-        if (selectCategoria) {
-            selectCategoria.value = itemId;
-        }
-    }
-
-    // Converter ISO YYYY-MM para MM/AAAA
-    document.getElementById('orcamento-mes').value = converterISOparaMesAnoBR(state.mesSelecionado);
-    abrirModal('modal-orcamento');
-}
-
-async function editarOrcamento(itemId, orcamentoId) {
-    try {
-        // Buscar detalhes do orçamento
-        const item = state.itensAgregados.find(i => i.id === itemId);
-        const response = await fetch(`/api/cartoes/itens/${itemId}/orcamentos?mes_referencia=${state.mesSelecionado}`);
-        const orcamentos = await response.json();
-        const orcamento = orcamentos.find(o => o.id === orcamentoId);
-
-        if (!orcamento) throw new Error('Orçamento não encontrado');
-
-        document.getElementById('modal-orcamento-titulo').textContent = 'Editar Limite da Categoria';
-        document.getElementById('orcamento-id').value = orcamento.id;
-        document.getElementById('orcamento-item-id').value = itemId;
-        document.getElementById('orcamento-categoria').value = itemId;
-        // Converter ISO YYYY-MM para MM/AAAA
-        document.getElementById('orcamento-mes').value = converterISOparaMesAnoBR(orcamento.mes_referencia);
-        document.getElementById('orcamento-valor').value = orcamento.valor_teto;
-        document.getElementById('orcamento-observacoes').value = orcamento.observacoes || '';
-
-        abrirModal('modal-orcamento');
-    } catch (error) {
-        console.error('Erro ao carregar orçamento:', error);
-        mostrarErro('Erro ao carregar orçamento');
-    }
-}
-
-async function salvarOrcamento(event) {
-    event.preventDefault();
-
-    const id = document.getElementById('orcamento-id').value;
-    const itemId = id
-        ? document.getElementById('orcamento-item-id').value
-        : document.getElementById('orcamento-categoria').value;
-
-    // Converter mês de MM/AAAA para ISO YYYY-MM
-    const mesBR = document.getElementById('orcamento-mes').value;
-    const mesISO = converterMesAnoBRparaISO(mesBR);
-
-    if (!mesISO) {
-        mostrarErro('Formato de data inválido. Use MM/AAAA');
-        return;
-    }
-
-    const dados = {
-        mes_referencia: mesISO.substring(0, 7), // YYYY-MM
-        valor_teto: parseFloat(document.getElementById('orcamento-valor').value),
-        observacoes: document.getElementById('orcamento-observacoes').value
-    };
-
-    try {
-        const url = id
-            ? `/api/cartoes/orcamentos/${id}`
-            : `/api/cartoes/itens/${itemId}/orcamentos`;
-        const method = id ? 'PUT' : 'POST';
-
-        const response = await fetch(url, {
-            method: method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(dados)
-        });
-
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || error.erro || error.message || 'Erro ao salvar orçamento');
-        }
-
-        fecharModal('modal-orcamento');
-        await carregarResumoCartao(state.cartaoAtual.id);
-        mostrarSucesso(id ? 'Limite atualizado!' : 'Categoria criada!');
-    } catch (error) {
-        console.error('Erro ao salvar orçamento:', error);
-        mostrarErro(error.message);
-    }
-}
-
-async function excluirOrcamento(id) {
-    if (!confirm('Tem certeza que deseja excluir o limite desta categoria?')) return;
-
-    try {
-        const response = await fetch(`/api/cartoes/orcamentos/${id}`, {
-            method: 'DELETE'
-        });
-
-        if (!response.ok) throw new Error('Erro ao excluir orçamento');
-
-        await carregarResumoCartao(state.cartaoAtual.id);
-        mostrarSucesso('Limite excluído!');
-    } catch (error) {
-        console.error('Erro ao excluir orçamento:', error);
-        mostrarErro('Erro ao excluir orçamento');
-    }
-}
-
-// ============================================================================
-// CRUD DE LANÇAMENTOS (Gastos)
-// ============================================================================
-
-async function carregarLancamentos() {
-    const container = document.getElementById('lista-lancamentos');
-
-    if (!state.cartaoAtual) return;
-
-    try {
-        // Carregar TODOS os lançamentos do cartão (com e sem categoria)
-        const response = await fetch(`/api/cartoes/${state.cartaoAtual.id}/lancamentos?mes_fatura=${state.mesSelecionado}`);
-        const lancamentos = await response.json();
-
-        // Enriquecer com nome da categoria do cartão (quando houver)
-        const lancamentosEnriquecidos = lancamentos.map(lanc => {
-            const item = state.itensAgregados.find(i => i.id === lanc.item_agregado_id);
-            return {
-                ...lanc,
-                item_nome: item ? item.nome : 'Sem categoria do cartão'
-            };
-        });
-
-        renderizarLancamentos(lancamentosEnriquecidos);
-    } catch (error) {
-        console.error('Erro ao carregar lançamentos:', error);
-        container.innerHTML = '<p class="error">Erro ao carregar lançamentos</p>';
-    }
-}
-
-function renderizarLancamentos(lancamentos) {
-    const container = document.getElementById('lista-lancamentos');
-
-    if (lancamentos.length === 0) {
-        container.innerHTML = '<p class="empty-state">Nenhum gasto registrado para este mês.</p>';
-        return;
-    }
-
-    // Agrupar por categoria
-    const porCategoria = {};
-    lancamentos.forEach(lanc => {
-        if (!porCategoria[lanc.item_nome]) {
-            porCategoria[lanc.item_nome] = [];
-        }
-        porCategoria[lanc.item_nome].push(lanc);
-    });
-
-    container.innerHTML = Object.keys(porCategoria).map(categoria => {
-        const itens = porCategoria[categoria];
-        const total = itens.reduce((sum, i) => sum + parseFloat(i.valor), 0);
-
-        return `
-            <div class="lancamento-grupo">
-                <div class="grupo-header">
-                    <h4>${categoria}</h4>
-                    <span class="grupo-total">R$ ${formatarMoeda(total)}</span>
-                </div>
-                <div class="lancamentos-items">
-                    ${itens.map(lanc => `
-                        <div class="lancamento-item">
-                            <div class="lancamento-info">
-                                <span class="lancamento-descricao">${lanc.descricao}</span>
-                                <span class="lancamento-data">${formatarData(lanc.data_compra)}</span>
-                                ${lanc.total_parcelas > 1 ? `
-                                    <span class="lancamento-parcela">${lanc.numero_parcela}/${lanc.total_parcelas}</span>
-                                ` : ''}
-                            </div>
-                            <div class="row-actions lancamento-actions">
-                                <span class="lancamento-valor">R$ ${formatarMoeda(lanc.valor)}</span>
-                                <button class="row-action-button" onclick="editarLancamento(${lanc.id})" title="Editar" aria-label="Editar">${cartoesIcon('edit')}</button>
-                                <button class="row-action-button danger" onclick="excluirLancamento(${lanc.id})" title="Excluir" aria-label="Excluir">${cartoesIcon('remove')}</button>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-        `;
-    }).join('');
-}
-
-function abrirModalLancamento() {
-    document.getElementById('modal-lancamento-titulo').textContent = 'Novo Gasto';
-    document.getElementById('form-lancamento').reset();
-    document.getElementById('lancamento-id').value = '';
-    // Converter ISO YYYY-MM para MM/AAAA
-    document.getElementById('lancamento-fatura').value = converterISOparaMesAnoBR(state.mesSelecionado);
-    document.getElementById('lancamento-data').value = new Date().toISOString().slice(0, 10);
-    abrirModal('modal-lancamento');
-}
-
-async function editarLancamento(id) {
-    try {
-        // Buscar o lançamento em TODOS os lançamentos do cartão (inclui sem categoria)
-        const response = await fetch(`/api/cartoes/${state.cartaoAtual.id}/lancamentos?mes_fatura=${state.mesSelecionado}`);
-        const lancamentos = await response.json();
-        const lancamento = lancamentos.find(l => l.id === id);
-
-        if (!lancamento) throw new Error('Lançamento não encontrado');
-
-        document.getElementById('modal-lancamento-titulo').textContent = 'Editar Gasto';
-        document.getElementById('lancamento-id').value = lancamento.id;
-
-        // Categoria da DESPESA (obrigatória)
-        document.getElementById('lancamento-categoria-despesa').value = lancamento.categoria_id;
-
-        // Categoria do CARTÃO (opcional) - null-safe
-        const selectCategoriaCartao = document.getElementById('lancamento-categoria-cartao');
-        if (selectCategoriaCartao) {
-            selectCategoriaCartao.value = lancamento.item_agregado_id || '';
-        }
-
-        document.getElementById('lancamento-descricao').value = lancamento.descricao;
-        document.getElementById('lancamento-valor').value = lancamento.valor;
-        document.getElementById('lancamento-data').value = lancamento.data_compra;
-        // Converter ISO YYYY-MM para MM/AAAA
-        document.getElementById('lancamento-fatura').value = converterISOparaMesAnoBR(lancamento.mes_fatura);
-        document.getElementById('lancamento-parcela').value = lancamento.numero_parcela;
-        document.getElementById('lancamento-total-parcelas').value = lancamento.total_parcelas;
-        document.getElementById('lancamento-observacoes').value = lancamento.observacoes || '';
-
-        abrirModal('modal-lancamento');
-    } catch (error) {
-        console.error('Erro ao carregar lançamento:', error);
-        mostrarErro('Erro ao carregar lançamento');
-    }
-}
-
-async function salvarLancamento(event) {
-    event.preventDefault();
-
-    if (!state.cartaoAtual) {
-        mostrarErro('Selecione um cartão primeiro');
-        return;
-    }
-
-    const id = document.getElementById('lancamento-id').value;
-    const categoriaDespesaId = document.getElementById('lancamento-categoria-despesa').value;
-
-    // Leitura null-safe da categoria do cartão (opcional)
-    const selectCategoriaCartao = document.getElementById('lancamento-categoria-cartao');
-    const itemAgregadoId = selectCategoriaCartao && selectCategoriaCartao.value
-        ? selectCategoriaCartao.value
+    const limite = limiteId
+        ? obterLimitesCartao(cartao.id).find((item) => item.id === Number(limiteId))
         : null;
+    const select = document.getElementById('limite-categoria-cartao');
+    const categoriasDisponiveis = obterCategoriasDisponiveis(cartao.id);
+    const categoriaAtual = limite ? obterCategoriaCartao(limite.categoria_cartao_id) : null;
+    const opcoes = limite && categoriaAtual
+        ? [categoriaAtual]
+        : categoriasDisponiveis;
 
-    // Converter mês da fatura de MM/AAAA para ISO YYYY-MM
-    const faturaBR = document.getElementById('lancamento-fatura').value;
-    const faturaISO = converterMesAnoBRparaISO(faturaBR);
-
-    if (!faturaISO) {
-        mostrarErro('Formato de data inválido. Use MM/AAAA');
+    if (!limite && !opcoes.length) {
+        mostrarErro('N\u00e3o h\u00e1 Categorias do Cart\u00e3o dispon\u00edveis para vincular.');
         return;
     }
 
-    const dados = {
-        descricao: document.getElementById('lancamento-descricao').value,
-        valor: parseFloat(document.getElementById('lancamento-valor').value),
-        data_compra: document.getElementById('lancamento-data').value,
-        mes_fatura: faturaISO.substring(0, 7), // YYYY-MM
-        numero_parcela: parseInt(document.getElementById('lancamento-parcela').value) || 1,
-        total_parcelas: parseInt(document.getElementById('lancamento-total-parcelas').value) || 1,
-        observacoes: document.getElementById('lancamento-observacoes').value,
-        categoria_id: parseInt(categoriaDespesaId)  // Categoria da DESPESA (obrigatória)
-    };
-
-    // Adicionar item_agregado_id APENAS se houver seleção válida
-    if (itemAgregadoId !== null) {
-        dados.item_agregado_id = parseInt(itemAgregadoId);
-    }
-
-    try {
-        const url = id
-            ? `/api/cartoes/lancamentos/${id}`
-            : `/api/cartoes/${state.cartaoAtual.id}/lancamentos`;
-        const method = id ? 'PUT' : 'POST';
-
-        const response = await fetch(url, {
-            method: method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(dados)
-        });
-
-        if (!response.ok) throw new Error('Erro ao salvar lançamento');
-
-        fecharModal('modal-lancamento');
-        await carregarLancamentos();
-        await carregarResumoCartao(state.cartaoAtual.id);
-        mostrarSucesso(id ? 'Gasto atualizado!' : 'Gasto registrado!');
-    } catch (error) {
-        console.error('Erro ao salvar lançamento:', error);
-        mostrarErro('Erro ao salvar gasto');
-    }
+    document.getElementById('modal-limite-titulo').textContent = limite ? 'Editar limite' : 'Vincular Categoria';
+    document.getElementById('limite-id').value = limite?.id || '';
+    select.innerHTML = opcoes.map((categoria) => `
+        <option value="${categoria.id}" ${(categoria.id === (categoriaPreSelecionadaId || limite?.categoria_cartao_id)) ? 'selected' : ''}>${escapeHtml(categoria.nome)}</option>
+    `).join('');
+    select.disabled = Boolean(limite);
+    document.getElementById('limite-valor').value = limite?.limite_mensal || '';
+    document.getElementById('limite-ativo').checked = limite?.ativo !== false;
+    abrirModal('modal-categoria-limite');
 }
 
-async function excluirLancamento(id) {
-    if (!confirm('Tem certeza que deseja excluir este lançamento?')) return;
-
-    try {
-        const response = await fetch(`/api/cartoes/lancamentos/${id}`, {
-            method: 'DELETE'
-        });
-
-        if (!response.ok) throw new Error('Erro ao excluir lançamento');
-
-        await carregarLancamentos();
-        await carregarResumoCartao(state.cartaoAtual.id);
-        mostrarSucesso('Lançamento excluído!');
-    } catch (error) {
-        console.error('Erro ao excluir lançamento:', error);
-        mostrarErro('Erro ao excluir lançamento');
-    }
-}
-
-// ============================================================================
-// CRUD DE FATURAS
-// ============================================================================
-
-/**
- * Carrega faturas do cartão
- * Frontend não decide - apenas busca e exibe
- */
-async function carregarFaturas(cartaoId) {
-    const container = document.getElementById('lista-faturas');
-
-    if (!cartaoId) {
-        container.innerHTML = '<p class="empty-state">Selecione um cartão para ver as faturas.</p>';
-        return;
-    }
-
-    mostrarLoading('Carregando faturas...');
-
-    try {
-        const response = await fetch(`/api/cartoes/${cartaoId}/faturas`);
-
-        if (!response.ok) {
-            throw new Error('Erro ao carregar faturas');
-        }
-
-        const faturas = await response.json();
-        renderizarFaturas(faturas);
-
-    } catch (error) {
-        console.error('Erro ao carregar faturas:', error);
-        container.innerHTML = '<p class="error">Erro ao carregar faturas</p>';
-        mostrarErro('Erro ao carregar faturas');
-    } finally {
-        esconderLoading();
-    }
-}
-
-/**
- * Renderiza lista de faturas
- * Não calcula nada - apenas exibe o que veio do backend
- */
-function renderizarFaturas(faturas) {
-    const container = document.getElementById('lista-faturas');
-
-    if (!faturas || faturas.length === 0) {
-        container.innerHTML = '<p class="empty-state">Nenhuma fatura encontrada.</p>';
-        return;
-    }
-
-    // Criar tabela simples
-    container.innerHTML = `
-        <table class="tabela-faturas" style="width: 100%; border-collapse: collapse;">
-            <thead>
-                <tr style="background: #f5f5f7; text-align: left;">
-                    <th style="padding: 12px; border-bottom: 2px solid #e8e8ea;">Competência</th>
-                    <th style="padding: 12px; border-bottom: 2px solid #e8e8ea;">Valor</th>
-                    <th style="padding: 12px; border-bottom: 2px solid #e8e8ea;">Status</th>
-                    <th style="padding: 12px; border-bottom: 2px solid #e8e8ea; text-align: center;">Ação</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${faturas.map(fatura => {
-                    const isPendente = fatura.status === 'PENDENTE';
-                    const statusCor = isPendente ? '#ff9500' : '#34c759';
-                    const statusTexto = isPendente ? 'Pendente' : 'Paga';
-
-                    return `
-                        <tr style="border-bottom: 1px solid #e8e8ea;">
-                            <td style="padding: 12px; color: #1d1d1f;">${fatura.competencia || '-'}</td>
-                            <td style="padding: 12px; color: #1d1d1f; font-weight: 600;">R$ ${formatarMoeda(fatura.valor_total || 0)}</td>
-                            <td style="padding: 12px;">
-                                <span style="
-                                    display: inline-block;
-                                    padding: 4px 12px;
-                                    background: ${statusCor}15;
-                                    color: ${statusCor};
-                                    border-radius: 12px;
-                                    font-size: 13px;
-                                    font-weight: 600;
-                                ">${statusTexto}</span>
-                            </td>
-                            <td style="padding: 12px; text-align: center;">
-                                ${isPendente ? `
-                                    <button
-                                        class="btn btn-sm btn-primary"
-                                        onclick="abrirModalPagarFatura(${fatura.despesa_id}, '${fatura.competencia}', ${fatura.valor_total})"
-                                        style="padding: 6px 16px; font-size: 14px;">
-                                        Pagar
-                                    </button>
-                                ` : `
-                                    <span style="color: #6e6e73; font-size: 13px;">
-                                        ${fatura.data_pagamento ? `Paga em ${formatarData(fatura.data_pagamento)}` : '-'}
-                                    </span>
-                                `}
-                            </td>
-                        </tr>
-                    `;
-                }).join('')}
-            </tbody>
-        </table>
-    `;
-}
-
-/**
- * Abre modal para pagar fatura
- */
-function abrirModalPagarFatura(despesaId, competencia, valor) {
-    document.getElementById('fatura-despesa-id').value = despesaId;
-    document.getElementById('fatura-data-pagamento').value = new Date().toISOString().slice(0, 10);
-    carregarContasBancariasAtivasFatura();
-
-    // Preencher info da fatura
-    document.getElementById('fatura-info').innerHTML = `
-        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-            <span style="color: #6e6e73;">Competência:</span>
-            <strong style="color: #1d1d1f;">${competencia}</strong>
-        </div>
-        <div style="display: flex; justify-content: space-between;">
-            <span style="color: #6e6e73;">Valor:</span>
-            <strong style="color: #1d1d1f; font-size: 18px;">R$ ${formatarMoeda(valor)}</strong>
-        </div>
-    `;
-
-    abrirModal('modal-pagar-fatura');
-}
-
-/**
- * Confirma pagamento da fatura
- * Chama endpoint de despesas já existente
- */
-async function carregarContasBancariasAtivasFatura() {
-    const select = document.getElementById('fatura-conta-bancaria');
-    if (!select) return;
-
-    select.innerHTML = '<option value=\"\">Carregando...</option>';
-
-    try {
-        const resp = await fetch('/api/contas?status=ATIVO');
-        const json = await resp.json();
-        if (!json.success) {
-            select.innerHTML = '<option value=\"\">Selecione...</option>';
-            return;
-        }
-
-        const contas = json.data || [];
-        select.innerHTML = '<option value=\"\">Selecione...</option>';
-        contas.forEach(c => {
-            const opt = document.createElement('option');
-            opt.value = c.id;
-            opt.textContent = `${c.nome} (${c.instituicao})`;
-            select.appendChild(opt);
-        });
-    } catch (e) {
-        console.error('Erro ao carregar contas bancárias:', e);
-        select.innerHTML = '<option value=\"\">Selecione...</option>';
-    }
-}
-
-async function pagarFatura(event) {
+async function salvarCategoriaLimite(event) {
     event.preventDefault();
 
-    const despesaId = document.getElementById('fatura-despesa-id').value;
-    const dataPagamento = document.getElementById('fatura-data-pagamento').value;
-    const contaBancariaId = document.getElementById('fatura-conta-bancaria').value;
+    const cartao = obterCartaoSelecionado();
+    if (!cartao) return;
 
+    const limiteId = document.getElementById('limite-id').value;
     const dados = {
-        data_pagamento: dataPagamento
+        categoria_cartao_id: Number(document.getElementById('limite-categoria-cartao').value),
+        limite_mensal: document.getElementById('limite-valor').value || 0,
+        ativo: document.getElementById('limite-ativo').checked
     };
 
-    // Conta bancária é opcional
-    if (!contaBancariaId) {
-        mostrarErro('Selecione a conta bancária para executar o pagamento.');
-        return;
-    }
-    dados.conta_bancaria_id = parseInt(contaBancariaId, 10);
-
-    mostrarLoading('Processando pagamento...');
-
     try {
-        const response = await fetch(`/api/despesas/${despesaId}/pagar`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(dados)
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-            throw new Error(result.error || result.erro || result.message || 'Erro ao pagar fatura');
-        }
-
-        fecharModal('modal-pagar-fatura');
-
-        // Recarregar faturas e resumo
-        if (state.cartaoAtual) {
-            await carregarFaturas(state.cartaoAtual.id);
-            await carregarResumoCartao(state.cartaoAtual.id);
-        }
-
-        mostrarSucesso('Fatura paga com sucesso!');
-
+        await fetchJson(
+            limiteId ? `${API_CARTOES}/${cartao.id}/categorias-limite/${limiteId}` : `${API_CARTOES}/${cartao.id}/categorias-limite`,
+            {
+                method: limiteId ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(dados)
+            }
+        );
+        fecharModal('modal-categoria-limite');
+        await carregarLimitesCartao(cartao.id);
+        renderizarTelaCartoes();
+        mostrarSucesso('Limite salvo.');
     } catch (error) {
-        console.error('Erro ao pagar fatura:', error);
-        mostrarErro(error.message);
+        console.error('Erro ao salvar limite:', error);
+        mostrarErro(`Erro ao salvar limite: ${error.message}`);
     }
 }
 
-// ============================================================================
-// CONTROLE DE TABS
-// ============================================================================
-// Função trocarTab removida - não há mais abas na tela de cartões
-// (Lançamentos e Faturas estão na tela de Despesas)
-// ============================================================================
-// UTILITÁRIOS
-// ============================================================================
+async function alternarLimite(limiteId) {
+    const cartao = obterCartaoSelecionado();
+    if (!cartao) return;
+
+    const limite = obterLimitesCartao(cartao.id).find((item) => item.id === Number(limiteId));
+    if (!limite) return;
+
+    try {
+        if (limite.ativo) {
+            await fetchJson(`${API_CARTOES}/${cartao.id}/categorias-limite/${limite.id}`, { method: 'DELETE' });
+        } else {
+            await fetchJson(`${API_CARTOES}/${cartao.id}/categorias-limite/${limite.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ativo: true })
+            });
+        }
+        await carregarLimitesCartao(cartao.id);
+        renderizarTelaCartoes();
+        mostrarSucesso(limite.ativo ? 'V\u00ednculo desativado.' : 'V\u00ednculo reativado.');
+    } catch (error) {
+        console.error('Erro ao atualizar vinculo:', error);
+        mostrarErro(`Erro ao atualizar vinculo: ${error.message}`);
+    }
+}
 
 function abrirModal(modalId) {
-    document.getElementById(modalId).style.display = 'flex';
+    document.getElementById(modalId)?.classList.add('open');
 }
 
 function fecharModal(modalId) {
-    document.getElementById(modalId).style.display = 'none';
-}
-
-function formatarMoeda(valor) {
-    return parseFloat(valor || 0).toLocaleString('pt-BR', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    });
-}
-
-function formatarData(data) {
-    if (!data) return '';
-    const d = new Date(data + 'T00:00:00');
-    return d.toLocaleDateString('pt-BR');
-}
-
-// ============================================================================
-// MENSAGENS DE FEEDBACK (copiado de financiamentos.js)
-// ============================================================================
-
-function mostrarLoading(mensagem = 'Carregando...') {
-    // Remover loading anterior se existir
-    esconderLoading();
-
-    const overlay = document.createElement('div');
-    overlay.id = 'loading-overlay';
-    overlay.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.5);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        z-index: 10000;
-    `;
-
-    const box = document.createElement('div');
-    box.style.cssText = `
-        background: white;
-        padding: 30px 40px;
-        border-radius: 8px;
-        text-align: center;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    `;
-
-    box.innerHTML = `
-        <div style="font-size: 32px; margin-bottom: 15px;">${cartoesIcon('loading')}</div>
-        <div style="font-size: 16px; color: #1d1d1f;">${mensagem}</div>
-    `;
-
-    overlay.appendChild(box);
-    document.body.appendChild(overlay);
-}
-
-function esconderLoading() {
-    const overlay = document.getElementById('loading-overlay');
-    if (overlay) {
-        overlay.remove();
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+    modal.classList.remove('open');
+    if (modalId === 'modal-categoria-limite') {
+        document.getElementById('limite-categoria-cartao').disabled = false;
     }
 }
 
-function mostrarSucesso(mensagem) {
-    esconderLoading();
-    mostrarNotificacao(mensagem, 'success');
-}
-
-function mostrarErro(mensagem) {
-    esconderLoading();
-    mostrarNotificacao(mensagem, 'error');
-}
-
-function mostrarNotificacao(mensagem, tipo = 'info') {
-    // Remover notificações anteriores
-    const existente = document.getElementById('notificacao-toast');
-    if (existente) existente.remove();
-
-    const cores = {
-        'success': { bg: '#34c759', icone: cartoesIcon('check') },
-        'error': { bg: '#ff3b30', icone: cartoesIcon('remove') },
-        'info': { bg: '#007aff', icone: cartoesIcon('info') },
-        'warning': { bg: '#ff9500', icone: cartoesIcon('warning') }
-    };
-
-    const config = cores[tipo] || cores['info'];
-
-    const toast = document.createElement('div');
-    toast.id = 'notificacao-toast';
-    toast.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: ${config.bg};
-        color: white;
-        padding: 16px 24px;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        z-index: 10001;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        font-size: 15px;
-        max-width: 400px;
-        animation: slideIn 0.3s ease-out;
-    `;
-
-    toast.innerHTML = `
-        <span style="font-size: 20px; font-weight: bold;">${config.icone}</span>
-        <span>${mensagem}</span>
-    `;
-
-    document.body.appendChild(toast);
-
-    // Auto-remover após 4 segundos
-    setTimeout(() => {
-        toast.style.animation = 'slideOut 0.3s ease-out';
-        setTimeout(() => toast.remove(), 300);
-    }, 4000);
-}
-
-// Adicionar CSS das animações
-if (!document.getElementById('toast-animations')) {
-    const style = document.createElement('style');
-    style.id = 'toast-animations';
-    style.textContent = `
-        @keyframes slideIn {
-            from {
-                transform: translateX(400px);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
-        }
-        @keyframes slideOut {
-            from {
-                transform: translateX(0);
-                opacity: 1;
-            }
-            to {
-                transform: translateX(400px);
-                opacity: 0;
-            }
-        }
-    `;
-    document.head.appendChild(style);
-}
-
-// Fechar modal ao clicar fora
-window.onclick = function(event) {
-    if (event.target.classList.contains('modal')) {
-        event.target.style.display = 'none';
-    }
-};
-
-// ============================================================================
-// NÚMERO DO CARTÃO E CÓDIGO DE SEGURANÇA
-// ============================================================================
-
-// Formatar número do cartão automaticamente (adicionar espaços)
-document.addEventListener('DOMContentLoaded', () => {
-    const inputNumeroCartao = document.getElementById('cartao-numero');
-    if (inputNumeroCartao) {
-        inputNumeroCartao.addEventListener('input', (e) => {
-            let valor = e.target.value.replace(/\s/g, '');  // Remove espaços
-            let formatado = valor.match(/.{1,4}/g)?.join(' ') || valor;  // Adiciona espaço a cada 4 dígitos
-            e.target.value = formatado;
-        });
-    }
-});
-
-// Função para revelar código de segurança
 async function revelarCodigoSeguranca(event) {
     event.preventDefault();
 
     const cartaoId = document.getElementById('cvv-cartao-id').value;
     const senha = document.getElementById('cvv-senha').value;
-
     try {
-        const response = await fetch(`/api/cartoes/${cartaoId}/codigo-seguranca`, {
+        const resp = await fetchJson(`${API_CARTOES}/${cartaoId}/codigo-seguranca`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ senha: senha })
+            body: JSON.stringify({ senha })
         });
-
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || error.erro || error.message || 'Erro ao revelar código');
-        }
-
-        const data = await response.json();
-
-        // Mostrar código
-        document.getElementById('cvv-codigo').textContent = data.codigo_seguranca || '***';
-        document.getElementById('cvv-resultado').style.display = 'block';
-        document.getElementById('btn-revelar').style.display = 'none';
-
+        document.getElementById('cvv-codigo').textContent = resp.data?.codigo_seguranca || '***';
+        document.getElementById('cvv-resultado').hidden = false;
+        document.getElementById('btn-revelar').hidden = true;
     } catch (error) {
         mostrarErro(error.message);
-        document.getElementById('cvv-senha').value = '';
     }
 }
 
-// Abrir modal para revelar CVV
-window.abrirModalRevelarCVV = function(cartaoId) {
-    document.getElementById('cvv-cartao-id').value = cartaoId;
-    document.getElementById('cvv-senha').value = '';
-    document.getElementById('cvv-resultado').style.display = 'none';
-    document.getElementById('btn-revelar').style.display = 'inline-block';
-    abrirModal('modal-revelar-cvv');
-};
-
-/**
- * Aplica máscara MM/AAAA em campos de mês/ano
- */
 function mascaraMesAno(input) {
-    let valor = input.value.replace(/\D/g, ''); // Remove tudo que não é dígito
-
+    let valor = input.value.replace(/\D/g, '');
     if (valor.length >= 2) {
-        valor = valor.substring(0, 2) + '/' + valor.substring(2, 6);
+        valor = `${valor.substring(0, 2)}/${valor.substring(2, 6)}`;
     }
-
     input.value = valor;
 }
 
-/**
- * Converte data brasileira MM/AAAA para formato ISO YYYY-MM-DD
- */
-function converterMesAnoBRparaISO(mesAnoBR) {
-    if (!mesAnoBR || mesAnoBR.length !== 7) return null;
-
-    const partes = mesAnoBR.split('/');
-    if (partes.length !== 2) return null;
-
-    const mes = partes[0];
-    const ano = partes[1];
-
-    // Validar mês
-    const mesNum = parseInt(mes);
-    if (mesNum < 1 || mesNum > 12) return null;
-
-    return `${ano}-${mes}-01`;
+function mostrarSucesso(mensagem) {
+    mostrarNotificacao(mensagem, 'success');
 }
 
-/**
- * Converte data ISO YYYY-MM para formato brasileiro MM/AAAA
- */
-function converterISOparaMesAnoBR(dataISO) {
-    if (!dataISO) return '';
-
-    const partes = dataISO.split('-');
-    if (partes.length < 2) return '';
-
-    return `${partes[1]}/${partes[0]}`;
+function mostrarErro(mensagem) {
+    mostrarNotificacao(mensagem, 'error');
 }
+
+function mostrarNotificacao(mensagem, tipo = 'info') {
+    const existente = document.getElementById('notificacao-toast');
+    if (existente) existente.remove();
+
+    const cores = {
+        success: '#16a34a',
+        error: '#dc2626',
+        info: '#2563eb'
+    };
+    const toast = document.createElement('div');
+    toast.id = 'notificacao-toast';
+    toast.className = 'notificacao-toast';
+    toast.style.background = cores[tipo] || cores.info;
+    toast.textContent = mensagem;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3600);
+}
+
+window.abrirModalCartao = abrirModalCartao;
+window.abrirModalEditarCartao = abrirModalEditarCartao;
+window.fecharModal = fecharModal;
+window.mascaraMesAno = mascaraMesAno;
