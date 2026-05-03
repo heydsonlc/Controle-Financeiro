@@ -91,7 +91,13 @@ class ItemDespesa(db.Model):
     # Campos para recorrência paga via cartão
     meio_pagamento = db.Column(db.String(20))  # 'boleto', 'debito', 'cartao', 'pix', etc. (None = não especificado)
     cartao_id = db.Column(db.Integer, db.ForeignKey('item_despesa.id'), nullable=True)  # Obrigatório quando meio_pagamento='cartao'
-    item_agregado_id = db.Column(db.Integer, db.ForeignKey('item_agregado.id'), nullable=True)  # Categoria do cartão (opcional)
+    item_agregado_id = db.Column(db.Integer, db.ForeignKey('item_agregado.id'), nullable=True)  # Compatibilidade transitória — preferir categoria_cartao_id
+
+    # VEIC-2: rastreabilidade de origem e Categoria do Cartão
+    origem_tipo = db.Column(db.String(30), nullable=True)       # 'VEICULO' | 'TRANSPORTE_APP' | 'ASSINATURA'
+    origem_id = db.Column(db.Integer, nullable=True)            # id da entidade de origem
+    origem_contexto = db.Column(db.String(50), nullable=True)   # 'combustivel_mensal' | 'assinatura_mensal'
+    categoria_cartao_id = db.Column(db.Integer, db.ForeignKey('categoria_cartao.id'), nullable=True)
 
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -116,6 +122,7 @@ class ItemDespesa(db.Model):
         post_update=True,
         uselist=False
     )
+    categoria_cartao = db.relationship('CategoriaCartao', foreign_keys=[categoria_cartao_id])
 
     def __repr__(self):
         return f'<ItemDespesa {self.nome} ({self.tipo})>'
@@ -138,7 +145,11 @@ class ItemDespesa(db.Model):
             'mes_competencia': self.mes_competencia,
             'meio_pagamento': self.meio_pagamento,
             'cartao_id': self.cartao_id,
-            'item_agregado_id': self.item_agregado_id
+            'item_agregado_id': self.item_agregado_id,
+            'origem_tipo': self.origem_tipo,
+            'origem_id': self.origem_id,
+            'origem_contexto': self.origem_contexto,
+            'categoria_cartao_id': self.categoria_cartao_id,
         }
 
         # Adicionar categoria apenas se existir
@@ -1893,4 +1904,48 @@ class DespesaPrevista(db.Model):
             'status': self.status,
             'metadata': md,
             'tipo_evento': md.get('tipo_evento')
+        }
+
+
+class MobilidadeCenarioAtivo(db.Model):
+    """
+    VEIC-2: Persiste a modalidade de mobilidade atualmente ativa.
+    Apenas uma linha status='ATIVO' por vez (enforced via service).
+    Substitui data/mobilidade_cenario_ativo.json como fonte principal.
+    """
+    __tablename__ = 'mobilidade_cenario_ativo'
+
+    id = db.Column(db.Integer, primary_key=True)
+    tipo_modalidade = db.Column(db.String(20), nullable=False)   # VEICULO | TRANSPORTE_APP | ASSINATURA
+    origem_id = db.Column(db.Integer, nullable=False)            # veiculo.id, caminho app, ou 0
+    ativo_desde = db.Column(db.Date, nullable=False, default=datetime.utcnow)
+    meio_pagamento = db.Column(db.String(20), nullable=True)
+    cartao_id = db.Column(db.Integer, db.ForeignKey('item_despesa.id'), nullable=True)
+    categoria_id = db.Column(db.Integer, db.ForeignKey('categoria.id'), nullable=True)
+    categoria_cartao_id = db.Column(db.Integer, db.ForeignKey('categoria_cartao.id'), nullable=True)
+    recorrencia_id = db.Column(db.Integer, db.ForeignKey('item_despesa.id'), nullable=True)
+    status = db.Column(db.String(10), nullable=False, default='ATIVO')  # ATIVO | INATIVO
+    metadata_json = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    cartao = db.relationship('ItemDespesa', foreign_keys=[cartao_id])
+    categoria = db.relationship('Categoria', foreign_keys=[categoria_id])
+    categoria_cartao = db.relationship('CategoriaCartao', foreign_keys=[categoria_cartao_id])
+    recorrencia = db.relationship('ItemDespesa', foreign_keys=[recorrencia_id])
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'tipo_modalidade': self.tipo_modalidade,
+            'origem_id': self.origem_id,
+            'ativo_desde': self.ativo_desde.isoformat() if self.ativo_desde else None,
+            'meio_pagamento': self.meio_pagamento,
+            'cartao_id': self.cartao_id,
+            'categoria_id': self.categoria_id,
+            'categoria_cartao_id': self.categoria_cartao_id,
+            'recorrencia_id': self.recorrencia_id,
+            'status': self.status,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }

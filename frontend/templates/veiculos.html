@@ -629,6 +629,67 @@
         </form>
     </div>
 </div>
+<!-- VEIC-2: Modal de ativação de modalidade de mobilidade -->
+<div id="modal-ativar-mobilidade" class="modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="ativar-mob-titulo">
+    <div class="modal-content" style="max-width:520px;">
+        <div class="modal-header">
+            <h2 id="ativar-mob-titulo">Ativar modalidade de mobilidade</h2>
+            <button class="modal-close" onclick="fecharModalAtivacaoMobilidade()" aria-label="Fechar">&times;</button>
+        </div>
+        <input type="hidden" id="ativar-mob-tipo" value="">
+        <input type="hidden" id="ativar-mob-origem-id" value="">
+        <div class="modal-body">
+            <div class="form-group">
+                <label for="ativar-mob-meio">Meio de pagamento do combustível</label>
+                <select id="ativar-mob-meio" class="form-control" onchange="document.getElementById('ativar-mob-cartao-wrap').style.display=this.value==='cartao'?'':'none'">
+                    <option value="">— Sem recorrência —</option>
+                    <option value="pix">Pix</option>
+                    <option value="debito">Débito</option>
+                    <option value="cartao">Cartão de crédito</option>
+                    <option value="dinheiro">Dinheiro</option>
+                    <option value="boleto">Boleto</option>
+                </select>
+            </div>
+            <div id="ativar-mob-cartao-wrap" style="display:none;">
+                <div class="form-group">
+                    <label for="ativar-mob-cartao-id">Cartão</label>
+                    <select id="ativar-mob-cartao-id" class="form-control" onchange="carregarCategoriaCartaoParaMobilidade()">
+                        <option value="">— Nenhum —</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="ativar-mob-categoria-cartao-id">Categoria do Cartão</label>
+                    <select id="ativar-mob-categoria-cartao-id" class="form-control">
+                        <option value="">— Resolver automaticamente —</option>
+                    </select>
+                    <small class="form-hint">Deixe em branco para resolver pelo mapa de categorias.</small>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="ativar-mob-categoria-id">Categoria de Despesa</label>
+                <select id="ativar-mob-categoria-id" class="form-control">
+                    <option value="">— Padrão (Mobilidade) —</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="ativar-mob-data-inicio">Data de início</label>
+                <input type="date" id="ativar-mob-data-inicio" class="form-control">
+            </div>
+            <div class="form-group" style="display:flex;align-items:center;gap:8px;">
+                <input type="checkbox" id="ativar-mob-criar-recorrencia" checked>
+                <label for="ativar-mob-criar-recorrencia" style="margin:0;">Criar recorrência mensal de combustível</label>
+            </div>
+            <div style="margin-top:8px;">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="previsualizarAtivacaoMobilidade()">Ver prévia</button>
+            </div>
+            <div id="ativar-mob-resultado" style="margin-top:12px;"></div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="fecharModalAtivacaoMobilidade()">Cancelar</button>
+            <button type="button" class="btn btn-primary" onclick="confirmarAtivacaoMobilidade()">Confirmar ativação</button>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}

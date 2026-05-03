@@ -25,6 +25,11 @@ try:
     from backend.services.veiculo_uso_service import calcular_resumo_uso
     from backend.services.veiculo_manutencao_km_service import listar_estimativas, gerar_despesa_prevista_por_regra
     from backend.services.veiculo_financiamento_service import upsert_financiamento, obter_financiamento, remover_financiamento
+    from backend.services.mobilidade_service import (
+        previsualizar_ativacao_modalidade,
+        ativar_modalidade,
+        obter_modalidade_ativa,
+    )
 except ImportError:
     from models import db, Veiculo, DespesaPrevista, VeiculoRegraManutencaoKm
     from services.veiculo_service import (
@@ -35,6 +40,11 @@ except ImportError:
     from services.veiculo_uso_service import calcular_resumo_uso
     from services.veiculo_manutencao_km_service import listar_estimativas, gerar_despesa_prevista_por_regra
     from services.veiculo_financiamento_service import upsert_financiamento, obter_financiamento, remover_financiamento
+    from services.mobilidade_service import (
+        previsualizar_ativacao_modalidade,
+        ativar_modalidade,
+        obter_modalidade_ativa,
+    )
 
 
 veiculos_bp = Blueprint('veiculos', __name__)
@@ -535,4 +545,63 @@ def set_cenario_ativo():
             json.dump(payload, f, ensure_ascii=False, indent=2)
         return jsonify({'success': True, 'message': 'Cenário ativo salvo', 'data': payload}), 200
     except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+# VEIC-2: Endpoints de mobilidade (modalidade ativa + recorrências)
+# ---------------------------------------------------------------------------
+
+@veiculos_bp.route('/mobilidade/ativo', methods=['GET'])
+def get_mobilidade_ativo():
+    """Retorna a modalidade de mobilidade atualmente ativa (banco)."""
+    try:
+        dados = obter_modalidade_ativa()
+        return jsonify({'success': True, 'data': dados}), 200
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@veiculos_bp.route('/mobilidade/previsualizar', methods=['POST'])
+def previsualizar_mobilidade():
+    """
+    Retorna prévia do que será criado ao ativar a modalidade.
+    Não grava nada no banco.
+    """
+    try:
+        payload = _ler_payload_request()
+        resultado = previsualizar_ativacao_modalidade(payload)
+        return jsonify({'success': True, 'data': resultado}), 200
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@veiculos_bp.route('/mobilidade/ativar', methods=['POST'])
+def ativar_mobilidade():
+    """
+    Ativa uma modalidade de mobilidade:
+    - Inativa a modalidade anterior e suas recorrências automáticas.
+    - Cria recorrência mensal de combustível (para veículo próprio com meio informado).
+    - Persiste MobilidadeCenarioAtivo no banco.
+    - Usa categoria_cartao_id via CategoriaCartaoService; nunca item_agregado_id.
+    """
+    try:
+        payload = _ler_payload_request()
+        confirmado = payload.get('confirmado', False)
+        if not confirmado:
+            return jsonify({
+                'success': False,
+                'error': 'Envie confirmado=true para prosseguir com a ativacao.',
+            }), 400
+
+        resultado = ativar_modalidade(payload)
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'Modalidade ativada', 'data': resultado}), 200
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception as e:
+        db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500

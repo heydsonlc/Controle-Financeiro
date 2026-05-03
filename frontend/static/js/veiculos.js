@@ -2366,10 +2366,207 @@ function renderTabelaComparativa() {
 }
 
 async function definirCenarioAtivo(tipo, id) {
+    // VEIC-2: para veículo próprio, abrir modal de ativação com prévia.
+    // Para outros tipos, mantém fluxo legado (JSON file).
+    if (tipo === 'VEICULO') {
+        await abrirModalAtivacaoMobilidade(tipo, id);
+        return;
+    }
     await salvarCenarioAtivo(tipo, id);
     renderCardsComparacao();
     renderResumoSuperior();
     renderizarConfiguracao();
+}
+
+// ================================================================
+// VEIC-2: Modal de ativação de modalidade de mobilidade
+// ================================================================
+
+let _ativacaoPrevia = null;
+
+async function abrirModalAtivacaoMobilidade(tipo, origemId) {
+    const modal = document.getElementById('modal-ativar-mobilidade');
+    if (!modal) {
+        // Fallback: fluxo legado se o modal ainda não estiver no template
+        await salvarCenarioAtivo(tipo, origemId);
+        renderCardsComparacao();
+        renderResumoSuperior();
+        return;
+    }
+
+    // Popular cartões
+    const selCartao = document.getElementById('ativar-mob-cartao-id');
+    if (selCartao && !cartoesCacheGlobal) {
+        try {
+            const r = await fetch(API_CARTOES);
+            const d = await r.json();
+            cartoesCacheGlobal = (d.success ? d.data : []).filter(c => c.tipo === 'Agregador' || c.ativo !== false);
+        } catch (e) { cartoesCacheGlobal = []; }
+    }
+    if (selCartao) {
+        selCartao.innerHTML = '<option value="">— Nenhum —</option>' +
+            (cartoesCacheGlobal || []).map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
+    }
+
+    // Popular categorias de despesa
+    const selCat = document.getElementById('ativar-mob-categoria-id');
+    if (selCat && selCat.options.length <= 1) {
+        try {
+            const r = await fetch(API_CATEGORIAS);
+            const d = await r.json();
+            const cats = d.success ? (d.data || []) : [];
+            selCat.innerHTML = '<option value="">— Padrão (Mobilidade) —</option>' +
+                cats.map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
+        } catch (e) { /* mantém opções existentes */ }
+    }
+
+    document.getElementById('ativar-mob-tipo').value = tipo;
+    document.getElementById('ativar-mob-origem-id').value = origemId;
+    document.getElementById('ativar-mob-resultado').innerHTML = '';
+    _ativacaoPrevia = null;
+
+    modal.style.display = 'flex';
+}
+
+function fecharModalAtivacaoMobilidade() {
+    const modal = document.getElementById('modal-ativar-mobilidade');
+    if (modal) modal.style.display = 'none';
+}
+
+async function previsualizarAtivacaoMobilidade() {
+    const tipo = document.getElementById('ativar-mob-tipo')?.value;
+    const origemId = document.getElementById('ativar-mob-origem-id')?.value;
+    const meio = document.getElementById('ativar-mob-meio')?.value || '';
+    const cartaoId = document.getElementById('ativar-mob-cartao-id')?.value || '';
+    const categoriaId = document.getElementById('ativar-mob-categoria-id')?.value || '';
+    const categoriaCartaoId = document.getElementById('ativar-mob-categoria-cartao-id')?.value || '';
+    const dataInicio = document.getElementById('ativar-mob-data-inicio')?.value || '';
+    const criarRec = document.getElementById('ativar-mob-criar-recorrencia')?.checked !== false;
+
+    const divResultado = document.getElementById('ativar-mob-resultado');
+    if (divResultado) divResultado.innerHTML = '<span style="color:#6b7280;font-size:0.85rem;">Calculando prévia…</span>';
+
+    try {
+        const resp = await fetch(`${API_VEICULOS}/mobilidade/previsualizar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                tipo_modalidade: tipo,
+                origem_id: origemId ? Number(origemId) : null,
+                meio_pagamento: meio || null,
+                cartao_id: cartaoId ? Number(cartaoId) : null,
+                categoria_id: categoriaId ? Number(categoriaId) : null,
+                categoria_cartao_id: categoriaCartaoId ? Number(categoriaCartaoId) : null,
+                data_inicio: dataInicio || null,
+                criar_recorrencia: criarRec,
+            }),
+        });
+        const data = await resp.json();
+        if (!data.success) {
+            if (divResultado) divResultado.innerHTML = `<span style="color:#ef4444;">${escapeHtml(data.error)}</span>`;
+            return;
+        }
+        _ativacaoPrevia = { ...data.data, meio_pagamento: meio, cartao_id: cartaoId, categoria_id: categoriaId, categoria_cartao_id: categoriaCartaoId, data_inicio: dataInicio, criar_recorrencia: criarRec };
+        _renderizarPreviaAtivacao(data.data, divResultado);
+    } catch (e) {
+        if (divResultado) divResultado.innerHTML = `<span style="color:#ef4444;">Erro: ${escapeHtml(String(e))}</span>`;
+    }
+}
+
+function _renderizarPreviaAtivacao(previa, container) {
+    if (!container) return;
+    const rec = previa.recorrencia;
+    const avisos = previa.avisos || [];
+    const fmtBrl = v => v != null ? 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '—';
+
+    let html = `<div style="border:1px solid #e5e7eb;border-radius:8px;padding:12px;font-size:0.85rem;">`;
+    html += `<div style="font-weight:600;margin-bottom:8px;">Prévia da ativação — ${escapeHtml(previa.nome_origem || '')}</div>`;
+
+    if (rec) {
+        html += `<div style="background:#f0fdf4;border-radius:6px;padding:8px;margin-bottom:8px;">`;
+        html += `<div style="font-weight:500;color:#16a34a;">Recorrência mensal que será criada</div>`;
+        html += `<div>${escapeHtml(rec.nome)}</div>`;
+        html += `<div>Valor: <strong>${fmtBrl(rec.valor)}</strong></div>`;
+        html += `<div>Categoria do Cartão: ${rec.categoria_cartao_id ? `<strong>ID ${rec.categoria_cartao_id}</strong>` : '<span style="color:#9ca3af;">não configurada</span>'}</div>`;
+        html += `</div>`;
+    } else {
+        html += `<div style="color:#6b7280;margin-bottom:8px;">Nenhuma recorrência mensal será criada.</div>`;
+    }
+
+    if (previa.despesas_previstas?.length) {
+        html += `<div style="font-weight:500;margin-bottom:4px;">Continuam como Despesa Prevista:</div>`;
+        html += `<ul style="margin:0 0 8px 16px;padding:0;">${previa.despesas_previstas.map(d => `<li>${escapeHtml(d)}</li>`).join('')}</ul>`;
+    }
+
+    avisos.forEach(a => {
+        html += `<div style="color:#d97706;background:#fffbeb;border-radius:4px;padding:4px 8px;margin-bottom:4px;">⚠ ${escapeHtml(a)}</div>`;
+    });
+
+    html += `</div>`;
+    container.innerHTML = html;
+}
+
+async function confirmarAtivacaoMobilidade() {
+    if (!_ativacaoPrevia) {
+        await previsualizarAtivacaoMobilidade();
+        if (!_ativacaoPrevia) return;
+    }
+
+    const tipo = document.getElementById('ativar-mob-tipo')?.value;
+    const origemId = document.getElementById('ativar-mob-origem-id')?.value;
+    const meio = document.getElementById('ativar-mob-meio')?.value || '';
+    const cartaoId = document.getElementById('ativar-mob-cartao-id')?.value || '';
+    const categoriaId = document.getElementById('ativar-mob-categoria-id')?.value || '';
+    const categoriaCartaoId = document.getElementById('ativar-mob-categoria-cartao-id')?.value || '';
+    const dataInicio = document.getElementById('ativar-mob-data-inicio')?.value || '';
+    const criarRec = document.getElementById('ativar-mob-criar-recorrencia')?.checked !== false;
+
+    try {
+        const resp = await fetch(`${API_VEICULOS}/mobilidade/ativar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                tipo_modalidade: tipo,
+                origem_id: origemId ? Number(origemId) : null,
+                meio_pagamento: meio || null,
+                cartao_id: cartaoId ? Number(cartaoId) : null,
+                categoria_id: categoriaId ? Number(categoriaId) : null,
+                categoria_cartao_id: categoriaCartaoId ? Number(categoriaCartaoId) : null,
+                data_inicio: dataInicio || null,
+                criar_recorrencia: criarRec,
+                confirmado: true,
+            }),
+        });
+        const data = await resp.json();
+        if (!data.success) {
+            alert('Erro ao ativar: ' + data.error);
+            return;
+        }
+        // Sincronizar estado legado
+        await salvarCenarioAtivo(tipo, Number(origemId));
+        fecharModalAtivacaoMobilidade();
+        renderCardsComparacao();
+        renderResumoSuperior();
+        renderizarConfiguracao();
+    } catch (e) {
+        alert('Erro: ' + String(e));
+    }
+}
+
+async function carregarCategoriaCartaoParaMobilidade() {
+    const selCartao = document.getElementById('ativar-mob-cartao-id');
+    const cartaoId = selCartao?.value;
+    const categoriaId = document.getElementById('ativar-mob-categoria-id')?.value;
+    const selCC = document.getElementById('ativar-mob-categoria-cartao-id');
+    if (!selCC) return;
+    if (!cartaoId) { selCC.innerHTML = '<option value="">—</option>'; return; }
+    try {
+        const r = await fetch(`/api/categoria-cartao/cartao/${cartaoId}/limites`);
+        const d = await r.json();
+        const itens = d.success ? (d.data || []).filter(l => l.ativo !== false) : [];
+        selCC.innerHTML = '<option value="">— Nenhuma —</option>' +
+            itens.map(l => `<option value="${l.categoria_cartao_id}">${escapeHtml(l.categoria_cartao_nome || String(l.categoria_cartao_id))}</option>`).join('');
+    } catch (e) { selCC.innerHTML = '<option value="">—</option>'; }
 }
 
 // ================================================================
