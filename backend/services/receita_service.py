@@ -77,7 +77,8 @@ class ReceitaService:
             valor_base_mensal=dados.get('valor_base_mensal'),
             dia_previsto_pagamento=dados.get('dia_previsto_pagamento'),
             conta_origem_id=dados.get('conta_origem_id'),
-            conta_bancaria_id=dados.get('conta_bancaria_id')
+            conta_bancaria_id=dados.get('conta_bancaria_id'),
+            recorrente=dados.get('recorrente', True)
         )
 
         db.session.add(item)
@@ -156,6 +157,8 @@ class ReceitaService:
             item.conta_origem_id = dados['conta_origem_id']
         if 'conta_bancaria_id' in dados:
             item.conta_bancaria_id = dados['conta_bancaria_id']
+        if 'recorrente' in dados:
+            item.recorrente = dados['recorrente']
 
         db.session.commit()
         return item
