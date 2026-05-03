@@ -868,71 +868,7 @@
     padding: 12px;
 }
 
-.modal {
-    display: none;
-    position: fixed;
-    z-index: 1000;
-    inset: 0;
-    padding: 24px;
-    overflow: auto;
-    background-color: rgba(15, 23, 42, 0.48);
-    backdrop-filter: blur(4px);
-    align-items: center;
-    justify-content: center;
-}
-
-.modal.open {
-    display: flex;
-}
-
-.modal-content {
-    width: min(620px, 100%);
-    max-height: calc(100vh - 48px);
-    overflow: auto;
-    background: #ffffff;
-    border: 1px solid rgba(15, 23, 42, 0.12);
-    border-radius: 8px;
-    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28);
-}
-
-.modal-sm {
-    width: min(480px, 100%);
-}
-
-.modal-header {
-    min-height: 62px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    padding: 18px 22px;
-    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-}
-
-.modal-header h2 {
-    margin: 0;
-    color: #0f172a;
-    font-size: 18px;
-}
-
-.modal-close {
-    width: 32px;
-    height: 32px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid rgba(15, 23, 42, 0.08);
-    border-radius: 6px;
-    background: #ffffff;
-    color: #475569;
-    cursor: pointer;
-    font-size: 24px;
-    line-height: 1;
-}
-
-.modal form {
-    padding: 22px;
-}
+/* Modal - estilos base em layout.css (MODAL-UX-1) */
 
 .form-group {
     margin-bottom: 16px;

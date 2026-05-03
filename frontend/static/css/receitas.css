@@ -449,78 +449,7 @@
     color: #dc3545;
 }
 
-/* Modais */
-.modal {
-    display: none;
-    position: fixed;
-    z-index: 1000;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    overflow: auto;
-    background-color: rgba(0,0,0,0.5);
-    animation: fadeIn 0.3s;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-.modal-content {
-    background-color: #fefefe;
-    margin: 5% auto;
-    padding: 0;
-    border: 1px solid #888;
-    border-radius: 8px;
-    width: 90%;
-    max-width: 600px;
-    animation: slideDown 0.3s;
-}
-
-@keyframes slideDown {
-    from {
-        transform: translateY(-50px);
-        opacity: 0;
-    }
-    to {
-        transform: translateY(0);
-        opacity: 1;
-    }
-}
-
-.modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 20px;
-    border-bottom: 1px solid #dee2e6;
-}
-
-.modal-header h2 {
-    margin: 0;
-    font-size: 20px;
-    color: #212529;
-}
-
-.close {
-    color: #aaa;
-    font-size: 28px;
-    font-weight: bold;
-    cursor: pointer;
-    line-height: 1;
-}
-
-.close:hover,
-.close:focus {
-    color: #000;
-}
-
-/* Formulários */
-form {
-    padding: 20px;
-}
+/* Modais - estilos base em layout.css (MODAL-UX-1) */
 
 .form-group {
     margin-bottom: 20px;
@@ -628,8 +557,4 @@ form {
         grid-template-columns: 1fr;
     }
 
-    .modal-content {
-        width: 95%;
-        margin: 10% auto;
-    }
 }

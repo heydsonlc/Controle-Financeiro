@@ -966,3 +966,391 @@ body.app-shell-body .mobile-toggle {
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
+/* ============================================================
+   MODAL-UX-1 - Padrao global de modais
+   ============================================================
+   Suporta dois mecanismos de abertura usados na aplicacao:
+   A) display:block / display:flex  (via style.display no JS)
+   B) .modal.open { display:flex }  (via classList.add/remove no JS)
+
+   Tamanhos disponiveis:
+     padrao  -> max-width: 560px
+     .modal-sm    -> max-width: 480px
+     .modal-md    -> max-width: 720px  (alias: .modal-large)
+     .modal-lg    -> max-width: 920px
+     .modal-xlarge -> max-width: 1200px
+   ============================================================ */
+
+/* --- Backdrop --- */
+.modal,
+.app-modal,
+.app-modal-backdrop {
+    display: none;
+    position: fixed;
+    z-index: 1100;
+    inset: 0;
+    padding: 24px 18px;
+    overflow-y: auto;
+    background-color: rgba(248, 250, 252, 0.74);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    /* centering for flex-based open mechanism */
+    align-items: center;
+    justify-content: center;
+}
+
+/* Mecanismo A: JS seta display direto */
+.modal[style*="display: block"],
+.modal[style*="display:block"] {
+    display: flex !important;
+}
+.modal[style*="display: flex"],
+.modal[style*="display:flex"] {
+    display: flex !important;
+}
+
+/* Mecanismo B: classList.add('open') */
+.modal.open {
+    display: flex;
+}
+
+body:has(.modal.open),
+body:has(.modal[style*="display: block"]),
+body:has(.modal[style*="display:block"]),
+body:has(.modal[style*="display: flex"]),
+body:has(.modal[style*="display:flex"]) {
+    overflow: hidden;
+}
+
+/* --- Caixa de dialogo --- */
+.modal-content,
+.app-modal-content,
+.app-modal-dialog {
+    position: relative;
+    width: min(720px, 100%);
+    max-height: calc(100vh - 48px);
+    margin: 0 auto;
+    background: #ffffff;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 18px;
+    box-shadow: 0 28px 90px rgba(15, 23, 42, 0.18);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: modal-slide-in 0.22s ease;
+}
+
+@keyframes modal-slide-in {
+    from {
+        opacity: 0;
+        transform: translateY(-12px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Tamanhos */
+.modal-content.modal-sm,
+.modal-sm > .modal-content,
+.app-modal-content.app-modal-sm {
+    width: min(520px, 100%);
+}
+
+.modal-content.modal-md,
+.modal-md > .modal-content,
+.modal-content.modal-large,
+.modal-large > .modal-content,
+.app-modal-content.app-modal-md {
+    width: min(720px, 100%);
+}
+
+.modal-content.modal-lg,
+.modal-lg > .modal-content,
+.app-modal-content.app-modal-lg {
+    width: min(920px, 100%);
+}
+
+.modal-content.modal-xlarge,
+.modal-xlarge > .modal-content,
+.app-modal-content.app-modal-xl {
+    width: min(1200px, 100%);
+}
+
+/* --- Cabecalho --- */
+.modal-header,
+.app-modal-header {
+    flex: 0 0 auto;
+    min-height: 68px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 22px 26px 16px;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    background: #ffffff;
+}
+
+.modal-header h2,
+.modal-title,
+.app-modal-title {
+    margin: 0;
+    color: #0f172a;
+    font-size: 1.08rem;
+    font-weight: 680;
+    line-height: 1.3;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* --- Botao fechar - .close (legado) e .modal-close (novo) --- */
+.modal .close,
+.modal-close,
+.app-modal-close {
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    border-radius: 999px;
+    background: transparent;
+    color: #64748b;
+    cursor: pointer;
+    font-size: 22px;
+    line-height: 1;
+    padding: 0;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    /* reset legacy styles */
+    font-weight: 400;
+    text-decoration: none;
+}
+
+.modal .close:hover,
+.modal-close:hover,
+.app-modal-close:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+    border-color: rgba(15, 23, 42, 0.18);
+    transform: none;
+}
+
+/* --- Corpo --- */
+.modal-body,
+.app-modal-body {
+    flex: 1 1 auto;
+    padding: 22px 26px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* Formularios direto no modal (heranca legada: form filho direto de modal-content) */
+.modal-content > form {
+    flex: 1 1 auto;
+    padding: 22px 26px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* --- Rodape --- */
+.modal-footer,
+.app-modal-footer,
+.app-modal-actions {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 16px 26px;
+    border-top: 1px solid rgba(15, 23, 42, 0.08);
+    background: #fbfbfd;
+}
+
+/* Acoes de formulario (legado: .form-actions dentro de form dentro de modal) */
+.modal .form-actions {
+    position: sticky;
+    bottom: -22px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    margin: 22px -26px -22px;
+    padding: 16px 26px;
+    border-top: 1px solid rgba(15, 23, 42, 0.07);
+    background: #fbfbfd;
+    flex-wrap: wrap;
+    z-index: 2;
+}
+
+/* --- Botoes padrao --- */
+.modal .btn,
+.modal-footer .btn {
+    min-height: 40px;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    font-weight: 620;
+    line-height: 1.2;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.modal .btn-primary,
+.modal-footer .btn-primary {
+    background: #2563eb;
+    color: #ffffff;
+    border-color: #2563eb;
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.22);
+}
+
+.modal .btn-primary:hover,
+.modal-footer .btn-primary:hover {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+}
+
+.modal .btn-secondary,
+.modal-footer .btn-secondary {
+    background: #ffffff;
+    color: #334155;
+    border-color: rgba(15, 23, 42, 0.1);
+}
+
+.modal .btn-secondary:hover,
+.modal-footer .btn-secondary:hover {
+    background: #e2e8f0;
+    border-color: rgba(15, 23, 42, 0.18);
+}
+
+.modal .btn-danger,
+.modal-footer .btn-danger {
+    background: #ffffff;
+    color: #b42318;
+    border-color: rgba(180, 35, 24, 0.22);
+}
+
+.modal .btn-danger:hover,
+.modal-footer .btn-danger:hover {
+    background: #fff7f6;
+    border-color: rgba(180, 35, 24, 0.36);
+}
+
+/* --- Secoes auxiliares dentro do modal --- */
+.modal-section,
+.app-modal-section {
+    margin-bottom: 18px;
+}
+
+.modal-section:last-child {
+    margin-bottom: 0;
+}
+
+.modal-grid,
+.app-modal-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+}
+
+.modal-field,
+.app-modal-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.modal-subtitle,
+.app-modal-subtitle,
+.modal-help,
+.app-modal-help {
+    margin: 4px 0 0;
+    color: #64748b;
+    font-size: 0.84rem;
+    line-height: 1.45;
+}
+
+.modal-danger,
+.app-modal-danger {
+    color: #b42318;
+}
+
+.modal input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+.modal select,
+.modal textarea {
+    min-height: 40px;
+    border: 1px solid #d9dee8;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #0f172a;
+    font-size: 0.9rem;
+}
+
+.modal textarea {
+    min-height: 92px;
+    resize: vertical;
+}
+
+.modal label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 6px;
+    color: #1e293b;
+    font-size: 0.86rem;
+    font-weight: 620;
+}
+
+/* --- Responsive --- */
+@media (max-width: 600px) {
+    .modal {
+        padding: 12px 8px;
+        align-items: flex-start;
+    }
+
+    .modal-content,
+    .modal-content.modal-sm,
+    .modal-content.modal-md,
+    .modal-content.modal-large,
+    .modal-content.modal-lg,
+    .modal-content.modal-xlarge {
+        width: 100%;
+        max-height: calc(100vh - 24px);
+        border-radius: 14px;
+    }
+
+    .modal-header {
+        padding: 14px 16px;
+    }
+
+    .modal-body,
+    .modal form,
+    .modal > .modal-content > form {
+        padding: 16px;
+    }
+
+    .modal-footer {
+        padding: 12px 16px;
+        flex-wrap: wrap;
+    }
+
+    .modal .form-actions {
+        flex-direction: column;
+        align-items: stretch;
+        bottom: -16px;
+        margin: 18px -16px -16px;
+        padding: 12px 16px;
+    }
+
+    .modal .form-actions .btn,
+    .modal-footer .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
