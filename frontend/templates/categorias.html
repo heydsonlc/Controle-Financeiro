@@ -6,67 +6,151 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/categorias.css') }}">
 {% endblock %}
 
-{% block action_bar %}
-    <div class="module-actionbar" aria-label="Ações de Categorias">
-        <div class="module-actionbar-actions">
-            <button class="action-icon-button primary" id="btn-nova-categoria" type="button" onclick="abrirModal()" title="Nova Categoria" aria-label="Nova Categoria">
-                <span class="action-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M12 5v14M5 12h14"/>
-                    </svg>
-                </span>
-                <span class="action-button-label">Nova Categoria</span>
-            </button>
-        </div>
-    </div>
-{% endblock %}
-
 {% block content %}
     <div class="container app-content-fluid">
-        <main>
-            <!-- Lista de categorias -->
-            <section class="module-data-section">
-                <div class="section-title-row">
-                    <div class="section-title-main">
-                        <span class="section-title-icon" aria-hidden="true">
+        <main class="categorias-page">
+            <header class="categorias-hero">
+                <div class="categorias-title-block">
+                    <nav class="breadcrumb categorias-breadcrumb" aria-label="Caminho">
+                        <span>Configura&ccedil;&otilde;es</span>
+                        <span aria-hidden="true">/</span>
+                        <span>Categorias</span>
+                    </nav>
+                    <h1>Categorias</h1>
+                    <p>Cadastre categorias de despesa e categorias do cart&atilde;o em um s&oacute; lugar.</p>
+                </div>
+
+                <section class="categorias-summary" aria-label="Resumo das categorias">
+                    <article class="summary-item">
+                        <span class="summary-icon summary-icon-card" aria-hidden="true">
                             <svg viewBox="0 0 24 24" focusable="false">
-                                <path d="M4 7h16"/>
-                                <path d="M4 12h16"/>
-                                <path d="M4 17h10"/>
+                                <rect x="3" y="6" width="18" height="12" rx="2"/>
+                                <path d="M3 10h18"/>
                             </svg>
                         </span>
-                        <h2 class="section-title-text">Categorias</h2>
+                        <span class="summary-label">Categorias do Cart&atilde;o</span>
+                        <strong id="summary-cartao">0</strong>
+                    </article>
+                    <article class="summary-item">
+                        <span class="summary-icon summary-icon-link" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false">
+                                <path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/>
+                                <path d="M14 11a5 5 0 0 0-7.1 0l-2 2a5 5 0 0 0 7.1 7.1l1.1-1.1"/>
+                            </svg>
+                        </span>
+                        <span class="summary-label">Categorias de Despesa vinculadas</span>
+                        <strong id="summary-vinculadas">0</strong>
+                    </article>
+                    <article class="summary-item">
+                        <span class="summary-icon summary-icon-alert" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false">
+                                <circle cx="12" cy="12" r="9"/>
+                                <path d="M8 8l8 8M16 8l-8 8"/>
+                            </svg>
+                        </span>
+                        <span class="summary-label">Categorias sem v&iacute;nculo</span>
+                        <strong id="summary-sem-vinculo">0</strong>
+                    </article>
+                </section>
+            </header>
+
+            <section class="categorias-toolbar" aria-label="A&ccedil;&otilde;es de categorias">
+                <button class="cf-button cf-button-primary" id="btn-nova-categoria-despesa" type="button">
+                    <span aria-hidden="true">+</span>
+                    <span>Nova categoria de despesa</span>
+                </button>
+                <button class="cf-button cf-button-primary" id="btn-nova-categoria-cartao" type="button">
+                    <span aria-hidden="true">+</span>
+                    <span>Nova categoria do cart&atilde;o</span>
+                </button>
+                <label class="toolbar-search" for="categorias-pesquisa">
+                    <span aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false">
+                            <circle cx="11" cy="11" r="7"/>
+                            <path d="m20 20-3.5-3.5"/>
+                        </svg>
+                    </span>
+                    <input type="search" id="categorias-pesquisa" placeholder="Pesquisar">
+                </label>
+                <label class="toolbar-status" for="categorias-status">
+                    <span>Status:</span>
+                    <select id="categorias-status">
+                        <option value="ativas">Ativas</option>
+                        <option value="inativas">Inativas</option>
+                        <option value="todas">Todas</option>
+                    </select>
+                </label>
+            </section>
+
+            <section class="categorias-shell" aria-label="Administra&ccedil;&atilde;o de categorias">
+                <div class="categorias-tabs" role="tablist" aria-label="Tipos de categoria">
+                    <button class="categorias-tab" id="tab-despesas" type="button" role="tab" aria-controls="panel-despesas" aria-selected="false" data-tab="despesas">
+                        Categorias de Despesa
+                    </button>
+                    <button class="categorias-tab active" id="tab-cartao" type="button" role="tab" aria-controls="panel-cartao" aria-selected="true" data-tab="cartao">
+                        Categorias do Cart&atilde;o
+                    </button>
+                </div>
+
+                <section class="categorias-panel hidden" id="panel-despesas" role="tabpanel" aria-labelledby="tab-despesas">
+                    <div class="despesas-panel-header">
+                        <div>
+                            <h2>Categorias de Despesa</h2>
+                            <p>Classifica&ccedil;&atilde;o financeira geral usada em despesas, relat&oacute;rios e lan&ccedil;amentos.</p>
+                        </div>
                     </div>
-                    <span class="section-title-meta">Classifica&ccedil;&atilde;o das movimenta&ccedil;&otilde;es</span>
-                </div>
-                <div class="categorias-lista" id="categorias-lista">
-                    <p class="loading">Carregando categorias...</p>
-                </div>
+                    <div class="categorias-lista" id="categorias-lista">
+                        <p class="loading">Carregando categorias...</p>
+                    </div>
+                </section>
+
+                <section class="categorias-panel" id="panel-cartao" role="tabpanel" aria-labelledby="tab-cartao">
+                    <div class="cartao-workspace">
+                        <aside class="cartao-sidebar" aria-label="Categorias do Cart&atilde;o">
+                            <label class="workspace-search" for="busca-categoria-cartao">
+                                <span aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" focusable="false">
+                                        <circle cx="11" cy="11" r="7"/>
+                                        <path d="m20 20-3.5-3.5"/>
+                                    </svg>
+                                </span>
+                                <input id="busca-categoria-cartao" type="search" placeholder="Buscar categoria do cart&atilde;o...">
+                            </label>
+                            <div class="cartao-list" id="categorias-cartao-lista">
+                                <p class="loading">Carregando categorias do cart&atilde;o...</p>
+                            </div>
+                        </aside>
+
+                        <section class="cartao-detail" id="categoria-cartao-detalhe" aria-live="polite">
+                            <div class="detail-empty">
+                                <h2>Selecione uma Categoria do Cart&atilde;o</h2>
+                                <p>Crie ou escolha uma categoria global para editar seus dados e vincular Categorias de Despesa.</p>
+                            </div>
+                        </section>
+                    </div>
+                </section>
             </section>
         </main>
     </div>
 
-    <!-- Modal para adicionar/editar categoria -->
     <div id="modal-categoria" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 id="modal-titulo">Nova Categoria</h2>
-                <span class="close" onclick="fecharModal()">&times;</span>
+                <h2 id="modal-titulo">Nova Categoria de Despesa</h2>
+                <button class="modal-close" type="button" id="modal-categoria-fechar" aria-label="Fechar">&times;</button>
             </div>
 
-            <form id="form-categoria" onsubmit="salvarCategoria(event)">
+            <form id="form-categoria">
                 <input type="hidden" id="categoria-id">
 
                 <div class="form-group">
                     <label for="nome">Nome *</label>
-                    <input type="text" id="nome" name="nome" required
-                           placeholder="Ex: Moradia, Transporte, Alimentação">
+                    <input type="text" id="nome" name="nome" required placeholder="Ex: Moradia, Transporte, Alimenta&ccedil;&atilde;o">
                 </div>
 
                 <div class="form-group">
-                    <label for="descricao">Descrição</label>
-                    <textarea id="descricao" name="descricao" rows="3"
-                              placeholder="Descrição opcional da categoria"></textarea>
+                    <label for="descricao">Descri&ccedil;&atilde;o</label>
+                    <textarea id="descricao" name="descricao" rows="3" placeholder="Descri&ccedil;&atilde;o opcional da categoria"></textarea>
                 </div>
 
                 <div class="form-group">
@@ -78,18 +162,14 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="icone">Ícone</label>
+                    <label for="icone">&Iacute;cone</label>
                     <div class="icone-picker-preview-row">
                         <div id="icone-preview" class="icone-preview" aria-hidden="true"></div>
-                        <input type="text" id="icone" name="icone" maxlength="50"
-                               class="icone-picker-input"
-                               placeholder="Sem icone selecionado">
+                        <input type="text" id="icone" name="icone" maxlength="50" class="icone-picker-input" placeholder="Sem icone selecionado">
                     </div>
-                    <small class="form-hint">Escolha um icone do catalogo interno ou mantenha vazio. Use logos especiais para fontes como Kortex ou Corpo de Bombeiros.</small>
+                    <small class="form-hint">Escolha um icone do catalogo interno ou mantenha vazio.</small>
                     <div class="icone-picker" aria-label="Seletor de icones da categoria">
-                        <button type="button" class="icone-picker-empty" id="icone-limpar">
-                            Sem icone
-                        </button>
+                        <button type="button" class="icone-picker-empty" id="icone-limpar">Sem icone</button>
                         <div id="icone-picker-grid" class="icone-picker-grid"></div>
                     </div>
                 </div>
@@ -105,8 +185,8 @@
                         </div>
                     </div>
                     <div class="logo-upload-actions">
-                        <button type="button" class="btn btn-secondary" id="logo-enviar">Enviar logo</button>
-                        <button type="button" class="btn btn-secondary" id="logo-remover">Remover logo</button>
+                        <button type="button" class="cf-button cf-button-secondary" id="logo-enviar">Enviar logo</button>
+                        <button type="button" class="cf-button cf-button-secondary" id="logo-remover">Remover logo</button>
                     </div>
                 </div>
 
@@ -118,12 +198,8 @@
                 </div>
 
                 <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="fecharModal()">
-                        Cancelar
-                    </button>
-                    <button type="submit" class="btn btn-primary">
-                        Salvar
-                    </button>
+                    <button type="button" class="cf-button cf-button-secondary" id="modal-categoria-cancelar">Cancelar</button>
+                    <button type="submit" class="cf-button cf-button-primary">Salvar</button>
                 </div>
             </form>
         </div>
@@ -132,15 +208,4 @@
 
 {% block extra_js %}
     <script src="{{ url_for('static', filename='js/categorias.js') }}"></script>
-    <script>
-        function toggleMobileView() {
-            document.body.classList.toggle('mobile-view');
-            const btn = document.getElementById('mobile-btn');
-            if (document.body.classList.contains('mobile-view')) {
-                btn.innerHTML = '💻 Ver em Desktop';
-            } else {
-                btn.innerHTML = '📱 Ver em Mobile';
-            }
-        }
-    </script>
 {% endblock %}
