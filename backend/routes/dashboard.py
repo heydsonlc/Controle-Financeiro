@@ -22,8 +22,10 @@ import logging
 
 try:
     from backend.models import db, Conta, Categoria, ItemDespesa, ConfigAgregador, ItemReceita, ReceitaRealizada, ContaBancaria, Financiamento, FinanciamentoParcela, ItemAgregado, ReceitaOrcamento, LancamentoAgregado, OrcamentoAgregado
+    from backend.services.dashboard_service import DashboardService
 except ImportError:
     from models import db, Conta, Categoria, ItemDespesa, ConfigAgregador, ItemReceita, ReceitaRealizada, ContaBancaria, Financiamento, FinanciamentoParcela, ItemAgregado, ReceitaOrcamento, LancamentoAgregado, OrcamentoAgregado
+    from services.dashboard_service import DashboardService
 
 # Criar blueprint
 dashboard_bp = Blueprint('dashboard', __name__)
@@ -40,6 +42,22 @@ def decimal_to_float(value):
     if value is None:
         return 0.0
     return float(value) if isinstance(value, Decimal) else value
+
+
+@dashboard_bp.route('/resumo', methods=['GET'])
+def resumo_operacional():
+    """
+    Endpoint consolidado do Dashboard Financeiro Operacional.
+    Aceita ?mes_referencia=YYYY-MM e preserva fallback para ?periodo=YYYY-MM.
+    """
+    try:
+        mes_referencia = request.args.get('mes_referencia') or request.args.get('periodo')
+        return jsonify({
+            'success': True,
+            'data': DashboardService.obter_resumo(mes_referencia)
+        }), 200
+    except Exception:
+        return _internal_error('resumo_operacional')
 
 
 def _filtro_conta_nao_fatura_cartao():

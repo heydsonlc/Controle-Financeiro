@@ -1,175 +1,223 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard - Controle Financeiro{% endblock %}
+{% block title %}Dashboard Financeiro - Controle Financeiro{% endblock %}
 
 {% block extra_css %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
 {% endblock %}
 
-{% block action_bar %}
-    <div class="module-actionbar" aria-label="Filtros do Dashboard">
-        <div class="module-actionbar-inner">
-            <div class="module-actionbar-filters">
-                <div class="module-filter-group">
-                    <label class="module-filter-label" for="filtro-periodo-input">Per&iacute;odo</label>
-                    <input class="module-filter-control" type="month" id="filtro-periodo-input">
-                </div>
-            </div>
-
-            <div class="module-actionbar-actions">
-                <button class="action-icon-button primary" id="filtro-periodo-aplicar" type="button" title="Aplicar" aria-label="Aplicar">
-                    <span class="action-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="m5 12 4 4L19 6"/>
-                        </svg>
-                    </span>
-                    <span class="action-button-label">Aplicar</span>
-                </button>
-                <button class="action-icon-button secondary" id="filtro-periodo-limpar" type="button" title="Atual" aria-label="Atual">
-                    <span class="action-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M4 12a8 8 0 1 0 2.3-5.7"/>
-                            <path d="M4 4v5h5"/>
-                        </svg>
-                    </span>
-                    <span class="action-button-label">Atual</span>
-                </button>
-            </div>
-        </div>
-    </div>
-{% endblock %}
-
 {% block content %}
-    <div class="container app-content-fluid dashboard-shell">
-        <div class="dashboard-period-summary" id="mes-atual">Carregando...</div>
+<div class="dashboard-operacional-shell">
+    <header class="dashboard-hero">
+        <div>
+            <nav class="dashboard-breadcrumb" aria-label="Breadcrumb">
+                <span>Financeiro</span>
+                <span aria-hidden="true">/</span>
+                <strong>Dashboard</strong>
+            </nav>
+            <h1>Dashboard Financeiro</h1>
+            <p>Vis&atilde;o consolidada da opera&ccedil;&atilde;o financeira, cart&otilde;es, recorr&ecirc;ncias e mobilidade</p>
+        </div>
 
-        <main class="dashboard-layout">
-            <section class="resumo-mes" id="secao-resumo">
-                <div class="resumo-card receitas" onclick="window.location.href='/receitas'">
-                    <div class="resumo-info">
-                        <h3>RECEITAS DO MES</h3>
-                        <p class="resumo-valor" id="receitas-mes">R$ 0,00</p>
+        <div class="dashboard-controls" aria-label="Controles do dashboard">
+            <label class="dashboard-period-button" for="dashboard-periodo">
+                <span class="control-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M7 4v3M17 4v3M5 9h14M5 6h14v14H5z"/></svg>
+                </span>
+                <span>Per&iacute;odo:</span>
+                <input type="month" id="dashboard-periodo">
+            </label>
+            <button class="dashboard-control-button" id="dashboard-atualizar" type="button">
+                <span class="control-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></svg>
+                </span>
+                Atualizar
+            </button>
+            <button class="dashboard-control-button" id="dashboard-filtros" type="button">
+                <span class="control-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+                </span>
+                Filtros
+            </button>
+        </div>
+    </header>
+
+    <section class="dashboard-kpi-grid" aria-label="KPIs principais">
+        <article class="dashboard-kpi-card tone-green">
+            <div class="kpi-icon" aria-hidden="true" data-icon="wallet"></div>
+            <div>
+                <p class="kpi-label">Saldo consolidado</p>
+                <strong class="kpi-value" id="kpi-saldo">R$ 0,00</strong>
+                <span class="kpi-subtitle" id="kpi-saldo-sub">Dispon&iacute;vel em contas</span>
+            </div>
+        </article>
+        <article class="dashboard-kpi-card tone-blue">
+            <div class="kpi-icon" aria-hidden="true" data-icon="trend"></div>
+            <div>
+                <p class="kpi-label">Fluxo projetado 30 dias</p>
+                <strong class="kpi-value" id="kpi-fluxo">R$ 0,00</strong>
+                <span class="kpi-subtitle">Saldo projetado</span>
+            </div>
+        </article>
+        <article class="dashboard-kpi-card tone-purple">
+            <div class="kpi-icon" aria-hidden="true" data-icon="card"></div>
+            <div>
+                <p class="kpi-label">Faturas em aberto</p>
+                <strong class="kpi-value" id="kpi-faturas">R$ 0,00</strong>
+                <span class="kpi-subtitle" id="kpi-faturas-sub">0 cart&otilde;es</span>
+            </div>
+        </article>
+        <article class="dashboard-kpi-card tone-amber">
+            <div class="kpi-icon" aria-hidden="true" data-icon="refresh"></div>
+            <div>
+                <p class="kpi-label">Recorr&ecirc;ncias ativas</p>
+                <strong class="kpi-value" id="kpi-recorrencias">0</strong>
+                <span class="kpi-subtitle" id="kpi-recorrencias-sub">R$ 0,00 / m&ecirc;s</span>
+            </div>
+        </article>
+    </section>
+
+    <section class="dashboard-ops-grid" aria-label="Indicadores operacionais">
+        <article class="dashboard-op-card">
+            <div class="op-icon tone-blue" aria-hidden="true" data-icon="calendar"></div>
+            <div>
+                <div class="op-title-row">
+                    <p>Despesas previstas do m&ecirc;s</p>
+                    <span class="info-dot">i</span>
+                </div>
+                <strong id="op-previstas">R$ 0,00</strong>
+                <span id="op-previstas-sub">0 pendentes</span>
+                <div class="mini-progress"><span id="op-previstas-bar"></span></div>
+            </div>
+        </article>
+        <article class="dashboard-op-card">
+            <div class="op-icon tone-orange" aria-hidden="true" data-icon="clock"></div>
+            <div>
+                <div class="op-title-row">
+                    <p>Contas a vencer (7 dias)</p>
+                    <span class="info-dot">i</span>
+                </div>
+                <strong id="op-vencer">R$ 0,00</strong>
+                <span id="op-vencer-sub">0 contas</span>
+                <a href="/despesas" class="inline-action">Ver detalhes</a>
+            </div>
+        </article>
+        <article class="dashboard-op-card">
+            <div class="op-icon tone-red" aria-hidden="true" data-icon="alert"></div>
+            <div>
+                <div class="op-title-row">
+                    <p>Alertas operacionais</p>
+                    <span class="info-dot">i</span>
+                </div>
+                <div class="alert-stack" id="op-alertas">
+                    <span class="empty-inline">Sem alertas no per&iacute;odo</span>
+                </div>
+                <a href="/despesas" class="inline-action">Ver todos os alertas</a>
+            </div>
+        </article>
+        <article class="dashboard-op-card">
+            <div class="op-icon tone-green" aria-hidden="true" data-icon="car"></div>
+            <div>
+                <p>Modalidade de mobilidade ativa</p>
+                <strong class="mobility-name" id="op-mobilidade">Sem modalidade ativa</strong>
+                <span id="op-mobilidade-sub">Configure a mobilidade</span>
+                <a href="/veiculos" class="inline-action">Ver compara&ccedil;&atilde;o</a>
+            </div>
+        </article>
+    </section>
+
+    <main class="dashboard-analytics-grid">
+        <section class="dashboard-panel dashboard-flow-panel">
+            <div class="panel-heading">
+                <div>
+                    <h2>Fluxo de caixa projetado</h2>
+                    <div class="chart-legend">
+                        <span class="legend-dot green"></span> Entradas
+                        <span class="legend-dot red"></span> Sa&iacute;das
+                        <span class="legend-dot blue"></span> Saldo projetado
                     </div>
                 </div>
-
-                <div class="resumo-card despesas" onclick="window.location.href='/despesas'">
-                    <div class="resumo-info">
-                        <h3>DESPESAS DO MES</h3>
-                        <p class="resumo-valor" id="despesas-mes">R$ 0,00</p>
-                    </div>
+                <select class="panel-select" aria-label="Granularidade do fluxo">
+                    <option>Di&aacute;rio</option>
+                </select>
+            </div>
+            <div class="dashboard-chart-wrap">
+                <canvas id="fluxo-caixa-chart"></canvas>
+            </div>
+            <div class="flow-summary">
+                <div>
+                    <span class="summary-icon green" aria-hidden="true"></span>
+                    <p>Receitas previstas</p>
+                    <strong id="flow-receitas">R$ 0,00</strong>
                 </div>
-
-                <div class="resumo-card saldo-liquido" id="card-saldo-liquido">
-                    <div class="resumo-info">
-                        <h3>SALDO LIQUIDO</h3>
-                        <p class="resumo-valor" id="saldo-liquido">R$ 0,00</p>
-                    </div>
+                <div>
+                    <span class="summary-icon red" aria-hidden="true"></span>
+                    <p>Despesas previstas</p>
+                    <strong id="flow-despesas">R$ 0,00</strong>
                 </div>
+                <div>
+                    <span class="summary-icon blue" aria-hidden="true"></span>
+                    <p>Saldo final projetado</p>
+                    <strong id="flow-saldo">R$ 0,00</strong>
+                </div>
+            </div>
+        </section>
 
-                <div class="resumo-card contas-bancarias" id="card-saldo-contas" onclick="window.location.href='/contas-bancarias'">
-                    <div class="resumo-info">
-                        <h3>SALDO NAS CONTAS</h3>
-                        <p class="resumo-valor" id="saldo-contas">R$ 0,00</p>
+        <aside class="dashboard-side-stack">
+            <section class="dashboard-panel">
+                <h2>Consumo por Categoria do Cart&atilde;o</h2>
+                <div class="dashboard-table category-table">
+                    <div class="table-row table-head">
+                        <span>Categoria</span>
+                        <span>Limite</span>
+                        <span>Gasto</span>
+                        <span>Dispon&iacute;vel</span>
                     </div>
+                    <div id="categorias-cartao-lista"></div>
                 </div>
             </section>
 
-            <div class="dashboard-main-grid">
-                <div class="dashboard-primary-column">
-                    <section class="graficos dashboard-panel" id="secao-graficos">
-                        <div class="section-heading">
-                            <h2 class="section-title">Analise Visual</h2>
-                        </div>
+            <section class="dashboard-panel">
+                <h2>Pr&oacute;ximos vencimentos</h2>
+                <div class="due-list" id="proximos-vencimentos"></div>
+                <a class="panel-link" href="/despesas">Ver todos os vencimentos</a>
+            </section>
+        </aside>
+    </main>
 
-                        <div class="graficos-grid">
-                            <div class="grafico-card" id="card-grafico-categorias">
-                                <h3>Despesas por Categoria</h3>
-                                <div class="grafico-wrapper">
-                                    <canvas id="grafico-categorias"></canvas>
-                                </div>
-                            </div>
-
-                            <div class="grafico-card" id="card-grafico-evolucao">
-                                <h3>Receitas vs Despesas</h3>
-                                <div class="grafico-wrapper">
-                                    <canvas id="grafico-evolucao"></canvas>
-                                </div>
-                            </div>
-
-                            <div class="grafico-card wide" id="card-grafico-saldo">
-                                <h3>Fluxo de Caixa</h3>
-                                <div class="grafico-wrapper">
-                                    <canvas id="grafico-saldo"></canvas>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-
-                    <section class="fluxo-projetado dashboard-panel" id="secao-fluxo-projetado">
-                        <div class="section-heading">
-                            <h2 class="section-title">Fluxo de Caixa Projetado</h2>
-                            <p class="fluxo-subtitle" id="fluxo-projetado-subtitle">Carregando...</p>
-                        </div>
-                        <div id="fluxo-projetado-lista" class="fluxo-lista">
-                            <p class="loading">Carregando projecao...</p>
-                        </div>
-                    </section>
+    <section class="dashboard-bottom-grid">
+        <article class="dashboard-panel">
+            <h2>Cart&otilde;es e limites</h2>
+            <div class="dashboard-table cards-table">
+                <div class="table-row table-head">
+                    <span>Cart&atilde;o</span>
+                    <span>Limite total</span>
+                    <span>Utilizado</span>
+                    <span>Dispon&iacute;vel</span>
+                    <span>Status</span>
                 </div>
-
-                <aside class="dashboard-secondary-column">
-                    <section class="leitura-mes dashboard-panel">
-                        <h2 class="section-title">Leitura do Mes</h2>
-                        <div id="leitura-container">
-                            <p class="loading">Carregando leitura...</p>
-                        </div>
-                    </section>
-
-                    <section class="indicadores dashboard-panel" id="secao-indicadores">
-                        <h2 class="section-title">Indicadores e Insights</h2>
-                        <div class="indicadores-grid" id="indicadores-container">
-                            <div class="loading-indicator">Carregando indicadores...</div>
-                        </div>
-                    </section>
-
-                    <section class="alertas dashboard-panel">
-                        <h2 class="section-title">Alertas e Pendencias</h2>
-
-                        <div class="alertas-grid">
-                            <div class="alerta-card">
-                                <h3>Contas a Vencer (7 dias)</h3>
-                                <div class="alerta-lista" id="contas-vencer">
-                                    <p class="loading">Carregando...</p>
-                                </div>
-                            </div>
-
-                            <div class="alerta-card">
-                                <h3>Faturas de Cartao</h3>
-                                <div class="alerta-lista" id="cartoes-vencer">
-                                    <p class="loading">Carregando...</p>
-                                </div>
-                            </div>
-
-                            <div class="alerta-card">
-                                <h3>Financiamentos Ativos</h3>
-                                <div class="alerta-lista" id="financiamentos-mes">
-                                    <p class="loading">Carregando...</p>
-                                </div>
-                            </div>
-
-                            <div class="alerta-card">
-                                <h3>Receitas Previstas</h3>
-                                <div class="alerta-lista" id="receitas-previstas">
-                                    <p class="loading">Carregando...</p>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-                </aside>
+                <div id="cartoes-limites-lista"></div>
             </div>
+            <a class="panel-link" href="/cartoes">Gerenciar cart&otilde;es e limites</a>
+        </article>
 
-            <div class="dashboard-bottom-spacer" aria-hidden="true"></div>
-        </main>
-    </div>
+        <article class="dashboard-panel mobility-panel">
+            <h2>Resumo de mobilidade <span class="info-dot">i</span></h2>
+            <div class="mobility-cards" id="mobilidade-resumo"></div>
+            <a class="panel-link" href="/veiculos">Ver compara&ccedil;&atilde;o completa</a>
+        </article>
+    </section>
+
+    <section class="quick-actions" aria-label="A&ccedil;&otilde;es r&aacute;pidas">
+        <div class="quick-title">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M13 3 5 14h6l-1 7 8-11h-6l1-7Z"/>
+            </svg>
+            A&ccedil;&otilde;es r&aacute;pidas
+        </div>
+        <div class="quick-actions-list" id="acoes-rapidas"></div>
+    </section>
+</div>
 {% endblock %}
 
 {% block extra_js %}
