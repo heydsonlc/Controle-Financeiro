@@ -30,10 +30,10 @@ from dateutil.relativedelta import relativedelta
 from sqlalchemy import func
 
 try:
-    from backend.models import db, ItemDespesa, LancamentoAgregado, ItemAgregado
+    from backend.models import db, ItemDespesa, LancamentoAgregado
     from backend.services.categoria_cartao_service import CategoriaCartaoService
 except ImportError:
-    from models import db, ItemDespesa, LancamentoAgregado, ItemAgregado
+    from models import db, ItemDespesa, LancamentoAgregado
     from services.categoria_cartao_service import CategoriaCartaoService
 
 
@@ -265,7 +265,6 @@ class ImportacaoCartaoService:
         total_parcelas,
         cartao_id,
         categoria_id,
-        item_agregado_id,
         competencia_base,
         categoria_cartao_id=None,
         compra_id=None,
@@ -284,7 +283,6 @@ class ImportacaoCartaoService:
             total_parcelas (int): Total de parcelas
             cartao_id (int): ID do cartÃ£o
             categoria_id (int): Categoria da despesa
-            item_agregado_id (int): Categoria do cartÃ£o (opcional)
             categoria_cartao_id (int): Categoria do cartao global (opcional)
             competencia_base (date): CompetÃªncia escolhida pelo usuÃ¡rio (YYYY-MM-01)
             compra_id (str): UUID da compra (se None, gera novo)
@@ -319,7 +317,6 @@ class ImportacaoCartaoService:
                 'total_parcelas': total_parcelas,
                 'cartao_id': cartao_id,
                 'categoria_id': categoria_id,
-                'item_agregado_id': item_agregado_id,
                 'categoria_cartao_id': categoria_cartao_id,
                 'compra_id': compra_id,
                 'is_importado': True,
@@ -418,7 +415,6 @@ class ImportacaoCartaoService:
             valor_str = linha.get('valor')
             parcela_str = linha.get('parcela', '1/1')  # Opcional
             categoria_id = linha.get('categoria_id')
-            item_agregado_id = linha.get('item_agregado_id')  # Opcional
             categoria_cartao_id = linha.get('categoria_cartao_id')
             origem_importacao = linha.get('origem_importacao') or 'csv'
 
@@ -510,7 +506,6 @@ class ImportacaoCartaoService:
                     total_parcelas=total_parcelas,
                     cartao_id=cartao_id,
                     categoria_id=categoria_id,
-                    item_agregado_id=item_agregado_id,
                     competencia_base=competencia_alvo,
                     categoria_cartao_id=categoria_cartao_id,
                     compra_id=None,
@@ -530,7 +525,6 @@ class ImportacaoCartaoService:
                     'total_parcelas': total_parcelas,
                     'cartao_id': cartao_id,
                     'categoria_id': categoria_id,
-                    'item_agregado_id': item_agregado_id,
                     'categoria_cartao_id': categoria_cartao_id,
                     'compra_id': compra_id,
                     'is_importado': True,
@@ -652,7 +646,7 @@ class ImportacaoCartaoService:
                     total_parcelas=lanc['total_parcelas'],
                     cartao_id=lanc['cartao_id'],
                     categoria_id=lanc['categoria_id'],
-                    item_agregado_id=lanc.get('item_agregado_id'),
+                    item_agregado_id=None,
                     categoria_cartao_id=lanc.get('categoria_cartao_id'),
                     compra_id=lanc['compra_id'],
                     is_importado=lanc['is_importado'],

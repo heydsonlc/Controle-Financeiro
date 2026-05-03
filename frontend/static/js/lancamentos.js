@@ -138,8 +138,7 @@ async function carregarCartoes() {
 
 async function carregarCategoriasAnalíticas() {
     try {
-        // Buscar CATEGORIAS ANALÍTICAS (tabela: categoria)
-        // NÃO buscar categorias do cartão (tabela: item_agregado)
+        // Buscar categorias de despesa para o filtro analitico.
         const response = await fetch('/api/categorias');
         const json = await response.json();
         const categorias = extrairArray(json);
@@ -208,11 +207,11 @@ async function carregarContasBancarias() {
 async function carregarCategoriasPorCartao() {
     const cartaoId = document.getElementById('lancamento-cartao').value;
     const selectCategoriaDespesa = document.getElementById('lancamento-categoria-despesa-cartao');
-    const selectItemAgregado = document.getElementById('lancamento-item-agregado');
+    const selectCategoriaCartao = document.getElementById('lancamento-categoria-cartao');
 
     if (!cartaoId) {
-        selectItemAgregado.disabled = true;
-        selectItemAgregado.innerHTML = '<option value="">Selecione um cartão primeiro...</option>';
+        selectCategoriaCartao.disabled = true;
+        selectCategoriaCartao.innerHTML = '<option value="">Selecione um cartão primeiro...</option>';
         return;
     }
 
@@ -240,9 +239,9 @@ async function carregarCategoriasPorCartao() {
             console.error('❌ Nenhuma categoria encontrada!', state.categoriasDespesa);
         }
 
-        // 2. Carregar CATEGORIAS DO CARTÃO (ItemAgregado) - opcional
+        // 2. Carregar Categorias do Cartao vinculadas a limites - opcional
         if (!state.categorias[cartaoId]) {
-            const response = await fetch(`/api/cartoes/${cartaoId}/itens`);
+            const response = await fetch(`/api/cartoes/${cartaoId}/categorias-limite?ativo=true`);
             const json = await response.json();
             const categorias = extrairArray(json);
             state.categorias[cartaoId] = categorias;
@@ -250,14 +249,14 @@ async function carregarCategoriasPorCartao() {
 
         const categoriasCartao = state.categorias[cartaoId];
 
-        selectItemAgregado.disabled = false;
-        selectItemAgregado.innerHTML = '<option value="">Sem categoria (não controla limite)</option>';
+        selectCategoriaCartao.disabled = false;
+        selectCategoriaCartao.innerHTML = '<option value="">Resolver automaticamente</option>';
 
         categoriasCartao.forEach(cat => {
             const option = document.createElement('option');
-            option.value = cat.id;
-            option.textContent = cat.nome;
-            selectItemAgregado.appendChild(option);
+            option.value = cat.categoria_cartao_id || cat.id;
+            option.textContent = cat.categoria_cartao_nome || cat.nome;
+            selectCategoriaCartao.appendChild(option);
         });
 
     } catch (error) {
@@ -277,20 +276,20 @@ async function carregarLancamentos() {
             const lancsCartao = extrairArray(jsonLancs);
 
             // Buscar categorias do cartão para enriquecer (apenas para exibição)
-            const respItens = await fetch(`/api/cartoes/${cartao.id}/itens`);
+            const respItens = await fetch(`/api/cartoes/${cartao.id}/categorias-limite?ativo=true`);
             const jsonItens = await respItens.json();
             const itens = extrairArray(jsonItens);
 
             lancsCartao.forEach(lanc => {
                 // Enriquecer com nome da categoria do cartão (se houver)
-                const itemCategoria = itens.find(i => i.id === lanc.item_agregado_id);
+                const itemCategoria = itens.find(i => Number(i.categoria_cartao_id || i.id) === Number(lanc.categoria_cartao_id));
 
                 lancamentos.push({
                     ...lanc,
                     tipo: 'cartao',
                     cartao_id: cartao.id,
                     cartao_nome: cartao.nome,
-                    categoria_cartao_nome: itemCategoria ? itemCategoria.nome : 'Sem categoria do cartão',
+                    categoria_cartao_nome: itemCategoria ? (itemCategoria.categoria_cartao_nome || itemCategoria.nome) : 'Sem categoria do cartão',
                     data_compra: lanc.data_compra,
                     mes_fatura: lanc.mes_fatura
                 });
@@ -398,7 +397,7 @@ function aplicarFiltros() {
         );
     }
 
-    // 4. Filtrar por categoria ANALÍTICA (categoria_id, não item_agregado_id)
+    // 4. Filtrar por categoria de despesa
     if (categoriaFiltro) {
         lancamentosFiltrados = lancamentosFiltrados.filter(l =>
             l.categoria_id == categoriaFiltro
@@ -542,7 +541,7 @@ function ajustarCamposPorTipo(tipo) {
     const camposCartao = {
         'lancamento-cartao': true,
         'lancamento-categoria-despesa-cartao': true,
-        'lancamento-item-agregado': false, // opcional
+        'lancamento-categoria-cartao': false, // opcional
         'lancamento-mes-fatura': true,
         'lancamento-parcelas': false // opcional
     };
@@ -667,9 +666,9 @@ async function salvarLancamentoCartao() {
     }
 
     // Leitura null-safe da categoria do cartão (opcional)
-    const selectItemAgregado = document.getElementById('lancamento-item-agregado');
-    const itemAgregadoId = selectItemAgregado && selectItemAgregado.value
-        ? parseInt(selectItemAgregado.value)
+    const selectCategoriaCartao = document.getElementById('lancamento-categoria-cartao');
+    const categoriaCartaoId = selectCategoriaCartao && selectCategoriaCartao.value
+        ? parseInt(selectCategoriaCartao.value)
         : null;
 
     // Montar payload base (campos obrigatórios)
@@ -685,9 +684,8 @@ async function salvarLancamentoCartao() {
         observacoes: document.getElementById('lancamento-observacoes').value
     };
 
-    // Adicionar item_agregado_id APENAS se houver seleção válida
-    if (itemAgregadoId !== null) {
-        dados.item_agregado_id = itemAgregadoId;
+    if (categoriaCartaoId !== null) {
+        dados.categoria_cartao_id = categoriaCartaoId;
     }
 
     try {
@@ -851,11 +849,11 @@ function editarLancamento(lancamento) {
                 // Categoria da DESPESA (obrigatória)
                 document.getElementById('lancamento-categoria-despesa-cartao').value = lancamento.categoria_id;
 
-                // Categoria do CARTÃO (opcional) - null-safe
-                if (lancamento.item_agregado_id) {
-                    const selectItemAgregado = document.getElementById('lancamento-item-agregado');
-                    if (selectItemAgregado) {
-                        selectItemAgregado.value = lancamento.item_agregado_id;
+                // Categoria do CARTAO (opcional) - null-safe
+                if (lancamento.categoria_cartao_id) {
+                    const selectCategoriaCartao = document.getElementById('lancamento-categoria-cartao');
+                    if (selectCategoriaCartao) {
+                        selectCategoriaCartao.value = lancamento.categoria_cartao_id;
                     }
                 }
             }, 100);

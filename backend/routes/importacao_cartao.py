@@ -13,7 +13,7 @@ from datetime import datetime
 from backend.services.importacao_cartao_service import ImportacaoCartaoService
 from backend.services.importacao_cartao_unificado_service import ImportacaoCartaoUnificadoService
 from backend.services.categoria_cartao_service import CategoriaCartaoService
-from backend.models import db, ItemDespesa, Categoria, ItemAgregado
+from backend.models import db, ItemDespesa, Categoria
 
 bp = Blueprint('importacao_cartao', __name__, url_prefix='/api/importacao-cartao')
 
@@ -128,22 +128,10 @@ def _validar_payload_importacao(data):
         return None, ('Cartao invalido', 400)
     cartao_id = cartao.id
 
-    categorias_cartao_ids = {
-        item.id for item in ItemAgregado.query.filter_by(item_despesa_id=cartao_id, ativo=True).all()
-    }
     for idx, linha in enumerate(linhas, start=1):
         if linha.get('ignorar'):
             continue
-        item_agregado_id = linha.get('item_agregado_id')
         categoria_cartao_id = linha.get('categoria_cartao_id')
-        if item_agregado_id:
-            try:
-                item_agregado_id = int(item_agregado_id)
-            except (TypeError, ValueError):
-                return None, (f'Linha {idx} com Categoria do Cartao invalida', 400)
-            if item_agregado_id not in categorias_cartao_ids:
-                return None, (f'Linha {idx} usa Categoria do Cartao que nao pertence ao cartao selecionado', 400)
-            linha['item_agregado_id'] = item_agregado_id
         if categoria_cartao_id:
             try:
                 categoria_cartao_id = int(categoria_cartao_id)
@@ -154,7 +142,7 @@ def _validar_payload_importacao(data):
                     'Esta Categoria do Cartao ainda nao esta vinculada ao cartao selecionado.'
                 )
             linha['categoria_cartao_id'] = categoria_cartao_id
-        elif not item_agregado_id:
+        else:
             linha.setdefault('avisos', []).append(
                 'Categoria do Cartao ainda nao configurada para esta Categoria de Despesa.'
             )
@@ -278,7 +266,7 @@ def processar_importacao():
                     'valor': str,
                     'parcela': str (opcional, ex: "1/12"),
                     'categoria_id': int,
-                    'item_agregado_id': int (opcional)
+                    'categoria_cartao_id': int (opcional)
                 }
             ]
         }

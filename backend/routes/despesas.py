@@ -10,11 +10,11 @@ from dateutil.relativedelta import relativedelta
 from sqlalchemy import func
 
 try:
-    from backend.models import db, ItemDespesa, Categoria, LancamentoAgregado, ItemAgregado, OrcamentoAgregado, Conta
+    from backend.models import db, ItemDespesa, Categoria, LancamentoAgregado, CartaoCategoriaLimite, Conta
     from backend.services.cartao_service import CartaoService
     from backend.services.categoria_cartao_service import CategoriaCartaoService
 except ImportError:
-    from models import db, ItemDespesa, Categoria, LancamentoAgregado, ItemAgregado, OrcamentoAgregado, Conta
+    from models import db, ItemDespesa, Categoria, LancamentoAgregado, CartaoCategoriaLimite, Conta
     from services.cartao_service import CartaoService
     from services.categoria_cartao_service import CategoriaCartaoService
 
@@ -113,45 +113,37 @@ def _calcular_totais_fatura_cartao_previsto(cartao_id, competencia):
     ).scalar()
     total_executado = float(total_executado or 0)
 
-    itens = ItemAgregado.query.filter_by(item_despesa_id=cartao_id, ativo=True).all()
-    if not itens:
+    limites = CartaoCategoriaLimite.query.filter_by(cartao_id=cartao_id, ativo=True).all()
+    if not limites:
         return total_executado, total_executado
 
-    itens_ids = [i.id for i in itens]
+    categorias_cartao_ids = [limite.categoria_cartao_id for limite in limites]
 
-    gastos_por_item = dict(
+    gastos_por_categoria = dict(
         db.session.query(
-            LancamentoAgregado.item_agregado_id,
+            LancamentoAgregado.categoria_cartao_id,
             func.coalesce(func.sum(LancamentoAgregado.valor), 0)
         ).filter(
             LancamentoAgregado.cartao_id == cartao_id,
             LancamentoAgregado.mes_fatura == comp,
-            LancamentoAgregado.item_agregado_id.in_(itens_ids)
+            LancamentoAgregado.categoria_cartao_id.in_(categorias_cartao_ids)
         ).group_by(
-            LancamentoAgregado.item_agregado_id
+            LancamentoAgregado.categoria_cartao_id
         ).all()
     )
 
-    orcados_por_item = dict(
-        db.session.query(
-            OrcamentoAgregado.item_agregado_id,
-            func.coalesce(func.sum(OrcamentoAgregado.valor_teto), 0)
-        ).filter(
-            OrcamentoAgregado.mes_referencia == comp,
-            OrcamentoAgregado.item_agregado_id.in_(itens_ids)
-        ).group_by(
-            OrcamentoAgregado.item_agregado_id
-        ).all()
-    )
+    limites_por_categoria = {
+        limite.categoria_cartao_id: float(limite.limite_mensal or 0)
+        for limite in limites
+    }
 
-    complemento_orcamento = 0.0
-    for item_id in itens_ids:
-        gasto = float(gastos_por_item.get(item_id, 0) or 0)
-        orcado = float(orcados_por_item.get(item_id, 0) or 0)
-        if orcado > gasto:
-            complemento_orcamento += (orcado - gasto)
+    complemento_limite = 0.0
+    for categoria_cartao_id, limite_mensal in limites_por_categoria.items():
+        gasto = float(gastos_por_categoria.get(categoria_cartao_id, 0) or 0)
+        if limite_mensal > gasto:
+            complemento_limite += (limite_mensal - gasto)
 
-    total_previsto = total_executado + complemento_orcamento
+    total_previsto = total_executado + complemento_limite
     return total_previsto, total_executado
 
 
@@ -501,7 +493,6 @@ def criar_despesa():
         # Se for despesa recorrente paga via cartÃ£o de crÃ©dito
         if bool(despesa.recorrente) and meio_pagamento == 'cartao':
             cartao_id = _to_int(dados.get('cartao_id'))
-            item_agregado_id = _to_int(dados.get('item_agregado_id'))
             categoria_cartao_id = _to_int(dados.get('categoria_cartao_id'))
 
             # ValidaÃ§Ã£o mÃ­nima de integridade
@@ -513,7 +504,7 @@ def criar_despesa():
                 }), 400
 
             despesa.cartao_id = cartao_id
-            despesa.item_agregado_id = item_agregado_id
+            despesa.item_agregado_id = None
             resolucao_cartao = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(
                 cartao_id=cartao_id,
                 categoria_id=despesa.categoria_id,
@@ -1238,7 +1229,7 @@ def gerar_lancamentos_cartao_recorrente(item_despesa_id, meses_futuros=12, mes_r
 
         novo = LancamentoAgregado(
             cartao_id=item.cartao_id,
-            item_agregado_id=item.item_agregado_id,  # Opcional - categoria do cartÃ£o legado
+            item_agregado_id=None,
             categoria_cartao_id=resolucao_cartao.get('categoria_cartao_id'),
             categoria_id=item.categoria_id,  # Categoria analÃ­tica obrigatÃ³ria
             descricao=item.nome,

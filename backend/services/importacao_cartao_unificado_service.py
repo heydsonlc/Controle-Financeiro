@@ -7,7 +7,7 @@ from pathlib import Path
 from sqlalchemy import func
 
 try:
-    from backend.models import Categoria, CategoriaCartao, ItemDespesa, ItemAgregado, LancamentoAgregado
+    from backend.models import Categoria, CategoriaCartao, ItemDespesa, LancamentoAgregado
     from backend.services.categoria_cartao_service import CategoriaCartaoService
     from backend.services.importacao_cartao_service import ImportacaoCartaoService
     from backend.services.parsers import (
@@ -16,7 +16,7 @@ try:
         importacao_xlsx_parser,
     )
 except ImportError:
-    from models import Categoria, CategoriaCartao, ItemDespesa, ItemAgregado, LancamentoAgregado
+    from models import Categoria, CategoriaCartao, ItemDespesa, LancamentoAgregado
     from services.categoria_cartao_service import CategoriaCartaoService
     from services.importacao_cartao_service import ImportacaoCartaoService
     from services.parsers import (
@@ -193,7 +193,6 @@ class ImportacaoCartaoUnificadoService:
             descricao_normalizada = linha.get('descricao_normalizada') or descricao_original
             parcela_atual = linha.get('parcela_atual') or linha.get('numero_parcela') or 1
             total_parcelas = linha.get('total_parcelas') or 1
-            item_agregado_id = linha.get('item_agregado_id')
             categoria_cartao_id = linha.get('categoria_cartao_id')
             categoria_id = linha.get('categoria_id') or linha.get('categoria_despesa_id')
 
@@ -218,7 +217,6 @@ class ImportacaoCartaoUnificadoService:
                 'categoria_despesa_id': categoria_id,
                 'categoria_id': categoria_id,
                 'categoria_cartao_id': categoria_cartao_id,
-                'item_agregado_id': item_agregado_id,
                 'categoria_cartao_origem': linha.get('categoria_cartao_origem'),
                 'categoria_cartao_vinculada_ao_cartao': linha.get('categoria_cartao_vinculada_ao_cartao'),
                 'confianca_categoria': linha.get('confianca_categoria') or 'baixa',
@@ -305,39 +303,8 @@ class ImportacaoCartaoUnificadoService:
         return linhas
 
     @staticmethod
-    def _sugerir_categoria_cartao(linha, cartao_id, categorias_cartao):
-        descricao_ref = ImportacaoCartaoService._normalizar_chave_texto(
-            linha.get('descricao_normalizada') or linha.get('descricao_original')
-        )
-        if descricao_ref:
-            registro = LancamentoAgregado.query.filter(
-                LancamentoAgregado.cartao_id == cartao_id,
-                LancamentoAgregado.item_agregado_id.isnot(None),
-                func.lower(
-                    func.coalesce(
-                        LancamentoAgregado.descricao_original_normalizada,
-                        LancamentoAgregado.descricao,
-                    )
-                ) == descricao_ref,
-            ).order_by(LancamentoAgregado.id.desc()).first()
-            if registro and registro.item_agregado_id:
-                item = next((cat for cat in categorias_cartao if cat.id == registro.item_agregado_id), None)
-                if item:
-                    return item, 'historico'
-
-        texto = f"{linha.get('descricao_normalizada') or ''} {linha.get('grupo') or ''}".lower()
-        for item in categorias_cartao:
-            nome = (item.nome or '').strip().lower()
-            if nome and nome in texto:
-                return item, 'palavra_chave'
-        return None, None
-
-    @staticmethod
     def validar_linhas(linhas, cartao, competencia_base):
         chaves_lote = set()
-        ids_categorias_cartao = {
-            item.id for item in ItemAgregado.query.filter_by(item_despesa_id=cartao.id, ativo=True).all()
-        }
 
         for linha in linhas:
             mensagens = linha.setdefault('mensagens', [])
@@ -360,16 +327,6 @@ class ImportacaoCartaoUnificadoService:
             if not (linha.get('descricao_normalizada') or linha.get('descricao_original')):
                 linha['status'] = 'revisar'
                 mensagens.append('Descricao ausente.')
-
-            item_agregado_id = linha.get('item_agregado_id')
-            if item_agregado_id:
-                try:
-                    item_agregado_id = int(item_agregado_id)
-                except (TypeError, ValueError):
-                    item_agregado_id = None
-                if item_agregado_id not in ids_categorias_cartao:
-                    linha['item_agregado_id'] = None
-                    mensagens.append('Categoria do cartao nao pertence ao cartao selecionado.')
 
             if linha.get('categoria_cartao_id'):
                 try:

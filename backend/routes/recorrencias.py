@@ -164,7 +164,6 @@ def _item_to_dict(item):
         'frequencia_semanas': detalhes['intervalo_semanas'],
         'meio_pagamento': item.meio_pagamento,
         'cartao_id': item.cartao_id,
-        'item_agregado_id': item.item_agregado_id,
         'categoria_cartao_id': item.categoria_cartao_id,
         'categoria_cartao_nome': item.categoria_cartao.nome if item.categoria_cartao else None,
         'ativo': bool(item.ativo),
@@ -238,7 +237,6 @@ def criar_recorrencia():
 
         meio_pagamento = _normalizar_meio_pagamento(dados.get('meio_pagamento'))
         cartao_id = _to_int(dados.get('cartao_id'))
-        item_agregado_id = _to_int(dados.get('item_agregado_id'))
         categoria_cartao_id = _to_int(dados.get('categoria_cartao_id'))
 
         if meio_pagamento == 'cartao' and cartao_id:
@@ -250,7 +248,6 @@ def criar_recorrencia():
             categoria_cartao_id = resolucao_cartao.get('categoria_cartao_id')
         else:
             cartao_id = None
-            item_agregado_id = None
             categoria_cartao_id = None
 
         item = ItemDespesa(
@@ -266,7 +263,7 @@ def criar_recorrencia():
             tipo='Simples',
             meio_pagamento=meio_pagamento,
             cartao_id=cartao_id,
-            item_agregado_id=item_agregado_id,
+            item_agregado_id=None,
             categoria_cartao_id=categoria_cartao_id,
         )
         db.session.add(item)
@@ -319,8 +316,6 @@ def atualizar_recorrencia(item_id):
             item.meio_pagamento = _normalizar_meio_pagamento(dados.get('meio_pagamento'))
         if 'cartao_id' in dados:
             item.cartao_id = _to_int(dados.get('cartao_id'))
-        if 'item_agregado_id' in dados:
-            item.item_agregado_id = _to_int(dados.get('item_agregado_id'))
         if 'categoria_cartao_id' in dados:
             item.categoria_cartao_id = _to_int(dados.get('categoria_cartao_id'))
         if 'ativo' in dados:
@@ -333,6 +328,7 @@ def atualizar_recorrencia(item_id):
                 categoria_cartao_id=item.categoria_cartao_id,
             )
             item.categoria_cartao_id = resolucao_cartao.get('categoria_cartao_id')
+            item.item_agregado_id = None
         else:
             item.cartao_id = None
             item.item_agregado_id = None

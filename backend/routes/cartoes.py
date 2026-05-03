@@ -694,10 +694,7 @@ def criar_lancamento(item_id):
 @cartoes_bp.route('/<int:cartao_id>/lancamentos', methods=['GET'])
 def listar_todos_lancamentos_cartao(cartao_id):
     """
-    Lista TODOS os lanÃ§amentos de um cartÃ£o (com e sem categoria do cartÃ£o)
-
-    Retorna lanÃ§amentos com item_agregado_id preenchido E com item_agregado_id = NULL.
-    Conforme contrato: lanÃ§amentos sem categoria aparecem no histÃ³rico.
+    Lista TODOS os lanÃ§amentos de um cartÃ£o (com e sem Categoria do Cartao).
     """
     try:
         mes_fatura = request.args.get('mes_fatura')
@@ -722,10 +719,7 @@ def listar_todos_lancamentos_cartao(cartao_id):
 @cartoes_bp.route('/<int:cartao_id>/lancamentos', methods=['POST'])
 def criar_lancamento_sem_categoria(cartao_id):
     """
-    Cria um lanÃ§amento diretamente no cartÃ£o (sem categoria)
-
-    Este endpoint aceita lanÃ§amentos que NÃƒO consomem limite orÃ§amentÃ¡rio.
-    O item_agregado_id Ã© opcional - se fornecido, consome limite; se None, apenas vai para fatura.
+    Cria um lancamento diretamente no cartao usando Categoria do Cartao quando informada.
     """
     try:
         dados = request.json
@@ -742,7 +736,6 @@ def criar_lancamento_sem_categoria(cartao_id):
         # Preparar dados para o service
         dados_lancamento = {
             'cartao_id': cartao_id,
-            'item_agregado_id': dados.get('item_agregado_id'),  # OPCIONAL (None se nÃ£o informado)
             'categoria_cartao_id': dados.get('categoria_cartao_id'),
             'categoria_id': dados['categoria_id'],  # Categoria da DESPESA (obrigatÃ³ria)
             'descricao': dados['descricao'],

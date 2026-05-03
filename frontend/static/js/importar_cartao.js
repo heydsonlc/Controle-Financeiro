@@ -45,7 +45,6 @@ function inicializarPainel() {
             await carregarCategorias();
             if (estado.linhasMapeadas.length) {
                 estado.linhasMapeadas.forEach((linha) => {
-                    linha.item_agregado_id = null;
                     linha.categoria_cartao_id = null;
                     linha.categoria_cartao_origem = null;
                 });
@@ -481,7 +480,6 @@ function converterLinhaIntermediaria(linha) {
         categoria_despesa_id: toIntOrNull(linha.categoria_despesa_id || linha.categoria_id),
         categoria_nome: linha.categoria_nome,
         categoria_origem: linha.categoria_origem || linha.categoria_sugerida_origem,
-        item_agregado_id: toIntOrNull(linha.item_agregado_id),
         categoria_cartao_id: toIntOrNull(linha.categoria_cartao_id),
         categoria_cartao_nome: linha.categoria_cartao_nome,
         categoria_cartao_origem: linha.categoria_cartao_origem || linha.categoria_cartao_sugerida_origem,
@@ -970,14 +968,12 @@ function aplicarResolucaoCategoriaCartaoLinha(linha, resolucao = {}) {
 
     if (categoriaCartaoId && vinculada) {
         proxima.categoria_cartao_id = categoriaCartaoId;
-        proxima.item_agregado_id = null;
         proxima.categoria_cartao_origem = resolucao.origem || 'mapa_categoria_despesa';
         proxima.status_classificacao = proxima.categoria_id ? 'classificada' : proxima.status_classificacao;
         return proxima;
     }
 
     proxima.categoria_cartao_id = null;
-    proxima.item_agregado_id = null;
 
     const temCategoriaResolvida = toIntOrNull(resolucao.categoria_cartao_resolvida_id || resolucao.categoria_cartao_id);
     if (temCategoriaResolvida && resolucao.vinculada_ao_cartao === false) {
@@ -1284,7 +1280,7 @@ function atualizarLinhaEdicao(index, campo, valor) {
     const linha = estado.linhasMapeadas[index];
     if (!linha) return;
 
-    if (campo === 'categoria_id' || campo === 'categoria_cartao_id' || campo === 'item_agregado_id') {
+    if (campo === 'categoria_id' || campo === 'categoria_cartao_id') {
         linha[campo] = toIntOrNull(valor);
         if (campo === 'categoria_id') {
             linha.categoria_despesa_id = linha[campo];
@@ -1292,19 +1288,16 @@ function atualizarLinhaEdicao(index, campo, valor) {
             linha.categoria_sugerida_origem = linha.categoria_origem;
             if (linha.categoria_cartao_origem !== 'manual') {
                 linha.categoria_cartao_id = null;
-                linha.item_agregado_id = null;
                 linha.categoria_cartao_origem = null;
                 linha.categoria_cartao_nome = null;
                 linha.categoria_cartao_vinculada_ao_cartao = false;
             }
         }
         if (campo === 'categoria_cartao_id') {
-            linha.item_agregado_id = null;
             linha.categoria_cartao_origem = linha[campo] ? 'manual' : null;
             linha.categoria_cartao_vinculada_ao_cartao = !!linha[campo];
             if (linha[campo] && linha.categoria_id) linha.status_classificacao = 'classificada';
         }
-        if (campo === 'item_agregado_id') linha.categoria_cartao_id = linha[campo];
     } else if (campo === 'numero_parcela' || campo === 'total_parcelas') {
         linha[campo] = Math.max(1, parseInt(valor || '1', 10));
         linha.parcelado = Number(linha.total_parcelas) > 1;
@@ -1319,7 +1312,7 @@ function atualizarLinhaEdicao(index, campo, valor) {
     if (campo === 'descricao_exibida') {
         linha.descricao = valor;
     }
-    if ((campo === 'categoria_id' || campo === 'categoria_cartao_id' || campo === 'item_agregado_id') && !['duplicado', 'ignorado'].includes(linha.status)) {
+    if ((campo === 'categoria_id' || campo === 'categoria_cartao_id') && !['duplicado', 'ignorado'].includes(linha.status)) {
         if (!linha.categoria_id) linha.status = 'revisar';
         else linha.status = 'valido';
     }
@@ -1521,9 +1514,6 @@ function montarPayloadImportacao() {
 
             if (linha.categoria_cartao_id) {
                 payload.categoria_cartao_id = linha.categoria_cartao_id;
-            }
-            if (linha.item_agregado_id) {
-                payload.item_agregado_id = linha.item_agregado_id;
             }
 
             return payload;

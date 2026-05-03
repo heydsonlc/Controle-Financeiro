@@ -167,7 +167,7 @@ async function carregarCartoes() {
 }
 
 /**
- * Carrega categorias (ItemAgregado) de um cartão específico
+ * Carrega categorias do cartão específico
  */
 async function carregarCategoriasCartao(cartaoId) {
     try {
@@ -2049,8 +2049,8 @@ async function carregarDetalhesFatura(despesaId, cartaoId, competencia) {
         const json = await response.json();
         const lancamentos = extrairArray(json);
 
-        // Buscar resumo do cartão para obter previsões das categorias
-        const resumoResponse = await fetch(`/api/cartoes/${cartaoId}/resumo?mes_referencia=${competenciaNormalizada}`);
+        // Buscar resumo da fatura por Categoria do Cartão
+        const resumoResponse = await fetch(`/api/cartoes/${cartaoId}/fatura-categorias?mes_referencia=${competenciaNormalizada}`);
         const resumoJson = await resumoResponse.json();
         if (!resumoResponse.ok) {
             throw new Error(resumoJson?.error || resumoJson?.erro || resumoJson?.message || 'Erro ao carregar resumo do cartão');
@@ -2089,8 +2089,17 @@ function organizarLancamentosEmBlocos(lancamentos, resumoCartao) {
         outros: []           // Parte 4: resto
     };
 
-    // Mapear categorias com previsão (valor_orcado no resumo)
-    (resumoCartao?.itens || []).forEach(item => {
+    const categoriasResumo = Array.isArray(resumoCartao?.categorias)
+        ? resumoCartao.categorias.map(item => ({
+            id: item.categoria_cartao_id,
+            nome: item.categoria_cartao_nome,
+            valor_orcado: item.limite_mensal,
+            valor_gasto: item.gasto_atual
+        }))
+        : (resumoCartao?.itens || []);
+
+    // Mapear categorias com previsão/limite no resumo
+    categoriasResumo.forEach(item => {
         const previsto = parseFloat(item.valor_orcado || 0);
         if (previsto > 0) {
             blocos.porCategoria[item.id] = {
@@ -2106,7 +2115,7 @@ function organizarLancamentosEmBlocos(lancamentos, resumoCartao) {
         const valorLanc = parseFloat(lanc.valor || 0);
         const totalParcelas = parseInt(lanc.total_parcelas || 0);
         const numeroParcela = parseInt(lanc.numero_parcela || 0);
-        const categoriaPrevista = blocos.porCategoria[lanc.categoria_cartao_id || lanc.item_agregado_id];
+        const categoriaPrevista = blocos.porCategoria[lanc.categoria_cartao_id];
         const isRecorrenteCartao = lanc.is_recorrente === true;  // Lançamento gerado por despesa recorrente
 
         // PARTE 1: Compras Parceladas
