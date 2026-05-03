@@ -1,306 +1,415 @@
 {% extends "base.html" %}
 
-{% block title %}Contas Bancárias - Controle Financeiro{% endblock %}
+{% block title %}Contas Bancárias{% endblock %}
 
 {% block extra_css %}
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/contas_bancarias.css') }}">
-{% endblock %}
-
-{% block action_bar %}
-    <div class="module-actionbar" aria-label="Filtros e acoes de Contas Bancarias">
-        <div class="module-actionbar-inner">
-            <div class="module-actionbar-filters">
-                <div class="module-filter-group">
-                    <label class="module-filter-label" for="filtro-status">Status</label>
-                    <select class="module-filter-control" id="filtro-status" onchange="carregarContas()">
-                        <option value="ATIVO">Contas Ativas</option>
-                        <option value="INATIVO">Contas Inativas</option>
-                        <option value="">Todas</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="module-actionbar-actions">
-                <button class="action-icon-button primary" id="btn-nova-conta" type="button" onclick="abrirModalNovaConta()" title="Nova Conta" aria-label="Nova Conta">
-                    <span class="action-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M12 5v14M5 12h14"/>
-                        </svg>
-                    </span>
-                    <span class="action-button-label">Nova Conta</span>
-                </button>
-            </div>
-        </div>
-    </div>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/contas_bancarias.css') }}">
 {% endblock %}
 
 {% block content %}
-    <div class="container app-content-fluid">
-        <main>
+<div class="contas-ux-page">
+    <p class="contas-page-subtitle">Gerencie suas contas bancárias e acompanhe os saldos.</p>
 
-            <!-- Cards de Resumo -->
-            <div class="cards-resumo">
-                <div class="card">
-                    <h3>Total em Contas</h3>
-                    <p class="valor" id="total-saldo">R$ 0,00</p>
-                </div>
-                <div class="card">
-                    <h3>Contas Ativas</h3>
-                    <p class="valor" id="total-contas">0</p>
-                </div>
-                <div class="card">
-                    <h3>Maior Saldo</h3>
-                    <p class="valor" id="maior-saldo">R$ 0,00</p>
-                </div>
+    <section class="contas-toolbar" aria-label="Filtros e ações de contas bancárias">
+        <label class="contas-filter">
+            <span>Status</span>
+            <select id="filtro-status" onchange="carregarContas()">
+                <option value="TODAS" selected>Todas</option>
+                <option value="ATIVO">Ativas</option>
+                <option value="INATIVO">Inativas</option>
+            </select>
+        </label>
+        <label class="contas-search">
+            <span class="sr-only">Buscar contas</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.3-4.3M10.8 18a7.2 7.2 0 1 1 0-14.4 7.2 7.2 0 0 1 0 14.4Z"/></svg>
+            <input id="contas-busca" type="search" placeholder="Buscar contas, instituição, agência ou número">
+        </label>
+        <button type="button" class="contas-secondary-btn" onclick="mostrarFiltrosAvancados()">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M7 12h10M10 17h4"/></svg>
+            Filtros
+        </button>
+        <button type="button" class="contas-primary-btn" onclick="abrirModalNovaConta()">
+            <span aria-hidden="true">+</span>
+            Nova conta
+        </button>
+    </section>
+
+    <section class="contas-kpi-grid" aria-label="Resumo de contas bancárias">
+        <article class="contas-kpi-card">
+            <span class="contas-kpi-icon blue" aria-hidden="true"></span>
+            <div class="contas-kpi-content">
+                <span>Saldo total em contas</span>
+                <strong id="saldo-total">R$ 0,00</strong>
+                <small id="saldo-total-percentual">0% do saldo disponível</small>
+                <div class="contas-progress"><div id="saldo-total-barra"></div></div>
             </div>
+        </article>
+        <article class="contas-kpi-card">
+            <span class="contas-kpi-icon green" aria-hidden="true"></span>
+            <div class="contas-kpi-content">
+                <span>Contas ativas</span>
+                <strong id="contas-ativas">0</strong>
+                <small id="contas-ativas-texto">0 de 0 contas</small>
+                <div class="contas-progress green"><div id="contas-ativas-barra"></div></div>
+            </div>
+        </article>
+        <article class="contas-kpi-card">
+            <span class="contas-kpi-icon purple" aria-hidden="true"></span>
+            <div class="contas-kpi-content">
+                <span>Maior saldo</span>
+                <strong id="maior-saldo">R$ 0,00</strong>
+                <small id="maior-saldo-conta">Nenhuma conta</small>
+            </div>
+        </article>
+        <article class="contas-kpi-card">
+            <span class="contas-kpi-icon yellow" aria-hidden="true"></span>
+            <div class="contas-kpi-content">
+                <span>Saldo conciliado</span>
+                <strong id="saldo-conciliado">R$ 0,00</strong>
+                <small id="saldo-conciliado-texto">Fallback do saldo total</small>
+                <div class="contas-progress yellow"><div id="saldo-conciliado-barra"></div></div>
+            </div>
+        </article>
+    </section>
 
-            <!-- Lista de Contas -->
-            <section class="module-data-section">
-                <div class="section-title-row">
-                    <div class="section-title-main">
-                        <span class="section-title-icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" focusable="false">
-                                <path d="M4 7h16"/>
-                                <path d="M4 12h16"/>
-                                <path d="M4 17h10"/>
-                            </svg>
-                        </span>
-                        <h2 class="section-title-text">Contas Banc&aacute;rias</h2>
-                    </div>
-                    <span class="section-title-meta">Saldo e a&ccedil;&otilde;es por conta</span>
-                </div>
-                <div class="contas-lista" id="contas-lista">
-                    <p class="loading">Carregando contas...</p>
-                </div>
-            </section>
-        </main>
-    </div>
+    <section class="contas-panel" aria-label="Contas bancárias">
+        <div class="contas-panel-header">
+            <div>
+                <h2>Contas bancárias</h2>
+                <p>Visualize e gerencie suas contas</p>
+            </div>
+            <div class="contas-panel-actions">
+                <button type="button" class="contas-secondary-btn" onclick="exportarContas()">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+                    Exportar
+                </button>
+                <button type="button" class="contas-icon-toggle active" aria-label="Ver em cards">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 0h7v7h-7v-7Z"/></svg>
+                </button>
+                <button type="button" class="contas-icon-toggle" aria-label="Ver em lista">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14"/></svg>
+                </button>
+            </div>
+        </div>
 
-    <!-- Modal: Nova Conta / Editar Conta -->
-    <div id="modal-conta" class="modal">
-        <div class="modal-content modal-large">
-            <div class="modal-header">
+        <div class="contas-table-head" aria-hidden="true">
+            <span>Conta</span>
+            <span>Detalhes</span>
+            <span>Saldo atual</span>
+            <span>Ações</span>
+        </div>
+
+        <div id="contas-lista" class="contas-lista">
+            <div class="contas-loading">Carregando contas...</div>
+        </div>
+
+        <footer class="contas-panel-footer">
+            <div class="contas-legend">
+                <strong>Legenda de ações:</strong>
+                <span>Visualizar</span>
+                <span>Editar</span>
+                <span>Transferir</span>
+                <span>Extrato</span>
+                <span>Inativar</span>
+            </div>
+            <span id="contas-total-encontradas">0 contas encontradas</span>
+        </footer>
+    </section>
+</div>
+
+<div id="modal-conta" class="contas-modal" aria-hidden="true">
+    <div class="contas-modal-box contas-account-modal" role="dialog" aria-modal="true" aria-labelledby="modal-titulo">
+        <div class="contas-modal-header">
+            <div>
                 <h2 id="modal-titulo">Nova Conta Bancária</h2>
-                <span class="close" onclick="fecharModal('modal-conta')">&times;</span>
+                <p id="modal-subtitulo">Cadastre uma nova conta para organizar e acompanhar seus saldos.</p>
             </div>
-            <form id="form-conta" onsubmit="salvarConta(event)">
-                <input type="hidden" id="conta-id">
+            <button type="button" onclick="fecharModal('modal-conta')" aria-label="Fechar">×</button>
+        </div>
 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="conta-nome">Nome da Conta *</label>
-                        <input type="text" id="conta-nome" required
-                               placeholder="Ex: Conta Corrente CAIXA">
-                    </div>
-                    <div class="form-group">
-                        <label for="conta-instituicao">Instituição *</label>
-                        <select id="conta-instituicao" required>
-                            <option value="">Selecione...</option>
-                            <option value="CAIXA">CAIXA</option>
-                            <option value="Banco do Brasil">Banco do Brasil</option>
-                            <option value="Bradesco">Bradesco</option>
-                            <option value="Itaú">Itaú</option>
-                            <option value="Santander">Santander</option>
-                            <option value="Nubank">Nubank</option>
-                            <option value="Inter">Inter</option>
-                            <option value="C6 Bank">C6 Bank</option>
-                            <option value="PicPay">PicPay</option>
-                            <option value="Mercado Pago">Mercado Pago</option>
-                            <option value="Pagbank">Pagbank</option>
-                            <option value="Next">Next</option>
-                            <option value="Neon">Neon</option>
-                            <option value="Outro">Outro</option>
-                        </select>
-                    </div>
+        <form id="form-conta" onsubmit="salvarConta(event)">
+            <input type="hidden" id="conta-id">
+            <input type="hidden" id="conta-cor" value="#3b82f6">
+
+            <div class="contas-modal-layout">
+                <div class="contas-form-card">
+                    <section class="contas-form-section">
+                        <div class="contas-section-heading">
+                            <span class="contas-section-icon"></span>
+                            <div>
+                                <h3>Dados da conta</h3>
+                                <p>Informações básicas para identificação da conta.</p>
+                            </div>
+                        </div>
+                        <div class="contas-form-grid">
+                            <label class="contas-field full">
+                                <span>Nome da Conta <em>*</em></span>
+                                <input id="conta-nome" type="text" required placeholder="Ex: Conta Corrente CAIXA">
+                            </label>
+                            <label class="contas-field">
+                                <span>Instituição <em>*</em></span>
+                                <select id="conta-instituicao" required>
+                                    <option value="">Selecione a instituição</option>
+                                    <option value="CAIXA">CAIXA</option>
+                                    <option value="Banco do Brasil">Banco do Brasil</option>
+                                    <option value="Bradesco">Bradesco</option>
+                                    <option value="Itaú">Itaú</option>
+                                    <option value="Santander">Santander</option>
+                                    <option value="Nubank">Nubank</option>
+                                    <option value="Inter">Inter</option>
+                                    <option value="C6 Bank">C6 Bank</option>
+                                    <option value="PicPay">PicPay</option>
+                                    <option value="Mercado Pago">Mercado Pago</option>
+                                    <option value="Pagbank">Pagbank</option>
+                                    <option value="Next">Next</option>
+                                    <option value="Neon">Neon</option>
+                                    <option value="Outro">Outro</option>
+                                </select>
+                            </label>
+                            <label class="contas-field">
+                                <span>Tipo de Conta <em>*</em></span>
+                                <select id="conta-tipo" required>
+                                    <option value="">Selecione o tipo de conta</option>
+                                    <option value="Conta Corrente">Conta Corrente</option>
+                                    <option value="Conta Poupança">Conta Poupança</option>
+                                    <option value="Carteira Digital">Carteira Digital</option>
+                                    <option value="Conta Salário">Conta Salário</option>
+                                    <option value="Conta Investimento">Conta Investimento</option>
+                                </select>
+                            </label>
+                        </div>
+                    </section>
+
+                    <section class="contas-form-section">
+                        <div class="contas-section-heading">
+                            <span class="contas-section-icon"></span>
+                            <div>
+                                <h3>Identificação bancária</h3>
+                                <p>Dados utilizados para identificação da conta bancária.</p>
+                            </div>
+                        </div>
+                        <div class="contas-form-grid bank-id">
+                            <label class="contas-field">
+                                <span>Agência</span>
+                                <input id="conta-agencia" type="text" placeholder="Ex: 1234">
+                            </label>
+                            <label class="contas-field">
+                                <span>Número da Conta</span>
+                                <input id="conta-numero" type="text" placeholder="Ex: 12345">
+                            </label>
+                            <label class="contas-field short">
+                                <span>Dígito</span>
+                                <input id="conta-digito" type="text" maxlength="2" placeholder="Ex: 6">
+                            </label>
+                        </div>
+                    </section>
+
+                    <section class="contas-form-section">
+                        <div class="contas-section-heading">
+                            <span class="contas-section-icon"></span>
+                            <div>
+                                <h3>Configurações</h3>
+                                <p>Defina o saldo inicial e a cor de exibição da conta.</p>
+                            </div>
+                        </div>
+                        <div class="contas-form-grid settings">
+                            <label class="contas-field">
+                                <span>Saldo Inicial</span>
+                                <input id="conta-saldo-inicial" type="text" placeholder="R$ 0,00" inputmode="decimal">
+                                <small>Saldo da conta no momento do cadastro</small>
+                            </label>
+                            <div class="contas-field">
+                                <span>Cor de Exibição</span>
+                                <div id="conta-cor-paleta" class="contas-color-grid" role="group" aria-label="Cor de exibição">
+                                    <button type="button" class="active" data-color="#3b82f6" style="--swatch:#3b82f6" aria-label="Azul"></button>
+                                    <button type="button" data-color="#22c55e" style="--swatch:#22c55e" aria-label="Verde"></button>
+                                    <button type="button" data-color="#14b8a6" style="--swatch:#14b8a6" aria-label="Teal"></button>
+                                    <button type="button" data-color="#7c3aed" style="--swatch:#7c3aed" aria-label="Roxo"></button>
+                                    <button type="button" data-color="#f97316" style="--swatch:#f97316" aria-label="Laranja"></button>
+                                    <button type="button" data-color="#ef4444" style="--swatch:#ef4444" aria-label="Vermelho"></button>
+                                    <button type="button" data-color="#6b7280" style="--swatch:#6b7280" aria-label="Cinza"></button>
+                                </div>
+                                <small>Cor usada para identificação visual nos gráficos.</small>
+                            </div>
+                        </div>
+                    </section>
                 </div>
 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="conta-tipo">Tipo de Conta *</label>
-                        <select id="conta-tipo" required>
-                            <option value="">Selecione...</option>
-                            <option value="Conta Corrente">Conta Corrente</option>
-                            <option value="Conta Poupança">Conta Poupança</option>
-                            <option value="Carteira Digital">Carteira Digital</option>
-                            <option value="Conta Salário">Conta Salário</option>
-                            <option value="Conta Investimento">Conta Investimento</option>
-                        </select>
+                <aside class="contas-preview-card" aria-label="Prévia da conta">
+                    <h3>Prévia da conta</h3>
+                    <p>Veja como sua conta será exibida no sistema.</p>
+                    <div class="contas-preview-body">
+                        <span id="preview-cor-icon" class="contas-preview-icon"></span>
+                        <strong id="preview-nome">Nome da Conta</strong>
+                        <span id="preview-tipo" class="contas-preview-pill">Tipo de Conta</span>
+                        <dl>
+                            <div><dt>Instituição</dt><dd id="preview-instituicao">-</dd></div>
+                            <div><dt>Agência / Conta</dt><dd id="preview-agencia-conta">- / -</dd></div>
+                            <div><dt>Saldo Inicial</dt><dd id="preview-saldo">R$ 0,00</dd></div>
+                            <div><dt>Cor de Exibição</dt><dd><span id="preview-cor-dot"></span></dd></div>
+                        </dl>
+                        <div class="contas-preview-note">Você poderá editar essas informações a qualquer momento.</div>
                     </div>
-                    <div class="form-group">
-                        <label for="conta-agencia">Agência</label>
-                        <input type="text" id="conta-agencia"
-                               placeholder="Ex: 1234">
-                    </div>
-                </div>
+                </aside>
+            </div>
 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="conta-numero">Número da Conta</label>
-                        <input type="text" id="conta-numero"
-                               placeholder="Ex: 12345">
-                    </div>
-                    <div class="form-group">
-                        <label for="conta-digito">Dígito</label>
-                        <input type="text" id="conta-digito"
-                               placeholder="Ex: 6" maxlength="2">
-                    </div>
-                </div>
+            <div class="contas-modal-footer">
+                <button type="button" class="contas-secondary-btn" onclick="fecharModal('modal-conta')">Cancelar</button>
+                <button type="button" id="btn-inativar-modal" class="contas-danger-btn" onclick="inativarContaModal()">Inativar</button>
+                <button type="submit" class="contas-primary-btn">Salvar conta</button>
+            </div>
+        </form>
+    </div>
+</div>
 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="conta-saldo-inicial">Saldo Inicial</label>
-                        <input type="text" id="conta-saldo-inicial"
-                               placeholder="R$ 0,00" onkeyup="formatarMoeda(this)">
-                        <small class="form-help">Saldo da conta no momento do cadastro</small>
-                    </div>
-                    <div class="form-group">
-                        <label for="conta-cor">Cor de Exibição</label>
-                        <input type="color" id="conta-cor" value="#3b82f6">
-                        <small class="form-help">Cor para identificação visual nos gráficos</small>
-                    </div>
-                </div>
+<div id="modal-detalhe" class="contas-modal" aria-hidden="true">
+    <div class="contas-modal-box" role="dialog" aria-modal="true" aria-labelledby="detalhe-titulo">
+        <div class="contas-modal-header">
+            <div>
+                <h2 id="detalhe-titulo">Detalhe da conta</h2>
+                <p id="detalhe-subtitulo">Dados principais e últimos movimentos.</p>
+            </div>
+            <button type="button" onclick="fecharModal('modal-detalhe')" aria-label="Fechar">×</button>
+        </div>
+        <div id="detalhe-conteudo" class="contas-detail-content"></div>
+    </div>
+</div>
 
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="fecharModal('modal-conta')">
-                        Cancelar
-                    </button>
-                    <div style="display: flex; gap: 10px;">
-                        <button type="button" id="btn-deletar-modal" class="btn btn-danger"
-                                onclick="inativarContaModal()" style="display: none;">
-                            Inativar
-                        </button>
-                        <button type="submit" class="btn btn-primary">
-                            Salvar
-                        </button>
-                    </div>
-                </div>
-            </form>
+<div id="modal-confirmar" class="contas-modal" aria-hidden="true">
+    <div class="contas-modal-box contas-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirmar-titulo">
+        <div class="contas-modal-header">
+            <div>
+                <h2 id="confirmar-titulo">Confirmar inativação</h2>
+                <p>Os lançamentos anteriores serão mantidos.</p>
+            </div>
+            <button type="button" onclick="fecharModal('modal-confirmar')" aria-label="Fechar">×</button>
+        </div>
+        <div class="contas-modal-footer">
+            <button type="button" class="contas-secondary-btn" onclick="fecharModal('modal-confirmar')">Cancelar</button>
+            <button type="button" class="contas-danger-btn" onclick="confirmarInativacao()">Inativar conta</button>
         </div>
     </div>
+</div>
 
-    <!-- Modal: Confirmar Inativação -->
-    <div id="modal-confirmar" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Confirmar Inativação</h2>
-                <span class="close" onclick="fecharModal('modal-confirmar')">&times;</span>
+<div id="modal-transferencia" class="contas-modal" aria-hidden="true">
+    <div class="contas-modal-box" role="dialog" aria-modal="true" aria-labelledby="transferencia-titulo">
+        <div class="contas-modal-header">
+            <div>
+                <h2 id="transferencia-titulo">Transferir entre contas</h2>
+                <p>Registre débito e crédito entre duas contas ativas.</p>
             </div>
-            <div style="padding: 20px;">
-                <p style="margin-bottom: 20px; color: #6e6e73;">
-                    Deseja realmente inativar esta conta? Os lançamentos anteriores serão mantidos.
-                </p>
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="fecharModal('modal-confirmar')">
-                        Cancelar
-                    </button>
-                    <button type="button" class="btn btn-danger" onclick="confirmarInativacao()">
-                        Inativar Conta
-                    </button>
-                </div>
-            </div>
+            <button type="button" onclick="fecharModal('modal-transferencia')" aria-label="Fechar">×</button>
         </div>
+        <form id="form-transferencia" onsubmit="salvarTransferencia(event)">
+            <input type="hidden" id="transfer-origem-id">
+            <div class="contas-form-grid one">
+                <label class="contas-field">
+                    <span>Conta de origem</span>
+                    <input id="transfer-origem-nome" type="text" readonly>
+                </label>
+                <label class="contas-field">
+                    <span>Conta de destino <em>*</em></span>
+                    <select id="transfer-destino-id" required></select>
+                </label>
+                <label class="contas-field">
+                    <span>Valor <em>*</em></span>
+                    <input id="transfer-valor" type="text" placeholder="R$ 0,00" required inputmode="decimal">
+                </label>
+                <label class="contas-field">
+                    <span>Data</span>
+                    <input id="transfer-data" type="date">
+                </label>
+                <label class="contas-field">
+                    <span>Descrição</span>
+                    <input id="transfer-descricao" type="text" placeholder="Ex: Transferência entre contas">
+                </label>
+            </div>
+            <div class="contas-modal-footer">
+                <button type="button" class="contas-secondary-btn" onclick="fecharModal('modal-transferencia')">Cancelar</button>
+                <button type="submit" class="contas-primary-btn">Transferir</button>
+            </div>
+        </form>
     </div>
+</div>
 
-    <!-- Modal: Extrato -->
-    <div id="modal-extrato" class="modal">
-        <div class="modal-content modal-large">
-            <div class="modal-header">
+<div id="modal-extrato" class="contas-modal" aria-hidden="true">
+    <div class="contas-modal-box contas-wide-modal" role="dialog" aria-modal="true" aria-labelledby="extrato-titulo">
+        <div class="contas-modal-header">
+            <div>
                 <h2 id="extrato-titulo">Extrato</h2>
-                <span class="close" onclick="fecharModal('modal-extrato')">&times;</span>
+                <p>O saldo é derivado do extrato e dos ajustes registrados.</p>
             </div>
-            <div style="padding: 20px;">
-                <div class="extrato-header">
-                    <div>
-                        <div class="extrato-saldo-label">Saldo Atual</div>
-                        <div class="extrato-saldo-valor" id="extrato-saldo">R$ 0,00</div>
-                        <div class="extrato-saldo-help">O saldo é derivado do extrato (movimentos).</div>
-                    </div>
-                    <button class="btn-icon" onclick="abrirModalAjusteSaldo()" title="Ajustar saldo">
-                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="width:1em;height:1em;display:inline-block;vertical-align:-0.125em;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">
-                            <path d="M12 8.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Z"/>
-                            <path d="M12 4v2M12 18v2M4 12h2M18 12h2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M17.7 6.3l-1.4 1.4M7.7 16.3l-1.4 1.4"/>
-                        </svg>
-                    </button>
-                </div>
-                <div id="extrato-lista" class="extrato-lista">
-                    <p class="loading">Carregando extrato...</p>
-                </div>
+            <button type="button" onclick="fecharModal('modal-extrato')" aria-label="Fechar">×</button>
+        </div>
+        <div class="contas-extrato-summary">
+            <div>
+                <span>Saldo atual</span>
+                <strong id="extrato-saldo">R$ 0,00</strong>
             </div>
+            <button type="button" class="contas-secondary-btn" onclick="abrirModalAjusteSaldo()">Ajustar saldo</button>
+        </div>
+        <div id="extrato-lista" class="contas-extrato-lista">
+            <div class="contas-loading">Carregando extrato...</div>
         </div>
     </div>
+</div>
 
-    <!-- Modal: Ajuste de Saldo -->
-    <div id="modal-ajuste" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
+<div id="modal-ajuste" class="contas-modal" aria-hidden="true">
+    <div class="contas-modal-box" role="dialog" aria-modal="true" aria-labelledby="ajuste-titulo">
+        <div class="contas-modal-header">
+            <div>
                 <h2 id="ajuste-titulo">Ajustar Saldo</h2>
-                <span class="close" onclick="fecharModal('modal-ajuste')">&times;</span>
+                <p>Cria um lançamento de ajuste para explicar o saldo final.</p>
             </div>
-            <form id="form-ajuste" onsubmit="salvarAjusteSaldo(event)">
-                <input type="hidden" id="ajuste-conta-id">
-                <input type="hidden" id="ajuste-movimento-id">
+            <button type="button" onclick="fecharModal('modal-ajuste')" aria-label="Fechar">×</button>
+        </div>
+        <form id="form-ajuste" onsubmit="salvarAjusteSaldo(event)">
+            <input type="hidden" id="ajuste-conta-id">
+            <input type="hidden" id="ajuste-movimento-id">
 
-                <div class="form-group">
-                    <label>Saldo atual (derivado)</label>
-                    <input type="text" id="ajuste-saldo-atual" readonly>
-                </div>
-
-                <!-- Modo: criar ajuste por saldo final -->
+            <div class="contas-form-grid one">
+                <label class="contas-field">
+                    <span>Saldo atual derivado</span>
+                    <input id="ajuste-saldo-atual" type="text" readonly>
+                </label>
                 <div id="ajuste-modo-saldo-final">
-                    <div class="form-group">
-                        <label for="ajuste-novo-saldo">Novo saldo</label>
-                        <input type="text" id="ajuste-novo-saldo" placeholder="R$ 0,00" onkeyup="formatarMoeda(this)">
-                        <small class="form-help">Isso criará um lançamento de ajuste no extrato.</small>
-                    </div>
+                    <label class="contas-field">
+                        <span>Novo saldo</span>
+                        <input id="ajuste-novo-saldo" type="text" placeholder="R$ 0,00" inputmode="decimal">
+                        <small>Isso criará um lançamento de ajuste no extrato.</small>
+                    </label>
                 </div>
-
-                <!-- Modo: editar ajuste existente -->
-                <div id="ajuste-modo-editar" style="display:none;">
-                    <div class="form-group">
-                        <label for="ajuste-tipo">Tipo do ajuste</label>
+                <div id="ajuste-modo-editar" class="contas-form-grid one" hidden>
+                    <label class="contas-field">
+                        <span>Tipo do ajuste</span>
                         <select id="ajuste-tipo">
                             <option value="CREDITO">Crédito</option>
                             <option value="DEBITO">Débito</option>
                         </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="ajuste-valor">Valor do ajuste</label>
-                        <input type="text" id="ajuste-valor" placeholder="R$ 0,00" onkeyup="formatarMoeda(this)">
-                    </div>
+                    </label>
+                    <label class="contas-field">
+                        <span>Valor do ajuste</span>
+                        <input id="ajuste-valor" type="text" placeholder="R$ 0,00" inputmode="decimal">
+                    </label>
                 </div>
-
-                <div class="form-group">
-                    <label for="ajuste-data">Data do movimento</label>
-                    <input type="date" id="ajuste-data">
-                </div>
-
-                <div class="form-group">
-                    <label for="ajuste-descricao">Descrição (opcional)</label>
-                    <input type="text" id="ajuste-descricao" placeholder="Ex: Ajuste por conciliação">
-                </div>
-
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="fecharModal('modal-ajuste')">
-                        Cancelar
-                    </button>
-                    <button type="submit" class="btn btn-primary">Salvar</button>
-                </div>
-            </form>
-        </div>
+                <label class="contas-field">
+                    <span>Data do movimento</span>
+                    <input id="ajuste-data" type="date">
+                </label>
+                <label class="contas-field">
+                    <span>Descrição</span>
+                    <input id="ajuste-descricao" type="text" placeholder="Ex: Ajuste por conciliação">
+                </label>
+            </div>
+            <div class="contas-modal-footer">
+                <button type="button" class="contas-secondary-btn" onclick="fecharModal('modal-ajuste')">Cancelar</button>
+                <button type="submit" class="contas-primary-btn">Salvar</button>
+            </div>
+        </form>
     </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/contas_bancarias.js') }}"></script>
-    <script>
-        function toggleMobileView() {
-            document.body.classList.toggle('mobile-view');
-            const btn = document.getElementById('mobile-btn');
-            if (document.body.classList.contains('mobile-view')) {
-                btn.innerHTML = '💻 Ver em Desktop';
-            } else {
-                btn.innerHTML = '📱 Ver em Mobile';
-            }
-        }
-    </script>
 {% endblock %}

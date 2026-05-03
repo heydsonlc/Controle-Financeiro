@@ -1,384 +1,1114 @@
-/* UI-only: Contas Bancarias no padrao operacional (listas) */
-
-/* Barra de acoes */
-.actions-bar {
-    margin-bottom: 25px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 15px;
+:root {
+    --contas-bg: #f5f7fb;
+    --contas-surface: #ffffff;
+    --contas-surface-soft: #f8fafc;
+    --contas-border: #dfe5ef;
+    --contas-border-soft: #e9eef6;
+    --contas-text: #0f172a;
+    --contas-muted: #64748b;
+    --contas-blue: #2563eb;
+    --contas-blue-soft: #dbeafe;
+    --contas-green: #16a34a;
+    --contas-green-soft: #dcfce7;
+    --contas-purple: #7c3aed;
+    --contas-purple-soft: #ede9fe;
+    --contas-yellow: #d97706;
+    --contas-yellow-soft: #fef3c7;
+    --contas-red: #dc2626;
+    --contas-red-soft: #fee2e2;
+    --contas-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+    --contas-radius: 8px;
+    --contas-gap: 20px;
 }
 
-.filters {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
+body.app-shell-body .app-content {
+    background: var(--contas-bg);
+    padding: 24px;
 }
 
-.filters select {
-    padding: 8px 12px;
-    border: 1px solid rgba(0, 0, 0, 0.12);
-    border-radius: 8px;
-    background: #ffffff;
-    color: #1d1d1f;
-    font-size: 0.9em;
-    transition: all 0.2s ease;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-.filters select:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-    transform: translateY(-1px);
-    border-color: rgba(0, 122, 255, 0.3);
-}
-
-.filters select:focus {
-    outline: none;
-    border-color: #007aff;
-    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1), 0 4px 12px rgba(0, 0, 0, 0.12);
-}
-
-/* Cards de resumo (mantidos) */
-.cards-resumo {
+.contas-ux-page {
+    max-width: 1680px;
+    margin: 0 auto;
+    color: var(--contas-text);
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 12px;
-    margin-bottom: 24px;
+    gap: var(--contas-gap);
 }
 
-.cards-resumo .card {
-    background: #ffffff;
-    border-radius: 12px;
-    padding: 18px;
-    border: 1px solid rgba(0, 0, 0, 0.06);
-    transition: all 0.2s ease;
-    text-align: center;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-}
-
-.cards-resumo .card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
-}
-
-.cards-resumo .card h3 {
-    font-size: 12px;
-    color: #6e6e73;
-    margin: 0 0 10px 0;
-    font-weight: 600;
-    letter-spacing: 0.4px;
-    text-transform: uppercase;
-}
-
-.cards-resumo .card .valor {
-    font-size: 1.4em;
-    font-weight: 700;
-    color: #1d1d1f;
-    margin: 0;
-}
-
-/* Lista de contas (operacional) */
-.contas-lista {
-    display: grid;
-    gap: 0;
-    background: #ffffff;
-    border: 1px solid rgba(0, 0, 0, 0.06);
-    border-radius: 12px;
-    overflow: hidden;
-}
-
-.conta-row {
-    display: flex;
-    align-items: center;
-    padding: 12px 12px;
-    border-bottom: 1px solid #f1f3f5;
-    background: #ffffff;
-}
-
-.conta-row:last-child {
-    border-bottom: none;
-}
-
-.conta-row:hover {
-    background: #fafafa;
-}
-
-.conta-row.inativa {
-    opacity: 0.75;
-}
-
-.col-descricao {
-    flex: 1;
-    min-width: 0;
-}
-
-.col-fill {
-    display: none;
-}
-
-.col-direita {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 10px;
-    flex-shrink: 0;
-}
-
-.titulo {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-weight: 600;
-    color: #1d1d1f;
-    min-width: 0;
-}
-
-.conta-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    flex-shrink: 0;
-}
-
-.conta-nome-texto {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.subtitulo {
-    margin-top: 2px;
-    font-size: 12px;
-    color: #6e6e73;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.saldo {
-    min-width: 140px; /* regra critica: sempre no mesmo X */
-    text-align: right;
-    white-space: nowrap;
-    font-weight: 700;
-    color: #1d1d1f;
-}
-
-.saldo.negativo {
-    color: #ff3b30;
-}
-
-/* Badge de status */
-.status {
-    display: inline-flex;
-    align-items: center;
-    padding: 2px 8px;
-    border-radius: 10px;
-    font-size: 11px;
-    font-weight: 800;
-    white-space: nowrap;
-}
-
-.status-ativo {
-    background: rgba(52, 199, 89, 0.12);
-    color: #1f8a3a;
-}
-
-.status-inativo {
-    background: #f5f5f7;
-    color: #6e6e73;
-}
-
-/* Acoes: reservam espaco (nao empurram saldo) */
-.acoes {
-    display: flex;
-    gap: 6px;
-    align-items: center;
-    justify-content: flex-end;
-    min-width: 108px; /* 3 icones */
-}
-
-/* Desktop: acoes so no hover (igual despesas/receitas) */
-@media (min-width: 769px) {
-    .conta-row .acoes {
-        opacity: 1;
-        visibility: visible;
-        pointer-events: auto;
-        transition: opacity 0.15s ease;
-    }
-
-    .conta-row:hover .acoes {
-        opacity: 1;
-        visibility: visible;
-        pointer-events: auto;
-    }
-}
-
-/* Mobile: acoes sempre visiveis */
-@media (max-width: 768px) {
-    .conta-row .acoes {
-        opacity: 1;
-        visibility: visible;
-        pointer-events: auto;
-    }
-}
-
-/* Botoes de acao (icone) - mesmo padrao */
-.btn-icon {
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    font-size: 18px;
-    padding: 6px;
-    border-radius: 6px;
-    transition: all 0.2s;
-    opacity: 0.6;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 30px;
-    height: 30px;
-    line-height: 1;
-}
-
-.btn-icon:hover {
-    opacity: 1;
-    background: rgba(0, 0, 0, 0.05);
-}
-
-.btn-icon:disabled {
-    opacity: 0.25;
-    cursor: not-allowed;
-    background: transparent;
-}
-
-.btn-icon.btn-danger {
-    color: #ff3b30;
-}
-
-.btn-icon.btn-danger:hover {
-    background: rgba(255, 59, 48, 0.1);
-}
-
-/* Loading / empty */
-.loading,
-.empty-state {
-    text-align: center;
-    padding: 28px 16px;
-    color: #6e6e73;
+.contas-page-subtitle {
+    margin: -2px 0 4px;
+    color: var(--contas-muted);
     font-size: 14px;
 }
 
-/* Extrato */
-.extrato-header {
-    display: flex;
-    justify-content: space-between;
-    gap: 20px;
-    align-items: flex-start;
-    margin-bottom: 15px;
-}
-
-.extrato-saldo-label {
-    color: #6e6e73;
-    font-size: 12px;
-    margin-bottom: 6px;
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-    font-weight: 700;
-}
-
-.extrato-saldo-valor {
-    color: #1d1d1f;
-    font-size: 1.6em;
-    font-weight: 800;
-}
-
-.extrato-saldo-help {
-    margin-top: 6px;
-    color: #6e6e73;
-    font-size: 12px;
-}
-
-.extrato-lista {
+.contas-toolbar {
     display: grid;
-    gap: 10px;
+    grid-template-columns: 210px minmax(280px, 1fr) max-content max-content;
+    gap: 14px;
+    align-items: center;
+    background: var(--contas-surface);
+    border: 1px solid var(--contas-border);
+    border-radius: var(--contas-radius);
+    box-shadow: var(--contas-shadow);
+    padding: 16px 20px;
 }
 
-.movimento {
-    background: #ffffff;
-    border: 1px solid rgba(0, 0, 0, 0.06);
-    border-radius: 12px;
-    padding: 12px 14px;
+.contas-filter {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 12px;
+}
+
+.contas-filter span {
+    font-size: 13px;
+    font-weight: 750;
+}
+
+.contas-filter select,
+.contas-search input,
+.contas-field input,
+.contas-field select,
+.contas-field textarea {
+    width: 100%;
+    min-height: 42px;
+    border: 1px solid var(--contas-border);
+    border-radius: 6px;
+    background: var(--contas-surface);
+    color: var(--contas-text);
+    font-size: 13px;
+    padding: 0 13px;
+    outline: none;
+}
+
+.contas-filter select:focus,
+.contas-search input:focus,
+.contas-field input:focus,
+.contas-field select:focus,
+.contas-field textarea:focus {
+    border-color: var(--contas-blue);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.contas-search {
+    display: grid;
+    grid-template-columns: 22px 1fr;
+    align-items: center;
+    gap: 8px;
+    min-height: 42px;
+    border: 1px solid var(--contas-border);
+    border-radius: 6px;
+    padding: 0 12px;
+    background: var(--contas-surface);
+}
+
+.contas-search svg,
+.contas-secondary-btn svg,
+.contas-icon-toggle svg,
+.contas-action-btn svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.contas-search input {
+    border: 0;
+    padding: 0;
+    box-shadow: none;
+}
+
+.contas-primary-btn,
+.contas-secondary-btn,
+.contas-danger-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 42px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    padding: 0 16px;
+    font-size: 13px;
+    font-weight: 750;
+    cursor: pointer;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.contas-primary-btn {
+    color: #ffffff;
+    border-color: var(--contas-blue);
+    background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+    box-shadow: 0 10px 18px rgba(37, 99, 235, 0.24);
+}
+
+.contas-secondary-btn {
+    color: var(--contas-text);
+    border-color: var(--contas-border);
+    background: var(--contas-surface);
+}
+
+.contas-danger-btn {
+    color: var(--contas-red);
+    border-color: #fecaca;
+    background: #fff7f7;
+}
+
+.contas-primary-btn:disabled,
+.contas-secondary-btn:disabled,
+.contas-danger-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.contas-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--contas-gap);
+}
+
+.contas-kpi-card {
+    min-height: 166px;
+    display: grid;
+    grid-template-columns: 62px minmax(0, 1fr);
+    align-items: center;
+    gap: 18px;
+    background: var(--contas-surface);
+    border: 1px solid var(--contas-border);
+    border-radius: var(--contas-radius);
+    box-shadow: var(--contas-shadow);
+    padding: 24px;
+}
+
+.contas-kpi-icon {
+    width: 58px;
+    height: 58px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.contas-kpi-icon::before,
+.contas-preview-icon::before,
+.conta-bank-icon::before {
+    content: "";
+    width: 28px;
+    height: 28px;
+    display: block;
+    background: currentColor;
+    mask: linear-gradient(#000 0 0);
+    -webkit-mask: linear-gradient(#000 0 0);
+    clip-path: polygon(50% 0, 92% 24%, 84% 32%, 84% 80%, 96% 80%, 96% 92%, 4% 92%, 4% 80%, 16% 80%, 16% 32%, 8% 32%);
+}
+
+.contas-kpi-icon.green::before {
+    clip-path: polygon(12% 45%, 28% 45%, 28% 75%, 12% 75%, 12% 45%, 36% 22%, 52% 22%, 52% 75%, 36% 75%, 36% 22%, 60% 36%, 76% 36%, 76% 75%, 60% 75%, 60% 36%, 84% 55%, 96% 55%, 96% 75%, 84% 75%);
+}
+
+.contas-kpi-icon.purple::before {
+    clip-path: polygon(10% 80%, 10% 64%, 26% 64%, 26% 80%, 38% 80%, 38% 48%, 54% 48%, 54% 80%, 66% 80%, 66% 28%, 82% 28%, 82% 80%, 94% 80%, 94% 92%, 6% 92%, 6% 80%);
+}
+
+.contas-kpi-icon.yellow::before {
+    clip-path: polygon(50% 4%, 88% 20%, 82% 72%, 50% 96%, 18% 72%, 12% 20%);
+}
+
+.contas-kpi-icon.blue {
+    color: var(--contas-blue);
+    background: var(--contas-blue-soft);
+}
+
+.contas-kpi-icon.green {
+    color: var(--contas-green);
+    background: var(--contas-green-soft);
+}
+
+.contas-kpi-icon.purple {
+    color: var(--contas-purple);
+    background: var(--contas-purple-soft);
+}
+
+.contas-kpi-icon.yellow {
+    color: var(--contas-yellow);
+    background: var(--contas-yellow-soft);
+}
+
+.contas-kpi-content span {
+    display: block;
+    color: var(--contas-text);
+    font-size: 13px;
+    font-weight: 650;
+    margin-bottom: 8px;
+}
+
+.contas-kpi-content strong {
+    display: block;
+    color: var(--contas-text);
+    font-size: 24px;
+    line-height: 1.1;
+    font-weight: 780;
+}
+
+.contas-kpi-content small {
+    display: block;
+    color: var(--contas-blue);
+    font-size: 13px;
+    margin-top: 18px;
+}
+
+.contas-progress {
+    height: 5px;
+    border-radius: 999px;
+    background: #dbeafe;
+    overflow: hidden;
+    margin-top: 10px;
+}
+
+.contas-progress > div {
+    width: 0%;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--contas-blue);
+}
+
+.contas-progress.green {
+    background: #dcfce7;
+}
+
+.contas-progress.green > div {
+    background: var(--contas-green);
+}
+
+.contas-progress.yellow {
+    background: #fef3c7;
+}
+
+.contas-progress.yellow > div {
+    background: var(--contas-yellow);
+}
+
+.contas-panel {
+    background: var(--contas-surface);
+    border: 1px solid var(--contas-border);
+    border-radius: var(--contas-radius);
+    box-shadow: var(--contas-shadow);
+    overflow: hidden;
+}
+
+.contas-panel-header {
     display: flex;
+    align-items: center;
     justify-content: space-between;
+    gap: 16px;
+    padding: 22px 24px;
+    border-bottom: 1px solid var(--contas-border-soft);
+}
+
+.contas-panel-header h2 {
+    margin: 0;
+    color: var(--contas-text);
+    font-size: 20px;
+    font-weight: 760;
+}
+
+.contas-panel-header p {
+    margin: 6px 0 0;
+    color: var(--contas-muted);
+    font-size: 13px;
+}
+
+.contas-panel-actions {
+    display: flex;
+    align-items: center;
     gap: 10px;
 }
 
-.movimento .mov-desc {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+.contas-icon-toggle {
+    width: 42px;
+    height: 42px;
+    border: 1px solid var(--contas-border);
+    border-radius: 6px;
+    background: var(--contas-surface);
+    color: var(--contas-text);
+    cursor: pointer;
+}
+
+.contas-icon-toggle.active {
+    background: var(--contas-surface-soft);
+}
+
+.contas-table-head {
+    display: grid;
+    grid-template-columns: minmax(280px, 1fr) minmax(360px, 1.1fr) minmax(190px, 0.45fr) minmax(250px, 0.55fr);
+    gap: 18px;
+    padding: 14px 28px;
+    background: var(--contas-surface-soft);
+    color: #475569;
+    border-bottom: 1px solid var(--contas-border-soft);
+    font-size: 12px;
+    font-weight: 760;
+    text-transform: uppercase;
+}
+
+.contas-lista {
+    display: grid;
+}
+
+.conta-row {
+    display: grid;
+    grid-template-columns: minmax(280px, 1fr) minmax(360px, 1.1fr) minmax(190px, 0.45fr) minmax(250px, 0.55fr);
+    gap: 18px;
+    align-items: center;
+    min-height: 116px;
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--contas-border-soft);
+    border-left: 4px solid var(--conta-cor, var(--contas-blue));
+}
+
+.conta-row:last-child {
+    border-bottom: 0;
+}
+
+.conta-main {
+    display: grid;
+    grid-template-columns: 66px 1fr;
+    gap: 16px;
+    align-items: center;
     min-width: 0;
 }
 
-.movimento .mov-desc .titulo {
-    color: #1d1d1f;
-    font-weight: 600;
-    white-space: nowrap;
+.conta-bank-icon,
+.contas-preview-icon {
+    width: 58px;
+    height: 58px;
+    border-radius: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--conta-cor, var(--contas-blue));
+    background: color-mix(in srgb, var(--conta-cor, var(--contas-blue)) 14%, white);
+}
+
+.conta-title {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+}
+
+.conta-title h3 {
+    margin: 0;
+    color: var(--contas-text);
+    font-size: 15px;
+    font-weight: 780;
     overflow: hidden;
     text-overflow: ellipsis;
-}
-
-.movimento .mov-desc .meta {
-    color: #6e6e73;
-    font-size: 12px;
-}
-
-.movimento .mov-valor {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 6px;
     white-space: nowrap;
 }
 
-.movimento .valor {
-    font-weight: 800;
-    color: #1d1d1f;
-}
-
-.movimento .valor.debito {
-    color: #ff3b30;
-}
-
-.movimento .valor.credito {
-    color: #34c759;
-}
-
-.movimento .saldo-apos {
-    color: #6e6e73;
+.conta-title p {
+    margin: 0;
+    color: var(--contas-muted);
     font-size: 12px;
 }
 
-.movimento .acoes {
-    min-width: auto;
+.conta-status {
+    display: inline-flex;
+    justify-self: start;
+    align-items: center;
+    gap: 6px;
+    min-height: 24px;
+    border-radius: 999px;
+    padding: 3px 10px;
+    color: #047857;
+    background: var(--contas-green-soft);
+    font-size: 11px;
+    font-weight: 780;
 }
 
-.movimento .acoes button {
-    background: transparent;
-    border: none;
+.conta-status::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: currentColor;
+}
+
+.conta-status.inativa {
+    color: #64748b;
+    background: #f1f5f9;
+}
+
+.conta-details {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.conta-detail {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr);
+    gap: 10px;
+    align-items: center;
+    border-left: 1px solid var(--contas-border);
+    padding-left: 16px;
+}
+
+.conta-detail:first-child {
+    border-left: 0;
+    padding-left: 0;
+}
+
+.conta-detail svg {
+    width: 19px;
+    height: 19px;
+    fill: none;
+    stroke: #475569;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.conta-detail span {
+    display: block;
+    color: var(--contas-muted);
+    font-size: 11px;
+}
+
+.conta-detail strong {
+    display: block;
+    color: var(--contas-text);
+    font-size: 12px;
+    font-weight: 650;
+    margin-top: 2px;
+}
+
+.conta-color-dot {
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: var(--conta-cor, var(--contas-blue));
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--conta-cor, var(--contas-blue)) 16%, white);
+}
+
+.conta-balance {
+    display: grid;
+    gap: 7px;
+    justify-items: start;
+}
+
+.conta-balance strong {
+    color: var(--contas-text);
+    font-size: 18px;
+    font-weight: 800;
+}
+
+.conta-balance small {
+    color: var(--contas-muted);
+    font-size: 12px;
+}
+
+.conta-balance .negative {
+    color: var(--contas-red);
+}
+
+.conta-mini-bar {
+    width: 110px;
+    height: 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--conta-cor, var(--contas-blue)) 18%, white);
+    overflow: hidden;
+}
+
+.conta-mini-bar div {
+    width: var(--saldo-percentual, 0%);
+    height: 100%;
+    border-radius: inherit;
+    background: var(--conta-cor, var(--contas-blue));
+}
+
+.conta-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 9px;
+}
+
+.contas-action-btn {
+    width: 40px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--contas-border);
+    border-radius: 8px;
+    background: var(--contas-surface);
+    color: var(--contas-text);
     cursor: pointer;
-    font-size: 16px;
-    padding: 6px;
-    border-radius: 6px;
-    opacity: 0.6;
-    transition: all 0.2s;
 }
 
-.movimento .acoes button:hover {
-    opacity: 1;
-    background: rgba(0, 0, 0, 0.05);
+.contas-action-btn:hover {
+    color: var(--contas-blue);
+    border-color: #bfdbfe;
+    background: #eff6ff;
+}
+
+.contas-action-btn.danger {
+    color: var(--contas-red);
+    border-color: #fecaca;
+    background: #fff7f7;
+}
+
+.contas-action-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.contas-panel-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 18px 24px;
+    color: var(--contas-muted);
+    border-top: 1px solid var(--contas-border-soft);
+    font-size: 13px;
+}
+
+.contas-legend {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+}
+
+.contas-legend strong {
+    color: var(--contas-text);
+}
+
+.contas-loading,
+.contas-empty-state {
+    display: grid;
+    justify-items: center;
+    align-content: center;
+    gap: 12px;
+    min-height: 220px;
+    color: var(--contas-muted);
+    text-align: center;
+    padding: 34px;
+}
+
+.contas-empty-state h3 {
+    margin: 0;
+    color: var(--contas-text);
+    font-size: 18px;
+}
+
+.contas-empty-state p {
+    margin: 0;
+}
+
+.contas-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(15, 23, 42, 0.62);
+}
+
+.contas-modal.is-open {
+    display: flex;
+}
+
+.contas-modal-box {
+    width: min(720px, 100%);
+    max-height: calc(100vh - 48px);
+    overflow: auto;
+    background: var(--contas-surface);
+    border-radius: var(--contas-radius);
+    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.26);
+}
+
+.contas-account-modal {
+    width: min(1280px, 100%);
+}
+
+.contas-wide-modal {
+    width: min(980px, 100%);
+}
+
+.contas-confirm-modal {
+    width: min(520px, 100%);
+}
+
+.contas-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 18px;
+    padding: 26px 30px;
+    border-bottom: 1px solid var(--contas-border-soft);
+}
+
+.contas-modal-header h2 {
+    margin: 0;
+    color: var(--contas-text);
+    font-size: 28px;
+    line-height: 1.15;
+    font-weight: 760;
+}
+
+.contas-modal-header p {
+    margin: 10px 0 0;
+    color: var(--contas-muted);
+    font-size: 14px;
+}
+
+.contas-modal-header > button {
+    width: 38px;
+    height: 38px;
+    border: 1px solid var(--contas-border);
+    border-radius: 999px;
+    color: var(--contas-text);
+    background: var(--contas-surface);
+    cursor: pointer;
+    font-size: 22px;
+}
+
+.contas-modal-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 400px;
+    gap: 28px;
+    padding: 30px;
+}
+
+.contas-form-card,
+.contas-preview-card {
+    border: 1px solid var(--contas-border);
+    border-radius: var(--contas-radius);
+    background: var(--contas-surface);
+}
+
+.contas-form-section {
+    padding: 26px;
+    border-bottom: 1px solid var(--contas-border-soft);
+}
+
+.contas-form-section:last-child {
+    border-bottom: 0;
+}
+
+.contas-section-heading {
+    display: grid;
+    grid-template-columns: 38px 1fr;
+    gap: 14px;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.contas-section-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    background: var(--contas-blue-soft);
+}
+
+.contas-section-heading h3 {
+    margin: 0;
+    color: var(--contas-text);
+    font-size: 17px;
+    font-weight: 760;
+}
+
+.contas-section-heading p {
+    margin: 5px 0 0;
+    color: var(--contas-muted);
+    font-size: 13px;
+}
+
+.contas-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+}
+
+.contas-form-grid.one {
+    grid-template-columns: 1fr;
+    padding: 24px 30px 0;
+}
+
+.contas-form-grid.bank-id {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 140px;
+}
+
+.contas-form-grid.settings {
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1fr);
+}
+
+.contas-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 650;
+}
+
+.contas-field.full {
+    grid-column: 1 / -1;
+}
+
+.contas-field span em {
+    color: var(--contas-red);
+    font-style: normal;
+}
+
+.contas-field small {
+    color: var(--contas-muted);
+    font-weight: 500;
+}
+
+.contas-color-grid {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 42px;
+}
+
+.contas-color-grid button {
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--swatch);
+    cursor: pointer;
+    box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+
+.contas-color-grid button.active {
+    box-shadow: 0 0 0 3px #ffffff, 0 0 0 5px var(--contas-blue);
+}
+
+.contas-preview-card {
+    align-self: start;
+    padding: 28px;
+    box-shadow: var(--contas-shadow);
+}
+
+.contas-preview-card h3 {
+    margin: 0;
+    color: var(--contas-text);
+    font-size: 18px;
+    font-weight: 760;
+}
+
+.contas-preview-card > p {
+    margin: 8px 0 28px;
+    color: var(--contas-muted);
+    font-size: 13px;
+}
+
+.contas-preview-body {
+    display: grid;
+    justify-items: center;
+    gap: 12px;
+    border: 1px solid var(--contas-border);
+    border-radius: var(--contas-radius);
+    padding: 26px;
+}
+
+.contas-preview-icon {
+    width: 92px;
+    height: 92px;
+    border-radius: 999px;
+    color: var(--conta-cor, var(--contas-blue));
+    background: var(--conta-cor, var(--contas-blue));
+}
+
+.contas-preview-icon::before {
+    color: #ffffff;
+}
+
+.contas-preview-body strong {
+    color: var(--contas-text);
+    font-size: 18px;
+    font-weight: 760;
+    text-align: center;
+}
+
+.contas-preview-pill {
+    border: 1px solid var(--contas-border);
+    border-radius: 999px;
+    padding: 5px 14px;
+    color: var(--contas-muted);
+    font-size: 12px;
+}
+
+.contas-preview-body dl {
+    width: 100%;
+    margin: 18px 0 0;
+    padding-top: 18px;
+    border-top: 1px dashed var(--contas-border);
+}
+
+.contas-preview-body dl div {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 0;
+    color: var(--contas-muted);
+    font-size: 13px;
+}
+
+.contas-preview-body dd {
+    margin: 0;
+    color: var(--contas-text);
+    font-weight: 700;
+    text-align: right;
+}
+
+#preview-cor-dot {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: var(--conta-cor, var(--contas-blue));
+}
+
+.contas-preview-note {
+    width: 100%;
+    border: 1px solid #bfdbfe;
+    border-radius: 6px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    padding: 14px;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.contas-modal-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 12px;
+    padding: 18px 30px;
+    border-top: 1px solid var(--contas-border-soft);
+    background: var(--contas-surface);
+}
+
+#btn-inativar-modal {
+    display: none;
+    margin-right: auto;
+}
+
+.contas-detail-content {
+    padding: 24px 30px 30px;
+}
+
+.contas-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.contas-detail-item {
+    border: 1px solid var(--contas-border-soft);
+    border-radius: 6px;
+    background: var(--contas-surface-soft);
+    padding: 14px;
+}
+
+.contas-detail-item span {
+    display: block;
+    color: var(--contas-muted);
+    font-size: 12px;
+    margin-bottom: 6px;
+}
+
+.contas-detail-item strong {
+    color: var(--contas-text);
+}
+
+.contas-extrato-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 30px;
+    border-bottom: 1px solid var(--contas-border-soft);
+}
+
+.contas-extrato-summary span {
+    display: block;
+    color: var(--contas-muted);
+    font-size: 12px;
+    margin-bottom: 6px;
+}
+
+.contas-extrato-summary strong {
+    color: var(--contas-text);
+    font-size: 24px;
+}
+
+.contas-extrato-lista {
+    display: grid;
+    gap: 10px;
+    padding: 20px 30px 30px;
+}
+
+.contas-movimento {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    border: 1px solid var(--contas-border-soft);
+    border-radius: 6px;
+    padding: 14px;
+}
+
+.contas-movimento h4 {
+    margin: 0;
+    color: var(--contas-text);
+    font-size: 14px;
+}
+
+.contas-movimento p {
+    margin: 5px 0 0;
+    color: var(--contas-muted);
+    font-size: 12px;
+}
+
+.contas-movimento-value {
+    display: grid;
+    justify-items: end;
+    gap: 5px;
+    white-space: nowrap;
+}
+
+.contas-movimento-value strong {
+    color: var(--contas-green);
+}
+
+.contas-movimento-value strong.debito {
+    color: var(--contas-red);
+}
+
+.contas-movimento-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+@media (max-width: 1280px) {
+    .contas-kpi-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .contas-table-head,
+    .conta-row {
+        grid-template-columns: minmax(260px, 1fr) minmax(300px, 1fr) minmax(170px, 0.5fr) minmax(210px, 0.6fr);
+    }
+}
+
+@media (max-width: 980px) {
+    .contas-toolbar {
+        grid-template-columns: 1fr;
+    }
+
+    .contas-kpi-grid,
+    .contas-modal-layout,
+    .contas-form-grid,
+    .contas-form-grid.bank-id,
+    .contas-form-grid.settings {
+        grid-template-columns: 1fr;
+    }
+
+    .contas-table-head {
+        display: none;
+    }
+
+    .conta-row {
+        grid-template-columns: 1fr;
+    }
+
+    .conta-details {
+        grid-template-columns: 1fr;
+    }
+
+    .conta-detail,
+    .conta-detail:first-child {
+        border-left: 0;
+        padding-left: 0;
+    }
+
+    .conta-actions {
+        justify-content: flex-start;
+        flex-wrap: wrap;
+    }
+}
+
+@media (max-width: 720px) {
+    body.app-shell-body .app-content {
+        padding: 16px;
+    }
+
+    .contas-panel-header,
+    .contas-panel-footer,
+    .contas-extrato-summary {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .contas-panel-actions {
+        flex-wrap: wrap;
+    }
+
+    .contas-primary-btn,
+    .contas-secondary-btn,
+    .contas-danger-btn {
+        width: 100%;
+    }
+
+    .contas-kpi-card {
+        grid-template-columns: 1fr;
+        justify-items: start;
+    }
+
+    .contas-modal {
+        padding: 10px;
+    }
+
+    .contas-modal-header,
+    .contas-modal-layout,
+    .contas-form-section,
+    .contas-modal-footer,
+    .contas-detail-content,
+    .contas-extrato-lista {
+        padding-left: 18px;
+        padding-right: 18px;
+    }
+
+    .contas-detail-grid {
+        grid-template-columns: 1fr;
+    }
 }

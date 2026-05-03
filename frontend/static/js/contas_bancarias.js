@@ -1,606 +1,729 @@
-/**
- * JavaScript para o módulo de Contas Bancárias
- */
-
 const API_BASE = '/api/contas';
 
-let contaAtual = null;
-let contaParaInativar = null;
-let contaExtratoId = null;
-let extratoMovimentos = [];
+const estadoContas = {
+    contas: [],
+    filtradas: [],
+    contaAtual: null,
+    contaParaInativar: null,
+    contaExtratoId: null,
+    extratoMovimentos: []
+};
 
-function contasIcon(name) {
-    const icons = {
-        file: '<path d="M7 4h7l4 4v12H7V4Z"/><path d="M14 4v4h4"/><path d="M9 13h6M9 17h6"/>',
-        edit: '<path d="M5 19h4L19 9a2.1 2.1 0 0 0-3-3L6 16l-1 3Z"/><path d="M14 6l4 4"/>',
-        remove: '<path d="M6 6l12 12"/><path d="M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/>',
-        restore: '<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 5v6h-6"/>',
-        scale: '<path d="M12 4v16M6 8h12"/><path d="M8 8l-4 7h8L8 8Z"/><path d="M16 8l-4 7h8l-4-7Z"/>',
-        check: '<path d="M5 12.5l4 4L19 7"/>',
-        trash: '<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/>'
-    };
+const CORES_CONTA = ['#3b82f6', '#22c55e', '#14b8a6', '#7c3aed', '#f97316', '#ef4444', '#6b7280'];
 
-    return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="width:1em;height:1em;display:inline-block;vertical-align:-0.125em;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">${icons[name] || icons.file}</svg>`;
-}
-
-// Carregar contas ao iniciar a página
 document.addEventListener('DOMContentLoaded', () => {
+    configurarEventos();
     carregarContas();
 });
 
-/**
- * Carrega todas as contas bancárias
- */
-async function carregarContas() {
-    try {
-        const status = document.getElementById('filtro-status').value;
-        const url = status ? `${API_BASE}?status=${status}` : `${API_BASE}?status=ATIVO`;
+function configurarEventos() {
+    const busca = document.getElementById('contas-busca');
+    if (busca) {
+        busca.addEventListener('input', aplicarFiltrosLocais);
+    }
 
-        const response = await fetch(url);
-        const result = await response.json();
-
-        if (result.success) {
-            exibirContas(result.data);
-            atualizarResumo(result.data);
-        } else {
-            mostrarErro('Erro ao carregar contas: ' + result.error);
+    ['conta-nome', 'conta-instituicao', 'conta-tipo', 'conta-agencia', 'conta-numero', 'conta-digito', 'conta-saldo-inicial'].forEach((id) => {
+        const campo = document.getElementById(id);
+        if (campo) {
+            campo.addEventListener('input', atualizarPreviaConta);
         }
+    });
+
+    ['conta-saldo-inicial', 'transfer-valor', 'ajuste-novo-saldo', 'ajuste-valor'].forEach((id) => {
+        const campo = document.getElementById(id);
+        if (campo) {
+            campo.addEventListener('blur', () => formatarCampoMoeda(campo));
+        }
+    });
+
+    document.querySelectorAll('#conta-cor-paleta [data-color]').forEach((botao) => {
+        botao.addEventListener('click', () => selecionarCorConta(botao.dataset.color));
+    });
+}
+
+async function carregarContas() {
+    const lista = document.getElementById('contas-lista');
+    if (lista) lista.innerHTML = '<div class="contas-loading">Carregando contas...</div>';
+
+    try {
+        const status = document.getElementById('filtro-status')?.value || 'TODAS';
+        estadoContas.contas = await buscarContas(status);
+        aplicarFiltrosLocais();
     } catch (error) {
         console.error('Erro ao carregar contas:', error);
-        mostrarErro('Erro ao conectar com o servidor');
+        if (lista) {
+            lista.innerHTML = `<div class="contas-empty-state"><h3>Erro ao carregar contas.</h3><p>${escapeHtml(error.message)}</p></div>`;
+        }
     }
 }
 
-/**
- * Exibe as contas na grade
- */
-function exibirContas(contas) {
-    const lista = document.getElementById('contas-lista');
+async function buscarContas(status) {
+    if (status === 'TODAS') {
+        const [ativas, inativas] = await Promise.all([
+            fetchJSON(`${API_BASE}?status=ATIVO`),
+            fetchJSON(`${API_BASE}?status=INATIVO`)
+        ]);
+        return [...ativas.data, ...inativas.data];
+    }
 
-    if (!contas || contas.length === 0) {
-        lista.innerHTML = '<p class="empty-state">Nenhuma conta encontrada. Cadastre sua primeira conta!</p>';
+    const resultado = await fetchJSON(`${API_BASE}?status=${encodeURIComponent(status)}`);
+    return resultado.data || [];
+}
+
+async function fetchJSON(url, options = {}) {
+    const response = await fetch(url, options);
+    const result = await response.json();
+    if (!result.success) {
+        throw new Error(result.error || result.message || 'Erro na operação');
+    }
+    return result;
+}
+
+function aplicarFiltrosLocais() {
+    const termo = normalizarBusca(document.getElementById('contas-busca')?.value || '');
+
+    estadoContas.filtradas = estadoContas.contas.filter((conta) => {
+        if (!termo) return true;
+        const alvo = [
+            conta.nome,
+            conta.instituicao,
+            conta.tipo,
+            conta.agencia,
+            conta.numero_conta,
+            conta.digito_conta
+        ].map(normalizarBusca).join(' ');
+        return alvo.includes(termo);
+    });
+
+    renderizarContas(estadoContas.filtradas);
+    atualizarResumo(estadoContas.contas);
+}
+
+function renderizarContas(contas) {
+    const lista = document.getElementById('contas-lista');
+    const total = document.getElementById('contas-total-encontradas');
+
+    if (total) {
+        total.textContent = `${contas.length} ${contas.length === 1 ? 'conta encontrada' : 'contas encontradas'}`;
+    }
+
+    if (!lista) return;
+
+    if (!contas.length) {
+        const statusAtual = document.getElementById('filtro-status')?.value || 'TODAS';
+        const termoBusca = document.getElementById('contas-busca')?.value?.trim();
+        const possuiFiltroAtivo = statusAtual !== 'TODAS' || Boolean(termoBusca);
+        const possuiCadastroForaDoFiltro = possuiFiltroAtivo || estadoContas.contas.length > 0;
+        lista.innerHTML = `
+            <div class="contas-empty-state">
+                <h3>${possuiCadastroForaDoFiltro ? 'Nenhuma conta encontrada.' : 'Nenhuma conta bancária cadastrada.'}</h3>
+                <p>${possuiCadastroForaDoFiltro ? 'Ajuste a busca ou os filtros para localizar a conta.' : 'Cadastre uma conta para acompanhar saldos e movimentações.'}</p>
+                <button type="button" class="contas-primary-btn" onclick="abrirModalNovaConta()">Nova conta</button>
+            </div>
+        `;
         return;
     }
 
-    lista.innerHTML = contas.map(conta => criarLinhaConta(conta)).join('');
+    const maiorSaldoAbsoluto = Math.max(...contas.map((conta) => Math.abs(Number(conta.saldo_atual || 0))), 1);
+
+    lista.innerHTML = contas.map((conta) => criarLinhaConta(conta, maiorSaldoAbsoluto)).join('');
 }
 
-/**
- * Cria o HTML de uma linha (lista)
- */
-function criarLinhaConta(conta) {
-    const saldoClass = conta.saldo_atual < 0 ? 'negativo' : '';
-    const statusText = conta.status === 'INATIVO' ? 'INATIVA' : 'ATIVA';
-    const statusClass = conta.status === 'INATIVO' ? 'status-inativo' : 'status-ativo';
-
-    const instituicao = conta.instituicao || '';
-    const tipo = conta.tipo || '';
-    const subtitulo = [instituicao, tipo].filter(Boolean).join(' - ');
-
-    const btnExtrato = `<button class="row-action-button" onclick="abrirExtrato(${conta.id})" title="Extrato" aria-label="Extrato" ${conta.status !== 'ATIVO' ? 'disabled' : ''}>${contasIcon('file')}</button>`;
-    const btnEditar = `<button class="row-action-button" onclick="editarConta(${conta.id})" title="Editar" aria-label="Editar">${contasIcon('edit')}</button>`;
-    const btnFinal = (conta.status === 'ATIVO')
-        ? `<button class="row-action-button danger" onclick="abrirModalInativar(${conta.id})" title="Inativar" aria-label="Inativar">${contasIcon('remove')}</button>`
-        : `<button class="row-action-button" onclick="ativarConta(${conta.id})" title="Ativar" aria-label="Ativar">${contasIcon('restore')}</button>`;
+function criarLinhaConta(conta, maiorSaldoAbsoluto) {
+    const cor = conta.cor_display || '#3b82f6';
+    const saldo = Number(conta.saldo_atual || 0);
+    const saldoPercentual = Math.min((Math.abs(saldo) / maiorSaldoAbsoluto) * 100, 100);
+    const statusInativo = conta.status === 'INATIVO';
+    const agenciaConta = formatarAgenciaConta(conta);
 
     return `
-        <div class="conta-row ${conta.status === 'INATIVO' ? 'inativa' : ''}">
-            <div class="col-descricao">
-                <div class="titulo">
-                    <span class="conta-dot" style="background-color: ${conta.cor_display || '#6e6e73'}" aria-hidden="true"></span>
-                    <span class="conta-nome-texto">${conta.nome}</span>
-                </div>
-                <div class="subtitulo">
-                    ${subtitulo}
-                    <span class="status ${statusClass}">${statusText}</span>
+        <article class="conta-row ${statusInativo ? 'is-inactive' : ''}" style="--conta-cor:${escapeHtml(cor)}; --saldo-percentual:${saldoPercentual.toFixed(2)}%">
+            <div class="conta-main">
+                <span class="conta-bank-icon" aria-hidden="true"></span>
+                <div class="conta-title">
+                    <h3>${escapeHtml(conta.nome)}</h3>
+                    <p>${escapeHtml(conta.instituicao || '-')}</p>
+                    <span class="conta-status ${statusInativo ? 'inativa' : ''}">${statusInativo ? 'INATIVA' : 'ATIVA'}</span>
                 </div>
             </div>
 
-            <div class="col-fill"></div>
-
-            <div class="col-direita">
-                <div class="saldo ${saldoClass}">${formatarMoedaDisplay(conta.saldo_atual)}</div>
-                <div class="row-actions acoes">
-                    ${btnExtrato}
-                    ${btnEditar}
-                    ${btnFinal}
+            <div class="conta-details">
+                <div class="conta-detail">
+                    ${contasIcon('bank')}
+                    <div><span>Instituição</span><strong>${escapeHtml(conta.instituicao || '-')}</strong></div>
+                </div>
+                <div class="conta-detail">
+                    ${contasIcon('card')}
+                    <div><span>Tipo de conta</span><strong>${escapeHtml(conta.tipo || '-')}</strong></div>
+                </div>
+                <div class="conta-detail">
+                    <span class="conta-color-dot" aria-hidden="true"></span>
+                    <div><span>Agência / Conta</span><strong>${agenciaConta}</strong></div>
                 </div>
             </div>
-        </div>
-    `;
-}
 
-/**
- * Cria o HTML de um card de conta
- */
-function criarCardContaLegacy(conta) {
-    const saldoClass = conta.saldo_atual < 0 ? 'negativo' : '';
-    const statusClass = conta.status === 'INATIVO' ? 'inativo' : '';
-    const statusText = conta.status === 'INATIVO' ? 'INATIVA' : 'ATIVA';
-
-    return `
-        <div class="conta-card" style="--cor-conta: ${conta.cor_display}">
-            <div class="conta-header">
-                <div class="conta-info">
-                    <h3>${conta.nome}</h3>
-                    <div class="instituicao">${conta.instituicao}</div>
-                    <div class="tipo">${conta.tipo}</div>
-                </div>
-                <span class="conta-badge ${statusClass}">${statusText}</span>
-            </div>
-
-            ${conta.agencia || conta.numero_conta ? `
-                <div class="conta-dados">
-                    ${conta.agencia ? `
-                        <div class="dado">
-                            <span class="dado-label">Agência</span>
-                            <span class="dado-valor">${conta.agencia}</span>
-                        </div>
-                    ` : ''}
-                    ${conta.numero_conta ? `
-                        <div class="dado">
-                            <span class="dado-label">Conta</span>
-                            <span class="dado-valor">${conta.numero_conta}${conta.digito_conta ? '-' + conta.digito_conta : ''}</span>
-                        </div>
-                    ` : ''}
-                </div>
-            ` : ''}
-
-            <div class="conta-saldo">
-                <div class="conta-saldo-label">Saldo Atual</div>
-                <div class="conta-saldo-valor ${saldoClass}">
-                    ${formatarMoedaDisplay(conta.saldo_atual)}
-                </div>
+            <div class="conta-balance">
+                <strong class="${saldo < 0 ? 'negative' : ''}">${formatarMoedaDisplay(saldo)}</strong>
+                <small>Saldo disponível</small>
+                <div class="conta-mini-bar" aria-hidden="true"><div></div></div>
             </div>
 
             <div class="conta-actions">
-                ${conta.status === 'ATIVO' ? `
-                    <button class="btn-extrato" onclick="abrirExtrato(${conta.id})">
-                        ${contasIcon('file')} Extrato
-                    </button>
-                    <button class="btn-ajustar" onclick="abrirAjusteSaldo(${conta.id})">
-                        ${contasIcon('scale')} Ajustar
-                    </button>
-                ` : ''}
-                <button class="btn-editar" onclick="editarConta(${conta.id})">
-                    ${contasIcon('edit')} Editar
-                </button>
-                ${conta.status === 'ATIVO' ? `
-                    <button class="btn-inativar" onclick="abrirModalInativar(${conta.id})">
-                        ${contasIcon('remove')} Inativar
-                    </button>
-                ` : `
-                    <button class="btn-ativar" onclick="ativarConta(${conta.id})">
-                        ${contasIcon('check')} Ativar
-                    </button>
-                `}
+                <button type="button" class="contas-action-btn" onclick="visualizarConta(${conta.id})" title="Visualizar" aria-label="Visualizar">${contasIcon('eye')}</button>
+                <button type="button" class="contas-action-btn" onclick="editarConta(${conta.id})" title="Editar" aria-label="Editar">${contasIcon('edit')}</button>
+                <button type="button" class="contas-action-btn" onclick="abrirTransferencia(${conta.id})" title="Transferir" aria-label="Transferir" ${statusInativo ? 'disabled' : ''}>${contasIcon('transfer')}</button>
+                <button type="button" class="contas-action-btn" onclick="abrirExtrato(${conta.id})" title="Extrato" aria-label="Extrato" ${statusInativo ? 'disabled' : ''}>${contasIcon('file')}</button>
+                ${statusInativo
+                    ? `<button type="button" class="contas-action-btn" onclick="ativarConta(${conta.id})" title="Ativar" aria-label="Ativar">${contasIcon('restore')}</button>`
+                    : `<button type="button" class="contas-action-btn danger" onclick="abrirModalInativar(${conta.id})" title="Inativar" aria-label="Inativar">${contasIcon('ban')}</button>`}
             </div>
+        </article>
+    `;
+}
+
+function atualizarResumo(contas) {
+    const contasAtivas = contas.filter((conta) => conta.status === 'ATIVO');
+    const totalSaldo = contasAtivas.reduce((sum, conta) => sum + Number(conta.saldo_atual || 0), 0);
+    const totalContas = contas.length;
+    const maiorConta = contasAtivas.reduce((maior, conta) => {
+        if (!maior || Number(conta.saldo_atual || 0) > Number(maior.saldo_atual || 0)) return conta;
+        return maior;
+    }, null);
+    const maiorSaldo = maiorConta ? Number(maiorConta.saldo_atual || 0) : 0;
+    const percentualAtivas = totalContas > 0 ? (contasAtivas.length / totalContas) * 100 : 0;
+
+    setText('saldo-total', formatarMoedaDisplay(totalSaldo));
+    setText('saldo-total-percentual', totalSaldo !== 0 ? '100% do saldo disponível' : '0% do saldo disponível');
+    setWidth('saldo-total-barra', totalSaldo !== 0 ? 100 : 0);
+    setText('contas-ativas', String(contasAtivas.length));
+    setText('contas-ativas-texto', `${contasAtivas.length} de ${totalContas} contas`);
+    setWidth('contas-ativas-barra', percentualAtivas);
+    setText('maior-saldo', formatarMoedaDisplay(maiorSaldo));
+    setText('maior-saldo-conta', maiorConta ? maiorConta.nome : 'Nenhuma conta');
+    setText('saldo-conciliado', formatarMoedaDisplay(totalSaldo));
+    setText('saldo-conciliado-texto', totalSaldo !== 0 ? '100% conciliado' : 'Sem conciliação registrada');
+    setWidth('saldo-conciliado-barra', totalSaldo !== 0 ? 100 : 0);
+}
+
+function abrirModalNovaConta() {
+    estadoContas.contaAtual = null;
+    document.getElementById('form-conta')?.reset();
+    setValue('conta-id', '');
+    setText('modal-titulo', 'Nova Conta Bancária');
+    setText('modal-subtitulo', 'Cadastre uma nova conta para organizar e acompanhar seus saldos.');
+    selecionarCorConta('#3b82f6');
+    const btnInativar = document.getElementById('btn-inativar-modal');
+    if (btnInativar) btnInativar.style.display = 'none';
+    atualizarPreviaConta();
+    abrirModal('modal-conta');
+}
+
+async function editarConta(id) {
+    try {
+        const result = await fetchJSON(`${API_BASE}/${id}`);
+        estadoContas.contaAtual = result.data;
+        preencherFormulario(result.data);
+        setText('modal-titulo', 'Editar Conta Bancária');
+        setText('modal-subtitulo', 'Atualize os dados cadastrais e visuais da conta.');
+        const btnInativar = document.getElementById('btn-inativar-modal');
+        if (btnInativar) btnInativar.style.display = result.data.status === 'ATIVO' ? 'inline-flex' : 'none';
+        abrirModal('modal-conta');
+    } catch (error) {
+        mostrarToast(error.message, 'erro');
+    }
+}
+
+function preencherFormulario(conta) {
+    setValue('conta-id', conta.id);
+    setValue('conta-nome', conta.nome || '');
+    setSelectValuePreservingOption('conta-instituicao', conta.instituicao || '');
+    setSelectValuePreservingOption('conta-tipo', conta.tipo || '');
+    setValue('conta-agencia', conta.agencia || '');
+    setValue('conta-numero', conta.numero_conta || '');
+    setValue('conta-digito', conta.digito_conta || '');
+    setValue('conta-saldo-inicial', formatarMoedaDisplay(conta.saldo_inicial || 0));
+    selecionarCorConta(conta.cor_display || '#3b82f6');
+    atualizarPreviaConta();
+}
+
+async function salvarConta(event) {
+    event.preventDefault();
+
+    const id = document.getElementById('conta-id')?.value;
+    const payload = {
+        nome: document.getElementById('conta-nome')?.value?.trim(),
+        instituicao: document.getElementById('conta-instituicao')?.value,
+        tipo: document.getElementById('conta-tipo')?.value,
+        agencia: valorOuNull(document.getElementById('conta-agencia')?.value),
+        numero_conta: valorOuNull(document.getElementById('conta-numero')?.value),
+        digito_conta: valorOuNull(document.getElementById('conta-digito')?.value),
+        saldo_inicial: parseMoeda(document.getElementById('conta-saldo-inicial')?.value),
+        cor_display: document.getElementById('conta-cor')?.value || '#3b82f6'
+    };
+
+    try {
+        const result = await fetchJSON(id ? `${API_BASE}/${id}` : API_BASE, {
+            method: id ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        fecharModal('modal-conta');
+        mostrarToast(result.message || 'Conta salva com sucesso.');
+        await carregarContas();
+    } catch (error) {
+        mostrarToast(error.message, 'erro');
+    }
+}
+
+async function visualizarConta(id) {
+    try {
+        const [contaResult, movimentosResult] = await Promise.all([
+            fetchJSON(`${API_BASE}/${id}`),
+            fetchJSON(`${API_BASE}/${id}/movimentos?incluir_saldo=1&limit=5`)
+        ]);
+        const conta = contaResult.data;
+        setText('detalhe-titulo', conta.nome);
+        setText('detalhe-subtitulo', `${conta.instituicao || '-'} - ${conta.tipo || '-'}`);
+        renderizarDetalheConta(conta, movimentosResult.data || []);
+        abrirModal('modal-detalhe');
+    } catch (error) {
+        mostrarToast(error.message, 'erro');
+    }
+}
+
+function renderizarDetalheConta(conta, movimentos) {
+    const container = document.getElementById('detalhe-conteudo');
+    if (!container) return;
+
+    container.innerHTML = `
+        <div class="contas-detail-grid">
+            <div class="contas-detail-item"><span>Instituição</span><strong>${escapeHtml(conta.instituicao || '-')}</strong></div>
+            <div class="contas-detail-item"><span>Tipo de conta</span><strong>${escapeHtml(conta.tipo || '-')}</strong></div>
+            <div class="contas-detail-item"><span>Agência / Conta</span><strong>${formatarAgenciaConta(conta)}</strong></div>
+            <div class="contas-detail-item"><span>Saldo atual</span><strong>${formatarMoedaDisplay(conta.saldo_atual || 0)}</strong></div>
+            <div class="contas-detail-item"><span>Status</span><strong>${escapeHtml(conta.status || '-')}</strong></div>
+            <div class="contas-detail-item"><span>Cor</span><strong>${escapeHtml(conta.cor_display || '-')}</strong></div>
+        </div>
+        <div class="contas-extrato-lista">
+            ${movimentos.length ? movimentos.map(criarMovimentoHTML).join('') : '<div class="contas-empty-state"><p>Nenhuma movimentação encontrada.</p></div>'}
+        </div>
+        <div class="contas-modal-footer">
+            <button type="button" class="contas-secondary-btn" onclick="abrirExtrato(${conta.id})">Abrir extrato</button>
+            <button type="button" class="contas-primary-btn" onclick="abrirTransferencia(${conta.id})">Transferir</button>
         </div>
     `;
 }
 
-/**
- * Atualiza os cards de resumo
- */
-function atualizarResumo(contas) {
-    const contasAtivas = contas.filter(c => c.status === 'ATIVO');
-    const totalSaldo = contasAtivas.reduce((sum, c) => sum + c.saldo_atual, 0);
-    const maiorSaldo = contasAtivas.length > 0 ?
-        Math.max(...contasAtivas.map(c => c.saldo_atual)) : 0;
-
-    document.getElementById('total-saldo').textContent = formatarMoedaDisplay(totalSaldo);
-    document.getElementById('total-contas').textContent = contasAtivas.length;
-    document.getElementById('maior-saldo').textContent = formatarMoedaDisplay(maiorSaldo);
-}
-
-/**
- * Abre modal para nova conta
- */
-function abrirModalNovaConta() {
-    contaAtual = null;
-    document.getElementById('modal-titulo').textContent = 'Nova Conta Bancária';
-    document.getElementById('btn-deletar-modal').style.display = 'none';
-    document.getElementById('form-conta').reset();
-    document.getElementById('conta-id').value = '';
-    document.getElementById('conta-cor').value = '#3b82f6';
-    abrirModal('modal-conta');
-}
-
-/**
- * Edita uma conta existente
- */
-async function editarConta(id) {
-    try {
-        const response = await fetch(`${API_BASE}/${id}`);
-        const result = await response.json();
-
-        if (result.success) {
-            contaAtual = result.data;
-            preencherFormulario(result.data);
-            document.getElementById('modal-titulo').textContent = 'Editar Conta Bancária';
-            document.getElementById('btn-deletar-modal').style.display = 'block';
-            abrirModal('modal-conta');
-        } else {
-            mostrarErro('Erro ao carregar conta: ' + result.error);
-        }
-    } catch (error) {
-        console.error('Erro ao carregar conta:', error);
-        mostrarErro('Erro ao conectar com o servidor');
-    }
-}
-
-/**
- * Preenche o formulário com os dados da conta
- */
-function preencherFormulario(conta) {
-    document.getElementById('conta-id').value = conta.id;
-    document.getElementById('conta-nome').value = conta.nome;
-    document.getElementById('conta-instituicao').value = conta.instituicao;
-    document.getElementById('conta-tipo').value = conta.tipo;
-    document.getElementById('conta-agencia').value = conta.agencia || '';
-    document.getElementById('conta-numero').value = conta.numero_conta || '';
-    document.getElementById('conta-digito').value = conta.digito_conta || '';
-    document.getElementById('conta-saldo-inicial').value = formatarMoedaDisplay(conta.saldo_inicial);
-    document.getElementById('conta-cor').value = conta.cor_display || '#3b82f6';
-}
-
-/**
- * Salva a conta (criar ou atualizar)
- */
-async function salvarConta(event) {
-    event.preventDefault();
-
-    const id = document.getElementById('conta-id').value;
-    const dados = {
-        nome: document.getElementById('conta-nome').value,
-        instituicao: document.getElementById('conta-instituicao').value,
-        tipo: document.getElementById('conta-tipo').value,
-        agencia: document.getElementById('conta-agencia').value || null,
-        numero_conta: document.getElementById('conta-numero').value || null,
-        digito_conta: document.getElementById('conta-digito').value || null,
-        saldo_inicial: parseMoeda(document.getElementById('conta-saldo-inicial').value),
-        cor_display: document.getElementById('conta-cor').value
-    };
-
-    try {
-        const url = id ? `${API_BASE}/${id}` : API_BASE;
-        const method = id ? 'PUT' : 'POST';
-
-        const response = await fetch(url, {
-            method: method,
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(dados)
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-            mostrarSucesso(result.message);
-            fecharModal('modal-conta');
-            carregarContas();
-        } else {
-            mostrarErro('Erro ao salvar conta: ' + result.error);
-        }
-    } catch (error) {
-        console.error('Erro ao salvar conta:', error);
-        mostrarErro('Erro ao conectar com o servidor');
-    }
-}
-
-/**
- * Abre modal de confirmação para inativar
- */
 function abrirModalInativar(id) {
-    contaParaInativar = id;
+    estadoContas.contaParaInativar = id;
     abrirModal('modal-confirmar');
 }
 
-/**
- * Inativar conta via modal de edição
- */
 function inativarContaModal() {
-    const id = document.getElementById('conta-id').value;
-    if (id) {
-        abrirModalInativar(id);
-        fecharModal('modal-conta');
-    }
+    const id = document.getElementById('conta-id')?.value;
+    if (!id) return;
+    fecharModal('modal-conta');
+    abrirModalInativar(Number(id));
 }
 
-/**
- * Confirma a inativação da conta
- */
 async function confirmarInativacao() {
-    if (!contaParaInativar) return;
+    if (!estadoContas.contaParaInativar) return;
 
     try {
-        const response = await fetch(`${API_BASE}/${contaParaInativar}`, {
-            method: 'DELETE'
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-            mostrarSucesso('Conta inativada com sucesso');
-            fecharModal('modal-confirmar');
-            contaParaInativar = null;
-            carregarContas();
-        } else {
-            mostrarErro('Erro ao inativar conta: ' + result.error);
-        }
+        const result = await fetchJSON(`${API_BASE}/${estadoContas.contaParaInativar}`, { method: 'DELETE' });
+        fecharModal('modal-confirmar');
+        estadoContas.contaParaInativar = null;
+        mostrarToast(result.message || 'Conta inativada com sucesso.');
+        await carregarContas();
     } catch (error) {
-        console.error('Erro ao inativar conta:', error);
-        mostrarErro('Erro ao conectar com o servidor');
+        mostrarToast(error.message, 'erro');
     }
 }
 
-/**
- * Ativar uma conta inativa
- */
 async function ativarConta(id) {
     try {
-        const response = await fetch(`${API_BASE}/${id}/ativar`, {
-            method: 'PUT'
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-            mostrarSucesso('Conta reativada com sucesso');
-            carregarContas();
-        } else {
-            mostrarErro('Erro ao ativar conta: ' + result.error);
-        }
+        const result = await fetchJSON(`${API_BASE}/${id}/ativar`, { method: 'PUT' });
+        mostrarToast(result.message || 'Conta reativada com sucesso.');
+        await carregarContas();
     } catch (error) {
-        console.error('Erro ao ativar conta:', error);
-        mostrarErro('Erro ao conectar com o servidor');
+        mostrarToast(error.message, 'erro');
     }
 }
 
-/**
- * Abre um modal
- */
-function abrirModal(modalId) {
-    document.getElementById(modalId).style.display = 'block';
+function abrirTransferencia(id) {
+    const origem = estadoContas.contas.find((conta) => Number(conta.id) === Number(id));
+    if (!origem) return;
+
+    const destinos = estadoContas.contas.filter((conta) => conta.status === 'ATIVO' && Number(conta.id) !== Number(id));
+    if (!destinos.length) {
+        mostrarToast('Cadastre outra conta ativa para transferir.');
+        return;
+    }
+
+    setValue('transfer-origem-id', origem.id);
+    setValue('transfer-origem-nome', origem.nome);
+    setValue('transfer-valor', '');
+    setValue('transfer-descricao', 'Transferência entre contas');
+    setValue('transfer-data', new Date().toISOString().slice(0, 10));
+
+    const destinoSelect = document.getElementById('transfer-destino-id');
+    if (destinoSelect) {
+        destinoSelect.innerHTML = destinos.map((conta) => `<option value="${conta.id}">${escapeHtml(conta.nome)} - ${escapeHtml(conta.instituicao || '')}</option>`).join('');
+    }
+
+    abrirModal('modal-transferencia');
 }
 
-/**
- * Fecha um modal
- */
-function fecharModal(modalId) {
-    document.getElementById(modalId).style.display = 'none';
-}
+async function salvarTransferencia(event) {
+    event.preventDefault();
 
-// ============================================================================
-// EXTRATO / AJUSTE DE SALDO
-// ============================================================================
+    const payload = {
+        conta_origem_id: Number(document.getElementById('transfer-origem-id')?.value),
+        conta_destino_id: Number(document.getElementById('transfer-destino-id')?.value),
+        valor: parseMoeda(document.getElementById('transfer-valor')?.value),
+        data_movimento: document.getElementById('transfer-data')?.value,
+        descricao: document.getElementById('transfer-descricao')?.value || 'Transferência'
+    };
+
+    try {
+        const result = await fetchJSON(`${API_BASE}/transferir`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        fecharModal('modal-transferencia');
+        mostrarToast(result.message || 'Transferência realizada.');
+        await carregarContas();
+    } catch (error) {
+        mostrarToast(error.message, 'erro');
+    }
+}
 
 async function abrirExtrato(contaId) {
-    contaExtratoId = contaId;
-    document.getElementById('extrato-lista').innerHTML = '<p class="loading">Carregando extrato...</p>';
+    estadoContas.contaExtratoId = contaId;
+    const lista = document.getElementById('extrato-lista');
+    if (lista) lista.innerHTML = '<div class="contas-loading">Carregando extrato...</div>';
     abrirModal('modal-extrato');
 
     try {
-        const [respConta, respMov] = await Promise.all([
-            fetch(`${API_BASE}/${contaId}`),
-            fetch(`${API_BASE}/${contaId}/movimentos?incluir_saldo=1&limit=200`)
+        const [contaResult, movimentosResult] = await Promise.all([
+            fetchJSON(`${API_BASE}/${contaId}`),
+            fetchJSON(`${API_BASE}/${contaId}/movimentos?incluir_saldo=1&limit=200`)
         ]);
-        const [jsonConta, jsonMov] = await Promise.all([respConta.json(), respMov.json()]);
-
-        if (!jsonConta.success) throw new Error(jsonConta.error || 'Erro ao carregar conta');
-        if (!jsonMov.success) throw new Error(jsonMov.error || 'Erro ao carregar extrato');
-
-        const conta = jsonConta.data;
-        extratoMovimentos = jsonMov.data || [];
-
-        document.getElementById('extrato-titulo').textContent = `Extrato - ${conta.nome}`;
-        document.getElementById('extrato-saldo').textContent = formatarMoedaDisplay(conta.saldo_atual);
-        renderizarExtrato(extratoMovimentos);
-    } catch (e) {
-        console.error(e);
-        document.getElementById('extrato-lista').innerHTML = `<p class="empty-state">Erro ao carregar extrato</p>`;
+        estadoContas.extratoMovimentos = movimentosResult.data || [];
+        setText('extrato-titulo', `Extrato - ${contaResult.data.nome}`);
+        setText('extrato-saldo', formatarMoedaDisplay(contaResult.data.saldo_atual || 0));
+        renderizarExtrato(estadoContas.extratoMovimentos);
+    } catch (error) {
+        if (lista) lista.innerHTML = `<div class="contas-empty-state"><p>${escapeHtml(error.message)}</p></div>`;
     }
 }
 
 function renderizarExtrato(movimentos) {
     const lista = document.getElementById('extrato-lista');
-    if (!movimentos || movimentos.length === 0) {
-        lista.innerHTML = '<p class="empty-state">Nenhum movimento encontrado</p>';
+    if (!lista) return;
+
+    if (!movimentos.length) {
+        lista.innerHTML = '<div class="contas-empty-state"><p>Nenhuma movimentação encontrada.</p></div>';
         return;
     }
 
-    lista.innerHTML = movimentos.map(m => {
-        const tipoClass = m.tipo === 'DEBITO' ? 'debito' : 'credito';
-        const sinal = m.tipo === 'DEBITO' ? '-' : '+';
-        const tag = (m.origem === 'AJUSTE') ? 'AJUSTE' : (m.origem || '');
-        const meta = `${formatarDataBR(m.data_movimento)}${tag ? ' - ' + tag : ''}`;
-        const saldoApos = (m.saldo_apos_movimento != null) ? formatarMoedaDisplay(m.saldo_apos_movimento) : null;
-
-        const acoes = (m.ajustavel)
-            ? `<div class="row-actions acoes">
-                    <button class="row-action-button" onclick="editarAjuste(${m.id})" title="Editar ajuste" aria-label="Editar ajuste">${contasIcon('edit')}</button>
-                    <button class="row-action-button danger" onclick="excluirAjuste(${m.id})" title="Excluir ajuste" aria-label="Excluir ajuste">${contasIcon('trash')}</button>
-               </div>`
-            : '';
-
-        return `
-            <div class="movimento">
-                <div class="mov-desc">
-                    <div class="titulo">${m.descricao}</div>
-                    <div class="meta">${meta}</div>
-                </div>
-                <div class="mov-valor">
-                    <div class="valor ${tipoClass}">${sinal} ${formatarMoedaDisplay(m.valor)}</div>
-                    ${saldoApos ? `<div class="saldo-apos">Saldo: ${saldoApos}</div>` : ''}
-                    ${acoes}
-                </div>
-            </div>
-        `;
-    }).join('');
+    lista.innerHTML = movimentos.map(criarMovimentoHTML).join('');
 }
 
-function abrirAjusteSaldo(contaId) {
-    contaExtratoId = contaId;
-    abrirModalAjusteSaldo();
+function criarMovimentoHTML(movimento) {
+    const debito = movimento.tipo === 'DEBITO';
+    const sinal = debito ? '-' : '+';
+    const saldoApos = movimento.saldo_apos_movimento != null ? formatarMoedaDisplay(movimento.saldo_apos_movimento) : null;
+
+    return `
+        <article class="contas-movimento">
+            <div>
+                <h4>${escapeHtml(movimento.descricao || 'Movimento')}</h4>
+                <p>${formatarDataBR(movimento.data_movimento)}${movimento.origem ? ` - ${escapeHtml(movimento.origem)}` : ''}</p>
+            </div>
+            <div class="contas-movimento-value">
+                <strong class="${debito ? 'debito' : ''}">${sinal} ${formatarMoedaDisplay(movimento.valor || 0)}</strong>
+                ${saldoApos ? `<small>Saldo: ${saldoApos}</small>` : ''}
+                ${movimento.ajustavel ? `
+                    <div class="contas-movimento-actions">
+                        <button type="button" class="contas-action-btn" onclick="editarAjuste(${movimento.id})" title="Editar ajuste">${contasIcon('edit')}</button>
+                        <button type="button" class="contas-action-btn danger" onclick="excluirAjuste(${movimento.id})" title="Excluir ajuste">${contasIcon('trash')}</button>
+                    </div>
+                ` : ''}
+            </div>
+        </article>
+    `;
 }
 
 function abrirModalAjusteSaldo() {
-    const hoje = new Date().toISOString().split('T')[0];
-    document.getElementById('ajuste-conta-id').value = contaExtratoId || '';
-    document.getElementById('ajuste-movimento-id').value = '';
-    document.getElementById('ajuste-titulo').textContent = 'Ajustar Saldo';
-    document.getElementById('ajuste-modo-saldo-final').style.display = 'block';
-    document.getElementById('ajuste-modo-editar').style.display = 'none';
-    document.getElementById('ajuste-data').value = hoje;
-    document.getElementById('ajuste-descricao').value = '';
-    document.getElementById('ajuste-novo-saldo').value = '';
-    document.getElementById('ajuste-valor').value = '';
-    document.getElementById('ajuste-tipo').value = 'CREDITO';
+    if (!estadoContas.contaExtratoId) {
+        mostrarToast('Abra o extrato de uma conta para ajustar o saldo.', 'erro');
+        return;
+    }
 
-    // saldo atual exibido
-    const saldoAtualTexto = document.getElementById('extrato-saldo')?.textContent || 'R$ 0,00';
-    document.getElementById('ajuste-saldo-atual').value = saldoAtualTexto;
-
+    setValue('ajuste-conta-id', estadoContas.contaExtratoId);
+    setValue('ajuste-movimento-id', '');
+    setText('ajuste-titulo', 'Ajustar Saldo');
+    document.getElementById('ajuste-modo-saldo-final')?.removeAttribute('hidden');
+    document.getElementById('ajuste-modo-editar')?.setAttribute('hidden', 'hidden');
+    setValue('ajuste-saldo-atual', document.getElementById('extrato-saldo')?.textContent || 'R$ 0,00');
+    setValue('ajuste-novo-saldo', '');
+    setValue('ajuste-valor', '');
+    setValue('ajuste-tipo', 'CREDITO');
+    setValue('ajuste-data', new Date().toISOString().slice(0, 10));
+    setValue('ajuste-descricao', '');
     abrirModal('modal-ajuste');
 }
 
 function editarAjuste(movId) {
-    const mov = (extratoMovimentos || []).find(m => m.id === movId);
-    if (!mov) return;
+    const movimento = estadoContas.extratoMovimentos.find((item) => Number(item.id) === Number(movId));
+    if (!movimento) return;
 
-    contaExtratoId = mov.conta_bancaria_id;
-    document.getElementById('ajuste-conta-id').value = contaExtratoId;
-    document.getElementById('ajuste-movimento-id').value = mov.id;
-    document.getElementById('ajuste-titulo').textContent = 'Editar Ajuste';
-    document.getElementById('ajuste-modo-saldo-final').style.display = 'none';
-    document.getElementById('ajuste-modo-editar').style.display = 'block';
-
-    document.getElementById('ajuste-saldo-atual').value = document.getElementById('extrato-saldo')?.textContent || 'R$ 0,00';
-    document.getElementById('ajuste-data').value = mov.data_movimento;
-    document.getElementById('ajuste-descricao').value = mov.descricao || '';
-    document.getElementById('ajuste-tipo').value = mov.tipo;
-    document.getElementById('ajuste-valor').value = formatarMoedaDisplay(mov.valor);
-
+    setValue('ajuste-conta-id', movimento.conta_bancaria_id);
+    setValue('ajuste-movimento-id', movimento.id);
+    setText('ajuste-titulo', 'Editar Ajuste');
+    document.getElementById('ajuste-modo-saldo-final')?.setAttribute('hidden', 'hidden');
+    document.getElementById('ajuste-modo-editar')?.removeAttribute('hidden');
+    setValue('ajuste-saldo-atual', document.getElementById('extrato-saldo')?.textContent || 'R$ 0,00');
+    setValue('ajuste-tipo', movimento.tipo);
+    setValue('ajuste-valor', formatarMoedaDisplay(movimento.valor || 0));
+    setValue('ajuste-data', movimento.data_movimento);
+    setValue('ajuste-descricao', movimento.descricao || '');
     abrirModal('modal-ajuste');
 }
 
 async function excluirAjuste(movId) {
-    if (!contaExtratoId) return;
-    if (!confirm('Excluir este ajuste?')) return;
+    if (!estadoContas.contaExtratoId) return;
+    if (!window.confirm('Excluir este ajuste?')) return;
 
     try {
-        const resp = await fetch(`${API_BASE}/${contaExtratoId}/movimentos/${movId}`, { method: 'DELETE' });
-        const json = await resp.json();
-        if (!json.success) throw new Error(json.error || 'Erro ao excluir ajuste');
-        await abrirExtrato(contaExtratoId);
-    } catch (e) {
-        console.error(e);
-        mostrarErro('Erro ao excluir ajuste: ' + e.message);
+        await fetchJSON(`${API_BASE}/${estadoContas.contaExtratoId}/movimentos/${movId}`, { method: 'DELETE' });
+        await abrirExtrato(estadoContas.contaExtratoId);
+        await carregarContas();
+    } catch (error) {
+        mostrarToast(error.message, 'erro');
     }
 }
 
 async function salvarAjusteSaldo(event) {
     event.preventDefault();
-    const contaId = parseInt(document.getElementById('ajuste-conta-id').value, 10);
-    const movId = document.getElementById('ajuste-movimento-id').value;
-    const dataMov = document.getElementById('ajuste-data').value;
-    const descricao = document.getElementById('ajuste-descricao').value || '';
+
+    const contaId = Number(document.getElementById('ajuste-conta-id')?.value);
+    const movId = document.getElementById('ajuste-movimento-id')?.value;
+    const descricao = document.getElementById('ajuste-descricao')?.value || '';
+    const dataMovimento = document.getElementById('ajuste-data')?.value;
 
     try {
-        if (!contaId) throw new Error('Conta inválida');
-
         if (movId) {
-            const payload = {
-                tipo: document.getElementById('ajuste-tipo').value,
-                valor: parseMoeda(document.getElementById('ajuste-valor').value),
-                descricao,
-                data_movimento: dataMov
-            };
-            const resp = await fetch(`${API_BASE}/${contaId}/movimentos/${movId}`, {
+            await fetchJSON(`${API_BASE}/${contaId}/movimentos/${movId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                body: JSON.stringify({
+                    tipo: document.getElementById('ajuste-tipo')?.value,
+                    valor: parseMoeda(document.getElementById('ajuste-valor')?.value),
+                    descricao,
+                    data_movimento: dataMovimento
+                })
             });
-            const json = await resp.json();
-            if (!json.success) throw new Error(json.error || 'Erro ao editar ajuste');
         } else {
-            const payload = {
-                valor_final_desejado: parseMoeda(document.getElementById('ajuste-novo-saldo').value),
-                descricao,
-                data_movimento: dataMov
-            };
-            const resp = await fetch(`${API_BASE}/${contaId}/ajuste-saldo`, {
+            await fetchJSON(`${API_BASE}/${contaId}/ajuste-saldo`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                body: JSON.stringify({
+                    valor_final_desejado: parseMoeda(document.getElementById('ajuste-novo-saldo')?.value),
+                    descricao,
+                    data_movimento: dataMovimento
+                })
             });
-            const json = await resp.json();
-            if (!json.success) throw new Error(json.error || 'Erro ao criar ajuste');
         }
 
         fecharModal('modal-ajuste');
         await abrirExtrato(contaId);
         await carregarContas();
-    } catch (e) {
-        console.error(e);
-        mostrarErro('Erro ao salvar ajuste: ' + e.message);
+    } catch (error) {
+        mostrarToast(error.message, 'erro');
     }
+}
+
+function selecionarCorConta(cor) {
+    const corNormalizada = /^#[0-9a-fA-F]{6}$/.test(cor || '') ? cor : '#3b82f6';
+    setValue('conta-cor', corNormalizada);
+    document.querySelectorAll('#conta-cor-paleta [data-color]').forEach((botao) => {
+        botao.classList.toggle('active', botao.dataset.color === corNormalizada);
+    });
+    atualizarPreviaConta();
+}
+
+function atualizarPreviaConta() {
+    const nome = document.getElementById('conta-nome')?.value || 'Nome da Conta';
+    const tipo = document.getElementById('conta-tipo')?.value || 'Tipo de Conta';
+    const instituicao = document.getElementById('conta-instituicao')?.value || '-';
+    const agencia = document.getElementById('conta-agencia')?.value || '-';
+    const numero = document.getElementById('conta-numero')?.value || '-';
+    const digito = document.getElementById('conta-digito')?.value;
+    const saldo = parseMoeda(document.getElementById('conta-saldo-inicial')?.value);
+    const cor = document.getElementById('conta-cor')?.value || '#3b82f6';
+
+    setText('preview-nome', nome);
+    setText('preview-tipo', tipo);
+    setText('preview-instituicao', instituicao);
+    setText('preview-agencia-conta', `${agencia} / ${numero}${digito ? '-' + digito : ''}`);
+    setText('preview-saldo', formatarMoedaDisplay(saldo));
+
+    ['preview-cor-icon', 'preview-cor-dot'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.style.setProperty('--conta-cor', cor);
+    });
+}
+
+function abrirModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+}
+
+function fecharModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+}
+
+function mostrarFiltrosAvancados() {
+    mostrarToast('Filtros avançados ficam para evolução futura. Use status e busca nesta versão.');
+}
+
+function exportarContas() {
+    mostrarToast('Exportação de contas fica para evolução futura.');
+}
+
+function contasIcon(name) {
+    const icons = {
+        bank: '<path d="m3 10 9-6 9 6"/><path d="M5 10h14M6 10v8M10 10v8M14 10v8M18 10v8M4 18h16M3 21h18"/>',
+        card: '<path d="M4 7h16v10H4V7Zm0 3h16M8 15h3"/>',
+        eye: '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><path d="M12 9a3 3 0 1 1 0 6 3 3 0 0 1 0-6Z"/>',
+        edit: '<path d="M5 19h4L19 9a2.1 2.1 0 0 0-3-3L6 16l-1 3Z"/><path d="M14 6l4 4"/>',
+        transfer: '<path d="M16 3l5 5-5 5"/><path d="M21 8H7"/><path d="M8 21l-5-5 5-5"/><path d="M3 16h14"/>',
+        file: '<path d="M7 4h7l4 4v12H7V4Z"/><path d="M14 4v4h4"/><path d="M9 13h6M9 17h6"/>',
+        ban: '<path d="M6 6l12 12"/><path d="M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/>',
+        restore: '<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 5v6h-6"/>',
+        trash: '<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/>'
+    };
+    return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${icons[name] || icons.bank}</svg>`;
+}
+
+function formatarAgenciaConta(conta) {
+    const agencia = conta.agencia || '-';
+    const numero = conta.numero_conta || '-';
+    const digito = conta.digito_conta ? `-${conta.digito_conta}` : '';
+    return `${escapeHtml(agencia)} / ${escapeHtml(numero)}${escapeHtml(digito)}`;
+}
+
+function formatarMoedaDisplay(valor) {
+    return Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function formatarCampoMoeda(campo) {
+    const valor = parseMoeda(campo.value);
+    campo.value = valor ? formatarMoedaDisplay(valor) : '';
+    atualizarPreviaConta();
+}
+
+function parseMoeda(valor) {
+    if (typeof valor === 'number') return valor;
+    if (!valor) return 0;
+    const normalizado = String(valor)
+        .replace(/[^\d,.-]/g, '')
+        .replace(/\./g, '')
+        .replace(',', '.');
+    const numero = Number(normalizado);
+    return Number.isFinite(numero) ? numero : 0;
 }
 
 function formatarDataBR(valor) {
     if (!valor) return '';
-    const [ano, mes, dia] = valor.slice(0, 10).split('-');
+    const iso = String(valor).slice(0, 10);
+    const [ano, mes, dia] = iso.split('-');
+    if (!ano || !mes || !dia) return valor;
     return `${dia}/${mes}/${ano}`;
 }
 
-/**
- * Formata valor monetário para exibição
- */
-function formatarMoedaDisplay(valor) {
-    return new Intl.NumberFormat('pt-BR', {
-        style: 'currency',
-        currency: 'BRL'
-    }).format(valor);
+function setText(id, texto) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = texto;
 }
 
-/**
- * Formata input de moeda
- */
-function formatarMoeda(input) {
-    let valor = input.value.replace(/\D/g, '');
-    valor = (parseInt(valor) / 100).toFixed(2);
-    input.value = 'R$ ' + valor.replace('.', ',').replace(/(\d)(?=(\d{3})+\,)/g, '$1.');
+function setValue(id, valor) {
+    const el = document.getElementById(id);
+    if (el) el.value = valor ?? '';
 }
 
-/**
- * Converte string de moeda para número
- */
-function parseMoeda(valor) {
-    if (!valor) return 0;
-    return parseFloat(valor.replace('R$', '').replace(/\./g, '').replace(',', '.').trim());
-}
+function setSelectValuePreservingOption(id, valor) {
+    const el = document.getElementById(id);
+    if (!el) return;
 
-/**
- * Mostra mensagem de sucesso
- */
-function mostrarSucesso(mensagem) {
-    alert(mensagem);
-}
-
-/**
- * Mostra mensagem de erro
- */
-function mostrarErro(mensagem) {
-    alert(mensagem);
-}
-
-// Fechar modal ao clicar fora
-window.onclick = function (event) {
-    const modals = document.getElementsByClassName('modal');
-    for (let modal of modals) {
-        if (event.target == modal) {
-            modal.style.display = 'none';
-        }
+    const value = valor ?? '';
+    if (value && !Array.from(el.options).some((option) => option.value === value)) {
+        const option = new Option(value, value);
+        el.add(option);
     }
+
+    el.value = value;
 }
+
+function setWidth(id, percentual) {
+    const el = document.getElementById(id);
+    if (el) el.style.width = `${Math.max(0, Math.min(Number(percentual) || 0, 100))}%`;
+}
+
+function valorOuNull(valor) {
+    const texto = String(valor || '').trim();
+    return texto || null;
+}
+
+function normalizarBusca(valor) {
+    return String(valor || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function escapeHtml(valor) {
+    return String(valor ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function mostrarToast(mensagem, tipo = 'info') {
+    let toast = document.getElementById('contas-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'contas-toast';
+        toast.className = 'contas-toast';
+        toast.style.position = 'fixed';
+        toast.style.right = '24px';
+        toast.style.bottom = '24px';
+        toast.style.zIndex = '1400';
+        toast.style.padding = '12px 16px';
+        toast.style.borderRadius = '6px';
+        toast.style.boxShadow = '0 14px 34px rgba(15, 23, 42, 0.18)';
+        toast.style.fontWeight = '700';
+        document.body.appendChild(toast);
+    }
+
+    toast.textContent = mensagem;
+    toast.style.background = tipo === 'erro' ? '#fee2e2' : '#eff6ff';
+    toast.style.color = tipo === 'erro' ? '#991b1b' : '#1d4ed8';
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(() => toast.remove(), 4200);
+}
+
+window.addEventListener('click', (event) => {
+    document.querySelectorAll('.contas-modal.is-open').forEach((modal) => {
+        if (event.target === modal) {
+            fecharModal(modal.id);
+        }
+    });
+});
