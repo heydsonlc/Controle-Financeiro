@@ -1721,22 +1721,107 @@ body.mobile-view .despesa-valor-principal {
     background: #0051d5;
 }
 
-/* Summary cards - 6 cards em grid responsivo */
+/* Busca e acoes dentro do module-actionbar (despesas) */
+.module-actionbar-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+    width: 100%;
+}
+
+.module-actionbar-filters {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    flex: 1;
+}
+
+.module-actionbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.despesas-busca-group .despesas-search-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: #f5f5f7;
+    border: 1px solid rgba(0,0,0,0.1);
+    border-radius: 7px;
+    padding: 0 8px;
+    height: 32px;
+}
+
+.despesas-busca-group .despesas-search-input {
+    border: none;
+    background: transparent;
+    font-size: 13px;
+    color: #1d1d1f;
+    outline: none;
+    width: 130px;
+}
+
+.module-actionbar .btn-filtros-adv {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 32px;
+    padding: 0 12px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #1d1d1f;
+    background: #f5f5f7;
+    border: 1px solid rgba(0,0,0,0.1);
+    border-radius: 7px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.module-actionbar .btn-filtros-adv:hover {
+    background: #e8e8ea;
+}
+
+.module-actionbar .btn-nova-despesa {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 32px;
+    padding: 0 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    background: #007aff;
+    border: none;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.module-actionbar .btn-nova-despesa:hover {
+    background: #0051d5;
+}
+
+/* Summary cards - 6 cards em linha única compacta */
 .despesas-summary-cards {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-    margin-bottom: 16px;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+    margin-bottom: 14px;
 }
 
 .summary-card {
     background: #ffffff;
     border: 1px solid rgba(0,0,0,0.06);
     border-radius: 10px;
-    padding: 14px 16px;
+    padding: 10px 12px;
     display: flex;
     align-items: flex-start;
-    gap: 10px;
+    gap: 8px;
     transition: box-shadow 0.15s, transform 0.15s;
 }
 
@@ -1746,14 +1831,14 @@ body.mobile-view .despesa-valor-principal {
 }
 
 .summary-card-icon {
-    width: 36px;
-    height: 36px;
-    border-radius: 9px;
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    font-size: 16px;
+    font-size: 13px;
 }
 
 .summary-card-icon.blue { background: rgba(0,122,255,0.1); color: #007aff; }
@@ -1769,16 +1854,16 @@ body.mobile-view .despesa-valor-principal {
 }
 
 .summary-card-label {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 500;
     color: #6e6e73;
     text-transform: uppercase;
     letter-spacing: 0.3px;
-    margin-bottom: 2px;
+    margin-bottom: 1px;
 }
 
 .summary-card-value {
-    font-size: 1.15em;
+    font-size: 1em;
     font-weight: 700;
     color: #1d1d1f;
     letter-spacing: -0.02em;
@@ -1788,7 +1873,7 @@ body.mobile-view .despesa-valor-principal {
 }
 
 .summary-card-sub {
-    font-size: 11px;
+    font-size: 10px;
     color: #86868b;
     margin-top: 1px;
 }
@@ -2188,13 +2273,13 @@ body.mobile-view .despesa-valor-principal {
     }
 
     .despesas-summary-cards {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(3, 1fr);
     }
 }
 
 @media (max-width: 700px) {
     .despesas-summary-cards {
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: repeat(2, 1fr);
     }
 
     .despesas-filters-bar {

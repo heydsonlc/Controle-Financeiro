@@ -38,6 +38,26 @@
                            onkeyup="mascaraMesAno(this)" onchange="aplicarFiltros()"
                            title="Filtrar por mes de competencia">
                 </div>
+                <div class="module-filter-group despesas-busca-group">
+                    <div class="despesas-search-wrapper">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                        </svg>
+                        <input type="search" id="despesas-busca" class="despesas-search-input" placeholder="Buscar..." oninput="filtrarBusca(this.value)" autocomplete="off">
+                    </div>
+                </div>
+            </div>
+            <div class="module-actionbar-actions">
+                <button type="button" class="btn-filtros-adv" onclick="carregarDespesas()" title="Atualizar lista">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/>
+                    </svg>
+                    Atualizar
+                </button>
+                <button type="button" class="btn-nova-despesa" onclick="abrirModal()" aria-label="Nova despesa">
+                    <span aria-hidden="true">+</span>
+                    Nova despesa
+                </button>
             </div>
         </div>
     </div>
@@ -47,35 +67,13 @@
 <div class="container app-content-fluid">
     <main>
 
-        <!-- Page header -->
-        <div class="despesas-page-header">
-            <h1>Gerenciamento de Despesas</h1>
-            <p class="page-subtitle">Composicao mensal por grupo e categoria</p>
-        </div>
+        <!-- Layout 70/30: coluna principal (cards + lista) + sidebar -->
+        <div class="despesas-page-layout">
 
-        <!-- Filter bar compacta com busca e botoes -->
-        <div class="despesas-filters-bar" role="toolbar" aria-label="Acoes rapidas de despesas">
-            <div class="despesas-search-wrapper">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-                </svg>
-                <input type="search" id="despesas-busca" class="despesas-search-input" placeholder="Buscar despesa..." oninput="filtrarBusca(this.value)" autocomplete="off">
-            </div>
+        <!-- Coluna principal -->
+        <section class="despesas-main">
 
-            <button type="button" class="btn-filtros-adv" onclick="carregarDespesas()" title="Atualizar lista">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/>
-                </svg>
-                Atualizar
-            </button>
-
-            <button type="button" class="btn-nova-despesa" onclick="abrirModal()" aria-label="Nova despesa">
-                <span aria-hidden="true">+</span>
-                Nova despesa
-            </button>
-        </div>
-
-        <!-- Cards de resumo (6 cards) -->
+        <!-- Cards de resumo (6 cards compactos) -->
         <div class="despesas-summary-cards" id="summary-cards" aria-label="Resumo financeiro do mes">
             <article class="summary-card">
                 <div class="summary-card-icon blue" aria-hidden="true">
@@ -144,12 +142,8 @@
             </article>
         </div>
 
-        <!-- Layout 70/30: lista principal + sidebar -->
-        <div class="despesas-page-layout">
-
-            <!-- Main: lista agrupada -->
-            <section class="despesas-main">
-                <div class="module-data-section despesas-data-section despesas-list-container">
+        <!-- Lista agrupada -->
+            <div class="module-data-section despesas-data-section despesas-list-container">
                     <div class="section-title-row">
                         <div class="section-title-main">
                             <span class="section-title-icon" aria-hidden="true">
@@ -170,8 +164,9 @@
                     <div class="despesas-lista" id="despesas-lista">
                         <p class="loading">Carregando despesas...</p>
                     </div>
-                </div>
-            </section>
+        </div><!-- /.despesas-list-container -->
+
+        </section><!-- /.despesas-main -->
 
             <!-- Sidebar: composicao mensal -->
             <aside class="despesas-sidebar" aria-label="Composicao mensal e indicadores">
@@ -248,7 +243,7 @@
                 </div>
 
             </aside>
-        </div><!-- .despesas-page-layout -->
+        </div><!-- /.despesas-page-layout -->
 
     </main>
 </div>
