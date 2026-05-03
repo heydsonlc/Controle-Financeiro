@@ -56,17 +56,17 @@ function preencherSelectCartoes() {
 
 async function carregarCategoriasCartaoSelecionado() {
     const cartaoId = document.getElementById('cartao-id').value;
-    const select = document.getElementById('item-agregado-id');
+    const select = document.getElementById('categoria-cartao-id');
     if (!select) return;
 
-    select.innerHTML = '<option value="">Sem categoria</option>';
+    select.innerHTML = '<option value="">Resolver automaticamente</option>';
     if (!cartaoId) return;
 
-    const response = await fetch(`${API_CARTOES}/${cartaoId}/itens`).then(r => r.json()).catch(() => ({ success: false, data: [] }));
+    const response = await fetch(`${API_CARTOES}/${cartaoId}/categorias-limite?ativo=true`).then(r => r.json()).catch(() => ({ success: false, data: [] }));
     if (!response.success) return;
 
     select.innerHTML += (response.data || [])
-        .map(item => `<option value="${item.id}">${escapeHtml(item.nome)}</option>`)
+        .map(item => `<option value="${item.categoria_cartao_id || item.id}">${escapeHtml(item.categoria_cartao_nome || item.nome)}</option>`)
         .join('');
 }
 
@@ -292,7 +292,7 @@ async function salvarRecorrenciaSimples() {
         dia_semana: document.getElementById('dia-semana').value || null,
         meio_pagamento: document.getElementById('meio-pagamento').value || null,
         cartao_id: document.getElementById('cartao-id').value || null,
-        item_agregado_id: document.getElementById('item-agregado-id').value || null
+        categoria_cartao_id: document.getElementById('categoria-cartao-id').value || null
     };
 
     const response = await fetch(id ? `${API_RECORRENCIAS}/${id}` : API_RECORRENCIAS, {
@@ -377,6 +377,10 @@ async function editarRecorrencia(origem, id) {
     document.getElementById('cartao-id').value = item.cartao_id || '';
     alternarFrequencia();
     alternarMeioPagamento();
+    if (item.meio_pagamento === 'cartao' && item.cartao_id) {
+        await carregarCategoriasCartaoSelecionado();
+        document.getElementById('categoria-cartao-id').value = item.categoria_cartao_id || '';
+    }
 }
 
 async function inativarRecorrencia(origem, id) {

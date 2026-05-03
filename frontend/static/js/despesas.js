@@ -47,12 +47,14 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('cartao_id').addEventListener('change', function() {
         const cartaoId = this.value;
         if (cartaoId) {
-            carregarCategoriasCartao(cartaoId);
+            carregarCategoriasCartao(cartaoId).then(() => resolverCategoriaCartaoDespesa());
         } else {
-            const selectCategoria = document.getElementById('item_agregado_id');
-            selectCategoria.innerHTML = '<option value="">Sem categoria</option>';
+            const selectCategoria = document.getElementById('categoria_cartao_id');
+            selectCategoria.innerHTML = '<option value="">Resolver automaticamente</option>';
         }
     });
+
+    document.getElementById('categoria_id').addEventListener('change', resolverCategoriaCartaoDespesa);
 });
 
 async function carregarContasBancariasAtivas() {
@@ -169,7 +171,7 @@ async function carregarCartoes() {
  */
 async function carregarCategoriasCartao(cartaoId) {
     try {
-        const response = await fetch(`/api/cartoes/${cartaoId}/itens`);
+        const response = await fetch(`/api/cartoes/${cartaoId}/categorias-limite?ativo=true`);
         const data = await response.json();
 
         // Aceitar tanto Array direto quanto objeto {success, data}
@@ -180,16 +182,35 @@ async function carregarCategoriasCartao(cartaoId) {
             categoriasList = data.data;
         }
 
-        const selectCategoria = document.getElementById('item_agregado_id');
-        selectCategoria.innerHTML = '<option value="">Sem categoria</option>';
+        const selectCategoria = document.getElementById('categoria_cartao_id');
+        selectCategoria.innerHTML = '<option value="">Resolver automaticamente</option>';
 
         categoriasList.forEach(categoria => {
             if (categoria.ativo) {
-                selectCategoria.innerHTML += `<option value="${categoria.id}">${categoria.nome}</option>`;
+                const categoriaId = categoria.categoria_cartao_id || categoria.id;
+                const nome = categoria.categoria_cartao_nome || categoria.nome;
+                selectCategoria.innerHTML += `<option value="${categoriaId}">${nome}</option>`;
             }
         });
     } catch (error) {
         console.error('Erro ao carregar categorias do cartão:', error);
+    }
+}
+
+async function resolverCategoriaCartaoDespesa() {
+    const cartaoId = document.getElementById('cartao_id')?.value;
+    const categoriaId = document.getElementById('categoria_id')?.value;
+    const selectCategoriaCartao = document.getElementById('categoria_cartao_id');
+    if (!cartaoId || !categoriaId || !selectCategoriaCartao || selectCategoriaCartao.value) return;
+
+    try {
+        const response = await fetch(`/api/categorias-cartao/resolver?categoria_id=${encodeURIComponent(categoriaId)}&cartao_id=${encodeURIComponent(cartaoId)}`);
+        const data = await response.json();
+        if (data.success && data.categoria_cartao_id) {
+            selectCategoriaCartao.value = String(data.categoria_cartao_id);
+        }
+    } catch (error) {
+        console.warn('Erro ao resolver Categoria do Cartao:', error);
     }
 }
 
@@ -1073,8 +1094,10 @@ async function editarDespesa(id) {
                     await carregarCategoriasCartao(despesa.cartao_id);
 
                     // Selecionar a categoria se existir
-                    if (despesa.item_agregado_id) {
-                        document.getElementById('item_agregado_id').value = despesa.item_agregado_id;
+                    if (despesa.categoria_cartao_id) {
+                        document.getElementById('categoria_cartao_id').value = despesa.categoria_cartao_id;
+                    } else {
+                        await resolverCategoriaCartaoDespesa();
                     }
                 }
             } else {
@@ -1159,7 +1182,7 @@ async function salvarDespesa(event) {
 
         if (meioPagamento === 'cartao') {
             const cartaoId = document.getElementById('cartao_id').value;
-            const itemAgregadoId = document.getElementById('item_agregado_id').value;
+            const categoriaCartaoId = document.getElementById('categoria_cartao_id').value;
 
             const cartaoIdNumber = Number(cartaoId);
             if (!Number.isInteger(cartaoIdNumber) || cartaoIdNumber <= 0) {
@@ -1168,10 +1191,10 @@ async function salvarDespesa(event) {
             }
             dados.cartao_id = cartaoIdNumber;
 
-            if (itemAgregadoId) {
-                const itemAgregadoIdNumber = Number(itemAgregadoId);
-                if (Number.isInteger(itemAgregadoIdNumber) && itemAgregadoIdNumber > 0) {
-                    dados.item_agregado_id = itemAgregadoIdNumber;
+            if (categoriaCartaoId) {
+                const categoriaCartaoIdNumber = Number(categoriaCartaoId);
+                if (Number.isInteger(categoriaCartaoIdNumber) && categoriaCartaoIdNumber > 0) {
+                    dados.categoria_cartao_id = categoriaCartaoIdNumber;
                 }
             }
         }
@@ -2083,7 +2106,7 @@ function organizarLancamentosEmBlocos(lancamentos, resumoCartao) {
         const valorLanc = parseFloat(lanc.valor || 0);
         const totalParcelas = parseInt(lanc.total_parcelas || 0);
         const numeroParcela = parseInt(lanc.numero_parcela || 0);
-        const categoriaPrevista = blocos.porCategoria[lanc.item_agregado_id];
+        const categoriaPrevista = blocos.porCategoria[lanc.categoria_cartao_id || lanc.item_agregado_id];
         const isRecorrenteCartao = lanc.is_recorrente === true;  // Lançamento gerado por despesa recorrente
 
         // PARTE 1: Compras Parceladas

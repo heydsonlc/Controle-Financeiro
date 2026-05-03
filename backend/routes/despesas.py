@@ -502,6 +502,7 @@ def criar_despesa():
         if bool(despesa.recorrente) and meio_pagamento == 'cartao':
             cartao_id = _to_int(dados.get('cartao_id'))
             item_agregado_id = _to_int(dados.get('item_agregado_id'))
+            categoria_cartao_id = _to_int(dados.get('categoria_cartao_id'))
 
             # ValidaÃ§Ã£o mÃ­nima de integridade
             if not cartao_id:
@@ -513,10 +514,17 @@ def criar_despesa():
 
             despesa.cartao_id = cartao_id
             despesa.item_agregado_id = item_agregado_id
+            resolucao_cartao = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(
+                cartao_id=cartao_id,
+                categoria_id=despesa.categoria_id,
+                categoria_cartao_id=categoria_cartao_id,
+            )
+            despesa.categoria_cartao_id = resolucao_cartao.get('categoria_cartao_id')
         else:
             # Garantir limpeza para outros meios de pagamento
             despesa.cartao_id = None
             despesa.item_agregado_id = None
+            despesa.categoria_cartao_id = None
 
         try:
             if despesa.recorrente:
@@ -1225,7 +1233,7 @@ def gerar_lancamentos_cartao_recorrente(item_despesa_id, meses_futuros=12, mes_r
         resolucao_cartao = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(
             cartao_id=item.cartao_id,
             categoria_id=item.categoria_id,
-            categoria_cartao_id=None,
+            categoria_cartao_id=item.categoria_cartao_id,
         )
 
         novo = LancamentoAgregado(

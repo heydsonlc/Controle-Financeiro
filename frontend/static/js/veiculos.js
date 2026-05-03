@@ -2493,6 +2493,8 @@ function _renderizarPreviaAtivacao(previa, container) {
     if (!container) return;
     const rec = previa.recorrencia;
     const avisos = previa.avisos || [];
+    const categoriaCartaoSelect = document.getElementById('ativar-mob-categoria-cartao-id');
+    const categoriaCartaoNome = categoriaCartaoSelect?.selectedOptions?.[0]?.textContent?.trim();
     const fmtBrl = v => v != null ? 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '—';
 
     let html = `<div style="border:1px solid #e5e7eb;border-radius:8px;padding:12px;font-size:0.85rem;">`;
@@ -2503,7 +2505,7 @@ function _renderizarPreviaAtivacao(previa, container) {
         html += `<div style="font-weight:500;color:#16a34a;">Recorrência mensal que será criada</div>`;
         html += `<div>${escapeHtml(rec.nome)}</div>`;
         html += `<div>Valor: <strong>${fmtBrl(rec.valor)}</strong></div>`;
-        html += `<div>Categoria do Cartão: ${rec.categoria_cartao_id ? `<strong>ID ${rec.categoria_cartao_id}</strong>` : '<span style="color:#9ca3af;">não configurada</span>'}</div>`;
+        html += `<div>Categoria do Cartão: ${rec.categoria_cartao_id ? `<strong>${escapeHtml(categoriaCartaoNome || rec.categoria_cartao_nome || String(rec.categoria_cartao_id))}</strong>` : '<span style="color:#9ca3af;">não configurada</span>'}</div>`;
         html += `</div>`;
     } else {
         html += `<div style="color:#6b7280;margin-bottom:8px;">Nenhuma recorrência mensal será criada.</div>`;
@@ -2577,7 +2579,7 @@ async function carregarCategoriaCartaoParaMobilidade() {
     if (!selCC) return;
     if (!cartaoId) { selCC.innerHTML = '<option value="">—</option>'; return; }
     try {
-        const r = await fetch(`/api/categoria-cartao/cartao/${cartaoId}/limites`);
+        const r = await fetch(`/api/cartoes/${cartaoId}/categorias-limite?ativo=true`);
         const d = await r.json();
         const itens = d.success ? (d.data || []).filter(l => l.ativo !== false) : [];
         selCC.innerHTML = '<option value="">— Nenhuma —</option>' +
@@ -3094,7 +3096,7 @@ function fecharModalConfirmar() {
 function toggleConfirmarCartao() {
     const meio = document.getElementById('confirmar-meio')?.value;
     const wrap = document.getElementById('wrap-confirmar-cartao');
-    const wrapItem = document.getElementById('wrap-confirmar-item-agregado');
+    const wrapItem = document.getElementById('wrap-confirmar-categoria-cartao');
     if (!wrap) return;
     if (meio === 'cartao') {
         wrap.style.display = '';
@@ -3102,7 +3104,7 @@ function toggleConfirmarCartao() {
     } else {
         wrap.style.display = 'none';
         if (wrapItem) wrapItem.style.display = 'none';
-        const selItem = document.getElementById('confirmar-item-agregado-id');
+        const selItem = document.getElementById('confirmar-categoria-cartao-id');
         if (selItem) selItem.innerHTML = '<option value="">— Nenhuma —</option>';
     }
 }
@@ -3132,9 +3134,9 @@ function preencherSelectCartoes(cartoes) {
         (cartoes || []).map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
 }
 
-async function carregarItensAgregadosCartao(cartaoId) {
-    const wrap = document.getElementById('wrap-confirmar-item-agregado');
-    const sel = document.getElementById('confirmar-item-agregado-id');
+async function carregarCategoriasCartaoConfirmacao(cartaoId) {
+    const wrap = document.getElementById('wrap-confirmar-categoria-cartao');
+    const sel = document.getElementById('confirmar-categoria-cartao-id');
     if (!wrap || !sel) return;
 
     if (!cartaoId) {
@@ -3144,7 +3146,7 @@ async function carregarItensAgregadosCartao(cartaoId) {
     }
 
     try {
-        const resp = await fetch(`${API_CARTOES}/${cartaoId}/itens`);
+        const resp = await fetch(`${API_CARTOES}/${cartaoId}/categorias-limite?ativo=true`);
         const data = await resp.json();
         const itens = (data.success ? (data.data || []) : []).filter(i => i.ativo !== false);
 
@@ -3155,15 +3157,15 @@ async function carregarItensAgregadosCartao(cartaoId) {
         }
 
         sel.innerHTML = '<option value="">— Nenhuma —</option>' +
-            itens.map(i => `<option value="${i.id}">${escapeHtml(i.nome)}</option>`).join('');
+            itens.map(i => `<option value="${i.categoria_cartao_id || i.id}">${escapeHtml(i.categoria_cartao_nome || i.nome)}</option>`).join('');
 
         // Pré-selecionar "Mobilidade" se existir neste cartão
-        const mob = itens.find(i => i.nome.toLowerCase() === 'mobilidade');
-        if (mob) sel.value = String(mob.id);
+        const mob = itens.find(i => (i.categoria_cartao_nome || i.nome || '').toLowerCase() === 'mobilidade');
+        if (mob) sel.value = String(mob.categoria_cartao_id || mob.id);
 
         wrap.style.display = '';
     } catch (e) {
-        console.warn('Itens agregados não carregados:', e.message);
+        console.warn('Categorias do Cartao nao carregadas:', e.message);
         wrap.style.display = 'none';
     }
 }
@@ -3181,11 +3183,11 @@ async function submitConfirmarPrevista() {
     const btn = document.getElementById('btn-confirmar-submit');
     if (btn) btn.disabled = true;
 
-    const itemAgregadoId = document.getElementById('confirmar-item-agregado-id')?.value;
+    const categoriaCartaoId = document.getElementById('confirmar-categoria-cartao-id')?.value;
 
     const payload = { meio_pagamento: meio };
     if (meio === 'cartao' && cartaoId) payload.cartao_id = Number(cartaoId);
-    if (meio === 'cartao' && itemAgregadoId) payload.item_agregado_id = Number(itemAgregadoId);
+    if (meio === 'cartao' && categoriaCartaoId) payload.categoria_cartao_id = Number(categoriaCartaoId);
     if (dataVenc) payload.data_vencimento = dataVenc;
     if (obs) payload.observacao = obs;
     if (_confirmarDadosPrevista?.categoria_id) payload.categoria_id = Number(_confirmarDadosPrevista.categoria_id);

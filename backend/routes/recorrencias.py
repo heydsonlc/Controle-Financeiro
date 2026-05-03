@@ -13,9 +13,11 @@ from sqlalchemy import or_
 
 try:
     from backend.models import db, ItemDespesa, Categoria
+    from backend.services.categoria_cartao_service import CategoriaCartaoService
     from backend.routes.despesas import calcular_competencia, gerar_execucao_despesa_recorrente
 except ImportError:
     from models import db, ItemDespesa, Categoria
+    from services.categoria_cartao_service import CategoriaCartaoService
     from routes.despesas import calcular_competencia, gerar_execucao_despesa_recorrente
 
 
@@ -163,6 +165,8 @@ def _item_to_dict(item):
         'meio_pagamento': item.meio_pagamento,
         'cartao_id': item.cartao_id,
         'item_agregado_id': item.item_agregado_id,
+        'categoria_cartao_id': item.categoria_cartao_id,
+        'categoria_cartao_nome': item.categoria_cartao.nome if item.categoria_cartao else None,
         'ativo': bool(item.ativo),
         'status': 'Ativa' if item.ativo else 'Inativa',
         'data_vencimento': item.data_vencimento.isoformat() if item.data_vencimento else None,
@@ -235,6 +239,19 @@ def criar_recorrencia():
         meio_pagamento = _normalizar_meio_pagamento(dados.get('meio_pagamento'))
         cartao_id = _to_int(dados.get('cartao_id'))
         item_agregado_id = _to_int(dados.get('item_agregado_id'))
+        categoria_cartao_id = _to_int(dados.get('categoria_cartao_id'))
+
+        if meio_pagamento == 'cartao' and cartao_id:
+            resolucao_cartao = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(
+                cartao_id=cartao_id,
+                categoria_id=categoria_id,
+                categoria_cartao_id=categoria_cartao_id,
+            )
+            categoria_cartao_id = resolucao_cartao.get('categoria_cartao_id')
+        else:
+            cartao_id = None
+            item_agregado_id = None
+            categoria_cartao_id = None
 
         item = ItemDespesa(
             nome=nome,
@@ -250,6 +267,7 @@ def criar_recorrencia():
             meio_pagamento=meio_pagamento,
             cartao_id=cartao_id,
             item_agregado_id=item_agregado_id,
+            categoria_cartao_id=categoria_cartao_id,
         )
         db.session.add(item)
         db.session.flush()
@@ -303,8 +321,22 @@ def atualizar_recorrencia(item_id):
             item.cartao_id = _to_int(dados.get('cartao_id'))
         if 'item_agregado_id' in dados:
             item.item_agregado_id = _to_int(dados.get('item_agregado_id'))
+        if 'categoria_cartao_id' in dados:
+            item.categoria_cartao_id = _to_int(dados.get('categoria_cartao_id'))
         if 'ativo' in dados:
             item.ativo = bool(dados.get('ativo'))
+
+        if item.meio_pagamento == 'cartao' and item.cartao_id:
+            resolucao_cartao = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(
+                cartao_id=item.cartao_id,
+                categoria_id=item.categoria_id,
+                categoria_cartao_id=item.categoria_cartao_id,
+            )
+            item.categoria_cartao_id = resolucao_cartao.get('categoria_cartao_id')
+        else:
+            item.cartao_id = None
+            item.item_agregado_id = None
+            item.categoria_cartao_id = None
 
         db.session.commit()
         return jsonify({

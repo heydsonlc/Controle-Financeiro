@@ -245,7 +245,6 @@ class ImportacaoCartaoUnificadoService:
 
     @staticmethod
     def aplicar_sugestoes_categoria(linhas, cartao):
-        categorias_cartao = ItemAgregado.query.filter_by(item_despesa_id=cartao.id, ativo=True).all()
         for linha in linhas:
             if linha.get('tipo_movimento') == 'credito':
                 continue
@@ -261,7 +260,7 @@ class ImportacaoCartaoUnificadoService:
                 linha['categoria_sugerida_origem'] = origem
                 linha['confianca_categoria'] = 'alta' if origem == 'historico' else 'media'
 
-            if not linha.get('categoria_cartao_id') and linha.get('categoria_id'):
+            if linha.get('categoria_id') or linha.get('categoria_cartao_id'):
                 resolucao_cartao = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(
                     cartao_id=cartao.id,
                     categoria_id=linha.get('categoria_id'),
@@ -273,16 +272,19 @@ class ImportacaoCartaoUnificadoService:
                     linha['categoria_cartao_origem'] = resolucao_cartao.get('origem')
                     linha['categoria_cartao_sugerida_id'] = int(categoria_cartao_id)
                     linha['categoria_cartao_sugerida_origem'] = resolucao_cartao.get('origem')
-
-            if not linha.get('item_agregado_id'):
-                item_sugerido, origem_item = ImportacaoCartaoUnificadoService._sugerir_categoria_cartao(
-                    linha,
-                    cartao.id,
-                    categorias_cartao,
-                )
-                if item_sugerido:
-                    linha['item_agregado_id'] = item_sugerido.id
-                    linha['item_agregado_origem'] = origem_item
+                    if resolucao_cartao.get('vinculada_ao_cartao') is False:
+                        linha.setdefault('mensagens', []).append(
+                            'Esta Categoria do Cartao ainda nao possui limite definido neste cartao.'
+                        )
+                elif resolucao_cartao.get('origem') == 'categoria_cartao_nao_vinculada':
+                    linha.setdefault('mensagens', []).append(
+                        'Esta Categoria do Cartao ainda nao possui limite definido neste cartao.'
+                    )
+                    linha['categoria_cartao_origem'] = resolucao_cartao.get('origem')
+                else:
+                    linha.setdefault('mensagens', []).append(
+                        'Categoria do Cartao ainda nao configurada para esta Categoria de Despesa.'
+                    )
         return linhas
 
     @staticmethod
@@ -359,9 +361,8 @@ class ImportacaoCartaoUnificadoService:
                     linha['categoria_cartao_id'] = None
                     mensagens.append('Categoria do cartao global invalida.')
 
-            if not (linha.get('item_agregado_id') or linha.get('categoria_cartao_id')):
-                linha['status'] = 'sem_categoria_cartao'
-                mensagens.append('Informe a categoria do cartao.')
+            if not linha.get('categoria_cartao_id') and not linha.get('item_agregado_id'):
+                mensagens.append('Categoria do Cartao ainda nao configurada para esta Categoria de Despesa.')
 
             if not linha.get('categoria_id') and linha['status'] == 'valido':
                 linha['status'] = 'revisar'
@@ -458,7 +459,13 @@ class ImportacaoCartaoUnificadoService:
             'validas': sum(1 for linha in linhas if linha.get('status') == 'valido'),
             'revisar': sum(1 for linha in linhas if linha.get('status') == 'revisar'),
             'duplicadas': sum(1 for linha in linhas if linha.get('status') == 'duplicado'),
-            'sem_categoria_cartao': sum(1 for linha in linhas if linha.get('status') == 'sem_categoria_cartao'),
+            'sem_categoria_cartao': sum(
+                1 for linha in linhas
+                if linha.get('tipo_movimento') == 'debito'
+                and linha.get('status') not in {'duplicado', 'ignorado'}
+                and not linha.get('categoria_cartao_id')
+                and not linha.get('item_agregado_id')
+            ),
             'total_importavel': round(total_importavel, 2),
             'total_fatura': float(total_fatura or 0),
             'creditos': sum(1 for linha in linhas if linha.get('tipo_movimento') == 'credito'),

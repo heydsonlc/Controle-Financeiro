@@ -135,9 +135,7 @@ def _validar_payload_importacao(data):
         if linha.get('ignorar'):
             continue
         item_agregado_id = linha.get('item_agregado_id')
-        categoria_cartao_id = linha.get('categoria_cartao_id') if not item_agregado_id else None
-        if not (item_agregado_id or categoria_cartao_id):
-            return None, (f'Linha {idx} sem Categoria do Cartao', 400)
+        categoria_cartao_id = linha.get('categoria_cartao_id')
         if item_agregado_id:
             try:
                 item_agregado_id = int(item_agregado_id)
@@ -145,14 +143,21 @@ def _validar_payload_importacao(data):
                 return None, (f'Linha {idx} com Categoria do Cartao invalida', 400)
             if item_agregado_id not in categorias_cartao_ids:
                 return None, (f'Linha {idx} usa Categoria do Cartao que nao pertence ao cartao selecionado', 400)
-        elif categoria_cartao_id:
+            linha['item_agregado_id'] = item_agregado_id
+        if categoria_cartao_id:
             try:
                 categoria_cartao_id = int(categoria_cartao_id)
             except (TypeError, ValueError):
                 return None, (f'Linha {idx} com Categoria do Cartao global invalida', 400)
             if not CategoriaCartaoService.validar_categoria_cartao_disponivel_no_cartao(cartao_id, categoria_cartao_id):
-                return None, (f'Linha {idx} usa Categoria do Cartao global nao vinculada ao cartao selecionado', 400)
+                linha.setdefault('avisos', []).append(
+                    'Esta Categoria do Cartao ainda nao possui limite definido neste cartao.'
+                )
             linha['categoria_cartao_id'] = categoria_cartao_id
+        elif not item_agregado_id:
+            linha.setdefault('avisos', []).append(
+                'Categoria do Cartao ainda nao configurada para esta Categoria de Despesa.'
+            )
 
     try:
         competencia = datetime.strptime(competencia_str, '%Y-%m-%d').date().replace(day=1)
@@ -280,11 +285,21 @@ def listar_categorias():
 
 @bp.route('/categorias-cartao/<int:cartao_id>', methods=['GET'])
 def listar_categorias_cartao(cartao_id):
-    """Lista categorias agregadas do cartão (opcionais)"""
-    itens = ItemAgregado.query.filter_by(item_despesa_id=cartao_id, ativo=True).all()
+    limites = CategoriaCartaoService.listar_limites_cartao(cartao_id, ativo=True)
+    categorias = []
+    for limite in limites:
+        categoria = limite.categoria_cartao
+        if not categoria or not categoria.ativo:
+            continue
+        item = categoria.to_dict()
+        item['limite_id'] = limite.id
+        item['limite_mensal'] = float(limite.limite_mensal or 0)
+        item['categoria_cartao_id'] = categoria.id
+        categorias.append(item)
     return jsonify({
         'success': True,
-        'categorias_cartao': [item.to_dict() for item in itens]
+        'categorias_cartao': categorias,
+        'data': categorias
     })
 
 

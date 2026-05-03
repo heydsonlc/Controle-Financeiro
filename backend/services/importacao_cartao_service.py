@@ -419,7 +419,7 @@ class ImportacaoCartaoService:
             parcela_str = linha.get('parcela', '1/1')  # Opcional
             categoria_id = linha.get('categoria_id')
             item_agregado_id = linha.get('item_agregado_id')  # Opcional
-            categoria_cartao_id = linha.get('categoria_cartao_id') if not item_agregado_id else None
+            categoria_cartao_id = linha.get('categoria_cartao_id')
             origem_importacao = linha.get('origem_importacao') or 'csv'
 
             # Validar obrigatÃ³rios
