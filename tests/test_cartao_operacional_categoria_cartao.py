@@ -16,6 +16,8 @@ from backend.services.cartao_service import CartaoService
 from backend.services.categoria_cartao_service import CategoriaCartaoService
 from backend.services.despesa_prevista_service import confirmar
 from backend.services.importacao_cartao_service import ImportacaoCartaoService
+from backend.routes.importacao_cartao import bp as importacao_cartao_bp
+from backend.routes.recorrencias import recorrencias_bp
 from backend.routes.despesas import gerar_execucao_despesa_recorrente
 
 
@@ -28,6 +30,8 @@ def app_context():
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
     )
     db.init_app(app)
+    app.register_blueprint(importacao_cartao_bp)
+    app.register_blueprint(recorrencias_bp, url_prefix='/api/recorrencias')
 
     with app.app_context():
         db.create_all()
@@ -96,6 +100,22 @@ def test_importacao_resolve_categoria_cartao_por_categoria_id(app_context):
     assert resultado['lancamentos'][0]['categoria_cartao_id'] == categoria_cartao.id
 
 
+def test_resolucao_operacional_service_retorna_categoria_cartao_com_limite(app_context):
+    categoria, _extra, cartao = _base_cartao()
+    categoria_cartao = _mapear_e_vincular(cartao, categoria)
+
+    resultado = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(
+        cartao_id=cartao.id,
+        categoria_id=categoria.id,
+    )
+
+    assert resultado == {
+        'categoria_cartao_id': categoria_cartao.id,
+        'origem': 'mapa_categoria_despesa',
+        'vinculada_ao_cartao': True,
+    }
+
+
 def test_importacao_preserva_categoria_cartao_manual(app_context):
     categoria, _extra, cartao = _base_cartao()
     mobilidade = _mapear_e_vincular(cartao, categoria, _categoria_cartao('Mobilidade'))
@@ -127,6 +147,27 @@ def test_importacao_sem_mapa_nao_quebra(app_context):
     assert resultado['lancamentos'][0]['categoria_cartao_id'] is None
 
 
+def test_importacao_endpoint_processa_sem_item_agregado_e_persiste_categoria_cartao(app_context):
+    categoria, _extra, cartao = _base_cartao()
+    categoria_cartao = _mapear_e_vincular(cartao, categoria)
+
+    with app_context.test_client() as client:
+        response = client.post('/api/importacao-cartao/processar', json={
+            'cartao_id': cartao.id,
+            'competencia': '2026-05-01',
+            'linhas': [_linha_importacao(categoria.id)],
+        })
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['success'] is True
+    assert data['inseridos'] == 1
+
+    lancamento = LancamentoAgregado.query.one()
+    assert lancamento.item_agregado_id is None
+    assert lancamento.categoria_cartao_id == categoria_cartao.id
+
+
 def test_lancamento_manual_cartao_grava_categoria_cartao_id(app_context):
     categoria, _extra, cartao = _base_cartao()
     categoria_cartao = _mapear_e_vincular(cartao, categoria)
@@ -141,6 +182,41 @@ def test_lancamento_manual_cartao_grava_categoria_cartao_id(app_context):
     })
 
     assert lancamento.categoria_cartao_id == categoria_cartao.id
+    assert lancamento.item_agregado_id is None
+
+
+def test_lancamento_manual_sem_categoria_cartao_configurada_nao_quebra(app_context):
+    categoria, _extra, cartao = _base_cartao()
+
+    lancamento, _fatura = CartaoService.adicionar_lancamento({
+        'cartao_id': cartao.id,
+        'categoria_id': categoria.id,
+        'descricao': 'Posto sem mapa',
+        'valor': 120,
+        'data_compra': date(2026, 5, 1),
+        'mes_fatura': date(2026, 5, 1),
+    })
+
+    assert lancamento.categoria_cartao_id is None
+    assert lancamento.item_agregado_id is None
+
+
+def test_lancamento_manual_categoria_cartao_nao_vinculada_nao_quebra(app_context):
+    categoria, _extra, cartao = _base_cartao()
+    categoria_cartao = _categoria_cartao('Mobilidade')
+    CategoriaCartaoService.vincular_categoria_despesa(categoria_cartao.id, categoria.id)
+    db.session.commit()
+
+    lancamento, _fatura = CartaoService.adicionar_lancamento({
+        'cartao_id': cartao.id,
+        'categoria_id': categoria.id,
+        'descricao': 'Posto sem limite',
+        'valor': 120,
+        'data_compra': date(2026, 5, 1),
+        'mes_fatura': date(2026, 5, 1),
+    })
+
+    assert lancamento.categoria_cartao_id is None
     assert lancamento.item_agregado_id is None
 
 
@@ -204,6 +280,34 @@ def test_recorrencia_manual_cartao_repassa_categoria_cartao_id(app_context):
 
     assert len(lancamentos) == 1
     assert lancamentos[0].categoria_cartao_id == categoria_cartao.id
+
+
+def test_recorrencia_criada_via_api_resolve_categoria_cartao_sem_manual(app_context):
+    categoria, _extra, cartao = _base_cartao()
+    categoria_cartao = _mapear_e_vincular(cartao, categoria)
+
+    with app_context.test_client() as client:
+        response = client.post('/api/recorrencias', json={
+            'nome': 'Combustivel recorrente',
+            'valor': '90.00',
+            'categoria_id': categoria.id,
+            'data_vencimento': '2026-05-01',
+            'tipo_recorrencia': 'mensal',
+            'meio_pagamento': 'cartao',
+            'cartao_id': cartao.id,
+        })
+
+    assert response.status_code == 201
+    data = response.get_json()
+    assert data['success'] is True
+    assert data['data']['categoria_cartao_id'] == categoria_cartao.id
+
+    recorrencia = ItemDespesa.query.filter_by(nome='Combustivel recorrente').one()
+    lancamento = LancamentoAgregado.query.filter_by(item_despesa_id=recorrencia.id).one()
+    assert recorrencia.item_agregado_id is None
+    assert recorrencia.categoria_cartao_id == categoria_cartao.id
+    assert lancamento.item_agregado_id is None
+    assert lancamento.categoria_cartao_id == categoria_cartao.id
 
 
 def test_ausencia_categoria_cartao_nao_impede_confirmacao(app_context):
