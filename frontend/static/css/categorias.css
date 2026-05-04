@@ -3,7 +3,7 @@
 .categorias-page {
     display: flex;
     flex-direction: row;
-    align-items: flex-start;
+    align-items: stretch;
     gap: 16px;
     color: #111827;
 }
@@ -16,8 +16,12 @@
 .categorias-summary-sidebar {
     flex-shrink: 0;
     width: 220px;
-    position: sticky;
-    top: 16px;
+    display: flex;
+    flex-direction: column;
+}
+
+.categorias-summary-sidebar .categorias-summary {
+    flex: 1;
 }
 
 .categorias-hero {
@@ -79,6 +83,7 @@
     text-align: left;
     border-right: none;
     border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    flex: 1;
 }
 
 .summary-item:last-child {
