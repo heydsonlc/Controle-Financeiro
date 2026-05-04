@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Lançamentos - Controle Financeiro{% endblock %}
+{% block title %}Lan&ccedil;amentos - Controle Financeiro{% endblock %}
 
 {% block extra_css %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/lancamentos.css') }}">
@@ -14,9 +14,9 @@
                     <label class="module-filter-label" for="filtro-tipo">Tipo</label>
                     <select class="module-filter-control" id="filtro-tipo">
                         <option value="">Todos os tipos</option>
-                        <option value="cartao">Cart&atilde;o de Cr&eacute;dito</option>
-                        <option value="direto">Despesa Direta</option>
-                        <option value="credito">Entrada / Cr&eacute;dito</option>
+                        <option value="cartao">Cart&atilde;o</option>
+                        <option value="direto">Despesa direta</option>
+                        <option value="credito">Entrada / cr&eacute;dito</option>
                     </select>
                 </div>
                 <div class="module-filter-group filter-item">
@@ -35,16 +35,58 @@
                         <option value="">Todas as categorias</option>
                     </select>
                 </div>
+                <div class="module-filter-group filter-item">
+                    <label class="module-filter-label" for="filtro-status">Status</label>
+                    <select class="module-filter-control" id="filtro-status">
+                        <option value="">Todos os status</option>
+                        <option value="pendente">Pendente</option>
+                        <option value="confirmado">Confirmado</option>
+                        <option value="pago">Pago</option>
+                    </select>
+                </div>
+                <div class="module-filter-group filter-item lancamentos-search">
+                    <label class="module-filter-label" for="filtro-busca">Busca</label>
+                    <div class="module-search-control">
+                        <input class="module-filter-control" type="search" id="filtro-busca" placeholder="Pesquisar descri&ccedil;&atilde;o, categoria...">
+                        <span class="module-search-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false">
+                                <path d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z"/>
+                                <path d="m16 16 5 5"/>
+                            </svg>
+                        </span>
+                    </div>
+                </div>
             </div>
 
             <div class="module-actionbar-actions">
+                <button class="action-icon-button" type="button" onclick="carregarLancamentos()" title="Atualizar" aria-label="Atualizar">
+                    <span class="action-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 12a9 9 0 0 1-15.5 6.2"/>
+                            <path d="M3 12A9 9 0 0 1 18.5 5.8"/>
+                            <path d="M18 3v4h-4"/>
+                            <path d="M6 21v-4h4"/>
+                        </svg>
+                    </span>
+                    <span class="action-button-label">Atualizar</span>
+                </button>
+                <button class="action-icon-button" type="button" onclick="aplicarFiltros()" title="Filtros" aria-label="Filtros">
+                    <span class="action-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4 6h16"/>
+                            <path d="M7 12h10"/>
+                            <path d="M10 18h4"/>
+                        </svg>
+                    </span>
+                    <span class="action-button-label">Filtros</span>
+                </button>
                 <button class="action-icon-button primary" id="btn-novo-lancamento" type="button" onclick="abrirModalLancamento()" title="Novo Lan&ccedil;amento" aria-label="Novo Lan&ccedil;amento">
                     <span class="action-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M12 5v14M5 12h14"/>
                         </svg>
                     </span>
-                    <span class="action-button-label">Novo Lan&ccedil;amento</span>
+                    <span class="action-button-label">Novo lan&ccedil;amento</span>
                 </button>
             </div>
         </div>
@@ -52,244 +94,266 @@
 {% endblock %}
 
 {% block content %}
-    <div class="container app-content-fluid">
-        <main>
-
-        <!-- Receitas Pendentes -->
-        <section class="receitas-pendentes-section module-data-section">
-            <div class="section-title-row">
-                <div class="section-title-main">
-                    <span class="section-title-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" focusable="false">
-                            <path d="M4 7h16"/>
-                            <path d="M4 12h16"/>
-                            <path d="M4 17h10"/>
-                        </svg>
-                    </span>
-                    <h2 class="section-title-text">Receitas Pendentes de Confirma&ccedil;&atilde;o</h2>
+    <div class="container app-content-fluid lancamentos-page">
+        <section class="lanc-summary-grid" aria-label="Resumo de lancamentos">
+            <article class="lanc-summary-card summary-entry">
+                <span class="lanc-summary-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M12 19V5"/><path d="m6 11 6-6 6 6"/></svg></span>
+                <div>
+                    <span class="lanc-summary-label">Entradas no m&ecirc;s</span>
+                    <strong id="lanc-kpi-entradas-valor">R$ 0,00</strong>
+                    <small id="lanc-kpi-entradas-qtd">0 lan&ccedil;amentos</small>
                 </div>
-                <p class="section-title-meta section-subtitle">Confirme o recebimento das receitas previstas para este m&ecirc;s</p>
-            </div>
-
-            <div id="lista-receitas-pendentes" class="receitas-pendentes-grid">
-                <!-- Receitas pendentes serão renderizadas aqui -->
-            </div>
+            </article>
+            <article class="lanc-summary-card summary-exit">
+                <span class="lanc-summary-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M12 5v14"/><path d="m6 13 6 6 6-6"/></svg></span>
+                <div>
+                    <span class="lanc-summary-label">Sa&iacute;das no m&ecirc;s</span>
+                    <strong id="lanc-kpi-saidas-valor">R$ 0,00</strong>
+                    <small id="lanc-kpi-saidas-qtd">0 lan&ccedil;amentos</small>
+                </div>
+            </article>
+            <article class="lanc-summary-card summary-pending">
+                <span class="lanc-summary-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="9"/></svg></span>
+                <div>
+                    <span class="lanc-summary-label">Pendentes</span>
+                    <strong id="lanc-kpi-pendentes-valor">R$ 0,00</strong>
+                    <small id="lanc-kpi-pendentes-qtd">0 lan&ccedil;amentos</small>
+                </div>
+            </article>
+            <article class="lanc-summary-card summary-confirmed">
+                <span class="lanc-summary-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M5 12.5 9 16l10-9"/></svg></span>
+                <div>
+                    <span class="lanc-summary-label">Confirmados</span>
+                    <strong id="lanc-kpi-confirmados-valor">R$ 0,00</strong>
+                    <small id="lanc-kpi-confirmados-qtd">0 lan&ccedil;amentos</small>
+                </div>
+            </article>
+            <article class="lanc-summary-card summary-balance">
+                <span class="lanc-summary-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M4 7h16v10H4z"/><path d="M8 12h.1M16 12h.1"/></svg></span>
+                <div>
+                    <span class="lanc-summary-label">Saldo do per&iacute;odo</span>
+                    <strong id="lanc-kpi-saldo-valor">R$ 0,00</strong>
+                    <small id="lanc-kpi-saldo-sub">Entradas - sa&iacute;das</small>
+                </div>
+            </article>
         </section>
 
-        <!-- Lista de Lançamentos -->
-        <section class="lancamentos-section module-data-section">
-            <div class="section-title-row">
-                <div class="section-title-main">
-                    <span class="section-title-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" focusable="false">
-                            <path d="M8 6h13"/>
-                            <path d="M8 12h13"/>
-                            <path d="M8 18h13"/>
-                            <path d="M3 6h.01"/>
-                            <path d="M3 12h.01"/>
-                            <path d="M3 18h.01"/>
-                        </svg>
-                    </span>
-                    <h2 class="section-title-text">Hist&oacute;rico de Lan&ccedil;amentos</h2>
-                </div>
-                <div class="resumo-mes section-title-meta">
-                    <span class="resumo-label">Total do mês:</span>
-                    <span class="resumo-valor" id="total-mes">R$ 0,00</span>
-                </div>
-            </div>
+        <div class="lancamentos-layout">
+            <main class="lancamentos-main-stack">
+                <section class="receitas-pendentes-section module-data-section">
+                    <div class="section-title-row">
+                        <div class="section-title-main">
+                            <span class="section-title-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="9"/></svg></span>
+                            <h2 class="section-title-text">Receitas pendentes de confirma&ccedil;&atilde;o</h2>
+                        </div>
+                        <a class="section-link" href="/receitas">Ver todas as receitas</a>
+                    </div>
+                    <div id="lista-receitas-pendentes" class="receitas-pendentes-grid">
+                        <!-- Receitas pendentes serao renderizadas aqui -->
+                    </div>
+                </section>
 
-            <div id="lista-lancamentos" class="lancamentos-grid">
-                <!-- Lançamentos serão renderizados aqui -->
-            </div>
-        </section>
-    </main>
+                <section class="lancamentos-section module-data-section">
+                    <div class="section-title-row">
+                        <div class="section-title-main">
+                            <span class="section-title-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg></span>
+                            <h2 class="section-title-text">Hist&oacute;rico de lan&ccedil;amentos</h2>
+                        </div>
+                        <div class="resumo-mes section-title-meta">
+                            <span class="resumo-label">Total do m&ecirc;s:</span>
+                            <span class="resumo-valor" id="total-mes">R$ 0,00</span>
+                        </div>
+                    </div>
+                    <div id="lista-lancamentos" class="lancamentos-grid">
+                        <!-- Lancamentos serao renderizados aqui -->
+                    </div>
+                </section>
+            </main>
 
-    <!-- Modal: Novo Lançamento -->
-    <div id="modal-lancamento" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="modal-lancamento-titulo">Novo Lançamento</h2>
-                <span class="close" onclick="fecharModal('modal-lancamento')">&times;</span>
-            </div>
-
-            <form id="form-lancamento" onsubmit="salvarLancamento(event)">
-                <input type="hidden" id="lancamento-id">
-
-                <div class="form-group">
-                    <label for="lancamento-tipo">Tipo de Lançamento *</label>
-                    <select id="lancamento-tipo" required onchange="alternarTipoLancamento()">
-                        <option value="">Selecione o tipo...</option>
-                        <option value="cartao">Cartão de Crédito (Despesa)</option>
-                        <option value="direto">Despesa Direta (Débito, Dinheiro, PIX)</option>
-                        <option value="credito">Entrada/Crédito (Receita Pontual)</option>
-                    </select>
-                </div>
-
-                <!-- Campos para Cartão de Crédito -->
-                <div id="campos-cartao" style="display: none;">
-                    <div class="form-group">
-                        <label for="lancamento-cartao">Cartão de Crédito *</label>
-                        <select id="lancamento-cartao" onchange="carregarCategoriasPorCartao()">
-                            <option value="">Selecione um cartão...</option>
-                        </select>
+            <aside class="lancamentos-side-stack" aria-label="Painel operacional de lancamentos">
+                <section class="lanc-side-card lanc-form-panel" id="painel-novo-lancamento">
+                    <div class="lanc-side-card-header">
+                        <div class="section-title-main">
+                            <span class="section-title-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M4 7h16v10H4z"/><path d="M12 5v14"/><path d="M5 12h14"/></svg></span>
+                            <h2 class="section-title-text" id="modal-lancamento-titulo">Novo lan&ccedil;amento</h2>
+                        </div>
                     </div>
 
-                    <div class="form-group">
-                        <label for="lancamento-categoria-despesa-cartao">Categoria da Despesa *</label>
-                        <select id="lancamento-categoria-despesa-cartao">
-                            <option value="">Selecione uma categoria...</option>
-                        </select>
-                        <small style="color: #6e6e73; font-size: 12px; display: block; margin-top: 5px;">
-                            Categoria para análise de gastos (Alimentação, Transporte, etc.)
-                        </small>
+                    <form id="form-lancamento" onsubmit="salvarLancamento(event)">
+                        <input type="hidden" id="lancamento-id">
+
+                        <div class="form-group">
+                            <label for="lancamento-tipo">Tipo de lan&ccedil;amento *</label>
+                            <select id="lancamento-tipo" required onchange="alternarTipoLancamento()">
+                                <option value="">Selecione o tipo...</option>
+                                <option value="cartao">Cart&atilde;o de cr&eacute;dito</option>
+                                <option value="direto">Despesa direta</option>
+                                <option value="credito">Entrada / cr&eacute;dito</option>
+                            </select>
+                        </div>
+
+                        <div id="campos-cartao" style="display: none;">
+                            <div class="form-group">
+                                <label for="lancamento-cartao">Cart&atilde;o de cr&eacute;dito *</label>
+                                <select id="lancamento-cartao" onchange="carregarCategoriasPorCartao()">
+                                    <option value="">Selecione um cart&atilde;o...</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="lancamento-categoria-despesa-cartao">Categoria da despesa *</label>
+                                <select id="lancamento-categoria-despesa-cartao">
+                                    <option value="">Selecione uma categoria...</option>
+                                </select>
+                                <small>Categoria para an&aacute;lise de gastos.</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="lancamento-categoria-cartao">Categoria do cart&atilde;o</label>
+                                <select id="lancamento-categoria-cartao" disabled>
+                                    <option value="">Selecione um cart&atilde;o primeiro...</option>
+                                </select>
+                                <small>Opcional para controle de limite.</small>
+                            </div>
+                        </div>
+
+                        <div id="campos-direto" style="display: none;">
+                            <div class="form-group">
+                                <label for="lancamento-categoria-geral">Categoria *</label>
+                                <select id="lancamento-categoria-geral">
+                                    <option value="">Selecione uma categoria...</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="lanc-checkbox-label">
+                                    <input type="checkbox" id="lancamento-pago">
+                                    <span>Despesa j&aacute; foi paga?</span>
+                                </label>
+                                <small>Quando marcado, aparece como paga no hist&oacute;rico.</small>
+                            </div>
+                        </div>
+
+                        <div id="campos-credito" style="display: none;">
+                            <div class="form-group">
+                                <label for="lancamento-conta-bancaria">Conta banc&aacute;ria de destino *</label>
+                                <select id="lancamento-conta-bancaria">
+                                    <option value="">Selecione uma conta...</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="lancamento-descricao">Descri&ccedil;&atilde;o *</label>
+                            <input type="text" id="lancamento-descricao" required placeholder="Ex: Compras no supermercado">
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="lancamento-valor">Valor *</label>
+                                <input type="number" id="lancamento-valor" required step="0.01" min="0" placeholder="0,00">
+                            </div>
+                            <div class="form-group">
+                                <label for="lancamento-data">Data da compra *</label>
+                                <input type="date" id="lancamento-data" required>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="lancamento-parcelas">Parcelas</label>
+                                <input type="number" id="lancamento-parcelas" min="1" max="48" value="1" placeholder="1">
+                            </div>
+                            <div class="form-group">
+                                <label for="lancamento-mes-fatura">M&ecirc;s da fatura *</label>
+                                <input type="month" id="lancamento-mes-fatura">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="lancamento-observacoes">Observa&ccedil;&otilde;es</label>
+                            <textarea id="lancamento-observacoes" rows="3" maxlength="200" placeholder="Observa&ccedil;&otilde;es adicionais (opcional)"></textarea>
+                            <small class="lanc-char-count">0/200</small>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-secondary" onclick="cancelarLancamentoInline()">Cancelar</button>
+                            <button type="submit" class="btn btn-primary">Salvar lan&ccedil;amento</button>
+                        </div>
+                    </form>
+                </section>
+
+                <section class="lanc-side-card" aria-label="Composicao por tipo">
+                    <div class="lanc-side-card-header">
+                        <h2 class="section-title-text">Composi&ccedil;&atilde;o por tipo</h2>
+                        <span class="section-title-icon info" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg></span>
                     </div>
-
-                    <div class="form-group">
-                        <label for="lancamento-categoria-cartao">Categoria do Cartão (opcional)</label>
-                        <select id="lancamento-categoria-cartao" disabled>
-                            <option value="">Selecione um cartão primeiro...</option>
-                        </select>
-                        <small style="color: #6e6e73; font-size: 12px; display: block; margin-top: 5px;">
-                            Categoria para controle de limite do cartão (Supermercado, Farmácia, etc.)
-                        </small>
+                    <div class="lanc-composition">
+                        <div id="lanc-composicao-donut" class="lanc-donut" style="--entrada: 0%; --saida: 0%;">
+                            <span id="lanc-comp-total-label">0%</span>
+                        </div>
+                        <div class="lanc-composition-list">
+                            <div><span><i class="dot entrada"></i>Entradas</span><strong id="lanc-comp-entradas-valor">R$ 0,00</strong><em id="lanc-comp-entradas-pct">0%</em></div>
+                            <div><span><i class="dot saida"></i>Sa&iacute;das</span><strong id="lanc-comp-saidas-valor">R$ 0,00</strong><em id="lanc-comp-saidas-pct">0%</em></div>
+                            <div class="total"><span>Total</span><strong id="lanc-comp-total-valor">R$ 0,00</strong><em>100%</em></div>
+                        </div>
                     </div>
-                </div>
+                    <p id="lanc-comp-empty" class="lanc-side-empty">Sem dados suficientes para composi&ccedil;&atilde;o.</p>
+                </section>
 
-                <!-- Campos para Despesa Direta -->
-                <div id="campos-direto" style="display: none;">
-                    <div class="form-group">
-                        <label for="lancamento-categoria-geral">Categoria *</label>
-                        <select id="lancamento-categoria-geral">
-                            <option value="">Selecione uma categoria...</option>
-                        </select>
+                <section class="lanc-side-card" aria-label="Resumo do periodo">
+                    <div class="lanc-side-card-header">
+                        <h2 class="section-title-text">Resumo do per&iacute;odo</h2>
                     </div>
-
-                    <div class="form-group">
-                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                            <input type="checkbox" id="lancamento-pago" style="width: auto; margin: 0;">
-                            <span>Despesa já foi paga?</span>
-                        </label>
-                        <small style="color: #6e6e73; font-size: 12px; display: block; margin-top: 5px;">
-                            Se marcado, a despesa aparece como "Paga" no histórico. Se não, aparece como "Pendente".
-                        </small>
-                    </div>
-                </div>
-
-                <!-- Campos para Entrada/Crédito -->
-                <div id="campos-credito" style="display: none;">
-                    <div class="form-group">
-                        <label for="lancamento-conta-bancaria">Conta Bancária de Destino *</label>
-                        <select id="lancamento-conta-bancaria">
-                            <option value="">Selecione uma conta...</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label for="lancamento-descricao">Descrição *</label>
-                    <input type="text" id="lancamento-descricao" required
-                           placeholder="Ex: Compras no supermercado">
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="lancamento-valor">Valor *</label>
-                        <input type="number" id="lancamento-valor" required
-                               step="0.01" min="0" placeholder="0,00">
-                    </div>
-
-                    <div class="form-group">
-                        <label for="lancamento-data">Data da Compra *</label>
-                        <input type="date" id="lancamento-data" required>
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="lancamento-parcelas">Parcelas</label>
-                        <input type="number" id="lancamento-parcelas"
-                               min="1" max="48" value="1" placeholder="1">
-                    </div>
-
-                    <div class="form-group">
-                        <label for="lancamento-mes-fatura">Mês da Fatura *</label>
-                        <input type="month" id="lancamento-mes-fatura">
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label for="lancamento-observacoes">Observações</label>
-                    <textarea id="lancamento-observacoes" rows="2"
-                              placeholder="Observações adicionais (opcional)"></textarea>
-                </div>
-
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="fecharModal('modal-lancamento')">
-                        Cancelar
-                    </button>
-                    <button type="submit" class="btn btn-primary">
-                        Salvar Lançamento
-                    </button>
-                </div>
-            </form>
+                    <dl class="lanc-period-summary">
+                        <div><dt>Maior entrada</dt><dd class="positive" id="lanc-maior-entrada">R$ 0,00</dd></div>
+                        <div><dt>Maior sa&iacute;da</dt><dd class="negative" id="lanc-maior-saida">R$ 0,00</dd></div>
+                        <div><dt>M&eacute;dia de gastos di&aacute;rios</dt><dd id="lanc-media-diaria">R$ 0,00</dd></div>
+                        <div><dt>Total de lan&ccedil;amentos</dt><dd id="lanc-total-lancamentos">0</dd></div>
+                    </dl>
+                </section>
+            </aside>
         </div>
-    </div>
 
-    <!-- Modal: Confirmar Recebimento de Receita -->
-    <div id="modal-confirmar-receita" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Confirmar Recebimento de Receita</h2>
-                <span class="close" onclick="fecharModal('modal-confirmar-receita')">&times;</span>
+        <div id="modal-confirmar-receita" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Confirmar recebimento de receita</h2>
+                    <span class="close" onclick="fecharModal('modal-confirmar-receita')">&times;</span>
+                </div>
+
+                <form id="form-confirmar-receita" onsubmit="confirmarRecebimento(event)">
+                    <input type="hidden" id="receita-item-id">
+                    <input type="hidden" id="receita-orcamento-id">
+
+                    <div class="form-group">
+                        <label for="receita-nome">Fonte de receita</label>
+                        <input type="text" id="receita-nome" disabled class="input-readonly">
+                    </div>
+                    <div class="form-group">
+                        <label for="receita-valor-previsto">Valor previsto</label>
+                        <input type="text" id="receita-valor-previsto" disabled class="input-readonly">
+                    </div>
+                    <div class="form-group">
+                        <label for="receita-data-recebimento">Data de recebimento *</label>
+                        <input type="date" id="receita-data-recebimento" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="receita-valor-recebido">Valor recebido *</label>
+                        <input type="number" id="receita-valor-recebido" required step="0.01" min="0" placeholder="0,00">
+                    </div>
+                    <div class="form-group">
+                        <label for="receita-observacoes">Observa&ccedil;&otilde;es</label>
+                        <textarea id="receita-observacoes" rows="2" placeholder="Observa&ccedil;&otilde;es sobre o recebimento (opcional)"></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" onclick="fecharModal('modal-confirmar-receita')">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Confirmar recebimento</button>
+                    </div>
+                </form>
             </div>
-
-            <form id="form-confirmar-receita" onsubmit="confirmarRecebimento(event)">
-                <input type="hidden" id="receita-item-id">
-                <input type="hidden" id="receita-orcamento-id">
-
-                <div class="form-group">
-                    <label for="receita-nome">Fonte de Receita</label>
-                    <input type="text" id="receita-nome" disabled class="input-readonly">
-                </div>
-
-                <div class="form-group">
-                    <label for="receita-valor-previsto">Valor Previsto</label>
-                    <input type="text" id="receita-valor-previsto" disabled class="input-readonly">
-                </div>
-
-                <div class="form-group">
-                    <label for="receita-data-recebimento">Data de Recebimento *</label>
-                    <input type="date" id="receita-data-recebimento" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="receita-valor-recebido">Valor Recebido *</label>
-                    <input type="number" id="receita-valor-recebido" required
-                           step="0.01" min="0" placeholder="0,00">
-                </div>
-
-                <div class="form-group">
-                    <label for="receita-observacoes">Observações</label>
-                    <textarea id="receita-observacoes" rows="2"
-                              placeholder="Observações sobre o recebimento (opcional)"></textarea>
-                </div>
-
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="fecharModal('modal-confirmar-receita')">
-                        Cancelar
-                    </button>
-                    <button type="submit" class="btn btn-primary">
-                        Confirmar Recebimento
-                    </button>
-                </div>
-            </form>
         </div>
-    </div>
-        </main>
     </div>
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='js/utils.js') }}?v=2025011801"></script>
+    <script src="{{ url_for('static', filename='js/utils.js') }}?v=2025011801"></script>
     <script src="{{ url_for('static', filename='js/lancamentos.js') }}?v=2025010101"></script>
 {% endblock %}

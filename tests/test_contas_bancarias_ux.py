@@ -70,7 +70,7 @@ def test_rota_principal_renderiza_layout_ux(client):
     assert response.status_code == 200
     html = response.get_data(as_text=True)
     assert 'Contas Bancárias' in html
-    assert 'Gerencie suas contas bancárias e acompanhe os saldos.' in html
+    assert 'module-actionbar' in html
     assert 'Saldo total em contas' in html
     assert 'Contas bancárias' in html
     assert 'Nova Conta Bancária' in html

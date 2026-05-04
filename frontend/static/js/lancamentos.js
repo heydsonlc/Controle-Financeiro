@@ -86,6 +86,14 @@ function inicializarFiltros() {
     document.getElementById('filtro-mes').addEventListener('change', aplicarFiltros);
     document.getElementById('filtro-cartao').addEventListener('change', aplicarFiltros);
     document.getElementById('filtro-categoria').addEventListener('change', aplicarFiltros);
+    document.getElementById('filtro-status')?.addEventListener('change', aplicarFiltros);
+    document.getElementById('filtro-busca')?.addEventListener('input', aplicarFiltros);
+
+    const campoObservacoes = document.getElementById('lancamento-observacoes');
+    campoObservacoes?.addEventListener('input', () => {
+        const contador = document.querySelector('.lanc-char-count');
+        if (contador) contador.textContent = `${campoObservacoes.value.length}/200`;
+    });
 }
 
 function ajustarVisibilidadeFiltros() {
@@ -373,6 +381,8 @@ function aplicarFiltros() {
     const mesFiltro = document.getElementById('filtro-mes').value;
     const cartaoFiltro = document.getElementById('filtro-cartao').value;
     const categoriaFiltro = document.getElementById('filtro-categoria').value;
+    const statusFiltro = document.getElementById('filtro-status')?.value || '';
+    const buscaFiltro = (document.getElementById('filtro-busca')?.value || '').trim().toLowerCase();
 
     let lancamentosFiltrados = state.lancamentos;
 
@@ -404,8 +414,30 @@ function aplicarFiltros() {
         );
     }
 
+    // 5. Filtrar por status operacional derivado dos dados atuais
+    if (statusFiltro) {
+        lancamentosFiltrados = lancamentosFiltrados.filter(l =>
+            obterStatusLancamento(l) === statusFiltro
+        );
+    }
+
+    // 6. Busca local por descricao, categoria, cartao, conta ou observacoes
+    if (buscaFiltro) {
+        lancamentosFiltrados = lancamentosFiltrados.filter(l => {
+            const alvo = [
+                l.descricao,
+                l.categoria_nome,
+                l.cartao_nome,
+                l.categoria_cartao_nome,
+                l.observacoes
+            ].filter(Boolean).join(' ').toLowerCase();
+            return alvo.includes(buscaFiltro);
+        });
+    }
+
     renderizarLancamentos(lancamentosFiltrados);
     atualizarResumoMes(lancamentosFiltrados);
+    atualizarResumoOperacional(lancamentosFiltrados);
 }
 
 function renderizarLancamentos(lancamentos) {
@@ -511,10 +543,101 @@ function atualizarResumoMes(lancamentos) {
 // MODAL E FORMULÁRIO
 // ===================================
 
+function obterValorLancamento(lancamento) {
+    return parseFloat(lancamento?.valor || 0) || 0;
+}
+
+function obterStatusLancamento(lancamento) {
+    if (lancamento.tipo === 'credito') return 'confirmado';
+
+    if (lancamento.tipo === 'direto') {
+        const status = String(lancamento.status_pagamento || '').toLowerCase();
+        if (status.includes('pago')) return 'pago';
+        if (lancamento.pago === true) return 'pago';
+        return 'pendente';
+    }
+
+    return 'pendente';
+}
+
+function formatarMoedaResumo(valor) {
+    return `R$ ${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+}
+
+function pluralizarLancamentos(qtd) {
+    return `${qtd} ${qtd === 1 ? 'lan\u00e7amento' : 'lan\u00e7amentos'}`;
+}
+
+function atualizarTexto(id, texto) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = texto;
+}
+
+function atualizarResumoOperacional(lancamentos) {
+    const entradas = lancamentos.filter(l => l.tipo === 'credito');
+    const saidas = lancamentos.filter(l => l.tipo !== 'credito');
+    const pendentes = lancamentos.filter(l => obterStatusLancamento(l) === 'pendente');
+    const confirmados = lancamentos.filter(l => ['confirmado', 'pago'].includes(obterStatusLancamento(l)));
+
+    const totalEntradas = entradas.reduce((sum, l) => sum + obterValorLancamento(l), 0);
+    const totalSaidas = saidas.reduce((sum, l) => sum + obterValorLancamento(l), 0);
+    const totalPendentes = pendentes.reduce((sum, l) => sum + obterValorLancamento(l), 0);
+    const totalConfirmados = confirmados.reduce((sum, l) => sum + obterValorLancamento(l), 0);
+    const saldo = totalEntradas - totalSaidas;
+
+    atualizarTexto('lanc-kpi-entradas-valor', formatarMoedaResumo(totalEntradas));
+    atualizarTexto('lanc-kpi-entradas-qtd', pluralizarLancamentos(entradas.length));
+    atualizarTexto('lanc-kpi-saidas-valor', formatarMoedaResumo(totalSaidas));
+    atualizarTexto('lanc-kpi-saidas-qtd', pluralizarLancamentos(saidas.length));
+    atualizarTexto('lanc-kpi-pendentes-valor', formatarMoedaResumo(totalPendentes));
+    atualizarTexto('lanc-kpi-pendentes-qtd', pluralizarLancamentos(pendentes.length));
+    atualizarTexto('lanc-kpi-confirmados-valor', formatarMoedaResumo(totalConfirmados));
+    atualizarTexto('lanc-kpi-confirmados-qtd', pluralizarLancamentos(confirmados.length));
+    atualizarTexto('lanc-kpi-saldo-valor', formatarMoedaResumo(saldo));
+
+    atualizarComposicaoTipo(totalEntradas, totalSaidas);
+    atualizarResumoPeriodo(lancamentos, entradas, saidas);
+}
+
+function atualizarComposicaoTipo(totalEntradas, totalSaidas) {
+    const total = totalEntradas + totalSaidas;
+    const entradaPct = total > 0 ? (totalEntradas / total) * 100 : 0;
+    const saidaPct = total > 0 ? (totalSaidas / total) * 100 : 0;
+    const donut = document.getElementById('lanc-composicao-donut');
+    const vazio = document.getElementById('lanc-comp-empty');
+
+    if (donut) {
+        donut.style.setProperty('--entrada', `${entradaPct}%`);
+        donut.style.setProperty('--saida', `${saidaPct}%`);
+    }
+
+    atualizarTexto('lanc-comp-total-label', total > 0 ? '100%' : '0%');
+    atualizarTexto('lanc-comp-entradas-valor', formatarMoedaResumo(totalEntradas));
+    atualizarTexto('lanc-comp-entradas-pct', `${entradaPct.toFixed(2).replace('.', ',')}%`);
+    atualizarTexto('lanc-comp-saidas-valor', formatarMoedaResumo(totalSaidas));
+    atualizarTexto('lanc-comp-saidas-pct', `${saidaPct.toFixed(2).replace('.', ',')}%`);
+    atualizarTexto('lanc-comp-total-valor', formatarMoedaResumo(total));
+
+    if (vazio) vazio.classList.toggle('visible', total === 0);
+}
+
+function atualizarResumoPeriodo(lancamentos, entradas, saidas) {
+    const maiorEntrada = entradas.reduce((max, l) => Math.max(max, obterValorLancamento(l)), 0);
+    const maiorSaida = saidas.reduce((max, l) => Math.max(max, obterValorLancamento(l)), 0);
+    const totalSaidas = saidas.reduce((sum, l) => sum + obterValorLancamento(l), 0);
+    const diasComSaida = new Set(saidas.map(l => l.data_compra).filter(Boolean)).size || 1;
+
+    atualizarTexto('lanc-maior-entrada', formatarMoedaResumo(maiorEntrada));
+    atualizarTexto('lanc-maior-saida', formatarMoedaResumo(maiorSaida));
+    atualizarTexto('lanc-media-diaria', formatarMoedaResumo(totalSaidas / diasComSaida));
+    atualizarTexto('lanc-total-lancamentos', String(lancamentos.length));
+}
+
 function abrirModalLancamento() {
     document.getElementById('modal-lancamento-titulo').textContent = 'Novo Lançamento';
     document.getElementById('form-lancamento').reset();
     document.getElementById('lancamento-id').value = '';
+    delete document.getElementById('lancamento-id').dataset.tipo;
 
     // Resetar visibilidade dos campos
     document.getElementById('campos-cartao').style.display = 'none';
@@ -529,7 +652,25 @@ function abrirModalLancamento() {
     // CRÍTICO: Limpar validações ao abrir modal (tipo ainda não selecionado)
     ajustarCamposPorTipo('');
 
-    abrirModal('modal-lancamento');
+    focarPainelLancamento();
+}
+
+function focarPainelLancamento() {
+    const painel = document.getElementById('painel-novo-lancamento');
+    if (painel) {
+        painel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        painel.classList.add('is-focused');
+        setTimeout(() => painel.classList.remove('is-focused'), 1200);
+    }
+    setTimeout(() => document.getElementById('lancamento-tipo')?.focus(), 250);
+}
+
+function cancelarLancamentoInline() {
+    abrirModalLancamento();
+}
+
+function finalizarLancamentoInline() {
+    abrirModalLancamento();
 }
 
 /**
@@ -698,7 +839,7 @@ async function salvarLancamentoCartao() {
 
         if (!response.ok) throw new Error('Erro ao salvar lançamento');
 
-        fecharModal('modal-lancamento');
+        finalizarLancamentoInline();
         await carregarLancamentos();
         mostrarSucesso('Lançamento em cartão salvo com sucesso!');
 
@@ -748,7 +889,7 @@ async function salvarLancamentoDireto() {
 
         if (!response.ok) throw new Error('Erro ao salvar despesa');
 
-        fecharModal('modal-lancamento');
+        finalizarLancamentoInline();
         await carregarLancamentos();
         mostrarSucesso(isEdicao ? 'Despesa direta atualizada com sucesso!' : 'Despesa direta salva com sucesso!');
 
@@ -789,7 +930,7 @@ async function salvarLancamentoCredito() {
             throw new Error(error.error || 'Erro ao salvar entrada');
         }
 
-        fecharModal('modal-lancamento');
+        finalizarLancamentoInline();
         await carregarLancamentos();
         mostrarSucesso('Entrada/Crédito registrado com sucesso!');
 
@@ -858,9 +999,12 @@ function editarLancamento(lancamento) {
                 }
             }, 100);
         }, 100);
+    } else if (lancamento.tipo === 'credito') {
+        document.getElementById('lancamento-tipo').value = 'credito';
+        alternarTipoLancamento();
     }
 
-    abrirModal('modal-lancamento');
+    focarPainelLancamento();
 }
 
 async function excluirLancamento(id, tipo) {

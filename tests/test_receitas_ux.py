@@ -96,7 +96,7 @@ def test_rota_principal_renderiza_layout_ux(client):
     assert response.status_code == 200
     html = response.get_data(as_text=True)
     assert 'Gerenciamento de Receitas' in html
-    assert 'Acompanhe, gerencie e projete todas as suas receitas em um só lugar.' in html
+    assert 'module-actionbar' in html
     assert 'receitas-busca' in html
     assert 'Previsto no mês' in html
     assert 'Receitas do mês' in html
