@@ -207,7 +207,7 @@ def test_sidebar_renderiza_sem_dados(client):
     html = resp.get_data(as_text=True)
     assert 'sidebar-composicao' in html
     assert 'sidebar-por-categoria' in html
-    assert 'sidebar-indicadores' in html
+    assert 'sidebar-indicadores' not in html
     assert 'sidebar-proximos' in html
 
 

@@ -2063,43 +2063,6 @@ body.mobile-view .despesa-valor-principal {
     transition: width 0.4s ease;
 }
 
-/* Indicadores rapidos */
-.indicadores-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-}
-
-.indicador-rapido {
-    background: #f5f5f7;
-    border-radius: 9px;
-    padding: 10px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-}
-
-.indicador-label {
-    font-size: 10px;
-    font-weight: 500;
-    color: #6e6e73;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-}
-
-.indicador-value {
-    font-size: 13px;
-    font-weight: 700;
-    color: #1d1d1f;
-    letter-spacing: -0.01em;
-}
-
-.indicador-value.red { color: #ff3b30; }
-.indicador-value.orange { color: #ff9500; }
-.indicador-value.green { color: #34c759; }
-.indicador-value.blue { color: #007aff; }
-.indicador-value.purple { color: #af52de; }
-
 /* Proximos vencimentos */
 .proximos-vencimentos-list {
     display: flex;

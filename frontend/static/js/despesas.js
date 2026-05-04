@@ -990,22 +990,6 @@ function renderizarSidebar(sidebar) {
     if (elPendentesSub) elPendentesSub.textContent = 'aguardando pagamento';
     if (elPagasSub) elPagasSub.textContent = 'liquidadas';
 
-    // Indicadores rapidos
-    const indRec = document.getElementById('ind-recorrentes-count');
-    const indVenc = document.getElementById('ind-vencendo-count');
-    const indCart = document.getElementById('ind-cartoes-count');
-    const indPct = document.getElementById('ind-pct-pago');
-
-    if (indRec) indRec.textContent = sidebar.recorrentes_count || 0;
-    if (indVenc) indVenc.textContent = sidebar.vencendo_7d_count || 0;
-    if (indCart) indCart.textContent = sidebar.cartoes_count || 0;
-    if (indPct) {
-        const total = (sidebar.total_mes || 0);
-        const pagas = (sidebar.total_pagas || 0);
-        const pct = total > 0 ? Math.round((pagas / total) * 100) : 0;
-        indPct.textContent = `${pct}%`;
-    }
-
     // Donut chart (composicao por categoria via conic-gradient)
     const composicao = sidebar.composicao_categoria || [];
     const donut = document.getElementById('sidebar-donut');
