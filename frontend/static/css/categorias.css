@@ -13,6 +13,10 @@
     align-items: start;
 }
 
+.categorias-summary-only {
+    display: block;
+}
+
 .categorias-title-block {
     display: grid;
     gap: 8px;
@@ -119,6 +123,23 @@
     align-items: center;
     gap: 12px;
     flex-wrap: wrap;
+}
+
+.categorias-toolbar.module-actionbar {
+    min-height: 52px;
+    padding: 8px 12px;
+}
+
+.categorias-toolbar.module-actionbar .cf-button,
+.categorias-toolbar.module-actionbar .toolbar-search,
+.categorias-toolbar.module-actionbar .toolbar-search input,
+.categorias-toolbar.module-actionbar .toolbar-status {
+    min-height: 32px;
+    height: 32px;
+}
+
+.categorias-toolbar.module-actionbar .cf-button {
+    padding-block: 0;
 }
 
 .cf-button {

@@ -1,6 +1,6 @@
 .import-page {
     width: 100%;
-    max-width: none;
+    max-width: var(--app-page-max-width, 1680px);
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -12,7 +12,13 @@
 }
 
 .import-actionbar {
-    min-height: 44px;
+    min-height: 52px;
+}
+
+.import-actionbar .tab-button,
+.import-actionbar .import-step-chip {
+    min-height: 32px;
+    height: 32px;
 }
 
 .import-steps {

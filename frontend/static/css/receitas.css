@@ -23,11 +23,10 @@
 
 body.app-shell-body .app-content {
     background: var(--rec-bg);
-    padding: 24px;
 }
 
 .receitas-ux-page {
-    max-width: 1680px;
+    max-width: var(--app-page-max-width, 1680px);
     margin: 0 auto;
     display: grid;
     gap: var(--rec-gap);
@@ -63,6 +62,25 @@ body.app-shell-body .app-content {
     border: 1px solid var(--rec-border);
     border-radius: var(--rec-radius);
     box-shadow: var(--rec-shadow);
+}
+
+.receitas-toolbar.module-actionbar {
+    min-height: 52px;
+    padding: 8px 12px;
+}
+
+.receitas-toolbar.module-actionbar .receitas-filter select,
+.receitas-toolbar.module-actionbar .receitas-search,
+.receitas-toolbar.module-actionbar .receitas-search input,
+.receitas-toolbar.module-actionbar .receitas-primary-btn,
+.receitas-toolbar.module-actionbar .receitas-secondary-btn {
+    min-height: 32px;
+    height: 32px;
+}
+
+.receitas-toolbar.module-actionbar .receitas-primary-btn,
+.receitas-toolbar.module-actionbar .receitas-secondary-btn {
+    padding-inline: 12px;
 }
 
 .receitas-filter {
@@ -1100,7 +1118,7 @@ body.app-shell-body .app-content {
     border: 0;
 }
 
-@media (max-width: 1680px) {
+@media (max-width: 1440px) {
     .receitas-workspace {
         grid-template-columns: 1fr;
     }
@@ -1148,11 +1166,7 @@ body.app-shell-body .app-content {
 
 @media (max-width: 720px) {
     body.app-shell-body .app-content {
-        padding: 16px;
-    }
-
-    .receitas-page-heading h1 {
-        font-size: 24px;
+        padding: 16px var(--app-page-gutter-mobile, 16px) var(--app-page-gutter-mobile, 16px);
     }
 
     .receitas-panel-header,

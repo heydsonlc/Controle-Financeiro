@@ -6,20 +6,40 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/categorias.css') }}">
 {% endblock %}
 
+{% block action_bar %}
+    <section class="module-actionbar categorias-toolbar" aria-label="A&ccedil;&otilde;es de categorias">
+        <button class="cf-button cf-button-primary" id="btn-nova-categoria-despesa" type="button">
+            <span aria-hidden="true">+</span>
+            <span>Nova categoria de despesa</span>
+        </button>
+        <button class="cf-button cf-button-primary" id="btn-nova-categoria-cartao" type="button">
+            <span aria-hidden="true">+</span>
+            <span>Nova categoria do cart&atilde;o</span>
+        </button>
+        <label class="toolbar-search" for="categorias-pesquisa">
+            <span aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false">
+                    <circle cx="11" cy="11" r="7"/>
+                    <path d="m20 20-3.5-3.5"/>
+                </svg>
+            </span>
+            <input type="search" id="categorias-pesquisa" placeholder="Pesquisar">
+        </label>
+        <label class="toolbar-status" for="categorias-status">
+            <span>Status:</span>
+            <select id="categorias-status">
+                <option value="ativas">Ativas</option>
+                <option value="inativas">Inativas</option>
+                <option value="todas">Todas</option>
+            </select>
+        </label>
+    </section>
+{% endblock %}
+
 {% block content %}
     <div class="container app-content-fluid">
         <main class="categorias-page">
-            <header class="categorias-hero">
-                <div class="categorias-title-block">
-                    <nav class="breadcrumb categorias-breadcrumb" aria-label="Caminho">
-                        <span>Configura&ccedil;&otilde;es</span>
-                        <span aria-hidden="true">/</span>
-                        <span>Categorias</span>
-                    </nav>
-                    <h1>Categorias</h1>
-                    <p>Cadastre categorias de despesa e categorias do cart&atilde;o em um s&oacute; lugar.</p>
-                </div>
-
+            <header class="categorias-hero categorias-summary-only">
                 <section class="categorias-summary" aria-label="Resumo das categorias">
                     <article class="summary-item">
                         <span class="summary-icon summary-icon-card" aria-hidden="true">
@@ -53,34 +73,6 @@
                     </article>
                 </section>
             </header>
-
-            <section class="categorias-toolbar" aria-label="A&ccedil;&otilde;es de categorias">
-                <button class="cf-button cf-button-primary" id="btn-nova-categoria-despesa" type="button">
-                    <span aria-hidden="true">+</span>
-                    <span>Nova categoria de despesa</span>
-                </button>
-                <button class="cf-button cf-button-primary" id="btn-nova-categoria-cartao" type="button">
-                    <span aria-hidden="true">+</span>
-                    <span>Nova categoria do cart&atilde;o</span>
-                </button>
-                <label class="toolbar-search" for="categorias-pesquisa">
-                    <span aria-hidden="true">
-                        <svg viewBox="0 0 24 24" focusable="false">
-                            <circle cx="11" cy="11" r="7"/>
-                            <path d="m20 20-3.5-3.5"/>
-                        </svg>
-                    </span>
-                    <input type="search" id="categorias-pesquisa" placeholder="Pesquisar">
-                </label>
-                <label class="toolbar-status" for="categorias-status">
-                    <span>Status:</span>
-                    <select id="categorias-status">
-                        <option value="ativas">Ativas</option>
-                        <option value="inativas">Inativas</option>
-                        <option value="todas">Todas</option>
-                    </select>
-                </label>
-            </section>
 
             <section class="categorias-shell" aria-label="Administra&ccedil;&atilde;o de categorias">
                 <div class="categorias-tabs" role="tablist" aria-label="Tipos de categoria">

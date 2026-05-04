@@ -6,14 +6,9 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/receitas.css') }}">
 {% endblock %}
 
-{% block content %}
-<div class="receitas-ux-page">
-    <header class="receitas-page-heading">
-        <h1>Gerenciamento de Receitas</h1>
-        <p>Acompanhe, gerencie e projete todas as suas receitas em um só lugar.</p>
-    </header>
+{% block action_bar %}
 
-    <section class="receitas-toolbar" aria-label="Filtros e ações de receitas">
+    <section class="module-actionbar receitas-toolbar" aria-label="Filtros e ações de receitas">
         <label class="receitas-filter compact">
             <span>Ano</span>
             <select id="filtro-ano" onchange="atualizarDados()"></select>
@@ -67,6 +62,10 @@
         </button>
     </section>
 
+{% endblock %}
+
+{% block content %}
+<div class="receitas-ux-page">
     <section class="receitas-kpi-grid" aria-label="Resumo mensal de receitas">
         <article class="receitas-kpi-card blue">
             <span class="receitas-kpi-accent" aria-hidden="true"></span>

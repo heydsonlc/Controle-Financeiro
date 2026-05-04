@@ -23,7 +23,7 @@ button, input, select, textarea, .card-badge {
 
 
 .container {
-    max-width: 1200px;
+    max-width: var(--app-page-max-width, 1680px);
     margin: 0 auto;
     background: #ffffff;
     border-radius: 16px;
@@ -233,7 +233,7 @@ body.mobile-view .mobile-toggle button {
 }
 
 .bottom-nav-container {
-    max-width: 1200px;
+    max-width: var(--app-page-max-width, 1680px);
     margin: 0 auto;
     display: flex;
     justify-content: space-around;

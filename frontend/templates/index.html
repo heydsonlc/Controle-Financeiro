@@ -6,9 +6,8 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
 {% endblock %}
 
-{% block content %}
-<div class="dashboard-operacional-shell">
-    <header class="dashboard-action-strip" aria-label="A&ccedil;&otilde;es do dashboard">
+{% block action_bar %}
+    <header class="module-actionbar dashboard-action-strip" aria-label="A&ccedil;&otilde;es do dashboard">
         <div class="dashboard-context">
             <nav class="dashboard-breadcrumb" aria-label="Breadcrumb">
                 <span>Financeiro</span>
@@ -42,7 +41,10 @@
             <div class="dashboard-quick-actions" id="acoes-rapidas" aria-label="A&ccedil;&otilde;es r&aacute;pidas"></div>
         </div>
     </header>
+{% endblock %}
 
+{% block content %}
+<div class="dashboard-operacional-shell">
     <section class="dashboard-kpi-grid" aria-label="KPIs principais">
         <article class="dashboard-kpi-card tone-green">
             <div class="kpi-icon" aria-hidden="true" data-icon="wallet"></div>

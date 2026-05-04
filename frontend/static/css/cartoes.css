@@ -52,6 +52,15 @@
     overflow: hidden;
 }
 
+.cartoes-summary-sidebar {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    overflow: visible;
+}
+
 .summary-item {
     min-height: 104px;
     padding: 16px 18px;
@@ -61,6 +70,32 @@
     gap: 8px;
     text-align: center;
     border-right: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.cartoes-summary-sidebar .summary-item {
+    min-height: 76px;
+    grid-template-columns: 38px minmax(0, 1fr);
+    justify-items: start;
+    align-content: center;
+    align-items: center;
+    gap: 4px 12px;
+    padding: 12px 14px;
+    text-align: left;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 7px;
+    background: #ffffff;
+}
+
+.cartoes-summary-sidebar .summary-icon {
+    grid-row: span 2;
+}
+
+.cartoes-summary-sidebar .summary-label {
+    min-height: 0;
+}
+
+.cartoes-summary-sidebar .summary-item strong {
+    font-size: 18px;
 }
 
 .summary-item:last-child {
@@ -119,6 +154,23 @@
     align-items: center;
     gap: 12px;
     flex-wrap: wrap;
+}
+
+.cartoes-toolbar.module-actionbar {
+    min-height: 52px;
+    padding: 8px 12px;
+}
+
+.cartoes-toolbar.module-actionbar .cf-button,
+.cartoes-toolbar.module-actionbar .toolbar-search,
+.cartoes-toolbar.module-actionbar .toolbar-search input,
+.cartoes-toolbar.module-actionbar .toolbar-status {
+    min-height: 32px;
+    height: 32px;
+}
+
+.cartoes-toolbar.module-actionbar .cf-button {
+    padding-block: 0;
 }
 
 .cf-button {
@@ -1179,7 +1231,7 @@
         grid-column: 1 / -1;
         border-left: none;
         border-top: 1px solid rgba(15, 23, 42, 0.08);
-        grid-template-columns: minmax(0, 1fr) minmax(260px, 0.34fr);
+        grid-template-columns: minmax(260px, 0.32fr) minmax(0, 1fr) minmax(260px, 0.28fr);
     }
 
     .how-card {
@@ -1220,6 +1272,10 @@
 
     .how-card {
         grid-template-columns: 1fr;
+    }
+
+    .cartoes-summary-sidebar {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
     .hierarchy-arrow {

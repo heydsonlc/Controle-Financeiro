@@ -1,7 +1,8 @@
 .dashboard-operacional-shell {
     --dashboard-gap: 18px;
     --dashboard-card-padding: 20px;
-    width: min(100%, 1660px);
+    width: 100%;
+    max-width: none;
     margin: 0 auto;
     padding: 0;
     display: grid;

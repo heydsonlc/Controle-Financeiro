@@ -6,11 +6,8 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/contas_bancarias.css') }}">
 {% endblock %}
 
-{% block content %}
-<div class="contas-ux-page">
-    <p class="contas-page-subtitle">Gerencie suas contas bancárias e acompanhe os saldos.</p>
-
-    <section class="contas-toolbar" aria-label="Filtros e ações de contas bancárias">
+{% block action_bar %}
+    <section class="module-actionbar contas-toolbar" aria-label="Filtros e ações de contas bancárias">
         <label class="contas-filter">
             <span>Status</span>
             <select id="filtro-status" onchange="carregarContas()">
@@ -34,6 +31,10 @@
         </button>
     </section>
 
+{% endblock %}
+
+{% block content %}
+<div class="contas-ux-page">
     <section class="contas-kpi-grid" aria-label="Resumo de contas bancárias">
         <article class="contas-kpi-card">
             <span class="contas-kpi-icon blue" aria-hidden="true"></span>

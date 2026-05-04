@@ -1,6 +1,12 @@
 /* Shell visual desktop/web - UX-1A */
 
 body.app-shell-body {
+    --app-page-gutter: 24px;
+    --app-page-gutter-mobile: 16px;
+    --app-page-max-width: none;
+    --app-actionbar-top-gap: 16px;
+    --app-content-top-gap: 20px;
+    --app-section-gap: 20px;
     min-height: 100vh;
     padding: 0;
     padding-bottom: 0;
@@ -146,6 +152,10 @@ body.app-shell-body .app-main {
     flex-direction: column;
 }
 
+body.app-shell-body main {
+    padding: 0;
+}
+
 body.app-shell-body .app-topbar {
     position: sticky;
     top: 0;
@@ -155,7 +165,7 @@ body.app-shell-body .app-topbar {
     grid-template-columns: 44px minmax(0, 1fr) 44px;
     align-items: center;
     gap: 12px;
-    padding: 14px 28px;
+    padding: 14px var(--app-page-gutter);
     background: rgba(245, 245, 247, 0.82);
     border-bottom: 1px solid rgba(0, 0, 0, 0.08);
     backdrop-filter: blur(24px) saturate(180%);
@@ -193,11 +203,12 @@ body.app-shell-body .app-topbar-title span {
 
 body.app-shell-body .app-content {
     width: 100%;
-    padding: 32px;
+    padding: var(--app-content-top-gap) var(--app-page-gutter) var(--app-page-gutter);
 }
 
 body.app-shell-body .app-actionbar-region {
     width: 100%;
+    padding: var(--app-actionbar-top-gap) var(--app-page-gutter) 0;
 }
 
 body.app-shell-body .app-actionbar-region:empty {
@@ -205,11 +216,11 @@ body.app-shell-body .app-actionbar-region:empty {
 }
 
 body.app-shell-body .module-actionbar {
-    width: auto;
-    max-width: none;
-    margin: 18px 28px 0;
+    width: 100%;
+    max-width: var(--app-page-max-width);
+    margin: 0 auto;
     padding: 8px 12px;
-    min-height: 50px;
+    min-height: 52px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -805,7 +816,7 @@ body.app-shell-body .actionbar-spacer {
 }
 
 body.app-shell-body .app-content > .container {
-    max-width: 1280px;
+    max-width: var(--app-page-max-width);
     margin: 0 auto;
     background: #ffffff;
     border-radius: 16px;
@@ -817,13 +828,13 @@ body.app-shell-body .app-content > .container {
 body.app-shell-body .app-content.app-content-wide > .container,
 body.app-shell-body .app-content > .container.app-content-wide,
 body.app-shell-body .app-content > .content-wide {
-    max-width: 1600px;
+    max-width: var(--app-page-max-width);
 }
 
 body.app-shell-body .app-content.app-content-fluid > .container,
 body.app-shell-body .app-content > .container.app-content-fluid,
 body.app-shell-body .app-content > .content-fluid {
-    max-width: none;
+    max-width: var(--app-page-max-width);
 }
 
 body.app-shell-body .bottom-nav,
@@ -837,7 +848,7 @@ body.app-shell-body .mobile-toggle {
     }
 
     body.app-shell-body .app-content {
-        padding: 24px;
+        padding: var(--app-content-top-gap) var(--app-page-gutter) var(--app-page-gutter);
     }
 }
 
@@ -853,11 +864,15 @@ body.app-shell-body .mobile-toggle {
     body.app-shell-body .app-topbar {
         grid-template-columns: 40px minmax(0, 1fr) 40px;
         min-height: 60px;
-        padding: 10px 14px;
+        padding: 10px var(--app-page-gutter-mobile);
+    }
+
+    body.app-shell-body .app-actionbar-region {
+        padding: 16px var(--app-page-gutter-mobile) 0;
     }
 
     body.app-shell-body .module-actionbar {
-        margin: 16px 16px 0;
+        margin: 0 auto;
         padding: 10px;
         flex-direction: column;
         align-items: stretch;
@@ -898,7 +913,7 @@ body.app-shell-body .mobile-toggle {
     }
 
     body.app-shell-body .app-content {
-        padding: 16px;
+        padding: 16px var(--app-page-gutter-mobile) var(--app-page-gutter-mobile);
     }
 
     body.app-shell-body .app-content > .container {

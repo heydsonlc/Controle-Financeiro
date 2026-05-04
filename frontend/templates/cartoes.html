@@ -6,83 +6,39 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/cartoes.css') }}">
 {% endblock %}
 
+{% block action_bar %}
+    <section class="module-actionbar cartoes-toolbar" aria-label="A&ccedil;&otilde;es de cart&otilde;es">
+        <button class="cf-button cf-button-primary" id="btn-novo-cartao" type="button">
+            <span aria-hidden="true">+</span>
+            <span>Novo cart&atilde;o</span>
+        </button>
+        <button class="cf-button cf-button-secondary" id="btn-vincular-categoria" type="button">
+            <span aria-hidden="true">+</span>
+            <span>Vincular categoria</span>
+        </button>
+        <label class="toolbar-search" for="cartoes-pesquisa">
+            <span aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false">
+                    <circle cx="11" cy="11" r="7"/>
+                    <path d="m20 20-3.5-3.5"/>
+                </svg>
+            </span>
+            <input type="search" id="cartoes-pesquisa" placeholder="Pesquisar">
+        </label>
+        <label class="toolbar-status" for="cartoes-status">
+            <span>Status:</span>
+            <select id="cartoes-status">
+                <option value="ativos">Ativos</option>
+                <option value="inativos">Inativos</option>
+                <option value="todos">Todos</option>
+            </select>
+        </label>
+    </section>
+{% endblock %}
+
 {% block content %}
     <div class="container app-content-fluid">
         <main class="cartoes-page">
-            <header class="cartoes-hero">
-                <div class="cartoes-title-block">
-                    <nav class="breadcrumb cartoes-breadcrumb" aria-label="Caminho">
-                        <span>Financeiro</span>
-                        <span aria-hidden="true">/</span>
-                        <span>Cart&otilde;es</span>
-                    </nav>
-                    <h1>Cart&otilde;es</h1>
-                    <p>Vincule categorias do cart&atilde;o globais e defina limites por cart&atilde;o.</p>
-                </div>
-
-                <section class="cartoes-summary" aria-label="Resumo dos cart&otilde;es">
-                    <article class="summary-item">
-                        <span class="summary-icon summary-icon-card" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" focusable="false">
-                                <rect x="3" y="6" width="18" height="12" rx="2"/>
-                                <path d="M3 10h18"/>
-                            </svg>
-                        </span>
-                        <span class="summary-label">Cart&otilde;es ativos</span>
-                        <strong id="summary-cartoes-ativos">0</strong>
-                    </article>
-                    <article class="summary-item">
-                        <span class="summary-icon summary-icon-link" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" focusable="false">
-                                <path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/>
-                                <path d="M14 11a5 5 0 0 0-7.1 0l-2 2a5 5 0 0 0 7.1 7.1l1.1-1.1"/>
-                            </svg>
-                        </span>
-                        <span class="summary-label">Categorias vinculadas</span>
-                        <strong id="summary-categorias-vinculadas">0</strong>
-                    </article>
-                    <article class="summary-item">
-                        <span class="summary-icon summary-icon-limit" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" focusable="false">
-                                <path d="M4 7h16v10H4V7Z"/>
-                                <path d="M7 11h6"/>
-                                <path d="M16 14h1"/>
-                            </svg>
-                        </span>
-                        <span class="summary-label">Limite total</span>
-                        <strong id="summary-limite-total">R$ 0,00</strong>
-                    </article>
-                </section>
-            </header>
-
-            <section class="cartoes-toolbar" aria-label="A&ccedil;&otilde;es de cart&otilde;es">
-                <button class="cf-button cf-button-primary" id="btn-novo-cartao" type="button">
-                    <span aria-hidden="true">+</span>
-                    <span>Novo cart&atilde;o</span>
-                </button>
-                <button class="cf-button cf-button-secondary" id="btn-vincular-categoria" type="button">
-                    <span aria-hidden="true">+</span>
-                    <span>Vincular categoria</span>
-                </button>
-                <label class="toolbar-search" for="cartoes-pesquisa">
-                    <span aria-hidden="true">
-                        <svg viewBox="0 0 24 24" focusable="false">
-                            <circle cx="11" cy="11" r="7"/>
-                            <path d="m20 20-3.5-3.5"/>
-                        </svg>
-                    </span>
-                    <input type="search" id="cartoes-pesquisa" placeholder="Pesquisar">
-                </label>
-                <label class="toolbar-status" for="cartoes-status">
-                    <span>Status:</span>
-                    <select id="cartoes-status">
-                        <option value="ativos">Ativos</option>
-                        <option value="inativos">Inativos</option>
-                        <option value="todos">Todos</option>
-                    </select>
-                </label>
-            </section>
-
             <section class="cartoes-shell" aria-label="Configura&ccedil;&atilde;o de limites por cart&atilde;o">
                 <aside class="cartoes-sidebar" aria-label="Lista de cart&otilde;es">
                     <div class="sidebar-title-row">
@@ -110,6 +66,40 @@
                 </section>
 
                 <aside class="hierarchy-panel" aria-label="Como funciona">
+                    <section class="cartoes-summary cartoes-summary-sidebar" aria-label="Resumo dos cart&otilde;es">
+                        <article class="summary-item">
+                            <span class="summary-icon summary-icon-card" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false">
+                                    <rect x="3" y="6" width="18" height="12" rx="2"/>
+                                    <path d="M3 10h18"/>
+                                </svg>
+                            </span>
+                            <span class="summary-label">Cart&otilde;es ativos</span>
+                            <strong id="summary-cartoes-ativos">0</strong>
+                        </article>
+                        <article class="summary-item">
+                            <span class="summary-icon summary-icon-link" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false">
+                                    <path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/>
+                                    <path d="M14 11a5 5 0 0 0-7.1 0l-2 2a5 5 0 0 0 7.1 7.1l1.1-1.1"/>
+                                </svg>
+                            </span>
+                            <span class="summary-label">Categorias vinculadas</span>
+                            <strong id="summary-categorias-vinculadas">0</strong>
+                        </article>
+                        <article class="summary-item">
+                            <span class="summary-icon summary-icon-limit" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false">
+                                    <path d="M4 7h16v10H4V7Z"/>
+                                    <path d="M7 11h6"/>
+                                    <path d="M16 14h1"/>
+                                </svg>
+                            </span>
+                            <span class="summary-label">Limite total</span>
+                            <strong id="summary-limite-total">R$ 0,00</strong>
+                        </article>
+                    </section>
+
                     <section class="how-card">
                         <h2>Como funciona</h2>
                         <p>A hierarquia aplicada &agrave;s despesas neste cart&atilde;o segue esta estrutura.</p>

@@ -23,11 +23,10 @@
 
 body.app-shell-body .app-content {
     background: var(--contas-bg);
-    padding: 24px;
 }
 
 .contas-ux-page {
-    max-width: 1680px;
+    max-width: var(--app-page-max-width, 1680px);
     margin: 0 auto;
     color: var(--contas-text);
     display: grid;
@@ -50,6 +49,25 @@ body.app-shell-body .app-content {
     border-radius: var(--contas-radius);
     box-shadow: var(--contas-shadow);
     padding: 16px 20px;
+}
+
+.contas-toolbar.module-actionbar {
+    min-height: 52px;
+    padding: 8px 12px;
+}
+
+.contas-toolbar.module-actionbar .contas-filter select,
+.contas-toolbar.module-actionbar .contas-search,
+.contas-toolbar.module-actionbar .contas-search input,
+.contas-toolbar.module-actionbar .contas-primary-btn,
+.contas-toolbar.module-actionbar .contas-secondary-btn {
+    min-height: 32px;
+    height: 32px;
+}
+
+.contas-toolbar.module-actionbar .contas-primary-btn,
+.contas-toolbar.module-actionbar .contas-secondary-btn {
+    padding-inline: 12px;
 }
 
 .contas-filter {
@@ -1069,7 +1087,7 @@ body.app-shell-body .app-content {
 
 @media (max-width: 720px) {
     body.app-shell-body .app-content {
-        padding: 16px;
+        padding: 16px var(--app-page-gutter-mobile, 16px) var(--app-page-gutter-mobile, 16px);
     }
 
     .contas-panel-header,
