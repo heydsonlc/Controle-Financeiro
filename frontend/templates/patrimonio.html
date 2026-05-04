@@ -1,191 +1,322 @@
 {% extends "base.html" %}
 
-{% block title %}Patrimônio - Controle Financeiro{% endblock %}
+{% block title %}Patrim&ocirc;nio - Controle Financeiro{% endblock %}
 
 {% block extra_css %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/patrimonio.css') }}">
 {% endblock %}
 
 {% block action_bar %}
-    <div class="module-actionbar" aria-label="Ações de Patrimônio">
-        <div class="module-actionbar-actions">
-            <button class="action-icon-button primary" id="btn-nova-caixinha" type="button" onclick="abrirModalNovaConta()" title="Nova Caixinha" aria-label="Nova Caixinha">
-                <span class="action-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M12 5v14M5 12h14"/>
-                    </svg>
-                </span>
-                <span class="action-button-label">Nova Caixinha</span>
-            </button>
-            <button class="action-icon-button secondary" id="btn-nova-transferencia" type="button" onclick="abrirModalNovaTransferencia()" title="Nova Transfer&ecirc;ncia" aria-label="Nova Transfer&ecirc;ncia">
-                <span class="action-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M7 7h10M14 4l3 3-3 3M17 17H7M10 14l-3 3 3 3"/>
-                    </svg>
-                </span>
-                <span class="action-button-label">Nova Transferência</span>
-            </button>
+    <div class="module-actionbar patrimonio-actionbar" aria-label="Acoes de Patrimonio">
+        <div class="module-actionbar-inner">
+            <div class="module-actionbar-tabs patrimonio-actionbar-tabs">
+                <button class="tab-button patrimonio-view-tab active" type="button" onclick="mostrarAba('contas', this)">
+                    <span class="patrimonio-tab-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false"><path d="M4 19h16"/><path d="M7 16V9"/><path d="M12 16V5"/><path d="M17 16v-4"/></svg>
+                    </span>
+                    Vis&atilde;o geral
+                </button>
+                <button class="tab-button patrimonio-view-tab" type="button" onclick="mostrarAba('contas', this)">
+                    <span class="patrimonio-tab-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false"><path d="M5 7h14v12H5z"/><path d="M8 7V5h8v2"/><path d="M8 12h8"/></svg>
+                    </span>
+                    Caixinhas
+                </button>
+                <button class="tab-button patrimonio-view-tab" type="button" onclick="mostrarAba('transferencias', this)">
+                    <span class="patrimonio-tab-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false"><path d="M7 7h10"/><path d="m14 4 3 3-3 3"/><path d="M17 17H7"/><path d="m10 14-3 3 3 3"/></svg>
+                    </span>
+                    Transfer&ecirc;ncias
+                </button>
+            </div>
+
+            <div class="module-actionbar-filters patrimonio-actionbar-search">
+                <div class="module-filter-group patrimonio-search">
+                    <label class="module-filter-label" for="patrimonio-busca">Busca</label>
+                    <div class="module-search-control">
+                        <input class="module-filter-control" id="patrimonio-busca" type="search" placeholder="Buscar caixinhas, aportes ou transfer&ecirc;ncias..." oninput="filtrarPatrimonio()">
+                        <span class="module-search-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="module-actionbar-actions">
+                <button class="action-icon-button primary patrimonio-action-main" id="btn-nova-caixinha" type="button" onclick="abrirModalNovaConta()" title="Nova Caixinha" aria-label="Nova Caixinha">
+                    <span class="action-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false"><path d="M12 5v14M5 12h14"/></svg>
+                    </span>
+                    <span class="action-button-label">Nova caixinha</span>
+                </button>
+                <button class="action-icon-button secondary patrimonio-action-secondary" id="btn-nova-transferencia" type="button" onclick="abrirModalNovaTransferencia()" title="Nova Transfer&ecirc;ncia" aria-label="Nova Transfer&ecirc;ncia">
+                    <span class="action-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false"><path d="M7 7h10"/><path d="m14 4 3 3-3 3"/><path d="M17 17H7"/><path d="m10 14-3 3 3 3"/></svg>
+                    </span>
+                    <span class="action-button-label">Transferir</span>
+                </button>
+            </div>
         </div>
     </div>
 {% endblock %}
 
 {% block content %}
-    <div class="container app-content-fluid">
-        <main>
-            <!-- Tabs -->
-            <div class="tabs">
-                <button class="tab-button active" onclick="mostrarAba('contas')">Caixinhas</button>
-                <button class="tab-button" onclick="mostrarAba('transferencias')">Transferências</button>
-            </div>
-
-            <!-- Aba: Contas (Caixinhas) -->
-            <div id="aba-contas" class="tab-content active">
-                <!-- Resumo -->
-                <div class="cards-resumo">
-                    <div class="card">
-                        <h3>Patrimônio Total</h3>
-                        <p class="valor" id="patrimonio-total">R$ 0,00</p>
-                    </div>
-                    <div class="card">
-                        <h3>Caixinhas Ativas</h3>
-                        <p class="valor" id="total-caixinhas">0</p>
-                    </div>
+    <div class="container app-content-fluid patrimonio-page">
+        <section class="patrimonio-summary-grid" aria-label="Resumo de patrimonio">
+            <article class="patrimonio-summary-card blue">
+                <span class="patrimonio-summary-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false"><path d="M5 8h14v11H5z"/><path d="M8 8V6h8v2"/><path d="M9 13h6"/></svg>
+                </span>
+                <div>
+                    <span>Patrim&ocirc;nio total</span>
+                    <strong id="patrimonio-total">R$ 0,00</strong>
+                    <small id="patrimonio-total-legenda">Total em caixinhas ativas</small>
                 </div>
+            </article>
+            <article class="patrimonio-summary-card green">
+                <span class="patrimonio-summary-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false"><path d="M4 7h16v12H4z"/><path d="M7 7V5h10v2"/><path d="M8 13h8"/></svg>
+                </span>
+                <div>
+                    <span>Caixinhas ativas</span>
+                    <strong id="total-caixinhas">0</strong>
+                    <small id="patrimonio-inativas">0 inativas</small>
+                </div>
+            </article>
+            <article class="patrimonio-summary-card purple">
+                <span class="patrimonio-summary-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>
+                </span>
+                <div>
+                    <span>Meta consolidada</span>
+                    <strong id="patrimonio-meta-total">R$ 0,00</strong>
+                    <small id="patrimonio-meta-progresso">0% da meta atingida</small>
+                </div>
+            </article>
+            <article class="patrimonio-summary-card amber">
+                <span class="patrimonio-summary-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false"><path d="M4 17 10 11l4 4 6-8"/><path d="M15 7h5v5"/></svg>
+                </span>
+                <div>
+                    <span>Maior saldo</span>
+                    <strong id="patrimonio-maior-saldo">R$ 0,00</strong>
+                    <small id="patrimonio-maior-caixinha">Nenhuma caixinha</small>
+                </div>
+            </article>
+        </section>
 
-                <!-- Lista de Caixinhas -->
-                <section class="module-data-section">
-                    <div class="section-title-row">
-                        <div class="section-title-main">
-                            <span class="section-title-icon" aria-hidden="true">
-                                <svg viewBox="0 0 24 24" focusable="false">
-                                    <path d="M4 7h16"/>
-                                    <path d="M4 12h16"/>
-                                    <path d="M4 17h10"/>
-                                </svg>
-                            </span>
-                            <h2 class="section-title-text">Caixinhas</h2>
+        <section id="aba-contas" class="tab-content active">
+            <div class="patrimonio-layout">
+                <section class="patrimonio-main-panel">
+                    <div class="patrimonio-panel-header">
+                        <div>
+                            <h2>Caixinhas</h2>
+                            <small id="patrimonio-lista-meta">Carregando...</small>
                         </div>
-                        <span class="section-title-meta">Saldos, metas e a&ccedil;&otilde;es</span>
+                        <label class="patrimonio-sort">
+                            <span>Ordenar por</span>
+                            <select id="patrimonio-ordenacao" onchange="renderizarCaixinhas()">
+                                <option value="nome">Nome (A-Z)</option>
+                                <option value="saldo">Maior saldo</option>
+                                <option value="meta">Maior progresso</option>
+                            </select>
+                        </label>
                     </div>
                     <div class="caixinhas-grid" id="caixinhas-lista">
                         <p class="loading">Carregando caixinhas...</p>
                     </div>
+                    <div class="patrimonio-panel-footer">
+                        <span id="patrimonio-legenda-tipos">Legenda de tipos: Corrente, Investimento, Reserva e Outros</span>
+                        <strong id="patrimonio-total-exibido">Exibindo 0 caixinhas</strong>
+                    </div>
                 </section>
-            </div>
 
-            <!-- Aba: Transferências -->
-            <div id="aba-transferencias" class="tab-content">
-                <!-- Lista de Transferências -->
-                <section class="module-data-section">
-                    <div class="section-title-row">
-                        <div class="section-title-main">
-                            <span class="section-title-icon" aria-hidden="true">
-                                <svg viewBox="0 0 24 24" focusable="false">
-                                    <path d="M7 7h10"/>
-                                    <path d="M14 4l3 3-3 3"/>
-                                    <path d="M17 17H7"/>
-                                    <path d="M10 14l-3 3 3 3"/>
-                                </svg>
-                            </span>
-                            <h2 class="section-title-text">Transfer&ecirc;ncias</h2>
+                <aside class="patrimonio-side-column">
+                    <section class="patrimonio-side-card">
+                        <div class="patrimonio-side-header">
+                            <h2>Composi&ccedil;&atilde;o do patrim&ocirc;nio</h2>
+                            <button type="button" class="patrimonio-link-btn" onclick="mostrarAba('contas')">Ver detalhes</button>
                         </div>
-                        <span class="section-title-meta">Movimenta&ccedil;&otilde;es entre caixinhas</span>
-                    </div>
-                    <div class="transferencias-lista" id="transferencias-lista">
-                    <p class="loading">Carregando transferências...</p>
-                    </div>
-                </section>
+                        <div id="patrimonio-composicao" class="patrimonio-composition">
+                            <p class="loading">Carregando composi&ccedil;&atilde;o...</p>
+                        </div>
+                    </section>
+
+                    <section class="patrimonio-side-card">
+                        <div class="patrimonio-side-header">
+                            <h2>Metas em destaque</h2>
+                            <button type="button" class="patrimonio-link-btn" onclick="abrirModalNovaConta()">Nova meta</button>
+                        </div>
+                        <div id="patrimonio-metas" class="patrimonio-goals-list">
+                            <p class="loading">Carregando metas...</p>
+                        </div>
+                    </section>
+
+                    <section class="patrimonio-side-card insight">
+                        <div>
+                            <h2>Insights r&aacute;pidos</h2>
+                            <p id="patrimonio-insight">Acompanhe suas metas e mantenha a consist&ecirc;ncia nos aportes.</p>
+                        </div>
+                        <span class="patrimonio-insight-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false"><path d="M4 17 10 11l4 4 6-8"/><path d="M15 7h5v5"/></svg>
+                        </span>
+                    </section>
+                </aside>
             </div>
-        </main>
+        </section>
+
+        <section id="aba-transferencias" class="tab-content">
+            <section class="patrimonio-main-panel transfer-panel">
+                <div class="patrimonio-panel-header">
+                    <div>
+                        <h2>Transfer&ecirc;ncias</h2>
+                        <small>Movimenta&ccedil;&otilde;es entre caixinhas</small>
+                    </div>
+                    <button type="button" class="patrimonio-secondary-btn" onclick="abrirModalNovaTransferencia()">Nova transfer&ecirc;ncia</button>
+                </div>
+                <div class="transferencias-lista" id="transferencias-lista">
+                    <p class="loading">Carregando transfer&ecirc;ncias...</p>
+                </div>
+            </section>
+        </section>
     </div>
 
-    <!-- Modal: Nova/Editar Caixinha -->
-    <div id="modal-conta" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="modal-conta-titulo">Nova Caixinha</h2>
-                <span class="close" onclick="fecharModal('modal-conta')">&times;</span>
+    <div id="modal-conta" class="patrimonio-modal" aria-hidden="true">
+        <div class="patrimonio-modal-box caixinha-modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-conta-titulo">
+            <div class="patrimonio-modal-header">
+                <div>
+                    <h2 id="modal-conta-titulo">Nova Caixinha</h2>
+                    <p>Organize reservas, metas e investimentos em caixinhas.</p>
+                </div>
+                <button type="button" class="patrimonio-modal-close" onclick="fecharModal('modal-conta')" aria-label="Fechar">&times;</button>
             </div>
             <form id="form-conta" onsubmit="salvarConta(event)">
                 <input type="hidden" id="conta-id">
-                <div class="form-group">
-                    <label for="conta-nome">Nome *</label>
-                    <input type="text" id="conta-nome" required placeholder="Ex: Reserva de Emergência">
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="conta-tipo">Tipo</label>
-                        <select id="conta-tipo">
-                            <option value="Corrente">Corrente</option>
-                            <option value="Poupança">Poupança</option>
-                            <option value="Investimento">Investimento</option>
-                            <option value="Reserva">Reserva</option>
-                        </select>
+                <div class="patrimonio-modal-body caixinha-modal-grid">
+                    <div class="patrimonio-form-column">
+                        <section class="patrimonio-form-section">
+                            <h3>Dados da caixinha</h3>
+                            <div class="form-group">
+                                <label for="conta-nome">Nome *</label>
+                                <input type="text" id="conta-nome" required placeholder="Ex: Reserva de Emerg&ecirc;ncia">
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="conta-tipo">Tipo</label>
+                                    <select id="conta-tipo">
+                                        <option value="Corrente">Corrente</option>
+                                        <option value="Poupan&ccedil;a">Poupan&ccedil;a</option>
+                                        <option value="Investimento">Investimento</option>
+                                        <option value="Reserva">Reserva</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="conta-cor">Cor</label>
+                                    <input type="color" id="conta-cor" value="#28a745">
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="patrimonio-form-section">
+                            <h3>Valores e meta</h3>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="conta-saldo-inicial">Saldo Inicial</label>
+                                    <input type="text" id="conta-saldo-inicial" placeholder="R$ 0,00" onkeyup="formatarMoeda(this)">
+                                </div>
+                                <div class="form-group">
+                                    <label for="conta-meta">Meta (opcional)</label>
+                                    <input type="text" id="conta-meta" placeholder="R$ 0,00" onkeyup="formatarMoeda(this)">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="conta-obs">Observa&ccedil;&otilde;es</label>
+                                <textarea id="conta-obs" rows="3" placeholder="Adicione uma observa&ccedil;&atilde;o opcional"></textarea>
+                            </div>
+                        </section>
                     </div>
-                    <div class="form-group">
-                        <label for="conta-cor">Cor</label>
-                        <input type="color" id="conta-cor" value="#28a745">
-                    </div>
+
+                    <aside class="patrimonio-preview-panel">
+                        <h3>Pr&eacute;via da caixinha</h3>
+                        <p>Assim sua caixinha aparecer&aacute; no painel.</p>
+                        <div class="caixinha-preview-card">
+                            <span class="caixinha-preview-icon" id="preview-conta-icon" aria-hidden="true"></span>
+                            <strong id="preview-conta-nome">Nome da caixinha</strong>
+                            <small id="preview-conta-tipo">Tipo: Corrente</small>
+                            <div class="preview-metric">
+                                <span>Saldo inicial</span>
+                                <strong id="preview-conta-saldo">R$ 0,00</strong>
+                            </div>
+                            <div class="preview-metric">
+                                <span>Meta opcional</span>
+                                <strong id="preview-conta-meta">R$ 0,00</strong>
+                                <div class="preview-progress"><span id="preview-conta-progress"></span></div>
+                            </div>
+                        </div>
+                        <div class="patrimonio-tip">A cor e o tipo ajudam a identificar sua caixinha rapidamente.</div>
+                    </aside>
                 </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="conta-saldo-inicial">Saldo Inicial</label>
-                        <input type="text" id="conta-saldo-inicial" placeholder="R$ 0,00" onkeyup="formatarMoeda(this)">
-                    </div>
-                    <div class="form-group">
-                        <label for="conta-meta">Meta (Opcional)</label>
-                        <input type="text" id="conta-meta" placeholder="R$ 0,00" onkeyup="formatarMoeda(this)">
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label for="conta-obs">Observações</label>
-                    <textarea id="conta-obs" rows="3"></textarea>
-                </div>
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="fecharModal('modal-conta')">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Salvar</button>
+                <div class="patrimonio-modal-footer">
+                    <button type="button" class="patrimonio-secondary-btn" onclick="fecharModal('modal-conta')">Cancelar</button>
+                    <button type="submit" class="patrimonio-primary-btn">Salvar caixinha</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Modal: Nova Transferência -->
-    <div id="modal-transferencia" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Nova Transferência</h2>
-                <span class="close" onclick="fecharModal('modal-transferencia')">&times;</span>
+    <div id="modal-transferencia" class="patrimonio-modal" aria-hidden="true">
+        <div class="patrimonio-modal-box transferencia-modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-transferencia-titulo">
+            <div class="patrimonio-modal-header">
+                <div>
+                    <h2 id="modal-transferencia-titulo">Nova Transfer&ecirc;ncia</h2>
+                    <p>Transfira valores entre suas caixinhas de forma organizada.</p>
+                </div>
+                <button type="button" class="patrimonio-modal-close" onclick="fecharModal('modal-transferencia')" aria-label="Fechar">&times;</button>
             </div>
             <form id="form-transferencia" onsubmit="salvarTransferencia(event)">
-                <div class="form-group">
-                    <label for="transf-origem">Conta Origem *</label>
-                    <select id="transf-origem" required>
-                        <option value="">Selecione...</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="transf-destino">Conta Destino *</label>
-                    <select id="transf-destino" required>
-                        <option value="">Selecione...</option>
-                    </select>
-                </div>
-                <div class="form-row">
+                <div class="patrimonio-modal-body transferencia-form-grid">
                     <div class="form-group">
-                        <label for="transf-valor">Valor *</label>
-                        <input type="text" id="transf-valor" required placeholder="R$ 0,00" onkeyup="formatarMoeda(this)">
+                        <label for="transf-origem">Conta Origem *</label>
+                        <select id="transf-origem" required onchange="atualizarPreviewTransferencia()">
+                            <option value="">Selecione...</option>
+                        </select>
                     </div>
                     <div class="form-group">
-                        <label for="transf-data">Data *</label>
-                        <input type="date" id="transf-data" required>
+                        <label for="transf-destino">Conta Destino *</label>
+                        <select id="transf-destino" required onchange="atualizarPreviewTransferencia()">
+                            <option value="">Selecione...</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="transf-valor">Valor *</label>
+                            <input type="text" id="transf-valor" required placeholder="R$ 0,00" onkeyup="formatarMoeda(this); atualizarPreviewTransferencia()">
+                        </div>
+                        <div class="form-group">
+                            <label for="transf-data">Data *</label>
+                            <input type="date" id="transf-data" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="transf-descricao">Descri&ccedil;&atilde;o</label>
+                        <input type="text" id="transf-descricao" placeholder="Ex: Aporte mensal">
+                    </div>
+                    <div class="transfer-preview">
+                        <h3>Resumo da transfer&ecirc;ncia</h3>
+                        <div>
+                            <span>Sa&iacute;da da origem</span>
+                            <strong id="preview-transfer-saida">R$ 0,00</strong>
+                        </div>
+                        <span class="transfer-preview-arrow" aria-hidden="true">&rarr;</span>
+                        <div>
+                            <span>Entrada no destino</span>
+                            <strong id="preview-transfer-entrada">R$ 0,00</strong>
+                        </div>
                     </div>
                 </div>
-                <div class="form-group">
-                    <label for="transf-descricao">Descrição</label>
-                    <input type="text" id="transf-descricao" placeholder="Ex: Aporte mensal">
-                </div>
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="fecharModal('modal-transferencia')">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Transferir</button>
+                <div class="patrimonio-modal-footer">
+                    <button type="button" class="patrimonio-secondary-btn" onclick="fecharModal('modal-transferencia')">Cancelar</button>
+                    <button type="submit" class="patrimonio-primary-btn">Transferir</button>
                 </div>
             </form>
         </div>
@@ -193,12 +324,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='js/patrimonio.js') }}"></script>
-    <script>
-        function toggleMobileView() {
-            document.body.classList.toggle('mobile-view');
-            const btn = document.getElementById('mobile-btn');
-            btn.innerHTML = document.body.classList.contains('mobile-view') ? '💻 Ver em Desktop' : '📱 Ver em Mobile';
-        }
-    </script>
+    <script src="{{ url_for('static', filename='js/patrimonio.js') }}"></script>
 {% endblock %}
