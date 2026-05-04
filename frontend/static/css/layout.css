@@ -162,7 +162,7 @@ body.app-shell-body .app-topbar {
     z-index: 20;
     min-height: 72px;
     display: grid;
-    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    grid-template-columns: 44px minmax(0, 1fr) auto;
     align-items: center;
     gap: 12px;
     padding: 14px var(--app-page-gutter);
@@ -170,6 +170,14 @@ body.app-shell-body .app-topbar {
     border-bottom: 1px solid rgba(0, 0, 0, 0.08);
     backdrop-filter: blur(24px) saturate(180%);
     -webkit-backdrop-filter: blur(24px) saturate(180%);
+}
+
+body.app-shell-body .app-topbar-actions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    min-width: 0;
 }
 
 body.app-shell-body .app-menu-button,
@@ -199,6 +207,143 @@ body.app-shell-body .app-topbar-title span {
     line-height: 1.2;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+body.app-shell-body .perfil-financeiro-switcher {
+    position: relative;
+}
+
+body.app-shell-body .perfil-financeiro-trigger {
+    min-width: 172px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    padding: 0 10px;
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.78);
+    color: #111827;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+}
+
+body.app-shell-body .perfil-financeiro-avatar,
+body.app-shell-body .perfil-financeiro-option-avatar {
+    --perfil-color: #2563eb;
+    width: 28px;
+    height: 28px;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--perfil-color) 16%, #ffffff);
+    color: var(--perfil-color);
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
+body.app-shell-body .perfil-financeiro-text,
+body.app-shell-body .perfil-financeiro-option-text {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    line-height: 1.1;
+}
+
+body.app-shell-body .perfil-financeiro-name {
+    max-width: 96px;
+    overflow: hidden;
+    font-size: 0.86rem;
+    font-weight: 750;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+body.app-shell-body .perfil-financeiro-type {
+    margin-top: 2px;
+    color: #667085;
+    font-size: 0.68rem;
+    font-weight: 650;
+}
+
+body.app-shell-body .perfil-financeiro-caret {
+    margin-left: auto;
+    color: #667085;
+    font-size: 0.92rem;
+}
+
+body.app-shell-body .perfil-financeiro-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 50;
+    width: 240px;
+    display: none;
+    padding: 8px;
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 18px 45px rgba(15, 23, 42, 0.16);
+    backdrop-filter: blur(18px);
+}
+
+body.app-shell-body .perfil-financeiro-switcher.open .perfil-financeiro-menu {
+    display: block;
+}
+
+body.app-shell-body .perfil-financeiro-options {
+    display: grid;
+    gap: 4px;
+}
+
+body.app-shell-body .perfil-financeiro-option {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: #111827;
+    text-align: left;
+    cursor: pointer;
+}
+
+body.app-shell-body .perfil-financeiro-option:hover,
+body.app-shell-body .perfil-financeiro-option.active {
+    background: #f3f6fb;
+}
+
+body.app-shell-body .perfil-financeiro-option strong {
+    font-size: 0.88rem;
+}
+
+body.app-shell-body .perfil-financeiro-option small {
+    margin-top: 2px;
+    color: #667085;
+    font-size: 0.72rem;
+}
+
+body.app-shell-body .perfil-financeiro-option-check {
+    margin-left: auto;
+    color: #2563eb;
+    font-weight: 850;
+}
+
+body.app-shell-body .perfil-financeiro-config {
+    width: 100%;
+    margin-top: 8px;
+    padding: 9px;
+    border: 1px dashed rgba(15, 23, 42, 0.14);
+    border-radius: 10px;
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 0.8rem;
+    font-weight: 700;
 }
 
 body.app-shell-body .app-content {
@@ -862,9 +1007,24 @@ body.app-shell-body .mobile-toggle {
     }
 
     body.app-shell-body .app-topbar {
-        grid-template-columns: 40px minmax(0, 1fr) 40px;
+        grid-template-columns: 40px minmax(0, 1fr) auto;
         min-height: 60px;
         padding: 10px var(--app-page-gutter-mobile);
+    }
+
+    body.app-shell-body .perfil-financeiro-trigger {
+        min-width: 0;
+        width: 44px;
+        padding: 0 8px;
+    }
+
+    body.app-shell-body .perfil-financeiro-text,
+    body.app-shell-body .perfil-financeiro-caret {
+        display: none;
+    }
+
+    body.app-shell-body .perfil-financeiro-menu {
+        right: -50px;
     }
 
     body.app-shell-body .app-actionbar-region {

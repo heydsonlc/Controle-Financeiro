@@ -235,6 +235,7 @@ def register_blueprints(app):
         from backend.routes.despesas_previstas import despesas_previstas_bp
         from backend.routes.mobilidade_app import mobilidade_app_bp
         from backend.routes.ir import ir_bp
+        from backend.routes.perfis import perfis_bp
     except ImportError:
         from routes.categorias import categorias_bp, categorias_cartao_bp
         from routes.despesas import despesas_bp
@@ -254,6 +255,7 @@ def register_blueprints(app):
         from routes.despesas_previstas import despesas_previstas_bp
         from routes.mobilidade_app import mobilidade_app_bp
         from routes.ir import ir_bp
+        from routes.perfis import perfis_bp
 
     # Registrar blueprints
     app.register_blueprint(categorias_bp, url_prefix='/api/categorias')
@@ -275,6 +277,7 @@ def register_blueprints(app):
     app.register_blueprint(despesas_previstas_bp, url_prefix='/api/despesas-previstas')
     app.register_blueprint(mobilidade_app_bp, url_prefix='/api/mobilidade-app')
     app.register_blueprint(ir_bp, url_prefix='/api/ir')
+    app.register_blueprint(perfis_bp)
 
 
 def register_error_handlers(app):

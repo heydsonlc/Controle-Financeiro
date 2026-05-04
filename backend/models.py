@@ -13,6 +13,49 @@ from flask_sqlalchemy import SQLAlchemy
 db = SQLAlchemy()
 
 
+class PerfilFinanceiro(db.Model):
+    """
+    Contexto financeiro selecionavel na aplicacao.
+
+    Nesta fase o perfil ativo fica em sessao e ainda nao escopa os dados
+    financeiros existentes.
+    """
+    __tablename__ = 'perfil_financeiro'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(120), nullable=False, unique=True)
+    tipo = db.Column(db.String(30), nullable=False)
+    documento = db.Column(db.String(32), nullable=True)
+    avatar = db.Column(db.String(20), nullable=True)
+    logo_url = db.Column(db.String(255), nullable=True)
+    cor = db.Column(db.String(7), nullable=False, default='#2563eb')
+    ativo = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        db.Index('ix_perfil_financeiro_tipo', 'tipo'),
+        db.Index('ix_perfil_financeiro_ativo', 'ativo'),
+    )
+
+    def __repr__(self):
+        return f'<PerfilFinanceiro {self.nome}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'nome': self.nome,
+            'tipo': self.tipo,
+            'documento': self.documento,
+            'avatar': self.avatar,
+            'logo_url': self.logo_url,
+            'cor': self.cor,
+            'ativo': bool(self.ativo),
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
 # ============================================================================
 # MÓDULO 1: ORÇAMENTO (RECEITAS E DESPESAS)
 # ============================================================================

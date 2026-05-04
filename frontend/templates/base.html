@@ -187,11 +187,27 @@
                 <div class="app-topbar-title">
                     <span>{{ page_title or "Controle Financeiro" }}</span>
                 </div>
-                <button class="app-topbar-button" type="button" aria-label="Alertas">
-                    <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                        <path d="M7 10a5 5 0 0 1 10 0v4l2 3H5l2-3v-4ZM10 20h4"/>
-                    </svg>
-                </button>
+                <div class="app-topbar-actions">
+                    <div class="perfil-financeiro-switcher" id="perfil-financeiro-switcher" data-loading="true">
+                        <button class="perfil-financeiro-trigger" id="perfil-financeiro-trigger" type="button" aria-haspopup="true" aria-expanded="false">
+                            <span class="perfil-financeiro-avatar" id="perfil-financeiro-avatar" aria-hidden="true">PE</span>
+                            <span class="perfil-financeiro-text">
+                                <span class="perfil-financeiro-name" id="perfil-financeiro-name">Pessoal</span>
+                                <span class="perfil-financeiro-type" id="perfil-financeiro-type">Perfil financeiro</span>
+                            </span>
+                            <span class="perfil-financeiro-caret" aria-hidden="true">⌄</span>
+                        </button>
+                        <div class="perfil-financeiro-menu" id="perfil-financeiro-menu" role="menu" aria-label="Perfis financeiros">
+                            <div class="perfil-financeiro-options" id="perfil-financeiro-options"></div>
+                            <button class="perfil-financeiro-config" type="button" disabled>Configurar perfis</button>
+                        </div>
+                    </div>
+                    <button class="app-topbar-button" type="button" aria-label="Alertas">
+                        <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                            <path d="M7 10a5 5 0 0 1 10 0v4l2 3H5l2-3v-4ZM10 20h4"/>
+                        </svg>
+                    </button>
+                </div>
             </header>
 
             <div class="app-actionbar-region">
@@ -206,6 +222,7 @@
 
     <script src="{{ url_for('static', filename='js/icons.js') }}"></script>
     <script src="{{ url_for('static', filename='js/instituicoes.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/contexto_financeiro.js') }}"></script>
     <script src="{{ url_for('static', filename='js/modals.js') }}"></script>
     {% block extra_js %}{% endblock %}
 </body>
