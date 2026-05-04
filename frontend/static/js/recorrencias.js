@@ -14,8 +14,7 @@ let estadoRecorrencias = {
 document.addEventListener('DOMContentLoaded', async () => {
     await carregarDadosBase();
     await carregarRecorrencias();
-    alternarTipoCadastro();
-    alternarFrequencia();
+    prepararFormularioNovaRecorrencia();
 });
 
 async function carregarDadosBase() {
@@ -55,7 +54,7 @@ function preencherSelectCartoes() {
 }
 
 async function carregarCategoriasCartaoSelecionado() {
-    const cartaoId = document.getElementById('cartao-id').value;
+    const cartaoId = document.getElementById('cartao-id')?.value;
     const select = document.getElementById('categoria-cartao-id');
     if (!select) return;
 
@@ -79,7 +78,21 @@ async function carregarRecorrencias() {
     estadoRecorrencias.recorrencias = recResp.success ? (recResp.data || []) : [];
     estadoRecorrencias.consorcios = consResp.success ? (consResp.data || []) : [];
 
-    renderizarLista();
+    renderizarTelaRecorrencias();
+}
+
+async function recarregarRecorrencias() {
+    await carregarDadosBase();
+    await carregarRecorrencias();
+}
+
+function renderizarTelaRecorrencias() {
+    const itens = obterItensUnificados();
+    const filtrados = obterItensFiltrados(itens);
+    renderizarCardsResumo(itens);
+    renderizarAgendaPeriodo(itens);
+    renderizarLista(filtrados);
+    renderizarComposicao(itens);
 }
 
 function obterItensUnificados() {
@@ -91,15 +104,17 @@ function obterItensUnificados() {
             nome: item.nome,
             descricao: item.descricao,
             tipo: 'recorrencia_simples',
-            tipoLabel: 'Despesa recorrente',
+            tipoLabel: 'Despesa',
             frequencia: item.frequencia || item.tipo_recorrencia || 'mensal',
             proximoVencimento: item.proximo_vencimento,
-            valor: item.valor,
+            valor: Number(item.valor || 0),
             categoriaId: item.categoria_id,
             categoriaNome: item.categoria_nome || categoria?.nome || '-',
             categoriaIcone: item.categoria_icone || categoria?.icone || null,
             categoriaLogoUrl: item.categoria_logo_url || categoria?.logo_url || null,
             meioPagamento: item.meio_pagamento || null,
+            categoriaCartaoId: item.categoria_cartao_id || null,
+            categoriaCartaoNome: item.categoria_cartao_nome || null,
             status: item.ativo ? 'ativa' : 'inativa',
             statusLabel: item.ativo ? 'Ativa' : 'Inativa',
             raw: item
@@ -115,9 +130,9 @@ function obterItensUnificados() {
         tipoLabel: 'Consorcio',
         frequencia: 'parcelas',
         proximoVencimento: item.mes_inicio,
-        valor: item.valor_inicial,
-        categoriaId: '',
-        categoriaNome: '-',
+        valor: Number(item.valor_inicial || 0),
+        categoriaId: item.categoria_id || '',
+        categoriaNome: item.categoria_nome || '-',
         status: item.ativo ? 'ativa' : 'inativa',
         statusLabel: item.ativo ? 'Ativo' : 'Inativo',
         detalhe: `${item.numero_parcelas || 0} parcelas`,
@@ -127,35 +142,88 @@ function obterItensUnificados() {
     return [...recorrencias, ...consorcios];
 }
 
-function aplicarFiltrosRecorrencias() {
-    renderizarLista();
-}
+function obterItensFiltrados(itens) {
+    const filtroTipo = document.getElementById('filtro-tipo')?.value || '';
+    const filtroStatus = document.getElementById('filtro-status')?.value || '';
+    const filtroFrequencia = document.getElementById('filtro-frequencia')?.value || '';
+    const filtroCategoria = document.getElementById('filtro-categoria')?.value || '';
+    const busca = normalizarBusca(document.getElementById('filtro-busca')?.value || '');
 
-function renderizarLista() {
-    const container = document.getElementById('recorrencias-lista');
-    const totalEl = document.getElementById('recorrencias-total');
-    if (!container) return;
-
-    const filtroTipo = document.getElementById('filtro-tipo').value;
-    const filtroStatus = document.getElementById('filtro-status').value;
-    const filtroFrequencia = document.getElementById('filtro-frequencia').value;
-    const filtroCategoria = document.getElementById('filtro-categoria').value;
-
-    let itens = obterItensUnificados();
-    itens = itens.filter(item => {
+    return itens.filter(item => {
         if (filtroTipo && item.tipo !== filtroTipo) return false;
         if (filtroStatus && item.status !== filtroStatus) return false;
         if (filtroFrequencia && item.frequencia !== filtroFrequencia) return false;
         if (filtroCategoria && String(item.categoriaId || '') !== filtroCategoria) return false;
+        if (busca && !normalizarBusca(`${item.nome} ${item.descricao || ''} ${item.categoriaNome}`).includes(busca)) return false;
         return true;
     });
+}
+
+function aplicarFiltrosRecorrencias() {
+    renderizarTelaRecorrencias();
+}
+
+function renderizarCardsResumo(itens) {
+    const ativas = itens.filter(item => item.status === 'ativa');
+    const totalMensal = ativas.reduce((total, item) => total + valorMensalEstimado(item), 0);
+    const proximos = obterEventosAgenda(ativas);
+    const proximo = proximos[0] || null;
+    const categorias = new Set(ativas.map(item => item.categoriaNome).filter(nome => nome && nome !== '-'));
+    const categoriaTop = obterCategoriaMaisUsada(ativas);
+
+    setText('kpi-ativas', ativas.length);
+    setText('kpi-ativas-sub', `de ${itens.length} cadastradas`);
+    setText('kpi-valor-mensal', formatarMoeda(totalMensal));
+    setText('kpi-proxima-geracao', proximo ? `${proximo.dias} ${proximo.dias === 1 ? 'dia' : 'dias'}` : '-');
+    setText('kpi-proxima-data', proximo ? `${formatarData(proximo.data)} (${formatarDiaSemana(proximo.data)})` : 'Sem data prevista');
+    setText('kpi-categorias', categorias.size);
+    setText('kpi-categoria-top', categoriaTop ? `mais usada: ${categoriaTop}` : 'Sem categoria dominante');
+}
+
+function renderizarAgendaPeriodo(itens) {
+    const container = document.getElementById('agenda-periodo');
+    if (!container) return;
+
+    const eventos = obterEventosAgenda(itens.filter(item => item.status === 'ativa')).slice(0, 3);
+    if (!eventos.length) {
+        container.innerHTML = `
+            <div class="recorrencias-empty">
+                <strong>Nenhuma recorrencia prevista no periodo.</strong>
+                <span>Cadastre uma recorrencia para automatizar previsoes.</span>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = eventos.map(evento => `
+        <article class="agenda-item">
+            <span class="agenda-icon" style="color:${corCategoria(evento.item.categoriaId)}">${renderizarIconeCategoria(evento.item, '22px')}</span>
+            <div>
+                <strong>${escapeHtml(evento.item.nome)}</strong>
+                <small>${formatarData(evento.data)} (${formatarDiaSemana(evento.data)})</small>
+            </div>
+            <strong class="agenda-value">${formatarMoeda(evento.item.valor)}</strong>
+            <span class="agenda-badge">${evento.dias} ${evento.dias === 1 ? 'dia' : 'dias'}</span>
+        </article>
+    `).join('');
+}
+
+function renderizarLista(itens) {
+    const container = document.getElementById('recorrencias-lista');
+    const totalEl = document.getElementById('recorrencias-total');
+    if (!container) return;
 
     if (totalEl) {
-        totalEl.textContent = `${itens.length} cadastro(s)`;
+        totalEl.textContent = `${itens.length} ${itens.length === 1 ? 'cadastro' : 'cadastros'} no total`;
     }
 
     if (itens.length === 0) {
-        container.innerHTML = '<p class="recorrencias-empty">Nenhuma recorrencia cadastrada para os filtros selecionados.</p>';
+        container.innerHTML = `
+            <div class="recorrencias-empty">
+                <strong>Nenhuma recorrencia cadastrada.</strong>
+                <span>Cadastre uma recorrencia para automatizar previsoes.</span>
+            </div>
+        `;
         return;
     }
 
@@ -173,69 +241,126 @@ function renderizarLista() {
             </div>
             ${itens.map(renderizarLinha).join('')}
         </div>
+        <div class="recorrencias-table-footer">
+            <span>Mostrando 1 a ${itens.length} de ${itens.length} recorrencias</span>
+            <span>Itens por pagina <strong>10</strong></span>
+        </div>
     `;
 }
 
 function renderizarLinha(item) {
-    const valor = formatarMoeda(item.valor);
     const vencimento = item.proximoVencimento ? formatarData(item.proximoVencimento) : '-';
+    const dias = item.proximoVencimento ? diasAte(item.proximoVencimento) : null;
     const detalhe = item.detalhe || formatarFrequencia(item.frequencia, item.raw);
-    const categoriaVisual = {
-        nome: item.categoriaNome,
-        icone: item.categoriaIcone,
-        logo_url: item.categoriaLogoUrl
-    };
-    const categoriaVisualHtml = (typeof renderCategoryVisual === 'function' && (item.categoriaLogoUrl || item.categoriaIcone))
-        ? renderCategoryVisual(categoriaVisual, { size: '12px', alt: item.categoriaNome })
-        : '';
+    const categoriaVisualHtml = renderizarIconeCategoria(item, '16px');
 
     return `
         <div class="recorrencias-row">
             <div class="recorrencias-title">
-                <strong>${escapeHtml(item.nome)}</strong>
-                <small>${escapeHtml(item.descricao || detalhe || '')}</small>
+                <span class="row-category-icon" style="color:${corCategoria(item.categoriaId)}">${categoriaVisualHtml}</span>
+                <span>
+                    <strong>${escapeHtml(item.nome)}</strong>
+                    <small>${escapeHtml(item.descricao || detalhe || '')}</small>
+                </span>
             </div>
-            <span><span class="compact-pill">${escapeHtml(item.tipoLabel)}</span>${(typeof renderPaymentIcon === 'function' && item.meioPagamento) ? `<span class="inline-icon" style="opacity:0.6;margin-left:4px" title="${item.meioPagamento}">${renderPaymentIcon(item.meioPagamento, { size: '12px' })}</span>` : ''}</span>
+            <span><span class="recorrencias-pill type">${escapeHtml(item.tipoLabel)}</span>${(typeof renderPaymentIcon === 'function' && item.meioPagamento) ? `<span class="inline-icon" title="${item.meioPagamento}">${renderPaymentIcon(item.meioPagamento, { size: '13px' })}</span>` : ''}</span>
             <span>${escapeHtml(detalhe)}</span>
-            <span>${vencimento}</span>
-            <span class="recorrencias-value">${valor}</span>
-            <span class="icon-chip">${categoriaVisualHtml}${escapeHtml(item.categoriaNome)}</span>
-            <span><span class="compact-pill">${escapeHtml(item.statusLabel)}</span></span>
+            <span>${vencimento}${dias !== null ? `<small class="next-days">(${dias} ${dias === 1 ? 'dia' : 'dias'})</small>` : ''}</span>
+            <span class="recorrencias-value">${formatarMoeda(item.valor)}</span>
+            <span class="categoria-cell"><i style="background:${corCategoria(item.categoriaId)}"></i>${escapeHtml(item.categoriaNome)}</span>
+            <span><span class="recorrencias-pill ${item.status === 'ativa' ? 'active' : 'inactive'}">${escapeHtml(item.statusLabel)}</span></span>
             <span class="row-actions recorrencias-actions">
-                <button class="row-action-button" type="button" onclick="editarRecorrencia('${item.origem}', ${item.id})" title="Editar" aria-label="Editar">
-                    <span class="action-icon" aria-hidden="true">${iconeEditar()}</span>
-                </button>
-                <button class="row-action-button danger" type="button" onclick="inativarRecorrencia('${item.origem}', ${item.id})" title="Inativar" aria-label="Inativar">
-                    <span class="action-icon" aria-hidden="true">${iconeInativar()}</span>
-                </button>
+                <button class="row-action-button" type="button" onclick="editarRecorrencia('${item.origem}', ${item.id})" title="Editar" aria-label="Editar">${iconeEditar()}</button>
+                <button class="row-action-button danger" type="button" onclick="inativarRecorrencia('${item.origem}', ${item.id})" title="Inativar" aria-label="Inativar">${iconeInativar()}</button>
             </span>
         </div>
     `;
 }
 
+function renderizarComposicao(itens) {
+    const container = document.getElementById('recorrencias-composicao');
+    if (!container) return;
+
+    const ativas = itens.filter(item => item.status === 'ativa');
+    if (!ativas.length) {
+        container.innerHTML = '<div class="recorrencias-empty"><strong>Sem dados suficientes para composicao.</strong></div>';
+        return;
+    }
+
+    const total = ativas.length;
+    const porFrequencia = ['mensal', 'semanal', 'quinzenal', 'anual', 'parcelas'].map(freq => ({
+        freq,
+        label: formatarFrequencia(freq),
+        count: ativas.filter(item => item.frequencia === freq).length
+    })).filter(item => item.count > 0);
+    const impacto = ativas.reduce((totalValor, item) => totalValor + valorMensalEstimado(item), 0);
+    const proximo = obterEventosAgenda(ativas)[0] || null;
+
+    container.innerHTML = `
+        <div class="composition-layout">
+            <div class="composition-donut" style="${gerarDonut(porFrequencia, total)}">
+                <strong>${total}</strong>
+                <span>Total</span>
+            </div>
+            <div class="composition-list">
+                ${porFrequencia.map((item, index) => `
+                    <div class="composition-line">
+                        <span><i class="dot color-${index}"></i>${escapeHtml(item.label)}</span>
+                        <strong>${item.count} (${Math.round((item.count / total) * 100)}%)</strong>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+        <div class="side-indicators">
+            <article>
+                <span>Proxima geracao em</span>
+                <strong>${proximo ? `${proximo.dias} ${proximo.dias === 1 ? 'dia' : 'dias'}` : '-'}</strong>
+                <small>${proximo ? `${formatarData(proximo.data)} (${formatarDiaSemana(proximo.data)})` : 'Sem data prevista'}</small>
+            </article>
+            <article class="green">
+                <span>Impacto mensal (ativas)</span>
+                <strong>${formatarMoeda(impacto)}</strong>
+            </article>
+            <article>
+                <span>Categoria mais usada</span>
+                <strong>${escapeHtml(obterCategoriaMaisUsada(ativas) || '-')}</strong>
+            </article>
+        </div>
+    `;
+}
+
 function abrirFormularioRecorrencia() {
+    prepararFormularioNovaRecorrencia();
+    document.getElementById('secao-formulario')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    document.getElementById('nome')?.focus();
+}
+
+function prepararFormularioNovaRecorrencia() {
     estadoRecorrencias.modoEdicao = null;
-    document.getElementById('form-recorrencia').reset();
-    document.getElementById('recorrencia-id').value = '';
-    document.getElementById('recorrencia-origem').value = '';
-    document.getElementById('form-titulo').textContent = 'Nova Recorrencia';
-    document.getElementById('tipo-cadastro').disabled = false;
-    document.getElementById('secao-formulario').hidden = false;
+    document.getElementById('form-recorrencia')?.reset();
+    setValue('recorrencia-id', '');
+    setValue('recorrencia-origem', '');
+    setText('form-titulo', 'Nova recorrencia');
+    const tipo = document.getElementById('tipo-cadastro');
+    if (tipo) {
+        tipo.disabled = false;
+        tipo.value = 'recorrencia_simples';
+    }
+    const ativo = document.getElementById('recorrencia-ativa');
+    if (ativo) ativo.checked = true;
     alternarTipoCadastro();
     alternarFrequencia();
-    document.getElementById('nome').focus();
+    alternarMeioPagamento();
 }
 
 function fecharFormularioRecorrencia() {
-    document.getElementById('secao-formulario').hidden = true;
-    document.getElementById('tipo-cadastro').disabled = false;
-    estadoRecorrencias.modoEdicao = null;
+    prepararFormularioNovaRecorrencia();
 }
 
 function alternarTipoCadastro() {
-    const tipo = document.getElementById('tipo-cadastro').value;
+    const tipo = document.getElementById('tipo-cadastro')?.value || 'recorrencia_simples';
     const isConsorcio = tipo === 'consorcio';
-    const editandoConsorcio = isConsorcio && document.getElementById('recorrencia-id').value;
+    const editandoConsorcio = isConsorcio && document.getElementById('recorrencia-id')?.value;
     const categoria = document.getElementById('categoria-id');
 
     document.querySelectorAll('.recorrencia-campo').forEach(el => {
@@ -248,11 +373,12 @@ function alternarTipoCadastro() {
         categoria.required = !editandoConsorcio;
     }
     alternarFrequencia();
+    alternarMeioPagamento();
 }
 
 function alternarFrequencia() {
-    const tipo = document.getElementById('tipo-cadastro').value;
-    const frequencia = document.getElementById('frequencia').value;
+    const tipo = document.getElementById('tipo-cadastro')?.value || 'recorrencia_simples';
+    const frequencia = document.getElementById('frequencia')?.value || 'mensal';
     const mostrarSemanal = tipo !== 'consorcio' && (frequencia === 'semanal' || frequencia === 'quinzenal');
 
     document.querySelectorAll('.recorrencia-semanal').forEach(el => {
@@ -261,7 +387,7 @@ function alternarFrequencia() {
 }
 
 function alternarMeioPagamento() {
-    const meio = document.getElementById('meio-pagamento').value;
+    const meio = document.getElementById('meio-pagamento')?.value || '';
     document.querySelectorAll('.recorrencia-cartao').forEach(el => {
         el.hidden = meio !== 'cartao';
     });
@@ -292,7 +418,8 @@ async function salvarRecorrenciaSimples() {
         dia_semana: document.getElementById('dia-semana').value || null,
         meio_pagamento: document.getElementById('meio-pagamento').value || null,
         cartao_id: document.getElementById('cartao-id').value || null,
-        categoria_cartao_id: document.getElementById('categoria-cartao-id').value || null
+        categoria_cartao_id: document.getElementById('categoria-cartao-id').value || null,
+        ativo: document.getElementById('recorrencia-ativa')?.checked ?? true
     };
 
     const response = await fetch(id ? `${API_RECORRENCIAS}/${id}` : API_RECORRENCIAS, {
@@ -306,7 +433,7 @@ async function salvarRecorrenciaSimples() {
         return;
     }
 
-    fecharFormularioRecorrencia();
+    prepararFormularioNovaRecorrencia();
     await carregarRecorrencias();
 }
 
@@ -336,51 +463,56 @@ async function salvarConsorcio() {
         return;
     }
 
-    fecharFormularioRecorrencia();
+    prepararFormularioNovaRecorrencia();
     await carregarRecorrencias();
 }
 
 async function editarRecorrencia(origem, id) {
-    abrirFormularioRecorrencia();
-    document.getElementById('recorrencia-id').value = id;
-    document.getElementById('recorrencia-origem').value = origem;
-    document.getElementById('tipo-cadastro').value = origem === 'consorcio' ? 'consorcio' : 'recorrencia_simples';
+    prepararFormularioNovaRecorrencia();
+    setValue('recorrencia-id', id);
+    setValue('recorrencia-origem', origem);
+    setValue('tipo-cadastro', origem === 'consorcio' ? 'consorcio' : 'recorrencia_simples');
     document.getElementById('tipo-cadastro').disabled = true;
-    document.getElementById('form-titulo').textContent = origem === 'consorcio' ? 'Editar Consorcio' : 'Editar Recorrencia';
+    setText('form-titulo', origem === 'consorcio' ? 'Editar consorcio' : 'Editar recorrencia');
     alternarTipoCadastro();
 
     if (origem === 'consorcio') {
         const item = estadoRecorrencias.consorcios.find(c => Number(c.id) === Number(id));
         if (!item) return;
-        document.getElementById('nome').value = item.nome || '';
-        document.getElementById('valor').value = item.valor_inicial || '';
-        document.getElementById('numero-parcelas').value = item.numero_parcelas || '';
-        document.getElementById('mes-inicio').value = normalizarMes(item.mes_inicio);
-        document.getElementById('tipo-reajuste').value = item.tipo_reajuste || 'nenhum';
-        document.getElementById('valor-reajuste').value = item.valor_reajuste || '';
-        document.getElementById('mes-contemplacao').value = normalizarMes(item.mes_contemplacao);
-        document.getElementById('valor-premio').value = item.valor_premio || '';
-        document.getElementById('observacoes').value = item.observacoes || '';
+        setValue('nome', item.nome || '');
+        setValue('valor', item.valor_inicial || '');
+        setValue('categoria-id', item.categoria_id || '');
+        setValue('numero-parcelas', item.numero_parcelas || '');
+        setValue('mes-inicio', normalizarMes(item.mes_inicio));
+        setValue('tipo-reajuste', item.tipo_reajuste || 'nenhum');
+        setValue('valor-reajuste', item.valor_reajuste || '');
+        setValue('mes-contemplacao', normalizarMes(item.mes_contemplacao));
+        setValue('valor-premio', item.valor_premio || '');
+        setValue('observacoes', item.observacoes || '');
+        document.getElementById('recorrencia-ativa').checked = item.ativo !== false;
+        document.getElementById('nome')?.focus();
         return;
     }
 
     const item = estadoRecorrencias.recorrencias.find(r => Number(r.id) === Number(id));
     if (!item) return;
-    document.getElementById('nome').value = item.nome || '';
-    document.getElementById('observacoes').value = item.descricao || '';
-    document.getElementById('valor').value = item.valor || '';
-    document.getElementById('categoria-id').value = item.categoria_id || '';
-    document.getElementById('data-vencimento').value = item.data_vencimento || '';
-    document.getElementById('frequencia').value = item.frequencia || 'mensal';
-    document.getElementById('dia-semana').value = item.dia_semana ?? '';
-    document.getElementById('meio-pagamento').value = item.meio_pagamento || '';
-    document.getElementById('cartao-id').value = item.cartao_id || '';
+    setValue('nome', item.nome || '');
+    setValue('observacoes', item.descricao || '');
+    setValue('valor', item.valor || '');
+    setValue('categoria-id', item.categoria_id || '');
+    setValue('data-vencimento', item.data_vencimento || '');
+    setValue('frequencia', item.frequencia || 'mensal');
+    setValue('dia-semana', item.dia_semana ?? '');
+    setValue('meio-pagamento', item.meio_pagamento || '');
+    setValue('cartao-id', item.cartao_id || '');
+    document.getElementById('recorrencia-ativa').checked = item.ativo !== false;
     alternarFrequencia();
     alternarMeioPagamento();
     if (item.meio_pagamento === 'cartao' && item.cartao_id) {
         await carregarCategoriasCartaoSelecionado();
-        document.getElementById('categoria-cartao-id').value = item.categoria_cartao_id || '';
+        setValue('categoria-cartao-id', item.categoria_cartao_id || '');
     }
+    document.getElementById('nome')?.focus();
 }
 
 async function inativarRecorrencia(origem, id) {
@@ -395,6 +527,68 @@ async function inativarRecorrencia(origem, id) {
         return;
     }
     await carregarRecorrencias();
+}
+
+function obterEventosAgenda(itens) {
+    return itens
+        .map(item => ({ item, data: item.proximoVencimento, dias: diasAte(item.proximoVencimento) }))
+        .filter(evento => evento.data && evento.dias !== null && evento.dias >= 0)
+        .sort((a, b) => a.dias - b.dias);
+}
+
+function valorMensalEstimado(item) {
+    const valor = Number(item.valor || 0);
+    if (item.frequencia === 'semanal') return valor * 4;
+    if (item.frequencia === 'quinzenal') return valor * 2;
+    if (item.frequencia === 'anual') return valor / 12;
+    return valor;
+}
+
+function obterCategoriaMaisUsada(itens) {
+    const contagem = new Map();
+    itens.forEach(item => {
+        if (!item.categoriaNome || item.categoriaNome === '-') return;
+        contagem.set(item.categoriaNome, (contagem.get(item.categoriaNome) || 0) + 1);
+    });
+    return [...contagem.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+}
+
+function gerarDonut(items, total) {
+    const cores = ['#2563eb', '#7c3aed', '#22c55e', '#f59e0b', '#64748b'];
+    let cursor = 0;
+    const partes = items.map((item, index) => {
+        const inicio = cursor;
+        const fim = cursor + (item.count / total) * 100;
+        cursor = fim;
+        return `${cores[index % cores.length]} ${inicio}% ${fim}%`;
+    });
+    return `background: conic-gradient(${partes.join(', ')});`;
+}
+
+function corCategoria(categoriaId) {
+    const categoria = estadoRecorrencias.categorias.find(cat => String(cat.id) === String(categoriaId));
+    return categoria?.cor || '#2563eb';
+}
+
+function renderizarIconeCategoria(item, size) {
+    const categoria = estadoRecorrencias.categorias.find(cat => String(cat.id) === String(item.categoriaId)) || {
+        nome: item.categoriaNome,
+        icone: item.categoriaIcone,
+        logo_url: item.categoriaLogoUrl
+    };
+    if (typeof renderCategoryVisual === 'function') {
+        return renderCategoryVisual(categoria, { size, alt: item.categoriaNome || item.nome });
+    }
+    return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 12 12 20 4 12V4h8l8 8Z"/><path d="M8.5 8.5h.01"/></svg>';
+}
+
+function diasAte(valor) {
+    if (!valor) return null;
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const data = new Date(`${String(valor).slice(0, 10)}T00:00:00`);
+    if (Number.isNaN(data.getTime())) return null;
+    return Math.ceil((data - hoje) / 86400000);
 }
 
 function formatarFrequencia(frequencia, item) {
@@ -417,12 +611,36 @@ function formatarData(valor) {
     return `${partes[2]}/${partes[1]}/${partes[0]}`;
 }
 
+function formatarDiaSemana(valor) {
+    const data = new Date(`${String(valor).slice(0, 10)}T00:00:00`);
+    if (Number.isNaN(data.getTime())) return '';
+    return data.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '');
+}
+
 function converterMesParaData(valor) {
     return valor ? `${valor}-01` : null;
 }
 
 function normalizarMes(valor) {
     return valor ? String(valor).slice(0, 7) : '';
+}
+
+function normalizarBusca(value) {
+    return String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+}
+
+function setText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+}
+
+function setValue(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.value = value;
 }
 
 function escapeHtml(value) {
