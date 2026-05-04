@@ -113,6 +113,38 @@ def test_upload_pdf_textual_classifica_categoria_e_ir(app_context, monkeypatch):
     assert arquivo.mime_type == 'application/pdf'
 
 
+def test_pdf_textual_pendente_retorna_dados_extraidos_para_revisao(app_context, monkeypatch):
+    texto = (
+        'Prefeitura Municipal de Goiania - GO Nota Fiscal de Servico Eletronica\n'
+        'Dados do Prestador de Servico\n'
+        'Data de Geracao da NFS-e\n'
+        '21/10/2025 20:21:08\n'
+        'Laboratorio Padrao SA\n'
+        'Inscricao Municipal 34551 - CPF/CNPJ 01.588.888/0001-98\n'
+        'Descricao dos Servicos\n'
+        'SERVICOS PRESTADOS EXAMES LABORATORIAIS\n'
+        'Vl. Total dos Servicos R$ 130,80\n'
+    )
+    monkeypatch.setattr(IrDocumentoService, 'extrair_texto_pdf', staticmethod(lambda _conteudo: texto))
+
+    with app_context.test_client() as client:
+        response = client.post(
+            '/api/ir/comprovantes/upload',
+            data={'ano_calendario': '2026', 'arquivos': (_pdf_bytes(), 'notaFiscal-0916993.pdf', 'application/pdf')},
+            content_type='multipart/form-data',
+        )
+
+    data = response.get_json()['data'][0]['data']['comprovante']
+    assert response.status_code == 200
+    assert data['status'] == 'PENDENTE_REVISAO'
+    assert data['ano_calendario'] == 2025
+    assert data['data_documento'] == '2025-10-21'
+    assert data['prestador_nome'] == 'Laboratorio Padrao SA'
+    assert data['prestador_cpf_cnpj'] == '01.588.888/0001-98'
+    assert data['valor'] == 130.8
+    assert 'SERVICOS PRESTADOS EXAMES' in data['texto_extraido']
+
+
 def test_upload_imagem_permitida_fica_pendente_sem_ocr(app_context):
     with app_context.test_client() as client:
         response = client.post(
@@ -161,6 +193,7 @@ def test_hash_bloqueia_duplicidade(app_context, monkeypatch):
     assert primeira.status_code == 200
     assert segunda.status_code == 200
     assert segunda.get_json()['data'][0]['data']['duplicado'] is True
+    assert 'texto_extraido' in segunda.get_json()['data'][0]['data']['comprovante']
     assert IrComprovante.query.count() == 1
 
 

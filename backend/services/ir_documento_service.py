@@ -303,7 +303,7 @@ class IrDocumentoService:
         if existente:
             return {
                 'duplicado': True,
-                'comprovante': existente.to_dict(),
+                'comprovante': existente.to_dict(include_texto=True, include_eventos=True),
                 'mensagem': 'Arquivo ja importado anteriormente.',
             }
 
@@ -384,14 +384,52 @@ class IrDocumentoService:
         if doc_match:
             comprovante.prestador_cpf_cnpj = doc_match.group(1)
 
+        prestador = cls._extrair_prestador(texto)
+        if prestador:
+            comprovante.prestador_nome = prestador
+            return
+
         for linha in (texto or '').splitlines():
             limpa = linha.strip()
             if not limpa or len(limpa) < 4:
                 continue
-            if re.search(r'(nota|cpf|cnpj|valor|data|total|recibo)', limpa, re.IGNORECASE):
+            if re.search(r'(nota|cpf|cnpj|valor|data|total|recibo|serie|prefeitura|secretaria)', limpa, re.IGNORECASE):
                 continue
             comprovante.prestador_nome = limpa[:255]
             break
+
+    @staticmethod
+    def _extrair_prestador(texto):
+        linhas = [linha.strip() for linha in (texto or '').splitlines() if linha.strip()]
+        if not linhas:
+            return None
+
+        padroes_inicio = (
+            'Dados do Prestador de Serviço',
+            'Dados do Prestador de Servico',
+            'PRESTADOR DE SERVIÇOS',
+            'PRESTADOR DE SERVICOS',
+            'PRESTADOR DOS SERVIÇOS',
+            'PRESTADOR DOS SERVICOS',
+        )
+        bloqueios = re.compile(
+            r'(data|cnpj|cpf|inscri|endere|cep|fone|telefone|email|nota|numero|série|serie|cód|cod|responsavel|identifica|natureza|local|município|municipio)',
+            re.IGNORECASE,
+        )
+        data_ou_numero = re.compile(r'^\d{1,2}/\d{1,2}/\d{4}|^\d{2}/\d{2}/\d{4}|\d{2}:\d{2}|\d{5,}$')
+
+        for idx, linha in enumerate(linhas):
+            if not any(padrao.lower() in linha.lower() for padrao in padroes_inicio):
+                continue
+            for candidata in linhas[idx + 1:idx + 10]:
+                if len(candidata) < 4:
+                    continue
+                if bloqueios.search(candidata) or data_ou_numero.search(candidata):
+                    continue
+                if re.search(r'[A-Za-zÀ-ÿ]', candidata):
+                    return candidata[:255]
+
+        return None
 
     @classmethod
     def _classificar_comprovante(cls, comprovante, texto):

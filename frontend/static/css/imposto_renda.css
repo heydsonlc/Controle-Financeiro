@@ -343,12 +343,122 @@
 }
 
 .ir-upload-item {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    gap: 12px;
-    align-items: center;
     padding: 12px 20px;
     border-bottom: 1px solid #edf1f7;
+}
+
+.ir-upload-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.ir-upload-card-head,
+.ir-upload-actions,
+.ir-upload-badges {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.ir-upload-card-head small,
+.ir-upload-muted {
+    display: block;
+    margin-top: 4px;
+    color: #64748b;
+}
+
+.ir-upload-badges {
+    justify-content: flex-end;
+}
+
+.ir-mini-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 5px 9px;
+    background: #e2e8f0;
+    color: #334155;
+    font-size: 12px;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.ir-mini-badge.ok {
+    background: #d1fae5;
+    color: #047857;
+}
+
+.ir-upload-warning {
+    border: 1px solid #fbbf24;
+    border-radius: 8px;
+    background: #fffbeb;
+    color: #92400e;
+    padding: 10px 12px;
+    font-weight: 700;
+}
+
+.ir-upload-extracted {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.ir-upload-extracted span {
+    border: 1px solid #e1e7f0;
+    border-radius: 8px;
+    background: #f8fafc;
+    padding: 10px;
+}
+
+.ir-upload-extracted small {
+    display: block;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.ir-upload-extracted strong {
+    display: block;
+    margin-top: 4px;
+    overflow: hidden;
+    color: #0f172a;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ir-upload-text {
+    border: 1px solid #e1e7f0;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.ir-upload-text summary {
+    cursor: pointer;
+    padding: 10px 12px;
+    color: #2563eb;
+    font-weight: 800;
+}
+
+.ir-upload-text pre {
+    max-height: 180px;
+    overflow: auto;
+    margin: 0;
+    padding: 12px;
+    border-top: 1px solid #e1e7f0;
+    white-space: pre-wrap;
+}
+
+.ir-upload-actions {
+    justify-content: flex-start;
+}
+
+.ir-link-button {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
 }
 
 .ir-import-summary {
@@ -503,6 +613,17 @@
     }
 
     .ir-review-form {
+        grid-template-columns: 1fr;
+    }
+
+    .ir-upload-card-head,
+    .ir-upload-actions,
+    .ir-upload-badges {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .ir-upload-extracted {
         grid-template-columns: 1fr;
     }
 }

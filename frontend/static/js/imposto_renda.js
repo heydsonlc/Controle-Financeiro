@@ -226,23 +226,79 @@
     function renderResultadoUpload(resultados) {
         const destino = $('ir-upload-results');
         const resumo = { enviados: resultados.length, lidos: 0, pendentes: 0, erros: 0 };
+        const anoUpload = $('ir-upload-ano')?.value || '';
         destino.innerHTML = resultados.map((resultado) => {
             if (!resultado.success) {
                 resumo.erros += 1;
-                return `<div class="ir-upload-item"><strong>${escapeHtml(resultado.arquivo || 'Arquivo')}</strong><span>${escapeHtml(resultado.error)}</span><span>${renderStatus('ERRO_LEITURA')}</span></div>`;
+                return `
+                    <div class="ir-upload-item ir-upload-card">
+                        <div>
+                            <strong>${escapeHtml(resultado.arquivo || 'Arquivo')}</strong>
+                            <small>${escapeHtml(resultado.error)}</small>
+                        </div>
+                        <div>${renderStatus('ERRO_LEITURA')}</div>
+                    </div>
+                `;
             }
             const comprovante = resultado.data?.comprovante || {};
             const status = comprovante.status || (resultado.data?.duplicado ? 'IMPORTADO' : 'PENDENTE_REVISAO');
             if (status === 'CLASSIFICADO' || status === 'VALIDADO') resumo.lidos += 1;
             if (status === 'PENDENTE_REVISAO' || status === 'IMPORTADO') resumo.pendentes += 1;
             if (status === 'ERRO_LEITURA') resumo.erros += 1;
-            return `<div class="ir-upload-item"><strong>${escapeHtml(comprovante.arquivo?.nome_arquivo || 'Comprovante')}</strong><span>${escapeHtml(resultado.data?.mensagem || '')}</span><span>${renderStatus(status)}</span></div>`;
+            return renderUploadComprovante(comprovante, resultado.data || {}, status, anoUpload);
         }).join('');
         estado.resumoImportacao = resumo;
         $('ir-import-enviados').textContent = resumo.enviados;
         $('ir-import-lidos').textContent = resumo.lidos;
         $('ir-import-pendentes').textContent = resumo.pendentes;
         $('ir-import-erros').textContent = resumo.erros;
+    }
+
+    function renderUploadComprovante(comprovante, resultado, status, anoUpload) {
+        const arquivo = comprovante.arquivo || {};
+        const extraido = Boolean(comprovante.texto_extraido);
+        const anoDocumento = comprovante.ano_calendario ? String(comprovante.ano_calendario) : '';
+        const anoDiferente = anoDocumento && anoUpload && anoDocumento !== anoUpload;
+        const resumo = [
+            ['Data', formatarData(comprovante.data_documento)],
+            ['Ano', comprovante.ano_calendario || '-'],
+            ['Prestador', comprovante.prestador_nome || '-'],
+            ['CPF/CNPJ', comprovante.prestador_cpf_cnpj || '-'],
+            ['Valor', comprovante.valor != null ? formatarMoeda(comprovante.valor) : '-'],
+            ['Categoria despesa', comprovante.categoria_nome || '-'],
+            ['Categoria IR', comprovante.categoria_ir_nome || '-'],
+        ];
+        const notaAno = anoDiferente
+            ? `<div class="ir-upload-warning">O documento foi identificado como ano-calendario ${escapeHtml(anoDocumento)}. Ele nao aparece no filtro ${escapeHtml(anoUpload)}.</div>`
+            : '';
+        const trecho = comprovante.texto_extraido
+            ? `<details class="ir-upload-text"><summary>Ver texto extraido</summary><pre>${escapeHtml(comprovante.texto_extraido.slice(0, 1400))}</pre></details>`
+            : '<p class="ir-upload-muted">Nenhum texto extraido disponivel. Se for imagem ou PDF escaneado, ficara para OCR futuro.</p>';
+
+        return `
+            <div class="ir-upload-item ir-upload-card">
+                <div class="ir-upload-card-head">
+                    <div>
+                        <strong>${escapeHtml(arquivo.nome_arquivo || 'Comprovante')}</strong>
+                        <small>${escapeHtml(resultado.mensagem || '')}${resultado.duplicado ? ' O registro existente foi carregado para revisao.' : ''}</small>
+                    </div>
+                    <div class="ir-upload-badges">
+                        ${extraido ? '<span class="ir-mini-badge ok">Texto extraido</span>' : '<span class="ir-mini-badge">Sem texto</span>'}
+                        ${renderStatus(status)}
+                    </div>
+                </div>
+                ${notaAno}
+                <div class="ir-upload-extracted">
+                    ${resumo.map(([label, value]) => `<span><small>${label}</small><strong>${escapeHtml(value)}</strong></span>`).join('')}
+                </div>
+                ${trecho}
+                <div class="ir-upload-actions">
+                    <button type="button" class="ir-secondary-btn" onclick="window.IRDoc.abrirRevisao(${comprovante.id})">Revisar dados</button>
+                    <a class="ir-secondary-btn ir-link-button" href="/api/ir/comprovantes/${comprovante.id}/arquivo" target="_blank" rel="noopener">Abrir arquivo</a>
+                    ${anoDiferente ? `<button type="button" class="ir-secondary-btn" onclick="window.IRDoc.verAno(${comprovante.ano_calendario})">Ver no ano ${escapeHtml(anoDocumento)}</button>` : ''}
+                </div>
+            </div>
+        `;
     }
 
     async function abrirRevisao(id) {
@@ -370,5 +426,17 @@
     window.IRDoc = {
         abrirRevisao,
         carregarComprovantes,
+        verAno(ano) {
+            if ($('ir-filtro-ano')) {
+                const valor = String(ano);
+                const select = $('ir-filtro-ano');
+                if (!Array.from(select.options).some((opcao) => opcao.value === valor)) {
+                    select.add(new Option(valor, valor));
+                }
+                select.value = valor;
+            }
+            alternarView('main');
+            carregarComprovantes();
+        },
     };
 }());
