@@ -27,7 +27,9 @@ const estado = {
         debito: null
     },
     regraNubank: 'absoluto',
-    regraCaixa: 'debito'
+    regraCaixa: 'debito',
+    filtroPrevia: 'todas',
+    linhasSelecionadas: new Set(),
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -364,6 +366,8 @@ function limparDadosImportacao() {
     estado.linhasInvalidasIniciais = [];
     estado.resumoPrevia = null;
     estado.perfilSelecionado = PERFIS.MANUAL;
+    estado.filtroPrevia = 'todas';
+    estado.linhasSelecionadas = new Set();
     estado.mapeamentoAtual = {
         data_compra: null,
         descricao: null,
@@ -485,6 +489,11 @@ function converterLinhaIntermediaria(linha) {
         categoria_cartao_origem: linha.categoria_cartao_origem || linha.categoria_cartao_sugerida_origem,
         categoria_cartao_vinculada_ao_cartao: linha.categoria_cartao_vinculada_ao_cartao,
         status_classificacao: linha.status_classificacao,
+        descricao_normalizada: linha.descricao_normalizada,
+        categoria_confianca: linha.categoria_confianca || linha.confianca_categoria,
+        confianca_categoria: linha.confianca_categoria || linha.categoria_confianca,
+        palavras_chave_encontradas: linha.palavras_chave_encontradas || [],
+        categorias_candidatas: linha.categorias_candidatas || [],
         categoria_sugerida_origem: linha.categoria_sugerida_origem,
         categoria_detectada_label: linha.categoria_detectada,
         cartao_final: linha.cartao_final,
@@ -516,6 +525,8 @@ function aplicarPayloadUnificado(data) {
     estado.linhasMapeadas = (data?.linhas || []).map(converterLinhaIntermediaria);
     estado.linhasInvalidasIniciais = [];
     estado.resumoPrevia = null;
+    estado.filtroPrevia = 'todas';
+    estado.linhasSelecionadas = new Set();
 
     const origemLabel = (data?.origem || '').toUpperCase();
     setFeedback(
@@ -578,6 +589,8 @@ async function processarCSV(file) {
         estado.linhasMapeadas = [];
         estado.linhasInvalidasIniciais = [];
         estado.resumoPrevia = null;
+        estado.filtroPrevia = 'todas';
+        estado.linhasSelecionadas = new Set();
         estado.perfilSelecionado = dados.perfil_detectado || PERFIS.MANUAL;
         estado.mapeamentoAtual = {
             data_compra: dados.mapeamento_sugerido?.data_compra ?? null,
@@ -1120,6 +1133,9 @@ function statusLinha(linha) {
     if (linha.status_classificacao === 'erro') {
         return { texto: 'Erro', classe: 'review' };
     }
+    if (linha.status_classificacao === 'ambigua' || linha.categoria_origem === 'ambigua') {
+        return { texto: 'Ambigua', classe: 'review' };
+    }
     if (linha.status_classificacao === 'categoria_despesa_pendente') {
         return { texto: 'Categoria da despesa pendente', classe: 'review' };
     }
@@ -1147,7 +1163,10 @@ function statusLinha(linha) {
     if (!linha.categoria_id) {
         return { texto: 'Revisar', classe: 'review' };
     }
-    if (linha.categoria_sugerida_origem && linha.categoria_sugerida_origem !== 'historico') {
+    if ((linha.categoria_confianca || linha.confianca_categoria) === 'baixa') {
+        return { texto: 'Baixa confianca', classe: 'low-confidence' };
+    }
+    if (linha.categoria_sugerida_origem && !['historico', 'palavra_chave', 'manual'].includes(linha.categoria_sugerida_origem)) {
         return { texto: 'Baixa confiança', classe: 'low-confidence' };
     }
     return { texto: 'Válido', classe: 'valid' };
@@ -1157,10 +1176,140 @@ function origemCategoriaLabel(linha) {
     const origem = linha.categoria_origem || linha.categoria_sugerida_origem || '-';
     if (origem === 'manual') return 'Sugestão: manual';
     if (origem === 'historico') return 'Sugestão: histórico';
+    if (origem === 'palavra_chave') return 'Sugestão: palavra-chave';
+    if (origem === 'ambigua') return 'Ambígua: revise';
     if (origem === 'descricao') return 'Sugestão: descrição';
     if (origem === 'sem_sugestao') return 'Sem sugestão';
     if (origem === 'fallback' || origem === 'fallback_lote') return 'Sugestão: fallback do lote';
     return `Sugestão: ${origem}`;
+}
+
+function badgeConfianca(linha) {
+    const confianca = linha.categoria_confianca || linha.confianca_categoria;
+    const origem = linha.categoria_origem || linha.categoria_sugerida_origem;
+    if (origem === 'manual') return '<span class="import-badge badge-manual">manual</span>';
+    if (origem === 'historico') return '<span class="import-badge badge-alta">histórico</span>';
+    if (origem === 'palavra_chave') {
+        if (confianca === 'alta') return '<span class="import-badge badge-alta">alta</span>';
+        return '<span class="import-badge badge-media">média</span>';
+    }
+    if (origem === 'ambigua') return '<span class="import-badge badge-revisar">revisar</span>';
+    if (!confianca || confianca === 'baixa') return '<span class="import-badge badge-baixa">baixa</span>';
+    return `<span class="import-badge badge-${confianca}">${escapeHtml(confianca)}</span>`;
+}
+
+function palavrasChaveEncontradas(linha) {
+    const palavras = linha.palavras_chave_encontradas || [];
+    if (!palavras.length) return '';
+    return `<span class="import-detected-note kw-found">Palavras: ${escapeHtml(palavras.join(', '))}</span>`;
+}
+
+function categoriasCandidatasHtml(linha) {
+    const origem = linha.categoria_origem || linha.categoria_sugerida_origem;
+    const candidatas = linha.categorias_candidatas || [];
+    if (origem !== 'ambigua' || !candidatas.length) return '';
+
+    const labels = candidatas.slice(0, 3).map((item) => {
+        const palavras = item.palavras_encontradas || [];
+        return `${item.categoria_nome || item.nome || 'Categoria'}${palavras.length ? ` (${palavras.join(', ')})` : ''}`;
+    });
+    return `<span class="import-detected-note candidate-list">Candidatas: ${escapeHtml(labels.join(' | '))}</span>`;
+}
+
+function linhaPrecisaRevisao(linha) {
+    const status = statusLinha(linha);
+    return ['review', 'missing', 'low-confidence'].includes(status.classe)
+        || linha.status_classificacao === 'ambigua'
+        || linha.categoria_origem === 'ambigua'
+        || linha.categoria_confianca === 'baixa';
+}
+
+function linhasPreviaFiltradas() {
+    return estado.linhasMapeadas
+        .map((linha, index) => ({ linha, index }))
+        .filter(({ linha }) => {
+            const status = statusLinha(linha);
+            const origem = linha.categoria_origem || linha.categoria_sugerida_origem;
+            const confianca = linha.categoria_confianca || linha.confianca_categoria;
+
+            if (estado.filtroPrevia === 'prontas') return status.classe === 'valid' || linha.status_classificacao === 'classificada';
+            if (estado.filtroPrevia === 'pendentes') return !linha.categoria_id || !categoriaCartaoIdLinha(linha);
+            if (estado.filtroPrevia === 'ambiguas') return linha.status_classificacao === 'ambigua' || origem === 'ambigua';
+            if (estado.filtroPrevia === 'duplicadas') return linha.status_classificacao === 'duplicada' || linha.status === 'duplicado';
+            if (estado.filtroPrevia === 'baixa_confianca') return confianca === 'baixa' || status.classe === 'low-confidence';
+            if (estado.filtroPrevia === 'sem_categoria_cartao') return !linha.ignorar && !categoriaCartaoIdLinha(linha);
+            if (estado.filtroPrevia === 'revisar') return linhaPrecisaRevisao(linha);
+            return true;
+        });
+}
+
+function contarFiltroPrevia(filtro) {
+    const anterior = estado.filtroPrevia;
+    estado.filtroPrevia = filtro;
+    const total = linhasPreviaFiltradas().length;
+    estado.filtroPrevia = anterior;
+    return total;
+}
+
+function alterarFiltroPrevia(filtro) {
+    estado.filtroPrevia = filtro || 'todas';
+    estado.linhasSelecionadas = new Set();
+    renderizarEditorPrePersistencia();
+}
+
+function alternarSelecaoLinha(index, marcado) {
+    if (marcado) estado.linhasSelecionadas.add(Number(index));
+    else estado.linhasSelecionadas.delete(Number(index));
+    renderizarEditorPrePersistencia();
+}
+
+function alternarSelecaoTodasPrevia(marcado) {
+    const visiveis = linhasPreviaFiltradas().map(({ index }) => Number(index));
+    if (marcado) visiveis.forEach((index) => estado.linhasSelecionadas.add(index));
+    else visiveis.forEach((index) => estado.linhasSelecionadas.delete(index));
+    renderizarEditorPrePersistencia();
+}
+
+function indicesSelecionados() {
+    return [...estado.linhasSelecionadas]
+        .map((index) => Number(index))
+        .filter((index) => estado.linhasMapeadas[index]);
+}
+
+function renderizarBarraRevisaoLote(linhasFiltradas) {
+    const selecionadas = indicesSelecionados().length;
+    const filtros = [
+        ['todas', 'Todas', estado.linhasMapeadas.length],
+        ['prontas', 'Prontas', contarFiltroPrevia('prontas')],
+        ['pendentes', 'Pendentes', contarFiltroPrevia('pendentes')],
+        ['ambiguas', 'Ambiguas', contarFiltroPrevia('ambiguas')],
+        ['duplicadas', 'Duplicadas', contarFiltroPrevia('duplicadas')],
+        ['baixa_confianca', 'Baixa confianca', contarFiltroPrevia('baixa_confianca')],
+        ['sem_categoria_cartao', 'Sem cartao', contarFiltroPrevia('sem_categoria_cartao')],
+        ['revisar', 'Revisar', contarFiltroPrevia('revisar')]
+    ].map(([id, label, total]) => `
+        <button class="import-review-filter ${estado.filtroPrevia === id ? 'is-active' : ''}" type="button" onclick="alterarFiltroPrevia('${id}')">
+            ${escapeHtml(label)} <span>${total}</span>
+        </button>
+    `).join('');
+
+    return `
+        <div class="import-review-toolbar">
+            <div class="import-review-summary">
+                <strong>Revisao em lote</strong>
+                <span>${selecionadas} selecionada${selecionadas === 1 ? '' : 's'} de ${linhasFiltradas.length} visiveis</span>
+            </div>
+            <div class="import-review-filters">${filtros}</div>
+            <div class="import-review-actions">
+                <select id="bulkCategoriaDespesa" class="import-inline-select">${opcoesCategoriaSelect('')}</select>
+                <button class="btn btn-secondary btn-sm" type="button" onclick="aplicarCategoriaDespesaLote()">Aplicar despesa</button>
+                <select id="bulkCategoriaCartao" class="import-inline-select">${opcoesCategoriaCartaoSelect('')}</select>
+                <button class="btn btn-secondary btn-sm" type="button" onclick="aplicarCategoriaCartaoLote()">Aplicar cartao</button>
+                <button class="btn btn-secondary btn-sm" type="button" onclick="marcarLinhasSelecionadasRevisadas()">Marcar revisadas</button>
+                <button class="btn btn-outline-danger btn-sm" type="button" onclick="ignorarLinhasSelecionadas()">Ignorar</button>
+            </div>
+        </div>
+    `;
 }
 
 function renderizarEditorPrePersistencia() {
@@ -1174,13 +1323,22 @@ function renderizarEditorPrePersistencia() {
         return;
     }
 
-    document.getElementById('previaContainer').innerHTML = '';
+    const previaContainer = document.getElementById('previaContainer');
+    if (previaContainer) previaContainer.innerHTML = '';
+    const linhasFiltradas = linhasPreviaFiltradas();
+    const indicesVisiveis = linhasFiltradas.map(({ index }) => Number(index));
+    const todasVisiveisSelecionadas = indicesVisiveis.length > 0
+        && indicesVisiveis.every((index) => estado.linhasSelecionadas.has(index));
     container.innerHTML = `
         <div class="import-preview-shell">
+            ${renderizarBarraRevisaoLote(linhasFiltradas)}
             <div class="import-preview-table-wrap">
                 <table class="import-preview-table">
                     <thead>
                         <tr>
+                            <th class="import-row-check">
+                                <input type="checkbox" ${todasVisiveisSelecionadas ? 'checked' : ''} onchange="alternarSelecaoTodasPrevia(this.checked)" aria-label="Selecionar linhas visiveis">
+                            </th>
                             <th>Status</th>
                             <th>Data</th>
                             <th>Descrição</th>
@@ -1192,12 +1350,14 @@ function renderizarEditorPrePersistencia() {
                         </tr>
                     </thead>
                     <tbody>
-                        ${linhas.map((linha, index) => renderizarLinhaPrevia(linha, index)).join('')}
+                        ${linhasFiltradas.length
+                            ? linhasFiltradas.map(({ linha, index }) => renderizarLinhaPrevia(linha, index)).join('')
+                            : '<tr><td colspan="9"><div class="import-empty-state compact">Nenhuma linha encontrada para este filtro.</div></td></tr>'}
                     </tbody>
                 </table>
             </div>
             <div class="import-preview-footer">
-                Mostrando ${linhas.length} de ${estado.csvData?.total_linhas || linhas.length} lançamentos
+                Mostrando ${linhasFiltradas.length} de ${estado.csvData?.total_linhas || linhas.length} lançamentos
             </div>
         </div>
     `;
@@ -1213,9 +1373,13 @@ function renderizarLinhaPrevia(linha, index) {
     const detalheOrigem = [linha.cartao_final ? `Cartão ${linha.cartao_final}` : null, linha.grupo]
         .filter(Boolean)
         .join(' | ');
+    const selecionada = estado.linhasSelecionadas.has(Number(index));
 
     return `
         <tr class="${linha.ignorar ? 'is-ignored' : ''}">
+            <td class="import-row-check">
+                <input type="checkbox" ${selecionada ? 'checked' : ''} onchange="alternarSelecaoLinha(${index}, this.checked)" aria-label="Selecionar linha ${index + 1}">
+            </td>
             <td>
                 <span class="import-status-pill ${status.classe}">${escapeHtml(status.texto)}</span>
                 ${avisos.length ? `<span class="import-detected-note warning-note">${escapeHtml(avisos[0])}</span>` : ''}
@@ -1242,6 +1406,9 @@ function renderizarLinhaPrevia(linha, index) {
                     ${opcoesCategoriaSelect(linha.categoria_id)}
                 </select>
                 <span class="import-detected-note ${baixaConfianca ? 'low-confidence' : ''}">${escapeHtml(origemCategoriaLabel(linha))}</span>
+                <div class="import-badge-row">${badgeConfianca(linha)}</div>
+                ${palavrasChaveEncontradas(linha)}
+                ${categoriasCandidatasHtml(linha)}
             </td>
             <td class="import-category-cell">
                 <select class="import-inline-select import-card-category-select ${categoriaCartaoIdLinha(linha) ? '' : 'needs-review'}" onchange="atualizarLinhaEdicao(${index}, 'categoria_cartao_id', this.value)">
@@ -1286,6 +1453,10 @@ function atualizarLinhaEdicao(index, campo, valor) {
             linha.categoria_despesa_id = linha[campo];
             linha.categoria_origem = linha[campo] ? 'manual' : 'sem_sugestao';
             linha.categoria_sugerida_origem = linha.categoria_origem;
+            linha.categoria_confianca = linha[campo] ? 'manual' : 'baixa';
+            linha.confianca_categoria = linha.categoria_confianca;
+            linha.palavras_chave_encontradas = [];
+            linha.categorias_candidatas = [];
             if (linha.categoria_cartao_origem !== 'manual') {
                 linha.categoria_cartao_id = null;
                 linha.categoria_cartao_origem = null;
@@ -1322,6 +1493,117 @@ function atualizarLinhaEdicao(index, campo, valor) {
     if (campo === 'categoria_id' && !categoriaCartaoIdLinha(linha)) {
         resolverCategoriaCartaoLinha(index);
     }
+}
+
+async function aplicarCategoriaDespesaLote() {
+    const categoriaId = toIntOrNull(document.getElementById('bulkCategoriaDespesa')?.value);
+    const selecionados = indicesSelecionados();
+    if (!selecionados.length) {
+        alert('Selecione ao menos uma linha.');
+        return;
+    }
+    if (!categoriaId) {
+        alert('Selecione uma Categoria da Despesa para aplicar.');
+        return;
+    }
+
+    for (const index of selecionados) {
+        const linha = estado.linhasMapeadas[index];
+        if (!linha) continue;
+        linha.categoria_id = categoriaId;
+        linha.categoria_despesa_id = categoriaId;
+        linha.categoria_origem = 'manual';
+        linha.categoria_sugerida_origem = 'manual';
+        linha.categoria_confianca = 'manual';
+        linha.confianca_categoria = 'manual';
+        linha.palavras_chave_encontradas = [];
+        linha.categorias_candidatas = [];
+        linha.status = 'valido';
+        if (linha.categoria_cartao_origem !== 'manual') {
+            linha.categoria_cartao_id = null;
+            linha.categoria_cartao_origem = null;
+            linha.categoria_cartao_nome = null;
+            linha.categoria_cartao_vinculada_ao_cartao = false;
+        }
+    }
+
+    estado.linhasSelecionadas = new Set();
+    invalidarPrevia();
+    renderizarEditorPrePersistencia();
+
+    await Promise.all(selecionados.map((index) => resolverCategoriaCartaoLinha(index)));
+}
+
+function aplicarCategoriaCartaoLote() {
+    const categoriaCartaoId = toIntOrNull(document.getElementById('bulkCategoriaCartao')?.value);
+    const selecionados = indicesSelecionados();
+    if (!selecionados.length) {
+        alert('Selecione ao menos uma linha.');
+        return;
+    }
+    if (!categoriaCartaoId) {
+        alert('Selecione uma Categoria do Cartao para aplicar.');
+        return;
+    }
+
+    selecionados.forEach((index) => {
+        const linha = estado.linhasMapeadas[index];
+        if (!linha) return;
+        linha.categoria_cartao_id = categoriaCartaoId;
+        linha.categoria_cartao_origem = 'manual';
+        linha.categoria_cartao_vinculada_ao_cartao = true;
+        if (linha.categoria_id) {
+            linha.status = 'valido';
+            linha.status_classificacao = 'classificada';
+        }
+    });
+
+    estado.linhasSelecionadas = new Set();
+    invalidarPrevia();
+    renderizarEditorPrePersistencia();
+}
+
+function ignorarLinhasSelecionadas() {
+    const selecionados = indicesSelecionados();
+    if (!selecionados.length) {
+        alert('Selecione ao menos uma linha.');
+        return;
+    }
+
+    selecionados.forEach((index) => {
+        const linha = estado.linhasMapeadas[index];
+        if (linha) linha.ignorar = true;
+    });
+    estado.linhasSelecionadas = new Set();
+    invalidarPrevia();
+    renderizarEditorPrePersistencia();
+}
+
+function marcarLinhasSelecionadasRevisadas() {
+    const selecionados = indicesSelecionados();
+    if (!selecionados.length) {
+        alert('Selecione ao menos uma linha.');
+        return;
+    }
+
+    selecionados.forEach((index) => {
+        const linha = estado.linhasMapeadas[index];
+        if (!linha) return;
+        if (linha.categoria_id) {
+            linha.status = 'valido';
+            linha.status_classificacao = categoriaCartaoIdLinha(linha) ? 'classificada' : 'categoria_cartao_pendente';
+        }
+        if (linha.categoria_origem === 'ambigua' && linha.categoria_id) {
+            linha.categoria_origem = 'manual';
+            linha.categoria_sugerida_origem = 'manual';
+            linha.categoria_confianca = 'manual';
+            linha.confianca_categoria = 'manual';
+        }
+    });
+
+    estado.linhasSelecionadas = new Set();
+    invalidarPrevia();
+    renderizarEditorPrePersistencia();
 }
 
 async function resolverCategoriaCartaoLinha(index) {
@@ -1508,12 +1790,16 @@ function montarPayloadImportacao() {
                 total_parcelas: linha.total_parcelas || 1,
                 gerar_parcelas_futuras: !!linha.gerar_parcelas_futuras,
                 categoria_id: linha.categoria_id,
+                categoria_origem: linha.categoria_origem,
+                categoria_confianca: linha.categoria_confianca || linha.confianca_categoria,
+                palavras_chave_encontradas: linha.palavras_chave_encontradas || [],
                 origem_importacao: linha.origem_importacao || estado.payloadUnificado?.origem || 'csv',
                 ignorar: false
             };
 
             if (linha.categoria_cartao_id) {
                 payload.categoria_cartao_id = linha.categoria_cartao_id;
+                payload.categoria_cartao_origem = linha.categoria_cartao_origem;
             }
 
             return payload;

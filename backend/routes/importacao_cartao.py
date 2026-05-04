@@ -13,6 +13,7 @@ from datetime import datetime
 from backend.services.importacao_cartao_service import ImportacaoCartaoService
 from backend.services.importacao_cartao_unificado_service import ImportacaoCartaoUnificadoService
 from backend.services.categoria_cartao_service import CategoriaCartaoService
+from backend.services.categoria_palavra_chave_service import CategoriaPalavraChaveService
 from backend.models import db, ItemDespesa, Categoria
 
 bp = Blueprint('importacao_cartao', __name__, url_prefix='/api/importacao-cartao')
@@ -320,7 +321,7 @@ def listar_categorias_cartao(cartao_id):
 @bp.route('/sugerir-categorias', methods=['POST'])
 def sugerir_categorias():
     """
-    Sugestao automatica simples de categoria por historico de descricao.
+    Sugestao de categoria por palavras-chave (prioritario) e historico (fallback).
     """
     try:
         data = request.get_json(silent=True) or {}
@@ -334,14 +335,43 @@ def sugerir_categorias():
         for descricao in descricoes:
             if descricao is None:
                 continue
-            categoria_id, origem = ImportacaoCartaoService.sugerir_categoria_por_descricao(
-                descricao_bruta=str(descricao),
-                categoria_fallback_id=categoria_fallback_id
-            )
-            sugestoes[str(descricao)] = {
-                'categoria_id': categoria_id,
-                'origem': origem
-            }
+            desc = str(descricao)
+            desc_norm = CategoriaPalavraChaveService.normalizar_descricao_importacao(desc)
+
+            # 1. Palavras-chave
+            resultado_pk = CategoriaPalavraChaveService.classificar_por_palavras_chave(desc_norm)
+            if resultado_pk.get('categoria_id') and not resultado_pk.get('ambigua'):
+                sugestoes[desc] = {
+                    'categoria_id': resultado_pk['categoria_id'],
+                    'origem': 'palavra_chave',
+                    'confianca': resultado_pk.get('confianca', 'alta'),
+                    'palavras_chave_encontradas': resultado_pk.get('palavras_encontradas', []),
+                    'ambigua': False,
+                    'categorias_candidatas': resultado_pk.get('categorias_candidatas', []),
+                }
+            elif resultado_pk.get('ambigua'):
+                sugestoes[desc] = {
+                    'categoria_id': None,
+                    'origem': 'ambigua',
+                    'confianca': 'baixa',
+                    'palavras_chave_encontradas': resultado_pk.get('palavras_encontradas', []),
+                    'ambigua': True,
+                    'categorias_candidatas': resultado_pk.get('categorias_candidatas', []),
+                }
+            else:
+                # 2. Histórico
+                categoria_id, origem = ImportacaoCartaoService.sugerir_categoria_por_descricao(
+                    descricao_bruta=desc,
+                    categoria_fallback_id=categoria_fallback_id
+                )
+                sugestoes[desc] = {
+                    'categoria_id': categoria_id,
+                    'origem': origem or 'sem_sugestao',
+                    'confianca': 'alta' if origem == 'historico' else ('media' if categoria_id else 'baixa'),
+                    'palavras_chave_encontradas': [],
+                    'ambigua': False,
+                    'categorias_candidatas': [],
+                }
 
         return jsonify({
             'success': True,

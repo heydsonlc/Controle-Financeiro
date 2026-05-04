@@ -9,6 +9,7 @@ from sqlalchemy import func
 try:
     from backend.models import Categoria, CategoriaCartao, ItemDespesa, LancamentoAgregado
     from backend.services.categoria_cartao_service import CategoriaCartaoService
+    from backend.services.categoria_palavra_chave_service import CategoriaPalavraChaveService
     from backend.services.importacao_cartao_service import ImportacaoCartaoService
     from backend.services.parsers import (
         importacao_csv_parser,
@@ -18,6 +19,7 @@ try:
 except ImportError:
     from models import Categoria, CategoriaCartao, ItemDespesa, LancamentoAgregado
     from services.categoria_cartao_service import CategoriaCartaoService
+    from services.categoria_palavra_chave_service import CategoriaPalavraChaveService
     from services.importacao_cartao_service import ImportacaoCartaoService
     from services.parsers import (
         importacao_csv_parser,
@@ -191,6 +193,9 @@ class ImportacaoCartaoUnificadoService:
         for idx, linha in enumerate(linhas, start=1):
             descricao_original = linha.get('descricao_original') or linha.get('descricao') or ''
             descricao_normalizada = linha.get('descricao_normalizada') or descricao_original
+            descricao_classificacao_normalizada = CategoriaPalavraChaveService.normalizar_descricao_importacao(
+                linha.get('descricao_normalizada') or descricao_original
+            )
             parcela_atual = linha.get('parcela_atual') or linha.get('numero_parcela') or 1
             total_parcelas = linha.get('total_parcelas') or 1
             categoria_cartao_id = linha.get('categoria_cartao_id')
@@ -203,6 +208,7 @@ class ImportacaoCartaoUnificadoService:
                 'data_compra': linha.get('data_compra'),
                 'descricao_original': descricao_original,
                 'descricao_normalizada': descricao_normalizada,
+                'descricao_classificacao_normalizada': descricao_classificacao_normalizada,
                 'descricao': descricao_normalizada,
                 'descricao_exibida': linha.get('descricao_exibida') or descricao_normalizada,
                 'cartao_final': linha.get('cartao_final'),
@@ -219,7 +225,11 @@ class ImportacaoCartaoUnificadoService:
                 'categoria_cartao_id': categoria_cartao_id,
                 'categoria_cartao_origem': linha.get('categoria_cartao_origem'),
                 'categoria_cartao_vinculada_ao_cartao': linha.get('categoria_cartao_vinculada_ao_cartao'),
-                'confianca_categoria': linha.get('confianca_categoria') or 'baixa',
+                'confianca_categoria': linha.get('categoria_confianca') or linha.get('confianca_categoria') or (
+                    'manual' if categoria_id else 'baixa'
+                ),
+                'palavras_chave_encontradas': list(linha.get('palavras_chave_encontradas') or []),
+                'categorias_candidatas': list(linha.get('categorias_candidatas') or []),
                 'categoria_sugerida_origem': linha.get('categoria_sugerida_origem'),
                 'categoria_origem': linha.get('categoria_origem') or linha.get('categoria_sugerida_origem'),
                 'duplicidade': linha.get('duplicidade'),
@@ -252,21 +262,62 @@ class ImportacaoCartaoUnificadoService:
                 continue
 
             if linha.get('categoria_id'):
+                # Categoria já definida (manual ou parser) — preservar
                 linha['categoria_despesa_id'] = linha.get('categoria_id')
                 linha['categoria_sugerida_origem'] = linha.get('categoria_sugerida_origem') or 'manual'
                 linha['categoria_origem'] = linha.get('categoria_origem') or linha.get('categoria_sugerida_origem')
             else:
-                categoria_id, origem = ImportacaoCartaoService.sugerir_categoria_por_descricao(
-                    linha.get('descricao_normalizada') or linha.get('descricao_original'),
-                    categoria_fallback_id=cartao.categoria_id,
-                )
-                if categoria_id:
-                    linha['categoria_id'] = categoria_id
-                    linha['categoria_despesa_id'] = categoria_id
-                    linha['categoria_detectada'] = linha.get('categoria_detectada') or 'historico'
-                    linha['categoria_sugerida_origem'] = origem or 'sem_sugestao'
-                    linha['categoria_origem'] = linha['categoria_sugerida_origem']
-                    linha['confianca_categoria'] = 'alta' if origem == 'historico' else 'media'
+                descricao = linha.get('descricao_normalizada') or linha.get('descricao_original') or ''
+                desc_norm = linha.get('descricao_classificacao_normalizada') or CategoriaPalavraChaveService.normalizar_descricao_importacao(descricao)
+
+                # 1. Tentar palavras-chave
+                resultado_pk = CategoriaPalavraChaveService.classificar_por_palavras_chave(desc_norm)
+
+                if resultado_pk.get('categoria_id') and not resultado_pk.get('ambigua'):
+                    linha['categoria_id'] = resultado_pk['categoria_id']
+                    linha['categoria_despesa_id'] = resultado_pk['categoria_id']
+                    linha['categoria_sugerida_origem'] = 'palavra_chave'
+                    linha['categoria_origem'] = 'palavra_chave'
+                    linha['confianca_categoria'] = resultado_pk.get('confianca', 'alta')
+                    linha['palavras_chave_encontradas'] = resultado_pk.get('palavras_encontradas', [])
+                    linha['categorias_candidatas'] = resultado_pk.get('categorias_candidatas', [])
+                    linha['categoria_detectada'] = 'palavra_chave'
+                    for aviso in (resultado_pk.get('avisos') or []):
+                        linha.setdefault('mensagens', [])
+                        if aviso not in linha['mensagens']:
+                            linha['mensagens'].append(aviso)
+
+                elif resultado_pk.get('ambigua'):
+                    # Ambígua: não escolher automaticamente
+                    linha['categoria_id'] = None
+                    linha['categoria_despesa_id'] = None
+                    linha['categoria_sugerida_origem'] = 'ambigua'
+                    linha['categoria_origem'] = 'ambigua'
+                    linha['confianca_categoria'] = 'baixa'
+                    linha['palavras_chave_encontradas'] = resultado_pk.get('palavras_encontradas', [])
+                    linha['categorias_candidatas'] = resultado_pk.get('categorias_candidatas', [])
+                    linha['status'] = 'revisar'
+                    linha['status_classificacao'] = 'ambigua'
+                    for aviso in (resultado_pk.get('avisos') or []):
+                        linha.setdefault('mensagens', [])
+                        if aviso not in linha['mensagens']:
+                            linha['mensagens'].append(aviso)
+
+                else:
+                    # 2. Sem palavras-chave: tentar histórico
+                    categoria_id, origem = ImportacaoCartaoService.sugerir_categoria_por_descricao(
+                        descricao,
+                        categoria_fallback_id=cartao.categoria_id,
+                    )
+                    if categoria_id:
+                        linha['categoria_id'] = categoria_id
+                        linha['categoria_despesa_id'] = categoria_id
+                        linha['categoria_detectada'] = linha.get('categoria_detectada') or origem
+                        linha['categoria_sugerida_origem'] = origem or 'sem_sugestao'
+                        linha['categoria_origem'] = linha['categoria_sugerida_origem']
+                        linha['confianca_categoria'] = 'alta' if origem == 'historico' else 'media'
+                        linha['palavras_chave_encontradas'] = []
+                        linha['categorias_candidatas'] = []
 
             if linha.get('categoria_id') or linha.get('categoria_cartao_id'):
                 resolucao_cartao = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(
@@ -377,15 +428,28 @@ class ImportacaoCartaoUnificadoService:
             if status_classificacao == 'classificada' and 'Linha pronta para importacao.' not in mensagens:
                 mensagens.append('Linha pronta para importacao.')
 
+            hash_deduplicacao = ImportacaoCartaoUnificadoService._hash_deduplicacao_preview(
+                linha,
+                cartao.id,
+                competencia_base,
+            )
             linha['id_linha'] = linha.get('linha_id')
             linha['data'] = linha.get('data_compra')
             linha['descricao'] = linha.get('descricao_exibida') or linha.get('descricao') or linha.get('descricao_original')
+            linha['descricao_normalizada'] = linha.get('descricao_classificacao_normalizada') or CategoriaPalavraChaveService.normalizar_descricao_importacao(
+                linha.get('descricao_normalizada') or linha.get('descricao_original', '')
+            )
             linha['categoria_id'] = int(categoria_id) if categoria_id else None
             linha['categoria_despesa_id'] = linha['categoria_id']
             linha['categoria_nome'] = categoria.nome if categoria else None
             linha['categoria_origem'] = linha.get('categoria_origem') or linha.get('categoria_sugerida_origem') or (
                 'manual' if categoria_id else 'sem_sugestao'
             )
+            linha['categoria_confianca'] = linha.get('confianca_categoria') or (
+                'alta' if linha.get('categoria_origem') in ('manual', 'historico') else 'baixa'
+            )
+            linha['palavras_chave_encontradas'] = linha.get('palavras_chave_encontradas') or []
+            linha['categorias_candidatas'] = linha.get('categorias_candidatas') or []
             linha['categoria_cartao_id'] = int(categoria_cartao_id) if categoria_cartao_id else None
             linha['categoria_cartao_nome'] = categoria_cartao.nome if categoria_cartao else linha.get('categoria_cartao_resolvida_nome')
             linha['categoria_cartao_origem'] = linha.get('categoria_cartao_origem') or (
@@ -399,11 +463,7 @@ class ImportacaoCartaoUnificadoService:
                 'parcela_atual': int(linha.get('parcela_atual') or linha.get('numero_parcela') or 1),
                 'total_parcelas': int(linha.get('total_parcelas') or 1),
             }
-            linha['hash_deduplicacao'] = ImportacaoCartaoUnificadoService._hash_deduplicacao_preview(
-                linha,
-                cartao.id,
-                competencia_base,
-            )
+            linha['hash_deduplicacao'] = hash_deduplicacao
             linha['mensagens'] = mensagens
             linha['avisos'] = mensagens
         return linhas
@@ -416,6 +476,8 @@ class ImportacaoCartaoUnificadoService:
             return 'ignorada'
         if linha.get('status') == 'erro':
             return 'erro'
+        if linha.get('categoria_origem') == 'ambigua' or linha.get('categoria_sugerida_origem') == 'ambigua':
+            return 'ambigua'
         if not (linha.get('categoria_id') or linha.get('categoria_despesa_id')):
             return 'categoria_despesa_pendente'
         if linha.get('categoria_cartao_origem') in ('categoria_cartao_nao_vinculada', 'nao_vinculada_ao_cartao'):
