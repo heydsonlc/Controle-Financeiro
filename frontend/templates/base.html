@@ -7,6 +7,7 @@
     <title>{% block title %}{{ page_title or "Controle Financeiro" }}{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/layout.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/instituicoes.css') }}">
     {% block extra_css %}{% endblock %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme-light.css') }}">
 </head>
@@ -195,6 +196,7 @@
     </div>
 
     <script src="{{ url_for('static', filename='js/icons.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/instituicoes.js') }}"></script>
     <script src="{{ url_for('static', filename='js/modals.js') }}"></script>
     {% block extra_js %}{% endblock %}
 </body>

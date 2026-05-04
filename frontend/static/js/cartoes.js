@@ -308,12 +308,13 @@ function renderizarListaCartoes() {
         const selecionado = cartao.id === estadoCartoes.cartaoSelecionadoId;
         const limitesAtivos = obterLimitesAtivos(cartao.id);
         const final = obterFinalCartao(cartao);
+        const emissor = obterInstituicaoCartao(cartao);
         return `
             <button class="cartao-list-item ${selecionado ? 'selected' : ''}" type="button" data-cartao-id="${cartao.id}">
                 <span class="cartao-brand">${renderizarMarcaCartao(cartao)}</span>
                 <span class="cartao-list-main">
                     <strong>${escapeHtml(cartao.nome)}</strong>
-                    <small>**** ${escapeHtml(final)}</small>
+                    <small>${escapeHtml(emissor || 'Emissor nao informado')} &bull; **** ${escapeHtml(final)}</small>
                 </span>
                 <span class="cartao-list-meta">
                     <span class="status-dot active"></span>
@@ -355,7 +356,7 @@ function renderizarDetalheCartao() {
                 <span class="cartao-detail-brand">${renderizarMarcaCartao(cartao)}</span>
                 <div>
                     <h2>${escapeHtml(cartao.nome)}</h2>
-                    <p>**** ${escapeHtml(final)} ${final !== '----' ? `(Final ${escapeHtml(final)})` : ''}</p>
+                    <p>${escapeHtml(obterInstituicaoCartao(cartao) || 'Emissor nao informado')} &bull; **** ${escapeHtml(final)} ${final !== '----' ? `(Final ${escapeHtml(final)})` : ''}</p>
                 </div>
                 <span class="compact-pill status-ativo">Ativo</span>
             </div>
@@ -374,7 +375,7 @@ function renderizarDetalheCartao() {
                 </div>
                 <div>
                     <span>Banco / Emissor</span>
-                    <strong>${escapeHtml(cartao.descricao || '-')}</strong>
+                    <strong class="cartao-institution-value">${renderizarMarcaCartao(cartao, 'sm')}${escapeHtml(obterInstituicaoCartao(cartao) || '-')}</strong>
                 </div>
                 <div>
                     <span>Final do cart&atilde;o</span>
@@ -730,13 +731,25 @@ async function tratarMudancaDetalhe(event) {
     }
 }
 
-function renderizarMarcaCartao(cartao) {
-    const nome = String(cartao?.nome || 'CC').trim();
-    const partes = nome.split(/\s+/);
+function renderizarMarcaCartao(cartao, tamanho = 'md') {
+    const nome = obterInstituicaoCartao(cartao) || cartao?.nome || 'Cartao';
+    if (window.InstituicoesUI?.renderLogo) {
+        return window.InstituicoesUI.renderLogo(nome, {
+            tipo: 'cartao',
+            tamanho
+        });
+    }
+
+    const nomeFallback = String(nome || 'CC').trim();
+    const partes = nomeFallback.split(/\s+/);
     const sigla = partes.length > 1
         ? `${partes[0][0] || ''}${partes[1][0] || ''}`
-        : nome.slice(0, 2);
+        : nomeFallback.slice(0, 2);
     return `<span>${escapeHtml(sigla.toUpperCase())}</span>`;
+}
+
+function obterInstituicaoCartao(cartao) {
+    return String(cartao?.descricao || cartao?.emissor || cartao?.banco || cartao?.nome || '').trim();
 }
 
 function renderizarIconeCategoriaCartao(categoria, size = '18px') {

@@ -1,0 +1,99 @@
+.institution-logo {
+    --institution-color: #64748b;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    color: var(--institution-color);
+    line-height: 1;
+    vertical-align: middle;
+}
+
+.institution-logo__mark {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 40px;
+    height: 40px;
+    border: 1px solid color-mix(in srgb, var(--institution-color) 24%, white);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--institution-color) 12%, white);
+    overflow: hidden;
+}
+
+.institution-logo__icon {
+    position: absolute;
+    inset: 8px;
+    width: calc(100% - 16px);
+    height: calc(100% - 16px);
+    object-fit: contain;
+    opacity: 0.16;
+    filter: grayscale(1);
+}
+
+.institution-logo__initials {
+    position: relative;
+    z-index: 1;
+    color: var(--institution-color);
+    font-size: 12px;
+    font-weight: 850;
+    letter-spacing: 0;
+}
+
+.institution-logo__label {
+    min-width: 0;
+    overflow: hidden;
+    color: #0f172a;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.institution-logo--sm .institution-logo__mark {
+    width: 24px;
+    height: 24px;
+    border-radius: 8px;
+}
+
+.institution-logo--sm .institution-logo__icon {
+    inset: 5px;
+    width: calc(100% - 10px);
+    height: calc(100% - 10px);
+}
+
+.institution-logo--sm .institution-logo__initials {
+    font-size: 9px;
+}
+
+.institution-logo--md .institution-logo__mark {
+    width: 42px;
+    height: 42px;
+}
+
+.institution-logo--lg .institution-logo__mark {
+    width: 58px;
+    height: 58px;
+    border-radius: 16px;
+}
+
+.institution-logo--lg .institution-logo__initials {
+    font-size: 15px;
+}
+
+.institution-logo--xl .institution-logo__mark {
+    width: 92px;
+    height: 92px;
+    border-radius: 999px;
+}
+
+.institution-logo--xl .institution-logo__initials {
+    font-size: 22px;
+}
+
+.institution-logo--cartao .institution-logo__mark {
+    border-radius: 10px;
+}

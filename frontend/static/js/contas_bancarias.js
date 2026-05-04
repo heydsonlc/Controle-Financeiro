@@ -139,7 +139,7 @@ function criarLinhaConta(conta, maiorSaldoAbsoluto) {
     return `
         <article class="conta-row ${statusInativo ? 'is-inactive' : ''}" style="--conta-cor:${escapeHtml(cor)}; --saldo-percentual:${saldoPercentual.toFixed(2)}%">
             <div class="conta-main">
-                <span class="conta-bank-icon" aria-hidden="true"></span>
+                <span class="conta-bank-icon">${renderizarInstituicaoConta(conta.instituicao, { tamanho: 'lg' })}</span>
                 <div class="conta-title">
                     <h3>${escapeHtml(conta.nome)}</h3>
                     <p>${escapeHtml(conta.instituicao || '-')}</p>
@@ -149,7 +149,7 @@ function criarLinhaConta(conta, maiorSaldoAbsoluto) {
 
             <div class="conta-details">
                 <div class="conta-detail">
-                    ${contasIcon('bank')}
+                    ${renderizarInstituicaoConta(conta.instituicao, { tamanho: 'sm' })}
                     <div><span>Instituição</span><strong>${escapeHtml(conta.instituicao || '-')}</strong></div>
                 </div>
                 <div class="conta-detail">
@@ -297,7 +297,7 @@ function renderizarDetalheConta(conta, movimentos) {
 
     container.innerHTML = `
         <div class="contas-detail-grid">
-            <div class="contas-detail-item"><span>Instituição</span><strong>${escapeHtml(conta.instituicao || '-')}</strong></div>
+            <div class="contas-detail-item"><span>Instituição</span><strong class="contas-institution-value">${renderizarInstituicaoConta(conta.instituicao, { tamanho: 'sm' })}${escapeHtml(conta.instituicao || '-')}</strong></div>
             <div class="contas-detail-item"><span>Tipo de conta</span><strong>${escapeHtml(conta.tipo || '-')}</strong></div>
             <div class="contas-detail-item"><span>Agência / Conta</span><strong>${formatarAgenciaConta(conta)}</strong></div>
             <div class="contas-detail-item"><span>Saldo atual</span><strong>${formatarMoedaDisplay(conta.saldo_atual || 0)}</strong></div>
@@ -571,6 +571,11 @@ function atualizarPreviaConta() {
     setText('preview-agencia-conta', `${agencia} / ${numero}${digito ? '-' + digito : ''}`);
     setText('preview-saldo', formatarMoedaDisplay(saldo));
 
+    const previewInstituicao = document.getElementById('preview-instituicao-logo');
+    if (previewInstituicao) {
+        previewInstituicao.innerHTML = renderizarInstituicaoConta(instituicao, { tamanho: 'xl' });
+    }
+
     ['preview-cor-icon', 'preview-cor-dot'].forEach((id) => {
         const el = document.getElementById(id);
         if (el) el.style.setProperty('--conta-cor', cor);
@@ -619,6 +624,23 @@ function formatarAgenciaConta(conta) {
     const numero = conta.numero_conta || '-';
     const digito = conta.digito_conta ? `-${conta.digito_conta}` : '';
     return `${escapeHtml(agencia)} / ${escapeHtml(numero)}${escapeHtml(digito)}`;
+}
+
+function renderizarInstituicaoConta(instituicao, options = {}) {
+    if (window.InstituicoesUI?.renderLogo) {
+        return window.InstituicoesUI.renderLogo(instituicao, {
+            tipo: 'banco',
+            tamanho: options.tamanho || 'md',
+            mostrarLabel: Boolean(options.mostrarLabel)
+        });
+    }
+
+    const nome = String(instituicao || 'Banco').trim();
+    const partes = nome.split(/\s+/).filter(Boolean);
+    const iniciais = partes.length > 1
+        ? `${partes[0][0] || ''}${partes[1][0] || ''}`
+        : nome.slice(0, 2);
+    return `<span class="institution-logo institution-logo--${escapeHtml(options.tamanho || 'md')} institution-logo--default"><span class="institution-logo__mark"><span class="institution-logo__initials">${escapeHtml(iniciais.toUpperCase())}</span></span></span>`;
 }
 
 function formatarMoedaDisplay(valor) {

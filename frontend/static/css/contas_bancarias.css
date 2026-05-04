@@ -212,8 +212,7 @@ body.app-shell-body .app-content {
 }
 
 .contas-kpi-icon::before,
-.contas-preview-icon::before,
-.conta-bank-icon::before {
+.contas-preview-icon::before {
     content: "";
     width: 28px;
     height: 28px;
@@ -410,6 +409,17 @@ body.app-shell-body .app-content {
     justify-content: center;
     color: var(--conta-cor, var(--contas-blue));
     background: color-mix(in srgb, var(--conta-cor, var(--contas-blue)) 14%, white);
+}
+
+.conta-bank-icon {
+    background: transparent;
+    color: inherit;
+}
+
+.conta-bank-icon .institution-logo__mark {
+    width: 58px;
+    height: 58px;
+    border-radius: 14px;
 }
 
 .conta-title {
@@ -847,6 +857,22 @@ body.app-shell-body .app-content {
     border-radius: 999px;
     color: var(--conta-cor, var(--contas-blue));
     background: var(--conta-cor, var(--contas-blue));
+}
+
+.contas-preview-institution .institution-logo__mark {
+    width: 92px;
+    height: 92px;
+    border-radius: 999px;
+}
+
+.contas-preview-institution .institution-logo__initials {
+    font-size: 22px;
+}
+
+.contas-institution-value {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 8px;
 }
 
 .contas-preview-icon::before {

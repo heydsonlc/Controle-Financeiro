@@ -371,6 +371,31 @@
     font-size: 18px;
 }
 
+.cartao-brand,
+.cartao-detail-brand {
+    background: transparent;
+    color: inherit;
+    border-radius: 0;
+}
+
+.cartao-brand .institution-logo__mark {
+    width: 46px;
+    height: 46px;
+    border-radius: 10px;
+}
+
+.cartao-detail-brand .institution-logo__mark {
+    width: 54px;
+    height: 54px;
+    border-radius: 12px;
+}
+
+.cartao-institution-value {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 8px;
+}
+
 .cartao-list-main {
     min-width: 0;
     display: grid;

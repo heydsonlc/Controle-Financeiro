@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="Cartao financeiro">
+  <rect width="48" height="48" rx="12" fill="#f5f3ff"/>
+  <rect x="9" y="14" width="30" height="21" rx="4" fill="none" stroke="#4f46e5" stroke-width="3"/>
+  <path d="M9 21h30M15 29h8" fill="none" stroke="#4f46e5" stroke-width="3" stroke-linecap="round"/>
+</svg>
