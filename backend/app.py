@@ -187,6 +187,11 @@ def create_app(config_name=None):
         """Página de importação de fatura de cartão (CSV)"""
         return render_template('importar_cartao.html', active_page='importar_cartao', page_title='Importar Cartão')
 
+    @app.route('/imposto-renda')
+    def imposto_renda():
+        """Pagina de comprovantes do Imposto de Renda"""
+        return render_template('imposto_renda.html', active_page='imposto_renda', page_title='Imposto de Renda')
+
     @app.route('/veiculos')
     def veiculos():
         return render_template('veiculos.html', active_page='veiculos', page_title='Veículos')
@@ -229,6 +234,7 @@ def register_blueprints(app):
         from backend.routes.veiculos import veiculos_bp
         from backend.routes.despesas_previstas import despesas_previstas_bp
         from backend.routes.mobilidade_app import mobilidade_app_bp
+        from backend.routes.ir import ir_bp
     except ImportError:
         from routes.categorias import categorias_bp, categorias_cartao_bp
         from routes.despesas import despesas_bp
@@ -247,6 +253,7 @@ def register_blueprints(app):
         from routes.veiculos import veiculos_bp
         from routes.despesas_previstas import despesas_previstas_bp
         from routes.mobilidade_app import mobilidade_app_bp
+        from routes.ir import ir_bp
 
     # Registrar blueprints
     app.register_blueprint(categorias_bp, url_prefix='/api/categorias')
@@ -267,6 +274,7 @@ def register_blueprints(app):
     app.register_blueprint(veiculos_bp, url_prefix='/api/veiculos')
     app.register_blueprint(despesas_previstas_bp, url_prefix='/api/despesas-previstas')
     app.register_blueprint(mobilidade_app_bp, url_prefix='/api/mobilidade-app')
+    app.register_blueprint(ir_bp, url_prefix='/api/ir')
 
 
 def register_error_handlers(app):

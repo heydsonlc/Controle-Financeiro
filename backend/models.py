@@ -102,6 +102,189 @@ class CategoriaPalavraChave(db.Model):
         }
 
 
+class IrCategoria(db.Model):
+    """
+    Categoria fiscal usada para organizar comprovantes do Imposto de Renda.
+    """
+    __tablename__ = 'ir_categoria'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False, unique=True)
+    descricao = db.Column(db.Text, nullable=True)
+    dedutivel = db.Column(db.Boolean, nullable=False, default=True)
+    ativo = db.Column(db.Boolean, nullable=False, default=True)
+    observacao_fiscal = db.Column(db.Text, nullable=True)
+    ordem = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    categorias_despesa = db.relationship('IrCategoriaDespesa', back_populates='categoria_ir', lazy='dynamic')
+    comprovantes = db.relationship('IrComprovante', back_populates='categoria_ir', lazy='dynamic')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'nome': self.nome,
+            'descricao': self.descricao,
+            'dedutivel': bool(self.dedutivel),
+            'ativo': bool(self.ativo),
+            'observacao_fiscal': self.observacao_fiscal,
+            'ordem': self.ordem,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class IrCategoriaDespesa(db.Model):
+    """
+    Vinculo entre uma Categoria de Despesa e uma Categoria IR.
+    """
+    __tablename__ = 'ir_categoria_despesa'
+
+    id = db.Column(db.Integer, primary_key=True)
+    categoria_ir_id = db.Column(db.Integer, db.ForeignKey('ir_categoria.id'), nullable=False)
+    categoria_id = db.Column(db.Integer, db.ForeignKey('categoria.id'), nullable=False)
+    ativo = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    categoria_ir = db.relationship('IrCategoria', back_populates='categorias_despesa')
+    categoria = db.relationship('Categoria', foreign_keys=[categoria_id])
+
+    __table_args__ = (
+        db.UniqueConstraint('categoria_ir_id', 'categoria_id', name='ux_ir_categoria_despesa_ir_categoria'),
+        db.Index('ix_ir_categoria_despesa_categoria', 'categoria_id'),
+        db.Index('ix_ir_categoria_despesa_categoria_ir', 'categoria_ir_id'),
+    )
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'categoria_ir_id': self.categoria_ir_id,
+            'categoria_ir_nome': self.categoria_ir.nome if self.categoria_ir else None,
+            'categoria_id': self.categoria_id,
+            'categoria_nome': self.categoria.nome if self.categoria else None,
+            'ativo': bool(self.ativo),
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class IrComprovante(db.Model):
+    """
+    Registro principal de um comprovante fiscal armazenado para Imposto de Renda.
+    """
+    __tablename__ = 'ir_comprovante'
+
+    id = db.Column(db.Integer, primary_key=True)
+    ano_calendario = db.Column(db.Integer, nullable=False, index=True)
+    data_documento = db.Column(db.Date, nullable=True)
+    prestador_nome = db.Column(db.String(255), nullable=True)
+    prestador_cpf_cnpj = db.Column(db.String(20), nullable=True)
+    tomador_nome = db.Column(db.String(255), nullable=True)
+    tomador_cpf = db.Column(db.String(20), nullable=True)
+    valor = db.Column(db.Numeric(12, 2), nullable=True)
+    categoria_id = db.Column(db.Integer, db.ForeignKey('categoria.id'), nullable=True)
+    categoria_ir_id = db.Column(db.Integer, db.ForeignKey('ir_categoria.id'), nullable=True)
+    dedutivel = db.Column(db.Boolean, nullable=True)
+    status = db.Column(db.String(30), nullable=False, default='IMPORTADO')
+    confianca = db.Column(db.String(30), nullable=True)
+    origem_classificacao = db.Column(db.String(50), nullable=True)
+    texto_extraido = db.Column(db.Text, nullable=True)
+    observacoes = db.Column(db.Text, nullable=True)
+    hash_arquivo = db.Column(db.String(64), nullable=False, unique=True, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    categoria = db.relationship('Categoria', foreign_keys=[categoria_id])
+    categoria_ir = db.relationship('IrCategoria', back_populates='comprovantes')
+    arquivo = db.relationship('IrComprovanteArquivo', back_populates='comprovante', uselist=False, cascade='all, delete-orphan')
+    eventos = db.relationship('IrComprovanteEvento', back_populates='comprovante', lazy='dynamic', cascade='all, delete-orphan')
+
+    def to_dict(self, include_texto=False, include_eventos=False):
+        data = {
+            'id': self.id,
+            'ano_calendario': self.ano_calendario,
+            'data_documento': self.data_documento.isoformat() if self.data_documento else None,
+            'prestador_nome': self.prestador_nome,
+            'prestador_cpf_cnpj': self.prestador_cpf_cnpj,
+            'tomador_nome': self.tomador_nome,
+            'tomador_cpf': self.tomador_cpf,
+            'valor': float(self.valor) if self.valor is not None else None,
+            'categoria_id': self.categoria_id,
+            'categoria_nome': self.categoria.nome if self.categoria else None,
+            'categoria_ir_id': self.categoria_ir_id,
+            'categoria_ir_nome': self.categoria_ir.nome if self.categoria_ir else None,
+            'dedutivel': bool(self.dedutivel) if self.dedutivel is not None else None,
+            'status': self.status,
+            'confianca': self.confianca,
+            'origem_classificacao': self.origem_classificacao,
+            'observacoes': self.observacoes,
+            'hash_arquivo': self.hash_arquivo,
+            'arquivo': self.arquivo.to_dict() if self.arquivo else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+        if include_texto:
+            data['texto_extraido'] = self.texto_extraido
+        if include_eventos:
+            data['eventos'] = [evento.to_dict() for evento in self.eventos.order_by(IrComprovanteEvento.created_at.asc()).all()]
+        return data
+
+
+class IrComprovanteArquivo(db.Model):
+    """
+    Arquivo original do comprovante, armazenado no banco como LargeBinary/BYTEA.
+    """
+    __tablename__ = 'ir_comprovante_arquivo'
+
+    id = db.Column(db.Integer, primary_key=True)
+    comprovante_id = db.Column(db.Integer, db.ForeignKey('ir_comprovante.id'), nullable=False, unique=True)
+    nome_arquivo = db.Column(db.String(255), nullable=False)
+    mime_type = db.Column(db.String(120), nullable=False)
+    tamanho_bytes = db.Column(db.Integer, nullable=False)
+    conteudo = db.Column(db.LargeBinary, nullable=False)
+    hash_arquivo = db.Column(db.String(64), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    comprovante = db.relationship('IrComprovante', back_populates='arquivo')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'comprovante_id': self.comprovante_id,
+            'nome_arquivo': self.nome_arquivo,
+            'mime_type': self.mime_type,
+            'tamanho_bytes': self.tamanho_bytes,
+            'hash_arquivo': self.hash_arquivo,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class IrComprovanteEvento(db.Model):
+    """
+    Evento de auditoria do ciclo de vida do comprovante.
+    """
+    __tablename__ = 'ir_comprovante_evento'
+
+    id = db.Column(db.Integer, primary_key=True)
+    comprovante_id = db.Column(db.Integer, db.ForeignKey('ir_comprovante.id'), nullable=False)
+    tipo_evento = db.Column(db.String(50), nullable=False)
+    descricao = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    comprovante = db.relationship('IrComprovante', back_populates='eventos')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'comprovante_id': self.comprovante_id,
+            'tipo_evento': self.tipo_evento,
+            'descricao': self.descricao,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 class ItemDespesa(db.Model):
     """
     Item de gasto - pode ser 'Simples' (boleto) ou 'Agregador' (cartão)

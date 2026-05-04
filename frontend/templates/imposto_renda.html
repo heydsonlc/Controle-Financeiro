@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+
+{% block title %}Imposto de Renda{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/imposto_renda.css') }}">
+{% endblock %}
+
+{% block action_bar %}
+<section class="module-actionbar ir-actionbar" aria-label="Filtros e acoes do Imposto de Renda">
+    <label class="ir-filter">
+        <span>Ano-calendario</span>
+        <select id="ir-filtro-ano">
+            <option value="2026">2026</option>
+            <option value="2025">2025</option>
+            <option value="2024">2024</option>
+            <option value="2023">2023</option>
+        </select>
+    </label>
+    <label class="ir-filter">
+        <span>Status</span>
+        <select id="ir-filtro-status">
+            <option value="TODOS">Todos</option>
+            <option value="CLASSIFICADO">Classificados</option>
+            <option value="PENDENTE_REVISAO">Pendentes</option>
+            <option value="VALIDADO">Validados</option>
+            <option value="ERRO_LEITURA">Erro de leitura</option>
+        </select>
+    </label>
+    <label class="ir-filter">
+        <span>Categoria IR</span>
+        <select id="ir-filtro-categoria">
+            <option value="">Todas</option>
+        </select>
+    </label>
+    <label class="ir-search">
+        <span class="sr-only">Buscar comprovantes</span>
+        <input id="ir-filtro-busca" type="search" placeholder="Buscar comprovantes...">
+    </label>
+    <button type="button" class="ir-secondary-btn" id="ir-btn-atualizar">Atualizar</button>
+    <button type="button" class="ir-primary-btn" id="ir-btn-importar">Importar comprovantes</button>
+    <button type="button" class="ir-secondary-btn" id="ir-btn-exportar">Exportar</button>
+</section>
+{% endblock %}
+
+{% block content %}
+<div class="ir-page" data-ir-page>
+    <section id="ir-main-view" class="ir-view active" aria-label="Imposto de Renda">
+        <div class="ir-kpi-grid">
+            <article class="ir-kpi-card blue">
+                <span class="ir-kpi-icon" aria-hidden="true">Doc</span>
+                <div>
+                    <span>Comprovantes</span>
+                    <strong id="ir-kpi-total">0</strong>
+                    <small>documentos cadastrados</small>
+                </div>
+            </article>
+            <article class="ir-kpi-card green">
+                <span class="ir-kpi-icon" aria-hidden="true">$</span>
+                <div>
+                    <span>Valor potencialmente dedutivel</span>
+                    <strong id="ir-kpi-valor">R$ 0,00</strong>
+                    <small>sujeito a revisao</small>
+                </div>
+            </article>
+            <article class="ir-kpi-card yellow">
+                <span class="ir-kpi-icon" aria-hidden="true">!</span>
+                <div>
+                    <span>Pendentes de revisao</span>
+                    <strong id="ir-kpi-pendentes">0</strong>
+                    <small>aguardando validacao</small>
+                </div>
+            </article>
+            <article class="ir-kpi-card purple">
+                <span class="ir-kpi-icon" aria-hidden="true">#</span>
+                <div>
+                    <span>Categorias IR usadas</span>
+                    <strong id="ir-kpi-categorias">0</strong>
+                    <small>classificacao potencial</small>
+                </div>
+            </article>
+        </div>
+
+        <div class="ir-layout">
+            <section class="ir-panel ir-table-panel">
+                <div class="ir-panel-header">
+                    <div>
+                        <h2>Comprovantes</h2>
+                        <p id="ir-lista-subtitulo">Nenhum comprovante carregado</p>
+                    </div>
+                </div>
+                <div class="ir-table-wrap">
+                    <table class="ir-table">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Prestador</th>
+                                <th>Categoria IR</th>
+                                <th>Categoria de Despesa</th>
+                                <th>Valor</th>
+                                <th>Ano</th>
+                                <th>Status</th>
+                                <th>Acoes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ir-comprovantes-tbody">
+                            <tr>
+                                <td colspan="8" class="ir-empty">Nenhum comprovante cadastrado para este ano.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <aside class="ir-side">
+                <section class="ir-panel">
+                    <div class="ir-panel-header compact">
+                        <h2>Totais por Categoria IR</h2>
+                    </div>
+                    <div id="ir-totais-categorias" class="ir-side-list">
+                        <p class="ir-empty">Nenhuma categoria consolidada.</p>
+                    </div>
+                </section>
+                <section class="ir-panel">
+                    <div class="ir-panel-header compact">
+                        <h2>Pendencias</h2>
+                    </div>
+                    <div id="ir-pendencias" class="ir-pendencias">
+                        <span>0 documentos pendentes</span>
+                    </div>
+                </section>
+                <section class="ir-panel">
+                    <div class="ir-panel-header compact">
+                        <h2>Acoes para o contador</h2>
+                    </div>
+                    <button type="button" class="ir-side-action" disabled>Gerar Excel <small>em breve</small></button>
+                    <button type="button" class="ir-side-action" disabled>Gerar PDF <small>em breve</small></button>
+                    <button type="button" class="ir-side-action" disabled>Separar documentos <small>em breve</small></button>
+                </section>
+            </aside>
+        </div>
+    </section>
+
+    <section id="ir-import-view" class="ir-view" aria-label="Importar comprovantes">
+        <div class="ir-import-layout">
+            <main class="ir-import-main">
+                <section class="ir-panel ir-import-toolbar">
+                    <label class="ir-filter">
+                        <span>Ano-calendario</span>
+                        <select id="ir-upload-ano">
+                            <option value="2026">2026</option>
+                            <option value="2025">2025</option>
+                            <option value="2024">2024</option>
+                        </select>
+                    </label>
+                    <div class="ir-import-actions">
+                        <button type="button" class="ir-secondary-btn" id="ir-btn-voltar">Voltar</button>
+                        <button type="button" class="ir-primary-btn" id="ir-upload-submit">Iniciar analise</button>
+                    </div>
+                </section>
+
+                <section class="ir-dropzone" id="ir-dropzone">
+                    <input id="ir-file-input" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp">
+                    <div class="ir-dropzone-content">
+                        <span class="ir-drop-icon" aria-hidden="true">&uarr;</span>
+                        <strong>Arraste arquivos aqui</strong>
+                        <button type="button" id="ir-select-files">selecione no computador</button>
+                        <small>Formatos aceitos: PDF, JPG, PNG e WEBP. OCR fica para etapa futura.</small>
+                    </div>
+                </section>
+
+                <section class="ir-panel">
+                    <div class="ir-panel-header">
+                        <div>
+                            <h2>Arquivos importados</h2>
+                            <p id="ir-upload-count">Nenhum arquivo selecionado</p>
+                        </div>
+                    </div>
+                    <div id="ir-upload-results" class="ir-upload-list">
+                        <p class="ir-empty">Selecione arquivos para iniciar a importacao.</p>
+                    </div>
+                </section>
+            </main>
+
+            <aside class="ir-side">
+                <section class="ir-panel">
+                    <div class="ir-panel-header compact"><h2>Resumo da importacao</h2></div>
+                    <div class="ir-import-summary">
+                        <span><strong id="ir-import-enviados">0</strong> Enviados</span>
+                        <span><strong id="ir-import-lidos">0</strong> Lidos</span>
+                        <span><strong id="ir-import-pendentes">0</strong> Pendentes</span>
+                        <span><strong id="ir-import-erros">0</strong> Erros</span>
+                    </div>
+                </section>
+                <section class="ir-panel">
+                    <div class="ir-panel-header compact"><h2>Proximos passos</h2></div>
+                    <ol class="ir-steps">
+                        <li>Enviar comprovantes para analise</li>
+                        <li>Revisar documentos pendentes</li>
+                        <li>Validar categorias sugeridas</li>
+                        <li>Gerar relatorio em etapa futura</li>
+                    </ol>
+                </section>
+            </aside>
+        </div>
+    </section>
+
+    <div id="ir-review-modal" class="ir-modal" aria-hidden="true">
+        <div class="ir-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="ir-review-title">
+            <div class="ir-modal-header">
+                <div>
+                    <h2 id="ir-review-title">Revisao do comprovante</h2>
+                    <p>Revise os dados extraidos e confirme a classificacao.</p>
+                </div>
+                <button type="button" class="ir-modal-close" id="ir-review-close" aria-label="Fechar">&times;</button>
+            </div>
+            <div class="ir-review-grid">
+                <section class="ir-document-preview">
+                    <div class="ir-preview-header">
+                        <strong id="ir-review-file-name">Arquivo</strong>
+                        <a id="ir-review-file-link" href="#" target="_blank" rel="noopener">Abrir arquivo</a>
+                    </div>
+                    <pre id="ir-review-texto">Texto extraido indisponivel.</pre>
+                </section>
+                <form id="ir-review-form" class="ir-review-form">
+                    <input type="hidden" id="ir-review-id">
+                    <label>Data do documento<input id="ir-review-data" type="date"></label>
+                    <label>Prestador<input id="ir-review-prestador" type="text"></label>
+                    <label>CPF/CNPJ<input id="ir-review-doc" type="text"></label>
+                    <label>Valor<input id="ir-review-valor" type="number" step="0.01"></label>
+                    <label>Ano-calendario<input id="ir-review-ano" type="number" min="2000" max="2100"></label>
+                    <label>Categoria de Despesa<select id="ir-review-categoria"></select></label>
+                    <label>Categoria IR<select id="ir-review-categoria-ir"></select></label>
+                    <label>Observacoes<textarea id="ir-review-observacoes" rows="4"></textarea></label>
+                </form>
+            </div>
+            <div class="ir-modal-footer">
+                <button type="button" class="ir-secondary-btn" id="ir-review-save">Salvar revisao</button>
+                <button type="button" class="ir-primary-btn" id="ir-review-validar">Validar comprovante</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/imposto_renda.js') }}"></script>
+{% endblock %}
