@@ -1,9 +1,23 @@
 /* CAT-MAP-4B - Tela Categorias */
 
 .categorias-page {
-    display: grid;
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
     gap: 16px;
     color: #111827;
+}
+
+.categorias-shell {
+    flex: 1;
+    min-width: 0;
+}
+
+.categorias-summary-sidebar {
+    flex-shrink: 0;
+    width: 220px;
+    position: sticky;
+    top: 16px;
 }
 
 .categorias-hero {
@@ -46,8 +60,8 @@
 }
 
 .categorias-summary {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    display: flex;
+    flex-direction: column;
     gap: 0;
     background: #ffffff;
     border: 1px solid rgba(15, 23, 42, 0.08);
@@ -57,18 +71,18 @@
 }
 
 .summary-item {
-    min-height: 104px;
-    padding: 16px 18px;
-    display: grid;
-    justify-items: center;
-    align-content: center;
-    gap: 8px;
-    text-align: center;
-    border-right: 1px solid rgba(15, 23, 42, 0.08);
+    min-height: 80px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-align: left;
+    border-right: none;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
 }
 
 .summary-item:last-child {
-    border-right: none;
+    border-bottom: none;
 }
 
 .summary-icon {
@@ -105,8 +119,15 @@
     background: #ffedd5;
 }
 
+.summary-item-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+}
+
 .summary-label {
-    min-height: 30px;
     color: #64748b;
     font-size: 11px;
     line-height: 1.35;
@@ -114,7 +135,7 @@
 
 .summary-item strong {
     color: #0f172a;
-    font-size: 23px;
+    font-size: 20px;
     line-height: 1;
 }
 
@@ -1125,6 +1146,29 @@
 }
 
 @media (max-width: 1180px) {
+    .categorias-page {
+        flex-direction: column;
+    }
+
+    .categorias-summary-sidebar {
+        position: static;
+        width: 100%;
+    }
+
+    .categorias-summary {
+        flex-direction: row;
+    }
+
+    .summary-item {
+        flex: 1;
+        border-bottom: none;
+        border-right: 1px solid rgba(15, 23, 42, 0.08);
+    }
+
+    .summary-item:last-child {
+        border-right: none;
+    }
+
     .categorias-hero,
     .cartao-workspace,
     .detail-grid {
