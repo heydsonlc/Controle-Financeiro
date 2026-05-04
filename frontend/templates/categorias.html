@@ -43,27 +43,42 @@
             <!-- Coluna principal: tabs + conteúdo -->
             <section class="categorias-shell" aria-label="Administra&ccedil;&atilde;o de categorias">
                 <div class="categorias-tabs" role="tablist" aria-label="Tipos de categoria">
-                    <button class="categorias-tab" id="tab-despesas" type="button" role="tab" aria-controls="panel-despesas" aria-selected="false" data-tab="despesas">
+                    <button class="categorias-tab active" id="tab-despesas" type="button" role="tab" aria-controls="panel-despesas" aria-selected="true" data-tab="despesas">
                         Categorias de Despesa
                     </button>
-                    <button class="categorias-tab active" id="tab-cartao" type="button" role="tab" aria-controls="panel-cartao" aria-selected="true" data-tab="cartao">
+                    <button class="categorias-tab" id="tab-cartao" type="button" role="tab" aria-controls="panel-cartao" aria-selected="false" data-tab="cartao">
                         Categorias do Cart&atilde;o
                     </button>
                 </div>
 
-                <section class="categorias-panel hidden" id="panel-despesas" role="tabpanel" aria-labelledby="tab-despesas">
-                    <div class="despesas-panel-header">
-                        <div>
-                            <h2>Categorias de Despesa</h2>
-                            <p>Classifica&ccedil;&atilde;o financeira geral usada em despesas, relat&oacute;rios e lan&ccedil;amentos.</p>
-                        </div>
-                    </div>
-                    <div class="categorias-lista" id="categorias-lista">
-                        <p class="loading">Carregando categorias...</p>
+                <section class="categorias-panel" id="panel-despesas" role="tabpanel" aria-labelledby="tab-despesas">
+                    <div class="despesa-workspace">
+                        <aside class="despesa-sidebar" aria-label="Categorias de Despesa">
+                            <label class="workspace-search" for="busca-categoria-despesa">
+                                <span aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" focusable="false">
+                                        <circle cx="11" cy="11" r="7"/>
+                                        <path d="m20 20-3.5-3.5"/>
+                                    </svg>
+                                </span>
+                                <input id="busca-categoria-despesa" type="search" placeholder="Buscar categoria...">
+                            </label>
+                            <div class="despesa-list" id="categorias-lista">
+                                <p class="loading">Carregando categorias...</p>
+                            </div>
+                            <p class="workspace-count" id="categorias-despesa-contagem">0 categorias</p>
+                        </aside>
+
+                        <section class="despesa-detail" id="categoria-despesa-detalhe" aria-live="polite">
+                            <div class="detail-empty">
+                                <h2>Selecione uma Categoria de Despesa</h2>
+                                <p>Confira dados, v&iacute;nculo operacional e Palavras-chave de classifica&ccedil;&atilde;o.</p>
+                            </div>
+                        </section>
                     </div>
                 </section>
 
-                <section class="categorias-panel" id="panel-cartao" role="tabpanel" aria-labelledby="tab-cartao">
+                <section class="categorias-panel hidden" id="panel-cartao" role="tabpanel" aria-labelledby="tab-cartao">
                     <div class="cartao-workspace">
                         <aside class="cartao-sidebar" aria-label="Categorias do Cart&atilde;o">
                             <label class="workspace-search" for="busca-categoria-cartao">
@@ -93,7 +108,7 @@
             <!-- Sidebar direita: cards de resumo -->
             <aside class="categorias-summary-sidebar" aria-label="Resumo das categorias">
                 <section class="categorias-summary" aria-label="Resumo das categorias">
-                    <article class="summary-item">
+                    <article class="summary-item summary-item-card">
                         <span class="summary-icon summary-icon-card" aria-hidden="true">
                             <svg viewBox="0 0 24 24" focusable="false">
                                 <rect x="3" y="6" width="18" height="12" rx="2"/>
@@ -101,9 +116,11 @@
                             </svg>
                         </span>
                         <strong id="summary-cartao">0</strong>
-                        <span class="summary-label">Categorias do Cart&atilde;o</span>
+                        <span class="summary-label" id="summary-cartao-label">Categorias do Cart&atilde;o</span>
+                        <small id="summary-cartao-desc">Total de categorias de cart&atilde;o cadastradas no sistema.</small>
+                        <span class="summary-link" id="summary-cartao-link">Ver detalhes &rarr;</span>
                     </article>
-                    <article class="summary-item">
+                    <article class="summary-item summary-item-keywords">
                         <span class="summary-icon summary-icon-link" aria-hidden="true">
                             <svg viewBox="0 0 24 24" focusable="false">
                                 <path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/>
@@ -111,9 +128,11 @@
                             </svg>
                         </span>
                         <strong id="summary-vinculadas">0</strong>
-                        <span class="summary-label">Categorias de Despesa vinculadas</span>
+                        <span class="summary-label" id="summary-vinculadas-label">Categorias com palavras-chave</span>
+                        <small id="summary-vinculadas-desc">Categorias de despesa com regras de classifica&ccedil;&atilde;o ativas.</small>
+                        <span class="summary-link" id="summary-vinculadas-link">Ver detalhes &rarr;</span>
                     </article>
-                    <article class="summary-item">
+                    <article class="summary-item summary-item-alert">
                         <span class="summary-icon summary-icon-alert" aria-hidden="true">
                             <svg viewBox="0 0 24 24" focusable="false">
                                 <circle cx="12" cy="12" r="9"/>
@@ -121,7 +140,9 @@
                             </svg>
                         </span>
                         <strong id="summary-sem-vinculo">0</strong>
-                        <span class="summary-label">Categorias sem v&iacute;nculo</span>
+                        <span class="summary-label" id="summary-sem-vinculo-label">Categorias sem v&iacute;nculo</span>
+                        <small id="summary-sem-vinculo-desc">Categorias de despesa ainda n&atilde;o associadas ao cart&atilde;o.</small>
+                        <span class="summary-link" id="summary-sem-vinculo-link">Ver detalhes &rarr;</span>
                     </article>
                 </section>
             </aside>

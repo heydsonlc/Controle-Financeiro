@@ -9,11 +9,14 @@ const estadoCategorias = {
     categoriasDespesa: [],
     categoriasCartao: [],
     vinculosPorCartao: new Map(),
-    abaAtiva: 'cartao',
+    palavrasPorCategoria: new Map(),
+    abaAtiva: 'despesas',
     filtroStatus: 'ativas',
     pesquisaGeral: '',
     pesquisaCartao: '',
+    pesquisaDespesa: '',
     categoriaCartaoSelecionadaId: null,
+    categoriaDespesaSelecionadaId: null,
     criandoCategoriaCartao: false,
     categoriaDespesaEditandoId: null,
     categoriaDespesaAtual: null
@@ -105,6 +108,22 @@ function configurarEventosGerais() {
         renderizarCategoriasCartao();
     });
 
+    document.getElementById('busca-categoria-despesa')?.addEventListener('input', (event) => {
+        estadoCategorias.pesquisaDespesa = event.target.value;
+        ajustarSelecaoDespesa();
+        renderizarCategoriasDespesa();
+        renderizarDetalheCategoriaDespesa();
+    });
+
+    const listaDespesa = document.getElementById('categorias-lista');
+    listaDespesa?.addEventListener('click', (event) => {
+        const item = event.target.closest('[data-categoria-despesa-id]');
+        if (!item) return;
+        estadoCategorias.categoriaDespesaSelecionadaId = Number(item.dataset.categoriaDespesaId);
+        renderizarCategoriasDespesa();
+        renderizarDetalheCategoriaDespesa();
+    });
+
     const listaCartao = document.getElementById('categorias-cartao-lista');
     listaCartao?.addEventListener('click', (event) => {
         const item = event.target.closest('[data-categoria-cartao-id]');
@@ -119,6 +138,10 @@ function configurarEventosGerais() {
     detalhe?.addEventListener('submit', salvarCategoriaCartao);
     detalhe?.addEventListener('click', tratarCliqueDetalheCartao);
     detalhe?.addEventListener('input', tratarInputDetalheCartao);
+
+    const detalheDespesa = document.getElementById('categoria-despesa-detalhe');
+    detalheDespesa?.addEventListener('submit', tratarSubmitDetalheDespesa);
+    detalheDespesa?.addEventListener('click', tratarCliqueDetalheDespesa);
 }
 
 function configurarModalCategoriaDespesa() {
@@ -157,6 +180,8 @@ async function carregarDadosCategorias() {
         estadoCategorias.categoriasDespesa = categoriasResp.data || [];
         estadoCategorias.categoriasCartao = categoriasCartaoResp.data || [];
         await carregarVinculosCategoriasCartao();
+        await carregarPalavrasChaveCategorias();
+        ajustarSelecaoDespesa();
         ajustarSelecaoCartao();
         renderizarTelaCategorias();
     } catch (error) {
@@ -188,10 +213,27 @@ async function carregarVinculosCategoriasCartao() {
     estadoCategorias.vinculosPorCartao = new Map(pares);
 }
 
+async function carregarPalavrasChaveCategorias() {
+    const pares = await Promise.all(
+        estadoCategorias.categoriasDespesa.map(async (categoria) => {
+            try {
+                const resp = await fetchJson(`${API_CATEGORIAS}/${categoria.id}/palavras-chave`);
+                return [categoria.id, resp.data || []];
+            } catch (error) {
+                console.error('Erro ao carregar palavras-chave da categoria:', categoria.id, error);
+                return [categoria.id, []];
+            }
+        })
+    );
+
+    estadoCategorias.palavrasPorCategoria = new Map(pares);
+}
+
 function renderizarTelaCategorias() {
     renderizarResumo();
     renderizarAbas();
     renderizarCategoriasDespesa();
+    renderizarDetalheCategoriaDespesa();
     renderizarCategoriasCartao();
     renderizarDetalheCategoriaCartao();
 }
@@ -208,10 +250,27 @@ function renderizarResumo() {
 
     const categoriasDespesaAtivas = estadoCategorias.categoriasDespesa.filter((categoria) => categoria.ativo);
     const semVinculo = categoriasDespesaAtivas.filter((categoria) => !idsDespesaVinculados.has(categoria.id)).length;
+    const comPalavrasChave = categoriasDespesaAtivas.filter((categoria) => obterPalavrasChaveCategoria(categoria.id).length > 0).length;
 
     setText('summary-cartao', categoriasCartaoAtivas.length);
-    setText('summary-vinculadas', idsDespesaVinculados.size);
+    setText('summary-vinculadas', estadoCategorias.abaAtiva === 'despesas' ? comPalavrasChave : idsDespesaVinculados.size);
     setText('summary-sem-vinculo', semVinculo);
+
+    if (estadoCategorias.abaAtiva === 'despesas') {
+        setText('summary-cartao-label', 'Categorias do Cartão');
+        setText('summary-cartao-desc', 'Total de categorias de cartão cadastradas no sistema.');
+        setText('summary-vinculadas-label', 'Categorias com palavras-chave');
+        setText('summary-vinculadas-desc', 'Categorias de despesa com regras de classificação ativas.');
+        setText('summary-sem-vinculo-label', 'Categorias sem vínculo');
+        setText('summary-sem-vinculo-desc', 'Categorias de despesa ainda não associadas ao cartão.');
+    } else {
+        setText('summary-cartao-label', 'Categorias do Cartão');
+        setText('summary-cartao-desc', 'Total de categorias ativas.');
+        setText('summary-vinculadas-label', 'Categorias de Despesa vinculadas');
+        setText('summary-vinculadas-desc', 'Total de vinculações ativas.');
+        setText('summary-sem-vinculo-label', 'Categorias sem vínculo');
+        setText('summary-sem-vinculo-desc', 'Disponíveis para vinculação.');
+    }
 }
 
 function setText(id, value) {
@@ -232,16 +291,19 @@ function renderizarAbas() {
 
 function trocarAba(tab) {
     estadoCategorias.abaAtiva = tab === 'despesas' ? 'despesas' : 'cartao';
+    ajustarSelecaoDespesa();
+    ajustarSelecaoCartao();
     renderizarTelaCategorias();
 }
 
-function categoriasFiltradas(lista) {
-    const pesquisa = normalizarBusca(estadoCategorias.pesquisaGeral);
+function categoriasFiltradas(lista, pesquisaAdicional = '') {
+    const pesquisas = [estadoCategorias.pesquisaGeral, pesquisaAdicional].map(normalizarBusca).filter(Boolean);
     return lista.filter((categoria) => {
         if (estadoCategorias.filtroStatus === 'ativas' && !categoria.ativo) return false;
         if (estadoCategorias.filtroStatus === 'inativas' && categoria.ativo) return false;
-        if (!pesquisa) return true;
-        return normalizarBusca(`${categoria.nome} ${categoria.descricao || ''}`).includes(pesquisa);
+        if (!pesquisas.length) return true;
+        const texto = normalizarBusca(`${categoria.nome} ${categoria.descricao || ''}`);
+        return pesquisas.every((pesquisa) => texto.includes(pesquisa));
     });
 }
 
@@ -249,7 +311,10 @@ function renderizarCategoriasDespesa() {
     const lista = document.getElementById('categorias-lista');
     if (!lista) return;
 
-    const categorias = categoriasFiltradas(estadoCategorias.categoriasDespesa);
+    const categorias = categoriasFiltradas(estadoCategorias.categoriasDespesa, estadoCategorias.pesquisaDespesa)
+        .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    setText('categorias-despesa-contagem', `${categorias.length} ${categorias.length === 1 ? 'categoria' : 'categorias'}`);
+
     if (categorias.length === 0) {
         lista.innerHTML = `
             <div class="empty-state">
@@ -260,53 +325,255 @@ function renderizarCategoriasDespesa() {
         return;
     }
 
-    const linhas = categorias.map((categoria) => {
-        const visualHtml = typeof renderCategoryVisual === 'function'
-            ? renderCategoryVisual(categoria, { size: '16px', alt: categoria.nome })
-            : '';
-        const iconeHtml = visualHtml
-            ? `<span class="category-icon" style="color:${escapeHtml(categoria.cor || '#6c757d')}">${visualHtml}</span>`
-            : `<span class="categoria-dot" style="background-color:${escapeHtml(categoria.cor || '#6c757d')}" aria-hidden="true"></span>`;
+    lista.innerHTML = categorias.map((categoria) => {
+        const selecionada = categoria.id === estadoCategorias.categoriaDespesaSelecionadaId;
         const categoriaCartao = obterCategoriaCartaoPorDespesa(categoria.id);
-        const vinculoLabel = categoriaCartao
-            ? `<span class="compact-pill vinculo-pill">${escapeHtml(categoriaCartao.nome)}</span>`
-            : '<span class="text-muted">Sem v&iacute;nculo</span>';
+        const palavras = obterPalavrasChaveCategoria(categoria.id);
 
         return `
-            <div class="compact-row categoria-row categorias-despesa-row">
-                <div class="compact-cell col-descricao">
-                    <span class="titulo">
-                        ${iconeHtml}
-                        <span class="categoria-nome-texto">${escapeHtml(categoria.nome)}</span>
-                    </span>
-                </div>
-                <div class="compact-cell compact-meta">${escapeHtml(categoria.descricao || '-')}</div>
-                <div class="compact-cell">${vinculoLabel}</div>
-                <div class="compact-cell">
-                    <span class="compact-pill status ${categoria.ativo ? 'status-ativo' : 'status-inativo'}">
-                        ${categoria.ativo ? 'Ativa' : 'Inativa'}
-                    </span>
-                </div>
-                <div class="compact-cell row-actions acoes">
-                    <button class="row-action-button" type="button" onclick="editarCategoria(${categoria.id})" title="Editar" aria-label="Editar">${categoriaIcon('edit')}</button>
-                    <button class="row-action-button danger" type="button" onclick="confirmarDeletar(${categoria.id}, ${escapeHtml(JSON.stringify(categoria.nome))})" title="Excluir" aria-label="Excluir">${categoriaIcon('remove')}</button>
-                </div>
-            </div>
+            <button class="despesa-list-item ${selecionada ? 'selected' : ''}" type="button" data-categoria-despesa-id="${categoria.id}">
+                <span class="despesa-list-icon" style="color:${escapeHtml(categoria.cor || '#2563eb')}">${renderizarIconeDespesa(categoria, '22px')}</span>
+                <span class="despesa-list-main">
+                    <strong>${escapeHtml(categoria.nome)}</strong>
+                    <small>${escapeHtml(categoria.descricao || 'Categoria de despesa')}</small>
+                </span>
+                <span class="despesa-list-meta">
+                    <span class="status-dot ${categoria.ativo ? 'active' : ''}"></span>
+                    <small>${categoria.ativo ? 'Ativa' : 'Inativa'}</small>
+                    <small>${palavras.length} ${palavras.length === 1 ? 'termo' : 'termos'}</small>
+                </span>
+                <span class="cartao-list-chevron" aria-hidden="true">${categoriaIcon('chevron')}</span>
+                ${categoriaCartao ? `<span class="sr-only">Vinculada a ${escapeHtml(categoriaCartao.nome)}</span>` : ''}
+            </button>
         `;
     }).join('');
+}
 
-    lista.innerHTML = `
-        <div class="compact-table categorias-despesa-table">
-            <div class="compact-table-header categorias-despesa-row">
-                <div>Categoria</div>
-                <div>Descri&ccedil;&atilde;o</div>
-                <div>Categoria do Cart&atilde;o</div>
-                <div>Status</div>
-                <div class="compact-actions">A&ccedil;&otilde;es</div>
+function renderizarDetalheCategoriaDespesa() {
+    const detalhe = document.getElementById('categoria-despesa-detalhe');
+    if (!detalhe) return;
+
+    const categoria = obterCategoriaDespesaSelecionada();
+    if (!categoria) {
+        detalhe.innerHTML = `
+            <div class="detail-empty">
+                <h2>Selecione uma Categoria de Despesa</h2>
+                <p>Confira dados, v&iacute;nculo operacional e palavras-chave de classifica&ccedil;&atilde;o.</p>
             </div>
-            ${linhas}
+        `;
+        return;
+    }
+
+    const palavras = obterPalavrasChaveCategoria(categoria.id);
+    const categoriaCartao = obterCategoriaCartaoPorDespesa(categoria.id);
+    const exemplos = gerarExemplosReconhecidos(categoria, palavras, categoriaCartao);
+
+    detalhe.innerHTML = `
+        <div class="detail-header despesa-detail-header">
+            <div class="detail-identity">
+                <span class="detail-icon" style="color:${escapeHtml(categoria.cor || '#2563eb')}">${renderizarIconeDespesa(categoria, '30px')}</span>
+                <div>
+                    <h2>${escapeHtml(categoria.nome)}</h2>
+                    <p>${escapeHtml(categoria.descricao || 'Categoria de despesa usada em despesas, relatórios e lançamentos.')}</p>
+                </div>
+                <span class="compact-pill ${categoria.ativo ? 'status-ativo' : 'status-inativo'}">${categoria.ativo ? 'Ativa' : 'Inativa'}</span>
+            </div>
+            <div class="detail-actions">
+                <button class="cf-button cf-button-secondary" type="button" data-action="editar-despesa" data-categoria-id="${categoria.id}">
+                    ${categoriaIcon('edit')}<span>Editar</span>
+                </button>
+                <button class="row-action-button danger" type="button" data-action="excluir-despesa" data-categoria-id="${categoria.id}" title="Excluir" aria-label="Excluir">${categoriaIcon('remove')}</button>
+            </div>
+        </div>
+
+        <section class="detail-card despesa-data-card">
+            <h3>Dados da Categoria de Despesa</h3>
+            <div class="despesa-data-grid">
+                <div><small>Nome</small><strong>${escapeHtml(categoria.nome)}</strong></div>
+                <div><small>Cor</small><strong><span class="color-swatch" style="background:${escapeHtml(categoria.cor || '#2563eb')}"></span>${escapeHtml(categoria.cor || '#2563eb')}</strong></div>
+                <div><small>&Iacute;cone</small><span class="preview-icon" style="color:${escapeHtml(categoria.cor || '#2563eb')}">${renderizarIconeDespesa(categoria, '24px')}</span></div>
+                <div><small>Categoria ativa</small><strong>${categoria.ativo ? 'Sim' : 'N&atilde;o'}</strong></div>
+                <div class="wide"><small>Descri&ccedil;&atilde;o</small><p>${escapeHtml(categoria.descricao || 'Sem descri&ccedil;&atilde;o cadastrada.')}</p></div>
+                <div><small>Data de cria&ccedil;&atilde;o</small><strong>${formatarDataHora(categoria.criado_em)}</strong></div>
+            </div>
+        </section>
+
+        <section class="detail-card operational-link-card">
+            <h3>Vincula&ccedil;&atilde;o operacional</h3>
+            <p>Esta categoria de despesa ser&aacute; associada &agrave;s transa&ccedil;&otilde;es da categoria do cart&atilde;o abaixo.</p>
+            ${renderizarVinculoOperacional(categoriaCartao)}
+        </section>
+
+        <section class="detail-card keywords-card">
+            <div class="card-title-inline">
+                <div>
+                    <h3>Palavras-chave de classifica&ccedil;&atilde;o</h3>
+                    <p>Palavras e termos que, quando encontrados na descri&ccedil;&atilde;o da transa&ccedil;&atilde;o, sugerem esta categoria.</p>
+                </div>
+            </div>
+            <div class="keyword-chip-list">
+                ${renderizarPalavrasChave(palavras)}
+            </div>
+            <form class="keyword-form" id="form-palavra-chave">
+                <input type="text" id="nova-palavra-chave" maxlength="120" placeholder="Adicionar nova palavra-chave...">
+                <button class="cf-button cf-button-primary" type="submit">
+                    <span aria-hidden="true">+</span>
+                    <span>Adicionar</span>
+                </button>
+            </form>
+        </section>
+
+        <section class="detail-card examples-card">
+            <h3>Exemplos reconhecidos</h3>
+            <p>Exemplos de descri&ccedil;&otilde;es de transa&ccedil;&otilde;es que seriam classificadas para esta categoria.</p>
+            ${renderizarExemplosReconhecidos(exemplos, categoria, categoriaCartao)}
+        </section>
+    `;
+}
+
+function renderizarVinculoOperacional(categoriaCartao) {
+    if (!categoriaCartao) {
+        return `
+            <div class="operational-link-empty">
+                <strong>Categoria ainda sem v&iacute;nculo com Categoria do Cart&atilde;o.</strong>
+                <span>Use a aba Categorias do Cart&atilde;o para criar ou ajustar o v&iacute;nculo operacional.</span>
+            </div>
+        `;
+    }
+
+    return `
+        <div class="operational-link-item">
+            <span class="cartao-list-icon" style="color:${escapeHtml(categoriaCartao.cor || '#2563eb')}">${renderizarIconeCartao(categoriaCartao, '22px')}</span>
+            <span>
+                <strong>${escapeHtml(categoriaCartao.nome)}</strong>
+                <small>${escapeHtml(categoriaCartao.descricao || 'Categoria global do cart&atilde;o')}</small>
+            </span>
+            <span class="compact-pill vinculo-pill">${categoriaIcon('check')} Categoria do cart&atilde;o vinculada</span>
+            <span class="cartao-list-chevron" aria-hidden="true">${categoriaIcon('chevron')}</span>
         </div>
     `;
+}
+
+function renderizarPalavrasChave(palavras) {
+    if (!palavras.length) {
+        return '<div class="empty-inline">Nenhuma palavra-chave cadastrada. Adicione termos para melhorar a classifica&ccedil;&atilde;o autom&aacute;tica.</div>';
+    }
+
+    return palavras.map((palavra) => `
+        <span class="keyword-chip">
+            ${escapeHtml(palavra.palavra)}
+            <button type="button" data-action="remover-palavra-chave" data-palavra-id="${palavra.id}" aria-label="Remover palavra-chave ${escapeHtml(palavra.palavra)}">&times;</button>
+        </span>
+    `).join('');
+}
+
+function renderizarExemplosReconhecidos(exemplos, categoria, categoriaCartao) {
+    if (!exemplos.length) {
+        return `
+            <div class="empty-inline">
+                Adicione palavras-chave para visualizar exemplos de classifica&ccedil;&atilde;o.
+            </div>
+        `;
+    }
+
+    return `
+        <div class="examples-table">
+            <div class="examples-table-header">
+                <div>Descri&ccedil;&atilde;o da transa&ccedil;&atilde;o</div>
+                <div>Categoria de Despesa (esperado)</div>
+                <div>Categoria do Cart&atilde;o (esperado)</div>
+            </div>
+            ${exemplos.map((descricao) => `
+                <div class="examples-table-row">
+                    <div>${escapeHtml(descricao)}</div>
+                    <div><span class="status-dot active"></span>${escapeHtml(categoria.nome)}</div>
+                    <div>
+                        ${categoriaCartao ? `<span class="chip-icon" style="color:${escapeHtml(categoriaCartao.cor || '#2563eb')}">${renderizarIconeCartao(categoriaCartao, '14px')}</span>${escapeHtml(categoriaCartao.nome)}` : '<span class="text-muted">Sem Categoria do Cart&atilde;o vinculada</span>'}
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+function gerarExemplosReconhecidos(categoria, palavras, categoriaCartao) {
+    if (!palavras.length) return [];
+    const termos = palavras.map((item) => item.palavra);
+    const exemplos = [];
+
+    if (termos.some((termo) => ['posto', 'shell'].includes(termo))) {
+        exemplos.push('POSTO SHELL VILA MARIANA');
+    }
+    if (termos.some((termo) => ['ipiranga', 'abastecimento'].includes(termo))) {
+        exemplos.push('IPIRANGA 0456 - ABASTECIMENTO');
+    }
+    if (termos.some((termo) => ['petrobras', 'gasolina'].includes(termo))) {
+        exemplos.push('PETROBRAS 1234 - GASOLINA COMUM');
+    }
+
+    termos.forEach((termo) => {
+        if (exemplos.length >= 3) return;
+        exemplos.push(`${termo.toUpperCase()} - ${categoria.nome.toUpperCase()}`);
+    });
+
+    return [...new Set(exemplos)].slice(0, 3);
+}
+
+async function tratarSubmitDetalheDespesa(event) {
+    if (event.target.id !== 'form-palavra-chave') return;
+    event.preventDefault();
+
+    const categoria = obterCategoriaDespesaSelecionada();
+    const input = document.getElementById('nova-palavra-chave');
+    const palavra = input?.value.trim();
+    if (!categoria || !palavra) return;
+
+    try {
+        await fetchJson(`${API_CATEGORIAS}/${categoria.id}/palavras-chave`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ palavra })
+        });
+        if (input) input.value = '';
+        await carregarPalavrasChaveCategorias();
+        renderizarResumo();
+        renderizarCategoriasDespesa();
+        renderizarDetalheCategoriaDespesa();
+    } catch (error) {
+        console.error('Erro ao adicionar palavra-chave:', error);
+        alert(`Erro ao adicionar palavra-chave: ${error.message}`);
+    }
+}
+
+async function tratarCliqueDetalheDespesa(event) {
+    const button = event.target.closest('[data-action]');
+    if (!button) return;
+
+    const categoria = obterCategoriaDespesaSelecionada();
+    const action = button.dataset.action;
+
+    if (action === 'editar-despesa' && categoria) {
+        await editarCategoria(categoria.id);
+    } else if (action === 'excluir-despesa' && categoria) {
+        confirmarDeletar(categoria.id, categoria.nome);
+    } else if (action === 'remover-palavra-chave' && categoria) {
+        await removerPalavraChave(categoria.id, Number(button.dataset.palavraId));
+    }
+}
+
+async function removerPalavraChave(categoriaId, palavraId) {
+    try {
+        await fetchJson(`${API_CATEGORIAS}/${categoriaId}/palavras-chave/${palavraId}`, {
+            method: 'DELETE'
+        });
+        await carregarPalavrasChaveCategorias();
+        renderizarResumo();
+        renderizarCategoriasDespesa();
+        renderizarDetalheCategoriaDespesa();
+    } catch (error) {
+        console.error('Erro ao remover palavra-chave:', error);
+        alert(`Erro ao remover palavra-chave: ${error.message}`);
+    }
 }
 
 function renderizarCategoriasCartao() {
@@ -678,13 +945,32 @@ function ajustarSelecaoCartao() {
         : (visiveis[0]?.id || null);
 }
 
+function ajustarSelecaoDespesa() {
+    const visiveis = categoriasFiltradas(estadoCategorias.categoriasDespesa, estadoCategorias.pesquisaDespesa)
+        .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    const selecionadaExiste = visiveis.some((categoria) => categoria.id === estadoCategorias.categoriaDespesaSelecionadaId);
+    estadoCategorias.categoriaDespesaSelecionadaId = selecionadaExiste
+        ? estadoCategorias.categoriaDespesaSelecionadaId
+        : (visiveis[0]?.id || null);
+}
+
 function obterCategoriaCartaoSelecionada() {
     if (!estadoCategorias.categoriaCartaoSelecionadaId) return null;
     return estadoCategorias.categoriasCartao.find((categoria) => categoria.id === estadoCategorias.categoriaCartaoSelecionadaId) || null;
 }
 
+function obterCategoriaDespesaSelecionada() {
+    if (!estadoCategorias.categoriaDespesaSelecionadaId) return null;
+    return obterCategoriaDespesa(estadoCategorias.categoriaDespesaSelecionadaId);
+}
+
 function obterCategoriaDespesa(categoriaId) {
     return estadoCategorias.categoriasDespesa.find((categoria) => categoria.id === Number(categoriaId)) || null;
+}
+
+function obterPalavrasChaveCategoria(categoriaId) {
+    return (estadoCategorias.palavrasPorCategoria.get(Number(categoriaId)) || [])
+        .filter((palavra) => palavra.ativo);
 }
 
 function obterVinculosAtivos(categoriaCartaoId) {
@@ -938,12 +1224,13 @@ async function salvarCategoria(event) {
     };
 
     try {
-        await fetchJson(id ? `${API_CATEGORIAS}/${id}` : API_CATEGORIAS, {
+        const response = await fetchJson(id ? `${API_CATEGORIAS}/${id}` : API_CATEGORIAS, {
             method: id ? 'PUT' : 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(dados)
         });
 
+        estadoCategorias.categoriaDespesaSelecionadaId = response.data?.id || Number(id) || estadoCategorias.categoriaDespesaSelecionadaId;
         fecharModal();
         await carregarDadosCategorias();
     } catch (error) {
@@ -961,6 +1248,9 @@ function confirmarDeletar(id, nome) {
 async function deletarCategoria(id) {
     try {
         await fetchJson(`${API_CATEGORIAS}/${id}`, { method: 'DELETE' });
+        if (estadoCategorias.categoriaDespesaSelecionadaId === id) {
+            estadoCategorias.categoriaDespesaSelecionadaId = null;
+        }
         await carregarDadosCategorias();
     } catch (error) {
         console.error('Erro ao excluir categoria:', error);

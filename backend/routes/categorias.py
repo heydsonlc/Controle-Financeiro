@@ -17,9 +17,11 @@ from werkzeug.utils import secure_filename
 try:
     from backend.models import db, Categoria
     from backend.services.categoria_cartao_service import CategoriaCartaoService
+    from backend.services.categoria_palavra_chave_service import CategoriaPalavraChaveService
 except ImportError:
     from models import db, Categoria
     from services.categoria_cartao_service import CategoriaCartaoService
+    from services.categoria_palavra_chave_service import CategoriaPalavraChaveService
 
 # Criar blueprint
 categorias_bp = Blueprint('categorias', __name__)
@@ -115,6 +117,15 @@ def _remover_arquivo_logo(nome_arquivo):
         current_app.logger.warning('Nao foi possivel remover logo antigo: %s', caminho)
 
 
+def _categoria_to_dict(categoria):
+    dados = categoria.to_dict()
+    try:
+        dados['palavras_chave_count'] = categoria.palavras_chave.filter_by(ativo=True).count()
+    except Exception:
+        dados['palavras_chave_count'] = 0
+    return dados
+
+
 @categorias_bp.route('', methods=['GET'])
 def listar_categorias():
     """
@@ -138,7 +149,7 @@ def listar_categorias():
 
         return jsonify({
             'success': True,
-            'data': [cat.to_dict() for cat in categorias],
+            'data': [_categoria_to_dict(cat) for cat in categorias],
             'total': len(categorias)
         }), 200
 
@@ -171,7 +182,7 @@ def buscar_categoria(id):
 
         return jsonify({
             'success': True,
-            'data': categoria.to_dict()
+            'data': _categoria_to_dict(categoria)
         }), 200
 
     except Exception as e:
@@ -334,6 +345,57 @@ def atualizar_categoria(id):
             'success': False,
             'error': str(e)
         }), 500
+
+
+@categorias_bp.route('/<int:id>/palavras-chave', methods=['GET'])
+def listar_palavras_chave_categoria(id):
+    try:
+        palavras = CategoriaPalavraChaveService.listar(id, ativo=True)
+        return jsonify({
+            'success': True,
+            'data': [palavra.to_dict() for palavra in palavras],
+            'total': len(palavras)
+        }), 200
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 404
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@categorias_bp.route('/<int:id>/palavras-chave', methods=['POST'])
+def criar_palavra_chave_categoria(id):
+    try:
+        dados = request.get_json(silent=True) or {}
+        palavra, criada = CategoriaPalavraChaveService.criar(id, dados.get('palavra'))
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'data': palavra.to_dict(),
+            'created': criada
+        }), 201 if criada else 200
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@categorias_bp.route('/<int:id>/palavras-chave/<int:palavra_id>', methods=['DELETE'])
+def remover_palavra_chave_categoria(id, palavra_id):
+    try:
+        palavra = CategoriaPalavraChaveService.desativar(id, palavra_id)
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'data': palavra.to_dict()
+        }), 200
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 404
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @categorias_bp.route('/<int:id>/logo', methods=['POST'])

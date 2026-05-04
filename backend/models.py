@@ -38,6 +38,7 @@ class Categoria(db.Model):
 
     # Relacionamentos
     itens_despesa = db.relationship('ItemDespesa', back_populates='categoria', lazy='dynamic')
+    palavras_chave = db.relationship('CategoriaPalavraChave', back_populates='categoria', lazy='dynamic')
 
     def __repr__(self):
         return f'<Categoria {self.nome}>'
@@ -61,7 +62,43 @@ class Categoria(db.Model):
             'logo_original_nome': self.logo_original_nome,
             'logo_criado_em': self.logo_criado_em.isoformat() if self.logo_criado_em else None,
             'logo_url': self.logo_url,
-            'ativo': self.ativo
+            'ativo': self.ativo,
+            'criado_em': self.criado_em.isoformat() if self.criado_em else None
+        }
+
+
+class CategoriaPalavraChave(db.Model):
+    """
+    Palavras-chave usadas para sugerir Categoria de Despesa em classificacoes futuras.
+    """
+    __tablename__ = 'categoria_palavra_chave'
+
+    id = db.Column(db.Integer, primary_key=True)
+    categoria_id = db.Column(db.Integer, db.ForeignKey('categoria.id'), nullable=False)
+    palavra = db.Column(db.String(120), nullable=False)
+    ativo = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    categoria = db.relationship('Categoria', back_populates='palavras_chave')
+
+    __table_args__ = (
+        db.UniqueConstraint('categoria_id', 'palavra', name='ux_categoria_palavra_chave_categoria_palavra'),
+        db.Index('ix_categoria_palavra_chave_categoria', 'categoria_id'),
+        db.Index('ix_categoria_palavra_chave_palavra', 'palavra'),
+    )
+
+    def __repr__(self):
+        return f'<CategoriaPalavraChave Categoria:{self.categoria_id} Palavra:{self.palavra}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'categoria_id': self.categoria_id,
+            'palavra': self.palavra,
+            'ativo': bool(self.ativo),
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
 
 
