@@ -173,6 +173,13 @@
     grid-template-columns: minmax(0, 1.75fr) minmax(340px, 0.75fr);
 }
 
+.patrimonio-main-column {
+    display: flex;
+    flex-direction: column;
+    gap: var(--app-section-gap, 16px);
+    min-width: 0;
+}
+
 .patrimonio-main-panel,
 .patrimonio-side-card {
     background: #ffffff;

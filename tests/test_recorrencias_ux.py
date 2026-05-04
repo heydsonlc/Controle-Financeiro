@@ -106,8 +106,10 @@ def test_template_contem_action_bar_e_filtros(client):
     ]:
         assert campo in html
 
-    assert 'Atualizar' in html
-    assert 'Filtros' in html
+    assert 'title="Atualizar"' not in html
+    assert '<span>Atualizar</span>' not in html
+    assert 'title="Filtros"' not in html
+    assert '<span>Filtros</span>' not in html
     assert 'Nova recorrencia' in html
 
 

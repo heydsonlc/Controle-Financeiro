@@ -293,9 +293,6 @@ function renderizarComposicao(itens) {
         label: formatarFrequencia(freq),
         count: ativas.filter(item => item.frequencia === freq).length
     })).filter(item => item.count > 0);
-    const impacto = ativas.reduce((totalValor, item) => totalValor + valorMensalEstimado(item), 0);
-    const proximo = obterEventosAgenda(ativas)[0] || null;
-
     container.innerHTML = `
         <div class="composition-layout">
             <div class="composition-donut" style="${gerarDonut(porFrequencia, total)}">
@@ -310,21 +307,6 @@ function renderizarComposicao(itens) {
                     </div>
                 `).join('')}
             </div>
-        </div>
-        <div class="side-indicators">
-            <article>
-                <span>Proxima geracao em</span>
-                <strong>${proximo ? `${proximo.dias} ${proximo.dias === 1 ? 'dia' : 'dias'}` : '-'}</strong>
-                <small>${proximo ? `${formatarData(proximo.data)} (${formatarDiaSemana(proximo.data)})` : 'Sem data prevista'}</small>
-            </article>
-            <article class="green">
-                <span>Impacto mensal (ativas)</span>
-                <strong>${formatarMoeda(impacto)}</strong>
-            </article>
-            <article>
-                <span>Categoria mais usada</span>
-                <strong>${escapeHtml(obterCategoriaMaisUsada(ativas) || '-')}</strong>
-            </article>
         </div>
     `;
 }

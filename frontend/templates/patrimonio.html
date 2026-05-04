@@ -12,12 +12,6 @@
             <div class="module-actionbar-tabs patrimonio-actionbar-tabs">
                 <button class="tab-button patrimonio-view-tab active" type="button" onclick="mostrarAba('contas', this)">
                     <span class="patrimonio-tab-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" focusable="false"><path d="M4 19h16"/><path d="M7 16V9"/><path d="M12 16V5"/><path d="M17 16v-4"/></svg>
-                    </span>
-                    Vis&atilde;o geral
-                </button>
-                <button class="tab-button patrimonio-view-tab" type="button" onclick="mostrarAba('contas', this)">
-                    <span class="patrimonio-tab-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" focusable="false"><path d="M5 7h14v12H5z"/><path d="M8 7V5h8v2"/><path d="M8 12h8"/></svg>
                     </span>
                     Caixinhas
@@ -62,74 +56,76 @@
 
 {% block content %}
     <div class="container app-content-fluid patrimonio-page">
-        <section class="patrimonio-summary-grid" aria-label="Resumo de patrimonio">
-            <article class="patrimonio-summary-card blue">
-                <span class="patrimonio-summary-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" focusable="false"><path d="M5 8h14v11H5z"/><path d="M8 8V6h8v2"/><path d="M9 13h6"/></svg>
-                </span>
-                <div>
-                    <span>Patrim&ocirc;nio total</span>
-                    <strong id="patrimonio-total">R$ 0,00</strong>
-                    <small id="patrimonio-total-legenda">Total em caixinhas ativas</small>
-                </div>
-            </article>
-            <article class="patrimonio-summary-card green">
-                <span class="patrimonio-summary-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" focusable="false"><path d="M4 7h16v12H4z"/><path d="M7 7V5h10v2"/><path d="M8 13h8"/></svg>
-                </span>
-                <div>
-                    <span>Caixinhas ativas</span>
-                    <strong id="total-caixinhas">0</strong>
-                    <small id="patrimonio-inativas">0 inativas</small>
-                </div>
-            </article>
-            <article class="patrimonio-summary-card purple">
-                <span class="patrimonio-summary-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>
-                </span>
-                <div>
-                    <span>Meta consolidada</span>
-                    <strong id="patrimonio-meta-total">R$ 0,00</strong>
-                    <small id="patrimonio-meta-progresso">0% da meta atingida</small>
-                </div>
-            </article>
-            <article class="patrimonio-summary-card amber">
-                <span class="patrimonio-summary-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" focusable="false"><path d="M4 17 10 11l4 4 6-8"/><path d="M15 7h5v5"/></svg>
-                </span>
-                <div>
-                    <span>Maior saldo</span>
-                    <strong id="patrimonio-maior-saldo">R$ 0,00</strong>
-                    <small id="patrimonio-maior-caixinha">Nenhuma caixinha</small>
-                </div>
-            </article>
-        </section>
-
         <section id="aba-contas" class="tab-content active">
             <div class="patrimonio-layout">
-                <section class="patrimonio-main-panel">
-                    <div class="patrimonio-panel-header">
-                        <div>
-                            <h2>Caixinhas</h2>
-                            <small id="patrimonio-lista-meta">Carregando...</small>
+                <div class="patrimonio-main-column">
+                    <section class="patrimonio-summary-grid" aria-label="Resumo de patrimonio">
+                        <article class="patrimonio-summary-card blue">
+                            <span class="patrimonio-summary-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false"><path d="M5 8h14v11H5z"/><path d="M8 8V6h8v2"/><path d="M9 13h6"/></svg>
+                            </span>
+                            <div>
+                                <span>Patrim&ocirc;nio total</span>
+                                <strong id="patrimonio-total">R$ 0,00</strong>
+                                <small id="patrimonio-total-legenda">Total em caixinhas ativas</small>
+                            </div>
+                        </article>
+                        <article class="patrimonio-summary-card green">
+                            <span class="patrimonio-summary-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false"><path d="M4 7h16v12H4z"/><path d="M7 7V5h10v2"/><path d="M8 13h8"/></svg>
+                            </span>
+                            <div>
+                                <span>Caixinhas ativas</span>
+                                <strong id="total-caixinhas">0</strong>
+                                <small id="patrimonio-inativas">0 inativas</small>
+                            </div>
+                        </article>
+                        <article class="patrimonio-summary-card purple">
+                            <span class="patrimonio-summary-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>
+                            </span>
+                            <div>
+                                <span>Meta consolidada</span>
+                                <strong id="patrimonio-meta-total">R$ 0,00</strong>
+                                <small id="patrimonio-meta-progresso">0% da meta atingida</small>
+                            </div>
+                        </article>
+                        <article class="patrimonio-summary-card amber">
+                            <span class="patrimonio-summary-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false"><path d="M4 17 10 11l4 4 6-8"/><path d="M15 7h5v5"/></svg>
+                            </span>
+                            <div>
+                                <span>Maior saldo</span>
+                                <strong id="patrimonio-maior-saldo">R$ 0,00</strong>
+                                <small id="patrimonio-maior-caixinha">Nenhuma caixinha</small>
+                            </div>
+                        </article>
+                    </section>
+
+                    <section class="patrimonio-main-panel">
+                        <div class="patrimonio-panel-header">
+                            <div>
+                                <h2>Caixinhas</h2>
+                                <small id="patrimonio-lista-meta">Carregando...</small>
+                            </div>
+                            <label class="patrimonio-sort">
+                                <span>Ordenar por</span>
+                                <select id="patrimonio-ordenacao" onchange="renderizarCaixinhas()">
+                                    <option value="nome">Nome (A-Z)</option>
+                                    <option value="saldo">Maior saldo</option>
+                                    <option value="meta">Maior progresso</option>
+                                </select>
+                            </label>
                         </div>
-                        <label class="patrimonio-sort">
-                            <span>Ordenar por</span>
-                            <select id="patrimonio-ordenacao" onchange="renderizarCaixinhas()">
-                                <option value="nome">Nome (A-Z)</option>
-                                <option value="saldo">Maior saldo</option>
-                                <option value="meta">Maior progresso</option>
-                            </select>
-                        </label>
-                    </div>
-                    <div class="caixinhas-grid" id="caixinhas-lista">
-                        <p class="loading">Carregando caixinhas...</p>
-                    </div>
-                    <div class="patrimonio-panel-footer">
-                        <span id="patrimonio-legenda-tipos">Legenda de tipos: Corrente, Investimento, Reserva e Outros</span>
-                        <strong id="patrimonio-total-exibido">Exibindo 0 caixinhas</strong>
-                    </div>
-                </section>
+                        <div class="caixinhas-grid" id="caixinhas-lista">
+                            <p class="loading">Carregando caixinhas...</p>
+                        </div>
+                        <div class="patrimonio-panel-footer">
+                            <span id="patrimonio-legenda-tipos">Legenda de tipos: Corrente, Investimento, Reserva e Outros</span>
+                            <strong id="patrimonio-total-exibido">Exibindo 0 caixinhas</strong>
+                        </div>
+                    </section>
+                </div>
 
                 <aside class="patrimonio-side-column">
                     <section class="patrimonio-side-card">

@@ -72,6 +72,7 @@ def test_rota_principal_renderiza_layout_ux(client):
     assert 'Patrim&ocirc;nio total' in html
     assert 'Caixinhas ativas' in html
     assert 'Meta consolidada' in html
+    assert 'patrimonio-main-column' in html
     assert 'caixinhas-lista' in html
     assert 'patrimonio-composicao' in html
     assert '<h1' not in html
@@ -157,6 +158,7 @@ def test_template_nao_expoe_subtitulo_local_redundante(client):
     html = client.get('/patrimonio').get_data(as_text=True)
 
     assert 'Gerencie seu patrimonio' not in html
-    assert 'Vis&atilde;o geral' in html
+    assert 'Vis&atilde;o geral' not in html
+    assert 'Caixinhas' in html
     assert 'Nova caixinha' in html
     assert 'Transferir' in html
