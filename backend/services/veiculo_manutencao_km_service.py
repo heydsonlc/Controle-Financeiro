@@ -11,9 +11,11 @@ from dateutil.relativedelta import relativedelta
 try:
     from backend.models import db, Veiculo, VeiculoRegraManutencaoKm, DespesaPrevista
     from backend.services.veiculo_uso_service import calcular_resumo_uso
+    from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import db, Veiculo, VeiculoRegraManutencaoKm, DespesaPrevista
     from services.veiculo_uso_service import calcular_resumo_uso
+    from services.perfil_financeiro_service import PerfilFinanceiroService
 
 
 def _primeiro_dia_mes(d: date) -> date:
@@ -53,7 +55,7 @@ def _buscar_evento_existente(veiculo_id: int, tipo_evento: str) -> DespesaPrevis
     Regra: não gerar nova se já existir PREVISTA/ADIADA/CONFIRMADA do mesmo tipo_evento.
     IGNORADA não bloqueia geração.
     """
-    candidatos = DespesaPrevista.query.filter(
+    candidatos = PerfilFinanceiroService.aplicar_perfil_query(DespesaPrevista.query, DespesaPrevista).filter(
         DespesaPrevista.origem_tipo == 'VEICULO',
         DespesaPrevista.origem_id == veiculo_id,
         DespesaPrevista.status.in_(['PREVISTA', 'ADIADA', 'CONFIRMADA']),
@@ -127,11 +129,13 @@ def calcular_impacto_mensal_manutencao(veiculo_id: int, janela_meses: int = 3) -
     - não cria DespesaPrevista
     - não altera estado
     """
-    v = Veiculo.query.get(veiculo_id)
+    v = PerfilFinanceiroService.aplicar_perfil_query(Veiculo.query, Veiculo).filter(Veiculo.id == veiculo_id).first()
     if not v:
         raise ValueError('Veículo não encontrado')
 
-    regras = VeiculoRegraManutencaoKm.query.filter_by(veiculo_id=veiculo_id, ativo=True).all()
+    regras = PerfilFinanceiroService.aplicar_perfil_query(
+        VeiculoRegraManutencaoKm.query, VeiculoRegraManutencaoKm
+    ).filter_by(veiculo_id=veiculo_id, ativo=True).all()
     km_mes, fonte, observacao = _calcular_km_mes_estimado(v, janela_meses=janela_meses)
 
     total = 0.0
@@ -183,11 +187,13 @@ def calcular_impacto_mensal_manutencao(veiculo_id: int, janela_meses: int = 3) -
 
 
 def listar_estimativas(veiculo_id: int, janela_meses: int = 3) -> dict:
-    v = Veiculo.query.get(veiculo_id)
+    v = PerfilFinanceiroService.aplicar_perfil_query(Veiculo.query, Veiculo).filter(Veiculo.id == veiculo_id).first()
     if not v:
         raise ValueError('Veículo não encontrado')
 
-    regras = VeiculoRegraManutencaoKm.query.filter_by(veiculo_id=veiculo_id, ativo=True).order_by(
+    regras = PerfilFinanceiroService.aplicar_perfil_query(
+        VeiculoRegraManutencaoKm.query, VeiculoRegraManutencaoKm
+    ).filter_by(veiculo_id=veiculo_id, ativo=True).order_by(
         VeiculoRegraManutencaoKm.id.asc()
     ).all()
 
@@ -244,11 +250,13 @@ def gerar_despesa_prevista_por_regra(veiculo_id: int, regra_id: int, janela_mese
     """
     Gera UMA despesa prevista por regra, sem cascata e sem múltiplas ocorrências futuras.
     """
-    v = Veiculo.query.get(veiculo_id)
+    v = PerfilFinanceiroService.aplicar_perfil_query(Veiculo.query, Veiculo).filter(Veiculo.id == veiculo_id).first()
     if not v:
         raise ValueError('Veículo não encontrado')
 
-    regra = VeiculoRegraManutencaoKm.query.filter_by(id=regra_id, veiculo_id=veiculo_id, ativo=True).first()
+    regra = PerfilFinanceiroService.aplicar_perfil_query(
+        VeiculoRegraManutencaoKm.query, VeiculoRegraManutencaoKm
+    ).filter_by(id=regra_id, veiculo_id=veiculo_id, ativo=True).first()
     if not regra:
         raise ValueError('Regra de manutenção não encontrada')
 
@@ -268,6 +276,7 @@ def gerar_despesa_prevista_por_regra(veiculo_id: int, regra_id: int, janela_mese
     data_calc = _primeiro_dia_mes(date.today() + relativedelta(months=meses or 0))
 
     desp = DespesaPrevista(
+        perfil_financeiro_id=v.perfil_financeiro_id or PerfilFinanceiroService.obter_perfil_ativo_id(),
         origem_tipo='VEICULO',
         origem_id=veiculo_id,
         categoria_id=regra.categoria_id,

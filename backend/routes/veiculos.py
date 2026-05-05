@@ -33,6 +33,7 @@ try:
         criar_assinatura,
         atualizar_assinatura,
     )
+    from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import db, Veiculo, DespesaPrevista, VeiculoRegraManutencaoKm
     from services.veiculo_service import (
@@ -51,6 +52,7 @@ except ImportError:
         criar_assinatura,
         atualizar_assinatura,
     )
+    from services.perfil_financeiro_service import PerfilFinanceiroService
 
 
 veiculos_bp = Blueprint('veiculos', __name__)
@@ -100,10 +102,22 @@ def _validar_mes(mes):
     return 1 <= int(mes) <= 12
 
 
+def _perfil_id():
+    return PerfilFinanceiroService.obter_perfil_ativo_id()
+
+
+def _veiculos_query():
+    return PerfilFinanceiroService.aplicar_perfil_query(Veiculo.query, Veiculo)
+
+
+def _buscar_veiculo_perfil(veiculo_id):
+    return _veiculos_query().filter(Veiculo.id == veiculo_id).first()
+
+
 @veiculos_bp.route('', methods=['GET'])
 def listar_veiculos():
     try:
-        veiculos = Veiculo.query.order_by(Veiculo.id.desc()).all()
+        veiculos = _veiculos_query().order_by(Veiculo.id.desc()).all()
         return jsonify({'success': True, 'data': [v.to_dict() for v in veiculos], 'total': len(veiculos)}), 200
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -112,7 +126,7 @@ def listar_veiculos():
 @veiculos_bp.route('/<int:veiculo_id>', methods=['GET'])
 def buscar_veiculo(veiculo_id):
     try:
-        v = Veiculo.query.get(veiculo_id)
+        v = _buscar_veiculo_perfil(veiculo_id)
         if not v:
             return jsonify({'success': False, 'error': 'Veículo não encontrado'}), 404
         return jsonify({'success': True, 'data': v.to_dict()}), 200
@@ -146,6 +160,7 @@ def criar_veiculo():
             return jsonify({'success': False, 'error': 'data_inicio é obrigatório para veículo ATIVO'}), 400
 
         v = Veiculo(
+            perfil_financeiro_id=_perfil_id(),
             nome=nome,
             tipo=tipo,
             combustivel=combustivel,
@@ -194,7 +209,7 @@ def criar_veiculo():
 @veiculos_bp.route('/<int:veiculo_id>', methods=['PUT'])
 def atualizar_veiculo(veiculo_id):
     try:
-        v = Veiculo.query.get(veiculo_id)
+        v = _buscar_veiculo_perfil(veiculo_id)
         if not v:
             return jsonify({'success': False, 'error': 'Veículo não encontrado'}), 404
 
@@ -271,12 +286,14 @@ def atualizar_veiculo(veiculo_id):
 @veiculos_bp.route('/<int:veiculo_id>', methods=['DELETE'])
 def deletar_veiculo(veiculo_id):
     try:
-        v = Veiculo.query.get(veiculo_id)
+        v = _buscar_veiculo_perfil(veiculo_id)
         if not v:
             return jsonify({'success': False, 'error': 'Veículo não encontrado'}), 404
 
         # Remover projeções associadas (origem = VEICULO)
-        DespesaPrevista.query.filter(
+        PerfilFinanceiroService.aplicar_perfil_query(
+            DespesaPrevista.query, DespesaPrevista
+        ).filter(
             DespesaPrevista.origem_tipo == 'VEICULO',
             DespesaPrevista.origem_id == veiculo_id
         ).delete(synchronize_session=False)
@@ -296,7 +313,7 @@ def converter_simulado_para_ativo(veiculo_id):
     Não cria histórico retroativo e não cria lançamentos reais.
     """
     try:
-        v = Veiculo.query.get(veiculo_id)
+        v = _buscar_veiculo_perfil(veiculo_id)
         if not v:
             return jsonify({'success': False, 'error': 'Veículo não encontrado'}), 404
         if v.status != 'SIMULADO':
@@ -322,7 +339,7 @@ def converter_simulado_para_ativo(veiculo_id):
 @veiculos_bp.route('/<int:veiculo_id>/projecoes', methods=['GET'])
 def listar_projecoes(veiculo_id):
     try:
-        v = Veiculo.query.get(veiculo_id)
+        v = _buscar_veiculo_perfil(veiculo_id)
         if not v:
             return jsonify({'success': False, 'error': 'Veículo não encontrado'}), 404
 
@@ -333,7 +350,9 @@ def listar_projecoes(veiculo_id):
         inicio = date.today().replace(day=1)
         fim = (inicio + relativedelta(months=meses)).replace(day=1)
 
-        proj = DespesaPrevista.query.filter(
+        proj = PerfilFinanceiroService.aplicar_perfil_query(
+            DespesaPrevista.query, DespesaPrevista
+        ).filter(
             DespesaPrevista.origem_tipo == 'VEICULO',
             DespesaPrevista.origem_id == veiculo_id,
             DespesaPrevista.data_prevista >= inicio,
@@ -348,7 +367,7 @@ def listar_projecoes(veiculo_id):
 @veiculos_bp.route('/<int:veiculo_id>/projecoes/gerar', methods=['POST'])
 def gerar_projecoes(veiculo_id):
     try:
-        v = Veiculo.query.get(veiculo_id)
+        v = _buscar_veiculo_perfil(veiculo_id)
         if not v:
             return jsonify({'success': False, 'error': 'Veículo não encontrado'}), 404
 
@@ -383,7 +402,11 @@ def obter_resumo_uso(veiculo_id):
 @veiculos_bp.route('/<int:veiculo_id>/regras-km', methods=['GET'])
 def listar_regras_km(veiculo_id):
     try:
-        regras = VeiculoRegraManutencaoKm.query.filter_by(veiculo_id=veiculo_id).order_by(VeiculoRegraManutencaoKm.id.asc()).all()
+        if not _buscar_veiculo_perfil(veiculo_id):
+            return jsonify({'success': False, 'error': 'VeÃ­culo nÃ£o encontrado'}), 404
+        regras = PerfilFinanceiroService.aplicar_perfil_query(
+            VeiculoRegraManutencaoKm.query, VeiculoRegraManutencaoKm
+        ).filter_by(veiculo_id=veiculo_id).order_by(VeiculoRegraManutencaoKm.id.asc()).all()
         return jsonify({'success': True, 'data': [r.to_dict() for r in regras], 'total': len(regras)}), 200
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -412,6 +435,7 @@ def criar_regra_km(veiculo_id):
             return jsonify({'success': False, 'error': 'categoria_id é obrigatório'}), 400
 
         regra = VeiculoRegraManutencaoKm(
+            perfil_financeiro_id=_perfil_id(),
             veiculo_id=veiculo_id,
             tipo_evento=tipo_evento,
             intervalo_km=intervalo_km,
@@ -431,7 +455,9 @@ def criar_regra_km(veiculo_id):
 @veiculos_bp.route('/<int:veiculo_id>/regras-km/<int:regra_id>', methods=['DELETE'])
 def deletar_regra_km(veiculo_id, regra_id):
     try:
-        regra = VeiculoRegraManutencaoKm.query.filter_by(id=regra_id, veiculo_id=veiculo_id).first()
+        regra = PerfilFinanceiroService.aplicar_perfil_query(
+            VeiculoRegraManutencaoKm.query, VeiculoRegraManutencaoKm
+        ).filter_by(id=regra_id, veiculo_id=veiculo_id).first()
         if not regra:
             return jsonify({'success': False, 'error': 'Regra não encontrada'}), 404
         db.session.delete(regra)

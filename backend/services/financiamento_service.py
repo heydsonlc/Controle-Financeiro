@@ -19,9 +19,11 @@ import logging
 try:
     from backend.models import (db, Financiamento, FinanciamentoParcela,
                                 FinanciamentoAmortizacaoExtra, IndexadorMensal, Conta)
+    from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import (db, Financiamento, FinanciamentoParcela,
                        FinanciamentoAmortizacaoExtra, IndexadorMensal, Conta)
+    from services.perfil_financeiro_service import PerfilFinanceiroService
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +36,21 @@ class FinanciamentoService:
     # ========================================================================
     # CRUD DE FINANCIAMENTOS
     # ========================================================================
+
+    @staticmethod
+    def _perfil_id():
+        return PerfilFinanceiroService.obter_perfil_ativo_id()
+
+    @staticmethod
+    def _query_financiamentos():
+        return PerfilFinanceiroService.aplicar_perfil_query(Financiamento.query, Financiamento)
+
+    @staticmethod
+    def obter_financiamento_no_perfil(financiamento_id):
+        financiamento = FinanciamentoService._query_financiamentos().filter(Financiamento.id == financiamento_id).first()
+        if not financiamento:
+            raise ValueError('Financiamento não encontrado')
+        return financiamento
 
     @staticmethod
     def criar_financiamento(dados):
@@ -97,6 +114,7 @@ class FinanciamentoService:
         if not item_despesa_id:
             from backend.models import ItemDespesa
             item_despesa = ItemDespesa(
+                perfil_financeiro_id=FinanciamentoService._perfil_id(),
                 nome=dados['nome'],
                 tipo='Financiamento',
                 ativo=True,
@@ -109,6 +127,7 @@ class FinanciamentoService:
 
         # Criar financiamento
         financiamento = Financiamento(
+            perfil_financeiro_id=FinanciamentoService._perfil_id(),
             nome=dados['nome'],
             produto=dados.get('produto', ''),
             sistema_amortizacao=dados['sistema_amortizacao'],
@@ -298,7 +317,7 @@ class FinanciamentoService:
         Returns:
             list[Financiamento]: Lista de financiamentos
         """
-        query = Financiamento.query
+        query = FinanciamentoService._query_financiamentos()
 
         if ativo is not None:
             query = query.filter_by(ativo=ativo)
@@ -319,9 +338,7 @@ class FinanciamentoService:
 
         Nota: Ao alterar configurações de seguro, considere regenerar as parcelas
         """
-        financiamento = Financiamento.query.get(financiamento_id)
-        if not financiamento:
-            raise ValueError('Financiamento não encontrado')
+        financiamento = FinanciamentoService.obter_financiamento_no_perfil(financiamento_id)
 
         # Atualizar campos permitidos
         if 'nome' in dados:
@@ -487,9 +504,7 @@ class FinanciamentoService:
         Returns:
             Financiamento: Financiamento inativado
         """
-        financiamento = Financiamento.query.get(financiamento_id)
-        if not financiamento:
-            raise ValueError('Financiamento não encontrado')
+        financiamento = FinanciamentoService.obter_financiamento_no_perfil(financiamento_id)
 
         financiamento.ativo = False
 
@@ -563,10 +578,7 @@ class FinanciamentoService:
         Raises:
             ValueError: Se financiamento não existe ou não pode ser excluído
         """
-        financiamento = Financiamento.query.get(financiamento_id)
-
-        if not financiamento:
-            raise ValueError("Financiamento não encontrado")
+        financiamento = FinanciamentoService.obter_financiamento_no_perfil(financiamento_id)
 
         if not FinanciamentoService.pode_excluir_financiamento(financiamento_id):
             raise ValueError(
@@ -613,9 +625,7 @@ class FinanciamentoService:
 
         logger.info(f"[RECALC] ========== INÍCIO RECÁLCULO FIN_ID={financiamento_id} ==========")
 
-        financiamento = Financiamento.query.get(financiamento_id)
-        if not financiamento:
-            raise ValueError('Financiamento não encontrado')
+        financiamento = FinanciamentoService.obter_financiamento_no_perfil(financiamento_id)
 
         # Buscar parcelas pendentes
         parcelas_pendentes = FinanciamentoParcela.query.filter_by(
@@ -772,9 +782,7 @@ class FinanciamentoService:
             logger.info(f"[SEGURO-ONLY] A partir de: {a_partir_de}")
 
         # Buscar financiamento
-        financiamento = Financiamento.query.get(financiamento_id)
-        if not financiamento:
-            raise ValueError(f'Financiamento {financiamento_id} não encontrado')
+        financiamento = FinanciamentoService.obter_financiamento_no_perfil(financiamento_id)
 
         # Buscar parcelas pendentes
         query = FinanciamentoParcela.query.filter_by(
@@ -889,6 +897,7 @@ class FinanciamentoService:
             conta_existente.financiamento_parcela_id = parcela.id
         else:
             conta_existente = Conta(
+                perfil_financeiro_id=financiamento.perfil_financeiro_id,
                 item_despesa_id=financiamento.item_despesa_id,
                 financiamento_parcela_id=parcela.id,
                 mes_referencia=mes_referencia,
@@ -1023,6 +1032,7 @@ class FinanciamentoService:
 
             # Criar parcela
             parcela = FinanciamentoParcela(
+                perfil_financeiro_id=financiamento.perfil_financeiro_id,
                 financiamento_id=financiamento.id,
                 numero_parcela=num_parcela,
                 data_vencimento=data_vencimento,
@@ -1099,6 +1109,7 @@ class FinanciamentoService:
 
             # Criar parcela
             parcela = FinanciamentoParcela(
+                perfil_financeiro_id=financiamento.perfil_financeiro_id,
                 financiamento_id=financiamento.id,
                 numero_parcela=num_parcela,
                 data_vencimento=data_vencimento,
@@ -1161,6 +1172,7 @@ class FinanciamentoService:
             saldo_apos_pagamento = saldo_devedor - amortizacao
 
             parcela = FinanciamentoParcela(
+                perfil_financeiro_id=financiamento.perfil_financeiro_id,
                 financiamento_id=financiamento.id,
                 numero_parcela=num_parcela,
                 data_vencimento=data_vencimento,
@@ -1218,7 +1230,9 @@ class FinanciamentoService:
         Returns:
             FinanciamentoParcela: Parcela atualizada
         """
-        parcela = FinanciamentoParcela.query.get(parcela_id)
+        parcela = PerfilFinanceiroService.aplicar_perfil_query(
+            FinanciamentoParcela.query, FinanciamentoParcela
+        ).filter(FinanciamentoParcela.id == parcela_id).first()
         if not parcela:
             raise ValueError('Parcela não encontrada')
 
@@ -1236,7 +1250,7 @@ class FinanciamentoService:
         # ========================================================================
         # ATUALIZAR SALDO SOBERANO (usar saldo calculado da parcela)
         # ========================================================================
-        financiamento = Financiamento.query.get(parcela.financiamento_id)
+        financiamento = FinanciamentoService.obter_financiamento_no_perfil(parcela.financiamento_id)
         if financiamento:
             # Usar saldo_devedor_apos_pagamento da parcela (já considera TR, amortização, etc.)
             # Este campo foi calculado corretamente pelo sistema SAC durante geração/recálculo
@@ -1277,9 +1291,7 @@ class FinanciamentoService:
         Returns:
             FinanciamentoAmortizacaoExtra: Registro criado
         """
-        financiamento = Financiamento.query.get(financiamento_id)
-        if not financiamento:
-            raise ValueError('Financiamento não encontrado')
+        financiamento = FinanciamentoService.obter_financiamento_no_perfil(financiamento_id)
 
         # Converter data
         if isinstance(dados_amortizacao['data'], str):
@@ -1292,6 +1304,7 @@ class FinanciamentoService:
 
         # Criar registro
         amortizacao = FinanciamentoAmortizacaoExtra(
+            perfil_financeiro_id=financiamento.perfil_financeiro_id,
             financiamento_id=financiamento_id,
             data=data_amort,
             valor=valor,
@@ -1556,9 +1569,7 @@ class FinanciamentoService:
         Returns:
             dict: Demonstrativo consolidado
         """
-        financiamento = Financiamento.query.get(financiamento_id)
-        if not financiamento:
-            raise ValueError('Financiamento não encontrado')
+        financiamento = FinanciamentoService.obter_financiamento_no_perfil(financiamento_id)
 
         data_inicio = date(ano, 1, 1)
         data_fim = date(ano, 12, 31)
@@ -1610,9 +1621,7 @@ class FinanciamentoService:
         from datetime import datetime
         from dateutil.relativedelta import relativedelta
 
-        financiamento = Financiamento.query.get(financiamento_id)
-        if not financiamento:
-            raise ValueError('Financiamento não encontrado')
+        financiamento = FinanciamentoService.obter_financiamento_no_perfil(financiamento_id)
 
         if not financiamento.item_despesa_id:
             # Se não tem item_despesa vinculado, não criar contas
@@ -1655,6 +1664,7 @@ class FinanciamentoService:
             else:
                 # Criar nova conta
                 nova_conta = Conta(
+                    perfil_financeiro_id=financiamento.perfil_financeiro_id,
                     item_despesa_id=financiamento.item_despesa_id,
                     financiamento_parcela_id=parcela.id,
                     mes_referencia=mes_referencia,

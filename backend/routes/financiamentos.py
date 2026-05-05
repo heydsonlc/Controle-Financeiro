@@ -147,6 +147,12 @@ def listar_financiamentos():
             'total': len(dados_enriquecidos)
         }), 200
 
+    except ValueError as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 404
+
     except Exception as e:
         return jsonify({
             'success': False,
@@ -166,7 +172,7 @@ def buscar_financiamento(id):
         JSON com dados do financiamento e suas parcelas
     """
     try:
-        financiamento = Financiamento.query.get(id)
+        financiamento = FinanciamentoService.obter_financiamento_no_perfil(id)
 
         if not financiamento:
             return jsonify({
@@ -289,6 +295,13 @@ def criar_financiamento():
             'success': False,
             'error': str(e)
         }), 400
+
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 404
 
     except Exception as e:
         db.session.rollback()
@@ -442,7 +455,7 @@ def regenerar_parcelas(id):
         JSON com confirmação
     """
     try:
-        financiamento = Financiamento.query.get(id)
+        financiamento = FinanciamentoService.obter_financiamento_no_perfil(id)
 
         if not financiamento:
             return jsonify({
@@ -632,7 +645,7 @@ def adicionar_vigencia_seguro(id):
         from decimal import Decimal
 
         # Buscar financiamento
-        financiamento = Financiamento.query.get(id)
+        financiamento = FinanciamentoService.obter_financiamento_no_perfil(id)
         if not financiamento:
             return jsonify({
                 'success': False,

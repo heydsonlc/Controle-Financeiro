@@ -18,11 +18,29 @@ from flask import Blueprint, request, jsonify
 from datetime import datetime, date
 try:
     from backend.models import db, ContaPatrimonio, Transferencia
+    from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import db, ContaPatrimonio, Transferencia
+    from services.perfil_financeiro_service import PerfilFinanceiroService
 
 # Criar blueprint
 patrimonio_bp = Blueprint('patrimonio', __name__)
+
+
+def _perfil_id():
+    return PerfilFinanceiroService.obter_perfil_ativo_id()
+
+
+def _contas_query():
+    return PerfilFinanceiroService.aplicar_perfil_query(ContaPatrimonio.query, ContaPatrimonio)
+
+
+def _buscar_conta_perfil(conta_id):
+    return _contas_query().filter(ContaPatrimonio.id == conta_id).first()
+
+
+def _transferencias_query():
+    return PerfilFinanceiroService.aplicar_perfil_query(Transferencia.query, Transferencia)
 
 
 # ============================================================================
@@ -45,9 +63,9 @@ def listar_contas():
 
         if ativo is not None:
             ativo_bool = ativo.lower() == 'true'
-            contas = ContaPatrimonio.query.filter_by(ativo=ativo_bool).all()
+            contas = _contas_query().filter(ContaPatrimonio.ativo == ativo_bool).all()
         else:
-            contas = ContaPatrimonio.query.filter_by(ativo=True).all()
+            contas = _contas_query().filter(ContaPatrimonio.ativo == True).all()
 
         # Calcular total do patrimônio
         total_patrimonio = sum(float(c.saldo_atual) for c in contas if c.ativo)
@@ -78,7 +96,7 @@ def buscar_conta(id):
         JSON com dados da conta
     """
     try:
-        conta = ContaPatrimonio.query.get(id)
+        conta = _buscar_conta_perfil(id)
 
         if not conta:
             return jsonify({
@@ -125,7 +143,7 @@ def criar_conta():
             }), 400
 
         # Verificar se já existe conta com mesmo nome
-        conta_existente = ContaPatrimonio.query.filter_by(nome=data['nome']).first()
+        conta_existente = _contas_query().filter(ContaPatrimonio.nome == data['nome']).first()
         if conta_existente:
             return jsonify({
                 'success': False,
@@ -136,6 +154,7 @@ def criar_conta():
         saldo_inicial = float(data.get('saldo_inicial', 0))
 
         nova_conta = ContaPatrimonio(
+            perfil_financeiro_id=_perfil_id(),
             nome=data['nome'],
             tipo=data.get('tipo'),
             saldo_inicial=saldo_inicial,
@@ -183,7 +202,7 @@ def atualizar_conta(id):
         JSON com dados da conta atualizada
     """
     try:
-        conta = ContaPatrimonio.query.get(id)
+        conta = _buscar_conta_perfil(id)
 
         if not conta:
             return jsonify({
@@ -196,7 +215,7 @@ def atualizar_conta(id):
         # Atualizar campos
         if 'nome' in data:
             # Verificar se já existe outra conta com mesmo nome
-            outra_conta = ContaPatrimonio.query.filter_by(nome=data['nome']).first()
+            outra_conta = _contas_query().filter(ContaPatrimonio.nome == data['nome']).first()
             if outra_conta and outra_conta.id != id:
                 return jsonify({
                     'success': False,
@@ -243,7 +262,7 @@ def inativar_conta(id):
         JSON com mensagem de sucesso
     """
     try:
-        conta = ContaPatrimonio.query.get(id)
+        conta = _buscar_conta_perfil(id)
 
         if not conta:
             return jsonify({
@@ -286,7 +305,7 @@ def listar_transferencias():
         JSON com lista de transferências
     """
     try:
-        query = Transferencia.query
+        query = _transferencias_query()
 
         # Filtros opcionais
         data_inicio = request.args.get('data_inicio')
@@ -338,7 +357,7 @@ def buscar_transferencia(id):
         JSON com dados da transferência
     """
     try:
-        transferencia = Transferencia.query.get(id)
+        transferencia = _transferencias_query().filter(Transferencia.id == id).first()
 
         if not transferencia:
             return jsonify({
@@ -413,8 +432,8 @@ def criar_transferencia():
             }), 400
 
         # Verificar se as contas existem e estão ativas
-        conta_origem = ContaPatrimonio.query.get(data['conta_origem_id'])
-        conta_destino = ContaPatrimonio.query.get(data['conta_destino_id'])
+        conta_origem = _buscar_conta_perfil(data['conta_origem_id'])
+        conta_destino = _buscar_conta_perfil(data['conta_destino_id'])
 
         if not conta_origem or not conta_origem.ativo:
             return jsonify({
@@ -439,6 +458,7 @@ def criar_transferencia():
 
         # Criar transferência
         nova_transferencia = Transferencia(
+            perfil_financeiro_id=_perfil_id(),
             conta_origem_id=data['conta_origem_id'],
             conta_destino_id=data['conta_destino_id'],
             valor=valor,
@@ -486,7 +506,7 @@ def deletar_transferencia(id):
         JSON com mensagem de sucesso
     """
     try:
-        transferencia = Transferencia.query.get(id)
+        transferencia = _transferencias_query().filter(Transferencia.id == id).first()
 
         if not transferencia:
             return jsonify({

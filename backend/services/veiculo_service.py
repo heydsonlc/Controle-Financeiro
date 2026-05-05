@@ -9,9 +9,11 @@ from dateutil.relativedelta import relativedelta
 try:
     from backend.models import db, Veiculo, Categoria, DespesaPrevista
     from backend.services.categoria_default import get_categoria_padrao_veiculos
+    from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import db, Veiculo, Categoria, DespesaPrevista
     from services.categoria_default import get_categoria_padrao_veiculos
+    from services.perfil_financeiro_service import PerfilFinanceiroService
 
 
 EVENTOS_MVP = ('COMBUSTIVEL', 'IPVA', 'SEGURO', 'LICENCIAMENTO')
@@ -77,7 +79,7 @@ def gerar_projecoes_mvp(veiculo: Veiculo, meses_futuros: int = 12) -> list[Despe
 
     # Remover projeções MVP no intervalo (idempotência simples)
     # Regra de blindagem: só remove PREVISTA (não toca em futuros status como ADIADA/CONFIRMADA).
-    existentes = DespesaPrevista.query.filter(
+    existentes = PerfilFinanceiroService.aplicar_perfil_query(DespesaPrevista.query, DespesaPrevista).filter(
         DespesaPrevista.origem_tipo == 'VEICULO',
         DespesaPrevista.origem_id == veiculo.id,
         DespesaPrevista.data_prevista >= inicio_mes,
@@ -117,6 +119,7 @@ def gerar_projecoes_mvp(veiculo: Veiculo, meses_futuros: int = 12) -> list[Despe
                 data_ref = _primeiro_dia_mes(data_ref + relativedelta(months=1))
                 continue
             desp = DespesaPrevista(
+                perfil_financeiro_id=veiculo.perfil_financeiro_id or PerfilFinanceiroService.obter_perfil_ativo_id(),
                 origem_tipo='VEICULO',
                 origem_id=veiculo.id,
                 categoria_id=categoria_padrao_id,
@@ -157,6 +160,7 @@ def gerar_projecoes_mvp(veiculo: Veiculo, meses_futuros: int = 12) -> list[Despe
             if (tipo_evento, d) in bloqueadas:
                 continue
             desp = DespesaPrevista(
+                perfil_financeiro_id=veiculo.perfil_financeiro_id or PerfilFinanceiroService.obter_perfil_ativo_id(),
                 origem_tipo='VEICULO',
                 origem_id=veiculo.id,
                 categoria_id=categoria_padrao_id,
@@ -182,7 +186,7 @@ def limpar_projecoes_anteriores(veiculo_id: int, data_inicio: date) -> int:
     """
     inicio_mes = _primeiro_dia_mes(data_inicio)
     removidas = 0
-    proj = DespesaPrevista.query.filter(
+    proj = PerfilFinanceiroService.aplicar_perfil_query(DespesaPrevista.query, DespesaPrevista).filter(
         DespesaPrevista.origem_tipo == 'VEICULO',
         DespesaPrevista.origem_id == veiculo_id,
         DespesaPrevista.data_prevista < inicio_mes,

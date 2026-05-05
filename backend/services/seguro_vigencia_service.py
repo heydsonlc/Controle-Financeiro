@@ -11,6 +11,7 @@ REGRAS DE NEGÓCIO (CANÔNICAS):
 """
 
 from backend.models import db, FinanciamentoSeguroVigencia
+from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 from datetime import date, timedelta
 from decimal import Decimal
 from sqlalchemy import and_
@@ -50,6 +51,7 @@ class SeguroVigenciaService:
 
         # 2. Criar nova vigência (sem calcular taxa, sem encerrar anterior)
         nova_vigencia = FinanciamentoSeguroVigencia(
+            perfil_financeiro_id=PerfilFinanceiroService.obter_perfil_ativo_id(),
             financiamento_id=financiamento_id,
             competencia_inicio=competencia_inicio,
             valor_mensal=valor_mensal,

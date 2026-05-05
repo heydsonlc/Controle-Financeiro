@@ -9,9 +9,11 @@ from dateutil.relativedelta import relativedelta
 try:
     from backend.models import db, Veiculo, VeiculoFinanciamento, Categoria, DespesaPrevista, IndexadorMensal
     from backend.services.categoria_default import get_categoria_padrao_veiculos
+    from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import db, Veiculo, VeiculoFinanciamento, Categoria, DespesaPrevista, IndexadorMensal
     from services.categoria_default import get_categoria_padrao_veiculos
+    from services.perfil_financeiro_service import PerfilFinanceiroService
 
 
 TIPO_EVENTO_PARCELA = 'PARCELA_FINANCIAMENTO'
@@ -58,7 +60,7 @@ def _existe_parcela_na_competencia(veiculo_id: int, competencia: date) -> bool:
     """
     Evitar duplicidade quando existirem parcelas não-PREVISTA (confirmadas/adiadas/ignoradas).
     """
-    candidatos = DespesaPrevista.query.filter(
+    candidatos = PerfilFinanceiroService.aplicar_perfil_query(DespesaPrevista.query, DespesaPrevista).filter(
         DespesaPrevista.origem_tipo == 'VEICULO',
         DespesaPrevista.origem_id == veiculo_id,
         DespesaPrevista.data_prevista == competencia,
@@ -75,7 +77,7 @@ def _existe_parcela_na_competencia(veiculo_id: int, competencia: date) -> bool:
 
 
 def _existe_iof_na_competencia(veiculo_id: int, competencia: date) -> bool:
-    candidatos = DespesaPrevista.query.filter(
+    candidatos = PerfilFinanceiroService.aplicar_perfil_query(DespesaPrevista.query, DespesaPrevista).filter(
         DespesaPrevista.origem_tipo == 'VEICULO',
         DespesaPrevista.origem_id == veiculo_id,
         DespesaPrevista.data_prevista == competencia,
@@ -96,7 +98,7 @@ def _limpar_previstas_financiamento(veiculo_id: int) -> int:
     Nunca toca em CONFIRMADAS/ADIADAS/IGNORADAS.
     """
     removidas = 0
-    despesas = DespesaPrevista.query.filter(
+    despesas = PerfilFinanceiroService.aplicar_perfil_query(DespesaPrevista.query, DespesaPrevista).filter(
         DespesaPrevista.origem_tipo == 'VEICULO',
         DespesaPrevista.origem_id == veiculo_id,
         DespesaPrevista.status == 'PREVISTA',
@@ -116,7 +118,7 @@ def upsert_financiamento(veiculo_id: int, payload: dict) -> dict:
     """
     Cria/atualiza financiamento projetivo e (re)gera DespesaPrevista de parcelas (e IOF).
     """
-    v = Veiculo.query.get(veiculo_id)
+    v = PerfilFinanceiroService.aplicar_perfil_query(Veiculo.query, Veiculo).filter(Veiculo.id == veiculo_id).first()
     if not v:
         raise ValueError('Veículo não encontrado')
 
@@ -145,9 +147,14 @@ def upsert_financiamento(veiculo_id: int, payload: dict) -> dict:
 
     iof_valor = (valor_financiado * iof_percentual) / Decimal('100')
 
-    fin = VeiculoFinanciamento.query.filter_by(veiculo_id=veiculo_id).first()
+    fin = PerfilFinanceiroService.aplicar_perfil_query(
+        VeiculoFinanciamento.query, VeiculoFinanciamento
+    ).filter_by(veiculo_id=veiculo_id).first()
     if not fin:
-        fin = VeiculoFinanciamento(veiculo_id=veiculo_id)
+        fin = VeiculoFinanciamento(
+            perfil_financeiro_id=v.perfil_financeiro_id or PerfilFinanceiroService.obter_perfil_ativo_id(),
+            veiculo_id=veiculo_id,
+        )
         db.session.add(fin)
 
     fin.valor_bem = valor_bem
@@ -171,6 +178,7 @@ def upsert_financiamento(veiculo_id: int, payload: dict) -> dict:
     # IOF (uma vez)
     if iof_valor > 0 and categoria_id and not _existe_iof_na_competencia(veiculo_id, competencia):
         desp_iof = DespesaPrevista(
+            perfil_financeiro_id=veiculo.perfil_financeiro_id or PerfilFinanceiroService.obter_perfil_ativo_id(),
             origem_tipo='VEICULO',
             origem_id=veiculo_id,
             categoria_id=categoria_id,
@@ -200,6 +208,7 @@ def upsert_financiamento(veiculo_id: int, payload: dict) -> dict:
         parcela = amort_base + juros_mes + correcao_mes
 
         desp = DespesaPrevista(
+            perfil_financeiro_id=veiculo.perfil_financeiro_id or PerfilFinanceiroService.obter_perfil_ativo_id(),
             origem_tipo='VEICULO',
             origem_id=veiculo_id,
             categoria_id=categoria_id,
@@ -244,11 +253,15 @@ def upsert_financiamento(veiculo_id: int, payload: dict) -> dict:
 
 
 def obter_financiamento(veiculo_id: int) -> VeiculoFinanciamento | None:
-    return VeiculoFinanciamento.query.filter_by(veiculo_id=veiculo_id).first()
+    return PerfilFinanceiroService.aplicar_perfil_query(
+        VeiculoFinanciamento.query, VeiculoFinanciamento
+    ).filter_by(veiculo_id=veiculo_id).first()
 
 
 def remover_financiamento(veiculo_id: int) -> int:
-    fin = VeiculoFinanciamento.query.filter_by(veiculo_id=veiculo_id).first()
+    fin = PerfilFinanceiroService.aplicar_perfil_query(
+        VeiculoFinanciamento.query, VeiculoFinanciamento
+    ).filter_by(veiculo_id=veiculo_id).first()
     if not fin:
         return 0
     _limpar_previstas_financiamento(veiculo_id)

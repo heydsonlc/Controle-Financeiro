@@ -20,6 +20,7 @@ try:
         db,
     )
     from backend.services.categoria_palavra_chave_service import CategoriaPalavraChaveService
+    from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import (
         Categoria,
@@ -31,6 +32,7 @@ except ImportError:
         db,
     )
     from services.categoria_palavra_chave_service import CategoriaPalavraChaveService
+    from services.perfil_financeiro_service import PerfilFinanceiroService
 
 
 logger = logging.getLogger(__name__)
@@ -103,7 +105,9 @@ class IrDocumentoService:
 
     @classmethod
     def listar_vinculos(cls):
-        return IrCategoriaDespesa.query.order_by(IrCategoriaDespesa.id.asc()).all()
+        return PerfilFinanceiroService.aplicar_perfil_query(
+            IrCategoriaDespesa.query, IrCategoriaDespesa
+        ).order_by(IrCategoriaDespesa.id.asc()).all()
 
     @classmethod
     def criar_vinculo(cls, dados):
@@ -111,12 +115,17 @@ class IrDocumentoService:
         categoria_ir_id = cls._parse_int((dados or {}).get('categoria_ir_id'))
         if not categoria_id or not categoria_ir_id:
             raise ValueError('Categoria de Despesa e Categoria IR sao obrigatorias')
-        if not Categoria.query.get(categoria_id):
+        categoria = PerfilFinanceiroService.aplicar_perfil_query(
+            Categoria.query, Categoria
+        ).filter(Categoria.id == categoria_id).first()
+        if not categoria:
             raise ValueError('Categoria de Despesa nao encontrada')
         if not IrCategoria.query.get(categoria_ir_id):
             raise ValueError('Categoria IR nao encontrada')
 
-        ativo_existente = IrCategoriaDespesa.query.filter_by(
+        ativo_existente = PerfilFinanceiroService.aplicar_perfil_query(
+            IrCategoriaDespesa.query, IrCategoriaDespesa
+        ).filter_by(
             categoria_id=categoria_id,
             ativo=True,
         ).first()
@@ -124,7 +133,9 @@ class IrDocumentoService:
             ativo_existente.ativo = False
             ativo_existente.updated_at = datetime.utcnow()
 
-        existente = IrCategoriaDespesa.query.filter_by(
+        existente = PerfilFinanceiroService.aplicar_perfil_query(
+            IrCategoriaDespesa.query, IrCategoriaDespesa
+        ).filter_by(
             categoria_id=categoria_id,
             categoria_ir_id=categoria_ir_id,
         ).first()
@@ -134,6 +145,7 @@ class IrDocumentoService:
             return existente
 
         vinculo = IrCategoriaDespesa(
+            perfil_financeiro_id=PerfilFinanceiroService.obter_perfil_ativo_id(),
             categoria_id=categoria_id,
             categoria_ir_id=categoria_ir_id,
             ativo=True,
@@ -144,7 +156,9 @@ class IrDocumentoService:
 
     @staticmethod
     def inativar_vinculo(vinculo_id):
-        vinculo = IrCategoriaDespesa.query.get(vinculo_id)
+        vinculo = PerfilFinanceiroService.aplicar_perfil_query(
+            IrCategoriaDespesa.query, IrCategoriaDespesa
+        ).filter(IrCategoriaDespesa.id == vinculo_id).first()
         if not vinculo:
             raise ValueError('Vinculo nao encontrado')
         vinculo.ativo = False
@@ -154,7 +168,7 @@ class IrDocumentoService:
     @classmethod
     def listar_comprovantes(cls, filtros=None):
         filtros = filtros or {}
-        query = IrComprovante.query
+        query = PerfilFinanceiroService.aplicar_perfil_query(IrComprovante.query, IrComprovante)
 
         ano = cls._parse_int(filtros.get('ano'))
         if ano:
@@ -214,7 +228,9 @@ class IrDocumentoService:
 
     @classmethod
     def obter_comprovante(cls, comprovante_id):
-        comprovante = IrComprovante.query.get(comprovante_id)
+        comprovante = PerfilFinanceiroService.aplicar_perfil_query(
+            IrComprovante.query, IrComprovante
+        ).filter(IrComprovante.id == comprovante_id).first()
         if not comprovante:
             raise ValueError('Comprovante nao encontrado')
         return comprovante
@@ -299,7 +315,9 @@ class IrDocumentoService:
         cls._validar_arquivo(nome_original, extensao, mime_type, conteudo)
 
         hash_arquivo = hashlib.sha256(conteudo).hexdigest()
-        existente = IrComprovante.query.filter_by(hash_arquivo=hash_arquivo).first()
+        existente = PerfilFinanceiroService.aplicar_perfil_query(
+            IrComprovante.query, IrComprovante
+        ).filter_by(hash_arquivo=hash_arquivo).first()
         if existente:
             return {
                 'duplicado': True,
@@ -308,6 +326,7 @@ class IrDocumentoService:
             }
 
         comprovante = IrComprovante(
+            perfil_financeiro_id=PerfilFinanceiroService.obter_perfil_ativo_id(),
             ano_calendario=ano_calendario,
             status='IMPORTADO',
             hash_arquivo=hash_arquivo,
@@ -445,7 +464,9 @@ class IrDocumentoService:
             return
 
         comprovante.categoria_id = categoria_id
-        vinculo = IrCategoriaDespesa.query.filter_by(categoria_id=categoria_id, ativo=True).first()
+        vinculo = PerfilFinanceiroService.aplicar_perfil_query(
+            IrCategoriaDespesa.query, IrCategoriaDespesa
+        ).filter_by(categoria_id=categoria_id, ativo=True).first()
         if vinculo:
             comprovante.categoria_ir_id = vinculo.categoria_ir_id
             comprovante.dedutivel = vinculo.categoria_ir.dedutivel if vinculo.categoria_ir else None

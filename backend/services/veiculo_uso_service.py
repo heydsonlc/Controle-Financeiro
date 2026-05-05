@@ -8,8 +8,10 @@ from dateutil.relativedelta import relativedelta
 
 try:
     from backend.models import db, Veiculo, DespesaPrevista
+    from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import db, Veiculo, DespesaPrevista
+    from services.perfil_financeiro_service import PerfilFinanceiroService
 
 
 def _to_decimal(value) -> Decimal | None:
@@ -86,7 +88,7 @@ def registrar_despesa_combustivel_confirmada(desp: DespesaPrevista) -> Decimal:
     if _get_tipo_evento(desp) != 'COMBUSTIVEL':
         return Decimal('0')
 
-    veiculo = Veiculo.query.get(desp.origem_id)
+    veiculo = PerfilFinanceiroService.aplicar_perfil_query(Veiculo.query, Veiculo).filter(Veiculo.id == desp.origem_id).first()
     if not veiculo:
         return Decimal('0')
 
@@ -114,7 +116,7 @@ def calcular_resumo_uso(veiculo_id: int, janela_meses: int = 3) -> dict:
     - km estimado por mês (últimos N meses)
     - média móvel dos últimos N meses
     """
-    v = Veiculo.query.get(veiculo_id)
+    v = PerfilFinanceiroService.aplicar_perfil_query(Veiculo.query, Veiculo).filter(Veiculo.id == veiculo_id).first()
     if not v:
         raise ValueError('Veículo não encontrado')
 
@@ -127,7 +129,7 @@ def calcular_resumo_uso(veiculo_id: int, janela_meses: int = 3) -> dict:
     fim_exclusivo = _primeiro_dia_mes(hoje + relativedelta(months=1))
     inicio = _primeiro_dia_mes(fim_exclusivo - relativedelta(months=janela_meses))
 
-    despesas = DespesaPrevista.query.filter(
+    despesas = PerfilFinanceiroService.aplicar_perfil_query(DespesaPrevista.query, DespesaPrevista).filter(
         DespesaPrevista.origem_tipo == 'VEICULO',
         DespesaPrevista.origem_id == veiculo_id,
         DespesaPrevista.status == 'CONFIRMADA',
@@ -161,4 +163,3 @@ def calcular_resumo_uso(veiculo_id: int, janela_meses: int = 3) -> dict:
         'preco_medio_combustivel': float(v.preco_medio_combustivel) if v.preco_medio_combustivel else None,
         'autonomia_km_l': float(v.autonomia_km_l) if v.autonomia_km_l else None,
     }
-

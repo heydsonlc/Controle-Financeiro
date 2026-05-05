@@ -18,10 +18,12 @@ try:
     )
     from backend.services.veiculo_uso_service import calcular_resumo_uso
     from backend.services.categoria_default import get_categoria_padrao_veiculos
+    from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import db, DespesaPrevista, Veiculo, VeiculoRegraManutencaoKm, VeiculoCicloManutencao
     from services.veiculo_uso_service import calcular_resumo_uso
     from services.categoria_default import get_categoria_padrao_veiculos
+    from services.perfil_financeiro_service import PerfilFinanceiroService
 
 
 EVENTOS_ANUAIS_MVP = ('IPVA', 'SEGURO', 'LICENCIAMENTO')
@@ -56,7 +58,9 @@ def _get_tipo_evento(desp: DespesaPrevista) -> str | None:
 
 
 def _buscar_regra_km(veiculo_id: int, tipo_evento: str) -> VeiculoRegraManutencaoKm | None:
-    return VeiculoRegraManutencaoKm.query.filter_by(
+    return PerfilFinanceiroService.aplicar_perfil_query(
+        VeiculoRegraManutencaoKm.query, VeiculoRegraManutencaoKm
+    ).filter_by(
         veiculo_id=veiculo_id,
         tipo_evento=tipo_evento,
         ativo=True
@@ -82,11 +86,14 @@ def _evento_elegivel(desp: DespesaPrevista) -> tuple[bool, str | None, VeiculoRe
 
 
 def _obter_ou_criar_ciclo(veiculo_id: int, tipo_evento: str, regra: VeiculoRegraManutencaoKm) -> VeiculoCicloManutencao:
-    ciclo = VeiculoCicloManutencao.query.filter_by(veiculo_id=veiculo_id, tipo_evento=tipo_evento).first()
+    ciclo = PerfilFinanceiroService.aplicar_perfil_query(
+        VeiculoCicloManutencao.query, VeiculoCicloManutencao
+    ).filter_by(veiculo_id=veiculo_id, tipo_evento=tipo_evento).first()
     if ciclo:
         return ciclo
 
     ciclo = VeiculoCicloManutencao(
+        perfil_financeiro_id=regra.perfil_financeiro_id or PerfilFinanceiroService.obter_perfil_ativo_id(),
         veiculo_id=veiculo_id,
         tipo_evento=tipo_evento,
         regra_id=regra.id,
@@ -98,7 +105,7 @@ def _obter_ou_criar_ciclo(veiculo_id: int, tipo_evento: str, regra: VeiculoRegra
 
 
 def _proxima_ordem_ciclo(ciclo_id: int) -> int:
-    despesas = DespesaPrevista.query.filter(
+    despesas = PerfilFinanceiroService.aplicar_perfil_query(DespesaPrevista.query, DespesaPrevista).filter(
         DespesaPrevista.origem_tipo == 'VEICULO',
         DespesaPrevista.status.in_(['PREVISTA', 'ADIADA', 'CONFIRMADA', 'IGNORADA']),
     ).all()
@@ -120,7 +127,7 @@ def _existe_evento_futuro_bloqueante(veiculo_id: int, tipo_evento: str, base: da
     Não criar próxima se já existe outra do mesmo tipo_evento com status PREVISTA/ADIADA
     (e também CONFIRMADA no futuro) a partir do mês base.
     """
-    candidatos = DespesaPrevista.query.filter(
+    candidatos = PerfilFinanceiroService.aplicar_perfil_query(DespesaPrevista.query, DespesaPrevista).filter(
         DespesaPrevista.origem_tipo == 'VEICULO',
         DespesaPrevista.origem_id == veiculo_id,
         DespesaPrevista.status.in_(['PREVISTA', 'ADIADA', 'CONFIRMADA']),
@@ -144,7 +151,9 @@ def ajustar_ciclo_um_passo(despesa_adiada: DespesaPrevista, janela_meses: int = 
     if not elegivel or not tipo_evento or not regra:
         return AjusteCicloResultado(ciclo_id=None, despesa_criada_id=None)
 
-    veiculo = Veiculo.query.get(despesa_adiada.origem_id)
+    veiculo = PerfilFinanceiroService.aplicar_perfil_query(
+        Veiculo.query, Veiculo
+    ).filter(Veiculo.id == despesa_adiada.origem_id).first()
     if not veiculo:
         return AjusteCicloResultado(ciclo_id=None, despesa_criada_id=None)
 
@@ -175,6 +184,7 @@ def ajustar_ciclo_um_passo(despesa_adiada: DespesaPrevista, janela_meses: int = 
         return AjusteCicloResultado(ciclo_id=ciclo.id, despesa_criada_id=None)
 
     desp_nova = DespesaPrevista(
+        perfil_financeiro_id=veiculo.perfil_financeiro_id or PerfilFinanceiroService.obter_perfil_ativo_id(),
         origem_tipo='VEICULO',
         origem_id=veiculo.id,
         categoria_id=get_categoria_padrao_veiculos(),

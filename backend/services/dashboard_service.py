@@ -340,7 +340,9 @@ def _alertas_operacionais(categorias, proximos_vencimentos):
             'mensagem': f'{len(limites_alerta)} limite(s) acima de 80%',
         })
 
-    atrasadas = DespesaPrevista.query.filter(
+    atrasadas = PerfilFinanceiroService.aplicar_perfil_query(
+        DespesaPrevista.query, DespesaPrevista
+    ).filter(
         DespesaPrevista.data_atual_prevista < date.today(),
         DespesaPrevista.status.in_(['PREVISTA', 'ADIADA']),
     ).count()
@@ -355,12 +357,16 @@ def _alertas_operacionais(categorias, proximos_vencimentos):
 
 
 def _mobilidade_ativa():
-    cenario = MobilidadeCenarioAtivo.query.filter_by(status='ATIVO').order_by(
+    cenario = PerfilFinanceiroService.aplicar_perfil_query(
+        MobilidadeCenarioAtivo.query, MobilidadeCenarioAtivo
+    ).filter_by(status='ATIVO').order_by(
         MobilidadeCenarioAtivo.updated_at.desc()
     ).first()
 
     alternativas = []
-    assinaturas = MobilidadeAssinatura.query.filter_by(status='ATIVO').limit(3).all()
+    assinaturas = PerfilFinanceiroService.aplicar_perfil_query(
+        MobilidadeAssinatura.query, MobilidadeAssinatura
+    ).filter_by(status='ATIVO').limit(3).all()
     for assinatura in assinaturas:
         alternativas.append({
             'tipo': 'ASSINATURA',

@@ -11,9 +11,11 @@ from sqlalchemy import func
 try:
     from backend.models import db, DespesaPrevista
     from backend.services.categoria_default import get_categoria_padrao_veiculos
+    from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import db, DespesaPrevista
     from services.categoria_default import get_categoria_padrao_veiculos
+    from services.perfil_financeiro_service import PerfilFinanceiroService
 
 
 ORIGEM_TIPO_TRANSPORTE_APP = 'TRANSPORTE_APP'
@@ -64,7 +66,9 @@ def _get_tipo_evento(desp: DespesaPrevista) -> str | None:
 
 
 def _next_origem_id() -> int:
-    max_id = db.session.query(func.max(DespesaPrevista.origem_id)).filter(
+    max_id = PerfilFinanceiroService.aplicar_perfil_query(
+        db.session.query(func.max(DespesaPrevista.origem_id)), DespesaPrevista
+    ).filter(
         DespesaPrevista.origem_tipo == ORIGEM_TIPO_TRANSPORTE_APP
     ).scalar()
     try:
@@ -166,7 +170,7 @@ def gerar_projecoes_transporte_app(origem_id: int, config: TransporteAppConfig, 
     inicio_mes = _primeiro_dia_mes(date.today())
     fim_exclusivo = _primeiro_dia_mes(inicio_mes + relativedelta(months=meses_futuros))
 
-    existentes = DespesaPrevista.query.filter(
+    existentes = PerfilFinanceiroService.aplicar_perfil_query(DespesaPrevista.query, DespesaPrevista).filter(
         DespesaPrevista.origem_tipo == ORIGEM_TIPO_TRANSPORTE_APP,
         DespesaPrevista.origem_id == origem_id,
         DespesaPrevista.data_prevista >= inicio_mes,
@@ -219,6 +223,7 @@ def gerar_projecoes_transporte_app(origem_id: int, config: TransporteAppConfig, 
         }
 
         desp = DespesaPrevista(
+            perfil_financeiro_id=PerfilFinanceiroService.obter_perfil_ativo_id(),
             origem_tipo=ORIGEM_TIPO_TRANSPORTE_APP,
             origem_id=origem_id,
             categoria_id=categoria_id,
@@ -237,14 +242,16 @@ def gerar_projecoes_transporte_app(origem_id: int, config: TransporteAppConfig, 
 
 
 def listar_caminhos_transporte_app() -> list[dict]:
-    origem_ids = db.session.query(DespesaPrevista.origem_id).filter(
+    origem_ids = PerfilFinanceiroService.aplicar_perfil_query(
+        db.session.query(DespesaPrevista.origem_id), DespesaPrevista
+    ).filter(
         DespesaPrevista.origem_tipo == ORIGEM_TIPO_TRANSPORTE_APP
     ).distinct().all()
     ids = [int(x[0]) for x in origem_ids if x and x[0] is not None]
 
     caminhos: list[dict] = []
     for oid in sorted(ids, reverse=True):
-        ultimo = DespesaPrevista.query.filter(
+        ultimo = PerfilFinanceiroService.aplicar_perfil_query(DespesaPrevista.query, DespesaPrevista).filter(
             DespesaPrevista.origem_tipo == ORIGEM_TIPO_TRANSPORTE_APP,
             DespesaPrevista.origem_id == oid,
         ).order_by(DespesaPrevista.id.desc()).first()
@@ -270,7 +277,7 @@ def listar_caminhos_transporte_app() -> list[dict]:
 
 
 def obter_config_transporte_app(origem_id: int) -> dict | None:
-    ultimo = DespesaPrevista.query.filter(
+    ultimo = PerfilFinanceiroService.aplicar_perfil_query(DespesaPrevista.query, DespesaPrevista).filter(
         DespesaPrevista.origem_tipo == ORIGEM_TIPO_TRANSPORTE_APP,
         DespesaPrevista.origem_id == origem_id,
     ).order_by(DespesaPrevista.id.desc()).first()
@@ -294,4 +301,3 @@ def atualizar_caminho_transporte_app(origem_id: int, payload: dict, meses_futuro
     config = parse_config(payload)
     gerar_projecoes_transporte_app(origem_id, config, meses_futuros=meses_futuros)
     return origem_id
-

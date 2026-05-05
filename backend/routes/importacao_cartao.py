@@ -14,6 +14,7 @@ from backend.services.importacao_cartao_service import ImportacaoCartaoService
 from backend.services.importacao_cartao_unificado_service import ImportacaoCartaoUnificadoService
 from backend.services.categoria_cartao_service import CategoriaCartaoService
 from backend.services.categoria_palavra_chave_service import CategoriaPalavraChaveService
+from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 from backend.models import db, ItemDespesa, Categoria
 
 bp = Blueprint('importacao_cartao', __name__, url_prefix='/api/importacao-cartao')
@@ -124,7 +125,9 @@ def _validar_payload_importacao(data):
         return None, ('Nenhuma linha para processar', 400)
 
     # Verificar se cartão existe
-    cartao = ItemDespesa.query.get(cartao_id)
+    cartao = PerfilFinanceiroService.aplicar_perfil_query(
+        ItemDespesa.query, ItemDespesa
+    ).filter(ItemDespesa.id == cartao_id).first()
     if not cartao or cartao.tipo != 'Agregador':
         return None, ('Cartao invalido', 400)
     cartao_id = cartao.id
@@ -291,7 +294,9 @@ def processar_importacao():
 @bp.route('/categorias', methods=['GET'])
 def listar_categorias():
     """Lista categorias de despesas disponíveis"""
-    categorias = Categoria.query.filter_by(ativo=True).all()
+    categorias = PerfilFinanceiroService.aplicar_perfil_query(
+        Categoria.query, Categoria
+    ).filter_by(ativo=True).all()
     return jsonify({
         'success': True,
         'categorias': [cat.to_dict() for cat in categorias]

@@ -14,6 +14,7 @@ from dateutil.relativedelta import relativedelta
 
 try:
     from backend.models import db, DespesaPrevista
+    from backend.services.perfil_financeiro_service import PerfilFinanceiroService
     from backend.services.transporte_app_service import (
         ORIGEM_TIPO_TRANSPORTE_APP,
         listar_caminhos_transporte_app,
@@ -23,6 +24,7 @@ try:
     )
 except ImportError:
     from models import db, DespesaPrevista
+    from services.perfil_financeiro_service import PerfilFinanceiroService
     from services.transporte_app_service import (
         ORIGEM_TIPO_TRANSPORTE_APP,
         listar_caminhos_transporte_app,
@@ -97,7 +99,7 @@ def atualizar_caminho(caminho_id: int):
 @mobilidade_app_bp.route('/<int:caminho_id>', methods=['DELETE'])
 def deletar_caminho(caminho_id: int):
     try:
-        itens = DespesaPrevista.query.filter(
+        itens = PerfilFinanceiroService.aplicar_perfil_query(DespesaPrevista.query, DespesaPrevista).filter(
             DespesaPrevista.origem_tipo == ORIGEM_TIPO_TRANSPORTE_APP,
             DespesaPrevista.origem_id == caminho_id,
         ).all()
@@ -121,7 +123,7 @@ def listar_projecoes(caminho_id: int):
         inicio = date.today().replace(day=1)
         fim = (inicio + relativedelta(months=meses)).replace(day=1)
 
-        proj = DespesaPrevista.query.filter(
+        proj = PerfilFinanceiroService.aplicar_perfil_query(DespesaPrevista.query, DespesaPrevista).filter(
             DespesaPrevista.origem_tipo == ORIGEM_TIPO_TRANSPORTE_APP,
             DespesaPrevista.origem_id == caminho_id,
             DespesaPrevista.data_prevista >= inicio,
@@ -131,4 +133,3 @@ def listar_projecoes(caminho_id: int):
         return jsonify({'success': True, 'data': [p.to_dict() for p in proj], 'total': len(proj)}), 200
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
-

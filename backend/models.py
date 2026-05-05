@@ -192,6 +192,7 @@ class IrCategoriaDespesa(db.Model):
     __tablename__ = 'ir_categoria_despesa'
 
     id = db.Column(db.Integer, primary_key=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
     categoria_ir_id = db.Column(db.Integer, db.ForeignKey('ir_categoria.id'), nullable=False)
     categoria_id = db.Column(db.Integer, db.ForeignKey('categoria.id'), nullable=False)
     ativo = db.Column(db.Boolean, nullable=False, default=True)
@@ -202,14 +203,16 @@ class IrCategoriaDespesa(db.Model):
     categoria = db.relationship('Categoria', foreign_keys=[categoria_id])
 
     __table_args__ = (
-        db.UniqueConstraint('categoria_ir_id', 'categoria_id', name='ux_ir_categoria_despesa_ir_categoria'),
+        db.UniqueConstraint('perfil_financeiro_id', 'categoria_ir_id', 'categoria_id', name='ux_ir_categoria_despesa_perfil_ir_categoria'),
         db.Index('ix_ir_categoria_despesa_categoria', 'categoria_id'),
         db.Index('ix_ir_categoria_despesa_categoria_ir', 'categoria_ir_id'),
+        db.Index('ix_ir_categoria_despesa_perfil_ativo', 'perfil_financeiro_id', 'ativo'),
     )
 
     def to_dict(self):
         return {
             'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
             'categoria_ir_id': self.categoria_ir_id,
             'categoria_ir_nome': self.categoria_ir.nome if self.categoria_ir else None,
             'categoria_id': self.categoria_id,
@@ -227,6 +230,7 @@ class IrComprovante(db.Model):
     __tablename__ = 'ir_comprovante'
 
     id = db.Column(db.Integer, primary_key=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
     ano_calendario = db.Column(db.Integer, nullable=False, index=True)
     data_documento = db.Column(db.Date, nullable=True)
     prestador_nome = db.Column(db.String(255), nullable=True)
@@ -242,7 +246,7 @@ class IrComprovante(db.Model):
     origem_classificacao = db.Column(db.String(50), nullable=True)
     texto_extraido = db.Column(db.Text, nullable=True)
     observacoes = db.Column(db.Text, nullable=True)
-    hash_arquivo = db.Column(db.String(64), nullable=False, unique=True, index=True)
+    hash_arquivo = db.Column(db.String(64), nullable=False, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -251,9 +255,15 @@ class IrComprovante(db.Model):
     arquivo = db.relationship('IrComprovanteArquivo', back_populates='comprovante', uselist=False, cascade='all, delete-orphan')
     eventos = db.relationship('IrComprovanteEvento', back_populates='comprovante', lazy='dynamic', cascade='all, delete-orphan')
 
+    __table_args__ = (
+        db.UniqueConstraint('perfil_financeiro_id', 'hash_arquivo', name='ux_ir_comprovante_perfil_hash'),
+        db.Index('ix_ir_comprovante_perfil_ano', 'perfil_financeiro_id', 'ano_calendario'),
+    )
+
     def to_dict(self, include_texto=False, include_eventos=False):
         data = {
             'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
             'ano_calendario': self.ano_calendario,
             'data_documento': self.data_documento.isoformat() if self.data_documento else None,
             'prestador_nome': self.prestador_nome,
@@ -1237,7 +1247,8 @@ class ContaPatrimonio(db.Model):
     __tablename__ = 'conta_patrimonio'
 
     id = db.Column(db.Integer, primary_key=True)
-    nome = db.Column(db.String(100), nullable=False, unique=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
+    nome = db.Column(db.String(100), nullable=False)
     tipo = db.Column(db.String(50))  # 'Corrente', 'Poupança', 'Investimento', 'Reserva'
     saldo_inicial = db.Column(db.Numeric(10, 2), default=0)
     saldo_atual = db.Column(db.Numeric(10, 2), default=0)
@@ -1246,6 +1257,11 @@ class ContaPatrimonio(db.Model):
     ativo = db.Column(db.Boolean, default=True)
     observacoes = db.Column(db.Text)
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint('perfil_financeiro_id', 'nome', name='ux_conta_patrimonio_perfil_nome'),
+        db.Index('idx_conta_patrimonio_perfil_ativo', 'perfil_financeiro_id', 'ativo'),
+    )
 
     # Relacionamentos
     transferencias_origem = db.relationship('Transferencia',
@@ -1263,6 +1279,7 @@ class ContaPatrimonio(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
             'nome': self.nome,
             'tipo': self.tipo,
             'saldo_inicial': float(self.saldo_inicial),
@@ -1281,6 +1298,7 @@ class Transferencia(db.Model):
     __tablename__ = 'transferencia'
 
     id = db.Column(db.Integer, primary_key=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
     conta_origem_id = db.Column(db.Integer, db.ForeignKey('conta_patrimonio.id'), nullable=False)
     conta_destino_id = db.Column(db.Integer, db.ForeignKey('conta_patrimonio.id'), nullable=False)
     valor = db.Column(db.Numeric(10, 2), nullable=False)
@@ -1302,6 +1320,7 @@ class Transferencia(db.Model):
         db.Index('idx_transf_data', 'data_transferencia'),
         db.Index('idx_transf_origem', 'conta_origem_id'),
         db.Index('idx_transf_destino', 'conta_destino_id'),
+        db.Index('idx_transf_perfil_data', 'perfil_financeiro_id', 'data_transferencia'),
     )
 
     def __repr__(self):
@@ -1310,6 +1329,7 @@ class Transferencia(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
             'conta_origem_id': self.conta_origem_id,
             'conta_destino_id': self.conta_destino_id,
             'valor': float(self.valor),
@@ -1333,6 +1353,7 @@ class Financiamento(db.Model):
     __tablename__ = 'financiamento'
 
     id = db.Column(db.Integer, primary_key=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
     nome = db.Column(db.String(200), nullable=False)
     produto = db.Column(db.String(100))  # Ex: SFH, Veículo, Pessoal
     sistema_amortizacao = db.Column(db.String(20), nullable=False)  # SAC, PRICE, SIMPLES
@@ -1458,6 +1479,7 @@ class Financiamento(db.Model):
 
         return {
             'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
             'nome': self.nome,
             'produto': self.produto,
             'sistema_amortizacao': self.sistema_amortizacao,
@@ -1494,6 +1516,7 @@ class FinanciamentoParcela(db.Model):
     __tablename__ = 'financiamento_parcela'
 
     id = db.Column(db.Integer, primary_key=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
     financiamento_id = db.Column(db.Integer, db.ForeignKey('financiamento.id'), nullable=False)
     numero_parcela = db.Column(db.Integer, nullable=False)
     data_vencimento = db.Column(db.Date, nullable=False)
@@ -1537,6 +1560,7 @@ class FinanciamentoParcela(db.Model):
         db.Index('idx_fin_parc_financ', 'financiamento_id'),
         db.Index('idx_fin_parc_venc', 'data_vencimento'),
         db.Index('idx_fin_parc_status', 'status'),
+        db.Index('idx_fin_parc_perfil_status', 'perfil_financeiro_id', 'status'),
     )
 
     def __repr__(self):
@@ -1545,6 +1569,7 @@ class FinanciamentoParcela(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
             'financiamento_id': self.financiamento_id,
             'numero_parcela': self.numero_parcela,
             'data_vencimento': self.data_vencimento.strftime('%Y-%m-%d'),
@@ -1577,6 +1602,7 @@ class FinanciamentoAmortizacaoExtra(db.Model):
     __tablename__ = 'financiamento_amortizacao_extra'
 
     id = db.Column(db.Integer, primary_key=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
     financiamento_id = db.Column(db.Integer, db.ForeignKey('financiamento.id'), nullable=False)
     data = db.Column(db.Date, nullable=False)
     valor = db.Column(db.Numeric(10, 2), nullable=False)
@@ -1591,6 +1617,7 @@ class FinanciamentoAmortizacaoExtra(db.Model):
     __table_args__ = (
         db.Index('idx_amort_financ', 'financiamento_id'),
         db.Index('idx_amort_data', 'data'),
+        db.Index('idx_amort_perfil_data', 'perfil_financeiro_id', 'data'),
     )
 
     def __repr__(self):
@@ -1599,6 +1626,7 @@ class FinanciamentoAmortizacaoExtra(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
             'financiamento_id': self.financiamento_id,
             'data': self.data.strftime('%Y-%m-%d'),
             'valor': float(self.valor),
@@ -1627,6 +1655,7 @@ class FinanciamentoSeguroVigencia(db.Model):
     __tablename__ = 'financiamento_seguro_vigencia'
 
     id = db.Column(db.Integer, primary_key=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
     financiamento_id = db.Column(db.Integer, db.ForeignKey('financiamento.id'), nullable=False)
 
     # Competência de início (primeiro mês desta vigência)
@@ -1659,6 +1688,7 @@ class FinanciamentoSeguroVigencia(db.Model):
         db.Index('idx_seguro_vig_financ', 'financiamento_id'),
         db.Index('idx_seguro_vig_comp', 'competencia_inicio'),
         db.Index('idx_seguro_vig_ativa', 'vigencia_ativa'),
+        db.Index('idx_seguro_vig_perfil_ativa', 'perfil_financeiro_id', 'vigencia_ativa'),
     )
 
     def __repr__(self):
@@ -1667,6 +1697,7 @@ class FinanciamentoSeguroVigencia(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
             'financiamento_id': self.financiamento_id,
             'competencia_inicio': self.competencia_inicio.strftime('%Y-%m-%d'),
             'valor_mensal': float(self.valor_mensal),
@@ -1933,6 +1964,7 @@ class Veiculo(db.Model):
     __tablename__ = 'veiculo'
 
     id = db.Column(db.Integer, primary_key=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
     nome = db.Column(db.String(100), nullable=False)
     tipo = db.Column(db.String(20), nullable=False)  # 'carro', 'moto', 'outro'
     combustivel = db.Column(db.String(20), nullable=False)  # 'gasolina', 'etanol', etc.
@@ -1974,6 +2006,7 @@ class Veiculo(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
             'nome': self.nome,
             'tipo': self.tipo,
             'combustivel': self.combustivel,
@@ -2017,6 +2050,7 @@ class VeiculoRegraManutencaoKm(db.Model):
     __tablename__ = 'veiculo_regra_manutencao_km'
 
     id = db.Column(db.Integer, primary_key=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
     veiculo_id = db.Column(db.Integer, db.ForeignKey('veiculo.id'), nullable=False)
     tipo_evento = db.Column(db.String(50), nullable=False)  # ex: 'TROCA_OLEO'
     intervalo_km = db.Column(db.Integer, nullable=False)
@@ -2038,6 +2072,7 @@ class VeiculoRegraManutencaoKm(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
             'veiculo_id': self.veiculo_id,
             'tipo_evento': self.tipo_evento,
             'intervalo_km': self.intervalo_km,
@@ -2059,6 +2094,7 @@ class VeiculoCicloManutencao(db.Model):
     __tablename__ = 'veiculo_ciclo_manutencao'
 
     id = db.Column(db.Integer, primary_key=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
     veiculo_id = db.Column(db.Integer, db.ForeignKey('veiculo.id'), nullable=False)
     tipo_evento = db.Column(db.String(50), nullable=False)
     regra_id = db.Column(db.Integer, db.ForeignKey('veiculo_regra_manutencao_km.id'), nullable=False)
@@ -2075,6 +2111,7 @@ class VeiculoCicloManutencao(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
             'veiculo_id': self.veiculo_id,
             'tipo_evento': self.tipo_evento,
             'regra_id': self.regra_id,
@@ -2118,6 +2155,7 @@ class VeiculoFinanciamento(db.Model):
     __tablename__ = 'veiculo_financiamento'
 
     id = db.Column(db.Integer, primary_key=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
     veiculo_id = db.Column(db.Integer, db.ForeignKey('veiculo.id'), nullable=False, unique=True)
 
     valor_bem = db.Column(db.Numeric(12, 2), nullable=False)
@@ -2228,6 +2266,7 @@ class MobilidadeCenarioAtivo(db.Model):
     __tablename__ = 'mobilidade_cenario_ativo'
 
     id = db.Column(db.Integer, primary_key=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
     tipo_modalidade = db.Column(db.String(20), nullable=False)   # VEICULO | TRANSPORTE_APP | ASSINATURA
     origem_id = db.Column(db.Integer, nullable=False)            # veiculo.id, caminho app, ou 0
     ativo_desde = db.Column(db.Date, nullable=False, default=datetime.utcnow)
@@ -2249,6 +2288,7 @@ class MobilidadeCenarioAtivo(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
             'tipo_modalidade': self.tipo_modalidade,
             'origem_id': self.origem_id,
             'ativo_desde': self.ativo_desde.isoformat() if self.ativo_desde else None,
@@ -2271,6 +2311,7 @@ class MobilidadeAssinatura(db.Model):
     __tablename__ = 'mobilidade_assinatura'
 
     id = db.Column(db.Integer, primary_key=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
     nome = db.Column(db.String(100), nullable=False)
     valor_mensal = db.Column(db.Numeric(10, 2), nullable=False)
     categoria_id = db.Column(db.Integer, db.ForeignKey('categoria.id'), nullable=True)
@@ -2284,6 +2325,7 @@ class MobilidadeAssinatura(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
             'nome': self.nome,
             'valor_mensal': float(self.valor_mensal) if self.valor_mensal is not None else None,
             'categoria_id': self.categoria_id,

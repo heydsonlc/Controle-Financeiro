@@ -19,11 +19,13 @@ try:
     from backend.models import db, DespesaPrevista, ItemDespesa, MobilidadeAssinatura, MobilidadeCenarioAtivo, Veiculo
     from backend.services.categoria_cartao_service import CategoriaCartaoService
     from backend.services.categoria_default import get_categoria_padrao_veiculos
+    from backend.services.perfil_financeiro_service import PerfilFinanceiroService
     from backend.services.transporte_app_service import obter_config_transporte_app, parse_config as parse_transporte_config
 except ImportError:
     from models import db, DespesaPrevista, ItemDespesa, MobilidadeAssinatura, MobilidadeCenarioAtivo, Veiculo
     from services.categoria_cartao_service import CategoriaCartaoService
     from services.categoria_default import get_categoria_padrao_veiculos
+    from services.perfil_financeiro_service import PerfilFinanceiroService
     from services.transporte_app_service import obter_config_transporte_app, parse_config as parse_transporte_config
 
 
@@ -45,6 +47,22 @@ def _to_decimal(v) -> Decimal | None:
         return Decimal(str(v))
     except Exception:
         return None
+
+
+def _perfil_id():
+    return PerfilFinanceiroService.obter_perfil_ativo_id()
+
+
+def _query_perfil(model):
+    return PerfilFinanceiroService.aplicar_perfil_query(model.query, model)
+
+
+def _veiculo_perfil(veiculo_id):
+    return _query_perfil(Veiculo).filter(Veiculo.id == veiculo_id).first()
+
+
+def _assinatura_perfil(assinatura_id):
+    return _query_perfil(MobilidadeAssinatura).filter(MobilidadeAssinatura.id == assinatura_id).first()
 
 
 def _parse_date(v) -> date | None:
@@ -112,7 +130,7 @@ def resolver_categoria_cartao_para_mobilidade(
 # ---------------------------------------------------------------------------
 
 def _buscar_recorrencia_existente(origem_tipo: str, origem_id: int, origem_contexto: str) -> ItemDespesa | None:
-    return ItemDespesa.query.filter_by(
+    return PerfilFinanceiroService.aplicar_perfil_query(ItemDespesa.query, ItemDespesa).filter_by(
         origem_tipo=origem_tipo,
         origem_id=origem_id,
         origem_contexto=origem_contexto,
@@ -128,7 +146,7 @@ def evitar_recorrencia_duplicada(origem_tipo: str, origem_id: int, origem_contex
 
 def inativar_recorrencias_origem(origem_tipo: str, origem_id: int) -> int:
     """Inativa todas as recorrências automáticas vinculadas a esta origem. Retorna count."""
-    itens = ItemDespesa.query.filter_by(
+    itens = PerfilFinanceiroService.aplicar_perfil_query(ItemDespesa.query, ItemDespesa).filter_by(
         origem_tipo=origem_tipo,
         origem_id=origem_id,
         recorrente=True,
@@ -197,6 +215,7 @@ def criar_recorrencia_combustivel(
     mes_comp = data_venc.strftime('%Y-%m')
 
     recorrencia = ItemDespesa(
+        perfil_financeiro_id=_perfil_id(),
         nome=nome,
         tipo='Simples',
         recorrente=True,
@@ -266,6 +285,7 @@ def criar_recorrencia_transporte_app(
     mes_comp = data_venc.strftime('%Y-%m')
 
     recorrencia = ItemDespesa(
+        perfil_financeiro_id=_perfil_id(),
         nome=f'Transporte por app - {nome}',
         tipo='Simples',
         recorrente=True,
@@ -334,6 +354,7 @@ def criar_recorrencia_assinatura(
     mes_comp = data_venc.strftime('%Y-%m')
 
     recorrencia = ItemDespesa(
+        perfil_financeiro_id=_perfil_id(),
         nome=f'Assinatura - {assinatura.nome}',
         tipo='Simples',
         recorrente=True,
@@ -370,7 +391,7 @@ def suprimir_despesas_previstas_por_recorrencia(
     Retorna o número de registros suprimidos.
     """
     hoje = date.today().replace(day=1)
-    candidatas = DespesaPrevista.query.filter(
+    candidatas = PerfilFinanceiroService.aplicar_perfil_query(DespesaPrevista.query, DespesaPrevista).filter(
         DespesaPrevista.origem_tipo == origem_tipo,
         DespesaPrevista.origem_id == origem_id,
         DespesaPrevista.status == 'PREVISTA',
@@ -400,7 +421,7 @@ def suprimir_despesas_previstas_por_recorrencia(
 
 def inativar_modalidade_atual() -> MobilidadeCenarioAtivo | None:
     """Inativa o cenário ativo atual (se existir) e suas recorrências."""
-    atual = MobilidadeCenarioAtivo.query.filter_by(status='ATIVO').first()
+    atual = _query_perfil(MobilidadeCenarioAtivo).filter_by(status='ATIVO').first()
     if not atual:
         return None
 
@@ -437,7 +458,7 @@ def previsualizar_ativacao_modalidade(payload: dict) -> dict:
     if tipo == 'VEICULO':
         if not origem_id:
             raise ValueError('origem_id (veiculo.id) e obrigatorio para tipo_modalidade=VEICULO')
-        v = Veiculo.query.get(origem_id)
+        v = _veiculo_perfil(origem_id)
         if not v:
             raise ValueError('Veiculo nao encontrado')
 
@@ -530,7 +551,7 @@ def previsualizar_ativacao_modalidade(payload: dict) -> dict:
     if tipo == 'ASSINATURA':
         if not origem_id:
             raise ValueError('origem_id (assinatura.id) e obrigatorio para tipo_modalidade=ASSINATURA')
-        assinatura = MobilidadeAssinatura.query.get(origem_id)
+        assinatura = _assinatura_perfil(origem_id)
         if not assinatura:
             raise ValueError('MobilidadeAssinatura nao encontrada')
         if assinatura.status != 'ATIVO':
@@ -609,7 +630,7 @@ def ativar_modalidade(payload: dict) -> dict:
     if tipo == 'VEICULO':
         if not origem_id:
             raise ValueError('origem_id (veiculo.id) e obrigatorio')
-        v = Veiculo.query.get(origem_id)
+        v = _veiculo_perfil(origem_id)
         if not v:
             raise ValueError('Veiculo nao encontrado')
 
@@ -686,7 +707,7 @@ def ativar_modalidade(payload: dict) -> dict:
     elif tipo == 'ASSINATURA':
         if not origem_id:
             raise ValueError('origem_id (assinatura.id) e obrigatorio')
-        assinatura = MobilidadeAssinatura.query.get(origem_id)
+        assinatura = _assinatura_perfil(origem_id)
         if not assinatura:
             raise ValueError('MobilidadeAssinatura nao encontrada')
 
@@ -714,6 +735,7 @@ def ativar_modalidade(payload: dict) -> dict:
 
     # 3. Gravar cenário ativo
     cenario = MobilidadeCenarioAtivo(
+        perfil_financeiro_id=_perfil_id(),
         tipo_modalidade=tipo,
         origem_id=origem_id or 0,
         ativo_desde=data_inicio,
@@ -740,21 +762,21 @@ def ativar_modalidade(payload: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 def obter_modalidade_ativa() -> dict | None:
-    cenario = MobilidadeCenarioAtivo.query.filter_by(status='ATIVO').first()
+    cenario = _query_perfil(MobilidadeCenarioAtivo).filter_by(status='ATIVO').first()
     if not cenario:
         return None
     resultado = cenario.to_dict()
     if cenario.tipo_modalidade == 'VEICULO' and cenario.origem_id:
-        v = Veiculo.query.get(cenario.origem_id)
+        v = _veiculo_perfil(cenario.origem_id)
         resultado['nome_origem'] = v.nome if v else None
     elif cenario.tipo_modalidade == 'TRANSPORTE_APP' and cenario.origem_id:
         caminho = obter_config_transporte_app(cenario.origem_id)
         resultado['nome_origem'] = (caminho or {}).get('nome') or f'Caminho {cenario.origem_id}'
     elif cenario.tipo_modalidade == 'ASSINATURA' and cenario.origem_id:
-        ass = MobilidadeAssinatura.query.get(cenario.origem_id)
+        ass = _assinatura_perfil(cenario.origem_id)
         resultado['nome_origem'] = ass.nome if ass else None
     if cenario.recorrencia_id:
-        rec = ItemDespesa.query.get(cenario.recorrencia_id)
+        rec = PerfilFinanceiroService.aplicar_perfil_query(ItemDespesa.query, ItemDespesa).filter(ItemDespesa.id == cenario.recorrencia_id).first()
         resultado['recorrencia'] = rec.to_dict() if rec else None
     return resultado
 
@@ -764,7 +786,7 @@ def obter_modalidade_ativa() -> dict | None:
 # ---------------------------------------------------------------------------
 
 def listar_assinaturas(apenas_ativas: bool = False) -> list[dict]:
-    q = MobilidadeAssinatura.query
+    q = _query_perfil(MobilidadeAssinatura)
     if apenas_ativas:
         q = q.filter_by(status='ATIVO')
     return [a.to_dict() for a in q.order_by(MobilidadeAssinatura.nome).all()]
@@ -779,6 +801,7 @@ def criar_assinatura(payload: dict) -> MobilidadeAssinatura:
         raise ValueError('valor_mensal deve ser > 0')
 
     ass = MobilidadeAssinatura(
+        perfil_financeiro_id=_perfil_id(),
         nome=nome,
         valor_mensal=valor,
         categoria_id=_to_int(payload.get('categoria_id')),
@@ -791,7 +814,7 @@ def criar_assinatura(payload: dict) -> MobilidadeAssinatura:
 
 
 def atualizar_assinatura(assinatura_id: int, payload: dict) -> MobilidadeAssinatura:
-    ass = MobilidadeAssinatura.query.get(assinatura_id)
+    ass = _assinatura_perfil(assinatura_id)
     if not ass:
         raise ValueError('MobilidadeAssinatura nao encontrada')
 

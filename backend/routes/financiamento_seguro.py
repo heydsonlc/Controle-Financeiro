@@ -9,11 +9,18 @@ Endpoints:
 
 from flask import Blueprint, request, jsonify
 from backend.models import db, Financiamento, FinanciamentoSeguroVigencia
+from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 from backend.services.seguro_vigencia_service import SeguroVigenciaService
 from datetime import datetime, date, timedelta
 from decimal import Decimal
 
 bp = Blueprint('financiamento_seguro', __name__)
+
+
+def _financiamento_no_perfil(financiamento_id):
+    return PerfilFinanceiroService.aplicar_perfil_query(
+        Financiamento.query, Financiamento
+    ).filter(Financiamento.id == financiamento_id).first()
 
 
 @bp.route('/api/financiamentos/<int:financiamento_id>/seguros', methods=['GET'])
@@ -25,7 +32,7 @@ def listar_vigencias(financiamento_id):
     """
     try:
         # Verificar se financiamento existe
-        financiamento = Financiamento.query.get(financiamento_id)
+        financiamento = _financiamento_no_perfil(financiamento_id)
         if not financiamento:
             return jsonify({
                 'success': False,
@@ -82,7 +89,7 @@ def criar_vigencia(financiamento_id):
     """
     try:
         # Verificar se financiamento existe
-        financiamento = Financiamento.query.get(financiamento_id)
+        financiamento = _financiamento_no_perfil(financiamento_id)
         if not financiamento:
             return jsonify({
                 'success': False,
@@ -246,7 +253,9 @@ def editar_vigencia(vigencia_id):
     """
     try:
         # Buscar vigência
-        vigencia = FinanciamentoSeguroVigencia.query.get(vigencia_id)
+        vigencia = PerfilFinanceiroService.aplicar_perfil_query(
+            FinanciamentoSeguroVigencia.query, FinanciamentoSeguroVigencia
+        ).filter(FinanciamentoSeguroVigencia.id == vigencia_id).first()
 
         if not vigencia:
             return jsonify({
