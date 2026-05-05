@@ -49,6 +49,12 @@ def listar_vinculos_ir():
     return _json_success([vinculo.to_dict() for vinculo in vinculos], total=len(vinculos))
 
 
+@ir_bp.route('/categorias-despesa-disponiveis', methods=['GET'])
+def listar_categorias_despesa_disponiveis():
+    categorias = IrDocumentoService.listar_categorias_despesa_disponiveis()
+    return _json_success(categorias, total=len(categorias))
+
+
 @ir_bp.route('/categorias-despesa', methods=['POST'])
 def criar_vinculo_ir():
     try:

@@ -7,6 +7,7 @@
         comprovantes: [],
         arquivosSelecionados: [],
         resumoImportacao: { enviados: 0, lidos: 0, pendentes: 0, erros: 0 },
+        categoriaIrManual: false,
     };
 
     const $ = (id) => document.getElementById(id);
@@ -45,6 +46,11 @@
         $('ir-review-close')?.addEventListener('click', fecharRevisao);
         $('ir-review-save')?.addEventListener('click', salvarRevisao);
         $('ir-review-validar')?.addEventListener('click', validarComprovante);
+        $('ir-review-categoria')?.addEventListener('change', resolverCategoriaIrDaDespesa);
+        $('ir-review-categoria-ir')?.addEventListener('change', () => {
+            estado.categoriaIrManual = true;
+            atualizarAvisoVinculo('');
+        });
 
         const dropzone = $('ir-dropzone');
         if (dropzone) {
@@ -78,11 +84,12 @@
 
     async function carregarCategoriasDespesa() {
         try {
-            const resposta = await fetch('/api/categorias');
+            const resposta = await fetch('/api/ir/categorias-despesa-disponiveis');
             const json = await resposta.json();
             estado.categoriasDespesa = json.data || [];
         } catch (error) {
             estado.categoriasDespesa = [];
+            mostrarAviso('Nao foi possivel carregar Categorias de Despesa para revisao.');
         }
         preencherSelectCategoriasDespesa();
     }
@@ -98,7 +105,8 @@
             filtro.value = atual;
         }
         if (review) {
-            review.innerHTML = '<option value="">Selecione...</option>' + estado.categoriasIr.map((cat) => (
+            const vazio = estado.categoriasIr.length ? 'Selecione...' : 'Nenhuma Categoria IR cadastrada';
+            review.innerHTML = `<option value="">${vazio}</option>` + estado.categoriasIr.map((cat) => (
                 `<option value="${cat.id}">${escapeHtml(cat.nome)}</option>`
             )).join('');
         }
@@ -107,9 +115,39 @@
     function preencherSelectCategoriasDespesa() {
         const select = $('ir-review-categoria');
         if (!select) return;
-        select.innerHTML = '<option value="">Selecione...</option>' + estado.categoriasDespesa.map((cat) => (
-            `<option value="${cat.id}">${escapeHtml(cat.nome)}</option>`
+        const vazio = estado.categoriasDespesa.length ? 'Selecione...' : 'Nenhuma categoria cadastrada';
+        select.innerHTML = `<option value="">${vazio}</option>` + estado.categoriasDespesa.map((cat) => (
+            `<option value="${cat.id}" data-categoria-ir-id="${cat.categoria_ir_id || ''}">${escapeHtml(cat.nome)}</option>`
         )).join('');
+    }
+
+    function resolverCategoriaIrDaDespesa() {
+        const selectCategoria = $('ir-review-categoria');
+        const selectIr = $('ir-review-categoria-ir');
+        if (!selectCategoria || !selectIr || estado.categoriaIrManual) return;
+
+        const categoriaId = Number(selectCategoria.value || 0);
+        if (!categoriaId) {
+            atualizarAvisoVinculo('');
+            return;
+        }
+
+        const categoria = estado.categoriasDespesa.find((item) => Number(item.id) === categoriaId);
+        if (categoria?.categoria_ir_id) {
+            selectIr.value = String(categoria.categoria_ir_id);
+            atualizarAvisoVinculo('');
+            return;
+        }
+
+        selectIr.value = '';
+        atualizarAvisoVinculo('Categoria de Despesa ainda sem vinculo com Categoria IR.');
+    }
+
+    function atualizarAvisoVinculo(mensagem) {
+        const aviso = $('ir-review-categoria-aviso');
+        if (!aviso) return;
+        aviso.textContent = mensagem || '';
+        aviso.hidden = !mensagem;
     }
 
     async function carregarComprovantes() {
@@ -309,6 +347,8 @@
             return;
         }
         const item = json.data;
+        estado.categoriaIrManual = false;
+        atualizarAvisoVinculo('');
         $('ir-review-id').value = item.id;
         $('ir-review-file-name').textContent = item.arquivo?.nome_arquivo || 'Comprovante';
         $('ir-review-file-link').href = `/api/ir/comprovantes/${item.id}/arquivo`;
@@ -320,6 +360,9 @@
         $('ir-review-ano').value = item.ano_calendario || '';
         $('ir-review-categoria').value = item.categoria_id || '';
         $('ir-review-categoria-ir').value = item.categoria_ir_id || '';
+        if (!item.categoria_ir_id) {
+            resolverCategoriaIrDaDespesa();
+        }
         $('ir-review-observacoes').value = item.observacoes || '';
         $('ir-review-modal').classList.add('open');
         $('ir-review-modal').setAttribute('aria-hidden', 'false');

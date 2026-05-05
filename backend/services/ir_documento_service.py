@@ -20,6 +20,7 @@ try:
         db,
     )
     from backend.services.categoria_palavra_chave_service import CategoriaPalavraChaveService
+    from backend.services.ir_nfse_goiania_parser import eh_nfse_goiania, extrair_dados_nfse_goiania
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import (
@@ -32,6 +33,7 @@ except ImportError:
         db,
     )
     from services.categoria_palavra_chave_service import CategoriaPalavraChaveService
+    from services.ir_nfse_goiania_parser import eh_nfse_goiania, extrair_dados_nfse_goiania
     from services.perfil_financeiro_service import PerfilFinanceiroService
 
 
@@ -108,6 +110,29 @@ class IrDocumentoService:
         return PerfilFinanceiroService.aplicar_perfil_query(
             IrCategoriaDespesa.query, IrCategoriaDespesa
         ).order_by(IrCategoriaDespesa.id.asc()).all()
+
+    @classmethod
+    def listar_categorias_despesa_disponiveis(cls):
+        categorias = PerfilFinanceiroService.aplicar_perfil_query(
+            Categoria.query, Categoria
+        ).filter(Categoria.ativo == True).order_by(Categoria.nome.asc()).all()  # noqa: E712
+        resultado = []
+        for categoria in categorias:
+            vinculo = PerfilFinanceiroService.aplicar_perfil_query(
+                IrCategoriaDespesa.query, IrCategoriaDespesa
+            ).filter_by(categoria_id=categoria.id, ativo=True).first()
+            item = categoria.to_dict() if hasattr(categoria, 'to_dict') else {
+                'id': categoria.id,
+                'nome': categoria.nome,
+                'descricao': categoria.descricao,
+                'ativo': bool(categoria.ativo),
+            }
+            item.update({
+                'categoria_ir_id': vinculo.categoria_ir_id if vinculo else None,
+                'categoria_ir_nome': vinculo.categoria_ir.nome if vinculo and vinculo.categoria_ir else None,
+            })
+            resultado.append(item)
+        return resultado
 
     @classmethod
     def criar_vinculo(cls, dados):
@@ -258,11 +283,23 @@ class IrDocumentoService:
         if 'valor' in dados:
             comprovante.valor = cls._parse_decimal(dados.get('valor'))
         if 'categoria_id' in dados:
-            comprovante.categoria_id = cls._parse_int(dados.get('categoria_id'))
+            categoria_id = cls._parse_int(dados.get('categoria_id'))
+            if categoria_id:
+                categoria = PerfilFinanceiroService.aplicar_perfil_query(
+                    Categoria.query, Categoria
+                ).filter(Categoria.id == categoria_id).first()
+                if not categoria:
+                    raise ValueError('Categoria de Despesa nao encontrada')
+            comprovante.categoria_id = categoria_id
         if 'categoria_ir_id' in dados:
             comprovante.categoria_ir_id = cls._parse_int(dados.get('categoria_ir_id'))
             categoria_ir = IrCategoria.query.get(comprovante.categoria_ir_id) if comprovante.categoria_ir_id else None
             comprovante.dedutivel = categoria_ir.dedutivel if categoria_ir else comprovante.dedutivel
+        elif 'categoria_id' in dados and comprovante.categoria_id:
+            vinculo = cls._buscar_vinculo_ir_por_categoria(comprovante.categoria_id)
+            if vinculo:
+                comprovante.categoria_ir_id = vinculo.categoria_ir_id
+                comprovante.dedutivel = vinculo.categoria_ir.dedutivel if vinculo.categoria_ir else comprovante.dedutivel
         if 'dedutivel' in dados:
             comprovante.dedutivel = bool(dados.get('dedutivel'))
         if 'observacoes' in dados:
@@ -371,8 +408,15 @@ class IrDocumentoService:
 
             comprovante.texto_extraido = texto
             cls._registrar_evento(comprovante, 'TEXTO_EXTRAIDO', 'Texto extraido de PDF textual.')
-            cls._extrair_dados_simples(comprovante, texto)
-            cls._classificar_comprovante(comprovante, texto)
+            texto_classificacao = texto
+            if eh_nfse_goiania(texto):
+                dados_nfse = extrair_dados_nfse_goiania(texto)
+                cls._aplicar_dados_nfse_goiania(comprovante, dados_nfse)
+                texto_classificacao = dados_nfse.get('texto_classificacao') or texto
+                cls._registrar_evento(comprovante, 'TEXTO_EXTRAIDO', 'Parser especifico NFS-e Goiania aplicado.')
+            else:
+                cls._extrair_dados_simples(comprovante, texto)
+            cls._classificar_comprovante(comprovante, texto_classificacao)
             return
 
         comprovante.status = 'PENDENTE_REVISAO'
@@ -416,6 +460,30 @@ class IrDocumentoService:
                 continue
             comprovante.prestador_nome = limpa[:255]
             break
+
+    @classmethod
+    def _aplicar_dados_nfse_goiania(cls, comprovante, dados):
+        if not dados:
+            return
+        if dados.get('data_documento'):
+            comprovante.data_documento = cls._parse_date(dados.get('data_documento'))
+        if dados.get('ano_calendario'):
+            comprovante.ano_calendario = dados.get('ano_calendario')
+        elif comprovante.data_documento:
+            comprovante.ano_calendario = comprovante.data_documento.year
+        if dados.get('prestador_nome'):
+            comprovante.prestador_nome = cls._limitar_texto(dados.get('prestador_nome'), 255)
+        if dados.get('prestador_cpf_cnpj'):
+            comprovante.prestador_cpf_cnpj = cls._limitar_texto(dados.get('prestador_cpf_cnpj'), 20)
+        if dados.get('tomador_nome'):
+            comprovante.tomador_nome = cls._limitar_texto(dados.get('tomador_nome'), 255)
+        if dados.get('tomador_cpf'):
+            comprovante.tomador_cpf = cls._limitar_texto(dados.get('tomador_cpf'), 20)
+        if dados.get('valor') is not None:
+            comprovante.valor = cls._parse_decimal(dados.get('valor'))
+        avisos = dados.get('avisos') or []
+        if avisos:
+            comprovante.observacoes = ' '.join(avisos)[:1000]
 
     @staticmethod
     def _extrair_prestador(texto):
@@ -464,9 +532,7 @@ class IrDocumentoService:
             return
 
         comprovante.categoria_id = categoria_id
-        vinculo = PerfilFinanceiroService.aplicar_perfil_query(
-            IrCategoriaDespesa.query, IrCategoriaDespesa
-        ).filter_by(categoria_id=categoria_id, ativo=True).first()
+        vinculo = cls._buscar_vinculo_ir_por_categoria(categoria_id)
         if vinculo:
             comprovante.categoria_ir_id = vinculo.categoria_ir_id
             comprovante.dedutivel = vinculo.categoria_ir.dedutivel if vinculo.categoria_ir else None
@@ -476,6 +542,12 @@ class IrDocumentoService:
 
         comprovante.status = 'PENDENTE_REVISAO'
         cls._registrar_evento(comprovante, 'PENDENTE_REVISAO', 'Categoria de Despesa sugerida, mas sem vinculo com Categoria IR.')
+
+    @staticmethod
+    def _buscar_vinculo_ir_por_categoria(categoria_id):
+        return PerfilFinanceiroService.aplicar_perfil_query(
+            IrCategoriaDespesa.query, IrCategoriaDespesa
+        ).filter_by(categoria_id=categoria_id, ativo=True).first()
 
     @staticmethod
     def _registrar_evento(comprovante, tipo_evento, descricao):

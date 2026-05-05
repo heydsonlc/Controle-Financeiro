@@ -229,7 +229,11 @@
                     <label>CPF/CNPJ<input id="ir-review-doc" type="text"></label>
                     <label>Valor<input id="ir-review-valor" type="number" step="0.01"></label>
                     <label>Ano-calendario<input id="ir-review-ano" type="number" min="2000" max="2100"></label>
-                    <label>Categoria de Despesa<select id="ir-review-categoria"></select></label>
+                    <label>
+                        Categoria de Despesa
+                        <select id="ir-review-categoria"></select>
+                        <small id="ir-review-categoria-aviso" class="ir-field-warning" hidden></small>
+                    </label>
                     <label>Categoria IR<select id="ir-review-categoria-ir"></select></label>
                     <label>Observacoes<textarea id="ir-review-observacoes" rows="4"></textarea></label>
                 </form>
