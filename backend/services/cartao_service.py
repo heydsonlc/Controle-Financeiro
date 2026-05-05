@@ -19,10 +19,12 @@ try:
     from backend.models import (db, Conta, ItemDespesa, ItemAgregado,
                                 OrcamentoAgregado, LancamentoAgregado, ConfigAgregador)
     from backend.services.categoria_cartao_service import CategoriaCartaoService
+    from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import (db, Conta, ItemDespesa, ItemAgregado,
                        OrcamentoAgregado, LancamentoAgregado, ConfigAgregador)
     from services.categoria_cartao_service import CategoriaCartaoService
+    from services.perfil_financeiro_service import PerfilFinanceiroService
 
 logger = logging.getLogger(__name__)
 
@@ -77,17 +79,21 @@ class CartaoService:
         comp_primeiro_dia = CartaoService._primeiro_dia_mes(competencia)
 
         # Buscar fatura existente
-        fatura = Conta.query.filter_by(
-            item_despesa_id=cartao_id,
-            is_fatura_cartao=True,
-            cartao_competencia=comp_primeiro_dia
+        fatura = Conta.query.filter(
+            Conta.item_despesa_id == cartao_id,
+            PerfilFinanceiroService.condicao_perfil(Conta),
+            Conta.is_fatura_cartao == True,
+            Conta.cartao_competencia == comp_primeiro_dia,
         ).first()
 
         if fatura:
             return fatura
 
         # Criar nova fatura virtual
-        cartao = ItemDespesa.query.get(cartao_id)
+        cartao = ItemDespesa.query.filter(
+            ItemDespesa.id == cartao_id,
+            PerfilFinanceiroService.condicao_perfil(ItemDespesa),
+        ).first()
         if not cartao or cartao.tipo != 'Agregador':
             raise ValueError(f'ItemDespesa {cartao_id} nÃ£o Ã© um cartÃ£o de crÃ©dito')
 
@@ -104,6 +110,7 @@ class CartaoService:
 
         # Criar fatura
         fatura = Conta(
+            perfil_financeiro_id=cartao.perfil_financeiro_id,
             item_despesa_id=cartao_id,
             mes_referencia=comp_primeiro_dia,
             descricao=f'Fatura {cartao.nome} - {comp_primeiro_dia.strftime("%m/%Y")}',
@@ -186,6 +193,7 @@ class CartaoService:
             func.coalesce(func.sum(LancamentoAgregado.valor), 0)
         ).filter(
             LancamentoAgregado.cartao_id == cartao_id,
+            PerfilFinanceiroService.condicao_perfil(LancamentoAgregado),
             LancamentoAgregado.mes_fatura >= comp_primeiro_dia,
             LancamentoAgregado.mes_fatura < proximo_mes
         ).scalar()
@@ -220,7 +228,11 @@ class CartaoService:
         """
         Retorna consumo da fatura agrupado por Categoria do Cartao global.
         """
-        cartao = ItemDespesa.query.filter_by(id=cartao_id, tipo='Agregador').first()
+        cartao = ItemDespesa.query.filter(
+            ItemDespesa.id == cartao_id,
+            ItemDespesa.tipo == 'Agregador',
+            PerfilFinanceiroService.condicao_perfil(ItemDespesa),
+        ).first()
         if not cartao:
             raise ValueError('Cartao nao encontrado')
 
@@ -254,6 +266,7 @@ class CartaoService:
 
         lancamentos = LancamentoAgregado.query.filter(
             LancamentoAgregado.cartao_id == cartao_id,
+            PerfilFinanceiroService.condicao_perfil(LancamentoAgregado),
             LancamentoAgregado.mes_fatura >= mes_ref,
             LancamentoAgregado.mes_fatura < proximo_mes,
         ).all()
@@ -367,7 +380,11 @@ class CartaoService:
         """
         Lista lancamentos da fatura com Categoria de Despesa e Categoria do Cartao.
         """
-        cartao = ItemDespesa.query.filter_by(id=cartao_id, tipo='Agregador').first()
+        cartao = ItemDespesa.query.filter(
+            ItemDespesa.id == cartao_id,
+            ItemDespesa.tipo == 'Agregador',
+            PerfilFinanceiroService.condicao_perfil(ItemDespesa),
+        ).first()
         if not cartao:
             raise ValueError('Cartao nao encontrado')
 
@@ -376,6 +393,7 @@ class CartaoService:
 
         query = LancamentoAgregado.query.filter(
             LancamentoAgregado.cartao_id == cartao_id,
+            PerfilFinanceiroService.condicao_perfil(LancamentoAgregado),
             LancamentoAgregado.mes_fatura >= mes_ref,
             LancamentoAgregado.mes_fatura < proximo_mes,
         )
@@ -502,7 +520,10 @@ class CartaoService:
         """
         from backend.models import ContaBancaria, MovimentoFinanceiro
 
-        fatura = Conta.query.get(fatura_id)
+        fatura = Conta.query.filter(
+            Conta.id == fatura_id,
+            PerfilFinanceiroService.condicao_perfil(Conta),
+        ).first()
         if not fatura:
             raise ValueError('Fatura nÃ£o encontrada')
 
@@ -533,7 +554,10 @@ class CartaoService:
 
         # SE conta bancÃ¡ria informada: debitar saldo
         if conta_bancaria_id:
-            conta = ContaBancaria.query.get(conta_bancaria_id)
+            conta = ContaBancaria.query.filter(
+                ContaBancaria.id == conta_bancaria_id,
+                PerfilFinanceiroService.condicao_perfil(ContaBancaria),
+            ).first()
             if not conta:
                 raise ValueError('Conta bancÃ¡ria nÃ£o encontrada')
 
@@ -542,6 +566,7 @@ class CartaoService:
 
             # Criar movimento financeiro (dÃ©bito)
             movimento = MovimentoFinanceiro(
+                perfil_financeiro_id=fatura.perfil_financeiro_id or PerfilFinanceiroService.obter_perfil_ativo_id(),
                 conta_bancaria_id=conta_bancaria_id,
                 tipo='DEBITO',
                 valor=valor_final_pagamento,
@@ -665,9 +690,10 @@ class CartaoService:
             # FASE 2: IDEMPOTÃŠNCIA ROBUSTA
             # Verifica se parcela jÃ¡ existe usando compra_id (UUID Ãºnico)
             # Muito mais seguro que usar descriÃ§Ã£o (texto livre)
-            lancamento_existente = LancamentoAgregado.query.filter_by(
-                compra_id=compra_uuid,
-                numero_parcela=n
+            lancamento_existente = LancamentoAgregado.query.filter(
+                PerfilFinanceiroService.condicao_perfil(LancamentoAgregado),
+                LancamentoAgregado.compra_id == compra_uuid,
+                LancamentoAgregado.numero_parcela == n,
             ).first()
 
             if lancamento_existente:
@@ -679,6 +705,7 @@ class CartaoService:
 
             # Criar lanÃ§amento da parcela
             lancamento = LancamentoAgregado(
+                perfil_financeiro_id=fatura_mes.perfil_financeiro_id or PerfilFinanceiroService.obter_perfil_ativo_id(),
                 cartao_id=cartao_id,
                 item_agregado_id=item_agregado_id,  # Pode ser None
                 categoria_cartao_id=categoria_cartao_id,
@@ -801,7 +828,11 @@ class CartaoService:
         mes_atual = date.today().replace(day=1)
 
         # Buscar todos os cartÃµes ativos
-        cartoes = ItemDespesa.query.filter_by(tipo='Agregador', ativo=True).all()
+        cartoes = ItemDespesa.query.filter(
+            ItemDespesa.tipo == 'Agregador',
+            ItemDespesa.ativo == True,
+            PerfilFinanceiroService.condicao_perfil(ItemDespesa),
+        ).all()
 
         faturas_criadas = []
 

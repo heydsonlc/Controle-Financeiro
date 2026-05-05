@@ -11,6 +11,7 @@ try:
     from backend.services.despesa_prevista_cascata_service import ajustar_ciclo_um_passo
     from backend.services.cartao_service import CartaoService
     from backend.services.categoria_cartao_service import CategoriaCartaoService
+    from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import db, DespesaPrevista, ItemDespesa, Conta
     from services.veiculo_uso_service import registrar_despesa_combustivel_confirmada
@@ -18,6 +19,7 @@ except ImportError:
     from services.despesa_prevista_cascata_service import ajustar_ciclo_um_passo
     from services.cartao_service import CartaoService
     from services.categoria_cartao_service import CategoriaCartaoService
+    from services.perfil_financeiro_service import PerfilFinanceiroService
 
 
 STATUS_PREVISTA = 'PREVISTA'
@@ -43,6 +45,10 @@ def _parse_date(value) -> date | None:
 
 def _primeiro_dia_mes(d: date) -> date:
     return d.replace(day=1)
+
+
+def _perfil_id():
+    return PerfilFinanceiroService.obter_perfil_ativo_id()
 
 
 def _assert_prevista(desp: DespesaPrevista) -> None:
@@ -87,6 +93,7 @@ def _criar_conta_para_prevista(desp: DespesaPrevista, meio_pagamento: str,
     mes_ref = _primeiro_dia_mes(data_vencimento)
 
     item = ItemDespesa(
+        perfil_financeiro_id=_perfil_id(),
         nome=nome,
         tipo='Simples',
         categoria_id=categoria_id,
@@ -101,6 +108,7 @@ def _criar_conta_para_prevista(desp: DespesaPrevista, meio_pagamento: str,
     db.session.flush()  # garante item.id antes de criar Conta
 
     conta = Conta(
+        perfil_financeiro_id=_perfil_id(),
         item_despesa_id=item.id,
         mes_referencia=mes_ref,
         descricao=nome + (f' — {observacao}' if observacao else ''),
@@ -166,7 +174,10 @@ def confirmar(despesa_id: int, payload: dict | None = None) -> tuple[DespesaPrev
 
     Retorna (desp, entidade_criada_dict | None).
     """
-    desp = DespesaPrevista.query.get(despesa_id)
+    desp = DespesaPrevista.query.filter(
+        DespesaPrevista.id == despesa_id,
+        PerfilFinanceiroService.condicao_perfil(DespesaPrevista),
+    ).first()
     if not desp:
         raise ValueError('Despesa prevista não encontrada')
     _assert_prevista(desp)
@@ -225,7 +236,10 @@ def confirmar(despesa_id: int, payload: dict | None = None) -> tuple[DespesaPrev
 
 
 def ignorar(despesa_id: int) -> DespesaPrevista:
-    desp = DespesaPrevista.query.get(despesa_id)
+    desp = DespesaPrevista.query.filter(
+        DespesaPrevista.id == despesa_id,
+        PerfilFinanceiroService.condicao_perfil(DespesaPrevista),
+    ).first()
     if not desp:
         raise ValueError('Despesa prevista não encontrada')
     _assert_prevista(desp)
@@ -236,7 +250,10 @@ def ignorar(despesa_id: int) -> DespesaPrevista:
 
 
 def adiar(despesa_id: int, nova_data, ajustar_ciclo: bool = False) -> tuple[DespesaPrevista, int | None]:
-    desp = DespesaPrevista.query.get(despesa_id)
+    desp = DespesaPrevista.query.filter(
+        DespesaPrevista.id == despesa_id,
+        PerfilFinanceiroService.condicao_perfil(DespesaPrevista),
+    ).first()
     if not desp:
         raise ValueError('Despesa prevista não encontrada')
     _assert_prevista(desp)

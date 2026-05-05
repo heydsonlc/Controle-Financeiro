@@ -13,10 +13,12 @@ try:
     from backend.models import db, ItemDespesa, Categoria, LancamentoAgregado, CartaoCategoriaLimite, Conta
     from backend.services.cartao_service import CartaoService
     from backend.services.categoria_cartao_service import CategoriaCartaoService
+    from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import db, ItemDespesa, Categoria, LancamentoAgregado, CartaoCategoriaLimite, Conta
     from services.cartao_service import CartaoService
     from services.categoria_cartao_service import CategoriaCartaoService
+    from services.perfil_financeiro_service import PerfilFinanceiroService
 
 despesas_bp = Blueprint('despesas', __name__, url_prefix='/api/despesas')
 logger = logging.getLogger(__name__)
@@ -49,6 +51,22 @@ def _normalizar_meio_pagamento(value):
     return (value or '').strip().lower() or None
 
 
+def _perfil_id():
+    return PerfilFinanceiroService.obter_perfil_ativo_id()
+
+
+def _query_itens():
+    return PerfilFinanceiroService.aplicar_perfil_query(ItemDespesa.query, ItemDespesa)
+
+
+def _query_contas():
+    return PerfilFinanceiroService.aplicar_perfil_query(Conta.query, Conta)
+
+
+def _query_lancamentos():
+    return PerfilFinanceiroService.aplicar_perfil_query(LancamentoAgregado.query, LancamentoAgregado)
+
+
 def gerar_execucao_despesa_recorrente(item_despesa_id, meses_futuros=1, mes_referencia=None):
     """
     Orquestrador Ãºnico de recorrÃªncia:
@@ -57,7 +75,7 @@ def gerar_execucao_despesa_recorrente(item_despesa_id, meses_futuros=1, mes_refe
 
     IMPORTANTE: esta funÃ§Ã£o NÃƒO faz commit; o caller controla a transaÃ§Ã£o.
     """
-    item = ItemDespesa.query.get(item_despesa_id)
+    item = _query_itens().filter(ItemDespesa.id == item_despesa_id).first()
     if not item:
         raise ValueError('ItemDespesa nÃ£o encontrado')
     if not item.recorrente:
@@ -109,6 +127,7 @@ def _calcular_totais_fatura_cartao_previsto(cartao_id, competencia):
         func.coalesce(func.sum(LancamentoAgregado.valor), 0)
     ).filter(
         LancamentoAgregado.cartao_id == cartao_id,
+        PerfilFinanceiroService.condicao_perfil(LancamentoAgregado),
         LancamentoAgregado.mes_fatura == comp
     ).scalar()
     total_executado = float(total_executado or 0)
@@ -125,6 +144,7 @@ def _calcular_totais_fatura_cartao_previsto(cartao_id, competencia):
             func.coalesce(func.sum(LancamentoAgregado.valor), 0)
         ).filter(
             LancamentoAgregado.cartao_id == cartao_id,
+            PerfilFinanceiroService.condicao_perfil(LancamentoAgregado),
             LancamentoAgregado.mes_fatura == comp,
             LancamentoAgregado.categoria_cartao_id.in_(categorias_cartao_ids)
         ).group_by(
@@ -165,7 +185,7 @@ def listar_despesas():
         if mes_arg:
             try:
                 mes_referencia = datetime.strptime(f"{mes_arg}-01", "%Y-%m-%d").date()
-                despesas_recorrentes = ItemDespesa.query.filter_by(recorrente=True).all()
+                despesas_recorrentes = _query_itens().filter_by(recorrente=True).all()
 
                 for desp in despesas_recorrentes:
                     if not desp.data_vencimento:
@@ -200,7 +220,7 @@ def listar_despesas():
                     mes_referencia.replace(day=1),
                     (mes_referencia + relativedelta(months=1)).replace(day=1),
                 ]
-                cartoes_ativos = ItemDespesa.query.filter_by(tipo='Agregador', ativo=True).all()
+                cartoes_ativos = _query_itens().filter_by(tipo='Agregador', ativo=True).all()
                 for cartao in cartoes_ativos:
                     for comp in competencias_fatura:
                         try:
@@ -235,6 +255,7 @@ def listar_despesas():
         ).outerjoin(
             Categoria, ItemDespesa.categoria_id == Categoria.id
         ).filter(
+            PerfilFinanceiroService.condicao_perfil(Conta),
             or_(
                 Conta.is_fatura_cartao == False,
                 Conta.is_fatura_cartao.is_(None)
@@ -280,6 +301,7 @@ def listar_despesas():
         ).outerjoin(
             Categoria, ItemDespesa.categoria_id == Categoria.id
         ).filter(
+            PerfilFinanceiroService.condicao_perfil(Conta),
             Conta.is_fatura_cartao == True
         ).order_by(
             Conta.data_vencimento.desc()
@@ -436,7 +458,7 @@ def obter_despesa(id):
     """ObtÃ©m uma conta especÃ­fica"""
     try:
         # Buscar na tabela Conta (nÃ£o ItemDespesa)
-        conta = Conta.query.get(id)
+        conta = _query_contas().filter(Conta.id == id).first()
         if not conta:
             return jsonify({
                 'success': False,
@@ -446,12 +468,15 @@ def obter_despesa(id):
         # Buscar ItemDespesa relacionado para pegar informaÃ§Ãµes adicionais
         item_despesa = None
         if conta.item_despesa_id:
-            item_despesa = ItemDespesa.query.get(conta.item_despesa_id)
+            item_despesa = _query_itens().filter(ItemDespesa.id == conta.item_despesa_id).first()
 
         # Buscar categoria se existir
         categoria = None
         if item_despesa and item_despesa.categoria_id:
-            categoria = Categoria.query.get(item_despesa.categoria_id)
+            categoria = Categoria.query.filter(
+                Categoria.id == item_despesa.categoria_id,
+                PerfilFinanceiroService.condicao_perfil(Categoria),
+            ).first()
 
         # Montar dados da conta
         conta_dict = {
@@ -515,7 +540,10 @@ def criar_despesa():
             }), 400
 
         # Verificar se categoria existe
-        categoria = Categoria.query.get(dados.get('categoria_id'))
+        categoria = Categoria.query.filter(
+            Categoria.id == dados.get('categoria_id'),
+            PerfilFinanceiroService.condicao_perfil(Categoria),
+        ).first()
         if not categoria:
             return jsonify({
                 'success': False,
@@ -550,6 +578,7 @@ def criar_despesa():
 
         # Criar despesa
         despesa = ItemDespesa(
+            perfil_financeiro_id=_perfil_id(),
             nome=dados['nome'],
             descricao=dados.get('descricao'),
             valor=float(dados['valor']),
@@ -613,6 +642,7 @@ def criar_despesa():
                     status = 'Pago' if dados.get('pago') or data_pagamento else 'Pendente'
 
                     nova_conta = Conta(
+                        perfil_financeiro_id=_perfil_id(),
                         item_despesa_id=despesa.id,
                         mes_referencia=mes_referencia,
                         descricao=despesa.nome,
@@ -649,7 +679,7 @@ def atualizar_despesa(id):
     """Atualiza uma conta especÃ­fica"""
     try:
         # Buscar na tabela Conta (nÃ£o ItemDespesa)
-        conta = Conta.query.get(id)
+        conta = _query_contas().filter(Conta.id == id).first()
         if not conta:
             return jsonify({
                 'success': False,
@@ -732,7 +762,7 @@ def atualizar_despesa(id):
 def atualizar_despesa_OLD(id):
     """[BACKUP] Atualiza uma despesa existente (Ãºnica ou com futuras) - VERSÃƒO ANTIGA"""
     try:
-        despesa = ItemDespesa.query.get(id)
+        despesa = _query_itens().filter(ItemDespesa.id == id).first()
         if not despesa:
             return jsonify({
                 'success': False,
@@ -754,7 +784,7 @@ def atualizar_despesa_OLD(id):
                 mes_competencia_atual = despesa.mes_competencia
 
                 # Buscar parcelas futuras do mesmo consÃ³rcio
-                parcelas_futuras = ItemDespesa.query.filter(
+                parcelas_futuras = _query_itens().filter(
                     ItemDespesa.tipo == 'Consorcio',
                     ItemDespesa.nome.like(f"{nome_base} - Parcela%"),
                     ItemDespesa.mes_competencia >= mes_competencia_atual,
@@ -767,7 +797,7 @@ def atualizar_despesa_OLD(id):
                 # Para recorrente, buscar despesas futuras com mesmo nome e categoria
                 mes_competencia_atual = despesa.mes_competencia
 
-                despesas_futuras = ItemDespesa.query.filter(
+                despesas_futuras = _query_itens().filter(
                     ItemDespesa.nome == despesa.nome,
                     ItemDespesa.categoria_id == despesa.categoria_id,
                     ItemDespesa.recorrente == True,
@@ -785,7 +815,10 @@ def atualizar_despesa_OLD(id):
             }), 400
 
         if 'categoria_id' in dados:
-            categoria = Categoria.query.get(dados['categoria_id'])
+            categoria = Categoria.query.filter(
+                Categoria.id == dados['categoria_id'],
+                PerfilFinanceiroService.condicao_perfil(Categoria),
+            ).first()
             if not categoria:
                 return jsonify({
                     'success': False,
@@ -875,7 +908,7 @@ def deletar_despesa(id):
     """Deleta uma conta especÃ­fica"""
     try:
         # Buscar na tabela Conta (nÃ£o ItemDespesa)
-        conta = Conta.query.get(id)
+        conta = _query_contas().filter(Conta.id == id).first()
         if not conta:
             return jsonify({
                 'success': False,
@@ -900,7 +933,7 @@ def deletar_despesa(id):
 def deletar_despesa_OLD(id):
     """[BACKUP] Deleta uma despesa (Ãºnica ou com futuras) - VERSÃƒO ANTIGA"""
     try:
-        despesa = ItemDespesa.query.get(id)
+        despesa = _query_itens().filter(ItemDespesa.id == id).first()
         if not despesa:
             return jsonify({
                 'success': False,
@@ -921,7 +954,7 @@ def deletar_despesa_OLD(id):
                 mes_competencia_atual = despesa.mes_competencia
 
                 # Buscar parcelas futuras do mesmo consÃ³rcio
-                parcelas_futuras = ItemDespesa.query.filter(
+                parcelas_futuras = _query_itens().filter(
                     ItemDespesa.tipo == 'Consorcio',
                     ItemDespesa.nome.like(f"{nome_base} - Parcela%"),
                     ItemDespesa.mes_competencia >= mes_competencia_atual,
@@ -934,7 +967,7 @@ def deletar_despesa_OLD(id):
                 # Para recorrente, buscar despesas futuras com mesmo nome e categoria
                 mes_competencia_atual = despesa.mes_competencia
 
-                despesas_futuras = ItemDespesa.query.filter(
+                despesas_futuras = _query_itens().filter(
                     ItemDespesa.nome == despesa.nome,
                     ItemDespesa.categoria_id == despesa.categoria_id,
                     ItemDespesa.recorrente == True,
@@ -975,7 +1008,7 @@ def marcar_como_pago(id):
     """
     try:
         # Buscar na tabela Conta (nÃ£o ItemDespesa)
-        conta = Conta.query.get(id)
+        conta = _query_contas().filter(Conta.id == id).first()
         if not conta:
             return jsonify({
                 'success': False,
@@ -1049,13 +1082,17 @@ def marcar_como_pago(id):
                 from models import ContaBancaria, MovimentoFinanceiro
                 from services.conta_bancaria_service import ContaBancariaService
 
-            conta_bancaria = ContaBancaria.query.get(conta_bancaria_id)
+            conta_bancaria = ContaBancaria.query.filter_by(
+                id=conta_bancaria_id,
+                perfil_financeiro_id=_perfil_id(),
+            ).first()
             if not conta_bancaria:
                 return jsonify({'success': False, 'error': 'Conta bancÃ¡ria nÃ£o encontrada'}), 404
             if conta_bancaria.status != 'ATIVO':
                 return jsonify({'success': False, 'error': 'Conta bancÃ¡ria estÃ¡ inativa'}), 400
 
             movimento = MovimentoFinanceiro(
+                perfil_financeiro_id=_perfil_id(),
                 conta_bancaria_id=conta_bancaria_id,
                 tipo='DEBITO',
                 valor=Decimal(str(conta.valor)),
@@ -1142,7 +1179,7 @@ def normalizar_dias_semana(dias):
 
 def gerar_contas_despesa_recorrente(item_despesa_id, meses_futuros=12, mes_referencia=None):
     """Gera contas reais para despesas recorrentes (mensal, anual, semanal, a_cada_2_semanas ou dias_semana)."""
-    item = ItemDespesa.query.get(item_despesa_id)
+    item = _query_itens().filter(ItemDespesa.id == item_despesa_id).first()
     if not item:
         raise ValueError('ItemDespesa nao encontrado')
     if not item.recorrente:
@@ -1161,13 +1198,14 @@ def gerar_contas_despesa_recorrente(item_despesa_id, meses_futuros=12, mes_refer
 
     def criar_conta(data_venc, descricao_custom=None):
         mes_ref = data_venc.replace(day=1)
-        existente = Conta.query.filter_by(
+        existente = _query_contas().filter_by(
             item_despesa_id=item_despesa_id,
             data_vencimento=data_venc
         ).first()
         if existente:
             return
         nova = Conta(
+            perfil_financeiro_id=item.perfil_financeiro_id,
             item_despesa_id=item_despesa_id,
             mes_referencia=mes_ref,
             descricao=descricao_custom or item.nome,
@@ -1253,7 +1291,7 @@ def gerar_lancamentos_cartao_recorrente(item_despesa_id, meses_futuros=12, mes_r
     """
     from datetime import date
 
-    item = ItemDespesa.query.get(item_despesa_id)
+    item = _query_itens().filter(ItemDespesa.id == item_despesa_id).first()
     if not item:
         raise ValueError('ItemDespesa nÃ£o encontrado')
     if not item.recorrente:
@@ -1295,7 +1333,7 @@ def gerar_lancamentos_cartao_recorrente(item_despesa_id, meses_futuros=12, mes_r
         mes_fatura = data_compra.replace(day=1)
         
         # Verificar se jÃ¡ existe lanÃ§amento deste item_despesa para este mÃªs (idempotÃªncia)
-        existente = LancamentoAgregado.query.filter_by(
+        existente = _query_lancamentos().filter_by(
             item_despesa_id=item_despesa_id,
             mes_fatura=mes_fatura,
             is_recorrente=True
@@ -1311,6 +1349,7 @@ def gerar_lancamentos_cartao_recorrente(item_despesa_id, meses_futuros=12, mes_r
         )
 
         novo = LancamentoAgregado(
+            perfil_financeiro_id=item.perfil_financeiro_id,
             cartao_id=item.cartao_id,
             item_agregado_id=None,
             categoria_cartao_id=resolucao_cartao.get('categoria_cartao_id'),

@@ -16,9 +16,11 @@ from sqlalchemy import func, case
 try:
     from backend.models import db, ContaBancaria, MovimentoFinanceiro
     from backend.services.conta_bancaria_service import ContaBancariaService
+    from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import db, ContaBancaria, MovimentoFinanceiro
     from services.conta_bancaria_service import ContaBancariaService
+    from services.perfil_financeiro_service import PerfilFinanceiroService
 
 # Criar blueprint
 contas_bancarias_bp = Blueprint('contas_bancarias', __name__)
@@ -41,6 +43,22 @@ def _get_json_payload():
     return data, None
 
 
+def _perfil_id():
+    return PerfilFinanceiroService.obter_perfil_ativo_id()
+
+
+def _query_contas():
+    return PerfilFinanceiroService.aplicar_perfil_query(ContaBancaria.query, ContaBancaria)
+
+
+def _obter_conta_no_perfil(conta_id):
+    return _query_contas().filter(ContaBancaria.id == conta_id).first()
+
+
+def _query_movimentos():
+    return PerfilFinanceiroService.aplicar_perfil_query(MovimentoFinanceiro.query, MovimentoFinanceiro)
+
+
 @contas_bancarias_bp.route('', methods=['GET'])
 def listar_contas():
     """
@@ -60,9 +78,9 @@ def listar_contas():
             status_normalizado = status.upper()
             if status_normalizado not in status_permitido:
                 return _json_error('status deve ser ATIVO ou INATIVO', 400)
-            contas = ContaBancaria.query.filter_by(status=status_normalizado).all()
+            contas = _query_contas().filter_by(status=status_normalizado).all()
         else:
-            contas = ContaBancaria.query.filter_by(status='ATIVO').all()
+            contas = _query_contas().filter_by(status='ATIVO').all()
 
         return jsonify({
             'success': True,
@@ -86,7 +104,7 @@ def buscar_conta(id):
         JSON com dados da conta
     """
     try:
-        conta = ContaBancaria.query.get(id)
+        conta = _obter_conta_no_perfil(id)
 
         if not conta:
             return _json_error('Conta nao encontrada', 404)
@@ -141,6 +159,7 @@ def criar_conta():
             return _json_error('saldo_inicial invalido', 400)
 
         nova_conta = ContaBancaria(
+            perfil_financeiro_id=_perfil_id(),
             nome=data['nome'],
             instituicao=data['instituicao'],
             tipo=data['tipo'],
@@ -194,7 +213,7 @@ def atualizar_conta(id):
         JSON com dados da conta atualizada
     """
     try:
-        conta = ContaBancaria.query.get(id)
+        conta = _obter_conta_no_perfil(id)
 
         if not conta:
             return _json_error('Conta nao encontrada', 404)
@@ -268,7 +287,7 @@ def inativar_conta(id):
         JSON com mensagem de sucesso
     """
     try:
-        conta = ContaBancaria.query.get(id)
+        conta = _obter_conta_no_perfil(id)
 
         if not conta:
             return _json_error('Conta nao encontrada', 404)
@@ -301,7 +320,7 @@ def ativar_conta(id):
         JSON com mensagem de sucesso
     """
     try:
-        conta = ContaBancaria.query.get(id)
+        conta = _obter_conta_no_perfil(id)
 
         if not conta:
             return _json_error('Conta nao encontrada', 404)
@@ -334,7 +353,7 @@ def listar_movimentos(id):
         incluir_saldo: 0/1 (opcional, default 1) - inclui saldo_apos_movimento
     """
     try:
-        conta = ContaBancaria.query.get(id)
+        conta = _obter_conta_no_perfil(id)
         if not conta:
             return _json_error('Conta nao encontrada', 404)
 
@@ -355,7 +374,7 @@ def listar_movimentos(id):
         if data_inicio and data_fim and data_inicio > data_fim:
             return _json_error('inicio nao pode ser maior que fim', 400)
 
-        query = MovimentoFinanceiro.query.filter_by(conta_bancaria_id=id)
+        query = _query_movimentos().filter_by(conta_bancaria_id=id)
         if data_inicio:
             query = query.filter(MovimentoFinanceiro.data_movimento >= data_inicio)
         if data_fim:
@@ -384,7 +403,7 @@ def listar_movimentos(id):
                 saldo_base = saldo_base + Decimal(str(anterior.cred or 0)) - Decimal(str(anterior.deb or 0))
 
             # Movimentos do período em ordem asc para calcular saldo_apos
-            query_asc = MovimentoFinanceiro.query.filter_by(conta_bancaria_id=id)
+            query_asc = _query_movimentos().filter_by(conta_bancaria_id=id)
             if data_inicio:
                 query_asc = query_asc.filter(MovimentoFinanceiro.data_movimento >= data_inicio)
             if data_fim:
@@ -421,7 +440,7 @@ def ajuste_saldo(id):
         }
     """
     try:
-        conta = ContaBancaria.query.get(id)
+        conta = _obter_conta_no_perfil(id)
         if not conta:
             return _json_error('Conta nao encontrada', 404)
 
@@ -488,7 +507,7 @@ def editar_movimento(conta_id, mov_id):
     Edita um movimento ajustável (AJUSTE).
     """
     try:
-        mov = MovimentoFinanceiro.query.get(mov_id)
+        mov = _query_movimentos().filter_by(id=mov_id).first()
         if not mov or mov.conta_bancaria_id != conta_id:
             return _json_error('Movimento nao encontrado', 404)
 
@@ -532,7 +551,7 @@ def deletar_movimento(conta_id, mov_id):
     Exclui um movimento ajustável (AJUSTE).
     """
     try:
-        mov = MovimentoFinanceiro.query.get(mov_id)
+        mov = _query_movimentos().filter_by(id=mov_id).first()
         if not mov or mov.conta_bancaria_id != conta_id:
             return _json_error('Movimento nao encontrado', 404)
 

@@ -11,6 +11,7 @@ try:
     from backend.services.categoria_cartao_service import CategoriaCartaoService
     from backend.services.categoria_palavra_chave_service import CategoriaPalavraChaveService
     from backend.services.importacao_cartao_service import ImportacaoCartaoService
+    from backend.services.perfil_financeiro_service import PerfilFinanceiroService
     from backend.services.parsers import (
         importacao_csv_parser,
         importacao_pdf_caixa_parser,
@@ -21,6 +22,7 @@ except ImportError:
     from services.categoria_cartao_service import CategoriaCartaoService
     from services.categoria_palavra_chave_service import CategoriaPalavraChaveService
     from services.importacao_cartao_service import ImportacaoCartaoService
+    from services.perfil_financeiro_service import PerfilFinanceiroService
     from services.parsers import (
         importacao_csv_parser,
         importacao_pdf_caixa_parser,
@@ -121,7 +123,10 @@ class ImportacaoCartaoUnificadoService:
         except (TypeError, ValueError):
             raise ValueError('cartao_id invalido.')
 
-        cartao = ItemDespesa.query.get(cartao_id_int)
+        cartao = ItemDespesa.query.filter(
+            ItemDespesa.id == cartao_id_int,
+            PerfilFinanceiroService.condicao_perfil(ItemDespesa),
+        ).first()
         if not cartao or cartao.tipo != 'Agregador':
             raise ValueError('Cartao invalido.')
         return cartao
@@ -414,8 +419,14 @@ class ImportacaoCartaoUnificadoService:
             categoria_id = linha.get('categoria_id') or linha.get('categoria_despesa_id')
             categoria_cartao_id = linha.get('categoria_cartao_id')
 
-            categoria = Categoria.query.get(int(categoria_id)) if categoria_id else None
-            categoria_cartao = CategoriaCartao.query.get(int(categoria_cartao_id)) if categoria_cartao_id else None
+            categoria = Categoria.query.filter(
+                Categoria.id == int(categoria_id),
+                PerfilFinanceiroService.condicao_perfil(Categoria),
+            ).first() if categoria_id else None
+            categoria_cartao = CategoriaCartao.query.filter(
+                CategoriaCartao.id == int(categoria_cartao_id),
+                PerfilFinanceiroService.condicao_perfil(CategoriaCartao),
+            ).first() if categoria_cartao_id else None
 
             vinculada = bool(categoria_cartao_id) and CategoriaCartaoService.validar_categoria_cartao_disponivel_no_cartao(
                 cartao.id,
@@ -548,6 +559,7 @@ class ImportacaoCartaoUnificadoService:
 
         existente = LancamentoAgregado.query.filter(
             LancamentoAgregado.cartao_id == cartao_id,
+            PerfilFinanceiroService.condicao_perfil(LancamentoAgregado),
             LancamentoAgregado.mes_fatura == competencia_base,
             LancamentoAgregado.data_compra == data_compra,
             LancamentoAgregado.valor == valor,

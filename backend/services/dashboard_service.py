@@ -21,6 +21,7 @@ try:
         ReceitaRealizada,
     )
     from backend.services.cartao_service import CartaoService
+    from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import (
         db,
@@ -38,6 +39,7 @@ except ImportError:
         ReceitaRealizada,
     )
     from services.cartao_service import CartaoService
+    from services.perfil_financeiro_service import PerfilFinanceiroService
 
 
 def _decimal(value):
@@ -54,6 +56,10 @@ def _float(value):
 
 def _round(value):
     return round(_float(value), 2)
+
+
+def _perfil_cond(model):
+    return PerfilFinanceiroService.condicao_perfil(model)
 
 
 def _periodo_mes(mes_referencia=None):
@@ -107,11 +113,13 @@ def _filtro_conta_nao_fatura_cartao():
 
 def _receitas_previstas(periodo):
     total_realizado = db.session.query(func.coalesce(func.sum(ReceitaRealizada.valor_recebido), 0)).filter(
+        _perfil_cond(ReceitaRealizada),
         extract('month', ReceitaRealizada.mes_referencia) == periodo.month,
         extract('year', ReceitaRealizada.mes_referencia) == periodo.year,
     ).scalar()
 
     total_orcado = db.session.query(func.coalesce(func.sum(ReceitaOrcamento.valor_esperado), 0)).filter(
+        _perfil_cond(ReceitaOrcamento),
         extract('month', ReceitaOrcamento.mes_referencia) == periodo.month,
         extract('year', ReceitaOrcamento.mes_referencia) == periodo.year,
     ).scalar()
@@ -121,12 +129,14 @@ def _receitas_previstas(periodo):
 
 def _despesas_previstas(periodo):
     total_contas = db.session.query(func.coalesce(func.sum(Conta.valor), 0)).filter(
+        _perfil_cond(Conta),
         extract('month', Conta.mes_referencia) == periodo.month,
         extract('year', Conta.mes_referencia) == periodo.year,
         _filtro_conta_nao_fatura_cartao(),
     ).scalar()
 
     total_previstas = db.session.query(func.coalesce(func.sum(DespesaPrevista.valor_previsto), 0)).filter(
+        _perfil_cond(DespesaPrevista),
         extract('month', DespesaPrevista.data_atual_prevista) == periodo.month,
         extract('year', DespesaPrevista.data_atual_prevista) == periodo.year,
         DespesaPrevista.status.in_(['PREVISTA', 'ADIADA']),
@@ -139,6 +149,7 @@ def _total_faturas_periodo(periodo):
     total = Decimal('0')
     quantidade = 0
     faturas = Conta.query.filter(
+        _perfil_cond(Conta),
         Conta.is_fatura_cartao == True,
         extract('month', Conta.mes_referencia) == periodo.month,
         extract('year', Conta.mes_referencia) == periodo.year,
@@ -154,29 +165,43 @@ def _total_faturas_periodo(periodo):
 
 
 def _recorrencias_ativas():
-    recorrencias = ItemDespesa.query.filter_by(recorrente=True, ativo=True).all()
+    recorrencias = ItemDespesa.query.filter(
+        _perfil_cond(ItemDespesa),
+        ItemDespesa.recorrente == True,
+        ItemDespesa.ativo == True,
+    ).all()
     total = sum((_decimal(item.valor) for item in recorrencias), Decimal('0'))
     return len(recorrencias), total
 
 
 def _saldo_contas():
     total = db.session.query(func.coalesce(func.sum(ContaBancaria.saldo_atual), 0)).filter(
+        _perfil_cond(ContaBancaria),
         ContaBancaria.status == 'ATIVO'
     ).scalar()
     return _decimal(total)
 
 
 def _cartoes_limites(periodo):
-    cartoes = ItemDespesa.query.filter_by(tipo='Agregador', ativo=True).order_by(ItemDespesa.nome).all()
+    cartoes = ItemDespesa.query.filter(
+        _perfil_cond(ItemDespesa),
+        ItemDespesa.tipo == 'Agregador',
+        ItemDespesa.ativo == True,
+    ).order_by(ItemDespesa.nome).all()
     resultado = []
     limite_total_geral = Decimal('0')
     utilizado_total_geral = Decimal('0')
 
     for cartao in cartoes:
-        limites = CartaoCategoriaLimite.query.filter_by(cartao_id=cartao.id, ativo=True).all()
+        limites = CartaoCategoriaLimite.query.filter(
+            _perfil_cond(CartaoCategoriaLimite),
+            CartaoCategoriaLimite.cartao_id == cartao.id,
+            CartaoCategoriaLimite.ativo == True,
+        ).all()
         limite_total = sum((_decimal(limite.limite_mensal) for limite in limites), Decimal('0'))
         utilizado = db.session.query(func.coalesce(func.sum(LancamentoAgregado.valor), 0)).filter(
             LancamentoAgregado.cartao_id == cartao.id,
+            _perfil_cond(LancamentoAgregado),
             extract('month', LancamentoAgregado.mes_fatura) == periodo.month,
             extract('year', LancamentoAgregado.mes_fatura) == periodo.year,
         ).scalar()
@@ -207,7 +232,10 @@ def _cartoes_limites(periodo):
 
 
 def _categorias_cartao(periodo):
-    limites = CartaoCategoriaLimite.query.filter_by(ativo=True).all()
+    limites = CartaoCategoriaLimite.query.filter(
+        _perfil_cond(CartaoCategoriaLimite),
+        CartaoCategoriaLimite.ativo == True,
+    ).all()
     categorias = {}
 
     for limite in limites:
@@ -229,6 +257,7 @@ def _categorias_cartao(periodo):
         func.coalesce(func.sum(LancamentoAgregado.valor), 0),
     ).filter(
         LancamentoAgregado.categoria_cartao_id.isnot(None),
+        _perfil_cond(LancamentoAgregado),
         extract('month', LancamentoAgregado.mes_fatura) == periodo.month,
         extract('year', LancamentoAgregado.mes_fatura) == periodo.year,
     ).group_by(LancamentoAgregado.categoria_cartao_id).all()
@@ -271,6 +300,7 @@ def _contas_a_vencer_7_dias():
     hoje = date.today()
     fim = hoje + timedelta(days=7)
     contas = Conta.query.filter(
+        _perfil_cond(Conta),
         Conta.data_vencimento.between(hoje, fim),
         Conta.status_pagamento == 'Pendente',
     ).order_by(Conta.data_vencimento).limit(8).all()

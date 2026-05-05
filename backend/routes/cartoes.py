@@ -5,6 +5,7 @@ from flask import Blueprint, request, jsonify, current_app
 from backend.models import db, ItemDespesa, ConfigAgregador, ItemAgregado, OrcamentoAgregado, LancamentoAgregado, Categoria
 from backend.services.cartao_service import CartaoService
 from backend.services.categoria_cartao_service import CategoriaCartaoService
+from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import func, and_
@@ -23,6 +24,24 @@ def _business_error(message, status=400):
     return jsonify({'success': False, 'error': message}), status
 
 
+def _perfil_id():
+    return PerfilFinanceiroService.obter_perfil_ativo_id()
+
+
+def _query_cartoes():
+    return PerfilFinanceiroService.aplicar_perfil_query(ItemDespesa.query, ItemDespesa).filter(
+        ItemDespesa.tipo == 'Agregador',
+    )
+
+
+def _obter_cartao(cartao_id):
+    return _query_cartoes().filter(ItemDespesa.id == cartao_id).first()
+
+
+def _query_lancamentos():
+    return PerfilFinanceiroService.aplicar_perfil_query(LancamentoAgregado.query, LancamentoAgregado)
+
+
 # ============================================================================
 # ROTAS PARA CARTÃ•ES DE CRÃ‰DITO (ItemDespesa tipo='Agregador')
 # ============================================================================
@@ -31,7 +50,7 @@ def _business_error(message, status=400):
 def listar_cartoes():
     """Lista todos os cartÃµes de crÃ©dito"""
     try:
-        cartoes = ItemDespesa.query.filter_by(tipo='Agregador', ativo=True).all()
+        cartoes = _query_cartoes().filter(ItemDespesa.ativo == True).all()
         resultado = []
 
         for cartao in cartoes:
@@ -53,7 +72,7 @@ def listar_cartoes():
 def obter_cartao(id):
     """ObtÃ©m detalhes de um cartÃ£o especÃ­fico"""
     try:
-        cartao = ItemDespesa.query.filter_by(id=id, tipo='Agregador').first()
+        cartao = _obter_cartao(id)
         if not cartao:
             return _business_error('Recurso nao encontrado', 404)
 
@@ -77,12 +96,16 @@ def criar_cartao():
         # Se nÃ£o especificou categoria, usa a categoria padrÃ£o "CartÃµes de CrÃ©dito"
         categoria_id = dados.get('categoria_id')
         if not categoria_id:
-            categoria_padrao = Categoria.query.filter_by(nome='Cartoes de Credito').first()
+            categoria_padrao = Categoria.query.filter(
+                Categoria.nome == 'Cartoes de Credito',
+                PerfilFinanceiroService.condicao_perfil(Categoria),
+            ).first()
             if categoria_padrao:
                 categoria_id = categoria_padrao.id
 
         # Criar o ItemDespesa
         novo_cartao = ItemDespesa(
+            perfil_financeiro_id=_perfil_id(),
             categoria_id=categoria_id,
             nome=dados['nome'],
             tipo='Agregador',
@@ -123,7 +146,7 @@ def criar_cartao():
 def atualizar_cartao(id):
     """Atualiza um cartÃ£o existente"""
     try:
-        cartao = ItemDespesa.query.filter_by(id=id, tipo='Agregador').first()
+        cartao = _obter_cartao(id)
         if not cartao:
             return _business_error('Recurso nao encontrado', 404)
 
@@ -171,7 +194,7 @@ def revelar_codigo_seguranca(id):
         if senha != senha_mestre:
             return _business_error('Senha incorreta', 401)
 
-        cartao = ItemDespesa.query.filter_by(id=id, tipo='Agregador').first()
+        cartao = _obter_cartao(id)
         if not cartao or not cartao.config_agregador:
             return _business_error('Cartao nao encontrado', 404)
 
@@ -185,7 +208,7 @@ def revelar_codigo_seguranca(id):
 def excluir_cartao(id):
     """Exclui (desativa) um cartÃ£o"""
     try:
-        cartao = ItemDespesa.query.filter_by(id=id, tipo='Agregador').first()
+        cartao = _obter_cartao(id)
         if not cartao:
             return _business_error('Recurso nao encontrado', 404)
 
@@ -293,9 +316,7 @@ def excluir_item_agregado(item_id):
             return _business_error('Recurso nao encontrado', 404)
 
         # Verificar se existem lanÃ§amentos (Teste 5 do roteiro)
-        total_lancamentos = LancamentoAgregado.query.filter_by(
-            item_agregado_id=item_id
-        ).count()
+        total_lancamentos = _query_lancamentos().filter_by(item_agregado_id=item_id).count()
 
         if total_lancamentos > 0:
             return jsonify({
@@ -337,6 +358,7 @@ def listar_categorias_limite(cartao_id):
                 LancamentoAgregado.cartao_id == cartao_id,
                 LancamentoAgregado.categoria_cartao_id == limite.categoria_cartao_id,
                 LancamentoAgregado.mes_fatura == mes_ref_date,
+                PerfilFinanceiroService.condicao_perfil(LancamentoAgregado),
             ).scalar() or 0
             gasto_atual = float(gasto_atual)
             limite_mensal = float(limite.limite_mensal or 0)
@@ -605,7 +627,7 @@ def listar_lancamentos(item_id):
     try:
         mes_fatura = request.args.get('mes_fatura')
 
-        query = LancamentoAgregado.query.filter_by(item_agregado_id=item_id)
+        query = _query_lancamentos().filter_by(item_agregado_id=item_id)
 
         if mes_fatura:
             # Converter para primeiro dia do mÃªs
@@ -700,7 +722,9 @@ def listar_todos_lancamentos_cartao(cartao_id):
         mes_fatura = request.args.get('mes_fatura')
 
         # Query base: todos os lanÃ§amentos do cartÃ£o
-        query = LancamentoAgregado.query.filter_by(cartao_id=cartao_id)
+        if not _obter_cartao(cartao_id):
+            return _business_error('Recurso nao encontrado', 404)
+        query = _query_lancamentos().filter_by(cartao_id=cartao_id)
 
         # Filtro opcional por mÃªs
         if mes_fatura:
@@ -785,7 +809,7 @@ def criar_lancamento_sem_categoria(cartao_id):
 def atualizar_lancamento(lancamento_id):
     """Atualiza um lanÃ§amento"""
     try:
-        lancamento = LancamentoAgregado.query.get(lancamento_id)
+        lancamento = _query_lancamentos().filter_by(id=lancamento_id).first()
         if not lancamento:
             return _business_error('Recurso nao encontrado', 404)
 
@@ -816,7 +840,7 @@ def atualizar_lancamento(lancamento_id):
 def excluir_lancamento(lancamento_id):
     """Exclui um lanÃ§amento"""
     try:
-        lancamento = LancamentoAgregado.query.get(lancamento_id)
+        lancamento = _query_lancamentos().filter_by(id=lancamento_id).first()
         if not lancamento:
             return _business_error('Recurso nao encontrado', 404)
 
@@ -840,7 +864,7 @@ def obter_resumo_cartao(cartao_id):
         mes_ref_date = datetime.strptime(mes_referencia + '-01', '%Y-%m-%d').date()
 
         # Buscar cartÃ£o
-        cartao = ItemDespesa.query.filter_by(id=cartao_id, tipo='Agregador').first()
+        cartao = _obter_cartao(cartao_id)
         if not cartao:
             return _business_error('Recurso nao encontrado', 404)
 
@@ -865,7 +889,7 @@ def obter_resumo_cartao(cartao_id):
             ).first()
 
             # Buscar gastos do mÃªs (apenas lanÃ§amentos DESTA categoria)
-            gastos = LancamentoAgregado.query.filter_by(
+            gastos = _query_lancamentos().filter_by(
                 item_agregado_id=item.id,
                 mes_fatura=mes_ref_date
             ).all()

@@ -15,13 +15,19 @@ from decimal import Decimal
 try:
     from backend.models import db, ItemReceita, ReceitaOrcamento, ReceitaRealizada, ContratoConsorcio
     from backend.services.receita_service import ReceitaService
+    from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import db, ItemReceita, ReceitaOrcamento, ReceitaRealizada, ContratoConsorcio
     from services.receita_service import ReceitaService
+    from services.perfil_financeiro_service import PerfilFinanceiroService
 
 # Criar blueprint
 receitas_bp = Blueprint('receitas', __name__)
 logger = logging.getLogger(__name__)
+
+
+def _perfil_id():
+    return PerfilFinanceiroService.obter_perfil_ativo_id()
 
 
 def _internal_error(contexto='receitas'):
@@ -48,9 +54,13 @@ def _backfill_receitas_contemplacao_consorcios(ano: int | None = None) -> None:
     if not consorcios:
         return
 
-    item_padrao = ItemReceita.query.filter_by(nome='ContemplaÃ§Ã£o de ConsÃ³rcio').first()
+    item_padrao = ItemReceita.query.filter(
+        ItemReceita.nome == 'ContemplaÃ§Ã£o de ConsÃ³rcio',
+        PerfilFinanceiroService.condicao_perfil(ItemReceita),
+    ).first()
     if not item_padrao:
         item_padrao = ItemReceita(
+            perfil_financeiro_id=_perfil_id(),
             nome='ContemplaÃ§Ã£o de ConsÃ³rcio',
             tipo='OUTROS',
             descricao='Receita pontual gerada automaticamente por consÃ³rcio contemplado.',
@@ -74,6 +84,7 @@ def _backfill_receitas_contemplacao_consorcios(ano: int | None = None) -> None:
 
         existente = ReceitaRealizada.query.filter(
             ReceitaRealizada.item_receita_id == item_padrao.id,
+            PerfilFinanceiroService.condicao_perfil(ReceitaRealizada),
             ReceitaRealizada.mes_referencia == competencia,
             ReceitaRealizada.observacoes.ilike(f"%{marcador}%"),
         ).first()
@@ -94,6 +105,7 @@ def _backfill_receitas_contemplacao_consorcios(ano: int | None = None) -> None:
             continue
 
         receita = ReceitaRealizada(
+            perfil_financeiro_id=_perfil_id(),
             item_receita_id=item_padrao.id,
             data_recebimento=consorcio.mes_contemplacao,
             valor_recebido=consorcio.valor_premio,
@@ -158,7 +170,10 @@ def buscar_item(id):
         JSON com dados do item
     """
     try:
-        item = ItemReceita.query.get(id)
+        item = ItemReceita.query.filter(
+            ItemReceita.id == id,
+            PerfilFinanceiroService.condicao_perfil(ItemReceita),
+        ).first()
 
         if not item:
             return jsonify({
@@ -218,12 +233,14 @@ def criar_item():
                 for i in range(12):
                     # Verificar se jÃ¡ existe
                     orcamento_existente = ReceitaOrcamento.query.filter(
+                        PerfilFinanceiroService.condicao_perfil(ReceitaOrcamento),
                         ReceitaOrcamento.item_receita_id == item.id,
                         ReceitaOrcamento.mes_referencia == mes_referencia
                     ).first()
 
                     if not orcamento_existente:
                         novo_orcamento = ReceitaOrcamento(
+                            perfil_financeiro_id=_perfil_id(),
                             item_receita_id=item.id,
                             mes_referencia=mes_referencia,
                             valor_esperado=item.valor_base_mensal,
@@ -295,12 +312,14 @@ def atualizar_item(id):
                 for i in range(12):
                     # Verificar se jÃ¡ existe
                     orcamento_existente = ReceitaOrcamento.query.filter(
+                        PerfilFinanceiroService.condicao_perfil(ReceitaOrcamento),
                         ReceitaOrcamento.item_receita_id == item.id,
                         ReceitaOrcamento.mes_referencia == mes_referencia
                     ).first()
 
                     if not orcamento_existente:
                         novo_orcamento = ReceitaOrcamento(
+                            perfil_financeiro_id=_perfil_id(),
                             item_receita_id=item.id,
                             mes_referencia=mes_referencia,
                             valor_esperado=item.valor_base_mensal,
@@ -568,7 +587,10 @@ def buscar_realizada(id):
         JSON com dados da receita
     """
     try:
-        receita = ReceitaRealizada.query.get(id)
+        receita = ReceitaRealizada.query.filter(
+            ReceitaRealizada.id == id,
+            PerfilFinanceiroService.condicao_perfil(ReceitaRealizada),
+        ).first()
 
         if not receita:
             return jsonify({
@@ -593,7 +615,10 @@ def atualizar_realizada(id):
     Body (JSON): mesmos campos do POST /realizadas
     """
     try:
-        receita_antes = ReceitaRealizada.query.get(id)
+        receita_antes = ReceitaRealizada.query.filter(
+            ReceitaRealizada.id == id,
+            PerfilFinanceiroService.condicao_perfil(ReceitaRealizada),
+        ).first()
         if not receita_antes:
             return jsonify({'success': False, 'error': 'Receita nÃ£o encontrada'}), 404
 
@@ -607,7 +632,10 @@ def atualizar_realizada(id):
 
         # Default de conta bancÃ¡ria: se nÃ£o veio no payload, tenta herdar da fonte
         if not data.get('conta_bancaria_id') and data.get('item_receita_id'):
-            item = ItemReceita.query.get(data.get('item_receita_id'))
+            item = ItemReceita.query.filter(
+                ItemReceita.id == data.get('item_receita_id'),
+                PerfilFinanceiroService.condicao_perfil(ItemReceita),
+            ).first()
             if item and item.conta_bancaria_id:
                 data['conta_bancaria_id'] = item.conta_bancaria_id
 
@@ -626,7 +654,11 @@ def atualizar_realizada(id):
             from services.conta_bancaria_service import ContaBancariaService
             from models import MovimentoFinanceiro
 
-        mov = MovimentoFinanceiro.query.filter_by(receita_realizada_id=receita.id, origem='RECEITA').first()
+        mov = MovimentoFinanceiro.query.filter_by(
+            receita_realizada_id=receita.id,
+            origem='RECEITA',
+            perfil_financeiro_id=_perfil_id(),
+        ).first()
         contas_recalc = set()
         if receita_antes.conta_bancaria_id:
             contas_recalc.add(receita_antes.conta_bancaria_id)
@@ -713,7 +745,10 @@ def criar_realizada():
                 from backend.models import ItemReceita
             except ImportError:
                 from models import ItemReceita
-            item = ItemReceita.query.get(data.get('item_receita_id'))
+            item = ItemReceita.query.filter(
+                ItemReceita.id == data.get('item_receita_id'),
+                PerfilFinanceiroService.condicao_perfil(ItemReceita),
+            ).first()
             if item and item.conta_bancaria_id:
                 data['conta_bancaria_id'] = item.conta_bancaria_id
 
@@ -730,7 +765,8 @@ def criar_realizada():
         if receita.conta_bancaria_id:
             existe = MovimentoFinanceiro.query.filter_by(
                 receita_realizada_id=receita.id,
-                origem='RECEITA'
+                origem='RECEITA',
+                perfil_financeiro_id=_perfil_id(),
             ).first()
             if not existe:
                 ContaBancariaService.criar_movimento(
@@ -811,7 +847,10 @@ def criar_receita_pontual():
                 }), 400
 
         # Verificar se a conta bancÃ¡ria existe
-        conta = ContaBancaria.query.get(data['conta_bancaria_id'])
+        conta = ContaBancaria.query.filter(
+            ContaBancaria.id == data['conta_bancaria_id'],
+            PerfilFinanceiroService.condicao_perfil(ContaBancaria),
+        ).first()
         if not conta:
             return jsonify({
                 'success': False,
@@ -826,6 +865,7 @@ def criar_receita_pontual():
 
         # Criar receita realizada sem item_receita_id e orcamento_id
         receita = ReceitaRealizada(
+            perfil_financeiro_id=_perfil_id(),
             item_receita_id=None,  # Receita pontual nÃ£o tem fonte fixa
             orcamento_id=None,     # NÃ£o vinculada a orÃ§amento
             conta_bancaria_id=data['conta_bancaria_id'],
@@ -888,7 +928,10 @@ def deletar_realizada(id):
         from models import MovimentoFinanceiro
 
     try:
-        receita = ReceitaRealizada.query.get(id)
+        receita = ReceitaRealizada.query.filter(
+            ReceitaRealizada.id == id,
+            PerfilFinanceiroService.condicao_perfil(ReceitaRealizada),
+        ).first()
 
         if not receita:
             return jsonify({
@@ -897,7 +940,12 @@ def deletar_realizada(id):
             }), 404
 
         # Remover movimento financeiro vinculado (se existir) e recalcular saldo
-        movimentos = MovimentoFinanceiro.query.filter_by(receita_realizada_id=receita.id, origem='RECEITA').all()
+        movimentos = MovimentoFinanceiro.query.filter_by(
+            receita_realizada_id=receita.id,
+            origem='RECEITA',
+        ).filter(
+            PerfilFinanceiroService.condicao_perfil(MovimentoFinanceiro),
+        ).all()
         contas_para_recalcular = {m.conta_bancaria_id for m in movimentos}
         for m in movimentos:
             db.session.delete(m)

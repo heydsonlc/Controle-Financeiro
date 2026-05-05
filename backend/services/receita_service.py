@@ -14,11 +14,32 @@ from decimal import Decimal
 
 try:
     from backend.models import db, ItemReceita, ReceitaOrcamento, ReceitaRealizada, ContaPatrimonio
+    from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import db, ItemReceita, ReceitaOrcamento, ReceitaRealizada, ContaPatrimonio
+    from services.perfil_financeiro_service import PerfilFinanceiroService
 
 
 class ReceitaService:
+    """
+    Servico para gerenciamento completo de receitas
+    """
+
+    @staticmethod
+    def _perfil_id():
+        return PerfilFinanceiroService.obter_perfil_ativo_id()
+
+    @staticmethod
+    def _query_itens():
+        return PerfilFinanceiroService.aplicar_perfil_query(ItemReceita.query, ItemReceita)
+
+    @staticmethod
+    def _query_orcamentos():
+        return PerfilFinanceiroService.aplicar_perfil_query(ReceitaOrcamento.query, ReceitaOrcamento)
+
+    @staticmethod
+    def _query_realizadas():
+        return PerfilFinanceiroService.aplicar_perfil_query(ReceitaRealizada.query, ReceitaRealizada)
     """
     Serviço para gerenciamento completo de receitas
     """
@@ -64,12 +85,13 @@ class ReceitaService:
             raise ValueError(f'Tipo inválido. Use um dos seguintes: {", ".join(tipos_validos)}')
 
         # Verificar se já existe
-        existe = ItemReceita.query.filter_by(nome=dados['nome']).first()
+        existe = ReceitaService._query_itens().filter_by(nome=dados['nome']).first()
         if existe:
             raise ValueError('Já existe uma fonte de receita com este nome')
 
         # Criar
         item = ItemReceita(
+            perfil_financeiro_id=ReceitaService._perfil_id(),
             nome=dados['nome'],
             tipo=dados['tipo'],
             descricao=dados.get('descricao', ''),
@@ -98,7 +120,7 @@ class ReceitaService:
         Returns:
             list[ItemReceita]: Lista de fontes
         """
-        query = ItemReceita.query
+        query = ReceitaService._query_itens()
 
         if tipo:
             query = query.filter_by(tipo=tipo)
@@ -123,7 +145,7 @@ class ReceitaService:
         Raises:
             ValueError: Se item não encontrado ou dados inválidos
         """
-        item = ItemReceita.query.get(item_id)
+        item = ReceitaService._query_itens().filter(ItemReceita.id == item_id).first()
         if not item:
             raise ValueError('Fonte de receita não encontrada')
 
@@ -132,7 +154,8 @@ class ReceitaService:
             # Verificar duplicidade
             existe = ItemReceita.query.filter(
                 ItemReceita.nome == dados['nome'],
-                ItemReceita.id != item_id
+                ItemReceita.id != item_id,
+                ItemReceita.perfil_financeiro_id == ReceitaService._perfil_id(),
             ).first()
             if existe:
                 raise ValueError('Já existe outra fonte com este nome')
@@ -174,7 +197,7 @@ class ReceitaService:
         Returns:
             ItemReceita: Item inativado
         """
-        item = ItemReceita.query.get(item_id)
+        item = ReceitaService._query_itens().filter(ItemReceita.id == item_id).first()
         if not item:
             raise ValueError('Fonte de receita não encontrada')
 
@@ -210,7 +233,7 @@ class ReceitaService:
         ano_mes = ano_mes.replace(day=1)
 
         # Verificar se já existe
-        orcamento = ReceitaOrcamento.query.filter_by(
+        orcamento = ReceitaService._query_orcamentos().filter_by(
             item_receita_id=item_receita_id,
             mes_referencia=ano_mes
         ).first()
@@ -224,6 +247,7 @@ class ReceitaService:
         else:
             # Criar novo
             orcamento = ReceitaOrcamento(
+                perfil_financeiro_id=ReceitaService._perfil_id(),
                 item_receita_id=item_receita_id,
                 mes_referencia=ano_mes,
                 valor_esperado=valor_previsto,
@@ -293,7 +317,7 @@ class ReceitaService:
         data_inicio = date(ano, 1, 1)
         data_fim = date(ano, 12, 31)
 
-        return ReceitaOrcamento.query.filter(
+        return ReceitaService._query_orcamentos().filter(
             ReceitaOrcamento.mes_referencia >= data_inicio,
             ReceitaOrcamento.mes_referencia <= data_fim
         ).order_by(ReceitaOrcamento.mes_referencia, ReceitaOrcamento.item_receita_id).all()
@@ -346,13 +370,14 @@ class ReceitaService:
             competencia = data_recebimento.replace(day=1)
 
         # Procurar orçamento correspondente
-        orcamento = ReceitaOrcamento.query.filter_by(
+        orcamento = ReceitaService._query_orcamentos().filter_by(
             item_receita_id=dados_receita['item_receita_id'],
             mes_referencia=competencia
         ).first()
 
         # Criar receita realizada
         receita = ReceitaRealizada(
+            perfil_financeiro_id=ReceitaService._perfil_id(),
             item_receita_id=dados_receita['item_receita_id'],
             data_recebimento=data_recebimento,
             valor_recebido=dados_receita['valor_recebido'],
@@ -381,7 +406,7 @@ class ReceitaService:
         Returns:
             ReceitaRealizada | None: Receita atualizada ou None se não encontrada
         """
-        receita = ReceitaRealizada.query.get(id)
+        receita = ReceitaService._query_realizadas().filter(ReceitaRealizada.id == id).first()
         if not receita:
             return None
 
@@ -406,7 +431,7 @@ class ReceitaService:
         else:
             competencia = data_recebimento.replace(day=1)
 
-        orcamento = ReceitaOrcamento.query.filter_by(
+        orcamento = ReceitaService._query_orcamentos().filter_by(
             item_receita_id=dados_receita['item_receita_id'],
             mes_referencia=competencia
         ).first()
@@ -436,7 +461,7 @@ class ReceitaService:
         Returns:
             list[ReceitaRealizada]: Lista de receitas
         """
-        query = ReceitaRealizada.query
+        query = ReceitaService._query_realizadas()
 
         if ano_mes:
             if isinstance(ano_mes, str):
@@ -474,6 +499,8 @@ class ReceitaService:
             ItemReceita.tipo,
             func.sum(ReceitaOrcamento.valor_esperado).label('total_previsto')
         ).join(ItemReceita).filter(
+            ReceitaOrcamento.perfil_financeiro_id == ReceitaService._perfil_id(),
+            ItemReceita.perfil_financeiro_id == ReceitaService._perfil_id(),
             ReceitaOrcamento.mes_referencia >= data_inicio,
             ReceitaOrcamento.mes_referencia <= data_fim
         ).group_by('mes', ItemReceita.tipo).all()
@@ -484,6 +511,7 @@ class ReceitaService:
             func.coalesce(ItemReceita.tipo, 'PONTUAL').label('tipo'),
             func.sum(ReceitaRealizada.valor_recebido).label('total_recebido')
         ).outerjoin(ItemReceita, ReceitaRealizada.item_receita_id == ItemReceita.id).filter(
+            ReceitaRealizada.perfil_financeiro_id == ReceitaService._perfil_id(),
             ReceitaRealizada.mes_referencia >= data_inicio,
             ReceitaRealizada.mes_referencia <= data_fim
         ).group_by('mes', 'tipo').all()
@@ -494,6 +522,7 @@ class ReceitaService:
             func.coalesce(ItemReceita.tipo, 'PONTUAL').label('tipo'),
             func.sum(ReceitaRealizada.valor_recebido).label('total_recebido')
         ).outerjoin(ItemReceita, ReceitaRealizada.item_receita_id == ItemReceita.id).filter(
+            ReceitaRealizada.perfil_financeiro_id == ReceitaService._perfil_id(),
             ReceitaRealizada.mes_referencia >= data_inicio,
             ReceitaRealizada.mes_referencia <= data_fim,
             ReceitaRealizada.orcamento_id.is_(None)
@@ -565,6 +594,8 @@ class ReceitaService:
             ItemReceita.tipo,
             func.sum(ReceitaOrcamento.valor_esperado).label('total_previsto')
         ).join(ItemReceita).filter(
+            ReceitaOrcamento.perfil_financeiro_id == ReceitaService._perfil_id(),
+            ItemReceita.perfil_financeiro_id == ReceitaService._perfil_id(),
             ReceitaOrcamento.mes_referencia >= ano_mes_ini,
             ReceitaOrcamento.mes_referencia <= ano_mes_fim
         ).group_by(
@@ -577,6 +608,7 @@ class ReceitaService:
             ReceitaRealizada.item_receita_id,
             func.sum(ReceitaRealizada.valor_recebido).label('total_recebido')
         ).filter(
+            ReceitaRealizada.perfil_financeiro_id == ReceitaService._perfil_id(),
             ReceitaRealizada.mes_referencia >= ano_mes_ini,
             ReceitaRealizada.mes_referencia <= ano_mes_fim
         ).group_by(ReceitaRealizada.item_receita_id).all()
@@ -636,19 +668,19 @@ class ReceitaService:
         data_fim = date(ano, 12, 31)
 
         # Buscar item
-        item = ItemReceita.query.get(item_receita_id)
+        item = ReceitaService._query_itens().filter(ItemReceita.id == item_receita_id).first()
         if not item:
             raise ValueError('Fonte de receita não encontrada')
 
         # Buscar orçamentos
-        orcamentos = ReceitaOrcamento.query.filter(
+        orcamentos = ReceitaService._query_orcamentos().filter(
             ReceitaOrcamento.item_receita_id == item_receita_id,
             ReceitaOrcamento.mes_referencia >= data_inicio,
             ReceitaOrcamento.mes_referencia <= data_fim
         ).order_by(ReceitaOrcamento.mes_referencia).all()
 
         # Buscar realizadas
-        realizadas = ReceitaRealizada.query.filter(
+        realizadas = ReceitaService._query_realizadas().filter(
             ReceitaRealizada.item_receita_id == item_receita_id,
             ReceitaRealizada.mes_referencia >= data_inicio,
             ReceitaRealizada.mes_referencia <= data_fim

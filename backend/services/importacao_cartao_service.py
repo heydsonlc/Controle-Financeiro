@@ -32,9 +32,11 @@ from sqlalchemy import func
 try:
     from backend.models import db, ItemDespesa, LancamentoAgregado
     from backend.services.categoria_cartao_service import CategoriaCartaoService
+    from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import db, ItemDespesa, LancamentoAgregado
     from services.categoria_cartao_service import CategoriaCartaoService
+    from services.perfil_financeiro_service import PerfilFinanceiroService
 
 
 class ImportacaoCartaoService:
@@ -243,6 +245,7 @@ class ImportacaoCartaoService:
         """
         despesa_fixa = ItemDespesa.query.filter(
             ItemDespesa.recorrente == True,
+            PerfilFinanceiroService.condicao_perfil(ItemDespesa),
             ItemDespesa.meio_pagamento == 'cartao',
             ItemDespesa.cartao_id == cartao_id,
             func.lower(ItemDespesa.nome) == descricao_normalizada.lower()
@@ -377,7 +380,8 @@ class ImportacaoCartaoService:
                     LancamentoAgregado.descricao
                 )
             ) == descricao_normalizada.lower(),
-            LancamentoAgregado.categoria_id.isnot(None)
+            LancamentoAgregado.categoria_id.isnot(None),
+            PerfilFinanceiroService.condicao_perfil(LancamentoAgregado),
         ).order_by(LancamentoAgregado.id.desc()).first()
 
         if registro and registro.categoria_id:
@@ -569,6 +573,7 @@ class ImportacaoCartaoService:
 
         existente = LancamentoAgregado.query.filter(
             LancamentoAgregado.cartao_id == lanc['cartao_id'],
+            PerfilFinanceiroService.condicao_perfil(LancamentoAgregado),
             LancamentoAgregado.mes_fatura == lanc['mes_fatura'],
             LancamentoAgregado.data_compra == lanc['data_compra'],
             LancamentoAgregado.valor == lanc['valor'],
@@ -635,6 +640,7 @@ class ImportacaoCartaoService:
 
                 # Criar novo lanÃ§amento
                 novo_lanc = LancamentoAgregado(
+                    perfil_financeiro_id=PerfilFinanceiroService.obter_perfil_ativo_id(),
                     descricao=lanc['descricao'],
                     descricao_original=lanc['descricao_original'],
                     descricao_original_normalizada=lanc['descricao_original_normalizada'],

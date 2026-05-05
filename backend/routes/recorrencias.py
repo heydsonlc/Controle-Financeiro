@@ -14,10 +14,12 @@ from sqlalchemy import or_
 try:
     from backend.models import db, ItemDespesa, Categoria
     from backend.services.categoria_cartao_service import CategoriaCartaoService
+    from backend.services.perfil_financeiro_service import PerfilFinanceiroService
     from backend.routes.despesas import calcular_competencia, gerar_execucao_despesa_recorrente
 except ImportError:
     from models import db, ItemDespesa, Categoria
     from services.categoria_cartao_service import CategoriaCartaoService
+    from services.perfil_financeiro_service import PerfilFinanceiroService
     from routes.despesas import calcular_competencia, gerar_execucao_despesa_recorrente
 
 
@@ -78,6 +80,10 @@ def _normalizar_tipo_recorrencia(dados):
         return tipo
 
     return 'mensal'
+
+
+def _perfil_id():
+    return PerfilFinanceiroService.obter_perfil_ativo_id()
 
 
 def _detalhes_frequencia(tipo_recorrencia):
@@ -175,7 +181,7 @@ def _item_to_dict(item):
 
 
 def _query_recorrencias():
-    return ItemDespesa.query.filter(
+    return PerfilFinanceiroService.aplicar_perfil_query(ItemDespesa.query, ItemDespesa).filter(
         ItemDespesa.recorrente == True,  # noqa: E712
         or_(ItemDespesa.tipo.is_(None), ItemDespesa.tipo != 'Consorcio'),
     )
@@ -227,7 +233,10 @@ def criar_recorrencia():
             return jsonify({'success': False, 'error': 'Valor e obrigatorio'}), 400
         if not categoria_id:
             return jsonify({'success': False, 'error': 'Categoria e obrigatoria'}), 400
-        if not Categoria.query.get(categoria_id):
+        if not Categoria.query.filter(
+            Categoria.id == categoria_id,
+            PerfilFinanceiroService.condicao_perfil(Categoria),
+        ).first():
             return jsonify({'success': False, 'error': 'Categoria nao encontrada'}), 404
 
         tipo_recorrencia = _normalizar_tipo_recorrencia(dados)
@@ -251,6 +260,7 @@ def criar_recorrencia():
             categoria_cartao_id = None
 
         item = ItemDespesa(
+            perfil_financeiro_id=_perfil_id(),
             nome=nome,
             descricao=dados.get('descricao'),
             valor=valor,
@@ -304,7 +314,10 @@ def atualizar_recorrencia(item_id):
                 item.valor = valor
         if 'categoria_id' in dados:
             categoria_id = _to_int(dados.get('categoria_id'))
-            if categoria_id and Categoria.query.get(categoria_id):
+            if categoria_id and Categoria.query.filter(
+                Categoria.id == categoria_id,
+                PerfilFinanceiroService.condicao_perfil(Categoria),
+            ).first():
                 item.categoria_id = categoria_id
         if 'data_vencimento' in dados:
             item.data_vencimento = _to_date(dados.get('data_vencimento'))

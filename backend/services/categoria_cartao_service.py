@@ -12,6 +12,7 @@ try:
         CategoriaCartaoDespesa,
         ItemDespesa,
     )
+    from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import (
         db,
@@ -21,12 +22,17 @@ except ImportError:
         CategoriaCartaoDespesa,
         ItemDespesa,
     )
+    from services.perfil_financeiro_service import PerfilFinanceiroService
 
 
 class CategoriaCartaoService:
     @staticmethod
+    def _perfil_id():
+        return PerfilFinanceiroService.obter_perfil_ativo_id()
+
+    @staticmethod
     def listar_categorias(ativo=None):
-        query = CategoriaCartao.query
+        query = PerfilFinanceiroService.aplicar_perfil_query(CategoriaCartao.query, CategoriaCartao)
         if ativo is not None:
             query = query.filter(CategoriaCartao.ativo == bool(ativo))
         return query.order_by(CategoriaCartao.nome.asc()).all()
@@ -37,6 +43,7 @@ class CategoriaCartaoService:
         CategoriaCartaoService._validar_nome_unico(nome)
 
         categoria = CategoriaCartao(
+            perfil_financeiro_id=CategoriaCartaoService._perfil_id(),
             nome=nome,
             descricao=(descricao or '').strip() or None,
             cor=cor or '#6c757d',
@@ -78,7 +85,10 @@ class CategoriaCartaoService:
     @staticmethod
     def listar_despesas_vinculadas(categoria_cartao_id, ativo=None):
         CategoriaCartaoService._validar_categoria_cartao(categoria_cartao_id)
-        query = CategoriaCartaoDespesa.query.filter_by(categoria_cartao_id=int(categoria_cartao_id))
+        query = CategoriaCartaoDespesa.query.filter_by(
+            categoria_cartao_id=int(categoria_cartao_id),
+            perfil_financeiro_id=CategoriaCartaoService._perfil_id(),
+        )
         if ativo is not None:
             query = query.filter(CategoriaCartaoDespesa.ativo == bool(ativo))
         return query.order_by(CategoriaCartaoDespesa.id.asc()).all()
@@ -97,6 +107,7 @@ class CategoriaCartaoService:
         existente = CategoriaCartaoDespesa.query.filter_by(
             categoria_cartao_id=categoria_cartao.id,
             categoria_id=categoria.id,
+            perfil_financeiro_id=CategoriaCartaoService._perfil_id(),
         ).first()
 
         if existente:
@@ -106,6 +117,7 @@ class CategoriaCartaoService:
             return existente, False
 
         vinculo = CategoriaCartaoDespesa(
+            perfil_financeiro_id=CategoriaCartaoService._perfil_id(),
             categoria_cartao_id=categoria_cartao.id,
             categoria_id=categoria.id,
             ativo=bool(ativo),
@@ -120,6 +132,7 @@ class CategoriaCartaoService:
         vinculo = CategoriaCartaoDespesa.query.filter_by(
             categoria_cartao_id=categoria_cartao_id,
             categoria_id=categoria_id,
+            perfil_financeiro_id=CategoriaCartaoService._perfil_id(),
         ).first()
         if not vinculo:
             raise ValueError('Vinculo nao encontrado')
@@ -137,8 +150,10 @@ class CategoriaCartaoService:
 
         vinculos = CategoriaCartaoDespesa.query.join(CategoriaCartao).filter(
             CategoriaCartaoDespesa.categoria_id == categoria_id,
+            PerfilFinanceiroService.condicao_perfil(CategoriaCartaoDespesa),
             CategoriaCartaoDespesa.ativo == True,
             CategoriaCartao.ativo == True,
+            PerfilFinanceiroService.condicao_perfil(CategoriaCartao),
         ).all()
 
         if len(vinculos) > 1:
@@ -150,7 +165,10 @@ class CategoriaCartaoService:
     @staticmethod
     def listar_limites_cartao(cartao_id, ativo=None):
         CategoriaCartaoService._validar_cartao(cartao_id)
-        query = CartaoCategoriaLimite.query.filter_by(cartao_id=int(cartao_id))
+        query = CartaoCategoriaLimite.query.filter_by(
+            cartao_id=int(cartao_id),
+            perfil_financeiro_id=CategoriaCartaoService._perfil_id(),
+        )
         if ativo is not None:
             query = query.filter(CartaoCategoriaLimite.ativo == bool(ativo))
         return query.order_by(CartaoCategoriaLimite.id.asc()).all()
@@ -171,6 +189,7 @@ class CategoriaCartaoService:
         existente = CartaoCategoriaLimite.query.filter_by(
             cartao_id=cartao.id,
             categoria_cartao_id=categoria_cartao.id,
+            perfil_financeiro_id=CategoriaCartaoService._perfil_id(),
         ).first()
 
         if existente:
@@ -183,6 +202,7 @@ class CategoriaCartaoService:
             return existente, False
 
         registro = CartaoCategoriaLimite(
+            perfil_financeiro_id=CategoriaCartaoService._perfil_id(),
             cartao_id=cartao.id,
             categoria_cartao_id=categoria_cartao.id,
             limite_mensal=limite,
@@ -229,8 +249,10 @@ class CategoriaCartaoService:
         return CartaoCategoriaLimite.query.join(CategoriaCartao).filter(
             CartaoCategoriaLimite.cartao_id == cartao_id,
             CartaoCategoriaLimite.categoria_cartao_id == categoria_cartao_id,
+            PerfilFinanceiroService.condicao_perfil(CartaoCategoriaLimite),
             CartaoCategoriaLimite.ativo == True,
             CategoriaCartao.ativo == True,
+            PerfilFinanceiroService.condicao_perfil(CategoriaCartao),
         ).first() is not None
 
     @staticmethod
@@ -242,6 +264,7 @@ class CategoriaCartaoService:
         return CartaoCategoriaLimite.query.filter_by(
             cartao_id=cartao_id,
             categoria_cartao_id=categoria_cartao_id,
+            perfil_financeiro_id=CategoriaCartaoService._perfil_id(),
             ativo=True,
         ).first()
 
@@ -289,7 +312,10 @@ class CategoriaCartaoService:
 
     @staticmethod
     def _validar_nome_unico(nome, ignorar_id=None):
-        query = CategoriaCartao.query.filter(func.lower(CategoriaCartao.nome) == nome.lower())
+        query = CategoriaCartao.query.filter(
+            func.lower(CategoriaCartao.nome) == nome.lower(),
+            PerfilFinanceiroService.condicao_perfil(CategoriaCartao),
+        )
         if ignorar_id:
             query = query.filter(CategoriaCartao.id != int(ignorar_id))
         if query.first():
@@ -300,7 +326,10 @@ class CategoriaCartaoService:
         categoria_cartao_id = CategoriaCartaoService._to_int(categoria_cartao_id)
         if not categoria_cartao_id:
             raise ValueError('categoria_cartao_id invalido')
-        categoria = CategoriaCartao.query.get(categoria_cartao_id)
+        categoria = CategoriaCartao.query.filter(
+            CategoriaCartao.id == categoria_cartao_id,
+            PerfilFinanceiroService.condicao_perfil(CategoriaCartao),
+        ).first()
         if not categoria:
             raise ValueError('Categoria do Cartao nao encontrada')
         return categoria
@@ -310,7 +339,10 @@ class CategoriaCartaoService:
         categoria_id = CategoriaCartaoService._to_int(categoria_id)
         if not categoria_id:
             raise ValueError('categoria_id invalido')
-        categoria = Categoria.query.get(categoria_id)
+        categoria = Categoria.query.filter(
+            Categoria.id == categoria_id,
+            PerfilFinanceiroService.condicao_perfil(Categoria),
+        ).first()
         if not categoria:
             raise ValueError('Categoria de despesa nao encontrada')
         return categoria
@@ -319,6 +351,7 @@ class CategoriaCartaoService:
     def _validar_categoria_despesa_sem_vinculo_ativo(categoria_id, ignorar_categoria_cartao_id=None):
         query = CategoriaCartaoDespesa.query.filter(
             CategoriaCartaoDespesa.categoria_id == categoria_id,
+            PerfilFinanceiroService.condicao_perfil(CategoriaCartaoDespesa),
             CategoriaCartaoDespesa.ativo == True,
         )
         if ignorar_categoria_cartao_id:
@@ -331,7 +364,10 @@ class CategoriaCartaoService:
         cartao_id = CategoriaCartaoService._to_int(cartao_id)
         if not cartao_id:
             raise ValueError('cartao_id invalido')
-        cartao = ItemDespesa.query.get(cartao_id)
+        cartao = ItemDespesa.query.filter(
+            ItemDespesa.id == cartao_id,
+            PerfilFinanceiroService.condicao_perfil(ItemDespesa),
+        ).first()
         if not cartao or cartao.tipo != 'Agregador':
             raise ValueError('Cartao invalido')
         return cartao
@@ -344,6 +380,7 @@ class CategoriaCartaoService:
         limite = CartaoCategoriaLimite.query.filter_by(
             id=limite_id,
             cartao_id=int(cartao_id),
+            perfil_financeiro_id=CategoriaCartaoService._perfil_id(),
         ).first()
         if not limite:
             raise ValueError('Limite nao encontrado')

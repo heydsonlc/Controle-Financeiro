@@ -67,7 +67,8 @@ class Categoria(db.Model):
     __tablename__ = 'categoria'
 
     id = db.Column(db.Integer, primary_key=True)
-    nome = db.Column(db.String(100), nullable=False, unique=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
+    nome = db.Column(db.String(100), nullable=False)
     descricao = db.Column(db.Text)
     cor = db.Column(db.String(7), default='#6c757d')  # Código hexadecimal
     icone = db.Column(db.String(50), nullable=True)
@@ -83,6 +84,11 @@ class Categoria(db.Model):
     itens_despesa = db.relationship('ItemDespesa', back_populates='categoria', lazy='dynamic')
     palavras_chave = db.relationship('CategoriaPalavraChave', back_populates='categoria', lazy='dynamic')
 
+    __table_args__ = (
+        db.UniqueConstraint('perfil_financeiro_id', 'nome', name='ux_categoria_perfil_nome'),
+        db.Index('ix_categoria_perfil_ativo', 'perfil_financeiro_id', 'ativo'),
+    )
+
     def __repr__(self):
         return f'<Categoria {self.nome}>'
 
@@ -95,6 +101,7 @@ class Categoria(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
             'nome': self.nome,
             'descricao': self.descricao,
             'cor': self.cor,
@@ -335,6 +342,7 @@ class ItemDespesa(db.Model):
     __tablename__ = 'item_despesa'
 
     id = db.Column(db.Integer, primary_key=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
     categoria_id = db.Column(db.Integer, db.ForeignKey('categoria.id'), nullable=True)  # Opcional para cartões
     nome = db.Column(db.String(100), nullable=False)
     tipo = db.Column(db.String(20), nullable=False)  # 'Simples' ou 'Agregador'
@@ -393,6 +401,7 @@ class ItemDespesa(db.Model):
     def to_dict(self):
         result = {
             'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
             'categoria_id': self.categoria_id,
             'nome': self.nome,
             'tipo': self.tipo,
@@ -520,6 +529,7 @@ class Conta(db.Model):
     __tablename__ = 'conta'
 
     id = db.Column(db.Integer, primary_key=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
     item_despesa_id = db.Column(db.Integer, db.ForeignKey('item_despesa.id'), nullable=False)
     financiamento_parcela_id = db.Column(db.Integer, db.ForeignKey('financiamento_parcela.id'))
     mes_referencia = db.Column(db.Date, nullable=False)
@@ -571,6 +581,7 @@ class Conta(db.Model):
         db.Index('idx_conta_vencimento', 'data_vencimento'),
         db.Index('idx_conta_status', 'status_pagamento'),
         db.Index('idx_conta_item_mes', 'item_despesa_id', 'mes_referencia'),
+        db.Index('idx_conta_perfil_status', 'perfil_financeiro_id', 'status_pagamento'),
     )
 
     def __repr__(self):
@@ -579,6 +590,7 @@ class Conta(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
             'item_despesa_id': self.item_despesa_id,
             'financiamento_parcela_id': self.financiamento_parcela_id,
             'mes_referencia': self.mes_referencia.strftime('%Y-%m-%d'),
@@ -698,7 +710,8 @@ class CategoriaCartao(db.Model):
     __tablename__ = 'categoria_cartao'
 
     id = db.Column(db.Integer, primary_key=True)
-    nome = db.Column(db.String(100), nullable=False, unique=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
+    nome = db.Column(db.String(100), nullable=False)
     descricao = db.Column(db.Text)
     cor = db.Column(db.String(7), default='#6c757d')
     icone = db.Column(db.String(50), nullable=True)
@@ -714,6 +727,11 @@ class CategoriaCartao(db.Model):
     despesas_vinculadas = db.relationship('CategoriaCartaoDespesa', back_populates='categoria_cartao', lazy='dynamic')
     limites_cartao = db.relationship('CartaoCategoriaLimite', back_populates='categoria_cartao', lazy='dynamic')
 
+    __table_args__ = (
+        db.UniqueConstraint('perfil_financeiro_id', 'nome', name='ux_categoria_cartao_perfil_nome'),
+        db.Index('ix_categoria_cartao_perfil_ativo', 'perfil_financeiro_id', 'ativo'),
+    )
+
     def __repr__(self):
         return f'<CategoriaCartao {self.nome}>'
 
@@ -726,6 +744,7 @@ class CategoriaCartao(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
             'nome': self.nome,
             'descricao': self.descricao,
             'cor': self.cor,
@@ -749,6 +768,7 @@ class CategoriaCartaoDespesa(db.Model):
     __tablename__ = 'categoria_cartao_despesa'
 
     id = db.Column(db.Integer, primary_key=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
     categoria_cartao_id = db.Column(db.Integer, db.ForeignKey('categoria_cartao.id'), nullable=False)
     categoria_id = db.Column(db.Integer, db.ForeignKey('categoria.id'), nullable=False)
     ativo = db.Column(db.Boolean, nullable=False, default=True)
@@ -762,6 +782,7 @@ class CategoriaCartaoDespesa(db.Model):
         db.UniqueConstraint('categoria_cartao_id', 'categoria_id', name='ux_categoria_cartao_despesa_par'),
         db.Index('ix_categoria_cartao_despesa_cartao', 'categoria_cartao_id'),
         db.Index('ix_categoria_cartao_despesa_categoria', 'categoria_id'),
+        db.Index('ix_categoria_cartao_despesa_perfil', 'perfil_financeiro_id'),
     )
 
     def __repr__(self):
@@ -770,6 +791,7 @@ class CategoriaCartaoDespesa(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
             'categoria_cartao_id': self.categoria_cartao_id,
             'categoria_cartao_nome': self.categoria_cartao.nome if self.categoria_cartao else None,
             'categoria_id': self.categoria_id,
@@ -787,6 +809,7 @@ class CartaoCategoriaLimite(db.Model):
     __tablename__ = 'cartao_categoria_limite'
 
     id = db.Column(db.Integer, primary_key=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
     cartao_id = db.Column(db.Integer, db.ForeignKey('item_despesa.id'), nullable=False)
     categoria_cartao_id = db.Column(db.Integer, db.ForeignKey('categoria_cartao.id'), nullable=False)
     limite_mensal = db.Column(db.Numeric(10, 2), nullable=False, default=0)
@@ -803,6 +826,7 @@ class CartaoCategoriaLimite(db.Model):
         db.UniqueConstraint('cartao_id', 'categoria_cartao_id', name='ux_cartao_categoria_limite_cartao_categoria'),
         db.Index('ix_cartao_categoria_limite_cartao', 'cartao_id'),
         db.Index('ix_cartao_categoria_limite_categoria', 'categoria_cartao_id'),
+        db.Index('ix_cartao_categoria_limite_perfil', 'perfil_financeiro_id'),
     )
 
     def __repr__(self):
@@ -811,6 +835,7 @@ class CartaoCategoriaLimite(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
             'cartao_id': self.cartao_id,
             'cartao_nome': self.cartao.nome if self.cartao else None,
             'categoria_cartao_id': self.categoria_cartao_id,
@@ -879,6 +904,7 @@ class LancamentoAgregado(db.Model):
     __tablename__ = 'lancamento_agregado'
 
     id = db.Column(db.Integer, primary_key=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
     item_agregado_id = db.Column(db.Integer, db.ForeignKey('item_agregado.id'), nullable=True)
     cartao_id = db.Column(db.Integer, db.ForeignKey('item_despesa.id'), nullable=False)  # Referência direta ao cartão
     categoria_id = db.Column(db.Integer, db.ForeignKey('categoria.id'), nullable=False)  # Categoria da DESPESA (analítica)
@@ -926,6 +952,7 @@ class LancamentoAgregado(db.Model):
         db.Index('idx_lanc_agregado_fatura', 'mes_fatura'),
         db.Index('idx_lanc_agregado_item_fatura', 'item_agregado_id', 'mes_fatura'),
         db.Index('idx_lanc_agregado_categoria_cartao_fatura', 'categoria_cartao_id', 'mes_fatura'),
+        db.Index('idx_lanc_agregado_perfil_fatura', 'perfil_financeiro_id', 'mes_fatura'),
     )
 
     def __repr__(self):
@@ -934,6 +961,7 @@ class LancamentoAgregado(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
             'item_agregado_id': self.item_agregado_id,
             'categoria_cartao_id': self.categoria_cartao_id,
             'descricao': self.descricao,
@@ -969,7 +997,8 @@ class ItemReceita(db.Model):
     __tablename__ = 'item_receita'
 
     id = db.Column(db.Integer, primary_key=True)
-    nome = db.Column(db.String(100), nullable=False, unique=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
+    nome = db.Column(db.String(100), nullable=False)
 
     # Tipo expandido conforme especificação
     tipo = db.Column(db.String(30), nullable=False)
@@ -995,12 +1024,18 @@ class ItemReceita(db.Model):
     conta_origem = db.relationship('ContaPatrimonio', foreign_keys=[conta_origem_id])
     conta_bancaria = db.relationship('ContaBancaria', foreign_keys=[conta_bancaria_id])
 
+    __table_args__ = (
+        db.UniqueConstraint('perfil_financeiro_id', 'nome', name='ux_item_receita_perfil_nome'),
+        db.Index('ix_item_receita_perfil_ativo', 'perfil_financeiro_id', 'ativo'),
+    )
+
     def __repr__(self):
         return f'<ItemReceita {self.nome} ({self.tipo})>'
 
     def to_dict(self):
         return {
             'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
             'nome': self.nome,
             'tipo': self.tipo,
             'descricao': self.descricao,
@@ -1025,6 +1060,7 @@ class ReceitaOrcamento(db.Model):
     __tablename__ = 'receita_orcamento'
 
     id = db.Column(db.Integer, primary_key=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
     item_receita_id = db.Column(db.Integer, db.ForeignKey('item_receita.id'), nullable=False)
     mes_referencia = db.Column(db.Date, nullable=False)  # Primeiro dia do mês (YYYY-MM-01)
     valor_esperado = db.Column(db.Numeric(10, 2), nullable=False)
@@ -1042,6 +1078,7 @@ class ReceitaOrcamento(db.Model):
     # Índice composto
     __table_args__ = (
         db.Index('idx_rec_orc_item_mes', 'item_receita_id', 'mes_referencia'),
+        db.Index('idx_rec_orc_perfil_mes', 'perfil_financeiro_id', 'mes_referencia'),
     )
 
     def __repr__(self):
@@ -1050,6 +1087,7 @@ class ReceitaOrcamento(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
             'item_receita_id': self.item_receita_id,
             'mes_referencia': self.mes_referencia.strftime('%Y-%m-%d'),
             'valor_esperado': float(self.valor_esperado),
@@ -1068,6 +1106,7 @@ class ReceitaRealizada(db.Model):
     __tablename__ = 'receita_realizada'
 
     id = db.Column(db.Integer, primary_key=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
     item_receita_id = db.Column(db.Integer, db.ForeignKey('item_receita.id'), nullable=True)  # Permitir NULL para receitas pontuais
 
     # Data efetiva do recebimento
@@ -1106,6 +1145,7 @@ class ReceitaRealizada(db.Model):
         db.Index('idx_rec_real_data', 'data_recebimento'),
         db.Index('idx_rec_real_competencia', 'mes_referencia'),
         db.Index('idx_rec_real_item_comp', 'item_receita_id', 'mes_referencia'),
+        db.Index('idx_rec_real_perfil_comp', 'perfil_financeiro_id', 'mes_referencia'),
     )
 
     def __repr__(self):
@@ -1114,6 +1154,7 @@ class ReceitaRealizada(db.Model):
     def to_dict(self):
         result = {
             'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
             'item_receita_id': self.item_receita_id,
             'data_recebimento': self.data_recebimento.strftime('%Y-%m-%d'),
             'valor_recebido': float(self.valor_recebido),
@@ -1676,6 +1717,7 @@ class ContaBancaria(db.Model):
     __tablename__ = 'conta_bancaria'
 
     id = db.Column(db.Integer, primary_key=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
     nome = db.Column(db.String(100), nullable=False)
     instituicao = db.Column(db.String(100), nullable=False)
     tipo = db.Column(db.String(50), nullable=False)  # Conta Corrente, Poupança, Carteira Digital
@@ -1696,6 +1738,7 @@ class ContaBancaria(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
             'nome': self.nome,
             'instituicao': self.instituicao,
             'tipo': self.tipo,
@@ -1721,6 +1764,7 @@ class MovimentoFinanceiro(db.Model):
     __tablename__ = 'movimento_financeiro'
 
     id = db.Column(db.Integer, primary_key=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
     conta_bancaria_id = db.Column(db.Integer, db.ForeignKey('conta_bancaria.id'), nullable=False)
     tipo = db.Column(db.String(20), nullable=False)  # DEBITO ou CREDITO
     valor = db.Column(db.Numeric(15, 2), nullable=False)
@@ -1750,6 +1794,7 @@ class MovimentoFinanceiro(db.Model):
         db.Index('idx_movimento_conta', 'conta_bancaria_id'),
         db.Index('idx_movimento_data', 'data_movimento'),
         db.Index('idx_movimento_fatura', 'fatura_id'),
+        db.Index('idx_movimento_perfil_data', 'perfil_financeiro_id', 'data_movimento'),
     )
 
     def __repr__(self):
@@ -1758,6 +1803,7 @@ class MovimentoFinanceiro(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
             'conta_bancaria_id': self.conta_bancaria_id,
             'tipo': self.tipo,
             'valor': float(self.valor),
@@ -2120,6 +2166,7 @@ class DespesaPrevista(db.Model):
     __tablename__ = 'despesa_prevista'
 
     id = db.Column(db.Integer, primary_key=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
     origem_tipo = db.Column(db.String(20), nullable=False)  # ex: 'VEICULO'
     origem_id = db.Column(db.Integer, nullable=False)
     categoria_id = db.Column(db.Integer, db.ForeignKey('categoria.id'), nullable=False)
@@ -2138,6 +2185,7 @@ class DespesaPrevista(db.Model):
 
     __table_args__ = (
         db.Index('idx_desp_prev_origem_data', 'origem_tipo', 'origem_id', 'data_prevista'),
+        db.Index('idx_desp_prev_perfil_data', 'perfil_financeiro_id', 'data_prevista'),
     )
 
     def _metadata_dict(self):
@@ -2156,6 +2204,7 @@ class DespesaPrevista(db.Model):
             md['ordem_no_ciclo'] = None
         return {
             'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
             'origem_tipo': self.origem_tipo,
             'origem_id': self.origem_id,
             'categoria_id': self.categoria_id,

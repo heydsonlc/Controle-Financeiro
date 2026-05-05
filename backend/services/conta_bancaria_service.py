@@ -9,14 +9,19 @@ from sqlalchemy import func, case
 
 try:
     from backend.models import db, ContaBancaria, MovimentoFinanceiro
+    from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import db, ContaBancaria, MovimentoFinanceiro
+    from services.perfil_financeiro_service import PerfilFinanceiroService
 
 
 class ContaBancariaService:
     @staticmethod
     def recalcular_saldo_conta(conta_id: int) -> Decimal:
-        conta = ContaBancaria.query.get(conta_id)
+        conta = ContaBancaria.query.filter(
+            ContaBancaria.id == conta_id,
+            PerfilFinanceiroService.condicao_perfil(ContaBancaria),
+        ).first()
         if not conta:
             raise ValueError('Conta bancária não encontrada')
 
@@ -30,7 +35,10 @@ class ContaBancariaService:
                 ),
                 0,
             )
-        ).filter(MovimentoFinanceiro.conta_bancaria_id == conta_id).scalar()
+        ).filter(
+            MovimentoFinanceiro.conta_bancaria_id == conta_id,
+            PerfilFinanceiroService.condicao_perfil(MovimentoFinanceiro),
+        ).scalar()
 
         total_debitos = db.session.query(
             func.coalesce(
@@ -42,7 +50,10 @@ class ContaBancariaService:
                 ),
                 0,
             )
-        ).filter(MovimentoFinanceiro.conta_bancaria_id == conta_id).scalar()
+        ).filter(
+            MovimentoFinanceiro.conta_bancaria_id == conta_id,
+            PerfilFinanceiroService.condicao_perfil(MovimentoFinanceiro),
+        ).scalar()
 
         saldo_inicial = Decimal(str(conta.saldo_inicial or 0))
         saldo = saldo_inicial + Decimal(str(total_creditos or 0)) - Decimal(str(total_debitos or 0))
@@ -73,6 +84,7 @@ class ContaBancariaService:
             raise ValueError('Valor do movimento deve ser maior que zero')
 
         movimento = MovimentoFinanceiro(
+            perfil_financeiro_id=PerfilFinanceiroService.obter_perfil_ativo_id(),
             conta_bancaria_id=conta_bancaria_id,
             tipo=tipo,
             valor=valor_dec,
@@ -102,8 +114,14 @@ class ContaBancariaService:
         if conta_origem_id == conta_destino_id:
             raise ValueError('Conta de origem e destino devem ser diferentes')
 
-        conta_origem = ContaBancaria.query.get(conta_origem_id)
-        conta_destino = ContaBancaria.query.get(conta_destino_id)
+        conta_origem = ContaBancaria.query.filter(
+            ContaBancaria.id == conta_origem_id,
+            PerfilFinanceiroService.condicao_perfil(ContaBancaria),
+        ).first()
+        conta_destino = ContaBancaria.query.filter(
+            ContaBancaria.id == conta_destino_id,
+            PerfilFinanceiroService.condicao_perfil(ContaBancaria),
+        ).first()
         if not conta_origem or not conta_destino:
             raise ValueError('Conta bancária não encontrada')
         if conta_origem.status != 'ATIVO' or conta_destino.status != 'ATIVO':
@@ -151,4 +169,3 @@ class ContaBancariaService:
         if isinstance(value, str):
             return datetime.strptime(value[:10], '%Y-%m-%d').date()
         raise ValueError('Data inválida')
-

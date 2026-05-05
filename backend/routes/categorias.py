@@ -18,10 +18,12 @@ try:
     from backend.models import db, Categoria
     from backend.services.categoria_cartao_service import CategoriaCartaoService
     from backend.services.categoria_palavra_chave_service import CategoriaPalavraChaveService
+    from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import db, Categoria
     from services.categoria_cartao_service import CategoriaCartaoService
     from services.categoria_palavra_chave_service import CategoriaPalavraChaveService
+    from services.perfil_financeiro_service import PerfilFinanceiroService
 
 # Criar blueprint
 categorias_bp = Blueprint('categorias', __name__)
@@ -126,6 +128,18 @@ def _categoria_to_dict(categoria):
     return dados
 
 
+def _perfil_id():
+    return PerfilFinanceiroService.obter_perfil_ativo_id()
+
+
+def _query_categorias():
+    return PerfilFinanceiroService.aplicar_perfil_query(Categoria.query, Categoria)
+
+
+def _obter_categoria_no_perfil(categoria_id):
+    return _query_categorias().filter(Categoria.id == categoria_id).first()
+
+
 @categorias_bp.route('', methods=['GET'])
 def listar_categorias():
     """
@@ -143,9 +157,9 @@ def listar_categorias():
 
         if ativo is not None:
             ativo_bool = ativo.lower() == 'true'
-            categorias = Categoria.query.filter_by(ativo=ativo_bool).all()
+            categorias = _query_categorias().filter_by(ativo=ativo_bool).all()
         else:
-            categorias = Categoria.query.all()
+            categorias = _query_categorias().all()
 
         return jsonify({
             'success': True,
@@ -172,7 +186,7 @@ def buscar_categoria(id):
         JSON com dados da categoria
     """
     try:
-        categoria = Categoria.query.get(id)
+        categoria = _obter_categoria_no_perfil(id)
 
         if not categoria:
             return jsonify({
@@ -225,7 +239,7 @@ def criar_categoria():
             }), 400
 
         # Verificar se já existe categoria com mesmo nome
-        existe = Categoria.query.filter_by(nome=data['nome'].strip()).first()
+        existe = _query_categorias().filter_by(nome=data['nome'].strip()).first()
         if existe:
             return jsonify({
                 'success': False,
@@ -235,6 +249,7 @@ def criar_categoria():
         # Criar categoria
         icone_raw = data.get('icone', '') or ''
         categoria = Categoria(
+            perfil_financeiro_id=_perfil_id(),
             nome=data['nome'].strip(),
             descricao=data.get('descricao', '').strip(),
             cor=data.get('cor', '#6c757d'),
@@ -279,7 +294,7 @@ def atualizar_categoria(id):
         JSON com a categoria atualizada
     """
     try:
-        categoria = Categoria.query.get(id)
+        categoria = _obter_categoria_no_perfil(id)
 
         if not categoria:
             return jsonify({
@@ -307,7 +322,8 @@ def atualizar_categoria(id):
             # Verificar se já existe outra categoria com mesmo nome
             existe = Categoria.query.filter(
                 Categoria.nome == nome,
-                Categoria.id != id
+                Categoria.id != id,
+                PerfilFinanceiroService.condicao_perfil(Categoria)
             ).first()
 
             if existe:
@@ -403,7 +419,7 @@ def enviar_logo_categoria(id):
     """
     Envia ou substitui o logo personalizado de uma categoria.
     """
-    categoria = Categoria.query.get(id)
+    categoria = _obter_categoria_no_perfil(id)
 
     if not categoria:
         return jsonify({
@@ -467,7 +483,7 @@ def remover_logo_categoria(id):
     Remove o logo personalizado de uma categoria.
     """
     try:
-        categoria = Categoria.query.get(id)
+        categoria = _obter_categoria_no_perfil(id)
 
         if not categoria:
             return jsonify({
@@ -504,7 +520,7 @@ def servir_logo_categoria(id):
     """
     Serve o logo personalizado de uma categoria.
     """
-    categoria = Categoria.query.get(id)
+    categoria = _obter_categoria_no_perfil(id)
 
     if not categoria or not categoria.logo_arquivo:
         return jsonify({
@@ -551,7 +567,7 @@ def deletar_categoria(id):
         JSON com confirmação
     """
     try:
-        categoria = Categoria.query.get(id)
+        categoria = _obter_categoria_no_perfil(id)
 
         if not categoria:
             return jsonify({
