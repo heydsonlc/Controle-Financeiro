@@ -4,9 +4,11 @@ from flask import Blueprint, jsonify, request, send_file
 
 try:
     from backend.models import db
+    from backend.services.documento_fiscal_service import DocumentoFiscalService
     from backend.services.ir_documento_service import IrDocumentoService
 except ImportError:
     from models import db
+    from services.documento_fiscal_service import DocumentoFiscalService
     from services.ir_documento_service import IrDocumentoService
 
 
@@ -30,6 +32,13 @@ def listar_categorias_ir():
     categorias = IrDocumentoService.listar_categorias_ir()
     db.session.commit()
     return _json_success([categoria.to_dict() for categoria in categorias], total=len(categorias))
+
+
+@ir_bp.route('/contexto', methods=['GET'])
+def obter_contexto_ir():
+    contexto = IrDocumentoService.obter_contexto()
+    db.session.commit()
+    return _json_success(contexto)
 
 
 @ir_bp.route('/categorias', methods=['POST'])
@@ -147,3 +156,60 @@ def obter_arquivo(comprovante_id):
         )
     except ValueError as exc:
         return _json_error(str(exc), 404)
+
+
+@ir_bp.route('/comprovantes/<int:comprovante_id>/vinculos', methods=['GET'])
+def listar_vinculos_comprovante(comprovante_id):
+    try:
+        vinculos = DocumentoFiscalService.listar_vinculos(comprovante_id)
+        return _json_success([vinculo.to_dict() for vinculo in vinculos], total=len(vinculos))
+    except ValueError as exc:
+        return _json_error(str(exc), 404)
+
+
+@ir_bp.route('/comprovantes/<int:comprovante_id>/vinculos', methods=['POST'])
+def criar_vinculo_comprovante(comprovante_id):
+    try:
+        vinculo = DocumentoFiscalService.criar_vinculo(comprovante_id, request.get_json(silent=True) or {})
+        db.session.commit()
+        return _json_success(vinculo.to_dict(), 201)
+    except ValueError as exc:
+        db.session.rollback()
+        return _json_error(str(exc), 400)
+
+
+@ir_bp.route('/comprovantes/<int:comprovante_id>/vinculos/<int:vinculo_id>', methods=['PUT'])
+def atualizar_vinculo_comprovante(comprovante_id, vinculo_id):
+    try:
+        vinculo = DocumentoFiscalService.atualizar_vinculo(comprovante_id, vinculo_id, request.get_json(silent=True) or {})
+        db.session.commit()
+        return _json_success(vinculo.to_dict())
+    except ValueError as exc:
+        db.session.rollback()
+        return _json_error(str(exc), 400)
+
+
+@ir_bp.route('/comprovantes/<int:comprovante_id>/vinculos/<int:vinculo_id>', methods=['DELETE'])
+def remover_vinculo_comprovante(comprovante_id, vinculo_id):
+    try:
+        vinculo = DocumentoFiscalService.remover_vinculo(comprovante_id, vinculo_id)
+        db.session.commit()
+        return _json_success(vinculo.to_dict())
+    except ValueError as exc:
+        db.session.rollback()
+        return _json_error(str(exc), 404)
+
+
+@ir_bp.route('/entidades-vinculaveis', methods=['GET'])
+def listar_entidades_vinculaveis():
+    entidades = DocumentoFiscalService.listar_entidades_vinculaveis(
+        request.args.get('tipo'),
+        request.args.get('busca'),
+    )
+    return _json_success(entidades, total=len(entidades))
+
+
+@ir_bp.route('/lastro/resumo', methods=['GET'])
+def resumo_lastro():
+    resumo = DocumentoFiscalService.resumo_lastro(request.args.get('ano'))
+    return _json_success(resumo)

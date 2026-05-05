@@ -28,7 +28,7 @@
         </select>
     </label>
     <label class="ir-filter">
-        <span>Categoria IR</span>
+        <span id="ir-filtro-categoria-label">Categoria IR</span>
         <select id="ir-filtro-categoria">
             <option value="">Todas</option>
         </select>
@@ -50,33 +50,33 @@
             <article class="ir-kpi-card blue">
                 <span class="ir-kpi-icon" aria-hidden="true">Doc</span>
                 <div>
-                    <span>Comprovantes</span>
+                    <span id="ir-kpi-total-label">Comprovantes</span>
                     <strong id="ir-kpi-total">0</strong>
-                    <small>documentos cadastrados</small>
+                    <small id="ir-kpi-total-sub">documentos cadastrados</small>
                 </div>
             </article>
             <article class="ir-kpi-card green">
                 <span class="ir-kpi-icon" aria-hidden="true">$</span>
                 <div>
-                    <span>Valor potencialmente dedutivel</span>
+                    <span id="ir-kpi-valor-label">Valor potencialmente dedutivel</span>
                     <strong id="ir-kpi-valor">R$ 0,00</strong>
-                    <small>sujeito a revisao</small>
+                    <small id="ir-kpi-valor-sub">sujeito a revisao</small>
                 </div>
             </article>
             <article class="ir-kpi-card yellow">
                 <span class="ir-kpi-icon" aria-hidden="true">!</span>
                 <div>
-                    <span>Pendentes de revisao</span>
+                    <span id="ir-kpi-pendentes-label">Pendentes de revisao</span>
                     <strong id="ir-kpi-pendentes">0</strong>
-                    <small>aguardando validacao</small>
+                    <small id="ir-kpi-pendentes-sub">aguardando validacao</small>
                 </div>
             </article>
             <article class="ir-kpi-card purple">
                 <span class="ir-kpi-icon" aria-hidden="true">#</span>
                 <div>
-                    <span>Categorias IR usadas</span>
+                    <span id="ir-kpi-categorias-label">Categorias IR usadas</span>
                     <strong id="ir-kpi-categorias">0</strong>
-                    <small>classificacao potencial</small>
+                    <small id="ir-kpi-categorias-sub">classificacao potencial</small>
                 </div>
             </article>
         </div>
@@ -85,7 +85,7 @@
             <section class="ir-panel ir-table-panel">
                 <div class="ir-panel-header">
                     <div>
-                        <h2>Comprovantes</h2>
+                        <h2 id="ir-lista-titulo">Comprovantes</h2>
                         <p id="ir-lista-subtitulo">Nenhum comprovante carregado</p>
                     </div>
                 </div>
@@ -99,13 +99,15 @@
                                 <th>Categoria de Despesa</th>
                                 <th>Valor</th>
                                 <th>Ano</th>
+                                <th>Natureza</th>
+                                <th>Lastro</th>
                                 <th>Status</th>
                                 <th>Acoes</th>
                             </tr>
                         </thead>
                         <tbody id="ir-comprovantes-tbody">
                             <tr>
-                                <td colspan="8" class="ir-empty">Nenhum comprovante cadastrado para este ano.</td>
+                                <td colspan="10" class="ir-empty">Nenhum comprovante cadastrado para este ano.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -123,10 +125,18 @@
                 </section>
                 <section class="ir-panel">
                     <div class="ir-panel-header compact">
-                        <h2>Pendencias</h2>
+                        <h2 id="ir-pendencias-titulo">Pendencias</h2>
                     </div>
                     <div id="ir-pendencias" class="ir-pendencias">
                         <span>0 documentos pendentes</span>
+                    </div>
+                </section>
+                <section class="ir-panel ir-lastro-card" id="ir-lastro-panel" hidden>
+                    <div class="ir-panel-header compact">
+                        <h2>Lastro financeiro</h2>
+                    </div>
+                    <div id="ir-lastro-resumo" class="ir-pendencias">
+                        <span>0 documentos sem vinculo</span>
                     </div>
                 </section>
                 <section class="ir-panel">
@@ -234,13 +244,72 @@
                         <select id="ir-review-categoria"></select>
                         <small id="ir-review-categoria-aviso" class="ir-field-warning" hidden></small>
                     </label>
-                    <label>Categoria IR<select id="ir-review-categoria-ir"></select></label>
+                    <label><span id="ir-review-categoria-ir-label">Categoria IR</span><select id="ir-review-categoria-ir"></select></label>
                     <label>Observacoes<textarea id="ir-review-observacoes" rows="4"></textarea></label>
                 </form>
             </div>
             <div class="ir-modal-footer">
                 <button type="button" class="ir-secondary-btn" id="ir-review-save">Salvar revisao</button>
                 <button type="button" class="ir-primary-btn" id="ir-review-validar">Validar comprovante</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="ir-link-modal" class="ir-modal" aria-hidden="true">
+        <div class="ir-modal-dialog ir-link-dialog" role="dialog" aria-modal="true" aria-labelledby="ir-link-title">
+            <div class="ir-modal-header">
+                <div>
+                    <h2 id="ir-link-title">Vincular documento</h2>
+                    <p>Classifique a natureza e vincule o documento a uma entidade do perfil ativo.</p>
+                </div>
+                <button type="button" class="ir-modal-close" id="ir-link-close" aria-label="Fechar">&times;</button>
+            </div>
+            <form id="ir-link-form" class="ir-review-form">
+                <input type="hidden" id="ir-link-comprovante-id">
+                <label>Tipo de entidade
+                    <select id="ir-link-tipo-entidade">
+                        <option value="DESPESA_PREVISTA">Despesa prevista</option>
+                        <option value="LANCAMENTO">Lancamento de cartao</option>
+                        <option value="MOVIMENTO_FINANCEIRO">Movimento financeiro</option>
+                        <option value="PATRIMONIO">Patrimonio</option>
+                        <option value="FINANCIAMENTO">Financiamento</option>
+                        <option value="CONTA">Conta bancaria</option>
+                        <option value="OUTRO">Outro</option>
+                    </select>
+                </label>
+                <label>Entidade
+                    <select id="ir-link-entidade"></select>
+                </label>
+                <label>Natureza
+                    <select id="ir-link-natureza">
+                        <option value="DESPESA_OPERACIONAL">Despesa operacional</option>
+                        <option value="PATRIMONIO_IMOBILIZADO">Patrimonio / Imobilizado</option>
+                        <option value="SOFTWARE_ASSINATURA">Software / Assinatura</option>
+                        <option value="IMPOSTO_TAXA">Imposto / taxa</option>
+                        <option value="PRO_LABORE">Pro-labore</option>
+                        <option value="DISTRIBUICAO_LUCROS">Distribuicao de lucros</option>
+                        <option value="REEMBOLSO">Reembolso</option>
+                        <option value="EMPRESTIMO">Emprestimo</option>
+                        <option value="ADIANTAMENTO">Adiantamento</option>
+                        <option value="OUTRO">Outro</option>
+                    </select>
+                </label>
+                <label>Status do lastro
+                    <select id="ir-link-status">
+                        <option value="PENDENTE">Pendente</option>
+                        <option value="COM_DOCUMENTO">Com documento</option>
+                        <option value="VALIDADO">Validado</option>
+                        <option value="AGUARDANDO_CONTADOR">Aguardando contador</option>
+                        <option value="DIVERGENTE">Divergente</option>
+                        <option value="NAO_APLICAVEL">Nao aplicavel</option>
+                    </select>
+                </label>
+                <label>Observacoes<textarea id="ir-link-observacoes" rows="3"></textarea></label>
+                <small class="ir-field-warning">Classificacao sujeita a validacao contabil.</small>
+            </form>
+            <div class="ir-modal-footer">
+                <button type="button" class="ir-secondary-btn" id="ir-link-cancel">Cancelar</button>
+                <button type="button" class="ir-primary-btn" id="ir-link-save">Salvar vinculo</button>
             </div>
         </div>
     </div>

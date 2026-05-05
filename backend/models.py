@@ -168,6 +168,8 @@ class IrCategoria(db.Model):
     ativo = db.Column(db.Boolean, nullable=False, default=True)
     observacao_fiscal = db.Column(db.Text, nullable=True)
     ordem = db.Column(db.Integer, nullable=False, default=0)
+    tipo_contexto = db.Column(db.String(20), nullable=False, default='PESSOAL')
+    natureza = db.Column(db.String(50), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -183,6 +185,8 @@ class IrCategoria(db.Model):
             'ativo': bool(self.ativo),
             'observacao_fiscal': self.observacao_fiscal,
             'ordem': self.ordem,
+            'tipo_contexto': self.tipo_contexto,
+            'natureza': self.natureza,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -257,6 +261,7 @@ class IrComprovante(db.Model):
     categoria_ir = db.relationship('IrCategoria', back_populates='comprovantes')
     arquivo = db.relationship('IrComprovanteArquivo', back_populates='comprovante', uselist=False, cascade='all, delete-orphan')
     eventos = db.relationship('IrComprovanteEvento', back_populates='comprovante', lazy='dynamic', cascade='all, delete-orphan')
+    vinculos = db.relationship('IrComprovanteVinculo', back_populates='comprovante', lazy='dynamic', cascade='all, delete-orphan')
 
     __table_args__ = (
         db.UniqueConstraint('perfil_financeiro_id', 'hash_arquivo', name='ux_ir_comprovante_perfil_hash'),
@@ -288,11 +293,63 @@ class IrComprovante(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }
+        vinculo = self.vinculos.filter_by(ativo=True).order_by(IrComprovanteVinculo.created_at.desc()).first()
+        data['vinculos_count'] = self.vinculos.filter_by(ativo=True).count()
+        data['status_lastro'] = vinculo.status_lastro if vinculo else 'SEM_DOCUMENTO'
+        data['natureza_fiscal'] = vinculo.natureza if vinculo else None
+        data['vinculo_resumo'] = vinculo.resumo_entidade if vinculo else None
         if include_texto:
             data['texto_extraido'] = self.texto_extraido
         if include_eventos:
             data['eventos'] = [evento.to_dict() for evento in self.eventos.order_by(IrComprovanteEvento.created_at.asc()).all()]
         return data
+
+
+class IrComprovanteVinculo(db.Model):
+    """
+    Vinculo entre comprovante fiscal e entidade financeira/patrimonial.
+    Usado como lastro empresarial; nao altera calculos financeiros.
+    """
+    __tablename__ = 'ir_comprovante_vinculo'
+
+    id = db.Column(db.Integer, primary_key=True)
+    comprovante_id = db.Column(db.Integer, db.ForeignKey('ir_comprovante.id'), nullable=False)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
+    tipo_entidade = db.Column(db.String(40), nullable=False)
+    entidade_id = db.Column(db.Integer, nullable=True)
+    resumo_entidade = db.Column(db.String(255), nullable=True)
+    tipo_vinculo = db.Column(db.String(40), nullable=False, default='COMPROVANTE')
+    natureza = db.Column(db.String(50), nullable=False, default='OUTRO')
+    status_lastro = db.Column(db.String(40), nullable=False, default='PENDENTE')
+    observacoes = db.Column(db.Text, nullable=True)
+    ativo = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    comprovante = db.relationship('IrComprovante', back_populates='vinculos')
+
+    __table_args__ = (
+        db.Index('ix_ir_comprovante_vinculo_comprovante', 'comprovante_id'),
+        db.Index('ix_ir_comprovante_vinculo_perfil_status', 'perfil_financeiro_id', 'status_lastro'),
+        db.Index('ix_ir_comprovante_vinculo_entidade', 'tipo_entidade', 'entidade_id'),
+    )
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'comprovante_id': self.comprovante_id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
+            'tipo_entidade': self.tipo_entidade,
+            'entidade_id': self.entidade_id,
+            'resumo_entidade': self.resumo_entidade,
+            'tipo_vinculo': self.tipo_vinculo,
+            'natureza': self.natureza,
+            'status_lastro': self.status_lastro,
+            'observacoes': self.observacoes,
+            'ativo': bool(self.ativo),
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
 
 
 class IrComprovanteArquivo(db.Model):

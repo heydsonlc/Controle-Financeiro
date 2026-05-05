@@ -596,6 +596,14 @@
     grid-column: 1 / -1;
 }
 
+.ir-link-dialog {
+    width: min(760px, 96vw);
+}
+
+.ir-lastro-card .ir-pendencias {
+    gap: 8px;
+}
+
 @media (max-width: 1180px) {
     .ir-kpi-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));

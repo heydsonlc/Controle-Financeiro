@@ -8,6 +8,7 @@
         arquivosSelecionados: [],
         resumoImportacao: { enviados: 0, lidos: 0, pendentes: 0, erros: 0 },
         categoriaIrManual: false,
+        contexto: { modo: 'IRPF' },
     };
 
     const $ = (id) => document.getElementById(id);
@@ -17,6 +18,7 @@
     async function inicializarIr() {
         definirAnoPadrao();
         vincularEventos();
+        await carregarContexto();
         await Promise.all([carregarCategoriasIr(), carregarCategoriasDespesa()]);
         await carregarComprovantes();
     }
@@ -51,6 +53,10 @@
             estado.categoriaIrManual = true;
             atualizarAvisoVinculo('');
         });
+        $('ir-link-close')?.addEventListener('click', fecharVinculo);
+        $('ir-link-cancel')?.addEventListener('click', fecharVinculo);
+        $('ir-link-save')?.addEventListener('click', salvarVinculo);
+        $('ir-link-tipo-entidade')?.addEventListener('change', carregarEntidadesVinculaveis);
 
         const dropzone = $('ir-dropzone');
         if (dropzone) {
@@ -73,6 +79,45 @@
     function alternarView(view) {
         $('ir-main-view')?.classList.toggle('active', view === 'main');
         $('ir-import-view')?.classList.toggle('active', view === 'import');
+    }
+
+    async function carregarContexto() {
+        try {
+            const resposta = await fetch('/api/ir/contexto');
+            const json = await resposta.json();
+            if (json.success && json.data) {
+                estado.contexto = json.data;
+                aplicarContextoVisual();
+            }
+        } catch (error) {
+            estado.contexto = { modo: 'IRPF' };
+        }
+    }
+
+    function modoEmpresa() {
+        return estado.contexto?.modo === 'DOCUMENTOS_FISCAIS_EMPRESA';
+    }
+
+    function aplicarContextoVisual() {
+        const empresa = modoEmpresa();
+        const titulo = estado.contexto?.titulo || (empresa ? 'Documentos Fiscais e Lastro' : 'Imposto de Renda');
+        const pageTitle = document.querySelector('.page-title, .topbar-title, [data-page-title]');
+        if (pageTitle) pageTitle.textContent = titulo;
+        document.title = titulo;
+        if ($('ir-btn-importar')) $('ir-btn-importar').textContent = empresa ? 'Importar documentos' : 'Importar comprovantes';
+        if ($('ir-lista-titulo')) $('ir-lista-titulo').textContent = empresa ? 'Documentos fiscais' : 'Comprovantes';
+        if ($('ir-kpi-total-label')) $('ir-kpi-total-label').textContent = empresa ? 'Documentos fiscais' : 'Comprovantes';
+        if ($('ir-kpi-total-sub')) $('ir-kpi-total-sub').textContent = empresa ? 'documentos cadastrados' : 'documentos cadastrados';
+        if ($('ir-kpi-valor-label')) $('ir-kpi-valor-label').textContent = empresa ? 'Valor documentado' : 'Valor potencialmente dedutivel';
+        if ($('ir-kpi-valor-sub')) $('ir-kpi-valor-sub').textContent = empresa ? 'com documento importado' : 'sujeito a revisao';
+        if ($('ir-kpi-pendentes-label')) $('ir-kpi-pendentes-label').textContent = empresa ? 'Sem lastro' : 'Pendentes de revisao';
+        if ($('ir-kpi-pendentes-sub')) $('ir-kpi-pendentes-sub').textContent = empresa ? 'sem vinculo financeiro' : 'aguardando validacao';
+        if ($('ir-kpi-categorias-label')) $('ir-kpi-categorias-label').textContent = empresa ? 'Aguardando contador' : 'Categorias IR usadas';
+        if ($('ir-kpi-categorias-sub')) $('ir-kpi-categorias-sub').textContent = empresa ? 'classificacao contabil' : 'classificacao potencial';
+        if ($('ir-pendencias-titulo')) $('ir-pendencias-titulo').textContent = empresa ? 'Pendencias de lastro' : 'Pendencias';
+        if ($('ir-filtro-categoria-label')) $('ir-filtro-categoria-label').textContent = empresa ? 'Categoria fiscal' : 'Categoria IR';
+        if ($('ir-review-categoria-ir-label')) $('ir-review-categoria-ir-label').textContent = empresa ? 'Categoria fiscal' : 'Categoria IR';
+        if ($('ir-lastro-panel')) $('ir-lastro-panel').hidden = !empresa;
     }
 
     async function carregarCategoriasIr() {
@@ -171,12 +216,14 @@
         const tbody = $('ir-comprovantes-tbody');
         if (!tbody) return;
         if (!estado.comprovantes.length) {
-            tbody.innerHTML = '<tr><td colspan="8" class="ir-empty">Nenhum comprovante cadastrado para este ano.</td></tr>';
-            $('ir-lista-subtitulo').textContent = '0 comprovantes encontrados';
+            tbody.innerHTML = '<tr><td colspan="10" class="ir-empty">Nenhum comprovante cadastrado para este ano.</td></tr>';
+            $('ir-lista-subtitulo').textContent = modoEmpresa() ? '0 documentos encontrados' : '0 comprovantes encontrados';
             return;
         }
 
-        $('ir-lista-subtitulo').textContent = `${estado.comprovantes.length} comprovante(s) encontrado(s)`;
+        $('ir-lista-subtitulo').textContent = modoEmpresa()
+            ? `${estado.comprovantes.length} documento(s) encontrado(s)`
+            : `${estado.comprovantes.length} comprovante(s) encontrado(s)`;
         tbody.innerHTML = estado.comprovantes.map((item) => `
             <tr>
                 <td>${formatarData(item.data_documento)}</td>
@@ -185,10 +232,13 @@
                 <td>${escapeHtml(item.categoria_nome || '-')}</td>
                 <td>${formatarMoeda(item.valor)}</td>
                 <td>${item.ano_calendario || '-'}</td>
+                <td>${formatarNatureza(item.natureza_fiscal)}</td>
+                <td>${renderLastro(item.status_lastro)}</td>
                 <td>${renderStatus(item.status)}</td>
                 <td>
                     <span class="ir-row-actions">
                         <button type="button" class="ir-icon-btn" title="Revisar" onclick="window.IRDoc.abrirRevisao(${item.id})">Ver</button>
+                        ${modoEmpresa() ? `<button type="button" class="ir-icon-btn" title="Vincular" onclick="window.IRDoc.abrirVinculo(${item.id})">Vincular</button>` : ''}
                         <a class="ir-icon-btn" title="Abrir arquivo" href="/api/ir/comprovantes/${item.id}/arquivo" target="_blank" rel="noopener">PDF</a>
                     </span>
                 </td>
@@ -197,11 +247,27 @@
     }
 
     function renderResumo(resumo) {
+        const lastro = resumo.lastro || {};
         $('ir-kpi-total').textContent = String(resumo.total_comprovantes || 0);
-        $('ir-kpi-valor').textContent = formatarMoeda(resumo.valor_potencialmente_dedutivel || 0);
-        $('ir-kpi-pendentes').textContent = String(resumo.pendentes_revisao || 0);
-        $('ir-kpi-categorias').textContent = String(resumo.categorias_ir_usadas || 0);
-        $('ir-pendencias').innerHTML = `<span>${resumo.pendentes_revisao || 0} documentos pendentes de revisao</span>`;
+        $('ir-kpi-valor').textContent = formatarMoeda(
+            modoEmpresa() ? (lastro.valor_com_lastro || 0) : (resumo.valor_potencialmente_dedutivel || 0)
+        );
+        $('ir-kpi-pendentes').textContent = String(
+            modoEmpresa() ? (lastro.documentos_sem_vinculo || 0) : (resumo.pendentes_revisao || 0)
+        );
+        $('ir-kpi-categorias').textContent = String(
+            modoEmpresa() ? (lastro.documentos_aguardando_contador || 0) : (resumo.categorias_ir_usadas || 0)
+        );
+        $('ir-pendencias').innerHTML = modoEmpresa()
+            ? `<span>${lastro.documentos_sem_vinculo || 0} documentos sem vinculo de lastro</span>`
+            : `<span>${resumo.pendentes_revisao || 0} documentos pendentes de revisao</span>`;
+        if ($('ir-lastro-resumo')) {
+            $('ir-lastro-resumo').innerHTML = `
+                <span>${lastro.documentos_vinculados || 0} documentos vinculados</span>
+                <span>${lastro.documentos_sem_vinculo || 0} sem vinculo</span>
+                <span>${formatarMoeda(lastro.valor_sem_lastro || 0)} sem lastro</span>
+            `;
+        }
 
         const totais = resumo.totais_por_categoria_ir || [];
         const destino = $('ir-totais-categorias');
@@ -373,6 +439,66 @@
         $('ir-review-modal').setAttribute('aria-hidden', 'true');
     }
 
+    async function abrirVinculo(id) {
+        if (!modoEmpresa()) return;
+        $('ir-link-comprovante-id').value = id;
+        $('ir-link-observacoes').value = '';
+        $('ir-link-status').value = 'PENDENTE';
+        $('ir-link-natureza').value = 'DESPESA_OPERACIONAL';
+        $('ir-link-tipo-entidade').value = 'DESPESA_PREVISTA';
+        await carregarEntidadesVinculaveis();
+        $('ir-link-modal').classList.add('open');
+        $('ir-link-modal').setAttribute('aria-hidden', 'false');
+    }
+
+    function fecharVinculo() {
+        $('ir-link-modal')?.classList.remove('open');
+        $('ir-link-modal')?.setAttribute('aria-hidden', 'true');
+    }
+
+    async function carregarEntidadesVinculaveis() {
+        const tipo = $('ir-link-tipo-entidade')?.value || 'OUTRO';
+        const select = $('ir-link-entidade');
+        if (!select) return;
+        if (tipo === 'OUTRO') {
+            select.innerHTML = '<option value="">Sem entidade especifica</option>';
+            select.disabled = true;
+            return;
+        }
+        select.disabled = false;
+        const resposta = await fetch(`/api/ir/entidades-vinculaveis?tipo=${encodeURIComponent(tipo)}`);
+        const json = await resposta.json();
+        const entidades = json.data || [];
+        const vazio = entidades.length ? 'Selecione...' : 'Nenhuma entidade encontrada no perfil ativo';
+        select.innerHTML = `<option value="">${vazio}</option>` + entidades.map((item) => (
+            `<option value="${item.id}">${escapeHtml(item.label)}${item.valor != null ? ` - ${formatarMoeda(item.valor)}` : ''}</option>`
+        )).join('');
+    }
+
+    async function salvarVinculo() {
+        const id = $('ir-link-comprovante-id').value;
+        const payload = {
+            tipo_entidade: $('ir-link-tipo-entidade').value,
+            entidade_id: $('ir-link-entidade').value || null,
+            natureza: $('ir-link-natureza').value,
+            status_lastro: $('ir-link-status').value,
+            tipo_vinculo: 'COMPROVANTE',
+            observacoes: $('ir-link-observacoes').value,
+        };
+        const resposta = await fetch(`/api/ir/comprovantes/${id}/vinculos`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const json = await resposta.json();
+        if (!json.success) {
+            mostrarAviso(json.error || 'Nao foi possivel vincular o documento.');
+            return;
+        }
+        fecharVinculo();
+        await carregarComprovantes();
+    }
+
     async function salvarRevisao() {
         const id = $('ir-review-id').value;
         const payload = {
@@ -428,6 +554,37 @@
         return `<span class="ir-status ${classe}">${label}</span>`;
     }
 
+    function renderLastro(status) {
+        const chave = String(status || 'SEM_DOCUMENTO').toUpperCase();
+        const mapa = {
+            COM_DOCUMENTO: ['classificado', 'Com documento'],
+            VALIDADO: ['validado', 'Validado'],
+            SEM_DOCUMENTO: ['pendente', 'Sem vinculo'],
+            PENDENTE: ['pendente', 'Pendente'],
+            DIVERGENTE: ['erro', 'Divergente'],
+            NAO_APLICAVEL: ['importado', 'Nao aplicavel'],
+            AGUARDANDO_CONTADOR: ['pendente', 'Aguardando contador'],
+        };
+        const [classe, label] = mapa[chave] || mapa.SEM_DOCUMENTO;
+        return `<span class="ir-status ${classe}">${label}</span>`;
+    }
+
+    function formatarNatureza(valor) {
+        const mapa = {
+            DESPESA_OPERACIONAL: 'Despesa operacional',
+            PATRIMONIO_IMOBILIZADO: 'Patrimonio',
+            SOFTWARE_ASSINATURA: 'Software',
+            IMPOSTO_TAXA: 'Imposto/taxa',
+            PRO_LABORE: 'Pro-labore',
+            DISTRIBUICAO_LUCROS: 'Distribuicao',
+            REEMBOLSO: 'Reembolso',
+            EMPRESTIMO: 'Emprestimo',
+            ADIANTAMENTO: 'Adiantamento',
+            OUTRO: 'Outro',
+        };
+        return escapeHtml(mapa[String(valor || '').toUpperCase()] || '-');
+    }
+
     function formatarMoeda(valor) {
         return Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     }
@@ -468,6 +625,7 @@
 
     window.IRDoc = {
         abrirRevisao,
+        abrirVinculo,
         carregarComprovantes,
         verAno(ano) {
             if ($('ir-filtro-ano')) {

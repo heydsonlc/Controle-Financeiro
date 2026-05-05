@@ -17,6 +17,7 @@ try:
         IrComprovante,
         IrComprovanteArquivo,
         IrComprovanteEvento,
+        IrComprovanteVinculo,
         db,
     )
     from backend.services.categoria_palavra_chave_service import CategoriaPalavraChaveService
@@ -30,6 +31,7 @@ except ImportError:
         IrComprovante,
         IrComprovanteArquivo,
         IrComprovanteEvento,
+        IrComprovanteVinculo,
         db,
     )
     from services.categoria_palavra_chave_service import CategoriaPalavraChaveService
@@ -50,22 +52,39 @@ class IrDocumentoService:
     }
     TAMANHO_MAXIMO = 10 * 1024 * 1024
     CATEGORIAS_IR_INICIAIS = [
-        ('Saude', 'Despesas medicas e assistenciais', True, 10),
-        ('Odontologia', 'Tratamentos odontologicos', True, 20),
-        ('Psicologia', 'Consultas e tratamentos psicologicos', True, 30),
-        ('Educacao', 'Despesas educacionais', True, 40),
-        ('Fisioterapia', 'Fisioterapia e reabilitacao', True, 50),
-        ('Exames', 'Exames laboratoriais e diagnosticos', True, 60),
-        ('Plano de Saude', 'Plano de saude e mensalidades assistenciais', True, 70),
-        ('Outros', 'Comprovantes relevantes para revisao', False, 999),
+        ('Saude', 'Despesas medicas e assistenciais', True, 10, 'DEDUCAO_IRPF'),
+        ('Odontologia', 'Tratamentos odontologicos', True, 20, 'DEDUCAO_IRPF'),
+        ('Psicologia', 'Consultas e tratamentos psicologicos', True, 30, 'DEDUCAO_IRPF'),
+        ('Educacao', 'Despesas educacionais', True, 40, 'DEDUCAO_IRPF'),
+        ('Fisioterapia', 'Fisioterapia e reabilitacao', True, 50, 'DEDUCAO_IRPF'),
+        ('Exames', 'Exames laboratoriais e diagnosticos', True, 60, 'DEDUCAO_IRPF'),
+        ('Plano de Saude', 'Plano de saude e mensalidades assistenciais', True, 70, 'DEDUCAO_IRPF'),
+        ('Outros', 'Comprovantes relevantes para revisao', False, 999, 'DEDUCAO_IRPF'),
+    ]
+    CATEGORIAS_EMPRESA_INICIAIS = [
+        ('Despesa operacional', 'Notas, recibos e comprovantes de despesas da operacao', True, 10, 'DESPESA_OPERACIONAL'),
+        ('Patrimonio / Imobilizado', 'Documentos de compra de bens e equipamentos', True, 20, 'PATRIMONIO_IMOBILIZADO'),
+        ('Software / Assinaturas', 'Servicos digitais, licencas e assinaturas', True, 30, 'SOFTWARE_ASSINATURA'),
+        ('Honorarios', 'Honorarios profissionais e servicos recorrentes', True, 40, 'DOCUMENTO_FISCAL'),
+        ('Impostos e taxas', 'Guias, taxas e obrigacoes fiscais', True, 50, 'IMPOSTO_TAXA'),
+        ('Pro-labore', 'Documento de suporte para retirada de socio', True, 60, 'PRO_LABORE'),
+        ('Distribuicao de lucros', 'Documento de suporte para distribuicao de lucros', True, 70, 'DISTRIBUICAO_LUCROS'),
+        ('Reembolso', 'Reembolsos e prestacoes de contas', True, 80, 'REEMBOLSO'),
+        ('Emprestimo / Adiantamento', 'Mutuos, adiantamentos e emprestimos', True, 90, 'EMPRESTIMO'),
+        ('Documento contabil', 'Documento fiscal ou contabil complementar', True, 100, 'DOCUMENTO_CONTABIL'),
+        ('Outros documentos', 'Documentos empresariais para revisao do contador', False, 999, 'OUTRO'),
     ]
 
     @classmethod
     def garantir_categorias_ir_iniciais(cls):
         criadas = []
-        for nome, descricao, dedutivel, ordem in cls.CATEGORIAS_IR_INICIAIS:
+        for nome, descricao, dedutivel, ordem, natureza in cls.CATEGORIAS_IR_INICIAIS:
             existente = IrCategoria.query.filter_by(nome=nome).first()
             if existente:
+                if not getattr(existente, 'tipo_contexto', None):
+                    existente.tipo_contexto = 'PESSOAL'
+                if not getattr(existente, 'natureza', None):
+                    existente.natureza = natureza
                 continue
             categoria = IrCategoria(
                 nome=nome,
@@ -74,6 +93,8 @@ class IrDocumentoService:
                 ativo=True,
                 observacao_fiscal='Classificacao potencial. Revisar com contador.',
                 ordem=ordem,
+                tipo_contexto='PESSOAL',
+                natureza=natureza,
             )
             db.session.add(categoria)
             criadas.append(categoria)
@@ -82,9 +103,62 @@ class IrDocumentoService:
         return criadas
 
     @classmethod
+    def garantir_categorias_fiscais_empresa(cls):
+        criadas = []
+        for nome, descricao, dedutivel, ordem, natureza in cls.CATEGORIAS_EMPRESA_INICIAIS:
+            existente = IrCategoria.query.filter_by(nome=nome).first()
+            if existente:
+                if not getattr(existente, 'tipo_contexto', None):
+                    existente.tipo_contexto = 'EMPRESA'
+                if not getattr(existente, 'natureza', None):
+                    existente.natureza = natureza
+                continue
+            categoria = IrCategoria(
+                nome=nome,
+                descricao=descricao,
+                dedutivel=dedutivel,
+                ativo=True,
+                observacao_fiscal='Classificacao informativa, sujeita a validacao contabil.',
+                ordem=ordem,
+                tipo_contexto='EMPRESA',
+                natureza=natureza,
+            )
+            db.session.add(categoria)
+            criadas.append(categoria)
+        if criadas:
+            db.session.flush()
+        return criadas
+
+    @classmethod
+    def obter_contexto(cls):
+        perfil = PerfilFinanceiroService.obter_perfil_ativo_id()
+        perfil_obj = PerfilFinanceiroService.obter_perfil_por_id(perfil)
+        tipo = (getattr(perfil_obj, 'tipo', None) or 'PESSOAL').upper()
+        modo_empresa = tipo == 'EMPRESA'
+        categorias = cls.listar_categorias_ir()
+        return {
+            'perfil': PerfilFinanceiroService.serializar_perfil(perfil_obj),
+            'modo': 'DOCUMENTOS_FISCAIS_EMPRESA' if modo_empresa else 'IRPF',
+            'titulo': 'Documentos Fiscais e Lastro' if modo_empresa else 'Imposto de Renda',
+            'subtitulo': (
+                'Organize documentos fiscais e vincule comprovantes as saidas financeiras da empresa.'
+                if modo_empresa
+                else 'Organize comprovantes potencialmente dedutiveis para sua declaracao anual.'
+            ),
+            'categorias': [categoria.to_dict() for categoria in categorias],
+        }
+
+    @classmethod
     def listar_categorias_ir(cls):
         cls.garantir_categorias_ir_iniciais()
-        return IrCategoria.query.order_by(IrCategoria.ordem.asc(), IrCategoria.nome.asc()).all()
+        cls.garantir_categorias_fiscais_empresa()
+        perfil_id = PerfilFinanceiroService.obter_perfil_ativo_id()
+        perfil = PerfilFinanceiroService.obter_perfil_por_id(perfil_id)
+        tipo = (getattr(perfil, 'tipo', None) or 'PESSOAL').upper()
+        return IrCategoria.query.filter(
+            IrCategoria.ativo == True,  # noqa: E712
+            IrCategoria.tipo_contexto.in_([tipo, 'AMBOS']),
+        ).order_by(IrCategoria.ordem.asc(), IrCategoria.nome.asc()).all()
 
     @classmethod
     def criar_categoria_ir(cls, dados):
@@ -100,6 +174,8 @@ class IrDocumentoService:
             ativo=bool((dados or {}).get('ativo', True)),
             observacao_fiscal=(dados or {}).get('observacao_fiscal'),
             ordem=int((dados or {}).get('ordem') or 0),
+            tipo_contexto=str((dados or {}).get('tipo_contexto') or 'PESSOAL').strip().upper(),
+            natureza=(dados or {}).get('natureza'),
         )
         db.session.add(categoria)
         db.session.flush()
@@ -245,10 +321,37 @@ class IrDocumentoService:
             'valor_potencialmente_dedutivel': float(valor_potencial),
             'pendentes_revisao': pendentes,
             'categorias_ir_usadas': len(categorias),
+            'lastro': cls.resumo_lastro(comprovantes),
             'totais_por_categoria_ir': [
                 {'categoria_ir_nome': nome, 'valor': float(valor)}
                 for nome, valor in sorted(por_categoria.items(), key=lambda item: item[0])
             ],
+        }
+
+    @staticmethod
+    def resumo_lastro(comprovantes):
+        total = len(comprovantes)
+        vinculados = 0
+        aguardando = 0
+        valor_com_lastro = Decimal('0')
+        valor_sem_lastro = Decimal('0')
+        for comprovante in comprovantes:
+            vinculo = comprovante.vinculos.filter_by(ativo=True).first()
+            valor = Decimal(str(comprovante.valor or 0))
+            if vinculo:
+                vinculados += 1
+                valor_com_lastro += valor
+                if vinculo.status_lastro == 'AGUARDANDO_CONTADOR':
+                    aguardando += 1
+            else:
+                valor_sem_lastro += valor
+        return {
+            'total_documentos': total,
+            'documentos_vinculados': vinculados,
+            'documentos_sem_vinculo': max(total - vinculados, 0),
+            'valor_com_lastro': float(valor_com_lastro),
+            'valor_sem_lastro': float(valor_sem_lastro),
+            'documentos_aguardando_contador': aguardando,
         }
 
     @classmethod
