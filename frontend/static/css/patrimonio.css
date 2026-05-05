@@ -91,6 +91,416 @@
     gap: var(--app-section-gap, 16px);
 }
 
+.patrimonio-empresa-controls,
+.patrimonio-empresa-actions {
+    display: none !important;
+}
+
+#patrimonio-empresarial[hidden],
+#patrimonio-pessoal[hidden] {
+    display: none !important;
+}
+
+body.patrimonio-empresa-mode .patrimonio-personal-controls,
+body.patrimonio-empresa-mode .patrimonio-personal-actions {
+    display: none !important;
+}
+
+body.patrimonio-empresa-mode .patrimonio-empresa-controls,
+body.patrimonio-empresa-mode .patrimonio-empresa-actions {
+    display: flex !important;
+}
+
+.patrimonio-empresa-controls {
+    flex: 1 1 auto;
+}
+
+.patrimonio-empresa-search {
+    min-width: 280px;
+}
+
+.patrimonio-empresa-heading {
+    align-items: center;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
+    display: flex;
+    justify-content: space-between;
+    padding: 18px 22px;
+}
+
+.patrimonio-empresa-heading h2 {
+    color: #0f172a;
+    font-size: 1.25rem;
+    margin: 0;
+}
+
+.patrimonio-empresa-heading p {
+    color: #64748b;
+    margin: 6px 0 0;
+}
+
+.patrimonio-empresa-badge,
+.patrimonio-counter {
+    align-items: center;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 999px;
+    color: #1d4ed8;
+    display: inline-flex;
+    font-size: 0.78rem;
+    font-weight: 800;
+    min-height: 28px;
+    padding: 0 10px;
+}
+
+.patrimonio-empresarial-shell {
+    display: flex;
+    flex-direction: column;
+    gap: var(--app-section-gap, 16px);
+}
+
+.patrimonio-empresa-layout {
+    align-items: start;
+    display: grid;
+    gap: var(--app-section-gap, 16px);
+    grid-template-columns: minmax(0, 1.7fr) minmax(360px, 0.85fr);
+}
+
+.patrimonio-empresa-main {
+    display: flex;
+    flex-direction: column;
+    gap: var(--app-section-gap, 16px);
+    min-width: 0;
+}
+
+.patrimonio-table-wrap {
+    overflow-x: auto;
+}
+
+.patrimonio-bens-table {
+    border-collapse: collapse;
+    min-width: 920px;
+    width: 100%;
+}
+
+.patrimonio-bens-table th,
+.patrimonio-bens-table td {
+    border-bottom: 1px solid #e5e7eb;
+    color: #0f172a;
+    font-size: 0.85rem;
+    padding: 12px 16px;
+    text-align: left;
+    vertical-align: middle;
+}
+
+.patrimonio-bens-table th {
+    background: #f8fafc;
+    color: #475569;
+    font-size: 0.76rem;
+    font-weight: 850;
+    text-transform: uppercase;
+}
+
+.patrimonio-bens-table tbody tr {
+    cursor: pointer;
+}
+
+.patrimonio-bens-table tbody tr:hover,
+.patrimonio-bens-table tbody tr.selected {
+    background: #f8fbff;
+}
+
+.bem-cell,
+.bem-row-actions,
+.bem-detail-actions {
+    align-items: center;
+    display: flex;
+    gap: 10px;
+}
+
+.bem-cell strong {
+    display: block;
+}
+
+.bem-cell small {
+    color: #64748b;
+    display: block;
+    margin-top: 3px;
+}
+
+.bem-thumb {
+    align-items: center;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    display: inline-flex;
+    flex: 0 0 42px;
+    height: 42px;
+    justify-content: center;
+    overflow: hidden;
+    width: 42px;
+}
+
+.bem-thumb.large {
+    flex-basis: 78px;
+    height: 78px;
+    width: 78px;
+}
+
+.bem-thumb img {
+    height: 100%;
+    object-fit: cover;
+    width: 100%;
+}
+
+.bem-thumb.fallback {
+    color: #2563eb;
+}
+
+.bem-thumb svg {
+    fill: none;
+    height: 20px;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.8;
+    width: 20px;
+}
+
+.bem-status {
+    border-radius: 999px;
+    display: inline-flex;
+    font-size: 0.74rem;
+    font-weight: 850;
+    padding: 5px 10px;
+    white-space: nowrap;
+}
+
+.bem-status.ok {
+    background: #dcfce7;
+    border: 1px solid #86efac;
+    color: #15803d;
+}
+
+.bem-status.warn {
+    background: #fef3c7;
+    border: 1px solid #fcd34d;
+    color: #b45309;
+}
+
+.bem-status.info {
+    background: #dbeafe;
+    border: 1px solid #93c5fd;
+    color: #1d4ed8;
+}
+
+.bem-status.neutral {
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    color: #475569;
+}
+
+.bem-status.danger {
+    background: #fee2e2;
+    border: 1px solid #fca5a5;
+    color: #b91c1c;
+}
+
+.bem-detail-card {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    padding: 18px 20px 22px;
+}
+
+.bem-detail-main h3 {
+    color: #0f172a;
+    font-size: 1.1rem;
+    margin: 0;
+}
+
+.bem-detail-main p,
+.bem-detail-main small {
+    color: #64748b;
+    display: block;
+    margin: 5px 0 0;
+}
+
+.bem-detail-grid {
+    border-top: 1px solid #e5e7eb;
+    display: grid;
+    gap: 0;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin: 2px 0 0;
+    padding-top: 14px;
+}
+
+.bem-detail-grid div {
+    border-right: 1px solid #e5e7eb;
+    min-height: 54px;
+    padding: 8px 14px;
+}
+
+.bem-detail-grid div:nth-child(4n) {
+    border-right: 0;
+}
+
+.bem-detail-grid dt {
+    color: #64748b;
+    font-size: 0.75rem;
+    font-weight: 800;
+}
+
+.bem-detail-grid dd {
+    color: #0f172a;
+    font-size: 0.85rem;
+    font-weight: 750;
+    margin: 5px 0 0;
+}
+
+.patrimonio-fluxo {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    padding: 18px;
+}
+
+.patrimonio-fluxo div {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 12px;
+    text-align: center;
+}
+
+.patrimonio-fluxo span {
+    align-items: center;
+    background: #dbeafe;
+    border-radius: 999px;
+    color: #2563eb;
+    display: inline-flex;
+    font-size: 0.75rem;
+    font-weight: 850;
+    height: 24px;
+    justify-content: center;
+    width: 24px;
+}
+
+.patrimonio-fluxo strong,
+.patrimonio-fluxo small {
+    display: block;
+}
+
+.patrimonio-fluxo strong {
+    color: #0f172a;
+    font-size: 0.8rem;
+    margin-top: 8px;
+}
+
+.patrimonio-fluxo small {
+    color: #64748b;
+    font-size: 0.72rem;
+    margin-top: 4px;
+}
+
+.patrimonio-pendencias-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px 16px 18px;
+}
+
+.pendencia-bem-item {
+    align-items: center;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 9px;
+    color: #0f172a;
+    cursor: pointer;
+    display: grid;
+    gap: 10px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    min-height: 44px;
+    padding: 8px 10px;
+    text-align: left;
+}
+
+.pendencia-bem-item:hover {
+    border-color: #bfdbfe;
+    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.10);
+}
+
+.pendencia-bem-item span {
+    color: #d97706;
+}
+
+.pendencia-bem-item svg {
+    fill: none;
+    height: 17px;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    width: 17px;
+}
+
+.pendencia-bem-item small {
+    color: #b45309;
+    font-weight: 800;
+}
+
+.bem-modal-box {
+    max-width: 1120px;
+}
+
+.vinculo-modal-box {
+    max-width: 620px;
+}
+
+.bem-form-grid {
+    display: grid;
+    gap: 22px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.bem-imagens-grid {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.bem-image-option {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    color: #0f172a;
+    cursor: pointer;
+    min-height: 104px;
+    overflow: hidden;
+    padding: 0;
+    text-align: left;
+}
+
+.bem-image-option.selected {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+}
+
+.bem-image-option img {
+    aspect-ratio: 16 / 9;
+    display: block;
+    object-fit: cover;
+    width: 100%;
+}
+
+.bem-image-option span {
+    display: block;
+    font-size: 0.76rem;
+    font-weight: 800;
+    padding: 8px 9px;
+}
+
 .patrimonio-summary-grid {
     display: grid;
     gap: var(--app-section-gap, 16px);
@@ -946,8 +1356,17 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .patrimonio-layout {
+    .patrimonio-layout,
+    .patrimonio-empresa-layout {
         grid-template-columns: 1fr;
+    }
+
+    .bem-detail-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .bem-detail-grid div:nth-child(2n) {
+        border-right: 0;
     }
 }
 
@@ -968,10 +1387,28 @@
     .caixinha-card,
     .form-row,
     .caixinha-modal-grid,
+    .bem-form-grid,
+    .bem-detail-card,
+    .bem-detail-grid,
+    .patrimonio-fluxo,
     .patrimonio-composition,
     .transf-card,
     .transfer-preview {
         grid-template-columns: 1fr;
+    }
+
+    .patrimonio-empresa-heading,
+    .bem-detail-actions {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .bem-detail-grid div {
+        border-right: 0;
+    }
+
+    .bem-imagens-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .patrimonio-preview-panel {

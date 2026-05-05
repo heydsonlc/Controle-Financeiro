@@ -5,6 +5,7 @@ from sqlalchemy import or_
 
 try:
     from backend.models import (
+        BemPatrimonial,
         ContaBancaria,
         ContaPatrimonio,
         DespesaPrevista,
@@ -19,6 +20,7 @@ try:
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import (
+        BemPatrimonial,
         ContaBancaria,
         ContaPatrimonio,
         DespesaPrevista,
@@ -39,7 +41,7 @@ class DocumentoFiscalService:
         'DESPESA_PREVISTA': DespesaPrevista,
         'LANCAMENTO': LancamentoAgregado,
         'MOVIMENTO_FINANCEIRO': MovimentoFinanceiro,
-        'PATRIMONIO': ContaPatrimonio,
+        'PATRIMONIO': BemPatrimonial,
         'FINANCIAMENTO': Financiamento,
         'OUTRO': None,
     }
@@ -208,7 +210,7 @@ class DocumentoFiscalService:
         if tipo_entidade == 'CONTA':
             return entidade.saldo_atual
         if tipo_entidade == 'PATRIMONIO':
-            return entidade.saldo_atual
+            return entidade.valor_aquisicao
         if tipo_entidade == 'FINANCIAMENTO':
             return entidade.valor_financiado
         if tipo_entidade == 'LANCAMENTO':
@@ -232,6 +234,8 @@ class DocumentoFiscalService:
             valor = entidade.data_prevista
         elif tipo_entidade == 'FINANCIAMENTO':
             valor = entidade.data_contrato
+        elif tipo_entidade == 'PATRIMONIO':
+            valor = entidade.data_aquisicao
         return valor.isoformat() if valor else None
 
     @staticmethod

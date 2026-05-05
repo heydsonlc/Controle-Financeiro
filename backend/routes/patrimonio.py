@@ -18,9 +18,11 @@ from flask import Blueprint, request, jsonify
 from datetime import datetime, date
 try:
     from backend.models import db, ContaPatrimonio, Transferencia
+    from backend.services.patrimonio_empresarial_service import PatrimonioEmpresarialService
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import db, ContaPatrimonio, Transferencia
+    from services.patrimonio_empresarial_service import PatrimonioEmpresarialService
     from services.perfil_financeiro_service import PerfilFinanceiroService
 
 # Criar blueprint
@@ -41,6 +43,111 @@ def _buscar_conta_perfil(conta_id):
 
 def _transferencias_query():
     return PerfilFinanceiroService.aplicar_perfil_query(Transferencia.query, Transferencia)
+
+
+def _json_success(data=None, status=200, **extra):
+    payload = {'success': True}
+    if data is not None:
+        payload['data'] = data
+    payload.update(extra)
+    return jsonify(payload), status
+
+
+def _json_error(message, status=400):
+    return jsonify({'success': False, 'error': str(message)}), status
+
+
+def _handle_empresarial_error(error):
+    if isinstance(error, PermissionError):
+        return _json_error(error, 403)
+    if isinstance(error, LookupError):
+        return _json_error(error, 404)
+    if isinstance(error, ValueError):
+        return _json_error(error, 400)
+    return _json_error(error, 500)
+
+
+@patrimonio_bp.route('/bens', methods=['GET'])
+def listar_bens_empresariais():
+    try:
+        bens = PatrimonioEmpresarialService.listar_bens(request.args)
+        return _json_success(bens, total=len(bens))
+    except Exception as e:
+        return _handle_empresarial_error(e)
+
+
+@patrimonio_bp.route('/bens', methods=['POST'])
+def criar_bem_empresarial():
+    try:
+        bem = PatrimonioEmpresarialService.criar_bem(request.get_json(silent=True) or {})
+        return _json_success(bem, status=201, message='Bem patrimonial criado com sucesso')
+    except Exception as e:
+        db.session.rollback()
+        return _handle_empresarial_error(e)
+
+
+@patrimonio_bp.route('/bens/imagens', methods=['GET'])
+def listar_imagens_bens_empresariais():
+    try:
+        imagens = PatrimonioEmpresarialService.listar_imagens_disponiveis()
+        return _json_success(imagens, total=len(imagens))
+    except Exception as e:
+        return _handle_empresarial_error(e)
+
+
+@patrimonio_bp.route('/bens/resumo', methods=['GET'])
+def resumo_bens_empresariais():
+    try:
+        return _json_success(PatrimonioEmpresarialService.resumo())
+    except Exception as e:
+        return _handle_empresarial_error(e)
+
+
+@patrimonio_bp.route('/bens/criar-a-partir-documento', methods=['POST'])
+def criar_bem_a_partir_documento():
+    try:
+        bem = PatrimonioEmpresarialService.criar_a_partir_documento(request.get_json(silent=True) or {})
+        return _json_success(bem, status=201, message='Bem criado a partir do documento fiscal')
+    except Exception as e:
+        db.session.rollback()
+        return _handle_empresarial_error(e)
+
+
+@patrimonio_bp.route('/bens/<int:bem_id>', methods=['GET'])
+def obter_bem_empresarial(bem_id):
+    try:
+        return _json_success(PatrimonioEmpresarialService.obter_bem(bem_id))
+    except Exception as e:
+        return _handle_empresarial_error(e)
+
+
+@patrimonio_bp.route('/bens/<int:bem_id>', methods=['PUT'])
+def atualizar_bem_empresarial(bem_id):
+    try:
+        bem = PatrimonioEmpresarialService.atualizar_bem(bem_id, request.get_json(silent=True) or {})
+        return _json_success(bem, message='Bem patrimonial atualizado com sucesso')
+    except Exception as e:
+        db.session.rollback()
+        return _handle_empresarial_error(e)
+
+
+@patrimonio_bp.route('/bens/<int:bem_id>/vincular-documento', methods=['POST'])
+def vincular_documento_bem_empresarial(bem_id):
+    try:
+        bem = PatrimonioEmpresarialService.vincular_documento(bem_id, request.get_json(silent=True) or {})
+        return _json_success(bem, message='Documento fiscal vinculado ao bem')
+    except Exception as e:
+        db.session.rollback()
+        return _handle_empresarial_error(e)
+
+
+@patrimonio_bp.route('/documentos-vinculaveis', methods=['GET'])
+def documentos_vinculaveis_patrimonio():
+    try:
+        documentos = PatrimonioEmpresarialService.documentos_vinculaveis(request.args.get('busca'))
+        return _json_success(documentos, total=len(documentos))
+    except Exception as e:
+        return _handle_empresarial_error(e)
 
 
 # ============================================================================

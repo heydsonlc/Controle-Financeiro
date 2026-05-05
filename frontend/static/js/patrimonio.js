@@ -3,16 +3,21 @@ const API_BASE = '/api/patrimonio';
 const estadoPatrimonio = {
     contas: [],
     transferencias: [],
+    bens: [],
+    documentos: [],
+    imagens: [],
+    resumoBens: null,
     busca: '',
     aba: 'contas',
+    modoEmpresa: false,
+    bemSelecionadoId: null,
 };
 
 let contaAtual = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     inicializarPreviewCaixinha();
-    carregarContas();
-    carregarTransferencias();
+    inicializarPatrimonioContextual();
 });
 
 function patrimonioIcon(name) {
@@ -40,6 +45,540 @@ function inicializarPreviewCaixinha() {
         document.getElementById(id)?.addEventListener('input', atualizarPreviewCaixinha);
         document.getElementById(id)?.addEventListener('change', atualizarPreviewCaixinha);
     });
+}
+
+async function inicializarPatrimonioContextual() {
+    configurarEventosEmpresa();
+    const perfil = await obterPerfilAtivo();
+    if (perfil?.tipo === 'EMPRESA') {
+        ativarModoEmpresa();
+        await carregarPatrimonioEmpresarial();
+    } else {
+        ativarModoPessoal();
+    }
+}
+
+async function obterPerfilAtivo() {
+    try {
+        const response = await fetch('/api/perfis-financeiros/ativo');
+        if (!response.ok) return null;
+        const result = await response.json();
+        return result.perfil_ativo || null;
+    } catch (error) {
+        return null;
+    }
+}
+
+function ativarModoPessoal() {
+    estadoPatrimonio.modoEmpresa = false;
+    document.body.classList.remove('patrimonio-empresa-mode');
+    document.getElementById('patrimonio-empresarial')?.setAttribute('hidden', '');
+    document.getElementById('patrimonio-pessoal')?.removeAttribute('hidden');
+    carregarContas();
+    carregarTransferencias();
+}
+
+function ativarModoEmpresa() {
+    estadoPatrimonio.modoEmpresa = true;
+    document.body.classList.add('patrimonio-empresa-mode');
+    document.getElementById('patrimonio-pessoal')?.setAttribute('hidden', '');
+    document.getElementById('patrimonio-empresarial')?.removeAttribute('hidden');
+    const pageTitle = document.querySelector('.app-topbar-title span');
+    if (pageTitle) pageTitle.textContent = 'Patrimonio Empresarial';
+}
+
+function configurarEventosEmpresa() {
+    if (document.body.dataset.patrimonioEmpresaBound === 'true') return;
+    document.body.dataset.patrimonioEmpresaBound = 'true';
+
+    ['bem-filtro-categoria', 'bem-filtro-status', 'bem-filtro-documento'].forEach((id) => {
+        document.getElementById(id)?.addEventListener('change', carregarPatrimonioEmpresarial);
+    });
+    document.getElementById('bem-busca')?.addEventListener('input', debounce(carregarPatrimonioEmpresarial, 260));
+    document.getElementById('btn-atualizar-bens')?.addEventListener('click', carregarPatrimonioEmpresarial);
+    document.getElementById('btn-novo-bem')?.addEventListener('click', abrirModalNovoBem);
+    document.getElementById('btn-importar-nota')?.addEventListener('click', () => { window.location.href = '/imposto-renda'; });
+    document.getElementById('btn-vincular-documento')?.addEventListener('click', () => abrirModalVincularBem());
+    document.getElementById('form-bem')?.addEventListener('submit', salvarBemEmpresarial);
+    document.getElementById('form-vincular-bem')?.addEventListener('submit', salvarVinculoBem);
+    document.getElementById('btn-criar-bem-documento')?.addEventListener('click', criarBemAPartirDocumento);
+}
+
+async function carregarPatrimonioEmpresarial() {
+    try {
+        const params = montarParamsBens();
+        const [resumo, bens, documentos, imagens] = await Promise.all([
+            fetchJson(`${API_BASE}/bens/resumo`),
+            fetchJson(`${API_BASE}/bens?${params.toString()}`),
+            fetchJson(`${API_BASE}/documentos-vinculaveis`),
+            fetchJson(`${API_BASE}/bens/imagens`),
+        ]);
+
+        estadoPatrimonio.resumoBens = resumo.data || {};
+        estadoPatrimonio.bens = bens.data || [];
+        estadoPatrimonio.documentos = documentos.data || [];
+        estadoPatrimonio.imagens = imagens.data || [];
+
+        renderizarFiltrosCategoriaBens();
+        renderizarResumoBens();
+        renderizarTabelaBens();
+        renderizarComposicaoBens();
+        renderizarPendenciasBens();
+        renderizarOpcoesDocumentos();
+        if (!estadoPatrimonio.bemSelecionadoId && estadoPatrimonio.bens.length) {
+            estadoPatrimonio.bemSelecionadoId = estadoPatrimonio.bens[0].id;
+        }
+        renderizarDetalheBem();
+    } catch (error) {
+        mostrarErro('Erro ao carregar patrimonio empresarial');
+    }
+}
+
+function montarParamsBens() {
+    const params = new URLSearchParams();
+    const categoria = document.getElementById('bem-filtro-categoria')?.value;
+    const status = document.getElementById('bem-filtro-status')?.value;
+    const documento = document.getElementById('bem-filtro-documento')?.value;
+    const busca = document.getElementById('bem-busca')?.value;
+    if (categoria) params.set('categoria', categoria);
+    if (status) params.set('status', status);
+    if (documento) params.set('documento', documento);
+    if (busca) params.set('busca', busca);
+    return params;
+}
+
+function renderizarFiltrosCategoriaBens() {
+    const select = document.getElementById('bem-filtro-categoria');
+    if (!select) return;
+    const valorAtual = select.value;
+    const categorias = [...new Set(estadoPatrimonio.bens.map((bem) => bem.categoria).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    select.innerHTML = '<option value="">Todas</option>' + categorias.map((categoria) => `<option value="${escapeHtml(categoria)}">${escapeHtml(categoria)}</option>`).join('');
+    select.value = categorias.includes(valorAtual) ? valorAtual : '';
+}
+
+function renderizarResumoBens() {
+    const resumo = estadoPatrimonio.resumoBens || {};
+    setText('bem-kpi-total', formatarMoedaDisplay(resumo.patrimonio_total || 0));
+    setText('bem-kpi-total-legenda', `${resumo.bens_cadastrados || 0} bens cadastrados`);
+    setText('bem-kpi-lastro', resumo.bens_com_lastro || 0);
+    setText('bem-kpi-lastro-legenda', `${Number(resumo.percentual_com_lastro || 0).toFixed(1)}% do total`);
+    setText('bem-kpi-pendencias', resumo.pendencias_documentais || 0);
+    setText('bem-kpi-aquisicoes', formatarMoedaDisplay(resumo.aquisicoes_ano?.valor || 0));
+    setText('bem-kpi-aquisicoes-legenda', `${resumo.aquisicoes_ano?.quantidade || 0} novos bens`);
+    setText('bens-pendencias-count', resumo.pendencias_documentais || 0);
+}
+
+function renderizarTabelaBens() {
+    const tbody = document.getElementById('bens-tabela-corpo');
+    if (!tbody) return;
+    setText('bens-lista-meta', `${estadoPatrimonio.bens.length} ${estadoPatrimonio.bens.length === 1 ? 'bem exibido' : 'bens exibidos'}`);
+    if (!estadoPatrimonio.bens.length) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7">
+                    <div class="empty-state">
+                        <strong>Nenhum bem patrimonial cadastrado.</strong>
+                        <span>Crie um bem ou selecione uma nota fiscal ja importada para iniciar o lastro.</span>
+                    </div>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = estadoPatrimonio.bens.map((bem) => `
+        <tr class="${bem.id === estadoPatrimonio.bemSelecionadoId ? 'selected' : ''}" onclick="selecionarBemEmpresarial(${bem.id})">
+            <td>
+                <div class="bem-cell">
+                    ${miniaturaBem(bem)}
+                    <div>
+                        <strong>${escapeHtml(bem.nome)}</strong>
+                        <small>${escapeHtml(bem.codigo || 'Sem tag')}</small>
+                    </div>
+                </div>
+            </td>
+            <td>${escapeHtml(bem.categoria || '-')}</td>
+            <td>${formatarData(bem.data_aquisicao)}</td>
+            <td><strong>${formatarMoedaDisplay(bem.valor_aquisicao || 0)}</strong></td>
+            <td>${escapeHtml(bem.documento_label || 'Sem documento')}</td>
+            <td><span class="bem-status ${classeStatusDocumento(bem.status_documental)}">${escapeHtml(bem.status_documental_label || '-')}</span></td>
+            <td>
+                <div class="bem-row-actions">
+                    <button class="row-action-button" type="button" onclick="event.stopPropagation(); abrirModalEditarBem(${bem.id})" title="Editar" aria-label="Editar">${patrimonioIcon('edit')}</button>
+                    <button class="row-action-button" type="button" onclick="event.stopPropagation(); abrirModalVincularBem(${bem.id})" title="Vincular documento" aria-label="Vincular documento">${patrimonioIcon('view')}</button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function renderizarComposicaoBens() {
+    const container = document.getElementById('bens-composicao');
+    if (!container) return;
+    const composicao = estadoPatrimonio.resumoBens?.composicao || [];
+    const total = estadoPatrimonio.resumoBens?.patrimonio_total || 0;
+    if (!composicao.length) {
+        container.innerHTML = '<div class="empty-state"><strong>Sem imobilizado.</strong><span>Cadastre bens com valor para visualizar a composicao.</span></div>';
+        return;
+    }
+    const cores = ['#2563eb', '#10b981', '#f59e0b', '#8b5cf6', '#0ea5e9', '#ef4444'];
+    let cursor = 0;
+    const gradiente = composicao.map((item, index) => {
+        const inicio = cursor;
+        const fim = cursor + Number(item.percentual || 0);
+        cursor = fim;
+        return `${cores[index % cores.length]} ${inicio}% ${fim}%`;
+    }).join(', ');
+    container.innerHTML = `
+        <div class="patrimonio-donut" style="background: conic-gradient(${gradiente});">
+            <span>Total</span>
+            <strong>${formatarMoedaDisplay(total)}</strong>
+        </div>
+        <div class="patrimonio-composition-list">
+            ${composicao.map((item, index) => `
+                <div class="patrimonio-composition-line">
+                    <span class="patrimonio-composition-name"><i style="--cor-conta:${cores[index % cores.length]}"></i>${escapeHtml(item.categoria)}</span>
+                    <strong>${Number(item.percentual || 0).toFixed(1)}%</strong>
+                    <span>${formatarMoedaDisplay(item.valor || 0)}</span>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+function renderizarPendenciasBens() {
+    const container = document.getElementById('bens-pendencias');
+    if (!container) return;
+    const pendencias = estadoPatrimonio.resumoBens?.pendencias_prioritarias || [];
+    if (!pendencias.length) {
+        container.innerHTML = '<div class="empty-state"><strong>Nenhuma pendencia documental.</strong><span>Todos os bens cadastrados estao com lastro ou excecao tratada.</span></div>';
+        return;
+    }
+    container.innerHTML = pendencias.map((bem) => `
+        <button type="button" class="pendencia-bem-item" onclick="selecionarBemEmpresarial(${bem.id})">
+            <span>${patrimonioIcon('note')}</span>
+            <strong>${escapeHtml(bem.nome)}</strong>
+            <small>${escapeHtml(bem.status_documental_label || 'Pendente')}</small>
+        </button>
+    `).join('');
+}
+
+function renderizarDetalheBem() {
+    const container = document.getElementById('bem-detalhe');
+    if (!container) return;
+    const bem = estadoPatrimonio.bens.find((item) => item.id === estadoPatrimonio.bemSelecionadoId);
+    if (!bem) {
+        container.innerHTML = '<div class="empty-state"><strong>Selecione um bem.</strong><span>O detalhe exibe documento fiscal, fornecedor, valor, local e status documental.</span></div>';
+        return;
+    }
+    container.innerHTML = `
+        <div class="patrimonio-panel-header">
+            <div>
+                <h2>Detalhe do bem selecionado</h2>
+                <small>${escapeHtml(bem.status_documental_label || '-')}</small>
+            </div>
+            <div class="bem-detail-actions">
+                <button type="button" class="patrimonio-secondary-btn" onclick="verDocumentoBem(${bem.id})">Ver documento</button>
+                <button type="button" class="patrimonio-primary-btn" onclick="abrirModalEditarBem(${bem.id})">Editar bem</button>
+            </div>
+        </div>
+        <div class="bem-detail-card">
+            ${miniaturaBem(bem, true)}
+            <div class="bem-detail-main">
+                <h3>${escapeHtml(bem.nome)}</h3>
+                <p>${escapeHtml(bem.codigo || 'Sem tag')} &middot; ${escapeHtml(bem.categoria || 'Sem categoria')}</p>
+                <small>${escapeHtml(bem.descricao || 'Sem descricao cadastrada.')}</small>
+            </div>
+            <span class="bem-status ${classeStatusDocumento(bem.status_documental)}">${escapeHtml(bem.status_documental_label || '-')}</span>
+            <dl class="bem-detail-grid">
+                <div><dt>Fornecedor</dt><dd>${escapeHtml(bem.fornecedor || '-')}</dd></div>
+                <div><dt>Numero da nota</dt><dd>${escapeHtml(bem.documento_numero || '-')}</dd></div>
+                <div><dt>Data da compra</dt><dd>${formatarData(bem.data_aquisicao)}</dd></div>
+                <div><dt>Valor de aquisicao</dt><dd>${formatarMoedaDisplay(bem.valor_aquisicao || 0)}</dd></div>
+                <div><dt>Vida util estimada</dt><dd>${bem.vida_util_meses ? `${bem.vida_util_meses} meses` : '-'}</dd></div>
+                <div><dt>Depreciacao mensal</dt><dd>${bem.depreciacao_mensal ? formatarMoedaDisplay(bem.depreciacao_mensal) : '-'}</dd></div>
+                <div><dt>Centro de custo</dt><dd>${escapeHtml(bem.centro_custo || '-')}</dd></div>
+                <div><dt>Localizacao</dt><dd>${escapeHtml(bem.localizacao || '-')}</dd></div>
+                <div><dt>Responsavel</dt><dd>${escapeHtml(bem.responsavel || '-')}</dd></div>
+                <div><dt>Documento fiscal</dt><dd>${escapeHtml(bem.documento_label || 'Sem documento')}</dd></div>
+            </dl>
+        </div>
+    `;
+}
+
+function selecionarBemEmpresarial(id) {
+    estadoPatrimonio.bemSelecionadoId = id;
+    renderizarTabelaBens();
+    renderizarDetalheBem();
+}
+
+function renderizarOpcoesDocumentos() {
+    const options = '<option value="">Sem documento vinculado</option>' + estadoPatrimonio.documentos.map((doc) => (
+        `<option value="${doc.id}">${escapeHtml(doc.label)}</option>`
+    )).join('');
+    const vinculoOptions = '<option value="">Selecione um documento...</option>' + estadoPatrimonio.documentos.map((doc) => (
+        `<option value="${doc.id}">${escapeHtml(doc.label)}</option>`
+    )).join('');
+    const bemSelect = document.getElementById('bem-comprovante');
+    const vinculoSelect = document.getElementById('vinculo-comprovante');
+    if (bemSelect) bemSelect.innerHTML = options;
+    if (vinculoSelect) vinculoSelect.innerHTML = vinculoOptions;
+}
+
+function renderizarImagensBens() {
+    const grid = document.getElementById('bem-imagens-grid');
+    if (!grid) return;
+    const selecionada = document.getElementById('bem-imagem-arquivo')?.value || '';
+    if (!estadoPatrimonio.imagens.length) {
+        grid.innerHTML = '<div class="empty-state"><strong>Sem imagens locais.</strong><span>O cadastro usara o icone padrao.</span></div>';
+        return;
+    }
+    grid.innerHTML = estadoPatrimonio.imagens.map((imagem) => `
+        <button type="button" class="bem-image-option ${imagem.arquivo === selecionada ? 'selected' : ''}" data-bem-imagem="${escapeHtml(imagem.arquivo)}">
+            <img src="${escapeHtml(imagem.url)}" alt="${escapeHtml(imagem.label)}">
+            <span>${escapeHtml(imagem.label)}</span>
+        </button>
+    `).join('');
+    grid.querySelectorAll('[data-bem-imagem]').forEach((button) => {
+        button.addEventListener('click', () => selecionarImagemBem(button.dataset.bemImagem));
+    });
+}
+
+function selecionarImagemBem(arquivo) {
+    setValue('bem-imagem-arquivo', arquivo || '');
+    renderizarImagensBens();
+}
+
+async function abrirModalNovoBem() {
+    document.getElementById('form-bem')?.reset();
+    setValue('bem-id', '');
+    setValue('bem-imagem-arquivo', '');
+    setValue('bem-status-documental', 'SEM_DOCUMENTO');
+    await garantirDadosAuxiliaresBens();
+    renderizarOpcoesDocumentos();
+    renderizarImagensBens();
+    abrirModal('modal-bem');
+}
+
+async function abrirModalEditarBem(id) {
+    const bem = estadoPatrimonio.bens.find((item) => item.id === id);
+    if (!bem) return;
+    await garantirDadosAuxiliaresBens();
+    preencherFormBem(bem);
+    renderizarOpcoesDocumentos();
+    renderizarImagensBens();
+    abrirModal('modal-bem');
+}
+
+function preencherFormBem(bem) {
+    setValue('bem-id', bem.id);
+    setValue('bem-nome', bem.nome || '');
+    setValue('bem-codigo', bem.codigo || '');
+    setValue('bem-categoria', bem.categoria || 'Equipamentos');
+    setValue('bem-status-documental', bem.status_documental || 'SEM_DOCUMENTO');
+    setValue('bem-descricao', bem.descricao || '');
+    setValue('bem-imagem-arquivo', bem.imagem_arquivo || '');
+    setValue('bem-valor', bem.valor_aquisicao ? formatarMoedaDisplay(bem.valor_aquisicao) : '');
+    setValue('bem-data', bem.data_aquisicao || '');
+    setValue('bem-fornecedor', bem.fornecedor || '');
+    setValue('bem-documento-numero', bem.documento_numero || '');
+    setValue('bem-comprovante', '');
+    setValue('bem-vida-util', bem.vida_util_meses || '');
+    setValue('bem-centro-custo', bem.centro_custo || '');
+    setValue('bem-localizacao', bem.localizacao || '');
+    setValue('bem-responsavel', bem.responsavel || '');
+    setValue('bem-observacoes', bem.observacoes || '');
+}
+
+async function salvarBemEmpresarial(event) {
+    event.preventDefault();
+    const id = document.getElementById('bem-id')?.value;
+    const dados = dadosFormBem();
+    try {
+        const response = await fetch(id ? `${API_BASE}/bens/${id}` : `${API_BASE}/bens`, {
+            method: id ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dados),
+        });
+        const result = await response.json();
+        if (!result.success) {
+            mostrarErro(result.error);
+            return;
+        }
+        mostrarSucesso(result.message || 'Bem salvo');
+        fecharModal('modal-bem');
+        estadoPatrimonio.bemSelecionadoId = result.data?.id || estadoPatrimonio.bemSelecionadoId;
+        await carregarPatrimonioEmpresarial();
+    } catch (error) {
+        mostrarErro('Erro ao salvar bem');
+    }
+}
+
+async function criarBemAPartirDocumento() {
+    const dados = dadosFormBem();
+    if (!dados.comprovante_id) {
+        mostrarErro('Selecione um documento fiscal para criar o bem.');
+        return;
+    }
+    try {
+        const response = await fetch(`${API_BASE}/bens/criar-a-partir-documento`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dados),
+        });
+        const result = await response.json();
+        if (!result.success) {
+            mostrarErro(result.error);
+            return;
+        }
+        mostrarSucesso(result.message || 'Bem criado a partir do documento');
+        fecharModal('modal-bem');
+        estadoPatrimonio.bemSelecionadoId = result.data?.id;
+        await carregarPatrimonioEmpresarial();
+    } catch (error) {
+        mostrarErro('Erro ao criar bem a partir do documento');
+    }
+}
+
+function dadosFormBem() {
+    return {
+        nome: document.getElementById('bem-nome')?.value,
+        codigo: document.getElementById('bem-codigo')?.value,
+        categoria: document.getElementById('bem-categoria')?.value,
+        status_documental: document.getElementById('bem-status-documental')?.value,
+        descricao: document.getElementById('bem-descricao')?.value,
+        imagem_arquivo: document.getElementById('bem-imagem-arquivo')?.value,
+        valor_aquisicao: parseMoeda(document.getElementById('bem-valor')?.value),
+        data_aquisicao: document.getElementById('bem-data')?.value,
+        fornecedor: document.getElementById('bem-fornecedor')?.value,
+        documento_numero: document.getElementById('bem-documento-numero')?.value,
+        comprovante_id: Number(document.getElementById('bem-comprovante')?.value) || null,
+        vida_util_meses: Number(document.getElementById('bem-vida-util')?.value) || null,
+        centro_custo: document.getElementById('bem-centro-custo')?.value,
+        localizacao: document.getElementById('bem-localizacao')?.value,
+        responsavel: document.getElementById('bem-responsavel')?.value,
+        observacoes: document.getElementById('bem-observacoes')?.value,
+    };
+}
+
+async function abrirModalVincularBem(id) {
+    const bemId = id || estadoPatrimonio.bemSelecionadoId;
+    if (!bemId) {
+        mostrarErro('Selecione um bem para vincular documento.');
+        return;
+    }
+    await garantirDadosAuxiliaresBens();
+    renderizarOpcoesDocumentos();
+    setValue('vinculo-bem-id', bemId);
+    setValue('vinculo-comprovante', '');
+    setValue('vinculo-tipo', 'NOTA_FISCAL');
+    setValue('vinculo-natureza', 'PATRIMONIO_IMOBILIZADO');
+    setValue('vinculo-observacoes', '');
+    abrirModal('modal-vincular-bem');
+}
+
+async function salvarVinculoBem(event) {
+    event.preventDefault();
+    const bemId = document.getElementById('vinculo-bem-id')?.value;
+    const dados = {
+        comprovante_id: Number(document.getElementById('vinculo-comprovante')?.value),
+        tipo_vinculo: document.getElementById('vinculo-tipo')?.value,
+        natureza: document.getElementById('vinculo-natureza')?.value,
+        observacoes: document.getElementById('vinculo-observacoes')?.value,
+    };
+    try {
+        const response = await fetch(`${API_BASE}/bens/${bemId}/vincular-documento`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dados),
+        });
+        const result = await response.json();
+        if (!result.success) {
+            mostrarErro(result.error);
+            return;
+        }
+        mostrarSucesso(result.message || 'Documento vinculado');
+        fecharModal('modal-vincular-bem');
+        estadoPatrimonio.bemSelecionadoId = result.data?.id || Number(bemId);
+        await carregarPatrimonioEmpresarial();
+    } catch (error) {
+        mostrarErro('Erro ao vincular documento');
+    }
+}
+
+async function garantirDadosAuxiliaresBens() {
+    if (estadoPatrimonio.documentos.length && estadoPatrimonio.imagens.length) return;
+    const [documentos, imagens] = await Promise.all([
+        fetchJson(`${API_BASE}/documentos-vinculaveis`),
+        fetchJson(`${API_BASE}/bens/imagens`),
+    ]);
+    estadoPatrimonio.documentos = documentos.data || [];
+    estadoPatrimonio.imagens = imagens.data || [];
+}
+
+function verDocumentoBem(id) {
+    const bem = estadoPatrimonio.bens.find((item) => item.id === id);
+    const documentoId = bem?.documento?.id;
+    if (!documentoId) {
+        mostrarErro('Este bem ainda nao possui documento vinculado.');
+        return;
+    }
+    window.open(`/api/ir/comprovantes/${documentoId}/arquivo`, '_blank', 'noopener');
+}
+
+function miniaturaBem(bem, grande = false) {
+    const url = bem.imagem_url || imagemUrlPorChave(bem.imagem_chave);
+    const classe = grande ? 'bem-thumb large' : 'bem-thumb';
+    if (url) {
+        return `<span class="${classe}"><img src="${escapeHtml(url)}" alt="${escapeHtml(bem.nome || 'Bem patrimonial')}"></span>`;
+    }
+    return `<span class="${classe} fallback">${patrimonioIcon('box')}</span>`;
+}
+
+function imagemUrlPorChave(chave) {
+    if (!chave || !estadoPatrimonio.imagens.length) return null;
+    const aliases = {
+        notebook: ['notebook', 'laptop'],
+        cadeira: ['cadeira'],
+        moveis: ['mesa', 'movel', 'moveis', 'móveis'],
+        impressora: ['impressora'],
+        ar_condicionado: ['ar condicionado', 'ar_condicionado', 'condicionado'],
+        monitor: ['monitor'],
+        webcam: ['webcam'],
+        placa_video: ['placa video', 'placa_de_video', 'gpu'],
+        equipamento: ['equipamento'],
+    };
+    const termos = aliases[chave] || [chave];
+    const imagem = estadoPatrimonio.imagens.find((item) => {
+        const arquivo = normalizarBusca(item.arquivo).replace(/_/g, ' ');
+        return termos.some((termo) => arquivo.includes(normalizarBusca(termo).replace(/_/g, ' ')));
+    });
+    return imagem?.url || null;
+}
+
+function classeStatusDocumento(status) {
+    if (status === 'COM_LASTRO') return 'ok';
+    if (status === 'NAO_APLICAVEL') return 'neutral';
+    if (status === 'AGUARDANDO_CONTADOR') return 'info';
+    if (status === 'DIVERGENTE') return 'danger';
+    return 'warn';
+}
+
+async function fetchJson(url, options) {
+    const response = await fetch(url, options);
+    const result = await response.json();
+    if (!response.ok || result.success === false) {
+        throw new Error(result.error || 'Erro de API');
+    }
+    return result;
+}
+
+function debounce(fn, delay) {
+    let timeoutId;
+    return (...args) => {
+        window.clearTimeout(timeoutId);
+        timeoutId = window.setTimeout(() => fn(...args), delay);
+    };
 }
 
 function mostrarAba(aba, button) {

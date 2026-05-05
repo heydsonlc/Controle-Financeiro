@@ -1389,6 +1389,72 @@ class ContaPatrimonio(db.Model):
         }
 
 
+class BemPatrimonial(db.Model):
+    """
+    Bem fisico/imobilizado do perfil Empresa com lastro documental fiscal.
+    Nao substitui ContaPatrimonio, que permanece como caixinhas.
+    """
+    __tablename__ = 'bem_patrimonial'
+
+    id = db.Column(db.Integer, primary_key=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=False, index=True)
+    nome = db.Column(db.String(160), nullable=False)
+    codigo = db.Column(db.String(60), nullable=True)
+    categoria = db.Column(db.String(80), nullable=True)
+    descricao = db.Column(db.Text, nullable=True)
+    fornecedor = db.Column(db.String(255), nullable=True)
+    documento_numero = db.Column(db.String(80), nullable=True)
+    imagem_arquivo = db.Column(db.String(255), nullable=True)
+    data_aquisicao = db.Column(db.Date, nullable=True)
+    valor_aquisicao = db.Column(db.Numeric(12, 2), nullable=True, default=0)
+    vida_util_meses = db.Column(db.Integer, nullable=True)
+    depreciacao_mensal = db.Column(db.Numeric(12, 2), nullable=True)
+    centro_custo = db.Column(db.String(120), nullable=True)
+    localizacao = db.Column(db.String(120), nullable=True)
+    responsavel = db.Column(db.String(120), nullable=True)
+    status = db.Column(db.String(30), nullable=False, default='ATIVO')
+    status_documental = db.Column(db.String(40), nullable=False, default='SEM_DOCUMENTO')
+    observacoes = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint('perfil_financeiro_id', 'codigo', name='ux_bem_patrimonial_perfil_codigo'),
+        db.Index('ix_bem_patrimonial_perfil_status', 'perfil_financeiro_id', 'status'),
+        db.Index('ix_bem_patrimonial_perfil_status_documental', 'perfil_financeiro_id', 'status_documental'),
+        db.Index('ix_bem_patrimonial_perfil_categoria', 'perfil_financeiro_id', 'categoria'),
+        db.Index('ix_bem_patrimonial_perfil_data', 'perfil_financeiro_id', 'data_aquisicao'),
+    )
+
+    def __repr__(self):
+        return f'<BemPatrimonial {self.nome} R${self.valor_aquisicao}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
+            'nome': self.nome,
+            'codigo': self.codigo,
+            'categoria': self.categoria,
+            'descricao': self.descricao,
+            'fornecedor': self.fornecedor,
+            'documento_numero': self.documento_numero,
+            'imagem_arquivo': self.imagem_arquivo,
+            'data_aquisicao': self.data_aquisicao.isoformat() if self.data_aquisicao else None,
+            'valor_aquisicao': float(self.valor_aquisicao or 0),
+            'vida_util_meses': self.vida_util_meses,
+            'depreciacao_mensal': float(self.depreciacao_mensal or 0) if self.depreciacao_mensal is not None else None,
+            'centro_custo': self.centro_custo,
+            'localizacao': self.localizacao,
+            'responsavel': self.responsavel,
+            'status': self.status,
+            'status_documental': self.status_documental,
+            'observacoes': self.observacoes,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
 class Transferencia(db.Model):
     """
     Movimentação de dinheiro entre contas de patrimônio

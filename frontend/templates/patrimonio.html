@@ -9,7 +9,7 @@
 {% block action_bar %}
     <div class="module-actionbar patrimonio-actionbar" aria-label="Acoes de Patrimonio">
         <div class="module-actionbar-inner">
-            <div class="module-actionbar-tabs patrimonio-actionbar-tabs">
+            <div class="module-actionbar-tabs patrimonio-actionbar-tabs patrimonio-personal-controls">
                 <button class="tab-button patrimonio-view-tab active" type="button" onclick="mostrarAba('contas', this)">
                     <span class="patrimonio-tab-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" focusable="false"><path d="M5 7h14v12H5z"/><path d="M8 7V5h8v2"/><path d="M8 12h8"/></svg>
@@ -24,7 +24,7 @@
                 </button>
             </div>
 
-            <div class="module-actionbar-filters patrimonio-actionbar-search">
+            <div class="module-actionbar-filters patrimonio-actionbar-search patrimonio-personal-controls">
                 <div class="module-filter-group patrimonio-search">
                     <label class="module-filter-label" for="patrimonio-busca">Busca</label>
                     <div class="module-search-control">
@@ -36,7 +36,45 @@
                 </div>
             </div>
 
-            <div class="module-actionbar-actions">
+            <div class="module-actionbar-filters patrimonio-empresa-controls" aria-label="Filtros de patrimonio empresarial">
+                <div class="module-filter-group">
+                    <label class="module-filter-label" for="bem-filtro-categoria">Categoria</label>
+                    <select class="module-filter-control" id="bem-filtro-categoria">
+                        <option value="">Todas</option>
+                    </select>
+                </div>
+                <div class="module-filter-group">
+                    <label class="module-filter-label" for="bem-filtro-status">Status</label>
+                    <select class="module-filter-control" id="bem-filtro-status">
+                        <option value="">Todos</option>
+                        <option value="ATIVO">Ativo</option>
+                        <option value="INATIVO">Inativo</option>
+                        <option value="EM_REVISAO">Em revis&atilde;o</option>
+                        <option value="BAIXADO">Baixado</option>
+                    </select>
+                </div>
+                <div class="module-filter-group">
+                    <label class="module-filter-label" for="bem-filtro-documento">Documento</label>
+                    <select class="module-filter-control" id="bem-filtro-documento">
+                        <option value="">Todos</option>
+                        <option value="COM_LASTRO">Com lastro</option>
+                        <option value="SEM_DOCUMENTO">Sem documento</option>
+                        <option value="PENDENTE">Pendente</option>
+                        <option value="AGUARDANDO_CONTADOR">Aguardando contador</option>
+                    </select>
+                </div>
+                <div class="module-filter-group patrimonio-search patrimonio-empresa-search">
+                    <label class="module-filter-label" for="bem-busca">Busca</label>
+                    <div class="module-search-control">
+                        <input class="module-filter-control" id="bem-busca" type="search" placeholder="Buscar bem, nota ou fornecedor">
+                        <span class="module-search-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="module-actionbar-actions patrimonio-personal-actions">
                 <button class="action-icon-button primary patrimonio-action-main" id="btn-nova-caixinha" type="button" onclick="abrirModalNovaConta()" title="Nova Caixinha" aria-label="Nova Caixinha">
                     <span class="action-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" focusable="false"><path d="M12 5v14M5 12h14"/></svg>
@@ -50,12 +88,159 @@
                     <span class="action-button-label">Transferir</span>
                 </button>
             </div>
+
+            <div class="module-actionbar-actions patrimonio-empresa-actions">
+                <button class="action-icon-button primary patrimonio-action-main" id="btn-novo-bem" type="button" title="Novo bem" aria-label="Novo bem">
+                    <span class="action-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false"><path d="M12 5v14M5 12h14"/></svg>
+                    </span>
+                    <span class="action-button-label">Novo bem</span>
+                </button>
+                <button class="action-icon-button secondary patrimonio-action-secondary" id="btn-importar-nota" type="button" title="Importar nota" aria-label="Importar nota">
+                    <span class="action-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false"><path d="M12 3v12"/><path d="m8 7 4-4 4 4"/><path d="M5 15v4h14v-4"/></svg>
+                    </span>
+                    <span class="action-button-label">Importar nota</span>
+                </button>
+                <button class="action-icon-button secondary patrimonio-action-secondary" id="btn-vincular-documento" type="button" title="Vincular documento" aria-label="Vincular documento">
+                    <span class="action-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false"><path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1"/></svg>
+                    </span>
+                    <span class="action-button-label">Vincular documento</span>
+                </button>
+            </div>
         </div>
     </div>
 {% endblock %}
 
 {% block content %}
     <div class="container app-content-fluid patrimonio-page">
+        <section id="patrimonio-empresarial" class="patrimonio-empresarial-shell" hidden>
+            <div class="patrimonio-empresa-heading">
+                <div>
+                    <h2>Patrim&ocirc;nio Empresarial</h2>
+                    <p>Bens patrimoniais com documento fiscal, fornecedor, valor de aquisi&ccedil;&atilde;o e status de lastro por perfil financeiro.</p>
+                </div>
+                <span class="patrimonio-empresa-badge">Perfil Empresa</span>
+            </div>
+
+            <section class="patrimonio-summary-grid patrimonio-empresa-kpis" aria-label="Resumo do patrimonio empresarial">
+                <article class="patrimonio-summary-card blue">
+                    <span class="patrimonio-summary-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false"><path d="M4 20h16"/><path d="M6 20V9h4v11"/><path d="M14 20V4h4v16"/></svg>
+                    </span>
+                    <div>
+                        <span>Patrim&ocirc;nio total</span>
+                        <strong id="bem-kpi-total">R$ 0,00</strong>
+                        <small id="bem-kpi-total-legenda">0 bens cadastrados</small>
+                    </div>
+                </article>
+                <article class="patrimonio-summary-card green">
+                    <span class="patrimonio-summary-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-5"/></svg>
+                    </span>
+                    <div>
+                        <span>Bens com lastro</span>
+                        <strong id="bem-kpi-lastro">0</strong>
+                        <small id="bem-kpi-lastro-legenda">0% do total</small>
+                    </div>
+                </article>
+                <article class="patrimonio-summary-card amber">
+                    <span class="patrimonio-summary-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false"><path d="M6 3h9l3 3v15H6V3Z"/><path d="M15 3v4h4"/><path d="M9 13h6M9 17h4"/></svg>
+                    </span>
+                    <div>
+                        <span>Pend&ecirc;ncias documentais</span>
+                        <strong id="bem-kpi-pendencias">0</strong>
+                        <small>Requerem aten&ccedil;&atilde;o</small>
+                    </div>
+                </article>
+                <article class="patrimonio-summary-card purple">
+                    <span class="patrimonio-summary-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false"><path d="M4 19h16"/><path d="m7 16 4-4 3 3 5-7"/><path d="M17 8h2v2"/></svg>
+                    </span>
+                    <div>
+                        <span>Aquisi&ccedil;&otilde;es no ano</span>
+                        <strong id="bem-kpi-aquisicoes">R$ 0,00</strong>
+                        <small id="bem-kpi-aquisicoes-legenda">0 novos bens</small>
+                    </div>
+                </article>
+            </section>
+
+            <div class="patrimonio-empresa-layout">
+                <div class="patrimonio-empresa-main">
+                    <section class="patrimonio-main-panel">
+                        <div class="patrimonio-panel-header">
+                            <div>
+                                <h2>Bens cadastrados</h2>
+                                <small id="bens-lista-meta">Carregando bens...</small>
+                            </div>
+                            <button type="button" class="patrimonio-link-btn" id="btn-atualizar-bens">Atualizar</button>
+                        </div>
+                        <div class="patrimonio-table-wrap">
+                            <table class="patrimonio-bens-table">
+                                <thead>
+                                    <tr>
+                                        <th>Bem</th>
+                                        <th>Categoria</th>
+                                        <th>Data</th>
+                                        <th>Valor</th>
+                                        <th>Documento</th>
+                                        <th>Status</th>
+                                        <th>A&ccedil;&otilde;es</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="bens-tabela-corpo">
+                                    <tr><td colspan="7">Carregando bens...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <section class="patrimonio-main-panel" id="bem-detalhe">
+                        <div class="empty-state">
+                            <strong>Selecione um bem.</strong>
+                            <span>O detalhe exibe documento fiscal, fornecedor, valor, local e status documental.</span>
+                        </div>
+                    </section>
+                </div>
+
+                <aside class="patrimonio-side-column patrimonio-empresa-side">
+                    <section class="patrimonio-side-card">
+                        <div class="patrimonio-side-header">
+                            <h2>Resumo do imobilizado</h2>
+                        </div>
+                        <div id="bens-composicao" class="patrimonio-composition">
+                            <p class="loading">Carregando composi&ccedil;&atilde;o...</p>
+                        </div>
+                    </section>
+
+                    <section class="patrimonio-side-card">
+                        <div class="patrimonio-side-header">
+                            <h2>Fluxo sugerido</h2>
+                        </div>
+                        <div class="patrimonio-fluxo">
+                            <div><span>1</span><strong>Importar nota</strong><small>Upload da NF no m&oacute;dulo fiscal</small></div>
+                            <div><span>2</span><strong>Extrair dados</strong><small>Valida&ccedil;&atilde;o no lastro</small></div>
+                            <div><span>3</span><strong>Criar bem</strong><small>Cadastro do ativo</small></div>
+                            <div><span>4</span><strong>Vincular lastro</strong><small>Documento fiscal</small></div>
+                        </div>
+                    </section>
+
+                    <section class="patrimonio-side-card">
+                        <div class="patrimonio-side-header">
+                            <h2>Pend&ecirc;ncias priorit&aacute;rias</h2>
+                            <span class="patrimonio-counter" id="bens-pendencias-count">0</span>
+                        </div>
+                        <div id="bens-pendencias" class="patrimonio-pendencias-list">
+                            <p class="loading">Carregando pend&ecirc;ncias...</p>
+                        </div>
+                    </section>
+                </aside>
+            </div>
+        </section>
+
+        <div id="patrimonio-pessoal">
         <section id="aba-contas" class="tab-content active">
             <div class="patrimonio-layout">
                 <div class="patrimonio-main-column">
@@ -175,6 +360,7 @@
                 </div>
             </section>
         </section>
+        </div>
     </div>
 
     <div id="modal-conta" class="patrimonio-modal" aria-hidden="true">
@@ -313,6 +499,188 @@
                 <div class="patrimonio-modal-footer">
                     <button type="button" class="patrimonio-secondary-btn" onclick="fecharModal('modal-transferencia')">Cancelar</button>
                     <button type="submit" class="patrimonio-primary-btn">Transferir</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-bem" class="patrimonio-modal" aria-hidden="true">
+        <div class="patrimonio-modal-box bem-modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-bem-titulo">
+            <div class="patrimonio-modal-header">
+                <div>
+                    <h2 id="modal-bem-titulo">Novo bem patrimonial</h2>
+                    <p>Cadastre o bem empresarial e vincule uma nota fiscal j&aacute; importada quando houver.</p>
+                </div>
+                <button type="button" class="patrimonio-modal-close" onclick="fecharModal('modal-bem')" aria-label="Fechar">&times;</button>
+            </div>
+            <form id="form-bem">
+                <input type="hidden" id="bem-id">
+                <input type="hidden" id="bem-imagem-arquivo">
+                <div class="patrimonio-modal-body bem-form-grid">
+                    <div class="patrimonio-form-column">
+                        <section class="patrimonio-form-section">
+                            <h3>Dados do bem</h3>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="bem-nome">Nome *</label>
+                                    <input type="text" id="bem-nome" required placeholder="Ex: Notebook Dell Latitude">
+                                </div>
+                                <div class="form-group">
+                                    <label for="bem-codigo">C&oacute;digo/tag</label>
+                                    <input type="text" id="bem-codigo" placeholder="Ex: TAG-0001">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="bem-categoria">Categoria</label>
+                                    <select id="bem-categoria">
+                                        <option value="Inform&aacute;tica">Inform&aacute;tica</option>
+                                        <option value="M&oacute;veis">M&oacute;veis</option>
+                                        <option value="Equipamentos">Equipamentos</option>
+                                        <option value="Estrutura">Estrutura</option>
+                                        <option value="Outros">Outros</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="bem-status-documental">Status documental</label>
+                                    <select id="bem-status-documental">
+                                        <option value="COM_LASTRO">Com lastro</option>
+                                        <option value="SEM_DOCUMENTO">Sem documento</option>
+                                        <option value="PENDENTE">Pendente</option>
+                                        <option value="AGUARDANDO_CONTADOR">Aguardando contador</option>
+                                        <option value="NAO_APLICAVEL">N&atilde;o aplic&aacute;vel</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="bem-descricao">Descri&ccedil;&atilde;o</label>
+                                <textarea id="bem-descricao" rows="3" placeholder="Descreva o uso, modelo ou contexto do bem"></textarea>
+                            </div>
+                        </section>
+
+                        <section class="patrimonio-form-section">
+                            <h3>Imagem do bem</h3>
+                            <div id="bem-imagens-grid" class="bem-imagens-grid">
+                                <p class="loading">Carregando imagens...</p>
+                            </div>
+                        </section>
+                    </div>
+
+                    <div class="patrimonio-form-column">
+                        <section class="patrimonio-form-section">
+                            <h3>Aquisi&ccedil;&atilde;o e documento</h3>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="bem-valor">Valor de aquisi&ccedil;&atilde;o</label>
+                                    <input type="text" id="bem-valor" placeholder="R$ 0,00" onkeyup="formatarMoeda(this)">
+                                </div>
+                                <div class="form-group">
+                                    <label for="bem-data">Data de aquisi&ccedil;&atilde;o</label>
+                                    <input type="date" id="bem-data">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="bem-fornecedor">Fornecedor</label>
+                                    <input type="text" id="bem-fornecedor" placeholder="Fornecedor da nota">
+                                </div>
+                                <div class="form-group">
+                                    <label for="bem-documento-numero">N&uacute;mero da nota</label>
+                                    <input type="text" id="bem-documento-numero" placeholder="Ex: 12854">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="bem-comprovante">Documento fiscal vinculado</label>
+                                <select id="bem-comprovante">
+                                    <option value="">Sem documento vinculado</option>
+                                </select>
+                            </div>
+                        </section>
+
+                        <section class="patrimonio-form-section">
+                            <h3>Gest&atilde;o interna</h3>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="bem-vida-util">Vida &uacute;til (meses)</label>
+                                    <input type="number" min="1" id="bem-vida-util" placeholder="36">
+                                </div>
+                                <div class="form-group">
+                                    <label for="bem-centro-custo">Centro de custo</label>
+                                    <input type="text" id="bem-centro-custo" placeholder="Administrativo">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="bem-localizacao">Localiza&ccedil;&atilde;o</label>
+                                    <input type="text" id="bem-localizacao" placeholder="Escrit&oacute;rio - Sala 02">
+                                </div>
+                                <div class="form-group">
+                                    <label for="bem-responsavel">Respons&aacute;vel</label>
+                                    <input type="text" id="bem-responsavel" placeholder="Equipe administrativa">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="bem-observacoes">Observa&ccedil;&otilde;es</label>
+                                <textarea id="bem-observacoes" rows="3"></textarea>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+                <div class="patrimonio-modal-footer">
+                    <button type="button" class="patrimonio-secondary-btn" onclick="fecharModal('modal-bem')">Cancelar</button>
+                    <button type="button" class="patrimonio-secondary-btn" id="btn-criar-bem-documento">Criar a partir da nota</button>
+                    <button type="submit" class="patrimonio-primary-btn">Salvar bem</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-vincular-bem" class="patrimonio-modal" aria-hidden="true">
+        <div class="patrimonio-modal-box vinculo-modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-vincular-bem-titulo">
+            <div class="patrimonio-modal-header">
+                <div>
+                    <h2 id="modal-vincular-bem-titulo">Vincular documento fiscal</h2>
+                    <p>Use um documento fiscal j&aacute; importado no m&oacute;dulo Documentos Fiscais e Lastro.</p>
+                </div>
+                <button type="button" class="patrimonio-modal-close" onclick="fecharModal('modal-vincular-bem')" aria-label="Fechar">&times;</button>
+            </div>
+            <form id="form-vincular-bem">
+                <input type="hidden" id="vinculo-bem-id">
+                <div class="patrimonio-modal-body transferencia-form-grid">
+                    <div class="form-group">
+                        <label for="vinculo-comprovante">Documento fiscal *</label>
+                        <select id="vinculo-comprovante" required>
+                            <option value="">Selecione um documento...</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="vinculo-tipo">Tipo de v&iacute;nculo</label>
+                            <select id="vinculo-tipo">
+                                <option value="NOTA_FISCAL">Nota fiscal</option>
+                                <option value="COMPROVANTE">Comprovante</option>
+                                <option value="RECIBO">Recibo</option>
+                                <option value="DOCUMENTO_CONTABIL">Documento cont&aacute;bil</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="vinculo-natureza">Natureza</label>
+                            <select id="vinculo-natureza">
+                                <option value="PATRIMONIO_IMOBILIZADO">Patrim&ocirc;nio / Imobilizado</option>
+                                <option value="SOFTWARE_ASSINATURA">Software / Assinatura</option>
+                                <option value="DESPESA_OPERACIONAL">Despesa operacional</option>
+                                <option value="OUTRO">Outro</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="vinculo-observacoes">Observa&ccedil;&otilde;es</label>
+                        <textarea id="vinculo-observacoes" rows="3" placeholder="Observa&ccedil;&atilde;o opcional do lastro"></textarea>
+                    </div>
+                </div>
+                <div class="patrimonio-modal-footer">
+                    <button type="button" class="patrimonio-secondary-btn" onclick="fecharModal('modal-vincular-bem')">Cancelar</button>
+                    <button type="submit" class="patrimonio-primary-btn">Vincular documento</button>
                 </div>
             </form>
         </div>
