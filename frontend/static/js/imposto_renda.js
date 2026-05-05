@@ -37,7 +37,9 @@
         $('ir-btn-atualizar')?.addEventListener('click', carregarComprovantes);
         $('ir-btn-importar')?.addEventListener('click', () => alternarView('import'));
         $('ir-btn-voltar')?.addEventListener('click', () => alternarView('main'));
-        $('ir-btn-exportar')?.addEventListener('click', () => mostrarAviso('Relatorios Excel/PDF ficam para etapa futura.'));
+        $('ir-btn-exportar')?.addEventListener('click', () => baixarRelatorio('excel'));
+        $('ir-btn-excel')?.addEventListener('click', () => baixarRelatorio('excel'));
+        $('ir-btn-pdf')?.addEventListener('click', () => baixarRelatorio('pdf'));
         $('ir-filtro-ano')?.addEventListener('change', carregarComprovantes);
         $('ir-filtro-status')?.addEventListener('change', carregarComprovantes);
         $('ir-filtro-categoria')?.addEventListener('change', carregarComprovantes);
@@ -196,6 +198,15 @@
     }
 
     async function carregarComprovantes() {
+        const params = montarFiltrosRelatorio();
+        const resposta = await fetch(`/api/ir/comprovantes?${params.toString()}`);
+        const json = await resposta.json();
+        estado.comprovantes = json.data || [];
+        renderComprovantes();
+        renderResumo(json.resumo || {});
+    }
+
+    function montarFiltrosRelatorio() {
         const params = new URLSearchParams();
         params.set('ano', $('ir-filtro-ano')?.value || new Date().getFullYear());
         const status = $('ir-filtro-status')?.value || 'TODOS';
@@ -204,12 +215,25 @@
         if (categoriaIr) params.set('categoria_ir_id', categoriaIr);
         const busca = $('ir-filtro-busca')?.value;
         if (busca) params.set('busca', busca);
+        return params;
+    }
 
-        const resposta = await fetch(`/api/ir/comprovantes?${params.toString()}`);
-        const json = await resposta.json();
-        estado.comprovantes = json.data || [];
-        renderComprovantes();
-        renderResumo(json.resumo || {});
+    function baixarRelatorio(tipo) {
+        const params = montarFiltrosRelatorio();
+        const endpoint = tipo === 'pdf' ? 'pdf' : 'excel';
+        const botao = tipo === 'pdf' ? $('ir-btn-pdf') : $('ir-btn-excel');
+        const textoOriginal = botao?.innerHTML;
+        if (botao) {
+            botao.disabled = true;
+            botao.innerHTML = 'Gerando...';
+        }
+        window.location.href = `/api/ir/relatorios/${endpoint}?${params.toString()}`;
+        window.setTimeout(() => {
+            if (botao) {
+                botao.disabled = false;
+                botao.innerHTML = textoOriginal;
+            }
+        }, 1200);
     }
 
     function renderComprovantes() {

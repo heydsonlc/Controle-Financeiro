@@ -6,10 +6,12 @@ try:
     from backend.models import db
     from backend.services.documento_fiscal_service import DocumentoFiscalService
     from backend.services.ir_documento_service import IrDocumentoService
+    from backend.services.ir_relatorio_service import IrRelatorioService
 except ImportError:
     from models import db
     from services.documento_fiscal_service import DocumentoFiscalService
     from services.ir_documento_service import IrDocumentoService
+    from services.ir_relatorio_service import IrRelatorioService
 
 
 ir_bp = Blueprint('ir', __name__)
@@ -213,3 +215,39 @@ def listar_entidades_vinculaveis():
 def resumo_lastro():
     resumo = DocumentoFiscalService.resumo_lastro(request.args.get('ano'))
     return _json_success(resumo)
+
+
+@ir_bp.route('/relatorios/excel', methods=['GET'])
+def relatorio_excel():
+    try:
+        arquivo, nome = IrRelatorioService.gerar_excel(request.args)
+        return send_file(
+            arquivo,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=nome,
+        )
+    except ValueError as exc:
+        return _json_error(str(exc), 400)
+
+
+@ir_bp.route('/relatorios/pdf', methods=['GET'])
+def relatorio_pdf():
+    try:
+        arquivo, nome = IrRelatorioService.gerar_pdf(request.args)
+        return send_file(
+            arquivo,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=nome,
+        )
+    except ValueError as exc:
+        return _json_error(str(exc), 400)
+
+
+@ir_bp.route('/relatorios/resumo', methods=['GET'])
+def relatorio_resumo():
+    try:
+        return _json_success(IrRelatorioService.resumo(request.args))
+    except ValueError as exc:
+        return _json_error(str(exc), 400)
