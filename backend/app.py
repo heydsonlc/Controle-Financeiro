@@ -192,6 +192,16 @@ def create_app(config_name=None):
         """Pagina de comprovantes do Imposto de Renda"""
         return render_template('imposto_renda.html', active_page='imposto_renda', page_title='Imposto de Renda')
 
+    @app.route('/ajuda')
+    def ajuda():
+        """Central de ajuda e manual de uso"""
+        return render_template('ajuda.html', active_page='ajuda', page_title='Central de Ajuda e Manual de Uso')
+
+    @app.route('/manual')
+    def manual():
+        """Atalho legado para a central de ajuda"""
+        return redirect('/ajuda')
+
     @app.route('/veiculos')
     def veiculos():
         return render_template('veiculos.html', active_page='veiculos', page_title='Veículos')

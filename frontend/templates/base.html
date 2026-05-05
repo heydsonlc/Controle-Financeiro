@@ -165,6 +165,15 @@
                         </span>
                         <span class="app-nav-text">Configurações e Preferências</span>
                     </a>
+                    <a href="/ajuda" class="app-nav-link {% if active_page == 'ajuda' %}active{% endif %}">
+                        <span class="app-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false">
+                                <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H7a3 3 0 0 0-3 3V5.5Z"/>
+                                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M8 7h8M8 11h6"/>
+                            </svg>
+                        </span>
+                        <span class="app-nav-text">Ajuda e Manual</span>
+                    </a>
                 </div>
             </nav>
         </aside>
@@ -180,6 +189,12 @@
                     <span>{{ page_title or "Controle Financeiro" }}</span>
                 </div>
                 <div class="app-topbar-actions">
+                    <a class="app-topbar-button" href="/ajuda" aria-label="Ajuda e Manual" title="Ajuda e Manual">
+                        <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                            <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H7a3 3 0 0 0-3 3V5.5Z"/>
+                            <path d="M8 7h8M8 11h6"/>
+                        </svg>
+                    </a>
                     <div class="perfil-financeiro-switcher" id="perfil-financeiro-switcher" data-loading="true">
                         <button class="perfil-financeiro-trigger" id="perfil-financeiro-trigger" type="button" aria-haspopup="true" aria-expanded="false">
                             <span class="perfil-financeiro-avatar" id="perfil-financeiro-avatar" aria-hidden="true">PE</span>

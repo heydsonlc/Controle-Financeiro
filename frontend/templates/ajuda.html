@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}Central de Ajuda e Manual de Uso - Controle Financeiro{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/ajuda.css') }}">
+{% endblock %}
+
+{% block action_bar %}
+    <div class="module-actionbar help-actionbar" aria-label="Ações da Central de Ajuda">
+        <div class="module-actionbar-inner">
+            <div class="help-search">
+                <span aria-hidden="true">⌕</span>
+                <input type="search" id="help-search-input" placeholder="Buscar no manual" autocomplete="off">
+            </div>
+            <label class="help-filter">
+                <span class="sr-only">Filtrar seção</span>
+                <select id="help-section-filter">
+                    <option value="all">Todas as seções</option>
+                    <option value="basico">Primeiros passos</option>
+                    <option value="cartoes">Cartões e faturas</option>
+                    <option value="fiscal">Documentos fiscais</option>
+                    <option value="gestao">Gestão financeira</option>
+                    <option value="config">Configurações</option>
+                </select>
+            </label>
+            <div class="module-actionbar-actions help-actions">
+                <button type="button" class="action-icon-button" data-help-open="primeiros-passos">Guia rápido</button>
+                <button type="button" class="action-icon-button" data-help-open="categoria-cartao">Abrir manual completo</button>
+                <button type="button" class="action-icon-button" data-help-scroll="faq">Perguntas frequentes</button>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block content %}
+    <div class="help-shell" data-help-page>
+        <section class="help-highlight-grid" aria-label="Destaques da Central de Ajuda">
+            <button type="button" class="help-highlight-card start" data-help-open="primeiros-passos">
+                <span class="help-highlight-icon" aria-hidden="true">↗</span>
+                <span><strong>Comece por aqui</strong><small>Visão geral do sistema e principais funcionalidades.</small></span>
+            </button>
+            <button type="button" class="help-highlight-card concept" data-help-open="categoria-cartao">
+                <span class="help-highlight-icon" aria-hidden="true">▣</span>
+                <span><strong>Conceitos essenciais</strong><small>Entenda os principais conceitos financeiros do sistema.</small></span>
+            </button>
+            <button type="button" class="help-highlight-card news" data-help-open="documentos-fiscais-ir">
+                <span class="help-highlight-icon" aria-hidden="true">★</span>
+                <span><strong>Novidades do sistema</strong><small>Acompanhe as atualizações e melhorias recentes.</small></span>
+            </button>
+            <button type="button" class="help-highlight-card shortcut" data-help-open="importacao-fatura">
+                <span class="help-highlight-icon" aria-hidden="true">⌘</span>
+                <span><strong>Atalhos úteis</strong><small>Dicas de produtividade para otimizar seu uso.</small></span>
+            </button>
+        </section>
+
+        <div class="help-layout">
+            <aside class="help-manual-nav" aria-label="Navegação do Manual">
+                <h2>Navegação do Manual</h2>
+                <div id="help-nav-list" class="help-nav-list"></div>
+                <div id="help-empty-results" class="help-empty-results" hidden>Nenhum conteúdo encontrado para sua busca.</div>
+            </aside>
+
+            <main class="help-article-panel">
+                <article id="help-article" class="help-article" aria-live="polite"></article>
+            </main>
+
+            <aside class="help-side-panel" aria-label="Conteúdo de apoio">
+                <section class="help-side-card">
+                    <h2>Tópicos relacionados</h2>
+                    <div id="help-related-list" class="help-related-list"></div>
+                </section>
+
+                <section class="help-side-card">
+                    <header class="help-side-header">
+                        <h2>Vídeos rápidos</h2>
+                        <button type="button" data-help-video-all>Ver todos</button>
+                    </header>
+                    <div id="help-video-list" class="help-video-list"></div>
+                </section>
+
+                <section class="help-side-card" id="faq">
+                    <header class="help-side-header">
+                        <h2>Perguntas frequentes</h2>
+                        <button type="button" data-help-scroll="faq">Ver todas</button>
+                    </header>
+                    <div id="help-faq-list" class="help-faq-list"></div>
+                </section>
+
+                <section class="help-side-card">
+                    <h2>Últimos acessos</h2>
+                    <div id="help-last-list" class="help-last-list"></div>
+                </section>
+
+                <section class="help-side-card support">
+                    <h2>Contato / suporte</h2>
+                    <p>Precisa de ajuda? Fale com nosso time.</p>
+                    <button type="button" class="help-primary-button" data-help-placeholder="Abrir chamado">Abrir chamado</button>
+                </section>
+            </aside>
+        </div>
+    </div>
+
+    <div class="help-video-modal" id="help-video-modal" aria-hidden="true">
+        <div class="help-video-dialog" role="dialog" aria-modal="true" aria-labelledby="help-video-title">
+            <button type="button" id="help-video-close" class="help-video-close" aria-label="Fechar">×</button>
+            <div class="help-video-thumb" aria-hidden="true">▶</div>
+            <h2 id="help-video-title">Vídeo rápido</h2>
+            <p>Vídeo demonstrativo será disponibilizado em etapa futura.</p>
+            <button type="button" class="help-primary-button" id="help-video-ok">Entendi</button>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+    <script src="{{ url_for('static', filename='js/ajuda.js') }}"></script>
+{% endblock %}
