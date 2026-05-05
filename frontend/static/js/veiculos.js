@@ -1598,6 +1598,19 @@ function escapeAttr(str) {
     return escapeHtml(str).replaceAll('`', '&#096;');
 }
 
+function renderFormaPagamentoMobilidade(valor, options = {}) {
+    if (!valor) return '';
+    if (window.FormasPagamentoUI?.renderFormaPagamento) {
+        return window.FormasPagamentoUI.renderFormaPagamento(valor, {
+            size: 'sm',
+            showLabel: true,
+            className: 'mobilidade-payment-method',
+            ...options
+        });
+    }
+    return `<span class="payment-method payment-method--sm payment-method--default mobilidade-payment-method"><span class="payment-method__label">${escapeHtml(valor)}</span></span>`;
+}
+
 // Fechar modal ao clicar fora
 window.onclick = function(event) {
     const modal = document.getElementById('modal-veiculo');
@@ -2586,9 +2599,9 @@ function renderDetalheOpcaoSelecionada() {
     const cartaoTexto = rec?.cartao_id
         ? `Cartão #${rec.cartao_id}${rec.categoria_cartao_id ? ` · Categoria do Cartão #${rec.categoria_cartao_id}` : ''}`
         : 'Nenhum lançamento no cartão configurado';
-    const pagamentoTexto = meio && meio !== 'cartao'
-        ? `${String(meio).toUpperCase()} · recorrência ${rec ? 'configurada' : 'não criada'}`
-        : 'Nenhum pagamento PIX/boleto/conta configurado';
+    const pagamentoHtml = meio && meio !== 'cartao'
+        ? `<span class="comp-payment-line">${renderFormaPagamentoMobilidade(meio, { size: 'sm', showLabel: true })}<span class="comp-payment-note">recorrencia ${rec ? 'configurada' : 'nao criada'}</span></span>`
+        : escapeHtml('Nenhum pagamento PIX/boleto/conta configurado');
 
     const lista = (itens, vazio) => itens.length
         ? itens.map(i => `<div class="comp-detalhe-linha"><span>${escapeHtml(i.nome)}</span><strong>${formatarMoeda(i.valor)}</strong></div>`).join('')
@@ -2621,7 +2634,7 @@ function renderDetalheOpcaoSelecionada() {
             </section>
             <section class="comp-detalhe-card">
                 <h4>Pagamentos PIX/boleto/conta</h4>
-                <div class="comp-detalhe-vazio">${escapeHtml(pagamentoTexto)}</div>
+                <div class="comp-detalhe-vazio">${pagamentoHtml}</div>
             </section>
         </div>
     `;
@@ -3365,6 +3378,10 @@ function renderEfetivacaoGrade() {
         const badgeClass = { prevista: 'prevista', confirmada: 'confirmada', adiada: 'adiada', ignorada: 'ignorada' }[status] || 'prevista';
         const freq = _frequencia(p);
         const destino = _destinoFinanceiro(p);
+        const formaPagamento = p.meio_pagamento || p.forma_pagamento || p.meio || null;
+        const formaPagamentoHtml = formaPagamento
+            ? renderFormaPagamentoMobilidade(formaPagamento, { size: 'sm', showLabel: true })
+            : '<span class="small-note">—</span>';
 
         let acoes = `<span class="small-note">—</span>`;
         if (p.status === 'PREVISTA') {
@@ -3383,7 +3400,7 @@ function renderEfetivacaoGrade() {
             <td><span class="small-note">${escapeHtml(freq)}</span></td>
             <td>${mes}</td>
             <td><span class="small-note">${escapeHtml(destino)}</span></td>
-            <td>—</td>
+            <td>${formaPagamentoHtml}</td>
             <td>—</td>
             <td style="text-align:right;font-weight:700;">${valor}</td>
             <td>

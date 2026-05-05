@@ -1,0 +1,139 @@
+.payment-method {
+    --payment-color: #64748b;
+    --payment-size: 28px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    min-width: 0;
+    color: var(--payment-color);
+    line-height: 1;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+.payment-method__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: var(--payment-size);
+    height: var(--payment-size);
+    border: 1px solid color-mix(in srgb, var(--payment-color) 20%, #dbe3ef);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--payment-color) 10%, white);
+    overflow: hidden;
+}
+
+.payment-method__img {
+    width: calc(var(--payment-size) - 8px);
+    height: calc(var(--payment-size) - 8px);
+    object-fit: contain;
+    display: block;
+}
+
+.payment-method__fallback {
+    color: var(--payment-color);
+    font-size: 9px;
+    font-weight: 850;
+    letter-spacing: 0;
+}
+
+.payment-method__label {
+    min-width: 0;
+    overflow: hidden;
+    color: #334155;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.payment-method--sm {
+    --payment-size: 20px;
+    gap: 4px;
+}
+
+.payment-method--sm .payment-method__icon {
+    border-radius: 6px;
+}
+
+.payment-method--sm .payment-method__img {
+    width: calc(var(--payment-size) - 5px);
+    height: calc(var(--payment-size) - 5px);
+}
+
+.payment-method--sm .payment-method__fallback {
+    font-size: 8px;
+}
+
+.payment-method--sm .payment-method__label {
+    font-size: 11px;
+}
+
+.payment-method--md {
+    --payment-size: 28px;
+}
+
+.payment-method--lg {
+    --payment-size: 38px;
+    gap: 8px;
+}
+
+.payment-method--lg .payment-method__icon {
+    border-radius: 12px;
+}
+
+.payment-method--lg .payment-method__label {
+    font-size: 13px;
+}
+
+.payment-method--custom .payment-method__icon {
+    border-radius: 6px;
+}
+
+.payment-method--asset .payment-method__icon {
+    background: #fff;
+    border-color: color-mix(in srgb, var(--payment-color) 16%, #dbe3ef);
+    box-shadow: 0 4px 10px rgba(15, 23, 42, 0.06);
+}
+
+.payment-method--fallback .payment-method__icon {
+    background: color-mix(in srgb, var(--payment-color) 12%, white);
+}
+
+.payment-method--pix {
+    --payment-color: #00a884;
+}
+
+.payment-method--dinheiro {
+    --payment-color: #16a34a;
+}
+
+.payment-method--cartao {
+    --payment-color: #2563eb;
+}
+
+.payment-method--boleto {
+    --payment-color: #f59e0b;
+}
+
+.payment-method--transferencia {
+    --payment-color: #0f766e;
+}
+
+.payment-method--debito-automatico {
+    --payment-color: #7c3aed;
+}
+
+.payment-method--default {
+    --payment-color: #64748b;
+}
+
+td .payment-method,
+.tbl-row .payment-method,
+.despesa-card .payment-method,
+.recorrencias-row .payment-method {
+    vertical-align: middle;
+}

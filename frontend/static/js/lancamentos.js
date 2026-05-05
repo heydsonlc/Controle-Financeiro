@@ -484,8 +484,8 @@ function renderizarLancamentos(lancamentos) {
         }
 
         // Ícone de meio de pagamento
-        const meioIconeHtml = (typeof renderPaymentIcon === 'function' && lanc.meio_pagamento)
-            ? `<span class="inline-icon" style="opacity:0.65;margin-left:3px">${renderPaymentIcon(lanc.meio_pagamento, { size: '13px' })}</span>`
+        const meioIconeHtml = (window.FormasPagamentoUI?.renderFormaPagamento && lanc.meio_pagamento)
+            ? `<span class="inline-icon" style="opacity:0.65;margin-left:3px">${window.FormasPagamentoUI.renderFormaPagamento(lanc.meio_pagamento, { size: '13px', showLabel: false, className: 'lancamento-payment-method' })}</span>`
             : '';
 
         // Subinfo na descrição (fatura, parcelas, obs)

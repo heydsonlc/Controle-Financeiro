@@ -723,8 +723,8 @@ function renderizarDespesas(despesasParaRenderizar) {
         const categoriaIconeHtml = (typeof renderCategoryVisual === 'function' && categoria)
             ? renderCategoryVisual(categoria, { size: '12px', alt: categoriaNome })
             : '';
-        const meioPageIconeHtml = (typeof renderPaymentIcon === 'function' && despesa.meio_pagamento)
-            ? renderPaymentIcon(despesa.meio_pagamento, { size: '12px' })
+        const meioPageIconeHtml = (window.FormasPagamentoUI?.renderFormaPagamento && despesa.meio_pagamento)
+            ? window.FormasPagamentoUI.renderFormaPagamento(despesa.meio_pagamento, { size: '12px', showLabel: false, className: 'despesa-payment-method' })
             : '';
 
         // Competência formatada

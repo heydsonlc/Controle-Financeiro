@@ -253,6 +253,9 @@ function renderizarLinha(item) {
     const dias = item.proximoVencimento ? diasAte(item.proximoVencimento) : null;
     const detalhe = item.detalhe || formatarFrequencia(item.frequencia, item.raw);
     const categoriaVisualHtml = renderizarIconeCategoria(item, '16px');
+    const meioPagamentoHtml = (window.FormasPagamentoUI?.renderFormaPagamento && item.meioPagamento)
+        ? `<span class="inline-icon" title="${escapeHtml(item.meioPagamento)}">${window.FormasPagamentoUI.renderFormaPagamento(item.meioPagamento, { size: '13px', showLabel: false, className: 'recorrencia-payment-method' })}</span>`
+        : '';
 
     return `
         <div class="recorrencias-row">
@@ -263,7 +266,7 @@ function renderizarLinha(item) {
                     <small>${escapeHtml(item.descricao || detalhe || '')}</small>
                 </span>
             </div>
-            <span><span class="recorrencias-pill type">${escapeHtml(item.tipoLabel)}</span>${(typeof renderPaymentIcon === 'function' && item.meioPagamento) ? `<span class="inline-icon" title="${item.meioPagamento}">${renderPaymentIcon(item.meioPagamento, { size: '13px' })}</span>` : ''}</span>
+            <span><span class="recorrencias-pill type">${escapeHtml(item.tipoLabel)}</span>${meioPagamentoHtml}</span>
             <span>${escapeHtml(detalhe)}</span>
             <span>${vencimento}${dias !== null ? `<small class="next-days">(${dias} ${dias === 1 ? 'dia' : 'dias'})</small>` : ''}</span>
             <span class="recorrencias-value">${formatarMoeda(item.valor)}</span>

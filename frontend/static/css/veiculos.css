@@ -2013,3 +2013,15 @@
         grid-template-columns: 1fr;
     }
 }
+.comp-payment-line {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.comp-payment-note {
+    color: #64748b;
+    font-size: 0.82rem;
+    font-weight: 600;
+}
