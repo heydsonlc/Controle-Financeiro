@@ -297,8 +297,11 @@ function renderCartoesLimites(bloco) {
     container.innerHTML = cartoes.map((cartao) => `
         <div class="table-row card-row">
             <span class="card-name-cell">
-                <b>${escapeHtml(cartao.nome)}</b>
-                <small>${cartao.final ? `**** ${escapeHtml(cartao.final)}` : 'Final nao informado'}</small>
+                ${renderBandeiraCartao(cartao)}
+                <span class="card-name-main">
+                    <b>${escapeHtml(cartao.nome)}</b>
+                    <small>${cartao.final ? `**** ${escapeHtml(cartao.final)}` : 'Final nao informado'}</small>
+                </span>
             </span>
             <span>${formatarMoeda(cartao.limite_total)}</span>
             <span>
@@ -312,27 +315,86 @@ function renderCartoesLimites(bloco) {
     `).join('');
 }
 
+const BANDEIRAS_CARTAO_DASHBOARD = {
+    visa: {
+        nome: 'Visa',
+        asset: '/static/img/logo_bandeira_cartao_visa.png',
+        aliases: ['visa']
+    },
+    mastercard: {
+        nome: 'Mastercard',
+        asset: '/static/img/logo_marterCard.png',
+        aliases: ['mastercard', 'master card', 'master']
+    },
+    elo: {
+        nome: 'Elo',
+        asset: '/static/img/elo.png',
+        aliases: ['elo']
+    }
+};
+
+function normalizarBandeiraCartao(valor) {
+    return String(valor || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function resolverBandeiraCartao(cartao) {
+    const texto = normalizarBandeiraCartao([
+        cartao?.bandeira,
+        cartao?.bandeira_key,
+        cartao?.nome,
+        cartao?.descricao,
+        cartao?.emissor
+    ].filter(Boolean).join(' '));
+
+    const encontrada = Object.entries(BANDEIRAS_CARTAO_DASHBOARD).find(([, bandeira]) => (
+        bandeira.aliases.some((alias) => {
+            const alvo = normalizarBandeiraCartao(alias);
+            return alvo && new RegExp(`(^| )${alvo}( |$)`).test(texto);
+        })
+    ));
+
+    if (!encontrada) {
+        return {
+            key: 'desconhecida',
+            nome: 'Bandeira nao identificada',
+            asset: null
+        };
+    }
+
+    return {
+        key: encontrada[0],
+        ...encontrada[1]
+    };
+}
+
+function renderBandeiraCartao(cartao) {
+    const bandeira = resolverBandeiraCartao(cartao);
+    const fallback = `<span class="card-brand-fallback" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false">${ICONS.card}</svg></span>`;
+    if (!bandeira.asset) {
+        return `<span class="card-brand card-brand--fallback" title="${escapeAttr(bandeira.nome)}" aria-label="${escapeAttr(bandeira.nome)}">${fallback}</span>`;
+    }
+
+    return `
+        <span class="card-brand card-brand--${escapeAttr(bandeira.key)}" title="${escapeAttr(bandeira.nome)}" aria-label="${escapeAttr(bandeira.nome)}">
+            <img src="${escapeAttr(bandeira.asset)}" alt="" loading="lazy" onerror="this.hidden=true;this.nextElementSibling.hidden=false;">
+            <span class="card-brand-fallback" hidden>${fallback}</span>
+        </span>
+    `;
+}
+
 function renderMobilidade(mobilidade) {
     const container = document.getElementById('mobilidade-resumo');
     if (!container) return;
 
-    const modalidades = [
-        { tipo: 'VEICULO', nome: 'Ve\u00edculo pr\u00f3prio', icon: 'car' },
-        { tipo: 'ASSINATURA', nome: 'Assinatura', icon: 'card' },
-        { tipo: 'TRANSPORTE_APP', nome: 'Transporte por app', icon: 'phone' },
-    ];
-    const tipoAtivo = mobilidade.status === 'ativa' ? normalizarTipoMobilidade(mobilidade.tipo) : '';
-    const alternativas = new Map();
+    const cenarios = montarCenariosMobilidade(mobilidade);
 
-    (mobilidade.alternativas || []).forEach((item) => {
-        const tipo = normalizarTipoMobilidade(item.tipo);
-        if (tipo && !alternativas.has(tipo)) alternativas.set(tipo, item);
-    });
-
-    const cards = modalidades.map((modalidade) => {
-        const itemAlternativo = alternativas.get(modalidade.tipo);
-        const item = tipoAtivo === modalidade.tipo ? mobilidade : itemAlternativo;
-        const status = definirStatusMobilidade(modalidade.tipo, tipoAtivo, itemAlternativo);
+    const cards = cenarios.map(({ modalidade, item, status }) => {
         const valor = item && item.custo_mensal !== undefined && item.custo_mensal !== null
             ? formatarMoeda(item.custo_mensal)
             : '&mdash;';
@@ -353,11 +415,68 @@ function renderMobilidade(mobilidade) {
     }).join('');
 
     container.innerHTML = `
-        ${tipoAtivo ? '' : '<p class="mobility-empty-note">Nenhuma modalidade ativa</p>'}
         <div class="mobility-options-grid">
             ${cards}
         </div>
     `;
+}
+
+function definicoesMobilidade() {
+    return [
+        { tipo: 'VEICULO', nome: 'Ve\u00edculo pr\u00f3prio', icon: 'car' },
+        { tipo: 'ASSINATURA', nome: 'Assinatura', icon: 'card' },
+        { tipo: 'TRANSPORTE_APP', nome: 'Transporte por app', icon: 'phone' },
+    ];
+}
+
+function montarCenariosMobilidade(mobilidade) {
+    const modalidades = definicoesMobilidade();
+    const tipoAtivo = mobilidade.status === 'ativa' ? normalizarTipoMobilidade(mobilidade.tipo) : '';
+    const alternativas = new Map();
+
+    (mobilidade.alternativas || []).forEach((item) => {
+        const tipo = normalizarTipoMobilidade(item.tipo);
+        if (tipo && !alternativas.has(tipo)) alternativas.set(tipo, item);
+    });
+
+    if (!tipoAtivo) {
+        return modalidades.slice(0, 2).map((modalidade) => ({
+            modalidade,
+            item: null,
+            status: definirStatusMobilidade(modalidade.tipo, tipoAtivo, null)
+        }));
+    }
+
+    const cenarios = [];
+    const modalidadeAtiva = modalidades.find((modalidade) => modalidade.tipo === tipoAtivo) || {
+        tipo: tipoAtivo,
+        nome: mobilidade.nome || 'Mobilidade',
+        icon: 'car'
+    };
+
+    cenarios.push({
+        modalidade: modalidadeAtiva,
+        item: mobilidade,
+        status: definirStatusMobilidade(modalidadeAtiva.tipo, tipoAtivo, alternativas.get(modalidadeAtiva.tipo))
+    });
+
+    const alternativa = modalidades
+        .filter((modalidade) => modalidade.tipo !== tipoAtivo)
+        .map((modalidade) => ({
+            modalidade,
+            item: alternativas.get(modalidade.tipo) || null,
+            status: definirStatusMobilidade(modalidade.tipo, tipoAtivo, alternativas.get(modalidade.tipo))
+        }))
+        .sort((a, b) => {
+            const peso = (cenario) => cenario.item ? 0 : 1;
+            return peso(a) - peso(b);
+        })[0];
+
+    if (alternativa) {
+        cenarios.push(alternativa);
+    }
+
+    return cenarios.slice(0, 2);
 }
 
 function normalizarTipoMobilidade(tipo) {
