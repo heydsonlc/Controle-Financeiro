@@ -413,6 +413,36 @@
     height: 42px;
 }
 
+.categoria-cartao-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #eff6ff;
+    color: #2563eb;
+}
+
+.categoria-cartao-icon__img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.categoria-cartao-icon__fallback {
+    display: inline-flex;
+}
+
+.categoria-cartao-icon--fallback {
+    border: 1px solid rgba(37, 99, 235, 0.15);
+}
+
+.categoria-cartao-icon--inline {
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06);
+}
+
 .despesa-list-icon {
     width: 42px;
     height: 42px;
@@ -1345,6 +1375,55 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.cartao-icone-select-row {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr);
+    gap: 10px;
+    align-items: center;
+}
+
+.cartao-icone-preview {
+    width: 38px;
+    height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cartao-icone-picker-grid {
+    margin-top: 10px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+    gap: 8px;
+}
+
+.cartao-icone-picker-option {
+    min-height: 46px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 8px;
+    background: #ffffff;
+    color: #334155;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 7px 9px;
+}
+
+.cartao-icone-picker-option:hover,
+.cartao-icone-picker-option.active {
+    border-color: rgba(37, 99, 235, 0.4);
+    background: #eff6ff;
+    color: #1d4ed8;
+}
+
+.categoria-cartao-icon--picker {
+    border-radius: 8px;
 }
 
 .logo-preview-row {

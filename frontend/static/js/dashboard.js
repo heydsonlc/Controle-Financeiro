@@ -226,11 +226,18 @@ function renderCategoriasCartao(categorias) {
 
     const linhas = categorias.map((item) => {
         const percentual = Math.max(0, Math.min(item.percentual || 0, 100));
+        const iconeCategoria = window.CategoriaCartaoIconesUI?.renderIconeCategoriaCartao
+            ? window.CategoriaCartaoIconesUI.renderIconeCategoriaCartao(item, {
+                size: 'sm',
+                className: 'dashboard-categoria-cartao-icon',
+                label: item.nome
+            })
+            : `<i style="--item-color:${escapeAttr(item.cor || '#2563eb')}"></i>`;
         return `
         <div class="table-row category-row">
             <span class="category-cell">
-                <i style="--item-color:${escapeAttr(item.cor || '#2563eb')}"></i>
-                ${escapeHtml(item.nome)}
+                ${iconeCategoria}
+                <span>${escapeHtml(item.nome)}</span>
             </span>
             <span class="category-progress-cell">
                 <b class="progress-line" aria-label="Consumo ${percentual}%">

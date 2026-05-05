@@ -637,13 +637,14 @@ function renderizarDetalheCategoriaCartao() {
         nome: '',
         descricao: '',
         cor: '#2563eb',
-        icone: 'credit-card',
+        icone: '',
         ativo: true
     };
     const vinculos = emCriacao ? [] : obterVinculosAtivos(formCategoria.id);
     const categoriasDisponiveis = emCriacao ? [] : obterCategoriasDespesaDisponiveis();
     const icone = renderizarIconeCartao(formCategoria, '30px');
-    const opcoesIcone = montarOpcoesIcone(formCategoria.icone);
+    const opcoesIcone = montarOpcoesIconeCartao(formCategoria.icone);
+    const gradeIcones = montarGradeIconesCartao(formCategoria.icone);
 
     detalhe.innerHTML = `
         <div class="detail-header">
@@ -688,7 +689,14 @@ function renderizarDetalheCategoriaCartao() {
                     </div>
                     <div class="form-group light">
                         <label for="cartao-icone">&Iacute;cone</label>
-                        <select id="cartao-icone">${opcoesIcone}</select>
+                        <div class="cartao-icone-select-row">
+                            <span class="cartao-icone-preview" id="cartao-icone-preview" aria-hidden="true">${icone}</span>
+                            <select id="cartao-icone">${opcoesIcone}</select>
+                        </div>
+                        <small class="form-hint">Lista propria de icones da Categoria do Cartao.</small>
+                        <div class="cartao-icone-picker-grid" id="cartao-icone-picker-grid" aria-label="Icones da Categoria do Cartao">
+                            ${gradeIcones}
+                        </div>
                     </div>
                 </div>
                 <label class="checkbox-label light">
@@ -811,12 +819,7 @@ function tratarInputDetalheCartao(event) {
     }
 
     if (event.target.id === 'cartao-icone') {
-        const icon = document.getElementById('cartao-detail-icon');
-        const categoria = {
-            icone: event.target.value,
-            cor: document.getElementById('cartao-cor')?.value || '#2563eb'
-        };
-        if (icon) icon.innerHTML = renderizarIconeCartao(categoria, '30px');
+        atualizarPreviewIconeCartao(event.target.value);
     }
 }
 
@@ -833,6 +836,8 @@ async function tratarCliqueDetalheCartao(event) {
         await alternarStatusCategoriaCartao();
     } else if (action === 'nova-vinculacao') {
         document.getElementById('categorias-disponiveis-lista')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } else if (action === 'selecionar-icone-cartao') {
+        selecionarIconeCartao(button.dataset.iconKey || '');
     }
 }
 
@@ -1008,6 +1013,14 @@ function obterCategoriaCartaoPorDespesa(categoriaId) {
 }
 
 function renderizarIconeCartao(categoria, size) {
+    if (window.CategoriaCartaoIconesUI?.renderIconeCategoriaCartao) {
+        const pixels = Number.parseInt(String(size || '30px'), 10) || 30;
+        return window.CategoriaCartaoIconesUI.renderIconeCategoriaCartao(categoria, {
+            sizePx: pixels,
+            className: 'categoria-cartao-icon--inline',
+            label: categoria?.nome || 'Categoria do Cartao'
+        });
+    }
     if (typeof renderIcon === 'function') {
         return renderIcon(categoria?.icone || 'credit-card', { size });
     }
@@ -1024,13 +1037,63 @@ function renderizarIconeDespesa(categoria, size) {
     return '';
 }
 
-function montarOpcoesIcone(iconeAtual) {
-    const keys = typeof getIconKeys === 'function' ? getIconKeys() : [];
-    const atual = iconeAtual || 'credit-card';
+function montarOpcoesIconeCartao(iconeAtual) {
+    const icones = window.CategoriaCartaoIconesUI?.listarIconesCategoriaCartao?.() || [];
+    const atual = iconeAtual || '';
+    const existeAtual = icones.some((icone) => icone.key === atual);
     return [
         `<option value="">Sem icone</option>`,
-        ...keys.map((key) => `<option value="${escapeHtml(key)}" ${key === atual ? 'selected' : ''}>${escapeHtml(key)}</option>`)
+        ...icones.map((icone) => `<option value="${escapeHtml(icone.key)}" ${icone.key === atual ? 'selected' : ''}>${escapeHtml(icone.nome)}</option>`),
+        atual && !existeAtual ? `<option value="${escapeHtml(atual)}" selected>Icone antigo indisponivel (${escapeHtml(atual)})</option>` : ''
     ].join('');
+}
+
+function montarGradeIconesCartao(iconeAtual) {
+    const icones = window.CategoriaCartaoIconesUI?.listarIconesCategoriaCartao?.() || [];
+    if (!icones.length) {
+        return '<div class="empty-inline">Nenhum icone local de Categoria do Cartao encontrado.</div>';
+    }
+    return icones.map((icone) => {
+        const ativo = icone.key === iconeAtual;
+        const preview = window.CategoriaCartaoIconesUI.renderIconeCategoriaCartao(icone.key, {
+            size: 'sm',
+            className: 'categoria-cartao-icon--picker',
+            label: icone.nome
+        });
+        return `
+            <button type="button" class="cartao-icone-picker-option ${ativo ? 'active' : ''}" data-action="selecionar-icone-cartao" data-icon-key="${escapeHtml(icone.key)}" aria-pressed="${ativo ? 'true' : 'false'}" title="${escapeHtml(icone.nome)}">
+                ${preview}
+                <span>${escapeHtml(icone.nome)}</span>
+            </button>
+        `;
+    }).join('');
+}
+
+function selecionarIconeCartao(key) {
+    const select = document.getElementById('cartao-icone');
+    if (select) {
+        select.value = key || '';
+    }
+    atualizarPreviewIconeCartao(key || '');
+}
+
+function atualizarPreviewIconeCartao(key) {
+    const categoria = {
+        icone: key,
+        nome: document.getElementById('cartao-nome')?.value || 'Categoria do Cartao',
+        cor: document.getElementById('cartao-cor')?.value || '#2563eb'
+    };
+    const html = renderizarIconeCartao(categoria, '30px');
+    const icon = document.getElementById('cartao-detail-icon');
+    const preview = document.getElementById('cartao-icone-preview');
+    if (icon) icon.innerHTML = html;
+    if (preview) preview.innerHTML = html;
+
+    document.querySelectorAll('.cartao-icone-picker-option').forEach((button) => {
+        const ativo = button.dataset.iconKey === key;
+        button.classList.toggle('active', ativo);
+        button.setAttribute('aria-pressed', ativo ? 'true' : 'false');
+    });
 }
 
 function montarSeletorIcones() {
