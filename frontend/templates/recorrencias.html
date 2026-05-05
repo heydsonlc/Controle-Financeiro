@@ -190,7 +190,7 @@
                             <div class="recorrencia-grid two-cols">
                                 <div class="form-group">
                                     <label for="categoria-id">Categoria *</label>
-                                    <select id="categoria-id" required>
+                                    <select id="categoria-id" required onchange="resolverCategoriaCartaoRecorrencia()">
                                         <option value="">Selecione...</option>
                                     </select>
                                 </div>
@@ -256,10 +256,11 @@
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label for="categoria-cartao-id">Categoria do Cartao</label>
-                                    <select id="categoria-cartao-id">
-                                        <option value="">Resolver automaticamente</option>
-                                    </select>
+                                    <label>Categoria do Cartao</label>
+                                    <input type="hidden" id="categoria-cartao-id">
+                                    <div id="categoria-cartao-info" class="categoria-cartao-auto-info" aria-live="polite">
+                                        Resolvida automaticamente pela Categoria de Despesa.
+                                    </div>
                                 </div>
                             </div>
 

@@ -286,6 +286,7 @@ def listar_despesas():
                 'mes_competencia': conta.mes_referencia.strftime('%Y-%m'),
                 'recorrente': item.recorrente if item else False,
                 'tipo_recorrencia': item.tipo_recorrencia if item else None,
+                'meio_pagamento': item.meio_pagamento if item else ('debito' if conta.debito_automatico else None),
                 'debito_automatico': conta.debito_automatico,
                 'numero_parcela': conta.numero_parcela,
                 'total_parcelas': conta.total_parcelas,
@@ -349,6 +350,7 @@ def listar_despesas():
                 'mes_competencia': fatura.cartao_competencia.strftime('%Y-%m'),
                 'recorrente': False,
                 'tipo_recorrencia': None,
+                'meio_pagamento': 'cartao',
                 'debito_automatico': fatura.debito_automatico,
                 'numero_parcela': None,
                 'total_parcelas': None,
@@ -605,7 +607,6 @@ def criar_despesa():
         # Se for despesa recorrente paga via cartÃ£o de crÃ©dito
         if bool(despesa.recorrente) and meio_pagamento == 'cartao':
             cartao_id = _to_int(dados.get('cartao_id'))
-            categoria_cartao_id = _to_int(dados.get('categoria_cartao_id'))
 
             # ValidaÃ§Ã£o mÃ­nima de integridade
             if not cartao_id:
@@ -620,7 +621,7 @@ def criar_despesa():
             resolucao_cartao = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(
                 cartao_id=cartao_id,
                 categoria_id=despesa.categoria_id,
-                categoria_cartao_id=categoria_cartao_id,
+                categoria_cartao_id=None,
             )
             despesa.categoria_cartao_id = resolucao_cartao.get('categoria_cartao_id')
         else:

@@ -650,29 +650,50 @@ def resolver_categoria_cartao():
     try:
         categoria_id = request.args.get('categoria_id')
         cartao_id = request.args.get('cartao_id')
-        categoria_cartao_id = CategoriaCartaoService.resolver_categoria_cartao_por_categoria_despesa(categoria_id)
-        limite = None
-        vinculada = False
-        if cartao_id and categoria_cartao_id:
-            vinculada = CategoriaCartaoService.validar_categoria_cartao_disponivel_no_cartao(
-                cartao_id,
-                categoria_cartao_id,
+        if cartao_id:
+            resolucao = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(
+                cartao_id=cartao_id,
+                categoria_id=categoria_id,
+                categoria_cartao_id=None,
             )
-            limite = CategoriaCartaoService.obter_limite_cartao(cartao_id, categoria_cartao_id)
+            categoria_cartao_id = resolucao.get('categoria_cartao_id')
+            categoria_resolvida_id = resolucao.get('categoria_cartao_resolvida_id') or categoria_cartao_id
+            categoria_nome = resolucao.get('categoria_cartao_nome')
+            vinculada = bool(resolucao.get('vinculada_ao_cartao'))
+            origem = resolucao.get('origem')
+        else:
+            categoria_cartao_id = CategoriaCartaoService.resolver_categoria_cartao_por_categoria_despesa(categoria_id)
+            categoria_resolvida_id = categoria_cartao_id
+            categoria = CategoriaCartaoService._validar_categoria_cartao(categoria_cartao_id) if categoria_cartao_id else None
+            categoria_nome = categoria.nome if categoria else None
+            vinculada = False
+            origem = 'mapa_categoria_despesa' if categoria_cartao_id else None
 
-        categoria = None
+        limite = None
+        if cartao_id and categoria_resolvida_id and vinculada:
+            limite = CategoriaCartaoService.obter_limite_cartao(cartao_id, categoria_resolvida_id)
+
         if categoria_cartao_id:
-            categoria = CategoriaCartaoService._validar_categoria_cartao(categoria_cartao_id)
+            aviso = f'Categoria do Cartao resolvida automaticamente: {categoria_nome}'
+        elif origem == 'categoria_cartao_nao_vinculada':
+            aviso = 'Categoria do Cartao resolvida, mas nao esta configurada para este cartao.'
+        else:
+            aviso = 'Categoria do Cartao nao configurada para esta Categoria de Despesa. Configure em Categorias > Categorias de Despesa.'
+
+        payload = {
+            'categoria_cartao_id': categoria_cartao_id,
+            'categoria_cartao_resolvida_id': categoria_resolvida_id,
+            'categoria_cartao_nome': categoria_nome,
+            'vinculada_ao_cartao': vinculada,
+            'limite_mensal': float(limite.limite_mensal) if limite else None,
+            'origem': origem,
+            'aviso': aviso,
+        }
 
         return jsonify({
             'success': True,
-            'data': {
-                'categoria_cartao_id': categoria_cartao_id,
-                'categoria_cartao_nome': categoria.nome if categoria else None,
-                'vinculada_ao_cartao': vinculada,
-                'limite_mensal': float(limite.limite_mensal) if limite else None,
-                'origem': 'mapa_categoria_despesa' if categoria_cartao_id else None,
-            }
+            'data': payload,
+            **payload,
         }), 200
     except ValueError as e:
         return jsonify({'success': False, 'error': str(e)}), 400

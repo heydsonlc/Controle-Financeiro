@@ -246,13 +246,13 @@ def criar_recorrencia():
 
         meio_pagamento = _normalizar_meio_pagamento(dados.get('meio_pagamento'))
         cartao_id = _to_int(dados.get('cartao_id'))
-        categoria_cartao_id = _to_int(dados.get('categoria_cartao_id'))
+        categoria_cartao_id = None
 
         if meio_pagamento == 'cartao' and cartao_id:
             resolucao_cartao = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(
                 cartao_id=cartao_id,
                 categoria_id=categoria_id,
-                categoria_cartao_id=categoria_cartao_id,
+                categoria_cartao_id=None,
             )
             categoria_cartao_id = resolucao_cartao.get('categoria_cartao_id')
         else:
@@ -329,8 +329,6 @@ def atualizar_recorrencia(item_id):
             item.meio_pagamento = _normalizar_meio_pagamento(dados.get('meio_pagamento'))
         if 'cartao_id' in dados:
             item.cartao_id = _to_int(dados.get('cartao_id'))
-        if 'categoria_cartao_id' in dados:
-            item.categoria_cartao_id = _to_int(dados.get('categoria_cartao_id'))
         if 'ativo' in dados:
             item.ativo = bool(dados.get('ativo'))
 
@@ -338,7 +336,7 @@ def atualizar_recorrencia(item_id):
             resolucao_cartao = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(
                 cartao_id=item.cartao_id,
                 categoria_id=item.categoria_id,
-                categoria_cartao_id=item.categoria_cartao_id,
+                categoria_cartao_id=None,
             )
             item.categoria_cartao_id = resolucao_cartao.get('categoria_cartao_id')
             item.item_agregado_id = None

@@ -743,7 +743,7 @@ def listar_todos_lancamentos_cartao(cartao_id):
 @cartoes_bp.route('/<int:cartao_id>/lancamentos', methods=['POST'])
 def criar_lancamento_sem_categoria(cartao_id):
     """
-    Cria um lancamento diretamente no cartao usando Categoria do Cartao quando informada.
+    Cria um lancamento diretamente no cartao resolvendo Categoria do Cartao pela Categoria de Despesa.
     """
     try:
         dados = request.json
@@ -760,7 +760,7 @@ def criar_lancamento_sem_categoria(cartao_id):
         # Preparar dados para o service
         dados_lancamento = {
             'cartao_id': cartao_id,
-            'categoria_cartao_id': dados.get('categoria_cartao_id'),
+            'categoria_cartao_id': None,
             'categoria_id': dados['categoria_id'],  # Categoria da DESPESA (obrigatÃ³ria)
             'descricao': dados['descricao'],
             'valor': dados['valor'],
@@ -827,8 +827,15 @@ def atualizar_lancamento(lancamento_id):
         lancamento.numero_parcela = dados.get('numero_parcela', lancamento.numero_parcela)
         lancamento.total_parcelas = dados.get('total_parcelas', lancamento.total_parcelas)
         lancamento.observacoes = dados.get('observacoes', lancamento.observacoes)
-        if 'categoria_cartao_id' in dados:
-            lancamento.categoria_cartao_id = dados.get('categoria_cartao_id') or None
+        if 'categoria_id' in dados:
+            lancamento.categoria_id = dados.get('categoria_id') or lancamento.categoria_id
+
+        resolucao_cartao = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(
+            cartao_id=lancamento.cartao_id,
+            categoria_id=lancamento.categoria_id,
+            categoria_cartao_id=None,
+        )
+        lancamento.categoria_cartao_id = resolucao_cartao.get('categoria_cartao_id')
 
         db.session.commit()
         return jsonify(lancamento.to_dict()), 200

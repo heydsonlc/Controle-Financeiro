@@ -69,6 +69,54 @@ async function carregarCategoriasCartaoSelecionado() {
         .join('');
 }
 
+function atualizarAvisoCategoriaCartaoRecorrencia(mensagem, tipo = 'neutral') {
+    const campo = document.getElementById('categoria-cartao-id');
+    const info = document.getElementById('categoria-cartao-info');
+    if (campo && tipo !== 'resolved') campo.value = '';
+    if (!info) return;
+    info.textContent = mensagem;
+    info.classList.remove('is-resolved', 'is-warning');
+    if (tipo === 'resolved') info.classList.add('is-resolved');
+    if (tipo === 'warning') info.classList.add('is-warning');
+}
+
+async function carregarCategoriasCartaoSelecionado() {
+    await resolverCategoriaCartaoRecorrencia();
+}
+
+async function resolverCategoriaCartaoRecorrencia() {
+    const cartaoId = document.getElementById('cartao-id')?.value;
+    const categoriaId = document.getElementById('categoria-id')?.value;
+    const campo = document.getElementById('categoria-cartao-id');
+    if (!campo) return;
+
+    if (!cartaoId || !categoriaId) {
+        atualizarAvisoCategoriaCartaoRecorrencia('Resolvida automaticamente pela Categoria de Despesa.', 'neutral');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/categorias-cartao/resolver?categoria_id=${encodeURIComponent(categoriaId)}&cartao_id=${encodeURIComponent(cartaoId)}`);
+        const data = await response.json();
+        const resolucao = data.data || data;
+        if (data.success && resolucao.categoria_cartao_id) {
+            campo.value = String(resolucao.categoria_cartao_id);
+            atualizarAvisoCategoriaCartaoRecorrencia(
+                resolucao.aviso || `Categoria do Cartao resolvida automaticamente: ${resolucao.categoria_cartao_nome || ''}`,
+                'resolved'
+            );
+        } else {
+            atualizarAvisoCategoriaCartaoRecorrencia(
+                resolucao.aviso || 'Categoria do Cartao nao configurada para esta Categoria de Despesa.',
+                'warning'
+            );
+        }
+    } catch (error) {
+        console.warn('Erro ao resolver Categoria do Cartao:', error);
+        atualizarAvisoCategoriaCartaoRecorrencia('Categoria do Cartao nao configurada para esta Categoria de Despesa.', 'warning');
+    }
+}
+
 async function carregarRecorrencias() {
     const [recResp, consResp] = await Promise.all([
         fetch(`${API_RECORRENCIAS}?status=todas`).then(r => r.json()).catch(() => ({ success: false, data: [] })),
@@ -376,6 +424,7 @@ function alternarMeioPagamento() {
     document.querySelectorAll('.recorrencia-cartao').forEach(el => {
         el.hidden = meio !== 'cartao';
     });
+    if (meio === 'cartao') resolverCategoriaCartaoRecorrencia();
 }
 
 async function salvarRecorrencia(event) {
@@ -403,7 +452,6 @@ async function salvarRecorrenciaSimples() {
         dia_semana: document.getElementById('dia-semana').value || null,
         meio_pagamento: document.getElementById('meio-pagamento').value || null,
         cartao_id: document.getElementById('cartao-id').value || null,
-        categoria_cartao_id: document.getElementById('categoria-cartao-id').value || null,
         ativo: document.getElementById('recorrencia-ativa')?.checked ?? true
     };
 
@@ -496,6 +544,7 @@ async function editarRecorrencia(origem, id) {
     if (item.meio_pagamento === 'cartao' && item.cartao_id) {
         await carregarCategoriasCartaoSelecionado();
         setValue('categoria-cartao-id', item.categoria_cartao_id || '');
+        resolverCategoriaCartaoRecorrencia();
     }
     document.getElementById('nome')?.focus();
 }

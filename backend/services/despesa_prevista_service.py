@@ -207,11 +207,10 @@ def confirmar(despesa_id: int, payload: dict | None = None) -> tuple[DespesaPrev
             if not cartao_id_raw:
                 raise ValueError('cartao_id é obrigatório quando meio_pagamento=cartao')
             cartao_id = int(cartao_id_raw)
-            categoria_cartao_id_raw = (payload or {}).get('categoria_cartao_id')
             resolucao_cartao = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(
                 cartao_id=cartao_id,
                 categoria_id=categoria_id,
-                categoria_cartao_id=categoria_cartao_id_raw,
+                categoria_cartao_id=None,
             )
             categoria_cartao_id = resolucao_cartao.get('categoria_cartao_id')
             entidade_criada = _criar_lancamento_para_prevista(

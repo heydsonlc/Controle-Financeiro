@@ -2782,7 +2782,6 @@ async function previsualizarAtivacaoMobilidade() {
     const meio = document.getElementById('ativar-mob-meio')?.value || '';
     const cartaoId = document.getElementById('ativar-mob-cartao-id')?.value || '';
     const categoriaId = document.getElementById('ativar-mob-categoria-id')?.value || '';
-    const categoriaCartaoId = document.getElementById('ativar-mob-categoria-cartao-id')?.value || '';
     const dataInicio = document.getElementById('ativar-mob-data-inicio')?.value || '';
     const criarRec = document.getElementById('ativar-mob-criar-recorrencia')?.checked !== false;
 
@@ -2799,7 +2798,6 @@ async function previsualizarAtivacaoMobilidade() {
                 meio_pagamento: meio || null,
                 cartao_id: cartaoId ? Number(cartaoId) : null,
                 categoria_id: categoriaId ? Number(categoriaId) : null,
-                categoria_cartao_id: categoriaCartaoId ? Number(categoriaCartaoId) : null,
                 data_inicio: dataInicio || null,
                 criar_recorrencia: criarRec,
             }),
@@ -2809,7 +2807,7 @@ async function previsualizarAtivacaoMobilidade() {
             if (divResultado) divResultado.innerHTML = `<span style="color:#ef4444;">${escapeHtml(data.error)}</span>`;
             return;
         }
-        _ativacaoPrevia = { ...data.data, meio_pagamento: meio, cartao_id: cartaoId, categoria_id: categoriaId, categoria_cartao_id: categoriaCartaoId, data_inicio: dataInicio, criar_recorrencia: criarRec };
+        _ativacaoPrevia = { ...data.data, meio_pagamento: meio, cartao_id: cartaoId, categoria_id: categoriaId, data_inicio: dataInicio, criar_recorrencia: criarRec };
         _renderizarPreviaAtivacao(data.data, divResultado);
     } catch (e) {
         if (divResultado) divResultado.innerHTML = `<span style="color:#ef4444;">Erro: ${escapeHtml(String(e))}</span>`;
@@ -2862,7 +2860,6 @@ async function confirmarAtivacaoMobilidade() {
     const meio = document.getElementById('ativar-mob-meio')?.value || '';
     const cartaoId = document.getElementById('ativar-mob-cartao-id')?.value || '';
     const categoriaId = document.getElementById('ativar-mob-categoria-id')?.value || '';
-    const categoriaCartaoId = document.getElementById('ativar-mob-categoria-cartao-id')?.value || '';
     const dataInicio = document.getElementById('ativar-mob-data-inicio')?.value || '';
     const criarRec = document.getElementById('ativar-mob-criar-recorrencia')?.checked !== false;
 
@@ -2876,7 +2873,6 @@ async function confirmarAtivacaoMobilidade() {
                 meio_pagamento: meio || null,
                 cartao_id: cartaoId ? Number(cartaoId) : null,
                 categoria_id: categoriaId ? Number(categoriaId) : null,
-                categoria_cartao_id: categoriaCartaoId ? Number(categoriaCartaoId) : null,
                 data_inicio: dataInicio || null,
                 criar_recorrencia: criarRec,
                 confirmado: true,
@@ -2920,6 +2916,52 @@ async function carregarCategoriaCartaoParaMobilidade() {
         selCC.innerHTML = '<option value="">— Nenhuma —</option>' +
             itens.map(l => `<option value="${l.categoria_cartao_id}">${escapeHtml(l.categoria_cartao_nome || String(l.categoria_cartao_id))}</option>`).join('');
     } catch (e) { selCC.innerHTML = '<option value="">—</option>'; }
+}
+
+function atualizarAvisoCategoriaCartaoMobilidade(mensagem, tipo = 'neutral', prefixo = 'ativar-mob') {
+    const campo = document.getElementById(`${prefixo}-categoria-cartao-id`);
+    const info = document.getElementById(`${prefixo}-categoria-cartao-info`);
+    if (campo && tipo !== 'resolved') campo.value = '';
+    if (!info) return;
+    info.textContent = mensagem;
+    info.classList.remove('is-resolved', 'is-warning');
+    if (tipo === 'resolved') info.classList.add('is-resolved');
+    if (tipo === 'warning') info.classList.add('is-warning');
+}
+
+async function carregarCategoriaCartaoParaMobilidade() {
+    const cartaoId = document.getElementById('ativar-mob-cartao-id')?.value;
+    const categoriaId = document.getElementById('ativar-mob-categoria-id')?.value;
+    const campo = document.getElementById('ativar-mob-categoria-cartao-id');
+    if (!campo) return;
+
+    if (!cartaoId || !categoriaId) {
+        atualizarAvisoCategoriaCartaoMobilidade('Resolvida automaticamente pela Categoria de Despesa.', 'neutral', 'ativar-mob');
+        return;
+    }
+
+    try {
+        const r = await fetch(`/api/categorias-cartao/resolver?categoria_id=${encodeURIComponent(categoriaId)}&cartao_id=${encodeURIComponent(cartaoId)}`);
+        const data = await r.json();
+        const resolucao = data.data || data;
+        if (data.success && resolucao.categoria_cartao_id) {
+            campo.value = String(resolucao.categoria_cartao_id);
+            atualizarAvisoCategoriaCartaoMobilidade(
+                resolucao.aviso || `Categoria do Cartao resolvida automaticamente: ${resolucao.categoria_cartao_nome || ''}`,
+                'resolved',
+                'ativar-mob'
+            );
+        } else {
+            atualizarAvisoCategoriaCartaoMobilidade(
+                resolucao.aviso || 'Categoria do Cartao nao configurada para esta Categoria de Despesa.',
+                'warning',
+                'ativar-mob'
+            );
+        }
+    } catch (e) {
+        console.warn('Categoria do Cartao nao carregada:', e.message);
+        atualizarAvisoCategoriaCartaoMobilidade('Categoria do Cartao nao configurada para esta Categoria de Despesa.', 'warning', 'ativar-mob');
+    }
 }
 
 // ================================================================
@@ -3565,6 +3607,42 @@ async function carregarCategoriasCartaoConfirmacao(cartaoId) {
     }
 }
 
+async function carregarCategoriasCartaoConfirmacao(cartaoId) {
+    const wrap = document.getElementById('wrap-confirmar-categoria-cartao');
+    const campo = document.getElementById('confirmar-categoria-cartao-id');
+    if (!wrap || !campo) return;
+    wrap.style.display = cartaoId ? '' : 'none';
+
+    const categoriaId = _confirmarDadosPrevista?.categoria_id;
+    if (!cartaoId || !categoriaId) {
+        atualizarAvisoCategoriaCartaoMobilidade('Resolvida automaticamente pela Categoria de Despesa.', 'neutral', 'confirmar');
+        return;
+    }
+
+    try {
+        const resp = await fetch(`/api/categorias-cartao/resolver?categoria_id=${encodeURIComponent(categoriaId)}&cartao_id=${encodeURIComponent(cartaoId)}`);
+        const data = await resp.json();
+        const resolucao = data.data || data;
+        if (data.success && resolucao.categoria_cartao_id) {
+            campo.value = String(resolucao.categoria_cartao_id);
+            atualizarAvisoCategoriaCartaoMobilidade(
+                resolucao.aviso || `Categoria do Cartao resolvida automaticamente: ${resolucao.categoria_cartao_nome || ''}`,
+                'resolved',
+                'confirmar'
+            );
+        } else {
+            atualizarAvisoCategoriaCartaoMobilidade(
+                resolucao.aviso || 'Categoria do Cartao nao configurada para esta Categoria de Despesa.',
+                'warning',
+                'confirmar'
+            );
+        }
+    } catch (e) {
+        console.warn('Categorias do Cartao nao carregadas:', e.message);
+        atualizarAvisoCategoriaCartaoMobilidade('Categoria do Cartao nao configurada para esta Categoria de Despesa.', 'warning', 'confirmar');
+    }
+}
+
 async function submitConfirmarPrevista() {
     const despesaId = document.getElementById('confirmar-despesa-id')?.value;
     const meio = document.getElementById('confirmar-meio')?.value;
@@ -3578,11 +3656,8 @@ async function submitConfirmarPrevista() {
     const btn = document.getElementById('btn-confirmar-submit');
     if (btn) btn.disabled = true;
 
-    const categoriaCartaoId = document.getElementById('confirmar-categoria-cartao-id')?.value;
-
     const payload = { meio_pagamento: meio };
     if (meio === 'cartao' && cartaoId) payload.cartao_id = Number(cartaoId);
-    if (meio === 'cartao' && categoriaCartaoId) payload.categoria_cartao_id = Number(categoriaCartaoId);
     if (dataVenc) payload.data_vencimento = dataVenc;
     if (obs) payload.observacao = obs;
     if (_confirmarDadosPrevista?.categoria_id) payload.categoria_id = Number(_confirmarDadosPrevista.categoria_id);

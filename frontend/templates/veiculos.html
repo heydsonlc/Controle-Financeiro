@@ -357,10 +357,11 @@
                 </select>
             </div>
             <div class="form-group span-2" id="wrap-confirmar-categoria-cartao" style="display:none;">
-                <label for="confirmar-categoria-cartao-id">Categoria do Cartão (opcional)</label>
-                <select id="confirmar-categoria-cartao-id">
-                    <option value="">— Nenhuma —</option>
-                </select>
+                <label>Categoria do Cartão</label>
+                <input type="hidden" id="confirmar-categoria-cartao-id">
+                <div id="confirmar-categoria-cartao-info" class="categoria-cartao-auto-info" aria-live="polite">
+                    Resolvida automaticamente pela Categoria de Despesa.
+                </div>
             </div>
             <div class="form-group">
                 <label for="confirmar-data-vencimento">Data de vencimento</label>
@@ -750,16 +751,16 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="ativar-mob-categoria-cartao-id">Categoria do Cartão</label>
-                    <select id="ativar-mob-categoria-cartao-id" class="form-control">
-                        <option value="">— Resolver automaticamente —</option>
-                    </select>
-                    <small class="form-hint">Deixe em branco para resolver pelo mapa de categorias.</small>
+                    <label>Categoria do Cartão</label>
+                    <input type="hidden" id="ativar-mob-categoria-cartao-id">
+                    <div id="ativar-mob-categoria-cartao-info" class="categoria-cartao-auto-info" aria-live="polite">
+                        Resolvida automaticamente pela Categoria de Despesa.
+                    </div>
                 </div>
             </div>
             <div class="form-group">
                 <label for="ativar-mob-categoria-id">Categoria de Despesa</label>
-                <select id="ativar-mob-categoria-id" class="form-control">
+                <select id="ativar-mob-categoria-id" class="form-control" onchange="carregarCategoriaCartaoParaMobilidade()">
                     <option value="">— Padrão (Mobilidade) —</option>
                 </select>
             </div>

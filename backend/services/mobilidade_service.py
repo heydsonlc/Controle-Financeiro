@@ -446,7 +446,7 @@ def previsualizar_ativacao_modalidade(payload: dict) -> dict:
     meio = (payload.get('meio_pagamento') or '').lower()
     cartao_id = _to_int(payload.get('cartao_id'))
     categoria_id = _to_int(payload.get('categoria_id'))
-    categoria_cartao_id_manual = _to_int(payload.get('categoria_cartao_id'))
+    categoria_cartao_id_manual = None
     data_inicio = _parse_date(payload.get('data_inicio'))
 
     if tipo not in TIPOS_VALIDOS:
@@ -608,7 +608,7 @@ def ativar_modalidade(payload: dict) -> dict:
     meio = (payload.get('meio_pagamento') or '').lower() or None
     cartao_id = _to_int(payload.get('cartao_id'))
     categoria_id = _to_int(payload.get('categoria_id'))
-    categoria_cartao_id_manual = _to_int(payload.get('categoria_cartao_id'))
+    categoria_cartao_id_manual = None
     data_inicio = _parse_date(payload.get('data_inicio')) or date.today().replace(day=1)
     criar_recorrencia = payload.get('criar_recorrencia', True)
 
@@ -625,7 +625,7 @@ def ativar_modalidade(payload: dict) -> dict:
 
     # 2. Criar recorrência
     cat_id = categoria_id
-    cc_id_resolvido = _to_int(payload.get('categoria_cartao_id'))
+    cc_id_resolvido = None
 
     if tipo == 'VEICULO':
         if not origem_id:

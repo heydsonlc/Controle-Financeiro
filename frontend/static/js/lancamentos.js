@@ -88,6 +88,8 @@ function inicializarFiltros() {
     document.getElementById('filtro-categoria').addEventListener('change', aplicarFiltros);
     document.getElementById('filtro-status')?.addEventListener('change', aplicarFiltros);
     document.getElementById('filtro-busca')?.addEventListener('input', aplicarFiltros);
+    document.getElementById('lancamento-categoria-despesa-cartao')?.addEventListener('change', resolverCategoriaCartaoLancamento);
+    document.getElementById('lancamento-cartao')?.addEventListener('change', resolverCategoriaCartaoLancamento);
 
     const campoObservacoes = document.getElementById('lancamento-observacoes');
     campoObservacoes?.addEventListener('input', () => {
@@ -270,6 +272,71 @@ async function carregarCategoriasPorCartao() {
     } catch (error) {
         console.error('Erro ao carregar categorias:', error);
         mostrarErro('Erro ao carregar categorias');
+    }
+}
+
+function atualizarAvisoCategoriaCartaoLancamento(mensagem, tipo = 'neutral') {
+    const campo = document.getElementById('lancamento-categoria-cartao');
+    const info = document.getElementById('lancamento-categoria-cartao-info');
+    if (campo && tipo !== 'resolved') campo.value = '';
+    if (!info) return;
+    info.textContent = mensagem;
+    info.classList.remove('is-resolved', 'is-warning');
+    if (tipo === 'resolved') info.classList.add('is-resolved');
+    if (tipo === 'warning') info.classList.add('is-warning');
+}
+
+async function carregarCategoriasPorCartao() {
+    if (!state.categoriasDespesa) {
+        const response = await fetch('/api/categorias');
+        const json = await response.json();
+        state.categoriasDespesa = extrairArray(json);
+    }
+
+    const selectCategoriaDespesa = document.getElementById('lancamento-categoria-despesa-cartao');
+    if (selectCategoriaDespesa && selectCategoriaDespesa.options.length <= 1) {
+        selectCategoriaDespesa.innerHTML = '<option value="">Selecione uma categoria...</option>';
+        (state.categoriasDespesa || []).forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat.id;
+            option.textContent = `${cat.nome}${cat.ativo === false ? ' (inativa)' : ''}`;
+            selectCategoriaDespesa.appendChild(option);
+        });
+    }
+
+    await resolverCategoriaCartaoLancamento();
+}
+
+async function resolverCategoriaCartaoLancamento() {
+    const cartaoId = document.getElementById('lancamento-cartao')?.value;
+    const categoriaId = document.getElementById('lancamento-categoria-despesa-cartao')?.value;
+    const campo = document.getElementById('lancamento-categoria-cartao');
+    if (!campo) return;
+
+    if (!cartaoId || !categoriaId) {
+        atualizarAvisoCategoriaCartaoLancamento('Resolvida automaticamente pela Categoria de Despesa.', 'neutral');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/categorias-cartao/resolver?categoria_id=${encodeURIComponent(categoriaId)}&cartao_id=${encodeURIComponent(cartaoId)}`);
+        const data = await response.json();
+        const resolucao = data.data || data;
+        if (data.success && resolucao.categoria_cartao_id) {
+            campo.value = String(resolucao.categoria_cartao_id);
+            atualizarAvisoCategoriaCartaoLancamento(
+                resolucao.aviso || `Categoria do Cartao resolvida automaticamente: ${resolucao.categoria_cartao_nome || ''}`,
+                'resolved'
+            );
+        } else {
+            atualizarAvisoCategoriaCartaoLancamento(
+                resolucao.aviso || 'Categoria do Cartao nao configurada para esta Categoria de Despesa.',
+                'warning'
+            );
+        }
+    } catch (error) {
+        console.warn('Erro ao resolver Categoria do Cartao:', error);
+        atualizarAvisoCategoriaCartaoLancamento('Categoria do Cartao nao configurada para esta Categoria de Despesa.', 'warning');
     }
 }
 
@@ -807,11 +874,6 @@ async function salvarLancamentoCartao() {
     }
 
     // Leitura null-safe da categoria do cartão (opcional)
-    const selectCategoriaCartao = document.getElementById('lancamento-categoria-cartao');
-    const categoriaCartaoId = selectCategoriaCartao && selectCategoriaCartao.value
-        ? parseInt(selectCategoriaCartao.value)
-        : null;
-
     // Montar payload base (campos obrigatórios)
     const dados = {
         cartao_id: parseInt(cartaoId),
@@ -824,10 +886,6 @@ async function salvarLancamentoCartao() {
         total_parcelas: parseInt(document.getElementById('lancamento-parcelas').value) || 1,
         observacoes: document.getElementById('lancamento-observacoes').value
     };
-
-    if (categoriaCartaoId !== null) {
-        dados.categoria_cartao_id = categoriaCartaoId;
-    }
 
     try {
         const url = `/api/cartoes/${cartaoId}/lancamentos`;
@@ -989,6 +1047,7 @@ function editarLancamento(lancamento) {
             setTimeout(() => {
                 // Categoria da DESPESA (obrigatória)
                 document.getElementById('lancamento-categoria-despesa-cartao').value = lancamento.categoria_id;
+                resolverCategoriaCartaoLancamento();
 
                 // Categoria do CARTAO (opcional) - null-safe
                 if (lancamento.categoria_cartao_id) {

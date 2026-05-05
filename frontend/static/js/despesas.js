@@ -21,6 +21,52 @@ function despesasIcon(name) {
     return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="width:1em;height:1em;display:inline-block;vertical-align:-0.125em;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">${icons[name] || icons.details}</svg>`;
 }
 
+function normalizarFormaPagamentoDespesa(valor) {
+    if (window.FormasPagamentoUI?.normalizarFormaPagamento) {
+        return window.FormasPagamentoUI.normalizarFormaPagamento(valor);
+    }
+    return String(valor || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^\w\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function obterFormaPagamentoDespesa(despesa) {
+    if (!despesa) return 'nao_informado';
+    if (despesa.is_fatura_cartao === true || despesa.tipo === 'cartao') return 'cartao';
+
+    const normalizada = normalizarFormaPagamentoDespesa(
+        despesa.meio_pagamento || despesa.forma_pagamento || despesa.pagamento
+    );
+    if (!normalizada) return 'nao_informado';
+    if (normalizada === 'debito' || normalizada.includes('debito automatico') || normalizada.includes('debito em conta')) {
+        return 'debito_automatico';
+    }
+
+    const resolvida = window.FormasPagamentoUI?.resolverFormaPagamento
+        ? window.FormasPagamentoUI.resolverFormaPagamento(normalizada)
+        : null;
+    if (resolvida?.key && resolvida.key !== 'default') return resolvida.key;
+    if (normalizada.includes('transferencia') || normalizada === 'ted' || normalizada === 'doc') return 'transferencia';
+    return 'outros';
+}
+
+function renderFormaPagamentoDespesa(despesa) {
+    const chave = obterFormaPagamentoDespesa(despesa);
+    const valor = chave === 'debito_automatico' ? 'debito automatico' : (chave === 'nao_informado' ? '' : chave);
+    if (window.FormasPagamentoUI?.renderFormaPagamento) {
+        return window.FormasPagamentoUI.renderFormaPagamento(valor || 'Nao informado', {
+            size: 'sm',
+            showLabel: false,
+            className: 'despesa-forma-pagamento-icon despesa-payment-method'
+        });
+    }
+    return `<span class="despesa-forma-pagamento-fallback" aria-hidden="true">$</span>`;
+}
+
 // Carregar dados ao iniciar a página
 document.addEventListener('DOMContentLoaded', () => {
     // Definir mês atual no filtro de competência
@@ -35,7 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
     carregarContasBancariasAtivas();
 
     // Event listeners para filtros
-    document.getElementById('filtro-categoria').addEventListener('change', aplicarFiltros);
+    document.getElementById('filtro-forma-pagamento').addEventListener('change', aplicarFiltros);
     document.getElementById('filtro-status').addEventListener('change', aplicarFiltros);
     document.getElementById('filtro-vencimento-ate').addEventListener('change', aplicarFiltros);
     document.getElementById('filtro-competencia').addEventListener('change', aplicarFiltros);
@@ -47,10 +93,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('cartao_id').addEventListener('change', function() {
         const cartaoId = this.value;
         if (cartaoId) {
-            carregarCategoriasCartao(cartaoId).then(() => resolverCategoriaCartaoDespesa());
+            resolverCategoriaCartaoDespesa();
         } else {
-            const selectCategoria = document.getElementById('categoria_cartao_id');
-            selectCategoria.innerHTML = '<option value="">Resolver automaticamente</option>';
+            atualizarAvisoCategoriaCartao('Resolvida automaticamente pela Categoria de Despesa.', 'neutral');
         }
     });
 
@@ -108,14 +153,6 @@ async function carregarCategorias() {
                 }
             });
 
-            // Preencher select de filtro
-            const selectFiltro = document.getElementById('filtro-categoria');
-            selectFiltro.innerHTML = '<option value="">Todas as categorias</option>';
-            categorias.forEach(cat => {
-                if (cat.ativo) {
-                    selectFiltro.innerHTML += `<option value="${cat.id}">${cat.nome}</option>`;
-                }
-            });
         }
     } catch (error) {
         console.error('Erro ao carregar categorias:', error);
@@ -217,6 +254,55 @@ async function resolverCategoriaCartaoDespesa() {
 /**
  * Carrega todas as despesas da API
  */
+function atualizarAvisoCategoriaCartao(mensagem, tipo = 'neutral') {
+    const campo = document.getElementById('categoria_cartao_id');
+    const info = document.getElementById('categoria-cartao-auto-info');
+    if (campo && tipo !== 'resolved') campo.value = '';
+    if (!info) return;
+    info.textContent = mensagem;
+    info.classList.remove('is-resolved', 'is-warning');
+    if (tipo === 'resolved') info.classList.add('is-resolved');
+    if (tipo === 'warning') info.classList.add('is-warning');
+}
+
+async function carregarCategoriasCartao(cartaoId) {
+    if (!cartaoId) return;
+    await resolverCategoriaCartaoDespesa();
+}
+
+async function resolverCategoriaCartaoDespesa() {
+    const cartaoId = document.getElementById('cartao_id')?.value;
+    const categoriaId = document.getElementById('categoria_id')?.value;
+    const campoCategoriaCartao = document.getElementById('categoria_cartao_id');
+    if (!campoCategoriaCartao) return;
+
+    if (!cartaoId || !categoriaId) {
+        atualizarAvisoCategoriaCartao('Resolvida automaticamente pela Categoria de Despesa.', 'neutral');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/categorias-cartao/resolver?categoria_id=${encodeURIComponent(categoriaId)}&cartao_id=${encodeURIComponent(cartaoId)}`);
+        const data = await response.json();
+        const resolucao = data.data || data;
+        if (data.success && resolucao.categoria_cartao_id) {
+            campoCategoriaCartao.value = String(resolucao.categoria_cartao_id);
+            atualizarAvisoCategoriaCartao(
+                resolucao.aviso || `Categoria do Cartao resolvida automaticamente: ${resolucao.categoria_cartao_nome || ''}`,
+                'resolved'
+            );
+        } else {
+            atualizarAvisoCategoriaCartao(
+                resolucao.aviso || 'Categoria do Cartao nao configurada para esta Categoria de Despesa.',
+                'warning'
+            );
+        }
+    } catch (error) {
+        console.warn('Erro ao resolver Categoria do Cartao:', error);
+        atualizarAvisoCategoriaCartao('Categoria do Cartao nao configurada para esta Categoria de Despesa.', 'warning');
+    }
+}
+
 async function carregarDespesas() {
     try {
         // Pegar mês selecionado no filtro de competência (formato: MM/YYYY)
@@ -281,16 +367,22 @@ function calcularCompetenciaAutomaticamente() {
  * Aplica filtros e atualiza a lista
  */
 function aplicarFiltros() {
-    const categoriaFiltro = document.getElementById('filtro-categoria').value;
+    const formaPagamentoFiltro = document.getElementById('filtro-forma-pagamento').value;
     const statusFiltro = document.getElementById('filtro-status').value;
     const vencimentoAteFiltro = document.getElementById('filtro-vencimento-ate').value; // Formato YYYY-MM-DD
     const competenciaFiltro = document.getElementById('filtro-competencia').value;
 
     let despesasFiltradas = [...despesas];
 
-    // Filtrar por categoria
-    if (categoriaFiltro) {
-        despesasFiltradas = despesasFiltradas.filter(d => d.categoria_id == categoriaFiltro);
+    // Filtrar por forma de pagamento
+    if (formaPagamentoFiltro) {
+        despesasFiltradas = despesasFiltradas.filter(d => {
+            const forma = obterFormaPagamentoDespesa(d);
+            if (formaPagamentoFiltro === 'outros') {
+                return forma === 'outros' || forma === 'nao_informado';
+            }
+            return forma === formaPagamentoFiltro;
+        });
     }
 
     // Filtrar por status
@@ -723,9 +815,7 @@ function renderizarDespesas(despesasParaRenderizar) {
         const categoriaIconeHtml = (typeof renderCategoryVisual === 'function' && categoria)
             ? renderCategoryVisual(categoria, { size: '12px', alt: categoriaNome })
             : '';
-        const meioPageIconeHtml = (window.FormasPagamentoUI?.renderFormaPagamento && despesa.meio_pagamento)
-            ? window.FormasPagamentoUI.renderFormaPagamento(despesa.meio_pagamento, { size: '12px', showLabel: false, className: 'despesa-payment-method' })
-            : '';
+        const formaPagamentoIconeHtml = renderFormaPagamentoDespesa(despesa);
 
         // Competência formatada
         const competencia = despesa.mes_competencia ? formatarCompetencia(despesa.mes_competencia) : '';
@@ -737,7 +827,7 @@ function renderizarDespesas(despesasParaRenderizar) {
             : (despesa.financiamento_parcela_id != null ? 'Financiamentos' : categoriaNome);
         const categoriaHtml = isFaturaCartao
             ? `${origemTexto}${despesa.status_fatura ? `<span class="despesa-pill despesa-pill-inline">${despesa.status_fatura}</span>` : ''}`
-            : `${categoriaIconeHtml ? `<span class="despesa-icon-inline">${categoriaIconeHtml}</span>` : ''}${origemTexto}${meioPageIconeHtml ? `<span class="despesa-icon-inline" title="${despesa.meio_pagamento}">${meioPageIconeHtml}</span>` : ''}`;
+            : `${categoriaIconeHtml ? `<span class="despesa-icon-inline">${categoriaIconeHtml}</span>` : ''}${origemTexto}`;
 
         // Ações disponíveis
         const acoesHTML = isFaturaCartao ? `
@@ -776,6 +866,10 @@ function renderizarDespesas(despesasParaRenderizar) {
         return `
             <div class="despesa-card despesa-card-padrao ${statusClass} ${tipoClass}" data-despesa-id="${despesa.id}">
                 <div class="despesa-linha-principal">
+                    <div class="despesa-cell despesa-cell-forma-pagamento" title="Forma de pagamento">
+                        ${formaPagamentoIconeHtml}
+                    </div>
+
                     <div class="despesa-cell despesa-cell-status despesa-status">
                         <span class="status-badge status-badge-${statusClass}">${statusTexto}</span>
                     </div>
@@ -882,6 +976,7 @@ function renderizarDespesas(despesasParaRenderizar) {
     const partesHTML = [`
         <div class="despesas-grade">
             <div class="despesas-grade-header">
+                <div>Forma</div>
                 <div>Pagamento</div>
                 <div>Descri&ccedil;&atilde;o</div>
                 <div>Vencimento</div>
@@ -1350,7 +1445,6 @@ async function salvarDespesa(event) {
 
         if (meioPagamento === 'cartao') {
             const cartaoId = document.getElementById('cartao_id').value;
-            const categoriaCartaoId = document.getElementById('categoria_cartao_id').value;
 
             const cartaoIdNumber = Number(cartaoId);
             if (!Number.isInteger(cartaoIdNumber) || cartaoIdNumber <= 0) {
@@ -1358,13 +1452,6 @@ async function salvarDespesa(event) {
                 return;
             }
             dados.cartao_id = cartaoIdNumber;
-
-            if (categoriaCartaoId) {
-                const categoriaCartaoIdNumber = Number(categoriaCartaoId);
-                if (Number.isInteger(categoriaCartaoIdNumber) && categoriaCartaoIdNumber > 0) {
-                    dados.categoria_cartao_id = categoriaCartaoIdNumber;
-                }
-            }
         }
     }
 
