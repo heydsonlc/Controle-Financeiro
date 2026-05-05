@@ -30,12 +30,14 @@ class PerfilFinanceiro(db.Model):
     logo_url = db.Column(db.String(255), nullable=True)
     cor = db.Column(db.String(7), nullable=False, default='#2563eb')
     ativo = db.Column(db.Boolean, nullable=False, default=True)
+    padrao = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     __table_args__ = (
         db.Index('ix_perfil_financeiro_tipo', 'tipo'),
         db.Index('ix_perfil_financeiro_ativo', 'ativo'),
+        db.Index('ix_perfil_financeiro_padrao', 'padrao'),
     )
 
     def __repr__(self):
@@ -51,6 +53,7 @@ class PerfilFinanceiro(db.Model):
             'logo_url': self.logo_url,
             'cor': self.cor,
             'ativo': bool(self.ativo),
+            'padrao': bool(self.padrao),
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }

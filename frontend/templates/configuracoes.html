@@ -3,6 +3,7 @@
 {% block title %}Configurações - Controle Financeiro{% endblock %}
 
 {% block extra_css %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/configuracoes.css') }}">
     <style>
         main {
             padding: 0;
@@ -86,6 +87,7 @@
             </div>
         </div>
     </div>
+
 {% endblock %}
 
 {% block content %}
@@ -110,6 +112,20 @@
                         Ajustes gerais do sistema, preferências de uso e parâmetros globais.
                         Os módulos operacionais e cadastros ficam disponíveis na navegação lateral.
                     </p>
+
+                    <section class="config-profiles-section" id="perfis-financeiros">
+                        <div class="config-profiles-header">
+                            <div>
+                                <h3>Perfis Financeiros</h3>
+                                <p>Configure os contextos financeiros usados no sistema, como pessoal, empresa ou outros.</p>
+                            </div>
+                            <button type="button" class="config-profile-primary" id="config-profile-new">+ Novo perfil financeiro</button>
+                        </div>
+                        <div class="config-profile-alert" id="config-profile-alert" hidden></div>
+                        <div class="config-profiles-list" id="config-profiles-list">
+                            <div class="config-profile-empty">Carregando perfis financeiros...</div>
+                        </div>
+                    </section>
 
                     <div class="config-grid">
                         <a href="/preferencias" class="config-card">
@@ -137,8 +153,40 @@
             </section>
         </main>
     </div>
+
+    <div class="config-profile-modal" id="config-profile-modal" aria-hidden="true">
+        <div class="config-profile-dialog" role="dialog" aria-modal="true" aria-labelledby="config-profile-title">
+            <div class="config-profile-modal-header">
+                <div>
+                    <h3 id="config-profile-title">Novo perfil financeiro</h3>
+                    <p>Os dados vinculados ao perfil serao preservados mesmo se ele for inativado.</p>
+                </div>
+                <button type="button" id="config-profile-close" aria-label="Fechar">&times;</button>
+            </div>
+            <form class="config-profile-form" id="config-profile-form">
+                <input type="hidden" id="config-profile-id">
+                <label>Nome<input type="text" id="config-profile-nome" required maxlength="120"></label>
+                <label>Tipo
+                    <select id="config-profile-tipo">
+                        <option value="PESSOAL">Pessoal</option>
+                        <option value="EMPRESA">Empresa</option>
+                        <option value="OUTRO">Outro</option>
+                    </select>
+                </label>
+                <label>Documento<input type="text" id="config-profile-documento" maxlength="32" placeholder="CPF, CNPJ ou identificador"></label>
+                <label>Cor<input type="color" id="config-profile-cor" value="#2563eb"></label>
+                <label>Avatar<input type="text" id="config-profile-avatar" maxlength="20" placeholder="Ex: PE"></label>
+                <label class="config-profile-check"><input type="checkbox" id="config-profile-ativo"> Perfil ativo</label>
+            </form>
+            <div class="config-profile-modal-footer">
+                <button type="button" class="config-profile-secondary" id="config-profile-cancel">Cancelar</button>
+                <button type="button" class="config-profile-primary" id="config-profile-save">Salvar perfil</button>
+            </div>
+        </div>
+    </div>
 {% endblock %}
 
 {% block extra_js %}
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/configuracoes.js') }}"></script>
 {% endblock %}

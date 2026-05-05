@@ -335,6 +335,7 @@ body.app-shell-body .perfil-financeiro-option-check {
 }
 
 body.app-shell-body .perfil-financeiro-config {
+    display: block;
     width: 100%;
     margin-top: 8px;
     padding: 9px;
@@ -344,6 +345,8 @@ body.app-shell-body .perfil-financeiro-config {
     color: #64748b;
     font-size: 0.8rem;
     font-weight: 700;
+    text-align: center;
+    text-decoration: none;
 }
 
 body.app-shell-body .app-content {
