@@ -18,7 +18,7 @@
     --rec-amber-soft: #fef3c7;
     --rec-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
     --rec-radius: 8px;
-    --rec-gap: 20px;
+    --rec-gap: 14px;
 }
 
 body.app-shell-body .app-content {
@@ -26,8 +26,9 @@ body.app-shell-body .app-content {
 }
 
 .receitas-ux-page {
-    max-width: var(--app-page-max-width, 1680px);
-    margin: 0 auto;
+    width: 100%;
+    max-width: none;
+    margin: 0;
     display: grid;
     gap: var(--rec-gap);
     color: var(--rec-text);
@@ -224,8 +225,8 @@ body.app-shell-body .app-content {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 58px;
     align-items: center;
-    gap: 18px;
-    padding: 24px;
+    gap: 16px;
+    padding: 20px;
     overflow: hidden;
     background: var(--rec-surface);
     border: 1px solid var(--rec-border);
@@ -314,7 +315,7 @@ body.app-shell-body .app-content {
 
 .receitas-workspace {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 360px;
+    grid-template-columns: minmax(0, 1fr) 340px;
     gap: var(--rec-gap);
     align-items: start;
 }
@@ -336,7 +337,7 @@ body.app-shell-body .app-content {
 }
 
 .receitas-panel-header {
-    padding: 20px 22px;
+    padding: 18px 20px;
     border-bottom: 1px solid var(--rec-border-soft);
 }
 
@@ -386,7 +387,7 @@ body.app-shell-body .app-content {
 }
 
 .receitas-table-head {
-    padding: 14px 18px;
+    padding: 12px 16px;
     background: var(--rec-surface-soft);
     border-bottom: 1px solid var(--rec-border-soft);
     color: #475569;
@@ -396,7 +397,7 @@ body.app-shell-body .app-content {
 
 .receita-row {
     min-height: 74px;
-    padding: 14px 18px;
+    padding: 14px 16px;
     border-bottom: 1px solid var(--rec-border-soft);
 }
 
@@ -523,7 +524,7 @@ body.app-shell-body .app-content {
     display: flex;
     justify-content: space-between;
     gap: 16px;
-    padding: 16px 18px;
+    padding: 14px 16px;
     color: var(--rec-muted);
     border-top: 1px solid var(--rec-border-soft);
     font-size: 12px;
@@ -539,7 +540,7 @@ body.app-shell-body .app-content {
 }
 
 .receitas-side-panel {
-    padding: 18px;
+    padding: 16px;
 }
 
 .receitas-side-header {

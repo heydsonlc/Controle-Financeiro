@@ -1610,19 +1610,23 @@ body.mobile-view .despesa-valor-principal {
     margin: 0;
 }
 
-/* Layout principal 70/30 */
+/* Layout principal: KPIs em linha cheia + lista 70/30 com sidebar */
 .despesas-page-layout {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
     gap: 20px;
     align-items: flex-start;
 }
 
 .despesas-main {
+    display: contents;
     flex: 1;
     min-width: 0;
 }
 
 .despesas-sidebar {
+    grid-column: 2;
+    grid-row: 2;
     width: 320px;
     flex-shrink: 0;
     position: sticky;
@@ -1727,7 +1731,7 @@ body.mobile-view .despesa-valor-principal {
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     width: 100%;
 }
 
@@ -1735,7 +1739,9 @@ body.mobile-view .despesa-valor-principal {
     display: flex;
     align-items: center;
     gap: 8px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
     flex: 1;
 }
 
@@ -1808,20 +1814,22 @@ body.mobile-view .despesa-valor-principal {
 
 /* Summary cards - 6 cards em linha única compacta */
 .despesas-summary-cards {
+    grid-column: 1 / -1;
     display: grid;
     grid-template-columns: repeat(6, 1fr);
-    gap: 8px;
-    margin-bottom: 14px;
+    gap: 10px;
+    margin-bottom: 0;
 }
 
 .summary-card {
+    min-height: 86px;
     background: #ffffff;
     border: 1px solid rgba(0,0,0,0.06);
     border-radius: 10px;
-    padding: 10px 12px;
+    padding: 14px 14px;
     display: flex;
-    align-items: flex-start;
-    gap: 8px;
+    align-items: center;
+    gap: 10px;
     transition: box-shadow 0.15s, transform 0.15s;
 }
 
@@ -1831,8 +1839,8 @@ body.mobile-view .despesa-valor-principal {
 }
 
 .summary-card-icon {
-    width: 28px;
-    height: 28px;
+    width: 34px;
+    height: 34px;
     border-radius: 7px;
     display: flex;
     align-items: center;
@@ -1854,16 +1862,16 @@ body.mobile-view .despesa-valor-principal {
 }
 
 .summary-card-label {
-    font-size: 10px;
+    font-size: 10.5px;
     font-weight: 500;
     color: #6e6e73;
     text-transform: uppercase;
     letter-spacing: 0.3px;
-    margin-bottom: 1px;
+    margin-bottom: 3px;
 }
 
 .summary-card-value {
-    font-size: 1em;
+    font-size: 1.08em;
     font-weight: 700;
     color: #1d1d1f;
     letter-spacing: -0.02em;
@@ -1875,11 +1883,12 @@ body.mobile-view .despesa-valor-principal {
 .summary-card-sub {
     font-size: 10px;
     color: #86868b;
-    margin-top: 1px;
+    margin-top: 3px;
 }
 
 /* List container */
 .despesas-list-container {
+    grid-column: 1;
     background: #ffffff;
     border: 1px solid rgba(0,0,0,0.06);
     border-radius: 10px;
@@ -2221,14 +2230,21 @@ body.mobile-view .despesa-valor-principal {
 /* Responsividade: sidebar desce abaixo em telas menores */
 @media (max-width: 1100px) {
     .despesas-page-layout {
-        flex-direction: column;
+        grid-template-columns: 1fr;
     }
 
     .despesas-sidebar {
+        grid-column: 1;
+        grid-row: auto;
         width: 100%;
         position: static;
         flex-direction: row;
         flex-wrap: wrap;
+    }
+
+    .despesas-summary-cards,
+    .despesas-list-container {
+        grid-column: 1;
     }
 
     .despesas-sidebar .sidebar-card {

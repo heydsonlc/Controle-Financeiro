@@ -17,7 +17,7 @@
     --fin-red: #dc2626;
     --fin-red-soft: #fee2e2;
     --fin-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
-    --fin-gap: 20px;
+    --fin-gap: 14px;
     --fin-radius: 8px;
 }
 
@@ -27,8 +27,9 @@ body.app-shell-body .app-content {
 
 .financiamentos-shell {
     color: var(--fin-text);
-    max-width: var(--app-page-max-width, 1680px);
-    margin: 0 auto;
+    width: 100%;
+    max-width: none;
+    margin: 0;
 }
 
 .fin-view {
@@ -235,9 +236,9 @@ body.app-shell-body .app-content {
 .fin-kpi-card {
     display: flex;
     align-items: center;
-    gap: 20px;
+    gap: 16px;
     min-height: 142px;
-    padding: 24px;
+    padding: 20px;
     background: var(--fin-surface);
     border: 1px solid var(--fin-border);
     border-radius: var(--fin-radius);
@@ -386,9 +387,9 @@ body.app-shell-body .app-content {
     display: grid;
     grid-template-columns: 74px minmax(190px, 1fr) minmax(520px, 1.75fr) minmax(340px, 0.95fr) 24px;
     align-items: center;
-    gap: 18px;
+    gap: 16px;
     min-height: 178px;
-    padding: 26px 20px;
+    padding: 22px 18px;
     border-bottom: 1px solid var(--fin-border-soft);
 }
 
@@ -438,7 +439,7 @@ body.app-shell-body .app-content {
 .fin-contract-metrics {
     display: grid;
     grid-template-columns: repeat(4, minmax(120px, 1fr));
-    gap: 18px;
+    gap: 14px;
 }
 
 .fin-contract-metric span {
@@ -484,7 +485,7 @@ body.app-shell-body .app-content {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 10px;
     border-left: 1px solid var(--fin-border);
-    padding-left: 24px;
+    padding-left: 18px;
 }
 
 .fin-action-btn {
@@ -530,7 +531,7 @@ body.app-shell-body .app-content {
     justify-content: space-between;
     align-items: center;
     gap: 16px;
-    padding: 16px 20px;
+    padding: 14px 18px;
     color: var(--fin-muted);
     font-size: 0.9rem;
     border-top: 1px solid var(--fin-border-soft);

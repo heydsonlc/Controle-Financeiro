@@ -46,14 +46,16 @@
     align-items: center;
     justify-content: flex-end;
     gap: 8px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
 }
 
 .dashboard-controls {
     display: flex;
     align-items: center;
     gap: 8px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: flex-end;
 }
 
@@ -783,7 +785,9 @@
     align-items: center;
     justify-content: flex-end;
     gap: 8px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
 }
 
 .quick-title {
@@ -805,8 +809,10 @@
 .quick-actions-list {
     display: flex;
     gap: 12px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: flex-end;
+    overflow-x: auto;
+    scrollbar-width: thin;
 }
 
 .quick-action-link {
@@ -893,20 +899,14 @@
         padding: 0;
     }
 
-    .dashboard-action-strip {
-        align-items: stretch;
-        flex-direction: column;
-        gap: 10px;
-    }
-
     .dashboard-action-groups,
     .dashboard-controls {
-        justify-content: flex-start;
+        justify-content: flex-end;
     }
 
     .dashboard-controls,
     .dashboard-quick-actions {
-        justify-content: flex-start;
+        justify-content: flex-end;
     }
 
     .panel-heading {

@@ -153,7 +153,9 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
 }
 
 .cartoes-toolbar.module-actionbar {
@@ -1355,6 +1357,11 @@
     .form-actions {
         align-items: stretch;
         flex-direction: column;
+    }
+
+    .cartoes-toolbar {
+        align-items: center;
+        flex-direction: row;
     }
 
     .toolbar-status {

@@ -18,7 +18,7 @@
     --contas-red-soft: #fee2e2;
     --contas-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
     --contas-radius: 8px;
-    --contas-gap: 20px;
+    --contas-gap: 14px;
 }
 
 body.app-shell-body .app-content {
@@ -26,8 +26,9 @@ body.app-shell-body .app-content {
 }
 
 .contas-ux-page {
-    max-width: var(--app-page-max-width, 1680px);
-    margin: 0 auto;
+    width: 100%;
+    max-width: none;
+    margin: 0;
     color: var(--contas-text);
     display: grid;
     gap: var(--contas-gap);
@@ -189,7 +190,7 @@ body.app-shell-body .app-content {
 }
 
 .contas-kpi-card {
-    min-height: 166px;
+    min-height: 150px;
     display: grid;
     grid-template-columns: 62px minmax(0, 1fr);
     align-items: center;
@@ -198,7 +199,7 @@ body.app-shell-body .app-content {
     border: 1px solid var(--contas-border);
     border-radius: var(--contas-radius);
     box-shadow: var(--contas-shadow);
-    padding: 24px;
+    padding: 18px;
 }
 
 .contas-kpi-icon {
@@ -322,7 +323,7 @@ body.app-shell-body .app-content {
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    padding: 22px 24px;
+    padding: 18px 20px;
     border-bottom: 1px solid var(--contas-border-soft);
 }
 
@@ -363,7 +364,7 @@ body.app-shell-body .app-content {
     display: grid;
     grid-template-columns: minmax(280px, 1fr) minmax(360px, 1.1fr) minmax(190px, 0.45fr) minmax(250px, 0.55fr);
     gap: 18px;
-    padding: 14px 28px;
+    padding: 12px 20px;
     background: var(--contas-surface-soft);
     color: #475569;
     border-bottom: 1px solid var(--contas-border-soft);
@@ -382,7 +383,7 @@ body.app-shell-body .app-content {
     gap: 18px;
     align-items: center;
     min-height: 116px;
-    padding: 18px 24px;
+    padding: 16px 20px;
     border-bottom: 1px solid var(--contas-border-soft);
     border-left: 4px solid var(--conta-cor, var(--contas-blue));
 }

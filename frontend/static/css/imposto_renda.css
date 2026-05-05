@@ -617,10 +617,17 @@
 }
 
 @media (max-width: 720px) {
-    .ir-actionbar,
+    .ir-actionbar {
+        align-items: end;
+        flex-direction: row;
+        flex-wrap: nowrap;
+    }
+
     .ir-import-toolbar {
-        align-items: stretch;
-        flex-direction: column;
+        align-items: center;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        overflow-x: auto;
     }
 
     .ir-kpi-grid {

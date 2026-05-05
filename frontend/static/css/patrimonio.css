@@ -955,9 +955,9 @@
     .patrimonio-actionbar .module-actionbar-inner,
     .patrimonio-actionbar-tabs,
     .patrimonio-actionbar .module-actionbar-actions {
-        align-items: stretch;
-        flex-direction: column;
-        width: 100%;
+        align-items: center;
+        flex-direction: row;
+        width: auto;
     }
 
     .patrimonio-search {

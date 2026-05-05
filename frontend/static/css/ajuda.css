@@ -35,7 +35,7 @@
 }
 
 .help-actions {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
 }
 
 .help-shell {
@@ -480,7 +480,6 @@
 }
 
 @media (max-width: 860px) {
-    .help-actionbar .module-actionbar-inner,
     .help-layout,
     .help-side-panel,
     .help-highlight-grid {
@@ -488,7 +487,8 @@
     }
 
     .help-actionbar .module-actionbar-inner {
-        display: grid;
+        display: flex;
+        min-width: max-content;
     }
 
     .help-filter {

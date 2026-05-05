@@ -1,17 +1,19 @@
 /* Shell visual desktop/web - UX-1A */
 
 body.app-shell-body {
-    --app-page-gutter: 24px;
+    --app-shell-gap: 16px;
+    --app-page-gutter: var(--app-shell-gap);
     --app-page-gutter-mobile: 16px;
-    --app-page-max-width: none;
-    --app-actionbar-top-gap: 16px;
-    --app-content-top-gap: 20px;
-    --app-section-gap: 20px;
+    --app-page-max-width: 1680px;
+    --app-actionbar-top-gap: var(--app-shell-gap);
+    --app-content-top-gap: 16px;
+    --app-section-gap: 16px;
     min-height: 100vh;
     padding: 0;
     padding-bottom: 0;
     background: #f5f5f7;
     color: #1d1d1f;
+    overflow-x: hidden;
 }
 
 body.app-shell-body .app-shell {
@@ -150,6 +152,7 @@ body.app-shell-body .app-main {
     min-width: 0;
     display: flex;
     flex-direction: column;
+    overflow-x: hidden;
 }
 
 body.app-shell-body main {
@@ -352,11 +355,40 @@ body.app-shell-body .perfil-financeiro-config {
 body.app-shell-body .app-content {
     width: 100%;
     padding: var(--app-content-top-gap) var(--app-page-gutter) var(--app-page-gutter);
+    overflow-x: hidden;
+}
+
+body.app-shell-body .app-page-frame {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    margin: 0 auto;
+    padding: 16px;
+    background: #ffffff;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 16px;
+    box-shadow: 0 8px 26px rgba(15, 23, 42, 0.045);
+    overflow: visible;
+}
+
+body.app-shell-body .app-page-frame > .container,
+body.app-shell-body .app-page-frame > .content-wide,
+body.app-shell-body .app-page-frame > .content-fluid {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    overflow: visible;
 }
 
 body.app-shell-body .app-actionbar-region {
     width: 100%;
     padding: var(--app-actionbar-top-gap) var(--app-page-gutter) 0;
+    overflow-x: hidden;
 }
 
 body.app-shell-body .app-actionbar-region:empty {
@@ -365,7 +397,7 @@ body.app-shell-body .app-actionbar-region:empty {
 
 body.app-shell-body .module-actionbar {
     width: 100%;
-    max-width: var(--app-page-max-width);
+    max-width: none;
     margin: 0 auto;
     padding: 8px 12px;
     min-height: 52px;
@@ -373,6 +405,10 @@ body.app-shell-body .module-actionbar {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
     background: rgba(255, 255, 255, 0.88);
     border: 1px solid rgba(29, 29, 31, 0.08);
     border-radius: 12px;
@@ -390,7 +426,7 @@ body.app-shell-body .module-actionbar-inner {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
 }
 
 body.app-shell-body .module-actionbar-header {
@@ -419,14 +455,18 @@ body.app-shell-body .module-actionbar-filters {
     min-width: 0;
     display: flex;
     flex: 1 1 auto;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
-    gap: 8px 14px;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
 }
 
 body.app-shell-body .module-actionbar-actions {
     display: flex;
-    flex-wrap: wrap;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
     align-items: center;
     justify-content: flex-end;
     gap: 6px;
@@ -437,9 +477,12 @@ body.app-shell-body .module-actionbar-tabs {
     min-width: 0;
     display: flex;
     flex: 1 1 auto;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
     gap: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
 }
 
 body.app-shell-body .module-actionbar .tab-button {
@@ -963,28 +1006,6 @@ body.app-shell-body .actionbar-spacer {
     flex: 1 1 auto;
 }
 
-body.app-shell-body .app-content > .container {
-    max-width: var(--app-page-max-width);
-    margin: 0 auto;
-    background: #ffffff;
-    border-radius: 16px;
-    box-shadow: 0 2px 16px rgba(0, 0, 0, 0.08);
-    border: 1px solid rgba(0, 0, 0, 0.06);
-    overflow: hidden;
-}
-
-body.app-shell-body .app-content.app-content-wide > .container,
-body.app-shell-body .app-content > .container.app-content-wide,
-body.app-shell-body .app-content > .content-wide {
-    max-width: var(--app-page-max-width);
-}
-
-body.app-shell-body .app-content.app-content-fluid > .container,
-body.app-shell-body .app-content > .container.app-content-fluid,
-body.app-shell-body .app-content > .content-fluid {
-    max-width: var(--app-page-max-width);
-}
-
 body.app-shell-body .bottom-nav,
 body.app-shell-body .mobile-toggle {
     display: none;
@@ -1037,18 +1058,16 @@ body.app-shell-body .mobile-toggle {
     body.app-shell-body .module-actionbar {
         margin: 0 auto;
         padding: 10px;
-        flex-direction: column;
-        align-items: stretch;
+        align-items: center;
     }
 
     body.app-shell-body .module-actionbar-inner {
-        flex-direction: column;
-        align-items: stretch;
+        align-items: center;
+        min-width: 0;
     }
 
     body.app-shell-body .module-actionbar-filters {
-        flex-direction: column;
-        align-items: stretch;
+        align-items: center;
     }
 
     body.app-shell-body .module-filter-group {
@@ -1056,13 +1075,12 @@ body.app-shell-body .mobile-toggle {
     }
 
     body.app-shell-body .module-actionbar-actions {
-        justify-content: flex-start;
+        justify-content: flex-end;
         margin-left: 0;
     }
 
     body.app-shell-body .module-actionbar-tabs {
-        flex-direction: column;
-        align-items: stretch;
+        align-items: center;
     }
 
     body.app-shell-body .section-title-row,
@@ -1079,8 +1097,10 @@ body.app-shell-body .mobile-toggle {
         padding: 16px var(--app-page-gutter-mobile) var(--app-page-gutter-mobile);
     }
 
-    body.app-shell-body .app-content > .container {
+    body.app-shell-body .app-page-frame {
+        padding: 12px;
         border-radius: 12px;
+        overflow-x: auto;
     }
 }
 

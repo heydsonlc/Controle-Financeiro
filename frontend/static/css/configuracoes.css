@@ -29,7 +29,7 @@
 }
 
 .config-actionbar-actions {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
 }
 
 .config-shell {
@@ -537,10 +537,12 @@
 
     .config-sidebar {
         position: static;
+        overflow: hidden;
     }
 
     .config-section-nav {
         display: flex;
+        max-width: 100%;
         overflow-x: auto;
         padding-bottom: 4px;
     }

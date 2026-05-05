@@ -164,7 +164,9 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
 }
 
 .categorias-toolbar.module-actionbar {
@@ -1447,6 +1449,11 @@
     .card-title-row {
         align-items: stretch;
         flex-direction: column;
+    }
+
+    .categorias-toolbar {
+        align-items: center;
+        flex-direction: row;
     }
 
     .toolbar-status {
