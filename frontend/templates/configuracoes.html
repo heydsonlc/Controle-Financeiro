@@ -291,6 +291,170 @@
             </section>
 
             <section class="config-panel" id="config-section-backup" data-config-section="backup">
+                <header class="config-panel-header config-backup-header">
+                    <span class="config-backup-header-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false"><path d="M12 3v18M7 7h10M6 11h12M7 15h10M8 19h8"/></svg>
+                    </span>
+                    <div>
+                        <h2>Backup e Restauração</h2>
+                        <p>Proteja seus dados e configurações. Realize exportações, importações e backups do banco de dados de forma segura.</p>
+                    </div>
+                </header>
+
+                <div class="config-backup-content">
+                    <div class="config-alert config-backup-alert" id="backup-alert" hidden></div>
+
+                    <div class="config-backup-primary-grid">
+                        <article class="config-backup-card">
+                            <span class="config-backup-card-icon blue" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false"><path d="M12 19V9M8 15l4 4 4-4M5 5h14"/></svg>
+                            </span>
+                            <div>
+                                <strong>Exportar configurações</strong>
+                                <p>Gere um arquivo com suas configurações e preferências.</p>
+                                <button type="button" class="config-secondary-action" id="backup-export-config">Exportar agora</button>
+                                <small>Formato: JSON</small>
+                            </div>
+                        </article>
+                        <article class="config-backup-card">
+                            <span class="config-backup-card-icon green" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false"><path d="M12 5v10M8 9l4-4 4 4M5 19h14"/></svg>
+                            </span>
+                            <div>
+                                <strong>Importar configurações</strong>
+                                <p>Valide configurações a partir de um arquivo previamente exportado.</p>
+                                <button type="button" class="config-secondary-action" id="backup-import-config">Importar arquivo</button>
+                                <small>Formato: JSON</small>
+                            </div>
+                        </article>
+                        <article class="config-backup-card">
+                            <span class="config-backup-card-icon violet" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false"><path d="M5 6c0-1.7 3.1-3 7-3s7 1.3 7 3-3.1 3-7 3-7-1.3-7-3Z"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg>
+                            </span>
+                            <div>
+                                <strong>Backup do PostgreSQL</strong>
+                                <p>Execute um backup completo do banco oficial com rotina operacional própria.</p>
+                                <button type="button" class="config-primary-action" id="backup-run">Executar backup</button>
+                                <small>Engine: PostgreSQL</small>
+                            </div>
+                        </article>
+                    </div>
+
+                    <div class="config-backup-grid-two">
+                        <article class="config-backup-box">
+                            <header>
+                                <span class="config-backup-inline-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" focusable="false"><path d="M8 2v4M16 2v4M4 9h16M5 5h14v16H5V5Z"/><path d="m9 15 2 2 4-5"/></svg>
+                                </span>
+                                <div>
+                                    <h3>Backups agendados</h3>
+                                    <p>Configuração visual persistida para uma rotina automática futura.</p>
+                                </div>
+                            </header>
+                            <div class="config-backup-schedule">
+                                <label>
+                                    <span>Frequência</span>
+                                    <select id="backup-schedule-frequency">
+                                        <option value="diaria">Diária</option>
+                                        <option value="semanal">Semanal</option>
+                                        <option value="mensal">Mensal</option>
+                                    </select>
+                                </label>
+                                <label>
+                                    <span>Horário</span>
+                                    <input type="time" id="backup-schedule-time" value="02:00">
+                                </label>
+                                <label>
+                                    <span>Retenção</span>
+                                    <input type="number" id="backup-schedule-retention" min="1" max="365" value="30">
+                                </label>
+                                <label>
+                                    <span>Próximo backup</span>
+                                    <output id="backup-schedule-next">-</output>
+                                </label>
+                            </div>
+                            <div class="config-backup-row-actions">
+                                <label class="config-backup-switch">
+                                    <input type="checkbox" id="backup-schedule-active">
+                                    <span>Agendamento preparado</span>
+                                </label>
+                                <button type="button" class="config-secondary-action" id="backup-schedule-save">Gerenciar agendamento</button>
+                            </div>
+                            <p class="config-backup-note" id="backup-schedule-note">Configuração visual preparada. Agendamento automático será ativado em etapa futura.</p>
+                        </article>
+
+                        <article class="config-backup-box">
+                            <header>
+                                <span class="config-backup-inline-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" focusable="false"><path d="M12 8v5l3 2"/><path d="M21 12A9 9 0 1 1 12 3"/></svg>
+                                </span>
+                                <div>
+                                    <h3>Histórico recente</h3>
+                                    <p>Últimos backups realizados.</p>
+                                </div>
+                            </header>
+                            <div class="config-backup-table-wrap">
+                                <table class="config-backup-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Data e hora</th>
+                                            <th>Tipo</th>
+                                            <th>Status</th>
+                                            <th>Tamanho</th>
+                                            <th>Ação</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="backup-history-body">
+                                        <tr><td colspan="5">Carregando histórico...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </article>
+                    </div>
+
+                    <article class="config-backup-restore">
+                        <div>
+                            <span class="config-backup-card-icon blue" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-5"/></svg>
+                            </span>
+                        </div>
+                        <div class="config-backup-restore-main">
+                            <h3>Restauração segura</h3>
+                            <p>Esta ação substituirá os dados atuais do banco. Faça um backup antes de restaurar.</p>
+                            <div class="config-backup-restore-fields">
+                                <label>
+                                    <span>Backup</span>
+                                    <select id="backup-restore-file">
+                                        <option value="">Selecione um backup</option>
+                                    </select>
+                                </label>
+                                <label>
+                                    <span>Confirmação</span>
+                                    <input type="text" id="backup-restore-confirmation" placeholder="CONFIRMO RESTAURACAO">
+                                </label>
+                                <button type="button" class="config-danger-action" id="backup-restore-start">Iniciar restauração</button>
+                            </div>
+                        </div>
+                    </article>
+
+                    <article class="config-backup-box">
+                        <header>
+                            <span class="config-backup-inline-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false"><path d="M9 18h6M10 22h4M8 14a6 6 0 1 1 8 0c-1 1-1.5 2-1.5 3h-5c0-1-.5-2-1.5-3Z"/></svg>
+                            </span>
+                            <div>
+                                <h3>Boas práticas</h3>
+                            </div>
+                        </header>
+                        <div class="config-backup-practices">
+                            <div><strong>Mantenha backups regulares</strong><span>Garanta cópias frequentes para evitar perda de dados.</span></div>
+                            <div><strong>Armazene em local seguro</strong><span>Salve cópias em ambientes controlados.</span></div>
+                            <div><strong>Teste suas restaurações</strong><span>Valide periodicamente se os arquivos restauram.</span></div>
+                            <div><strong>Monitore o histórico</strong><span>Acompanhe falhas rapidamente.</span></div>
+                        </div>
+                    </article>
+                </div>
+                <input type="file" id="backup-import-file" accept="application/json,.json" hidden>
                 <header class="config-panel-header">
                     <div>
                         <h2>Backup</h2>

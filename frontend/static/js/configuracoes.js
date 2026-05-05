@@ -3,11 +3,17 @@
 
     const API_PERFIS = '/api/perfis-financeiros';
     const API_PREFERENCIAS = '/api/preferencias';
+    const API_BACKUP = '/api/backup';
     const state = {
         perfis: [],
         ativo: null,
         selecionado: null,
         preferencias: {},
+        backup: {
+            status: null,
+            historico: [],
+            carregado: false
+        },
         secao: 'perfis-financeiros'
     };
 
@@ -101,6 +107,41 @@
         alert.hidden = !message;
     }
 
+    function mostrarBackupMensagem(message, tipo = 'info') {
+        const alert = $('backup-alert');
+        if (!alert) return;
+        alert.textContent = message || '';
+        alert.dataset.tipo = tipo;
+        alert.hidden = !message;
+    }
+
+    function formatarDataHora(valor) {
+        if (!valor) return '-';
+        const data = new Date(valor);
+        if (Number.isNaN(data.getTime())) return String(valor);
+        return data.toLocaleString('pt-BR', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+
+    function statusLabel(status) {
+        const valor = String(status || '').toLowerCase();
+        if (valor === 'concluido') return 'Concluído';
+        if (valor === 'erro') return 'Erro';
+        return valor || '-';
+    }
+
+    function tipoBackupLabel(tipo) {
+        const valor = String(tipo || '').toLowerCase();
+        if (valor === 'manual') return 'Manual';
+        if (valor === 'automatico') return 'Automático';
+        return valor || '-';
+    }
+
     async function requestJson(url, options = {}) {
         const response = await fetch(url, {
             headers: {
@@ -115,6 +156,219 @@
             throw new Error(data.error || data.message || 'Falha na operação');
         }
         return data;
+    }
+
+    async function carregarBackup() {
+        if (!$('config-section-backup')) return;
+        try {
+            const [status, historico] = await Promise.all([
+                requestJson(`${API_BACKUP}/status`),
+                requestJson(`${API_BACKUP}/historico`)
+            ]);
+            state.backup.status = status;
+            state.backup.historico = historico.data || [];
+            state.backup.carregado = true;
+            renderBackup();
+        } catch (error) {
+            mostrarBackupMensagem(error.message);
+            renderBackup();
+        }
+    }
+
+    function renderBackup() {
+        renderBackupAgendamento();
+        renderBackupHistorico();
+        if (state.secao === 'backup') {
+            renderBackupPainel();
+        }
+    }
+
+    function renderBackupAgendamento() {
+        const agendamento = state.backup.status?.agendamento || {};
+        const ativo = $('backup-schedule-active');
+        const frequencia = $('backup-schedule-frequency');
+        const horario = $('backup-schedule-time');
+        const retencao = $('backup-schedule-retention');
+        const proximo = $('backup-schedule-next');
+        const nota = $('backup-schedule-note');
+        if (ativo) ativo.checked = Boolean(agendamento.ativo);
+        if (frequencia && agendamento.frequencia) frequencia.value = agendamento.frequencia;
+        if (horario && agendamento.horario) horario.value = agendamento.horario;
+        if (retencao && agendamento.retencao_dias) retencao.value = agendamento.retencao_dias;
+        if (proximo) proximo.textContent = agendamento.proximo_backup_estimado || '-';
+        if (nota) nota.textContent = agendamento.mensagem || 'Configuração visual preparada. Agendamento automático será ativado em etapa futura.';
+    }
+
+    function renderBackupHistorico() {
+        const tbody = $('backup-history-body');
+        const seletor = $('backup-restore-file');
+        if (!tbody) return;
+
+        if (!state.backup.historico.length) {
+            tbody.innerHTML = '<tr><td colspan="5">Nenhum backup registrado ainda.</td></tr>';
+        } else {
+            tbody.innerHTML = state.backup.historico.slice(0, 8).map((item) => {
+                const podeBaixar = item.arquivo && item.status === 'concluido';
+                return `
+                    <tr>
+                        <td>${escapeHtml(formatarDataHora(item.created_at))}</td>
+                        <td>${escapeHtml(tipoBackupLabel(item.tipo))}</td>
+                        <td><span class="config-backup-status ${escapeHtml(item.status)}">${escapeHtml(statusLabel(item.status))}</span></td>
+                        <td>${escapeHtml(item.tamanho_formatado || '-')}</td>
+                        <td>
+                            ${podeBaixar ? `<button type="button" class="config-table-link" data-backup-download="${escapeHtml(item.arquivo)}">Baixar</button>` : '<span class="config-muted">-</span>'}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        if (seletor) {
+            const selecionaveis = state.backup.historico.filter((item) => item.arquivo && item.status === 'concluido');
+            seletor.innerHTML = '<option value="">Selecione um backup</option>' + selecionaveis.map((item) => (
+                `<option value="${escapeHtml(item.arquivo)}">${escapeHtml(item.arquivo)} · ${escapeHtml(item.tamanho_formatado || '')}</option>`
+            )).join('');
+        }
+    }
+
+    function renderBackupPainel() {
+        const title = $('config-help-title');
+        const content = $('config-help-content');
+        const status = state.backup.status || {};
+        if (title) title.textContent = 'Status do backup';
+        if (!content) return;
+        const checklist = status.checklist || [];
+        content.innerHTML = `
+            <div class="config-backup-side">
+                <div class="config-backup-side-status ${escapeHtml(status.status || 'atencao')}">
+                    <strong>${status.status === 'ok' ? 'Tudo certo' : 'Atenção necessária'}</strong>
+                    <span>${status.ultimo_backup ? 'Histórico local encontrado.' : 'Nenhum backup concluído registrado.'}</span>
+                </div>
+                <section>
+                    <h3>Checklist rápido</h3>
+                    <div class="config-backup-side-list">
+                        ${checklist.map((item) => `
+                            <span class="${item.ok ? 'ok' : 'warn'}">
+                                <i aria-hidden="true">${item.ok ? '✓' : '!'}</i>
+                                ${escapeHtml(item.label)}
+                            </span>
+                        `).join('')}
+                    </div>
+                </section>
+                <section>
+                    <h3>Informações rápidas</h3>
+                    <dl class="config-backup-info">
+                        <dt>Último backup</dt>
+                        <dd>${escapeHtml(formatarDataHora(status.ultimo_backup?.created_at))}</dd>
+                        <dt>Engine do banco</dt>
+                        <dd>${escapeHtml(status.engine || 'PostgreSQL')}</dd>
+                        <dt>Retenção configurada</dt>
+                        <dd>${escapeHtml(status.retencao_dias || 30)} dias</dd>
+                        <dt>Tamanho médio</dt>
+                        <dd>${escapeHtml(status.tamanho_medio_formatado || '0 B')}</dd>
+                    </dl>
+                </section>
+                <section class="config-backup-recommendation">
+                    <strong>Recomendação</strong>
+                    <span>${escapeHtml(status.recomendacao || 'Exporte configurações após alterações importantes.')}</span>
+                    <button type="button" class="config-secondary-action" id="backup-side-export">Exportar configurações</button>
+                </section>
+            </div>
+        `;
+        $('backup-side-export')?.addEventListener('click', exportarConfiguracoes);
+    }
+
+    async function executarBackup() {
+        const botao = $('backup-run');
+        mostrarBackupMensagem('Executando backup local do PostgreSQL...', 'info');
+        if (botao) {
+            botao.disabled = true;
+            botao.textContent = 'Executando...';
+        }
+        try {
+            const resposta = await requestJson(`${API_BACKUP}/executar`, { method: 'POST', body: '{}' });
+            mostrarBackupMensagem(resposta.message || 'Backup concluído.', 'success');
+        } catch (error) {
+            mostrarBackupMensagem(error.message, 'error');
+        } finally {
+            if (botao) {
+                botao.disabled = false;
+                botao.textContent = 'Executar backup';
+            }
+            await carregarBackup();
+        }
+    }
+
+    async function salvarAgendamentoBackup() {
+        const payload = {
+            ativo: obterCheckbox('backup-schedule-active'),
+            frequencia: obterCampo('backup-schedule-frequency') || 'diaria',
+            horario: obterCampo('backup-schedule-time') || '02:00',
+            retencao_dias: parseInt(obterCampo('backup-schedule-retention'), 10) || 30
+        };
+        try {
+            const resposta = await requestJson(`${API_BACKUP}/agendamento`, {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+            state.backup.status = state.backup.status || {};
+            state.backup.status.agendamento = resposta.data;
+            mostrarBackupMensagem(resposta.message || 'Agendamento salvo.', 'success');
+            renderBackup();
+        } catch (error) {
+            mostrarBackupMensagem(error.message);
+        }
+    }
+
+    function exportarConfiguracoes() {
+        window.location.href = `${API_BACKUP}/configuracoes/exportar`;
+    }
+
+    function abrirImportacaoConfiguracoes() {
+        $('backup-import-file')?.click();
+    }
+
+    async function importarConfiguracoes(event) {
+        const arquivo = event.target.files?.[0];
+        if (!arquivo) return;
+        try {
+            const texto = await arquivo.text();
+            const payload = JSON.parse(texto);
+            const resposta = await requestJson(`${API_BACKUP}/configuracoes/importar`, {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+            mostrarBackupMensagem(resposta.message || 'Arquivo validado.', 'success');
+        } catch (error) {
+            mostrarBackupMensagem(error.message || 'Arquivo inválido.');
+        } finally {
+            event.target.value = '';
+        }
+    }
+
+    async function restaurarBackup() {
+        const arquivo = obterCampo('backup-restore-file');
+        const confirmacao = obterCampo('backup-restore-confirmation').trim();
+        if (!arquivo) {
+            mostrarBackupMensagem('Selecione um backup para restaurar.');
+            return;
+        }
+        if (confirmacao !== 'CONFIRMO RESTAURACAO') {
+            mostrarBackupMensagem('Digite CONFIRMO RESTAURACAO para liberar a restauração.');
+            return;
+        }
+        const autorizado = window.confirm('Esta ação substituirá os dados atuais do banco. Confirma a restauração?');
+        if (!autorizado) return;
+
+        try {
+            const resposta = await requestJson(`${API_BACKUP}/restaurar`, {
+                method: 'POST',
+                body: JSON.stringify({ arquivo, confirmacao })
+            });
+            mostrarBackupMensagem(resposta.message || 'Restauração concluída.', 'success');
+        } catch (error) {
+            mostrarBackupMensagem(error.message, 'error');
+        }
     }
 
     async function carregarPerfis() {
@@ -356,6 +610,13 @@
             link.classList.toggle('active', link.dataset.configSectionTarget === state.secao);
         });
         renderAjuda();
+        if (state.secao === 'backup') {
+            if (!state.backup.carregado) {
+                carregarBackup();
+            } else {
+                renderBackupPainel();
+            }
+        }
         if (window.location.hash !== `#${state.secao}`) {
             history.replaceState(null, '', `#${state.secao}`);
         }
@@ -415,7 +676,31 @@
         });
 
         document.querySelectorAll('[data-config-placeholder]').forEach((button) => {
+            const texto = String(button.dataset.configPlaceholder || '');
+            if (texto.includes('Exportar')) {
+                button.removeAttribute('data-config-placeholder');
+                button.addEventListener('click', exportarConfiguracoes);
+            }
+            if (texto.includes('Importar')) {
+                button.removeAttribute('data-config-placeholder');
+                button.addEventListener('click', abrirImportacaoConfiguracoes);
+            }
+        });
+
+        document.querySelectorAll('[data-config-placeholder]').forEach((button) => {
             button.addEventListener('click', () => mostrarMensagem(`${button.dataset.configPlaceholder} será disponibilizado em etapa futura.`, 'info'));
+        });
+
+        $('backup-export-config')?.addEventListener('click', exportarConfiguracoes);
+        $('backup-import-config')?.addEventListener('click', abrirImportacaoConfiguracoes);
+        $('backup-import-file')?.addEventListener('change', importarConfiguracoes);
+        $('backup-run')?.addEventListener('click', executarBackup);
+        $('backup-schedule-save')?.addEventListener('click', salvarAgendamentoBackup);
+        $('backup-restore-start')?.addEventListener('click', restaurarBackup);
+        $('backup-history-body')?.addEventListener('click', (event) => {
+            const botao = event.target.closest('[data-backup-download]');
+            if (!botao) return;
+            window.location.href = `${API_BACKUP}/download/${encodeURIComponent(botao.dataset.backupDownload)}`;
         });
 
         $('config-profiles-list')?.addEventListener('click', (event) => {
