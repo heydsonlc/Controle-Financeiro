@@ -7,11 +7,13 @@ try:
     from backend.services.documento_fiscal_service import DocumentoFiscalService
     from backend.services.ir_documento_service import IrDocumentoService
     from backend.services.ir_relatorio_service import IrRelatorioService
+    from backend.services.lastro_financeiro_service import LastroFinanceiroService
 except ImportError:
     from models import db
     from services.documento_fiscal_service import DocumentoFiscalService
     from services.ir_documento_service import IrDocumentoService
     from services.ir_relatorio_service import IrRelatorioService
+    from services.lastro_financeiro_service import LastroFinanceiroService
 
 
 ir_bp = Blueprint('ir', __name__)
@@ -215,6 +217,52 @@ def listar_entidades_vinculaveis():
 def resumo_lastro():
     resumo = DocumentoFiscalService.resumo_lastro(request.args.get('ano'))
     return _json_success(resumo)
+
+
+@ir_bp.route('/lastro/saidas-sem-documento/resumo', methods=['GET'])
+def resumo_saidas_sem_documento():
+    try:
+        resumo = LastroFinanceiroService.resumo_saidas_sem_documento(request.args)
+        return _json_success(resumo)
+    except PermissionError as exc:
+        return _json_error(str(exc), 403)
+
+
+@ir_bp.route('/lastro/saidas-sem-documento', methods=['GET'])
+def listar_saidas_sem_documento():
+    try:
+        saidas = LastroFinanceiroService.listar_saidas_sem_documento(request.args)
+        return _json_success(saidas, total=len(saidas))
+    except PermissionError as exc:
+        return _json_error(str(exc), 403)
+
+
+@ir_bp.route('/lastro/saidas-sem-documento/vincular', methods=['POST'])
+def vincular_saida_sem_documento():
+    try:
+        vinculo = LastroFinanceiroService.vincular_documento(request.get_json(silent=True) or {})
+        db.session.commit()
+        return _json_success(vinculo.to_dict(), 201)
+    except PermissionError as exc:
+        db.session.rollback()
+        return _json_error(str(exc), 403)
+    except ValueError as exc:
+        db.session.rollback()
+        return _json_error(str(exc), 400)
+
+
+@ir_bp.route('/lastro/saidas-sem-documento/status', methods=['POST'])
+def marcar_status_saida_sem_documento():
+    try:
+        pendencia = LastroFinanceiroService.marcar_status(request.get_json(silent=True) or {})
+        db.session.commit()
+        return _json_success(pendencia)
+    except PermissionError as exc:
+        db.session.rollback()
+        return _json_error(str(exc), 403)
+    except ValueError as exc:
+        db.session.rollback()
+        return _json_error(str(exc), 400)
 
 
 @ir_bp.route('/relatorios/excel', methods=['GET'])

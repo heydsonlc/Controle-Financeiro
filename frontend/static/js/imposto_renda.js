@@ -5,6 +5,8 @@
         categoriasIr: [],
         categoriasDespesa: [],
         comprovantes: [],
+        saidasSemDocumento: [],
+        resumoSaidasSemDocumento: {},
         arquivosSelecionados: [],
         resumoImportacao: { enviados: 0, lidos: 0, pendentes: 0, erros: 0 },
         categoriaIrManual: false,
@@ -12,6 +14,18 @@
     };
 
     const $ = (id) => document.getElementById(id);
+    const NATUREZAS_LASTRO = [
+        ['DESPESA_OPERACIONAL', 'Despesa operacional'],
+        ['PATRIMONIO_IMOBILIZADO', 'Patrimonio / Imobilizado'],
+        ['SOFTWARE_ASSINATURA', 'Software / Assinatura'],
+        ['IMPOSTO_TAXA', 'Imposto / taxa'],
+        ['PRO_LABORE', 'Pro-labore'],
+        ['DISTRIBUICAO_LUCROS', 'Distribuicao de lucros'],
+        ['REEMBOLSO', 'Reembolso'],
+        ['EMPRESTIMO', 'Emprestimo'],
+        ['ADIANTAMENTO', 'Adiantamento'],
+        ['OUTRO', 'Outro'],
+    ];
 
     document.addEventListener('DOMContentLoaded', inicializarIr);
 
@@ -20,12 +34,14 @@
         vincularEventos();
         await carregarContexto();
         await Promise.all([carregarCategoriasIr(), carregarCategoriasDespesa()]);
+        preencherSelectsNaturezaLastro();
         await carregarComprovantes();
+        await carregarSaidasSemDocumento();
     }
 
     function definirAnoPadrao() {
         const ano = String(new Date().getFullYear());
-        ['ir-filtro-ano', 'ir-upload-ano'].forEach((id) => {
+        ['ir-filtro-ano', 'ir-upload-ano', 'ir-saidas-filtro-ano'].forEach((id) => {
             const campo = $(id);
             if (campo && Array.from(campo.options).some((opcao) => opcao.value === ano)) {
                 campo.value = ano;
@@ -44,6 +60,13 @@
         $('ir-filtro-status')?.addEventListener('change', carregarComprovantes);
         $('ir-filtro-categoria')?.addEventListener('change', carregarComprovantes);
         $('ir-filtro-busca')?.addEventListener('input', debounce(carregarComprovantes, 250));
+        $('ir-saidas-btn-atualizar')?.addEventListener('click', carregarSaidasSemDocumento);
+        $('ir-saidas-filtro-ano')?.addEventListener('change', carregarSaidasSemDocumento);
+        $('ir-saidas-filtro-mes')?.addEventListener('change', carregarSaidasSemDocumento);
+        $('ir-saidas-filtro-origem')?.addEventListener('change', carregarSaidasSemDocumento);
+        $('ir-saidas-filtro-status')?.addEventListener('change', carregarSaidasSemDocumento);
+        $('ir-saidas-filtro-valor')?.addEventListener('input', debounce(carregarSaidasSemDocumento, 250));
+        $('ir-saidas-filtro-busca')?.addEventListener('input', debounce(carregarSaidasSemDocumento, 250));
         $('ir-upload-submit')?.addEventListener('click', enviarArquivos);
         $('ir-select-files')?.addEventListener('click', () => $('ir-file-input')?.click());
         $('ir-file-input')?.addEventListener('change', (event) => selecionarArquivos(event.target.files));
@@ -59,6 +82,12 @@
         $('ir-link-cancel')?.addEventListener('click', fecharVinculo);
         $('ir-link-save')?.addEventListener('click', salvarVinculo);
         $('ir-link-tipo-entidade')?.addEventListener('change', carregarEntidadesVinculaveis);
+        $('ir-saida-link-close')?.addEventListener('click', fecharVinculoSaida);
+        $('ir-saida-link-cancel')?.addEventListener('click', fecharVinculoSaida);
+        $('ir-saida-link-save')?.addEventListener('click', salvarVinculoSaida);
+        $('ir-saida-status-close')?.addEventListener('click', fecharStatusSaida);
+        $('ir-saida-status-cancel')?.addEventListener('click', fecharStatusSaida);
+        $('ir-saida-status-save')?.addEventListener('click', salvarStatusSaida);
 
         const dropzone = $('ir-dropzone');
         if (dropzone) {
@@ -120,6 +149,7 @@
         if ($('ir-filtro-categoria-label')) $('ir-filtro-categoria-label').textContent = empresa ? 'Categoria fiscal' : 'Categoria IR';
         if ($('ir-review-categoria-ir-label')) $('ir-review-categoria-ir-label').textContent = empresa ? 'Categoria fiscal' : 'Categoria IR';
         if ($('ir-lastro-panel')) $('ir-lastro-panel').hidden = !empresa;
+        if ($('ir-saidas-sem-documento-panel')) $('ir-saidas-sem-documento-panel').hidden = !empresa;
     }
 
     async function carregarCategoriasIr() {
@@ -311,6 +341,240 @@
                 </div>
             `;
         }).join('');
+    }
+
+    function preencherSelectsNaturezaLastro() {
+        const options = NATUREZAS_LASTRO.map(([valor, label]) => (
+            `<option value="${valor}">${escapeHtml(label)}</option>`
+        )).join('');
+        ['ir-saida-link-natureza', 'ir-saida-status-natureza'].forEach((id) => {
+            const select = $(id);
+            if (select) select.innerHTML = options;
+        });
+    }
+
+    function montarFiltrosSaidas() {
+        const params = new URLSearchParams();
+        params.set('ano', $('ir-saidas-filtro-ano')?.value || $('ir-filtro-ano')?.value || new Date().getFullYear());
+        const mes = $('ir-saidas-filtro-mes')?.value;
+        if (mes) params.set('mes', mes);
+        const origem = $('ir-saidas-filtro-origem')?.value;
+        if (origem) params.set('origem', origem);
+        const status = $('ir-saidas-filtro-status')?.value;
+        if (status) params.set('status', status);
+        const valorMinimo = $('ir-saidas-filtro-valor')?.value;
+        if (valorMinimo) params.set('valor_minimo', valorMinimo);
+        const busca = $('ir-saidas-filtro-busca')?.value;
+        if (busca) params.set('busca', busca);
+        return params;
+    }
+
+    async function carregarSaidasSemDocumento() {
+        if (!modoEmpresa()) {
+            estado.saidasSemDocumento = [];
+            estado.resumoSaidasSemDocumento = {};
+            renderSaidasSemDocumento();
+            renderResumoSaidasSemDocumento({});
+            return;
+        }
+        const params = montarFiltrosSaidas();
+        try {
+            const [listaResp, resumoResp] = await Promise.all([
+                fetch(`/api/ir/lastro/saidas-sem-documento?${params.toString()}`),
+                fetch(`/api/ir/lastro/saidas-sem-documento/resumo?${params.toString()}`),
+            ]);
+            const listaJson = await listaResp.json();
+            const resumoJson = await resumoResp.json();
+            if (!listaJson.success) throw new Error(listaJson.error || 'Erro ao carregar saidas sem documento.');
+            if (!resumoJson.success) throw new Error(resumoJson.error || 'Erro ao carregar resumo de lastro.');
+            estado.saidasSemDocumento = listaJson.data || [];
+            estado.resumoSaidasSemDocumento = resumoJson.data || {};
+            renderResumoSaidasSemDocumento(estado.resumoSaidasSemDocumento);
+            renderSaidasSemDocumento();
+        } catch (error) {
+            estado.saidasSemDocumento = [];
+            renderSaidasSemDocumento();
+            mostrarAviso(error.message || 'Nao foi possivel carregar saidas sem documento.');
+        }
+    }
+
+    function renderResumoSaidasSemDocumento(resumo) {
+        if ($('ir-saidas-kpi-quantidade')) $('ir-saidas-kpi-quantidade').textContent = String(resumo.quantidade_sem_documento || 0);
+        if ($('ir-saidas-kpi-valor')) $('ir-saidas-kpi-valor').textContent = formatarMoeda(resumo.valor_sem_documento || 0);
+        if ($('ir-saidas-kpi-contador')) $('ir-saidas-kpi-contador').textContent = String(resumo.aguardando_contador || 0);
+        if ($('ir-saidas-kpi-na')) $('ir-saidas-kpi-na').textContent = String(resumo.nao_aplicavel || 0);
+    }
+
+    function renderSaidasSemDocumento() {
+        const tbody = $('ir-saidas-tbody');
+        const subtitulo = $('ir-saidas-subtitulo');
+        if (!tbody) return;
+        if (!modoEmpresa()) {
+            tbody.innerHTML = '<tr><td colspan="8" class="ir-empty">Disponivel apenas no perfil Empresa.</td></tr>';
+            if (subtitulo) subtitulo.textContent = 'Disponivel apenas no perfil Empresa';
+            return;
+        }
+        if (!estado.saidasSemDocumento.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="ir-empty">Nenhuma saida sem documento no periodo.</td></tr>';
+            if (subtitulo) subtitulo.textContent = '0 saidas sem documento encontradas';
+            return;
+        }
+        if (subtitulo) subtitulo.textContent = `${estado.saidasSemDocumento.length} saida(s) sem documento encontrada(s)`;
+        tbody.innerHTML = estado.saidasSemDocumento.map((saida) => `
+            <tr>
+                <td>${formatarData(saida.data)}</td>
+                <td>${escapeHtml(saida.origem || '-')}</td>
+                <td>
+                    <span class="ir-saida-descricao">
+                        <strong>${escapeHtml(saida.descricao || 'Saida financeira')}</strong>
+                        <small>${escapeHtml(saida.tipo_entidade)} #${escapeHtml(saida.entidade_id)}</small>
+                    </span>
+                </td>
+                <td>${escapeHtml(saida.categoria || '-')}</td>
+                <td>${formatarMoeda(saida.valor)}</td>
+                <td>${formatarNatureza(saida.natureza_sugerida)}</td>
+                <td>${renderLastro(saida.status_lastro)}</td>
+                <td>
+                    <span class="ir-saida-actions">
+                        <button type="button" class="ir-icon-btn" title="Vincular documento" onclick="window.IRDoc.abrirVinculoSaida('${saida.tipo_entidade}', ${saida.entidade_id})">Vincular</button>
+                        <button type="button" class="ir-icon-btn" title="Aguardando contador" onclick="window.IRDoc.abrirStatusSaida('${saida.tipo_entidade}', ${saida.entidade_id}, 'AGUARDANDO_CONTADOR')">Contador</button>
+                        <button type="button" class="ir-icon-btn" title="Nao aplicavel" onclick="window.IRDoc.abrirStatusSaida('${saida.tipo_entidade}', ${saida.entidade_id}, 'NAO_APLICAVEL')">N/A</button>
+                        <button type="button" class="ir-icon-btn" title="Ver origem" onclick="window.IRDoc.verOrigemSaida('${saida.tipo_entidade}', ${saida.entidade_id})">Origem</button>
+                    </span>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function buscarSaida(tipoEntidade, entidadeId) {
+        return estado.saidasSemDocumento.find((saida) => (
+            saida.tipo_entidade === tipoEntidade && Number(saida.entidade_id) === Number(entidadeId)
+        ));
+    }
+
+    function renderResumoSaidaModal(saida) {
+        if (!saida) return '';
+        return `
+            <span><small>Saida</small><strong>${escapeHtml(saida.descricao || '-')}</strong></span>
+            <span><small>Valor</small><strong>${formatarMoeda(saida.valor)}</strong></span>
+            <span><small>Data</small><strong>${formatarData(saida.data)}</strong></span>
+            <span><small>Origem</small><strong>${escapeHtml(saida.origem || '-')}</strong></span>
+            <span><small>Categoria</small><strong>${escapeHtml(saida.categoria || '-')}</strong></span>
+            <span><small>Status</small><strong>${escapeHtml(saida.status_lastro || 'SEM_DOCUMENTO')}</strong></span>
+        `;
+    }
+
+    async function abrirVinculoSaida(tipoEntidade, entidadeId) {
+        const saida = buscarSaida(tipoEntidade, entidadeId);
+        if (!saida) return;
+        $('ir-saida-link-tipo-entidade').value = tipoEntidade;
+        $('ir-saida-link-entidade-id').value = entidadeId;
+        $('ir-saida-link-resumo').innerHTML = renderResumoSaidaModal(saida);
+        $('ir-saida-link-natureza').value = saida.natureza_sugerida || 'DESPESA_OPERACIONAL';
+        $('ir-saida-link-status').value = 'VALIDADO';
+        $('ir-saida-link-tipo-vinculo').value = 'NOTA_FISCAL';
+        $('ir-saida-link-observacoes').value = saida.observacoes || '';
+        await carregarComprovantesParaVinculoSaida();
+        $('ir-saida-link-modal').classList.add('open');
+        $('ir-saida-link-modal').setAttribute('aria-hidden', 'false');
+    }
+
+    function fecharVinculoSaida() {
+        $('ir-saida-link-modal')?.classList.remove('open');
+        $('ir-saida-link-modal')?.setAttribute('aria-hidden', 'true');
+    }
+
+    async function carregarComprovantesParaVinculoSaida() {
+        const select = $('ir-saida-link-comprovante');
+        if (!select) return;
+        const ano = $('ir-saidas-filtro-ano')?.value || $('ir-filtro-ano')?.value || new Date().getFullYear();
+        const resposta = await fetch(`/api/ir/comprovantes?ano=${encodeURIComponent(ano)}`);
+        const json = await resposta.json();
+        const documentos = json.data || [];
+        const vazio = documentos.length ? 'Selecione...' : 'Nenhum documento fiscal encontrado no ano';
+        select.innerHTML = `<option value="">${vazio}</option>` + documentos.map((item) => {
+            const label = [
+                item.prestador_nome || item.arquivo?.nome_arquivo || `Documento #${item.id}`,
+                item.valor != null ? formatarMoeda(item.valor) : null,
+                formatarData(item.data_documento),
+            ].filter(Boolean).join(' - ');
+            return `<option value="${item.id}">${escapeHtml(label)}</option>`;
+        }).join('');
+    }
+
+    async function salvarVinculoSaida() {
+        const comprovanteId = $('ir-saida-link-comprovante')?.value;
+        if (!comprovanteId) {
+            mostrarAviso('Selecione um documento fiscal existente.');
+            return;
+        }
+        const payload = {
+            tipo_entidade: $('ir-saida-link-tipo-entidade').value,
+            entidade_id: $('ir-saida-link-entidade-id').value,
+            comprovante_id: comprovanteId,
+            tipo_vinculo: $('ir-saida-link-tipo-vinculo').value,
+            natureza: $('ir-saida-link-natureza').value,
+            status_lastro: $('ir-saida-link-status').value,
+            observacoes: $('ir-saida-link-observacoes').value,
+        };
+        const resposta = await fetch('/api/ir/lastro/saidas-sem-documento/vincular', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const json = await resposta.json();
+        if (!json.success) {
+            mostrarAviso(json.error || 'Nao foi possivel vincular o documento fiscal.');
+            return;
+        }
+        fecharVinculoSaida();
+        await Promise.all([carregarComprovantes(), carregarSaidasSemDocumento()]);
+    }
+
+    function abrirStatusSaida(tipoEntidade, entidadeId, status) {
+        const saida = buscarSaida(tipoEntidade, entidadeId);
+        if (!saida) return;
+        $('ir-saida-status-tipo-entidade').value = tipoEntidade;
+        $('ir-saida-status-entidade-id').value = entidadeId;
+        $('ir-saida-status-resumo').innerHTML = renderResumoSaidaModal(saida);
+        $('ir-saida-status-valor').value = status || saida.status_lastro || 'AGUARDANDO_CONTADOR';
+        $('ir-saida-status-natureza').value = saida.natureza_sugerida || 'DESPESA_OPERACIONAL';
+        $('ir-saida-status-observacoes').value = saida.observacoes || '';
+        $('ir-saida-status-modal').classList.add('open');
+        $('ir-saida-status-modal').setAttribute('aria-hidden', 'false');
+    }
+
+    function fecharStatusSaida() {
+        $('ir-saida-status-modal')?.classList.remove('open');
+        $('ir-saida-status-modal')?.setAttribute('aria-hidden', 'true');
+    }
+
+    async function salvarStatusSaida() {
+        const payload = {
+            tipo_entidade: $('ir-saida-status-tipo-entidade').value,
+            entidade_id: $('ir-saida-status-entidade-id').value,
+            status_lastro: $('ir-saida-status-valor').value,
+            natureza: $('ir-saida-status-natureza').value,
+            observacoes: $('ir-saida-status-observacoes').value,
+        };
+        const resposta = await fetch('/api/ir/lastro/saidas-sem-documento/status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const json = await resposta.json();
+        if (!json.success) {
+            mostrarAviso(json.error || 'Nao foi possivel salvar o status de lastro.');
+            return;
+        }
+        fecharStatusSaida();
+        await carregarSaidasSemDocumento();
+    }
+
+    function verOrigemSaida(tipoEntidade, entidadeId) {
+        const saida = buscarSaida(tipoEntidade, entidadeId);
+        if (!saida) return;
+        mostrarAviso(`${saida.origem || 'Origem'} #${saida.entidade_id}\n${saida.descricao || ''}\n${formatarMoeda(saida.valor)} em ${formatarData(saida.data)}`);
     }
 
     function selecionarArquivos(fileList) {
@@ -521,6 +785,7 @@
         }
         fecharVinculo();
         await carregarComprovantes();
+        await carregarSaidasSemDocumento();
     }
 
     async function salvarRevisao() {
@@ -650,7 +915,11 @@
     window.IRDoc = {
         abrirRevisao,
         abrirVinculo,
+        abrirVinculoSaida,
+        abrirStatusSaida,
+        verOrigemSaida,
         carregarComprovantes,
+        carregarSaidasSemDocumento,
         verAno(ano) {
             if ($('ir-filtro-ano')) {
                 const valor = String(ano);

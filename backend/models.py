@@ -352,6 +352,44 @@ class IrComprovanteVinculo(db.Model):
         }
 
 
+class LastroFinanceiroPendencia(db.Model):
+    """
+    Tratamento manual de uma saida financeira ainda sem comprovante vinculado.
+    Permite marcar excecoes de lastro sem criar documento fiscal ficticio.
+    """
+    __tablename__ = 'lastro_financeiro_pendencia'
+
+    id = db.Column(db.Integer, primary_key=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=False, index=True)
+    tipo_entidade = db.Column(db.String(40), nullable=False)
+    entidade_id = db.Column(db.Integer, nullable=False)
+    status_lastro = db.Column(db.String(40), nullable=False, default='PENDENTE')
+    natureza = db.Column(db.String(50), nullable=False, default='OUTRO')
+    observacoes = db.Column(db.Text, nullable=True)
+    ativo = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        db.Index('ix_lastro_pendencia_perfil_status', 'perfil_financeiro_id', 'status_lastro'),
+        db.Index('ix_lastro_pendencia_entidade', 'perfil_financeiro_id', 'tipo_entidade', 'entidade_id'),
+    )
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
+            'tipo_entidade': self.tipo_entidade,
+            'entidade_id': self.entidade_id,
+            'status_lastro': self.status_lastro,
+            'natureza': self.natureza,
+            'observacoes': self.observacoes,
+            'ativo': bool(self.ativo),
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
 class IrComprovanteArquivo(db.Model):
     """
     Arquivo original do comprovante, armazenado no banco como LargeBinary/BYTEA.
