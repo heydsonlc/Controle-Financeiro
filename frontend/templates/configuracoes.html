@@ -340,6 +340,46 @@
                         </article>
                     </div>
 
+                    <article class="config-backup-box config-backup-tools">
+                        <header>
+                            <span class="config-backup-inline-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false"><path d="M4 6h16M4 12h16M4 18h16"/><path d="M8 6v12M16 6v12"/></svg>
+                            </span>
+                            <div>
+                                <h3>Ferramentas PostgreSQL</h3>
+                                <p>Configure os executáveis usados para backup e restauração quando eles não estiverem no PATH do Windows.</p>
+                            </div>
+                        </header>
+                        <div class="config-backup-tools-status">
+                            <span>pg_dump <strong id="backup-tool-pg-dump-status" class="config-backup-status">Carregando</strong></span>
+                            <span>pg_restore <strong id="backup-tool-pg-restore-status" class="config-backup-status">Carregando</strong></span>
+                            <span>psql <strong id="backup-tool-psql-status" class="config-backup-status">Opcional</strong></span>
+                            <span>Última validação <strong id="backup-tools-last-validation">-</strong></span>
+                        </div>
+                        <div class="config-backup-tools-grid">
+                            <label>
+                                <span>Caminho do pg_dump</span>
+                                <input type="text" id="backup-pg-dump-path" placeholder="C:\Program Files\PostgreSQL\18\bin\pg_dump.exe">
+                            </label>
+                            <label>
+                                <span>Caminho do pg_restore</span>
+                                <input type="text" id="backup-pg-restore-path" placeholder="C:\Program Files\PostgreSQL\18\bin\pg_restore.exe">
+                            </label>
+                            <label>
+                                <span>Caminho do psql <small>(opcional)</small></span>
+                                <input type="text" id="backup-psql-path" placeholder="C:\Program Files\PostgreSQL\18\bin\psql.exe">
+                            </label>
+                        </div>
+                        <div class="config-backup-row-actions">
+                            <p class="config-backup-note">Se o backup não executar, configure o caminho da pasta bin do PostgreSQL instalada no seu computador.</p>
+                            <div class="config-backup-tool-actions">
+                                <button type="button" class="config-secondary-action" id="backup-tools-autodetect">Autodetectar</button>
+                                <button type="button" class="config-secondary-action" id="backup-tools-validate">Validar ferramentas</button>
+                                <button type="button" class="config-primary-action" id="backup-tools-save">Salvar caminhos</button>
+                            </div>
+                        </div>
+                    </article>
+
                     <div class="config-backup-grid-two">
                         <article class="config-backup-box">
                             <header>

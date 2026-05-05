@@ -118,3 +118,24 @@ def salvar_agendamento():
         'message': 'Configuração de agendamento salva.',
         'data': agendamento,
     }), 200
+
+
+@backup_bp.route('/ferramentas/status', methods=['GET'])
+def status_ferramentas():
+    return jsonify(BackupService.validar_ferramentas_postgres(salvar=True)), 200
+
+
+@backup_bp.route('/ferramentas/configurar', methods=['POST'])
+def configurar_ferramentas():
+    payload = request.get_json(silent=True) or {}
+    resultado = BackupService.configurar_ferramentas_postgres(payload)
+    return jsonify({
+        **resultado,
+        'message': 'Configuração das ferramentas PostgreSQL salva.',
+    }), 200
+
+
+@backup_bp.route('/ferramentas/autodetectar', methods=['POST'])
+def autodetectar_ferramentas():
+    resultado = BackupService.autodetectar_ferramentas_postgres()
+    return jsonify(resultado), 200

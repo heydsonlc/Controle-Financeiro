@@ -53,8 +53,8 @@
         backup: {
             titulo: 'Backup',
             itens: [
-                ['Em breve', 'Importação e exportação de configurações ainda são placeholders seguros.'],
-                ['Banco oficial', 'Backup operacional do PostgreSQL deve ser tratado em rotina própria.']
+                ['Ferramentas PostgreSQL', 'Configure pg_dump e pg_restore quando eles não estiverem no PATH do Windows.'],
+                ['Restauração segura', 'Restore continua exigindo confirmação textual forte antes de executar.']
             ]
         },
         'ia-automacao': {
@@ -177,6 +177,7 @@
 
     function renderBackup() {
         renderBackupAgendamento();
+        renderBackupFerramentas();
         renderBackupHistorico();
         if (state.secao === 'backup') {
             renderBackupPainel();
@@ -197,6 +198,47 @@
         if (retencao && agendamento.retencao_dias) retencao.value = agendamento.retencao_dias;
         if (proximo) proximo.textContent = agendamento.proximo_backup_estimado || '-';
         if (nota) nota.textContent = agendamento.mensagem || 'Configuração visual preparada. Agendamento automático será ativado em etapa futura.';
+    }
+
+    function renderBackupFerramentas() {
+        const ferramentas = state.backup.status?.ferramentas || {};
+        const config = ferramentas.configuracao || {};
+        preencherCampoFerramenta('backup-pg-dump-path', config.pg_dump_path);
+        preencherCampoFerramenta('backup-pg-restore-path', config.pg_restore_path);
+        preencherCampoFerramenta('backup-psql-path', config.psql_path);
+        renderBackupFerramentaBadge('backup-tool-pg-dump-status', ferramentas.ferramentas?.pg_dump, true);
+        renderBackupFerramentaBadge('backup-tool-pg-restore-status', ferramentas.ferramentas?.pg_restore, true);
+        renderBackupFerramentaBadge('backup-tool-psql-status', ferramentas.ferramentas?.psql, false);
+        const ultima = $('backup-tools-last-validation');
+        if (ultima) ultima.textContent = formatarDataHora(ferramentas.ultima_validacao || config.ultima_validacao);
+    }
+
+    function preencherCampoFerramenta(id, valor) {
+        const campo = $(id);
+        if (!campo || document.activeElement === campo) return;
+        campo.value = valor || '';
+    }
+
+    function renderBackupFerramentaBadge(id, info, obrigatorio) {
+        const badge = $(id);
+        if (!badge) return;
+        const disponivel = Boolean(info?.disponivel);
+        badge.className = 'config-backup-status';
+        if (disponivel) {
+            badge.classList.add('disponivel');
+            badge.textContent = info?.origem === 'configurado' ? 'Configurado' : 'Disponível';
+            badge.title = [info?.caminho, info?.versao].filter(Boolean).join(' | ');
+            return;
+        }
+        if (!obrigatorio) {
+            badge.classList.add('opcional');
+            badge.textContent = 'Opcional';
+            badge.title = info?.mensagem || '';
+            return;
+        }
+        badge.classList.add('nao-encontrado');
+        badge.textContent = 'Não encontrado';
+        badge.title = info?.mensagem || '';
     }
 
     function renderBackupHistorico() {
@@ -235,6 +277,7 @@
         const title = $('config-help-title');
         const content = $('config-help-content');
         const status = state.backup.status || {};
+        const ferramentas = status.ferramentas?.ferramentas || {};
         if (title) title.textContent = 'Status do backup';
         if (!content) return;
         const checklist = status.checklist || [];
@@ -262,6 +305,12 @@
                         <dd>${escapeHtml(formatarDataHora(status.ultimo_backup?.created_at))}</dd>
                         <dt>Engine do banco</dt>
                         <dd>${escapeHtml(status.engine || 'PostgreSQL')}</dd>
+                        <dt>pg_dump</dt>
+                        <dd>${ferramentas.pg_dump?.disponivel ? 'Disponível' : 'Não encontrado'}</dd>
+                        <dt>pg_restore</dt>
+                        <dd>${ferramentas.pg_restore?.disponivel ? 'Disponível' : 'Não encontrado'}</dd>
+                        <dt>Última validação</dt>
+                        <dd>${escapeHtml(formatarDataHora(status.ferramentas?.ultima_validacao))}</dd>
                         <dt>Retenção configurada</dt>
                         <dd>${escapeHtml(status.retencao_dias || 30)} dias</dd>
                         <dt>Tamanho médio</dt>
@@ -317,6 +366,53 @@
             renderBackup();
         } catch (error) {
             mostrarBackupMensagem(error.message);
+        }
+    }
+
+    async function validarFerramentasBackup() {
+        try {
+            const resposta = await requestJson(`${API_BACKUP}/ferramentas/status`);
+            state.backup.status = state.backup.status || {};
+            state.backup.status.ferramentas = resposta;
+            renderBackup();
+            mostrarBackupMensagem(resposta.disponivel ? 'Ferramentas PostgreSQL disponíveis.' : 'Ferramentas PostgreSQL incompletas. Configure os caminhos.', resposta.disponivel ? 'success' : 'error');
+        } catch (error) {
+            mostrarBackupMensagem(error.message, 'error');
+        }
+    }
+
+    async function autodetectarFerramentasBackup() {
+        try {
+            const resposta = await requestJson(`${API_BACKUP}/ferramentas/autodetectar`, {
+                method: 'POST',
+                body: '{}'
+            });
+            state.backup.status = state.backup.status || {};
+            state.backup.status.ferramentas = resposta;
+            renderBackup();
+            mostrarBackupMensagem(resposta.mensagem || 'Autodetecção concluída.', resposta.disponivel ? 'success' : 'error');
+        } catch (error) {
+            mostrarBackupMensagem(error.message, 'error');
+        }
+    }
+
+    async function salvarFerramentasBackup() {
+        const payload = {
+            pg_dump_path: obterCampo('backup-pg-dump-path').trim(),
+            pg_restore_path: obterCampo('backup-pg-restore-path').trim(),
+            psql_path: obterCampo('backup-psql-path').trim()
+        };
+        try {
+            const resposta = await requestJson(`${API_BACKUP}/ferramentas/configurar`, {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+            state.backup.status = state.backup.status || {};
+            state.backup.status.ferramentas = resposta;
+            renderBackup();
+            mostrarBackupMensagem(resposta.disponivel ? 'Caminhos salvos e validados.' : 'Caminhos salvos, mas alguma ferramenta não foi validada.', resposta.disponivel ? 'success' : 'error');
+        } catch (error) {
+            mostrarBackupMensagem(error.message, 'error');
         }
     }
 
@@ -695,6 +791,9 @@
         $('backup-import-config')?.addEventListener('click', abrirImportacaoConfiguracoes);
         $('backup-import-file')?.addEventListener('change', importarConfiguracoes);
         $('backup-run')?.addEventListener('click', executarBackup);
+        $('backup-tools-autodetect')?.addEventListener('click', autodetectarFerramentasBackup);
+        $('backup-tools-validate')?.addEventListener('click', validarFerramentasBackup);
+        $('backup-tools-save')?.addEventListener('click', salvarFerramentasBackup);
         $('backup-schedule-save')?.addEventListener('click', salvarAgendamentoBackup);
         $('backup-restore-start')?.addEventListener('click', restaurarBackup);
         $('backup-history-body')?.addEventListener('click', (event) => {

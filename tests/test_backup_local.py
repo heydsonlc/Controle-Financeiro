@@ -14,6 +14,7 @@ from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 def app(tmp_path):
     app = create_app('testing')
     app.config['BACKUP_BASE_DIR'] = tmp_path / 'backups'
+    app.config['BACKUP_POSTGRES_SEARCH_ROOTS'] = []
     with app.app_context():
         db.create_all()
         PerfilFinanceiroService.obter_ou_criar_perfis_iniciais()
@@ -46,6 +47,18 @@ def _criar_backup_fixture(app, nome='fixture.dump', conteudo=b'backup fixture'):
     return arquivo
 
 
+def _criar_ferramenta(tmp_path, nome):
+    arquivo = tmp_path / nome
+    arquivo.write_text('binario mockado', encoding='utf-8')
+    return arquivo
+
+
+def _configurar_ferramentas(app, **paths):
+    config_file = Path(app.config['BACKUP_BASE_DIR']) / 'backup_config.json'
+    config_file.parent.mkdir(parents=True, exist_ok=True)
+    config_file.write_text(json.dumps(paths), encoding='utf-8')
+
+
 def test_status_inicial_retorna_estrutura_valida(client):
     response = client.get('/api/backup/status')
     data = response.get_json()
@@ -66,11 +79,80 @@ def test_historico_vazio_funciona(client):
     assert data['data'] == []
 
 
-def test_backup_manual_com_pg_dump_mockado_registra_historico(client, app, monkeypatch):
+def test_status_ferramentas_sem_configuracao_retorna_erro_controlado(client, monkeypatch):
+    monkeypatch.setattr('backend.services.backup_service.shutil.which', lambda comando: None)
+
+    response = client.get('/api/backup/ferramentas/status')
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data['success'] is True
+    assert data['disponivel'] is False
+    assert data['ferramentas']['pg_dump']['disponivel'] is False
+    assert 'pg_dump' in data['ferramentas']['pg_dump']['mensagem']
+
+
+def test_autodeteccao_encontra_binarios_mockados(client, app, tmp_path, monkeypatch):
+    raiz = tmp_path / 'PostgreSQL'
+    bin_dir = raiz / '18' / 'bin'
+    bin_dir.mkdir(parents=True)
+    for nome in ['pg_dump.exe', 'pg_restore.exe', 'psql.exe']:
+        (bin_dir / nome).write_text('mock', encoding='utf-8')
+    app.config['BACKUP_POSTGRES_SEARCH_ROOTS'] = [raiz]
+    monkeypatch.setattr('backend.services.backup_service.subprocess.run', lambda comando, **kwargs: subprocess.CompletedProcess(comando, 0, stdout=f'{Path(comando[0]).name} 18.0', stderr=''))
+
+    response = client.post('/api/backup/ferramentas/autodetectar', json={})
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data['disponivel'] is True
+    assert data['configuracao']['pg_dump_path'].endswith('pg_dump.exe')
+    assert data['configuracao']['pg_restore_path'].endswith('pg_restore.exe')
+
+
+def test_configuracao_manual_salva_caminhos(client, tmp_path, monkeypatch):
+    pg_dump = _criar_ferramenta(tmp_path, 'pg_dump.exe')
+    pg_restore = _criar_ferramenta(tmp_path, 'pg_restore.exe')
+    monkeypatch.setattr('backend.services.backup_service.subprocess.run', lambda comando, **kwargs: subprocess.CompletedProcess(comando, 0, stdout='PostgreSQL mock 18', stderr=''))
+
+    response = client.post('/api/backup/ferramentas/configurar', json={
+        'pg_dump_path': str(pg_dump),
+        'pg_restore_path': str(pg_restore),
+        'psql_path': '',
+    })
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data['disponivel'] is True
+    assert data['configuracao']['pg_dump_path'] == str(pg_dump)
+    assert data['configuracao']['pg_restore_path'] == str(pg_restore)
+
+
+def test_validacao_executa_version_com_mock(client, app, tmp_path, monkeypatch):
+    pg_dump = _criar_ferramenta(tmp_path, 'pg_dump.exe')
+    pg_restore = _criar_ferramenta(tmp_path, 'pg_restore.exe')
+    _configurar_ferramentas(app, pg_dump_path=str(pg_dump), pg_restore_path=str(pg_restore))
+    chamadas = []
+
+    def fake_run(comando, **kwargs):
+        chamadas.append(comando)
+        return subprocess.CompletedProcess(comando, 0, stdout='PostgreSQL 18.0', stderr='')
+
+    monkeypatch.setattr('backend.services.backup_service.subprocess.run', fake_run)
+
+    data = client.get('/api/backup/ferramentas/status').get_json()
+
+    assert data['disponivel'] is True
+    assert all('--version' in chamada for chamada in chamadas)
+    assert any(str(pg_dump) == chamada[0] for chamada in chamadas)
+
+
+def test_backup_manual_com_pg_dump_mockado_registra_historico(client, app, tmp_path, monkeypatch):
     _usar_postgres(app)
+    pg_dump_path = _criar_ferramenta(tmp_path, 'pg_dump.exe')
 
     def fake_which(comando):
-        return 'pg_dump.exe' if comando == 'pg_dump' else None
+        return str(pg_dump_path) if comando == 'pg_dump' else None
 
     def fake_run(comando, **kwargs):
         destino = Path(comando[comando.index('--file') + 1])
@@ -91,6 +173,48 @@ def test_backup_manual_com_pg_dump_mockado_registra_historico(client, app, monke
     historico = client.get('/api/backup/historico').get_json()['data']
     assert historico[0]['status'] == 'concluido'
     assert historico[0]['tamanho_bytes'] > 0
+
+
+def test_backup_manual_usa_caminho_configurado(client, app, tmp_path, monkeypatch):
+    _usar_postgres(app)
+    pg_dump = _criar_ferramenta(tmp_path, 'pg_dump-configurado.exe')
+    _configurar_ferramentas(app, pg_dump_path=str(pg_dump))
+    monkeypatch.setattr('backend.services.backup_service.shutil.which', lambda comando: None)
+    comandos = []
+
+    def fake_run(comando, **kwargs):
+        comandos.append(comando)
+        destino = Path(comando[comando.index('--file') + 1])
+        destino.write_bytes(b'conteudo dump')
+        return subprocess.CompletedProcess(comando, 0, stdout='', stderr='')
+
+    monkeypatch.setattr('backend.services.backup_service.subprocess.run', fake_run)
+
+    data = client.post('/api/backup/executar', json={}).get_json()
+
+    assert data['success'] is True
+    assert comandos[0][0] == str(pg_dump)
+
+
+def test_backup_manual_fallback_path_continua_funcionando(client, app, tmp_path, monkeypatch):
+    _usar_postgres(app)
+    pg_dump_path = _criar_ferramenta(tmp_path, 'pg_dump-path.exe')
+
+    def fake_which(comando):
+        return str(pg_dump_path) if comando == 'pg_dump' else None
+
+    def fake_run(comando, **kwargs):
+        destino = Path(comando[comando.index('--file') + 1])
+        destino.write_bytes(b'conteudo dump')
+        return subprocess.CompletedProcess(comando, 0, stdout='', stderr='')
+
+    monkeypatch.setattr('backend.services.backup_service.shutil.which', fake_which)
+    monkeypatch.setattr('backend.services.backup_service.subprocess.run', fake_run)
+
+    data = client.post('/api/backup/executar', json={}).get_json()
+
+    assert data['success'] is True
+    assert data['data']['status'] == 'concluido'
 
 
 def test_falha_de_pg_dump_retorna_erro_controlado(client, app, monkeypatch):
@@ -146,6 +270,30 @@ def test_restauracao_com_arquivo_fora_da_pasta_e_bloqueada(client):
     assert response.get_json()['success'] is False
 
 
+def test_restore_usa_pg_restore_configurado(client, app, tmp_path, monkeypatch):
+    _usar_postgres(app)
+    _criar_backup_fixture(app, 'restore-config.dump')
+    pg_restore = _criar_ferramenta(tmp_path, 'pg_restore.exe')
+    _configurar_ferramentas(app, pg_restore_path=str(pg_restore))
+    comandos = []
+
+    def fake_run(comando, **kwargs):
+        comandos.append(comando)
+        return subprocess.CompletedProcess(comando, 0, stdout='', stderr='')
+
+    monkeypatch.setattr('backend.services.backup_service.shutil.which', lambda comando: None)
+    monkeypatch.setattr('backend.services.backup_service.subprocess.run', fake_run)
+
+    response = client.post('/api/backup/restaurar', json={
+        'arquivo': 'restore-config.dump',
+        'confirmacao': 'CONFIRMO RESTAURACAO',
+    })
+
+    assert response.status_code == 200
+    assert response.get_json()['success'] is True
+    assert comandos[0][0] == str(pg_restore)
+
+
 def test_exportar_configuracoes_retorna_json_sem_dados_financeiros(client):
     response = client.get('/api/backup/configuracoes/exportar')
     data = response.get_json()
@@ -182,6 +330,9 @@ def test_ui_configuracoes_contem_secao_backup_reformulada(client):
     assert 'Histórico recente' in html
     assert 'Restauração segura' in html
     assert 'Boas práticas' in html
+    assert 'Ferramentas PostgreSQL' in html
+    assert 'id="backup-pg-dump-path"' in html
+    assert 'id="backup-pg-restore-path"' in html
 
 
 def test_botao_executar_backup_e_historico_renderizam(client):

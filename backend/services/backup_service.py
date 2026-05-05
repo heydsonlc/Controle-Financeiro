@@ -19,6 +19,28 @@ from flask import current_app
 
 
 CONFIRMACAO_RESTORE = 'CONFIRMO RESTAURACAO'
+EXEMPLO_PG_DUMP_WINDOWS = r'C:\Program Files\PostgreSQL\18\bin\pg_dump.exe'
+
+POSTGRES_TOOLS = {
+    'pg_dump': {
+        'campo': 'pg_dump_path',
+        'env': 'PG_DUMP_PATH',
+        'exe': 'pg_dump.exe',
+        'obrigatorio': True,
+    },
+    'pg_restore': {
+        'campo': 'pg_restore_path',
+        'env': 'PG_RESTORE_PATH',
+        'exe': 'pg_restore.exe',
+        'obrigatorio': True,
+    },
+    'psql': {
+        'campo': 'psql_path',
+        'env': 'PSQL_PATH',
+        'exe': 'psql.exe',
+        'obrigatorio': False,
+    },
+}
 
 
 class BackupService:
@@ -39,19 +61,22 @@ class BackupService:
                 'mensagem': 'Backup local disponível apenas para PostgreSQL.',
             })
 
-        pg_dump = shutil.which('pg_dump')
-        if not pg_dump:
+        pg_dump = BackupService._resolver_ferramenta_postgres('pg_dump')
+        if not pg_dump.get('caminho'):
             return BackupService._registrar_historico({
                 'tipo': 'manual',
                 'arquivo': None,
                 'caminho': None,
                 'tamanho_bytes': 0,
                 'status': 'erro',
-                'mensagem': 'pg_dump não encontrado. Instale as ferramentas do PostgreSQL ou ajuste o PATH.',
+                'mensagem': (
+                    'pg_dump não encontrado. Configure o caminho em Configurações > Backup. '
+                    f'Exemplo: {EXEMPLO_PG_DUMP_WINDOWS}'
+                ),
             })
 
         comando = [
-            pg_dump,
+            pg_dump['caminho'],
             '--format=custom',
             '--no-owner',
             '--file',
@@ -126,7 +151,9 @@ class BackupService:
         concluidos = [item for item in historico if item.get('status') == 'concluido' and item.get('tamanho_bytes')]
         agendamento = BackupService.obter_agendamento()
         banco = BackupService._database_config()
-        pg_dump_disponivel = bool(shutil.which('pg_dump'))
+        ferramentas = BackupService.validar_ferramentas_postgres(salvar=False)
+        pg_dump_disponivel = ferramentas['ferramentas']['pg_dump']['disponivel']
+        pg_restore_disponivel = ferramentas['ferramentas']['pg_restore']['disponivel']
         tamanho_medio = int(sum(item['tamanho_bytes'] for item in concluidos) / len(concluidos)) if concluidos else 0
 
         checklist = [
@@ -139,8 +166,12 @@ class BackupService:
                 'ok': banco['is_postgres'],
             },
             {
-                'label': 'pg_dump disponível no PATH',
+                'label': 'pg_dump disponível',
                 'ok': pg_dump_disponivel,
+            },
+            {
+                'label': 'pg_restore disponível',
+                'ok': pg_restore_disponivel,
             },
             {
                 'label': 'Último backup concluído',
@@ -164,6 +195,7 @@ class BackupService:
             'tamanho_medio_formatado': BackupService.formatar_bytes(tamanho_medio),
             'checklist': checklist,
             'agendamento': agendamento,
+            'ferramentas': ferramentas,
             'recomendacao': 'Exporte configurações após mudanças importantes e mantenha cópias fora desta máquina.',
         }
 
@@ -202,8 +234,106 @@ class BackupService:
             'updated_at': BackupService._now_iso(),
         }
         BackupService._ensure_dirs()
-        BackupService._write_json(BackupService._config_file(), agendamento)
+        config = BackupService._read_config()
+        config.update(agendamento)
+        BackupService._write_json(BackupService._config_file(), config)
         return BackupService.obter_agendamento()
+
+    @staticmethod
+    def configurar_ferramentas_postgres(dados: dict[str, Any] | None) -> dict[str, Any]:
+        dados = dados or {}
+        config = BackupService._read_config()
+        for meta in POSTGRES_TOOLS.values():
+            campo = meta['campo']
+            if campo in dados:
+                config[campo] = str(dados.get(campo) or '').strip()
+        config['auto_detectado'] = False
+        config['updated_at'] = BackupService._now_iso()
+        BackupService._ensure_dirs()
+        BackupService._write_json(BackupService._config_file(), config)
+        return BackupService.validar_ferramentas_postgres(salvar=True)
+
+    @staticmethod
+    def autodetectar_ferramentas_postgres() -> dict[str, Any]:
+        encontrados = BackupService._autodetectar_ferramentas_postgres()
+        config = BackupService._read_config()
+        for nome, caminho in encontrados.items():
+            campo = POSTGRES_TOOLS[nome]['campo']
+            config[campo] = caminho
+        config['auto_detectado'] = bool(encontrados)
+        config['updated_at'] = BackupService._now_iso()
+        BackupService._ensure_dirs()
+        BackupService._write_json(BackupService._config_file(), config)
+        resultado = BackupService.validar_ferramentas_postgres(salvar=True)
+        resultado['encontrados'] = encontrados
+        resultado['mensagem'] = (
+            'Ferramentas PostgreSQL detectadas e salvas.'
+            if encontrados else
+            'Nenhuma instalação local do PostgreSQL foi detectada nos caminhos padrão.'
+        )
+        return resultado
+
+    @staticmethod
+    def validar_ferramentas_postgres(salvar: bool = True) -> dict[str, Any]:
+        config = BackupService._read_config()
+        banco = BackupService._database_config()
+        ferramentas = {}
+        for nome in POSTGRES_TOOLS:
+            resolucao = BackupService._resolver_ferramenta_postgres(nome, config=config)
+            info = {
+                'nome': nome,
+                'disponivel': False,
+                'caminho': resolucao.get('caminho'),
+                'origem': resolucao.get('origem'),
+                'versao': None,
+                'mensagem': resolucao.get('mensagem') or '',
+            }
+            if resolucao.get('caminho'):
+                try:
+                    resultado = subprocess.run(
+                        [resolucao['caminho'], '--version'],
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                        check=False,
+                    )
+                    saida = (resultado.stdout or resultado.stderr or '').strip()
+                    info['disponivel'] = resultado.returncode == 0
+                    info['versao'] = BackupService._sanitize_message(saida, banco) if saida else None
+                    info['mensagem'] = 'Disponível.' if info['disponivel'] else BackupService._sanitize_message(saida, banco)
+                except Exception as exc:  # pragma: no cover - depende do sistema operacional
+                    info['mensagem'] = BackupService._sanitize_message(str(exc), banco)
+            ferramentas[nome] = info
+
+        ultima_validacao = BackupService._now_iso()
+        disponivel = all(
+            ferramentas[nome]['disponivel']
+            for nome, meta in POSTGRES_TOOLS.items()
+            if meta['obrigatorio']
+        )
+        payload = {
+            'success': True,
+            'disponivel': disponivel,
+            'ultima_validacao': ultima_validacao,
+            'auto_detectado': bool(config.get('auto_detectado')),
+            'configuracao': BackupService._configuracao_ferramentas(config),
+            'ferramentas': ferramentas,
+        }
+        if salvar:
+            config['ultima_validacao'] = ultima_validacao
+            config['status_ferramentas'] = {
+                nome: {
+                    'disponivel': info['disponivel'],
+                    'caminho': info.get('caminho'),
+                    'origem': info.get('origem'),
+                    'versao': info.get('versao'),
+                    'mensagem': info.get('mensagem'),
+                }
+                for nome, info in ferramentas.items()
+            }
+            BackupService._write_json(BackupService._config_file(), config)
+            payload['configuracao'] = BackupService._configuracao_ferramentas(config)
+        return payload
 
     @staticmethod
     def baixar_backup(nome_arquivo: str) -> Path:
@@ -220,11 +350,11 @@ class BackupService:
             raise RuntimeError('Restauração local disponível apenas para PostgreSQL.')
 
         if caminho.suffix.lower() == '.dump':
-            ferramenta = shutil.which('pg_restore')
-            if not ferramenta:
-                raise RuntimeError('pg_restore não encontrado. Restauração manual necessária.')
+            ferramenta = BackupService._resolver_ferramenta_postgres('pg_restore')
+            if not ferramenta.get('caminho'):
+                raise RuntimeError('pg_restore não encontrado. Configure o caminho em Configurações > Backup.')
             comando = [
-                ferramenta,
+                ferramenta['caminho'],
                 '--clean',
                 '--if-exists',
                 '--no-owner',
@@ -239,11 +369,11 @@ class BackupService:
                 str(caminho),
             ]
         elif caminho.suffix.lower() == '.sql':
-            ferramenta = shutil.which('psql')
-            if not ferramenta:
-                raise RuntimeError('psql não encontrado. Restauração manual necessária.')
+            ferramenta = BackupService._resolver_ferramenta_postgres('psql')
+            if not ferramenta.get('caminho'):
+                raise RuntimeError('psql não encontrado. Configure o caminho em Configurações > Backup.')
             comando = [
-                ferramenta,
+                ferramenta['caminho'],
                 '--host',
                 banco['host'],
                 '--port',
@@ -405,6 +535,114 @@ class BackupService:
                 'correcao_categorias',
             ]
         }
+
+    @staticmethod
+    def _read_config() -> dict[str, Any]:
+        dados = BackupService._read_json(BackupService._config_file(), {})
+        return dados if isinstance(dados, dict) else {}
+
+    @staticmethod
+    def _configuracao_ferramentas(config: dict[str, Any] | None = None) -> dict[str, Any]:
+        config = config or BackupService._read_config()
+        return {
+            'pg_dump_path': str(config.get('pg_dump_path') or ''),
+            'pg_restore_path': str(config.get('pg_restore_path') or ''),
+            'psql_path': str(config.get('psql_path') or ''),
+            'auto_detectado': bool(config.get('auto_detectado')),
+            'ultima_validacao': config.get('ultima_validacao'),
+            'status_ferramentas': config.get('status_ferramentas') or {},
+        }
+
+    @staticmethod
+    def _resolver_ferramenta_postgres(nome: str, config: dict[str, Any] | None = None) -> dict[str, Any]:
+        meta = POSTGRES_TOOLS[nome]
+        config = config or BackupService._read_config()
+        candidatos = [
+            ('configurado', config.get(meta['campo'])),
+            ('variavel_ambiente', os.getenv(meta['env'])),
+            ('path', shutil.which(nome)),
+            ('autodetectado', BackupService._autodetectar_ferramentas_postgres().get(nome)),
+        ]
+        erros = []
+        for origem, candidato in candidatos:
+            caminho = str(candidato or '').strip()
+            if not caminho:
+                continue
+            if BackupService._caminho_executavel(caminho):
+                return {
+                    'caminho': caminho,
+                    'origem': origem,
+                    'mensagem': 'Ferramenta localizada.',
+                }
+            erros.append(f'{origem}: caminho inválido')
+        return {
+            'caminho': None,
+            'origem': None,
+            'mensagem': '; '.join(erros) or f'{nome} não encontrado.',
+        }
+
+    @staticmethod
+    def _caminho_executavel(caminho: str) -> bool:
+        try:
+            path = Path(caminho)
+            if path.is_file():
+                return True
+        except (OSError, ValueError):
+            return False
+        return bool(shutil.which(caminho))
+
+    @staticmethod
+    def _autodetectar_ferramentas_postgres() -> dict[str, str]:
+        encontrados: dict[str, str] = {}
+        for nome, meta in POSTGRES_TOOLS.items():
+            candidatos = []
+            for raiz in BackupService._postgres_search_roots():
+                try:
+                    for versao_dir in Path(raiz).iterdir():
+                        if not versao_dir.is_dir():
+                            continue
+                        caminho = versao_dir / 'bin' / meta['exe']
+                        if caminho.is_file():
+                            candidatos.append((BackupService._versao_sort_key(versao_dir.name), caminho))
+                except (OSError, ValueError):
+                    continue
+            if candidatos:
+                candidatos.sort(key=lambda item: item[0], reverse=True)
+                encontrados[nome] = str(candidatos[0][1])
+        return encontrados
+
+    @staticmethod
+    def _postgres_search_roots() -> list[Path]:
+        configurado = current_app.config.get('BACKUP_POSTGRES_SEARCH_ROOTS')
+        if configurado is not None:
+            return [Path(item) for item in configurado]
+        roots = []
+        for env_name in ['ProgramFiles', 'ProgramFiles(x86)']:
+            base = os.environ.get(env_name)
+            if base:
+                roots.append(Path(base) / 'PostgreSQL')
+        roots.extend([
+            Path(r'C:\Program Files\PostgreSQL'),
+            Path(r'C:\Program Files (x86)\PostgreSQL'),
+        ])
+        unicos = []
+        vistos = set()
+        for root in roots:
+            texto = str(root).lower()
+            if texto not in vistos:
+                vistos.add(texto)
+                unicos.append(root)
+        return unicos
+
+    @staticmethod
+    def _versao_sort_key(valor: str) -> tuple[int, ...]:
+        partes = []
+        for parte in str(valor or '').replace('-', '.').split('.'):
+            try:
+                partes.append(int(parte))
+            except ValueError:
+                partes.append(0)
+        return tuple(partes or [0])
 
     @staticmethod
     def _safe_backup_path(nome_arquivo: str, must_exist: bool = False) -> Path:
