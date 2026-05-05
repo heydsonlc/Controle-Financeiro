@@ -1,188 +1,352 @@
 {% extends "base.html" %}
 
-{% block title %}Configurações - Controle Financeiro{% endblock %}
+{% block title %}Configurações e Preferências - Controle Financeiro{% endblock %}
 
 {% block extra_css %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/configuracoes.css') }}">
-    <style>
-        main {
-            padding: 0;
-        }
-
-        .config-intro {
-            max-width: 680px;
-            color: #6e6e73;
-            line-height: 1.5;
-            margin: 0;
-        }
-
-        .config-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 12px;
-            margin-top: 24px;
-        }
-
-        .config-card {
-            background: #f5f5f7;
-            border-radius: 12px;
-            padding: 20px;
-            border: 1px solid rgba(0, 0, 0, 0.06);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            text-decoration: none;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 6px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-        }
-
-        a.config-card:hover {
-            background: #e8e8ea;
-            border-color: rgba(0, 0, 0, 0.1);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-        }
-
-        a.config-card:active {
-            transform: scale(0.99);
-        }
-
-        .config-card.planned {
-            background: #ffffff;
-            border-style: dashed;
-            box-shadow: none;
-        }
-
-        .config-title {
-            font-size: 1.05em;
-            font-weight: 600;
-            color: #1d1d1f;
-            letter-spacing: -0.01em;
-        }
-
-        .config-description {
-            font-size: 0.85em;
-            color: #6e6e73;
-            line-height: 1.4;
-            font-weight: 400;
-        }
-    </style>
 {% endblock %}
 
 {% block action_bar %}
-    <div class="module-actionbar" aria-label="Ações de Configurações">
+    <div class="module-actionbar config-actionbar" aria-label="Ações de Configurações e Preferências">
         <div class="module-actionbar-inner">
-            <div class="module-actionbar-filters"></div>
-            <div class="module-actionbar-actions">
-                <a class="action-icon-button primary" href="/preferencias" title="Preferências" aria-label="Preferências">
+            <div class="config-actionbar-message">
+                <span class="config-actionbar-icon" aria-hidden="true">i</span>
+                <span>Gerencie seus perfis financeiros e personalize o sistema de acordo com suas necessidades.</span>
+            </div>
+            <div class="module-actionbar-actions config-actionbar-actions">
+                <button type="button" class="action-icon-button" data-config-placeholder="Importar configurações">
                     <span class="action-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z"/>
-                            <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3a2 2 0 1 1 4 0v.1A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 .6 1 1.7 1.7 0 0 0 1.1.4h.1a2 2 0 1 1 0 4h-.1A1.7 1.7 0 0 0 19.4 15Z"/>
-                        </svg>
+                        <svg viewBox="0 0 24 24" focusable="false"><path d="M12 5v10M8 9l4-4 4 4M5 19h14"/></svg>
                     </span>
-                    <span class="action-button-label">Preferências</span>
-                </a>
+                    <span class="action-button-label">Importar configurações</span>
+                </button>
+                <button type="button" class="action-icon-button" data-config-placeholder="Exportar configurações">
+                    <span class="action-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false"><path d="M12 19V9M8 15l4 4 4-4M5 5h14"/></svg>
+                    </span>
+                    <span class="action-button-label">Exportar configurações</span>
+                </button>
+                <button type="button" class="action-icon-button" data-config-section-target="preferencias-gerais">
+                    <span class="action-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false"><path d="M12 8.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Z"/><path d="M19 12h2M3 12h2M12 3v2M12 19v2"/></svg>
+                    </span>
+                    <span class="action-button-label">Preferências globais</span>
+                </button>
             </div>
         </div>
     </div>
-
 {% endblock %}
 
 {% block content %}
-    <div class="container app-content-fluid">
-        <main>
-            <section class="module-data-section">
-                <div class="section-title-row">
-                    <div class="section-title-main">
-                        <span class="section-title-icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" focusable="false">
-                                <path d="M4 7h16"/>
-                                <path d="M4 12h16"/>
-                                <path d="M4 17h10"/>
-                            </svg>
-                        </span>
-                        <h2 class="section-title-text">Áreas de Configuração</h2>
-                    </div>
-                    <span class="section-title-meta">Preferências e parâmetros globais</span>
+    <div class="config-shell" data-config-page>
+        <aside class="config-sidebar" aria-label="Seções de configuração">
+            <nav class="config-section-nav">
+                <button type="button" class="config-section-link active" data-config-section-target="perfis-financeiros">
+                    <span class="config-section-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false"><path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M16 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/><path d="M3.5 19a4.5 4.5 0 0 1 9 0"/><path d="M13.5 18a3.5 3.5 0 0 1 7 0"/></svg>
+                    </span>
+                    <span>Perfis Financeiros</span>
+                </button>
+                <button type="button" class="config-section-link" data-config-section-target="preferencias-gerais">
+                    <span class="config-section-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false"><path d="M12 8.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Z"/><path d="M19 12h2M3 12h2M12 3v2M12 19v2"/></svg>
+                    </span>
+                    <span>Preferências Gerais</span>
+                </button>
+                <button type="button" class="config-section-link" data-config-section-target="aparencia">
+                    <span class="config-section-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false"><path d="M12 3a9 9 0 1 0 0 18h1a2 2 0 0 0 0-4h-1a2 2 0 0 1 0-4h2a7 7 0 0 0 0-14h-2Z"/><path d="M7.5 10h.1M9.5 6.8h.1M14.5 6.8h.1M16.5 10h.1"/></svg>
+                    </span>
+                    <span>Aparência</span>
+                </button>
+                <button type="button" class="config-section-link" data-config-section-target="comportamento">
+                    <span class="config-section-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false"><path d="M4 5h16M4 12h10M4 19h7"/><path d="m17 15 3 3-3 3"/></svg>
+                    </span>
+                    <span>Comportamento</span>
+                </button>
+                <button type="button" class="config-section-link" data-config-section-target="backup">
+                    <span class="config-section-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false"><path d="M5 19h14V8l-3-3H5v14Z"/><path d="M8 19v-6h8v6M8 5v4h7"/></svg>
+                    </span>
+                    <span>Backup</span>
+                </button>
+                <button type="button" class="config-section-link" data-config-section-target="ia-automacao">
+                    <span class="config-section-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false"><path d="M12 3l1.7 5.2L19 10l-5.3 1.8L12 17l-1.7-5.2L5 10l5.3-1.8L12 3Z"/><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16Z"/></svg>
+                    </span>
+                    <span>IA e Automação</span>
+                </button>
+                <button type="button" class="config-section-link" data-config-section-target="documentos-fiscais">
+                    <span class="config-section-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false"><path d="M6 3h9l3 3v15H6V3Z"/><path d="M14 3v4h4M9 11h6M9 15h6M9 19h4"/></svg>
+                    </span>
+                    <span>Documentos Fiscais</span>
+                </button>
+            </nav>
+
+            <div class="config-help-card">
+                <span class="config-help-icon" aria-hidden="true">?</span>
+                <div>
+                    <strong>Precisa de ajuda?</strong>
+                    <small>Acesse nossa central de ajuda em etapa futura.</small>
                 </div>
-                <div style="padding: 20px;">
-                    <p class="config-intro">
-                        Ajustes gerais do sistema, preferências de uso e parâmetros globais.
-                        Os módulos operacionais e cadastros ficam disponíveis na navegação lateral.
-                    </p>
+            </div>
+        </aside>
 
-                    <section class="config-profiles-section" id="perfis-financeiros">
-                        <div class="config-profiles-header">
-                            <div>
-                                <h3>Perfis Financeiros</h3>
-                                <p>Configure os contextos financeiros usados no sistema, como pessoal, empresa ou outros.</p>
-                            </div>
-                            <button type="button" class="config-profile-primary" id="config-profile-new">+ Novo perfil financeiro</button>
+        <main class="config-main">
+            <section class="config-panel active" id="config-section-perfis-financeiros" data-config-section="perfis-financeiros">
+                <header class="config-panel-header">
+                    <div>
+                        <h2>Perfis Financeiros</h2>
+                        <p>Crie e gerencie perfis financeiros independentes. Altere o contexto a qualquer momento pelo seletor no topo.</p>
+                    </div>
+                    <button type="button" class="config-secondary-action" id="config-profile-manage" data-config-placeholder="Gerenciar perfis">
+                        <span aria-hidden="true">☷</span>
+                        Gerenciar perfis
+                    </button>
+                </header>
+
+                <div class="config-alert" id="config-profile-alert" hidden></div>
+                <div class="config-profile-grid" id="config-profiles-list">
+                    <div class="config-empty-state">Carregando perfis financeiros...</div>
+                </div>
+
+                <section class="config-form-card" aria-labelledby="config-profile-form-title">
+                    <header>
+                        <h3 id="config-profile-form-title">Configuração do Perfil Financeiro</h3>
+                    </header>
+                    <form id="config-profile-form" class="config-profile-form">
+                        <input type="hidden" id="config-profile-id">
+                        <label>
+                            <span>Nome do perfil</span>
+                            <input type="text" id="config-profile-nome" required maxlength="120" placeholder="Pessoal">
+                        </label>
+                        <label>
+                            <span>Tipo de perfil</span>
+                            <select id="config-profile-tipo">
+                                <option value="PESSOAL">Pessoal</option>
+                                <option value="EMPRESA">Empresa</option>
+                                <option value="OUTRO">Outro</option>
+                            </select>
+                        </label>
+                        <label>
+                            <span>Apelido de exibição</span>
+                            <input type="text" id="config-profile-avatar" maxlength="20" placeholder="PE">
+                        </label>
+                        <label>
+                            <span>Documento</span>
+                            <input type="text" id="config-profile-documento" maxlength="32" placeholder="CPF, CNPJ ou identificador">
+                        </label>
+                        <label>
+                            <span>Cor do perfil</span>
+                            <input type="color" id="config-profile-cor" value="#2563eb">
+                        </label>
+                        <label class="config-toggle-field">
+                            <input type="checkbox" id="config-profile-ativo">
+                            <span>
+                                <strong>Perfil ativo</strong>
+                                <small>Exibe este perfil no seletor global.</small>
+                            </span>
+                        </label>
+                        <label class="config-toggle-field">
+                            <input type="checkbox" id="config-profile-padrao">
+                            <span>
+                                <strong>Perfil padrão</strong>
+                                <small>Usado quando não houver sessão ativa.</small>
+                            </span>
+                        </label>
+                    </form>
+
+                    <div class="config-behavior-box">
+                        <h4>Comportamento deste perfil</h4>
+                        <div class="config-behavior-grid">
+                            <label class="config-check-card">
+                                <input type="checkbox" id="config-profile-irpf" disabled>
+                                <span><strong>Exibir módulo Imposto de Renda</strong><small>Habilita o fluxo de IRPF para perfil pessoal.</small></span>
+                            </label>
+                            <label class="config-check-card">
+                                <input type="checkbox" id="config-profile-docs" disabled>
+                                <span><strong>Usar Documentos Fiscais e Lastro</strong><small>Exibe documentos fiscais em perfis empresariais.</small></span>
+                            </label>
+                            <label class="config-check-card">
+                                <input type="checkbox" id="config-profile-topbar" disabled checked>
+                                <span><strong>Exibir no seletor global</strong><small>Controlado pelo status ativo do perfil.</small></span>
+                            </label>
+                            <label class="config-check-card">
+                                <input type="checkbox" id="config-profile-switch" disabled checked>
+                                <span><strong>Permitir alternância rápida na topbar</strong><small>Troca de contexto sem logout.</small></span>
+                            </label>
                         </div>
-                        <div class="config-profile-alert" id="config-profile-alert" hidden></div>
-                        <div class="config-profiles-list" id="config-profiles-list">
-                            <div class="config-profile-empty">Carregando perfis financeiros...</div>
-                        </div>
-                    </section>
+                    </div>
 
-                    <div class="config-grid">
-                        <a href="/preferencias" class="config-card">
-                            <div class="config-title">Preferências do Sistema</div>
-                            <div class="config-description">
-                                Personalize aparência, comportamento, backup e preferências gerais da aplicação.
-                            </div>
-                        </a>
+                    <div class="config-form-actions">
+                        <button type="button" class="config-secondary-action" id="config-profile-new">Novo perfil</button>
+                        <button type="button" class="config-secondary-action" id="config-profile-duplicate" data-config-placeholder="Duplicar perfil">Duplicar perfil</button>
+                        <span class="config-form-spacer"></span>
+                        <button type="button" class="config-secondary-action" id="config-profile-use">Usar este perfil</button>
+                        <button type="button" class="config-secondary-action" id="config-profile-cancel">Cancelar alterações</button>
+                        <button type="button" class="config-primary-action" id="config-profile-save">Salvar configurações</button>
+                    </div>
+                </section>
+            </section>
 
-                        <a href="/recorrencias" class="config-card">
-                            <div class="config-title">Recorrencias e Obrigacoes</div>
-                            <div class="config-description">
-                                Cadastre despesas recorrentes, diaristas, parcelas fixas e consorcios.
-                            </div>
-                        </a>
-
-                        <div class="config-card planned" aria-label="Outras configurações planejadas">
-                            <div class="config-title">Outras configurações</div>
-                            <div class="config-description">
-                                Novos parâmetros sistêmicos serão adicionados aqui conforme o sistema evoluir.
-                            </div>
-                        </div>
+            <section class="config-panel" id="config-section-preferencias-gerais" data-config-section="preferencias-gerais">
+                <header class="config-panel-header">
+                    <div>
+                        <h2>Preferências Gerais</h2>
+                        <p>Preferências globais preservadas da tela antiga. Elas ainda não são específicas por perfil.</p>
+                    </div>
+                </header>
+                <div class="config-form-card">
+                    <h3>Dados principais</h3>
+                    <form class="config-preferences-form">
+                        <label>
+                            <span>Nome do usuário</span>
+                            <input type="text" id="nome_usuario" placeholder="Digite seu nome">
+                        </label>
+                        <label>
+                            <span>Renda principal mensal</span>
+                            <input type="number" id="renda_principal" step="0.01" min="0" placeholder="0,00">
+                        </label>
+                        <label>
+                            <span>Mês de início do planejamento</span>
+                            <select id="mes_inicio_planejamento">
+                                <option value="1">Janeiro</option>
+                                <option value="2">Fevereiro</option>
+                                <option value="3">Março</option>
+                                <option value="4">Abril</option>
+                                <option value="5">Maio</option>
+                                <option value="6">Junho</option>
+                                <option value="7">Julho</option>
+                                <option value="8">Agosto</option>
+                                <option value="9">Setembro</option>
+                                <option value="10">Outubro</option>
+                                <option value="11">Novembro</option>
+                                <option value="12">Dezembro</option>
+                            </select>
+                        </label>
+                        <label>
+                            <span>Dia de fechamento do mês</span>
+                            <input type="number" id="dia_fechamento_mes" min="1" max="31" placeholder="1">
+                            <small>Dia usado para gerar relatórios mensais.</small>
+                        </label>
+                    </form>
+                    <div class="config-form-actions">
+                        <span class="config-form-spacer"></span>
+                        <button type="button" class="config-primary-action" id="config-preferences-save">Salvar preferências gerais</button>
                     </div>
                 </div>
             </section>
-        </main>
-    </div>
 
-    <div class="config-profile-modal" id="config-profile-modal" aria-hidden="true">
-        <div class="config-profile-dialog" role="dialog" aria-modal="true" aria-labelledby="config-profile-title">
-            <div class="config-profile-modal-header">
-                <div>
-                    <h3 id="config-profile-title">Novo perfil financeiro</h3>
-                    <p>Os dados vinculados ao perfil serao preservados mesmo se ele for inativado.</p>
+            <section class="config-panel" id="config-section-aparencia" data-config-section="aparencia">
+                <header class="config-panel-header">
+                    <div>
+                        <h2>Aparência</h2>
+                        <p>Ajustes visuais globais preservados da tela antiga.</p>
+                    </div>
+                </header>
+                <div class="config-form-card">
+                    <form class="config-preferences-form">
+                        <fieldset class="config-radio-group">
+                            <legend>Tema do sistema</legend>
+                            <label><input type="radio" name="tema_sistema" value="claro"> Tema claro</label>
+                            <label><input type="radio" name="tema_sistema" value="escuro"> Tema escuro</label>
+                            <label><input type="radio" name="tema_sistema" value="auto"> Automático</label>
+                        </fieldset>
+                        <label>
+                            <span>Cor principal</span>
+                            <input type="color" id="cor_principal" value="#3b82f6">
+                            <small id="cor_preview">#3b82f6</small>
+                        </label>
+                        <label class="config-toggle-field"><input type="checkbox" id="mostrar_icones_coloridos"><span><strong>Ícones coloridos</strong><small>Usado em contas e categorias quando disponível.</small></span></label>
+                        <label class="config-toggle-field"><input type="checkbox" id="abreviar_valores"><span><strong>Abreviar valores grandes</strong><small>Exemplo: R$ 1,2k.</small></span></label>
+                    </form>
+                    <div class="config-form-actions">
+                        <span class="config-form-spacer"></span>
+                        <button type="button" class="config-primary-action" data-preferences-save="aparencia">Salvar aparência</button>
+                    </div>
                 </div>
-                <button type="button" id="config-profile-close" aria-label="Fechar">&times;</button>
-            </div>
-            <form class="config-profile-form" id="config-profile-form">
-                <input type="hidden" id="config-profile-id">
-                <label>Nome<input type="text" id="config-profile-nome" required maxlength="120"></label>
-                <label>Tipo
-                    <select id="config-profile-tipo">
-                        <option value="PESSOAL">Pessoal</option>
-                        <option value="EMPRESA">Empresa</option>
-                        <option value="OUTRO">Outro</option>
-                    </select>
-                </label>
-                <label>Documento<input type="text" id="config-profile-documento" maxlength="32" placeholder="CPF, CNPJ ou identificador"></label>
-                <label>Cor<input type="color" id="config-profile-cor" value="#2563eb"></label>
-                <label>Avatar<input type="text" id="config-profile-avatar" maxlength="20" placeholder="Ex: PE"></label>
-                <label class="config-profile-check"><input type="checkbox" id="config-profile-ativo"> Perfil ativo</label>
-            </form>
-            <div class="config-profile-modal-footer">
-                <button type="button" class="config-profile-secondary" id="config-profile-cancel">Cancelar</button>
-                <button type="button" class="config-profile-primary" id="config-profile-save">Salvar perfil</button>
-            </div>
-        </div>
+            </section>
+
+            <section class="config-panel" id="config-section-comportamento" data-config-section="comportamento">
+                <header class="config-panel-header">
+                    <div>
+                        <h2>Comportamento</h2>
+                        <p>Preferências operacionais globais. O escopo por perfil fica para uma etapa futura.</p>
+                    </div>
+                </header>
+                <div class="config-form-card">
+                    <div class="config-behavior-grid">
+                        <label class="config-check-card"><input type="checkbox" id="ajustar_competencia_automatico"><span><strong>Ajustar competência automaticamente</strong><small>Ao registrar pagamento.</small></span></label>
+                        <label class="config-check-card"><input type="checkbox" id="exibir_aviso_despesa_vencida"><span><strong>Aviso de despesa vencida</strong><small>Mostra confirmação ao pagar despesa vencida.</small></span></label>
+                        <label class="config-check-card"><input type="checkbox" id="solicitar_confirmacao_exclusao"><span><strong>Confirmar exclusões</strong><small>Solicita confirmação em ações sensíveis.</small></span></label>
+                        <label class="config-check-card"><input type="checkbox" id="vincular_pagamento_cartao_auto"><span><strong>Vincular pagamento de cartão</strong><small>Automação preservada como preferência global.</small></span></label>
+                    </div>
+                    <div class="config-form-actions">
+                        <span class="config-form-spacer"></span>
+                        <button type="button" class="config-primary-action" data-preferences-save="comportamento">Salvar comportamento</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="config-panel" id="config-section-backup" data-config-section="backup">
+                <header class="config-panel-header">
+                    <div>
+                        <h2>Backup</h2>
+                        <p>Preparação visual para importação/exportação de configurações e orientação de backup.</p>
+                    </div>
+                </header>
+                <div class="config-placeholder-grid">
+                    <article class="config-placeholder-card"><strong>Exportar configurações</strong><span>Em breve</span></article>
+                    <article class="config-placeholder-card"><strong>Importar configurações</strong><span>Em breve</span></article>
+                    <article class="config-placeholder-card"><strong>Backup do PostgreSQL</strong><span>Planejado como rotina operacional.</span></article>
+                </div>
+            </section>
+
+            <section class="config-panel" id="config-section-ia-automacao" data-config-section="ia-automacao">
+                <header class="config-panel-header">
+                    <div>
+                        <h2>IA e Automação</h2>
+                        <p>Centraliza as preferências de automação já existentes e futuras sugestões inteligentes.</p>
+                    </div>
+                </header>
+                <div class="config-form-card">
+                    <div class="config-behavior-grid">
+                        <label class="config-check-card"><input type="checkbox" id="modo_inteligente_ativo"><span><strong>Modo inteligente</strong><small>Base para recursos futuros.</small></span></label>
+                        <label class="config-check-card"><input type="checkbox" id="sugestoes_economia"><span><strong>Sugestões de economia</strong><small>Planejado.</small></span></label>
+                        <label class="config-check-card"><input type="checkbox" id="classificacao_automatica"><span><strong>Classificação automática</strong><small>Usa palavras-chave e regras existentes.</small></span></label>
+                        <label class="config-check-card"><input type="checkbox" id="correcao_categorias"><span><strong>Correção de categorias</strong><small>Planejado.</small></span></label>
+                    </div>
+                    <div class="config-form-actions">
+                        <span class="config-form-spacer"></span>
+                        <button type="button" class="config-primary-action" data-preferences-save="ia">Salvar IA e automação</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="config-panel" id="config-section-documentos-fiscais" data-config-section="documentos-fiscais">
+                <header class="config-panel-header">
+                    <div>
+                        <h2>Documentos Fiscais</h2>
+                        <p>Resumo conceitual do comportamento fiscal por perfil. Regras de lastro não foram alteradas.</p>
+                    </div>
+                </header>
+                <div class="config-placeholder-grid">
+                    <article class="config-placeholder-card"><strong>Perfil pessoal</strong><span>Usa Imposto de Renda e comprovantes potencialmente dedutíveis.</span></article>
+                    <article class="config-placeholder-card"><strong>Perfil empresa</strong><span>Usa Documentos Fiscais e Lastro Empresarial.</span></article>
+                    <article class="config-placeholder-card"><strong>Contador</strong><span>Classificações seguem sujeitas a revisão fiscal/contábil.</span></article>
+                </div>
+            </section>
+        </main>
+
+        <aside class="config-context-panel" id="config-context-panel" aria-label="Ajuda contextual">
+            <header>
+                <span class="config-context-icon" aria-hidden="true">i</span>
+                <h2 id="config-help-title">Como funciona o contexto financeiro</h2>
+            </header>
+            <div id="config-help-content"></div>
+        </aside>
     </div>
 {% endblock %}
 

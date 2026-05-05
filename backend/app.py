@@ -7,7 +7,7 @@ import os
 import sys
 import logging
 from pathlib import Path
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, redirect, render_template
 from flask_cors import CORS
 from flask_migrate import Migrate
 from dotenv import load_dotenv
@@ -165,7 +165,7 @@ def create_app(config_name=None):
     @app.route('/configuracoes')
     def configuracoes():
         """Página de configurações do sistema"""
-        return render_template('configuracoes.html', active_page='configuracoes', page_title='Configurações')
+        return render_template('configuracoes.html', active_page='configuracoes', page_title='Configurações e Preferências')
 
     @app.route('/contas-bancarias')
     def contas_bancarias():
@@ -180,7 +180,7 @@ def create_app(config_name=None):
     @app.route('/preferencias')
     def preferencias():
         """Página de preferências e configurações gerais"""
-        return render_template('preferencias.html', active_page='preferencias', page_title='Preferências')
+        return redirect('/configuracoes#preferencias-gerais')
 
     @app.route('/importar-cartao')
     def importar_cartao():

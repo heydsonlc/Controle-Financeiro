@@ -1,88 +1,286 @@
-.config-profiles-section {
-    margin-top: 24px;
-    background: #fff;
-    border: 1px solid #dde3ec;
+.config-actionbar .module-actionbar-inner {
+    align-items: center;
+    gap: 16px;
+}
+
+.config-actionbar-message {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 260px;
+    color: #334155;
+    font-size: 0.92rem;
+}
+
+.config-actionbar-icon,
+.config-context-icon,
+.config-help-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 auto;
+    color: #2563eb;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    font-weight: 900;
+    font-size: 0.82rem;
+}
+
+.config-actionbar-actions {
+    flex-wrap: wrap;
+}
+
+.config-shell {
+    display: grid;
+    grid-template-columns: 300px minmax(0, 1fr) 340px;
+    gap: 16px;
+    align-items: start;
+}
+
+.config-sidebar,
+.config-main,
+.config-context-panel {
+    min-width: 0;
+}
+
+.config-sidebar,
+.config-context-panel,
+.config-panel,
+.config-form-card,
+.config-placeholder-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
     border-radius: 12px;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+}
+
+.config-sidebar {
+    position: sticky;
+    top: 92px;
+    padding: 16px;
+}
+
+.config-section-nav {
+    display: grid;
+    gap: 8px;
+}
+
+.config-section-link {
+    width: 100%;
+    min-height: 52px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border: 0;
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: transparent;
+    color: #1f2937;
+    font-weight: 800;
+    text-align: left;
+    cursor: pointer;
+}
+
+.config-section-link:hover {
+    background: #f1f5f9;
+}
+
+.config-section-link.active {
+    background: #eff6ff;
+    color: #1d4ed8;
+    box-shadow: inset 3px 0 0 #2563eb;
+}
+
+.config-section-icon,
+.config-secondary-action span {
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+}
+
+.config-section-icon svg,
+.config-actionbar svg {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.config-help-card {
+    display: flex;
+    gap: 12px;
+    margin-top: 28px;
+    padding: 14px;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #f8fafc;
+}
+
+.config-help-card strong,
+.config-help-card small {
+    display: block;
+}
+
+.config-help-card small {
+    margin-top: 4px;
+    color: #64748b;
+}
+
+.config-main {
+    display: grid;
+    gap: 16px;
+}
+
+.config-panel {
+    display: none;
     overflow: hidden;
 }
 
-.config-profiles-header {
+.config-panel.active {
+    display: block;
+}
+
+.config-panel-header,
+.config-form-card > header,
+.config-context-panel header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 16px;
     padding: 18px 20px;
-    border-bottom: 1px solid #e5eaf2;
+    border-bottom: 1px solid #e2e8f0;
 }
 
-.config-profiles-header h3 {
+.config-panel-header h2,
+.config-form-card h3,
+.config-context-panel h2 {
     margin: 0;
+    color: #0f172a;
+}
+
+.config-panel-header h2,
+.config-context-panel h2 {
     font-size: 1.05rem;
 }
 
-.config-profiles-header p {
-    margin: 4px 0 0;
+.config-panel-header p {
+    margin: 6px 0 0;
     color: #64748b;
-    font-size: 0.88rem;
+    font-size: 0.9rem;
+    line-height: 1.45;
 }
 
-.config-profiles-list {
+.config-alert {
+    margin: 14px 20px 0;
+    padding: 10px 12px;
+    border: 1px solid #fed7aa;
+    border-radius: 10px;
+    background: #fff7ed;
+    color: #9a3412;
+    font-weight: 800;
+}
+
+.config-profile-grid {
     display: grid;
-    gap: 10px;
-    padding: 16px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    padding: 20px;
 }
 
-.config-profile-card {
+.config-profile-card,
+.config-profile-new-card {
+    min-height: 118px;
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
-    gap: 14px;
     align-items: center;
-    padding: 14px;
-    border: 1px solid #e2e8f0;
+    gap: 14px;
+    padding: 16px;
+    border: 1px solid #dbe3ef;
     border-radius: 12px;
-    background: #f8fafc;
+    background: #ffffff;
+    cursor: pointer;
+    text-align: left;
 }
 
-.config-profile-avatar {
+.config-profile-card.active {
+    border-color: #93c5fd;
+    box-shadow: inset 0 0 0 1px #93c5fd;
+}
+
+.config-profile-new-card {
+    border-style: dashed;
+    color: #334155;
+}
+
+.config-profile-avatar,
+.config-profile-plus {
     --profile-color: #2563eb;
-    width: 44px;
-    height: 44px;
-    border-radius: 14px;
+    width: 50px;
+    height: 50px;
     display: grid;
     place-items: center;
+    border-radius: 14px;
     color: var(--profile-color);
-    background: color-mix(in srgb, var(--profile-color) 14%, #fff);
+    background: color-mix(in srgb, var(--profile-color) 16%, #fff);
     border: 1px solid color-mix(in srgb, var(--profile-color) 28%, #dbe3ef);
     font-weight: 900;
+    font-size: 1.05rem;
+}
+
+.config-profile-plus {
+    --profile-color: #64748b;
+    font-size: 1.7rem;
+    font-weight: 500;
+}
+
+.config-profile-main strong,
+.config-profile-main small,
+.config-profile-main span {
+    display: block;
 }
 
 .config-profile-main strong {
-    display: block;
+    color: #0f172a;
     font-size: 0.98rem;
 }
 
-.config-profile-main small {
+.config-profile-main small,
+.config-profile-main span {
+    margin-top: 4px;
     color: #64748b;
+    font-size: 0.82rem;
+    line-height: 1.35;
 }
 
-.config-profile-badges,
-.config-profile-actions {
+.config-profile-badges {
     display: flex;
-    gap: 8px;
+    gap: 6px;
     flex-wrap: wrap;
-    justify-content: flex-end;
+    margin-top: 10px;
 }
 
 .config-profile-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     border-radius: 999px;
     padding: 4px 8px;
     background: #e2e8f0;
     color: #334155;
-    font-size: 0.75rem;
-    font-weight: 800;
+    font-size: 0.72rem;
+    font-weight: 900;
 }
 
-.config-profile-badge.active {
+.config-profile-badge.active,
+.config-profile-badge.available {
     background: #dcfce7;
     color: #166534;
 }
@@ -92,152 +290,283 @@
     color: #991b1b;
 }
 
-.config-profile-badge.default {
+.config-profile-badge.default,
+.config-profile-badge.current {
     background: #dbeafe;
     color: #1d4ed8;
 }
 
-.config-profile-primary,
-.config-profile-secondary,
-.config-profile-action {
-    border: 1px solid #d8e0ec;
-    border-radius: 10px;
-    padding: 9px 12px;
-    background: #fff;
-    font-weight: 800;
-    cursor: pointer;
-}
-
-.config-profile-primary {
-    background: #2563eb;
-    border-color: #2563eb;
-    color: #fff;
-}
-
-.config-profile-action.danger {
-    color: #b91c1c;
-    border-color: #fecaca;
-}
-
-.config-profile-action.success {
-    color: #047857;
-    border-color: #bbf7d0;
-}
-
-.config-profile-alert {
-    margin: 12px 16px 0;
-    padding: 10px 12px;
-    border: 1px solid #fed7aa;
-    border-radius: 10px;
-    background: #fff7ed;
-    color: #9a3412;
-    font-weight: 700;
-}
-
-.config-profile-empty {
-    padding: 20px;
-    color: #64748b;
-    text-align: center;
-}
-
-.config-profile-modal {
-    position: fixed;
-    inset: 0;
-    z-index: 80;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
-    background: rgba(15, 23, 42, 0.35);
-}
-
-.config-profile-modal.open {
-    display: flex;
-}
-
-.config-profile-dialog {
-    width: min(720px, 100%);
-    background: #fff;
-    border-radius: 16px;
-    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+.config-form-card {
+    margin: 0 20px 20px;
     overflow: hidden;
 }
 
-.config-profile-modal-header,
-.config-profile-modal-footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 16px 18px;
-    border-bottom: 1px solid #e2e8f0;
-}
-
-.config-profile-modal-footer {
-    border-top: 1px solid #e2e8f0;
-    border-bottom: 0;
-    justify-content: flex-end;
-}
-
-.config-profile-modal-header h3,
-.config-profile-modal-header p {
-    margin: 0;
-}
-
-.config-profile-modal-header p {
-    margin-top: 4px;
-    color: #64748b;
-    font-size: 0.85rem;
-}
-
-#config-profile-close {
-    width: 34px;
-    height: 34px;
-    border: 1px solid #d8e0ec;
-    border-radius: 999px;
-    background: #fff;
-    cursor: pointer;
-}
-
-.config-profile-form {
+.config-profile-form,
+.config-preferences-form {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px;
-    padding: 18px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+    padding: 18px 20px;
 }
 
-.config-profile-form label {
+.config-profile-form label,
+.config-preferences-form label {
     display: grid;
-    gap: 6px;
+    gap: 7px;
+    color: #0f172a;
     font-size: 0.82rem;
     font-weight: 800;
 }
 
 .config-profile-form input,
-.config-profile-form select {
-    min-height: 38px;
+.config-profile-form select,
+.config-preferences-form input,
+.config-preferences-form select {
+    min-height: 40px;
+    width: 100%;
     border: 1px solid #cfd8e6;
     border-radius: 10px;
     padding: 8px 10px;
+    background: #ffffff;
+    color: #0f172a;
 }
 
-.config-profile-check {
-    align-content: end;
+.config-profile-form small,
+.config-preferences-form small {
+    color: #64748b;
+    font-weight: 500;
 }
 
-.config-profile-check input {
-    min-height: auto;
-    margin-right: 8px;
+.config-toggle-field,
+.config-check-card {
+    display: flex !important;
+    grid-template-columns: none !important;
+    align-items: flex-start;
+    gap: 10px !important;
 }
 
-@media (max-width: 760px) {
-    .config-profiles-header,
-    .config-profile-card {
-        grid-template-columns: 1fr;
-        display: grid;
+.config-toggle-field input,
+.config-check-card input {
+    width: 18px;
+    height: 18px;
+    min-height: 18px;
+    margin-top: 2px;
+    accent-color: #2563eb;
+}
+
+.config-toggle-field strong,
+.config-toggle-field small,
+.config-check-card strong,
+.config-check-card small {
+    display: block;
+}
+
+.config-behavior-box {
+    margin: 0 20px 18px;
+    padding: 16px;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+}
+
+.config-behavior-box h4 {
+    margin: 0 0 12px;
+}
+
+.config-behavior-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.config-check-card {
+    padding: 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #f8fafc;
+}
+
+.config-form-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 16px 20px;
+    border-top: 1px solid #e2e8f0;
+}
+
+.config-form-spacer {
+    flex: 1;
+}
+
+.config-primary-action,
+.config-secondary-action {
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.config-primary-action {
+    border: 1px solid #2563eb;
+    background: #2563eb;
+    color: #ffffff;
+}
+
+.config-secondary-action {
+    border: 1px solid #d8e0ec;
+    background: #ffffff;
+    color: #0f172a;
+}
+
+.config-radio-group {
+    display: grid;
+    gap: 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 12px;
+}
+
+.config-radio-group legend {
+    padding: 0 4px;
+    font-weight: 900;
+}
+
+.config-placeholder-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    padding: 20px;
+}
+
+.config-placeholder-card {
+    padding: 16px;
+}
+
+.config-placeholder-card strong,
+.config-placeholder-card span {
+    display: block;
+}
+
+.config-placeholder-card span {
+    margin-top: 8px;
+    color: #64748b;
+    line-height: 1.45;
+}
+
+.config-empty-state {
+    grid-column: 1 / -1;
+    padding: 24px;
+    border: 1px dashed #cbd5e1;
+    border-radius: 12px;
+    color: #64748b;
+    text-align: center;
+}
+
+.config-context-panel {
+    position: sticky;
+    top: 92px;
+    overflow: hidden;
+}
+
+.config-context-panel header {
+    justify-content: flex-start;
+}
+
+.config-context-panel h2 {
+    font-size: 0.98rem;
+}
+
+.config-help-list {
+    display: grid;
+    gap: 18px;
+    padding: 18px 20px;
+}
+
+.config-help-item {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 12px;
+}
+
+.config-help-item strong,
+.config-help-item span {
+    display: block;
+}
+
+.config-help-item span {
+    margin-top: 4px;
+    color: #475569;
+    line-height: 1.45;
+}
+
+.config-help-marker {
+    width: 26px;
+    height: 26px;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    background: #eff6ff;
+    color: #2563eb;
+    font-weight: 900;
+}
+
+@media (max-width: 1280px) {
+    .config-shell {
+        grid-template-columns: 260px minmax(0, 1fr);
     }
 
-    .config-profile-form {
+    .config-context-panel {
+        grid-column: 1 / -1;
+        position: static;
+    }
+
+    .config-profile-grid,
+    .config-placeholder-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 900px) {
+    .config-shell {
         grid-template-columns: 1fr;
+    }
+
+    .config-sidebar {
+        position: static;
+    }
+
+    .config-section-nav {
+        display: flex;
+        overflow-x: auto;
+        padding-bottom: 4px;
+    }
+
+    .config-section-link {
+        min-width: max-content;
+    }
+
+    .config-profile-form,
+    .config-preferences-form,
+    .config-behavior-grid,
+    .config-profile-grid,
+    .config-placeholder-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .config-profile-card,
+    .config-profile-new-card {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .config-form-actions {
+        flex-wrap: wrap;
+    }
+
+    .config-form-spacer {
+        display: none;
     }
 }
