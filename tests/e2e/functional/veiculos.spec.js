@@ -4,6 +4,21 @@ const { skipUnlessTestingEnvironment } = require('../helpers/api');
 const { makeVeiculoNome } = require('../helpers/test-data');
 const { assertModalAberto, assertTextoVisivel } = require('../helpers/assertions');
 
+async function garantirCategoriaMobilidade(request) {
+  const response = await request.get('/api/categorias');
+  const body = await response.json();
+  const existe = (body.data || []).some((categoria) => categoria.nome === 'Mobilidade');
+  if (!existe) {
+    await request.post('/api/categorias', {
+      data: {
+        nome: 'Mobilidade',
+        descricao: 'Categoria padrao para testes de mobilidade',
+        cor: '#2563eb'
+      }
+    });
+  }
+}
+
 test.describe('Veiculos - fluxo funcional', () => {
 
   test('[safe] abre modal Novo Veiculo ao clicar no botao', async ({ page }) => {
@@ -24,6 +39,7 @@ test.describe('Veiculos - fluxo funcional', () => {
 
   test('[create] cria novo veiculo simulado e confirma aparece na lista', async ({ page, request }) => {
     await skipUnlessTestingEnvironment(test, request, 'TEST-2B');
+    await garantirCategoriaMobilidade(request);
 
     const consoleErrors = attachConsoleErrorTracking(page, '/veiculos');
     const nome = makeVeiculoNome();

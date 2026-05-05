@@ -20,7 +20,16 @@ async function assertModalAberto(page, selector) {
  * @param {string} texto
  */
 async function assertTextoVisivel(page, texto) {
-  await expect(page.getByText(texto, { exact: false })).toBeVisible({ timeout: 5000 });
+  const matches = page.getByText(texto, { exact: false });
+  await expect.poll(async () => {
+    const total = await matches.count();
+    for (let index = 0; index < total; index += 1) {
+      if (await matches.nth(index).isVisible().catch(() => false)) {
+        return true;
+      }
+    }
+    return false;
+  }, { timeout: 5000 }).toBe(true);
 }
 
 module.exports = { assertModalAberto, assertTextoVisivel };

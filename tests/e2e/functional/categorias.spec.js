@@ -11,7 +11,7 @@ test.describe('Categorias — fluxo funcional', () => {
     await page.goto('/categorias', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle').catch(() => {});
 
-    await page.locator('#btn-nova-categoria').click();
+    await page.locator('#btn-nova-categoria-despesa').click();
 
     await assertModalAberto(page, '#modal-categoria');
     await expect(page.locator('#nome')).toBeVisible();
@@ -29,7 +29,7 @@ test.describe('Categorias — fluxo funcional', () => {
     await page.goto('/categorias', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle').catch(() => {});
 
-    await page.locator('#btn-nova-categoria').click();
+    await page.locator('#btn-nova-categoria-despesa').click();
     await assertModalAberto(page, '#modal-categoria');
 
     await page.locator('#nome').fill(nome);

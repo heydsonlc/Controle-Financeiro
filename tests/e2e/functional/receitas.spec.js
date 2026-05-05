@@ -20,7 +20,7 @@ test.describe('Receitas — fluxo funcional (Fonte)', () => {
     consoleErrors.assertNoCriticalErrors();
   });
 
-  test('[create] cria nova fonte de receita (não-recorrente) e confirma aparece na lista', async ({ page, request }) => {
+  test('[create] cria nova fonte de receita recorrente e confirma aparece na lista', async ({ page, request }) => {
     await skipUnlessTestingEnvironment(test, request, 'TEST-2A');
 
     const consoleErrors = attachConsoleErrorTracking(page, '/receitas');
@@ -34,12 +34,8 @@ test.describe('Receitas — fluxo funcional (Fonte)', () => {
 
     await page.locator('#fonte-nome').fill(nome);
     await page.locator('#fonte-tipo').selectOption('RENDA_EXTRA');
-
-    // #fonte-recorrente vem checked por padrão — desmarcar para não gerar orçamentos automáticos
-    const recorrente = page.locator('#fonte-recorrente');
-    if (await recorrente.isChecked()) {
-      await recorrente.uncheck();
-    }
+    await page.locator('#fonte-valor-base').fill('500,00');
+    await page.locator('#fonte-dia-pagamento').selectOption('5');
 
     page.on('dialog', async (dialog) => {
       await dialog.accept();
