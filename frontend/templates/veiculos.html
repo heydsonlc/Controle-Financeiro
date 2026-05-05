@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Veículos e Mobilidade - Controle Financeiro{% endblock %}
+{% block title %}Mobilidade - Controle Financeiro{% endblock %}
 
 {% block extra_css %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/veiculos.css') }}">
@@ -9,13 +9,22 @@
 {% block action_bar %}
     <div class="module-actionbar" aria-label="Ações de Mobilidade">
         <div class="module-actionbar-actions">
-            <button class="action-icon-button primary" type="button" onclick="abrirModalNovo()" title="Novo Veículo" aria-label="Novo Veículo">
+            <button class="action-icon-button primary" type="button" onclick="abrirModalNovo()" title="Novo veículo próprio" aria-label="Novo veículo próprio">
                 <span class="action-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M12 5v14M5 12h14"/>
                     </svg>
                 </span>
-                <span class="action-button-label">Novo Veículo</span>
+                <span class="action-button-label">Novo veículo próprio</span>
+            </button>
+            <button class="action-icon-button secondary" type="button" onclick="abrirModalAssinaturaNovo()" title="Carro por assinatura" aria-label="Carro por assinatura">
+                <span class="action-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 16h16M6 16l2-7h8l2 7M9 9V6h6v3M8 19h.1M16 19h.1"/>
+                        <path d="M6 5h12M18 5v4"/>
+                    </svg>
+                </span>
+                <span class="action-button-label">Assinatura</span>
             </button>
             <button class="action-icon-button secondary" type="button" onclick="abrirModalAppNovo()" title="Transporte por App" aria-label="Transporte por App">
                 <span class="action-icon" aria-hidden="true">
@@ -66,12 +75,24 @@
             <!-- Barra de filtros -->
             <div class="comp-filtros-bar">
                 <div class="comp-filtro-grupo">
+                    <span class="comp-filtro-label">Tipo de comparação</span>
+                    <select id="comp-tipo" class="mob-select-sm" onchange="renderizarComparacao()">
+                        <option value="todos" selected>Todas as opções</option>
+                        <option value="proprio_assinatura">Próprio x assinatura</option>
+                        <option value="proprio_app">Próprio x app/táxi</option>
+                    </select>
+                </div>
+                <div class="comp-filtro-grupo">
                     <span class="comp-filtro-label">Horizonte</span>
                     <select id="comp-horizonte" class="mob-select-sm" onchange="renderizarComparacao()">
                         <option value="12">12 meses</option>
                         <option value="24" selected>24 meses</option>
                         <option value="36">36 meses</option>
                     </select>
+                </div>
+                <div class="comp-filtro-grupo">
+                    <span class="comp-filtro-label">Uso mensal</span>
+                    <input id="comp-uso-mensal" class="mob-input-sm" type="number" min="0" step="50" value="1200" onchange="renderizarComparacao()">
                 </div>
                 <div class="comp-filtros-bar-sep"></div>
                 <button class="btn btn-primary btn-sm" onclick="renderizarComparacao()">
@@ -91,6 +112,9 @@
             <!-- Cards de comparação (ou estado vazio rico) -->
             <div id="comp-cards" class="comp-cards-grid"></div>
 
+            <!-- Detalhamento da opção selecionada -->
+            <div id="comp-detalhe-selecionado" class="comp-detalhe-selecionado" style="display:none;"></div>
+
             <!-- Tabela comparativa -->
             <div id="comp-tabela-wrap" class="comp-tabela-wrap" style="display:none;">
                 <h3 class="comp-tabela-titulo">Comparativo detalhado</h3>
@@ -108,7 +132,7 @@
 
             <div class="mob-bloco-header">
                 <div>
-                    <h2 class="mob-bloco-titulo">Cadastro de Modalidades de Mobilidade</h2>
+                    <h2 class="mob-bloco-titulo">Cadastro de Modalidades</h2>
                     <p class="mob-bloco-sub">Cadastre e configure seus cenários de veículo, assinatura e transporte por app.</p>
                 </div>
             </div>
@@ -121,6 +145,10 @@
                         <button class="conf-subtab active" id="conf-subtab-veiculo" onclick="ativarConfSubtab('veiculo')">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M7 17l2.5-8h5L17 17M9 13h6"/><circle cx="8" cy="19" r="1"/><circle cx="16" cy="19" r="1"/></svg>
                             Veículo Próprio
+                        </button>
+                        <button class="conf-subtab" id="conf-subtab-assinatura" onclick="ativarConfSubtab('assinatura')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16h16M6 16l2-7h8l2 7M9 9V6h6v3"/><circle cx="8" cy="19" r="1"/><circle cx="16" cy="19" r="1"/></svg>
+                            Carro por Assinatura
                         </button>
                         <button class="conf-subtab" id="conf-subtab-app" onclick="ativarConfSubtab('app')">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
@@ -144,6 +172,27 @@
                                 </button>
                             </div>
                             <div id="conf-veiculos-lista" class="conf-lista">
+                                <p class="loading">Carregando...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Painel Transporte por App -->
+                    <div id="conf-painel-assinatura" style="display:none;">
+                        <div class="conf-secao">
+                            <div class="conf-secao-header">
+                                <div class="conf-secao-titulo-wrap">
+                                    <span class="conf-secao-icone" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16h16M6 16l2-7h8l2 7M9 9V6h6v3"/><circle cx="8" cy="19" r="1"/><circle cx="16" cy="19" r="1"/></svg>
+                                    </span>
+                                    <h3 class="conf-secao-titulo">Carro por Assinatura</h3>
+                                </div>
+                                <button class="btn btn-primary btn-sm" type="button" onclick="abrirModalAssinaturaNovo()">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:13px;height:13px;margin-right:4px;"><path d="M12 5v14M5 12h14"/></svg>
+                                    Nova assinatura
+                                </button>
+                            </div>
+                            <div id="conf-assinaturas-lista" class="conf-lista">
                                 <p class="loading">Carregando...</p>
                             </div>
                         </div>
@@ -281,14 +330,15 @@
 <!-- MODAL — Confirmar DespesaPrevista (converter em Conta ou Cartão)  -->
 <!-- ================================================================ -->
 <div id="modal-confirmar-prevista" class="modal">
-    <div class="modal-content">
+    <div class="modal-content modal-confirmar-prevista">
         <div class="modal-header">
             <h2>Confirmar despesa prevista</h2>
             <span class="close" onclick="fecharModalConfirmar()">&times;</span>
         </div>
         <input type="hidden" id="confirmar-despesa-id">
-        <div id="confirmar-preview" class="confirmar-preview"></div>
-        <div class="form-grid" style="margin-top:14px;">
+        <div class="confirmar-modal-body">
+            <div id="confirmar-preview" class="confirmar-preview confirmar-preview-card"></div>
+        <div class="form-grid confirmar-form-grid">
             <div class="form-group span-2">
                 <label for="confirmar-meio">Meio de pagamento *</label>
                 <select id="confirmar-meio" required onchange="toggleConfirmarCartao()">
@@ -301,7 +351,7 @@
                 </select>
             </div>
             <div class="form-group span-2" id="wrap-confirmar-cartao" style="display:none;">
-                <label for="confirmar-cartao-id">Cartão *</label>
+                <label for="confirmar-cartao-id">Conta ou cartão *</label>
                 <select id="confirmar-cartao-id" onchange="carregarCategoriasCartaoConfirmacao(this.value)">
                     <option value="">Carregando cartões...</option>
                 </select>
@@ -320,6 +370,7 @@
                 <label for="confirmar-observacao">Observação (opcional)</label>
                 <input type="text" id="confirmar-observacao" placeholder="Ex: pago via app do banco">
             </div>
+        </div>
         </div>
         <div class="form-actions">
             <button type="button" class="btn btn-secondary" onclick="fecharModalConfirmar()">Cancelar</button>
@@ -625,6 +676,47 @@
                 <button type="button" class="btn btn-secondary" onclick="fecharModalApp()">Cancelar</button>
                 <button type="submit" class="btn btn-primary">Salvar simulação</button>
                 <button type="button" class="btn btn-danger" onclick="removerCaminhoApp()">Remover</button>
+            </div>
+        </form>
+    </div>
+</div>
+<!-- ================================================================ -->
+<!-- MODAL — Carro por Assinatura                                     -->
+<!-- ================================================================ -->
+<div id="modal-assinatura" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="modal-assinatura-titulo">Carro por Assinatura</h2>
+            <span class="close" onclick="fecharModalAssinatura()">&times;</span>
+        </div>
+        <form id="form-assinatura" onsubmit="salvarAssinatura(event)">
+            <input type="hidden" id="assinatura-id">
+            <div class="form-grid">
+                <div class="form-group span-2">
+                    <label for="assinatura-nome">Nome *</label>
+                    <input type="text" id="assinatura-nome" required placeholder="Ex: SUV por assinatura">
+                </div>
+                <div class="form-group">
+                    <label for="assinatura-valor-mensal">Assinatura mensal *</label>
+                    <input type="number" step="0.01" min="0" id="assinatura-valor-mensal" required placeholder="Ex: 2190">
+                </div>
+                <div class="form-group">
+                    <label for="assinatura-status">Status</label>
+                    <select id="assinatura-status">
+                        <option value="ATIVO">ATIVO</option>
+                        <option value="INATIVO">INATIVO</option>
+                    </select>
+                </div>
+                <div class="form-group span-2">
+                    <label for="assinatura-categoria-id">Categoria de Despesa</label>
+                    <select id="assinatura-categoria-id">
+                        <option value="">— Padrão (Mobilidade) —</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="fecharModalAssinatura()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Salvar assinatura</button>
             </div>
         </form>
     </div>

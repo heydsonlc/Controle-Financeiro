@@ -204,7 +204,7 @@ def create_app(config_name=None):
 
     @app.route('/veiculos')
     def veiculos():
-        return render_template('veiculos.html', active_page='veiculos', page_title='Veículos')
+        return render_template('veiculos.html', active_page='veiculos', page_title='Mobilidade')
 
     @app.route('/health')
     def health():

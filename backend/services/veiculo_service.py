@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from dateutil.relativedelta import relativedelta
 
@@ -17,6 +17,7 @@ except ImportError:
 
 
 EVENTOS_MVP = ('COMBUSTIVEL', 'IPVA', 'SEGURO', 'LICENCIAMENTO')
+CENTAVOS = Decimal('0.01')
 
 
 def _primeiro_dia_mes(d: date) -> date:
@@ -30,6 +31,53 @@ def _to_decimal(value) -> Decimal | None:
         return Decimal(str(value))
     except Exception:
         return None
+
+
+def _money(value: Decimal) -> Decimal:
+    return value.quantize(CENTAVOS, rounding=ROUND_HALF_UP)
+
+
+def calcular_resumo_mensal_estimado_veiculo(veiculo: Veiculo) -> dict:
+    """
+    Calcula o custo mensal contratual/cadastral da modalidade veículo.
+
+    Este cálculo não depende da janela de DespesaPrevista: IPVA, seguro e
+    licenciamento são sempre diluídos por 12 para o resumo mensal da tela.
+    """
+    combustivel = _to_decimal(getattr(veiculo, 'combustivel_valor_mensal', None)) or Decimal('0')
+    ipva = _to_decimal(getattr(veiculo, 'ipva_valor', None)) or Decimal('0')
+    seguro = _to_decimal(getattr(veiculo, 'seguro_valor', None)) or Decimal('0')
+    licenciamento = _to_decimal(getattr(veiculo, 'licenciamento_valor', None)) or Decimal('0')
+
+    componentes = {
+        'combustivel_mensal': _money(combustivel),
+        'seguro_mensal_diluido': _money(seguro / Decimal('12')) if seguro else Decimal('0.00'),
+        'ipva_mensal_diluido': _money(ipva / Decimal('12')) if ipva else Decimal('0.00'),
+        'licenciamento_mensal_diluido': _money(licenciamento / Decimal('12')) if licenciamento else Decimal('0.00'),
+        'manutencao_mensal_media': Decimal('0.00'),
+        'assinatura_mensal': Decimal('0.00'),
+        'transporte_app_mensal': Decimal('0.00'),
+        'outros_custos_mensais': Decimal('0.00'),
+    }
+    total = _money(sum(componentes.values(), Decimal('0')))
+
+    return {
+        'componentes': {k: float(v) for k, v in componentes.items()},
+        'total_mensal': float(total),
+    }
+
+
+def calcular_total_mensal_estimado_veiculo(veiculo: Veiculo) -> Decimal:
+    resumo = calcular_resumo_mensal_estimado_veiculo(veiculo)
+    return Decimal(str(resumo['total_mensal'])).quantize(CENTAVOS)
+
+
+def serializar_veiculo_mobilidade(veiculo: Veiculo) -> dict:
+    dados = veiculo.to_dict()
+    resumo = calcular_resumo_mensal_estimado_veiculo(veiculo)
+    dados['resumo_mensal_estimado'] = resumo['componentes']
+    dados['total_mensal_estimado'] = resumo['total_mensal']
+    return dados
 
 
 def _get_tipo_evento(desp: DespesaPrevista) -> str | None:

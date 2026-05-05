@@ -21,6 +21,7 @@ try:
         aplicar_defaults_categorias_veiculo,
         gerar_projecoes_mvp,
         limpar_projecoes_anteriores,
+        serializar_veiculo_mobilidade,
     )
     from backend.services.veiculo_uso_service import calcular_resumo_uso
     from backend.services.veiculo_manutencao_km_service import listar_estimativas, gerar_despesa_prevista_por_regra
@@ -40,6 +41,7 @@ except ImportError:
         aplicar_defaults_categorias_veiculo,
         gerar_projecoes_mvp,
         limpar_projecoes_anteriores,
+        serializar_veiculo_mobilidade,
     )
     from services.veiculo_uso_service import calcular_resumo_uso
     from services.veiculo_manutencao_km_service import listar_estimativas, gerar_despesa_prevista_por_regra
@@ -118,7 +120,7 @@ def _buscar_veiculo_perfil(veiculo_id):
 def listar_veiculos():
     try:
         veiculos = _veiculos_query().order_by(Veiculo.id.desc()).all()
-        return jsonify({'success': True, 'data': [v.to_dict() for v in veiculos], 'total': len(veiculos)}), 200
+        return jsonify({'success': True, 'data': [serializar_veiculo_mobilidade(v) for v in veiculos], 'total': len(veiculos)}), 200
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -129,7 +131,7 @@ def buscar_veiculo(veiculo_id):
         v = _buscar_veiculo_perfil(veiculo_id)
         if not v:
             return jsonify({'success': False, 'error': 'Veículo não encontrado'}), 404
-        return jsonify({'success': True, 'data': v.to_dict()}), 200
+        return jsonify({'success': True, 'data': serializar_veiculo_mobilidade(v)}), 200
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -200,7 +202,7 @@ def criar_veiculo():
 
         db.session.commit()
 
-        return jsonify({'success': True, 'message': 'Veículo criado', 'data': v.to_dict()}), 201
+        return jsonify({'success': True, 'message': 'Veículo criado', 'data': serializar_veiculo_mobilidade(v)}), 201
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -276,7 +278,7 @@ def atualizar_veiculo(veiculo_id):
         gerar_projecoes_mvp(v, meses_futuros=int(data.get('meses_futuros') or 12))
 
         db.session.commit()
-        return jsonify({'success': True, 'message': 'Veículo atualizado', 'data': v.to_dict()}), 200
+        return jsonify({'success': True, 'message': 'Veículo atualizado', 'data': serializar_veiculo_mobilidade(v)}), 200
 
     except Exception as e:
         db.session.rollback()
@@ -330,7 +332,7 @@ def converter_simulado_para_ativo(veiculo_id):
         gerar_projecoes_mvp(v, meses_futuros=int(data.get('meses_futuros') or 12))
 
         db.session.commit()
-        return jsonify({'success': True, 'message': 'Veículo convertido para ATIVO', 'data': v.to_dict()}), 200
+        return jsonify({'success': True, 'message': 'Veículo convertido para ATIVO', 'data': serializar_veiculo_mobilidade(v)}), 200
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500

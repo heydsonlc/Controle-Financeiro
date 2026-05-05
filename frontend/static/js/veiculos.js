@@ -3,6 +3,7 @@ const API_CATEGORIAS = '/api/categorias';
 const API_DESPESAS_PREVISTAS = '/api/despesas-previstas';
 const API_INDEXADORES_TIPOS = '/api/indexadores/tipos';
 const API_MOBILIDADE_APP = '/api/mobilidade-app';
+const API_ASSINATURAS = `${API_VEICULOS}/mobilidade/assinaturas`;
 
 const STORAGE_MOBILIDADE_ATIVA = 'mobilidade_caminhos_ativos_v1';
 
@@ -22,9 +23,19 @@ let projecoesIndex = {};
 let finVeiculoCache = {};
 let appEditando = null;
 let appPerfis = [];
+let assinaturaEditando = null;
 
 let caminhosVeiculos = null;
 let caminhosApps = null;
+let caminhosAssinaturas = null;
+
+const MOBILIDADE_IMAGENS = {
+    veiculoCompacto: '/static/img/Veiculo_pessoal_1.png',
+    veiculoMedio: '/static/img/Veiculo_pessoal_2.png',
+    veiculoSuv: '/static/img/Veiculo_pessoal_3.png',
+    assinatura: '/static/img/transporte_por_assinatura.png',
+    app: '/static/img/Transporte_por_App.png',
+};
 
 function veiculosIcon(name) {
     const icons = {
@@ -39,12 +50,57 @@ function veiculosIcon(name) {
     return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="width:1em;height:1em;display:inline-block;vertical-align:-0.125em;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">${icons[name] || icons.eye}</svg>`;
 }
 
+function _textoModalidadeImagem(cenario) {
+    const raw = cenario?.raw || cenario || {};
+    return `${raw.nome || cenario?.nome || ''} ${raw.tipo || ''} ${raw.combustivel || ''}`.toLowerCase();
+}
+
+function imagemModalidade(cenario) {
+    const tipo = String(cenario?.tipo || cenario?.tipo_modalidade || '').toUpperCase();
+    const texto = _textoModalidadeImagem(cenario);
+    if (tipo === 'ASSINATURA') return MOBILIDADE_IMAGENS.assinatura;
+    if (tipo === 'TRANSPORTE_APP') return MOBILIDADE_IMAGENS.app;
+    if (texto.includes('suv') || texto.includes('assinatura')) return MOBILIDADE_IMAGENS.veiculoSuv;
+    if (texto.includes('city') || texto.includes('civic') || texto.includes('corolla') || texto.includes('sedan medio') || texto.includes('sedan médio')) {
+        return MOBILIDADE_IMAGENS.veiculoMedio;
+    }
+    return MOBILIDADE_IMAGENS.veiculoCompacto;
+}
+
+function fallbackImagemModalidade(tipo) {
+    const tipoNorm = String(tipo || '').toUpperCase();
+    if (tipoNorm === 'TRANSPORTE_APP') {
+        return `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="6" width="20" height="36" rx="4"/><path d="M20 38h8"/><circle cx="24" cy="34" r="1.5" fill="currentColor" stroke="none"/></svg>`;
+    }
+    return `<svg viewBox="0 0 56 32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h48M8 22l4-12h28l4 12"/><path d="M14 10l3-8h18l3 8"/><rect x="16" y="12" width="8" height="6" rx="1"/><rect x="32" y="12" width="8" height="6" rx="1"/><circle cx="12" cy="25" r="3"/><circle cx="44" cy="25" r="3"/></svg>`;
+}
+
+function renderImagemModalidade(cenario, classe = 'comp-card-image') {
+    const tipo = String(cenario?.tipo || cenario?.tipo_modalidade || '').toUpperCase();
+    const src = imagemModalidade(cenario);
+    const alt = cenario?.tipo === 'ASSINATURA' ? 'Carro por assinatura' :
+        cenario?.tipo === 'TRANSPORTE_APP' ? 'Transporte por app ou taxi' : 'Veiculo proprio';
+    return `
+        <img class="${classe}" src="${escapeAttr(src)}" alt="${escapeAttr(alt)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <div class="mobility-image-fallback" aria-hidden="true" style="display:none;">${fallbackImagemModalidade(tipo)}</div>
+    `;
+}
+
+function extrairListaApi(payload) {
+    if (Array.isArray(payload)) return payload;
+    if (payload?.success === true) return payload.data || [];
+    return Array.isArray(payload?.data) ? payload.data : [];
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     preencherMeses();
     carregarCaminhosAtivosLocal();
     await carregarCategorias();
     await carregarCaminhosApp();
+    await carregarAssinaturas();
     await carregarVeiculos();
+    await carregarCenarioAtivo();
+    await renderizarComparacao();
     toggleDataInicio();
 });
 
@@ -90,7 +146,7 @@ async function renderCaminhosGrid() {
     const container = document.getElementById('caminhos-lista');
     if (!container) return;
 
-    if (caminhosVeiculos === null || caminhosApps === null) {
+    if (caminhosVeiculos === null || caminhosApps === null || caminhosAssinaturas === null) {
         container.innerHTML = `<p class="loading">Carregando caminhos...</p>`;
         atualizarResumoMobilidadeAtiva();
         return;
@@ -98,8 +154,9 @@ async function renderCaminhosGrid() {
 
     const listaVeiculos = caminhosVeiculos || [];
     const listaApps = caminhosApps || [];
+    const listaAssinaturas = caminhosAssinaturas || [];
 
-    if (!listaVeiculos.length && !listaApps.length) {
+    if (!listaVeiculos.length && !listaApps.length && !listaAssinaturas.length) {
         container.innerHTML = `
             <div class="empty-state">
                 <h3>Nenhum caminho cadastrado</h3>
@@ -112,6 +169,7 @@ async function renderCaminhosGrid() {
 
     const cards = [];
     listaVeiculos.forEach(v => cards.push(renderVeiculoCard(v)));
+    listaAssinaturas.forEach(a => cards.push(renderAssinaturaCard(a)));
     listaApps.forEach(c => cards.push(renderAppCard(c)));
 
     const total = cards.length;
@@ -218,7 +276,10 @@ async function carregarVeiculos() {
         // reset cache (será preenchido ao carregar projeções para custo mensal)
         custoMensalConsolidado.VEICULO = {};
 
+        await atualizarCustosMensais(Array.from(ids));
         await renderCaminhosGrid();
+        if (abaAtiva === 'comparacao') await renderizarComparacao();
+        if (abaAtiva === 'configuracao') await renderizarConfiguracao();
     } catch (e) {
         console.error(e);
         caminhosVeiculos = [];
@@ -250,9 +311,27 @@ async function carregarCaminhosApp() {
         });
 
         await renderCaminhosGrid();
+        if (abaAtiva === 'comparacao') await renderizarComparacao();
+        if (abaAtiva === 'configuracao') await renderizarConfiguracao();
     } catch (e) {
         console.error(e);
         caminhosApps = [];
+        await renderCaminhosGrid();
+    }
+}
+
+async function carregarAssinaturas() {
+    try {
+        const resp = await fetch(API_ASSINATURAS);
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'Falha ao carregar assinaturas');
+        caminhosAssinaturas = data.data || [];
+        await renderCaminhosGrid();
+        if (abaAtiva === 'comparacao') await renderizarComparacao();
+        if (abaAtiva === 'configuracao') await renderizarConfiguracao();
+    } catch (e) {
+        console.error(e);
+        caminhosAssinaturas = [];
         await renderCaminhosGrid();
     }
 }
@@ -304,6 +383,39 @@ function renderAppCard(c) {
     `;
 }
 
+function renderAssinaturaCard(a) {
+    const valor = formatarMoeda(a.valor_mensal || 0);
+    const ativo = isCenarioAtivo('ASSINATURA', a.id);
+
+    return `
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">${escapeHtml(a.nome || 'Carro por Assinatura')}</div>
+                <div class="card-right">
+                    <span class="card-badge ${a.status === 'ATIVO' ? 'status-ativo' : 'status-simulado'}">${escapeHtml(a.status || 'ATIVO')}</span>
+                    ${ativo ? '<span class="card-badge status-ativo">Selecionada</span>' : ''}
+                </div>
+            </div>
+
+            <div class="card-body">
+                <div class="veiculo-sub">Contrato mensal de mobilidade</div>
+                <div class="veiculo-sub">Manutenção, seguro e depreciação normalmente diluídos no contrato.</div>
+            </div>
+
+            <div class="card-cost">
+                <div class="custo-label">Assinatura mensal</div>
+                <div class="custo-valor">${valor} / mês</div>
+                <div class="custo-hint">Recorrência mensal ao ativar.</div>
+            </div>
+
+            <div class="row-actions card-actions">
+                <button class="row-action-button" onclick="abrirModalAssinaturaEditar(${a.id})" title="Editar" aria-label="Editar">${veiculosIcon('edit')}</button>
+                <button class="row-action-button success" onclick="abrirModalAtivacaoMobilidade('ASSINATURA', ${a.id})" title="Selecionar" aria-label="Selecionar">${veiculosIcon('check')}</button>
+            </div>
+        </div>
+    `;
+}
+
 function abrirModalAppNovo() {
     appEditando = null;
     appPerfis = [];
@@ -321,6 +433,73 @@ function abrirModalAppNovo() {
 function fecharModalApp() {
     document.getElementById('modal-app').style.display = 'none';
     appEditando = null;
+}
+
+function preencherCategoriasAssinatura() {
+    const sel = document.getElementById('assinatura-categoria-id');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— Padrão (Mobilidade) —</option>' +
+        (categorias || []).map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
+}
+
+function abrirModalAssinaturaNovo() {
+    assinaturaEditando = null;
+    preencherCategoriasAssinatura();
+    document.getElementById('modal-assinatura-titulo').textContent = 'Carro por Assinatura';
+    document.getElementById('assinatura-id').value = '';
+    document.getElementById('assinatura-nome').value = '';
+    document.getElementById('assinatura-valor-mensal').value = '';
+    document.getElementById('assinatura-status').value = 'ATIVO';
+    document.getElementById('assinatura-categoria-id').value = '';
+    document.getElementById('modal-assinatura').style.display = 'block';
+}
+
+function abrirModalAssinaturaEditar(id) {
+    const ass = (caminhosAssinaturas || []).find(a => Number(a.id) === Number(id));
+    if (!ass) {
+        alert('Assinatura não encontrada.');
+        return;
+    }
+    assinaturaEditando = id;
+    preencherCategoriasAssinatura();
+    document.getElementById('modal-assinatura-titulo').textContent = 'Carro por Assinatura (editar)';
+    document.getElementById('assinatura-id').value = id;
+    document.getElementById('assinatura-nome').value = ass.nome || '';
+    document.getElementById('assinatura-valor-mensal').value = ass.valor_mensal ?? '';
+    document.getElementById('assinatura-status').value = ass.status || 'ATIVO';
+    document.getElementById('assinatura-categoria-id').value = ass.categoria_id || '';
+    document.getElementById('modal-assinatura').style.display = 'block';
+}
+
+function fecharModalAssinatura() {
+    document.getElementById('modal-assinatura').style.display = 'none';
+    assinaturaEditando = null;
+}
+
+async function salvarAssinatura(event) {
+    event.preventDefault();
+    const id = document.getElementById('assinatura-id')?.value;
+    const payload = {
+        nome: document.getElementById('assinatura-nome')?.value,
+        valor_mensal: document.getElementById('assinatura-valor-mensal')?.value,
+        status: document.getElementById('assinatura-status')?.value || 'ATIVO',
+        categoria_id: document.getElementById('assinatura-categoria-id')?.value || null,
+    };
+
+    try {
+        const resp = await fetch(id ? `${API_ASSINATURAS}/${id}` : API_ASSINATURAS, {
+            method: id ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'Falha ao salvar assinatura');
+        fecharModalAssinatura();
+        await carregarAssinaturas();
+    } catch (e) {
+        console.error(e);
+        alert('Erro ao salvar assinatura: ' + e.message);
+    }
 }
 
 function adicionarPerfilApp(prefill = null) {
@@ -1022,24 +1201,30 @@ async function obterCustoMensalVeiculo(veiculoId) {
 
     if (!respProj.success) throw new Error(respProj.error || 'Falha ao carregar projeções');
 
+    const veiculo = (caminhosVeiculos || []).find(v => Number(v.id) === Number(veiculoId));
+    const custoCadastral = veiculo ? calcularCustoMensalVeiculoLocal(veiculo, false) : 0;
     const tiposRegras = new Set((respMan?.success ? (respMan.data?.tipos_evento_regras || []) : []).map(t => String(t || '').toUpperCase()));
-    const custoBase = calcularCustoMensalEstimado(respProj.data || [], 12, tiposRegras);
+    const tiposDiretos = new Set(['COMBUSTIVEL', 'IPVA', 'SEGURO', 'LICENCIAMENTO', ...Array.from(tiposRegras)]);
+    const custoProjetivoComplementar = calcularCustoMensalEstimado(respProj.data || [], 12, tiposDiretos);
     const impactoManut = respMan?.success ? Number(respMan.data?.impacto_mensal_total || 0) : 0;
-    return custoBase + (Number.isFinite(impactoManut) ? impactoManut : 0);
+    return custoCadastral + custoProjetivoComplementar + (Number.isFinite(impactoManut) ? impactoManut : 0);
 }
 
 async function atualizarCustosMensais(veiculoIds) {
     const ids = (veiculoIds || []).filter(Boolean);
     await Promise.all(ids.map(async (id) => {
         const el = document.getElementById(`custo-mensal-${id}`);
-        if (!el) return;
-        const valorEl = el.querySelector('.custo-valor');
+        const valorEl = el?.querySelector('.custo-valor');
         try {
             const custo = await obterCustoMensalVeiculo(id);
+            custoMensalConsolidado.VEICULO[id] = Number(custo || 0);
             const fmt = Number(custo || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
             if (valorEl) valorEl.textContent = `${fmt} / mês`;
         } catch (e) {
             console.error(e);
+            const veiculo = (caminhosVeiculos || []).find(v => Number(v.id) === Number(id));
+            const fallback = veiculo ? calcularCustoMensalVeiculoLocal(veiculo, false) : 0;
+            custoMensalConsolidado.VEICULO[id] = Number(fallback || 0);
             if (valorEl) valorEl.textContent = '—';
         }
     }));
@@ -1961,6 +2146,9 @@ async function carregarCenarioAtivo() {
                 id: c.origem_id,
                 nome_origem: c.nome_origem,
                 recorrencia: c.recorrencia || null,
+                meio_pagamento: c.meio_pagamento || null,
+                cartao_id: c.cartao_id || null,
+                categoria_cartao_id: c.categoria_cartao_id || null,
             };
             _sincronizarMobilidadeAtivaLocal(c.tipo_modalidade, c.origem_id);
             return;
@@ -1988,6 +2176,9 @@ function _sincronizarMobilidadeAtivaLocal(tipo, id) {
     } else if (tipo === 'TRANSPORTE_APP') {
         mobilidadeAtiva.VEICULO = new Set();
         mobilidadeAtiva.TRANSPORTE_APP = new Set([id]);
+    } else if (tipo === 'ASSINATURA') {
+        mobilidadeAtiva.VEICULO = new Set();
+        mobilidadeAtiva.TRANSPORTE_APP = new Set();
     } else {
         mobilidadeAtiva.VEICULO = new Set();
         mobilidadeAtiva.TRANSPORTE_APP = new Set();
@@ -2017,14 +2208,16 @@ function _chaveCenario(tipo, id) { return `${tipo}_${id}`; }
 // Calcula custo mensal de veículo diretamente dos campos do objeto,
 // sem depender do cache assíncrono custoMensalConsolidado.
 // Usa cache como enriquecimento se já estiver disponível.
-function calcularCustoMensalVeiculoLocal(v) {
+function calcularCustoMensalVeiculoLocal(v, usarCache = true) {
     const cached = Number(custoMensalConsolidado?.VEICULO?.[v.id] || 0);
-    if (cached > 0) return cached;
+    if (usarCache && cached > 0) return cached;
+    const totalApi = Number(v.total_mensal_estimado || 0);
     let soma = 0;
     if (v.projecao_combustivel?.valor_mensal) soma += Number(v.projecao_combustivel.valor_mensal);
     if (v.ipva?.valor) soma += Number(v.ipva.valor) / 12;
     if (v.seguro?.valor) soma += Number(v.seguro.valor) / 12;
     if (v.licenciamento?.valor) soma += Number(v.licenciamento.valor) / 12;
+    if (totalApi > 0 || soma === 0) return totalApi;
     return soma;
 }
 
@@ -2052,6 +2245,21 @@ async function construirTodosOsCenarios(veiculos, apps) {
         });
     }
 
+    for (const a of (caminhosAssinaturas || [])) {
+        const custo = Number(a.valor_mensal || 0);
+        todos.push({
+            tipo: 'ASSINATURA',
+            id: a.id,
+            nome: a.nome || 'Carro por Assinatura',
+            subLabel: 'Contrato mensal de mobilidade',
+            statusLabel: a.status || 'ATIVO',
+            custoMensal: custo,
+            custoAnual: custo * 12,
+            itens: [{ nome: 'Assinatura mensal', valor: custo }],
+            raw: a,
+        });
+    }
+
     for (const c of (apps || [])) {
         const custo = Number(c.valor_mensal || 0);
         todos.push({
@@ -2067,16 +2275,30 @@ async function construirTodosOsCenarios(veiculos, apps) {
         });
     }
 
-    todosOsCenarios = todos;
+    const filtro = document.getElementById('comp-tipo')?.value || 'todos';
+    let filtrados = todos;
+    if (filtro === 'proprio_assinatura') {
+        filtrados = todos.filter(c => c.tipo === 'VEICULO' || c.tipo === 'ASSINATURA');
+    } else if (filtro === 'proprio_app') {
+        filtrados = todos.filter(c => c.tipo === 'VEICULO' || c.tipo === 'TRANSPORTE_APP');
+    }
+
+    todosOsCenarios = filtrados;
 
     // Selecionar os primeiros 3 automaticamente se nenhum selecionado ainda
     if (cenariosSelecionados.size === 0) {
-        todos.slice(0, 3).forEach(c => cenariosSelecionados.add(_chaveCenario(c.tipo, c.id)));
+        filtrados.slice(0, 3).forEach(c => cenariosSelecionados.add(_chaveCenario(c.tipo, c.id)));
+    }
+    Array.from(cenariosSelecionados).forEach(chave => {
+        if (!filtrados.some(c => _chaveCenario(c.tipo, c.id) === chave)) cenariosSelecionados.delete(chave);
+    });
+    if (cenariosSelecionados.size === 0) {
+        filtrados.slice(0, 3).forEach(c => cenariosSelecionados.add(_chaveCenario(c.tipo, c.id)));
     }
 }
 
 async function renderizarComparacao() {
-    if (!caminhosVeiculos || !caminhosApps) return;
+    if (!caminhosVeiculos || !caminhosApps || !caminhosAssinaturas) return;
     await construirTodosOsCenarios(caminhosVeiculos, caminhosApps);
 
     const seletorWrap = document.getElementById('comp-seletor-wrap');
@@ -2190,6 +2412,41 @@ function getCenariosSelecionados() {
     return todosOsCenarios.filter(c => cenariosSelecionados.has(_chaveCenario(c.tipo, c.id)));
 }
 
+function labelTipoCenario(c) {
+    if (c?.tipo === 'VEICULO') return 'Veículo próprio';
+    if (c?.tipo === 'ASSINATURA') return 'Assinatura';
+    if (c?.tipo === 'TRANSPORTE_APP') return 'App/Táxi';
+    return 'Mobilidade';
+}
+
+function calcularCustoPorKmCenario(c) {
+    if (!c) return null;
+    if (c.tipo === 'TRANSPORTE_APP') {
+        const km = Number(c.raw?.km_mensal_estimado || 0);
+        return km > 0 ? c.custoMensal / km : null;
+    }
+    if (c.tipo === 'VEICULO') {
+        const preco = Number(c.raw?.preco_medio_combustivel || 0);
+        const autonomia = Number(c.raw?.autonomia_km_l || 0);
+        const comb = Number(c.raw?.projecao_combustivel?.valor_mensal || 0);
+        if (preco > 0 && autonomia > 0 && comb > 0) {
+            const kmMes = (comb / preco) * autonomia;
+            return kmMes > 0 ? c.custoMensal / kmMes : null;
+        }
+        const usoManual = Number(document.getElementById('comp-uso-mensal')?.value || 0);
+        return usoManual > 0 ? c.custoMensal / usoManual : null;
+    }
+    const usoManual = Number(document.getElementById('comp-uso-mensal')?.value || 0);
+    return usoManual > 0 ? c.custoMensal / usoManual : null;
+}
+
+function statusCenarioComparacao(c, selecionados) {
+    const maisEconomico = selecionados.reduce((a, b) => a.custoMensal < b.custoMensal ? a : b, selecionados[0]);
+    if (maisEconomico && c.tipo === maisEconomico.tipo && Number(c.id) === Number(maisEconomico.id)) return 'Mais econômico';
+    if (c.tipo === 'TRANSPORTE_APP') return 'Conveniência total';
+    return 'Boa relação custo-benefício';
+}
+
 function renderResumoSuperior() {
     const el = document.getElementById('comp-resumo-superior');
     if (!el) return;
@@ -2198,10 +2455,10 @@ function renderResumoSuperior() {
         // Mostrar 4 KPIs em skeleton quando há cenários mas nenhum está selecionado
         el.style.display = 'grid';
         el.innerHTML = `
-            <div class="comp-resumo-card"><div class="comp-resumo-label">Mais economico</div><div class="comp-resumo-valor" style="color:#9ca3af;">—</div><div class="comp-resumo-sub">Selecione cenarios acima</div></div>
-            <div class="comp-resumo-card"><div class="comp-resumo-label">Custo medio mensal</div><div class="comp-resumo-valor" style="color:#9ca3af;">—</div><div class="comp-resumo-sub">Entre os cenarios</div></div>
-            <div class="comp-resumo-card"><div class="comp-resumo-label">Custo estimado (${document.getElementById('comp-horizonte')?.value || 24}m)</div><div class="comp-resumo-valor" style="color:#9ca3af;">—</div><div class="comp-resumo-sub">Selecione para calcular</div></div>
-            <div class="comp-resumo-card"><div class="comp-resumo-label">Cenario ativo</div><div class="comp-resumo-valor" style="color:#9ca3af;">${cenarioAtivoState.tipo ? escapeHtml(todosOsCenarios.find(c => c.tipo === cenarioAtivoState.tipo && Number(c.id) === Number(cenarioAtivoState.id))?.nome || '—') : '—'}</div><div class="comp-resumo-sub">Clique em "Definir ativo"</div></div>
+            <div class="comp-resumo-card"><div class="comp-resumo-label">Mais econômico</div><div class="comp-resumo-valor" style="color:#9ca3af;">—</div><div class="comp-resumo-sub">Selecione cenários acima</div></div>
+            <div class="comp-resumo-card"><div class="comp-resumo-label">Custo mensal médio</div><div class="comp-resumo-valor" style="color:#9ca3af;">—</div><div class="comp-resumo-sub">Entre as opções</div></div>
+            <div class="comp-resumo-card"><div class="comp-resumo-label">Custo anual estimado</div><div class="comp-resumo-valor" style="color:#9ca3af;">—</div><div class="comp-resumo-sub">Selecione para calcular</div></div>
+            <div class="comp-resumo-card"><div class="comp-resumo-label">Melhor custo por km</div><div class="comp-resumo-valor" style="color:#9ca3af;">—</div><div class="comp-resumo-sub">Uso mensal informado</div></div>
         `;
         return;
     }
@@ -2210,11 +2467,12 @@ function renderResumoSuperior() {
     const mensal = sel.map(c => c.custoMensal);
     const mediaGeral = mensal.reduce((a, b) => a + b, 0) / mensal.length;
     const maisEconomico = sel.reduce((a, b) => a.custoMensal < b.custoMensal ? a : b);
-    const melhorKm = sel.reduce((a, b) => {
-        const kma = Number(a.raw?.km_mensal_estimado || a.raw?.autonomia_km_l && 1200 / a.raw.autonomia_km_l && a.custoMensal / (1200 / (a.raw?.autonomia_km_l || 1)) || 0);
-        const kmb = Number(b.raw?.km_mensal_estimado || b.raw?.autonomia_km_l && 1200 / b.raw.autonomia_km_l && b.custoMensal / (1200 / (b.raw?.autonomia_km_l || 1)) || 0);
-        return kma <= kmb ? a : b;
-    });
+    const custosKmValidos = sel
+        .map(c => ({ c, custoKm: calcularCustoPorKmCenario(c) }))
+        .filter(item => Number.isFinite(item.custoKm) && item.custoKm > 0);
+    const melhorKm = custosKmValidos.length
+        ? custosKmValidos.reduce((a, b) => a.custoKm <= b.custoKm ? a : b)
+        : null;
 
     el.style.display = 'grid';
     el.innerHTML = `
@@ -2224,19 +2482,19 @@ function renderResumoSuperior() {
             <div class="comp-resumo-sub">${formatarMoeda(maisEconomico.custoMensal)} / mês</div>
         </div>
         <div class="comp-resumo-card">
-            <div class="comp-resumo-label">Custo médio mensal</div>
+            <div class="comp-resumo-label">Custo mensal médio</div>
             <div class="comp-resumo-valor">${formatarMoeda(mediaGeral)} / mês</div>
-            <div class="comp-resumo-sub">Entre os ${sel.length} cenários</div>
+            <div class="comp-resumo-sub">Entre as ${sel.length} opções</div>
         </div>
         <div class="comp-resumo-card">
-            <div class="comp-resumo-label">Custo estimado (${horizonte}m)</div>
-            <div class="comp-resumo-valor">${formatarMoeda(mediaGeral * horizonte)}</div>
-            <div class="comp-resumo-sub">Média anual: ${formatarMoeda(mediaGeral * 12)}</div>
+            <div class="comp-resumo-label">Custo anual estimado</div>
+            <div class="comp-resumo-valor">${formatarMoeda(mediaGeral * 12)}</div>
+            <div class="comp-resumo-sub">Horizonte ${horizonte}m: ${formatarMoeda(mediaGeral * horizonte)}</div>
         </div>
         <div class="comp-resumo-card">
-            <div class="comp-resumo-label">Cenário ativo</div>
-            <div class="comp-resumo-valor">${cenarioAtivoState.tipo ? escapeHtml(todosOsCenarios.find(c => c.tipo === cenarioAtivoState.tipo && Number(c.id) === Number(cenarioAtivoState.id))?.nome || '—') : '—'}</div>
-            <div class="comp-resumo-sub">Clique em "Definir ativo" nos cards</div>
+            <div class="comp-resumo-label">Melhor custo por km</div>
+            <div class="comp-resumo-valor">${melhorKm ? escapeHtml(melhorKm.c.nome) : '—'}</div>
+            <div class="comp-resumo-sub">${melhorKm ? `${formatarMoeda(melhorKm.custoKm)} / km` : 'Sem km suficiente'}</div>
         </div>
     `;
 }
@@ -2248,11 +2506,14 @@ function renderCardsComparacao() {
 
     if (!sel.length) {
         el.innerHTML = `<div class="veic-empty-state veic-empty-state--inline" style="grid-column:1/-1"><p class="veic-empty-sub">Selecione cenários acima para comparar lado a lado.</p></div>`;
+        renderDetalheOpcaoSelecionada();
         return;
     }
 
     el.innerHTML = sel.map(c => {
         const ativoGlobal = isCenarioAtivo(c.tipo, c.id);
+        const statusComparacao = statusCenarioComparacao(c, sel);
+        const custoKm = calcularCustoPorKmCenario(c);
         const itensHtml = c.itens.slice(0, 4).map(i => `
             <div class="comp-card-item-linha">
                 <span class="comp-card-item-nome">${escapeHtml(i.nome)}</span>
@@ -2262,40 +2523,108 @@ function renderCardsComparacao() {
 
         const editAction = c.tipo === 'VEICULO'
             ? `onclick="abrirModalEditar(${c.id})"`
-            : `onclick="abrirModalAppEditar(${c.id})"`;
+            : c.tipo === 'ASSINATURA'
+                ? `onclick="abrirModalAssinaturaEditar(${c.id})"`
+                : `onclick="abrirModalAppEditar(${c.id})"`;
 
-        const tipoRaw = c.tipo === 'VEICULO' ? (c.raw?.tipo || 'carro') : 'app';
-        const iconeSvg = tipoRaw === 'moto'
-            ? `<svg viewBox="0 0 48 32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="24" r="7"/><circle cx="39" cy="24" r="7"/><path d="M9 17l5-10h14l6 10"/><path d="M16 7h8l6 10H16z"/><path d="M23 17l3-10"/></svg>`
+        const tipoRaw = c.tipo === 'VEICULO'
+            ? (c.raw?.tipo || 'carro')
             : c.tipo === 'TRANSPORTE_APP'
-            ? `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="6" width="20" height="36" rx="4"/><path d="M20 38h8"/><circle cx="24" cy="34" r="1.5" fill="currentColor" stroke="none"/></svg>`
-            : `<svg viewBox="0 0 56 32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h48M8 22l4-12h28l4 12"/><path d="M14 10l3-8h18l3 8"/><rect x="16" y="12" width="8" height="6" rx="1"/><rect x="32" y="12" width="8" height="6" rx="1"/><circle cx="12" cy="25" r="3"/><circle cx="44" cy="25" r="3"/></svg>`;
+                ? 'app'
+                : 'assinatura';
 
         return `
             <div class="comp-card${ativoGlobal ? ' ativo-global' : ''}">
-                ${ativoGlobal ? '<span class="comp-card-badge-ativo">Ativo</span>' : ''}
-                <div class="comp-card-visual comp-card-visual--${c.tipo === 'VEICULO' ? tipoRaw : 'app'}">
-                    <div class="comp-card-vehicle-icon">${iconeSvg}</div>
+                ${ativoGlobal ? '<span class="comp-card-badge-ativo">Opção selecionada</span>' : ''}
+                <div class="comp-card-visual comp-card-visual--${tipoRaw}">
+                    ${renderImagemModalidade(c)}
                 </div>
                 <div class="comp-card-body">
-                    <div class="comp-card-tipo">${c.tipo === 'VEICULO' ? 'Veículo próprio' : 'Transporte por app'}</div>
+                    <div class="comp-card-tipo">${escapeHtml(labelTipoCenario(c))}</div>
                     <div class="comp-card-nome">${escapeHtml(c.nome)}</div>
                     <div class="comp-card-sub">${escapeHtml(c.subLabel)}</div>
+                    <div class="comp-card-status">${escapeHtml(statusComparacao)}</div>
                 </div>
                 <div class="comp-card-kpi">
                     <div class="comp-card-custo-label">Custo mensal estimado</div>
                     <div class="comp-card-custo-valor">${formatarMoeda(c.custoMensal)}</div>
                     <div class="comp-card-custo-anual">Anual: ${formatarMoeda(c.custoAnual)}</div>
+                    <div class="comp-card-custo-km">${custoKm ? `${formatarMoeda(custoKm)} / km` : 'Custo/km indisponível'}</div>
                 </div>
                 <div class="comp-card-itens">${itensHtml || '<span class="small-note">Sem detalhamento configurado.</span>'}</div>
                 <div class="comp-card-acoes">
                     <button class="btn btn-secondary btn-sm" ${editAction}>Editar</button>
-                    ${!ativoGlobal ? `<button class="btn btn-primary btn-sm" onclick="definirCenarioAtivo('${c.tipo}', ${c.id})">Definir ativo</button>` : `<button class="btn btn-secondary btn-sm" disabled>Ativo</button>`}
+                    ${!ativoGlobal ? `<button class="btn btn-primary btn-sm" onclick="definirCenarioAtivo('${c.tipo}', ${c.id})">Selecionar esta opção</button>` : `<button class="btn btn-secondary btn-sm" disabled>Opção selecionada</button>`}
                     <button class="btn btn-secondary btn-sm" onclick="ativarAba('efetivacao'); selecionarCenarioEfetivacao('${c.tipo}', ${c.id})">Efetivar</button>
                 </div>
             </div>
         `;
     }).join('');
+    renderDetalheOpcaoSelecionada();
+}
+
+function renderDetalheOpcaoSelecionada() {
+    const el = document.getElementById('comp-detalhe-selecionado');
+    if (!el) return;
+    const sel = getCenariosSelecionados();
+    const ativoSelecionado = sel.find(c => isCenarioAtivo(c.tipo, c.id));
+    const ativoGeral = cenarioAtivoState.tipo
+        ? todosOsCenarios.find(c => c.tipo === cenarioAtivoState.tipo && Number(c.id) === Number(cenarioAtivoState.id))
+        : null;
+    const c = ativoSelecionado || ativoGeral || sel[0];
+
+    if (!c) {
+        el.style.display = 'none';
+        el.innerHTML = '';
+        return;
+    }
+
+    const recorrentes = c.itens.filter(i => /combust|assinatura|app|transporte|mensal/i.test(i.nome));
+    const periodicas = c.itens.filter(i => /ipva|seguro|licenciamento|manuten|revis|pneu|oleo|óleo/i.test(i.nome));
+    const rec = isCenarioAtivo(c.tipo, c.id) ? (cenarioAtivoState.recorrencia || null) : null;
+    const meio = rec?.meio_pagamento || cenarioAtivoState.meio_pagamento || null;
+    const cartaoTexto = rec?.cartao_id
+        ? `Cartão #${rec.cartao_id}${rec.categoria_cartao_id ? ` · Categoria do Cartão #${rec.categoria_cartao_id}` : ''}`
+        : 'Nenhum lançamento no cartão configurado';
+    const pagamentoTexto = meio && meio !== 'cartao'
+        ? `${String(meio).toUpperCase()} · recorrência ${rec ? 'configurada' : 'não criada'}`
+        : 'Nenhum pagamento PIX/boleto/conta configurado';
+
+    const lista = (itens, vazio) => itens.length
+        ? itens.map(i => `<div class="comp-detalhe-linha"><span>${escapeHtml(i.nome)}</span><strong>${formatarMoeda(i.valor)}</strong></div>`).join('')
+        : `<div class="comp-detalhe-vazio">${escapeHtml(vazio)}</div>`;
+
+    el.style.display = '';
+    el.innerHTML = `
+        <div class="comp-detalhe-header">
+            <div>
+                <h3>Detalhamento da opção selecionada</h3>
+                <p>${escapeHtml(labelTipoCenario(c))} · ${escapeHtml(c.nome)}</p>
+            </div>
+            <div class="comp-detalhe-total">
+                <span>Total mensal</span>
+                <strong>${formatarMoeda(c.custoMensal)}</strong>
+            </div>
+        </div>
+        <div class="comp-detalhe-grid">
+            <section class="comp-detalhe-card">
+                <h4>Despesas recorrentes mensais</h4>
+                ${lista(recorrentes, 'Sem recorrências mensais configuradas.')}
+            </section>
+            <section class="comp-detalhe-card">
+                <h4>Despesas periódicas</h4>
+                ${lista(periodicas, 'Sem despesas periódicas configuradas.')}
+            </section>
+            <section class="comp-detalhe-card">
+                <h4>Lançamentos no cartão</h4>
+                <div class="comp-detalhe-vazio">${escapeHtml(cartaoTexto)}</div>
+            </section>
+            <section class="comp-detalhe-card">
+                <h4>Pagamentos PIX/boleto/conta</h4>
+                <div class="comp-detalhe-vazio">${escapeHtml(pagamentoTexto)}</div>
+            </section>
+        </div>
+    `;
 }
 
 function renderTabelaComparativa() {
@@ -2314,22 +2643,7 @@ function renderTabelaComparativa() {
         menores[k] = Math.min(...vals);
     });
 
-    // Custo/km: km mensal é c.raw.km_mensal_estimado (app) ou estimativa por autonomia (veículo)
-    const custoKm = sel.map(c => {
-        if (c.tipo === 'TRANSPORTE_APP') {
-            const km = Number(c.raw?.km_mensal_estimado || 0);
-            return km > 0 ? c.custoMensal / km : null;
-        }
-        // veículo: custo_mensal / (combustivel_mensal / preco_medio * autonomia)
-        const preco = Number(c.raw?.preco_medio_combustivel || 0);
-        const autonomia = Number(c.raw?.autonomia_km_l || 0);
-        const comb = Number(c.raw?.projecao_combustivel?.valor_mensal || 0);
-        if (preco > 0 && autonomia > 0 && comb > 0) {
-            const kmMes = (comb / preco) * autonomia;
-            return kmMes > 0 ? c.custoMensal / kmMes : null;
-        }
-        return null;
-    });
+    const custoKm = sel.map(c => calcularCustoPorKmCenario(c));
     const menoresCustoKm = custoKm.filter(v => v !== null);
     const menorKm = menoresCustoKm.length ? Math.min(...menoresCustoKm) : null;
 
@@ -2364,7 +2678,7 @@ function renderTabelaComparativa() {
         ${linhaKm}
         <tr>
             <td>Tipo</td>
-            ${sel.map(c => `<td>${c.tipo === 'VEICULO' ? 'Veículo próprio' : 'App'}</td>`).join('')}
+            ${sel.map(c => `<td>${escapeHtml(labelTipoCenario(c))}</td>`).join('')}
         </tr>
     </tbody>`;
 
@@ -2398,7 +2712,7 @@ async function abrirModalAtivacaoMobilidade(tipo, origemId) {
         try {
             const r = await fetch(API_CARTOES);
             const d = await r.json();
-            cartoesCacheGlobal = (d.success ? d.data : []).filter(c => c.tipo === 'Agregador' || c.ativo !== false);
+            cartoesCacheGlobal = extrairListaApi(d).filter(c => c.tipo === 'Agregador' || c.ativo !== false);
         } catch (e) { cartoesCacheGlobal = []; }
     }
     if (selCartao) {
@@ -2560,12 +2874,20 @@ async function confirmarAtivacaoMobilidade() {
             alert('Erro ao ativar: ' + data.error);
             return;
         }
-        // Sincronizar estado legado
-        await salvarCenarioAtivo(tipo, Number(origemId));
+        cenarioAtivoState = {
+            tipo,
+            id: Number(origemId),
+            recorrencia: data.data?.recorrencia || null,
+            meio_pagamento: data.data?.cenario?.meio_pagamento || meio || null,
+            cartao_id: data.data?.cenario?.cartao_id || null,
+            categoria_cartao_id: data.data?.cenario?.categoria_cartao_id || null,
+        };
+        _sincronizarMobilidadeAtivaLocal(tipo, Number(origemId));
+        salvarCaminhosAtivosLocal();
         fecharModalAtivacaoMobilidade();
         renderCardsComparacao();
         renderResumoSuperior();
-        renderizarConfiguracao();
+        await renderizarConfiguracao();
     } catch (e) {
         alert('Erro: ' + String(e));
     }
@@ -2595,7 +2917,7 @@ let confSubtabAtiva = 'veiculo';
 
 function ativarConfSubtab(nome) {
     confSubtabAtiva = nome;
-    ['veiculo', 'app'].forEach(t => {
+    ['veiculo', 'assinatura', 'app'].forEach(t => {
         const btn = document.getElementById(`conf-subtab-${t}`);
         const painel = document.getElementById(`conf-painel-${t}`);
         if (btn) btn.classList.toggle('active', t === nome);
@@ -2603,8 +2925,10 @@ function ativarConfSubtab(nome) {
     });
 }
 
-function renderizarConfiguracao() {
+async function renderizarConfiguracao() {
+    await construirTodosOsCenarios(caminhosVeiculos || [], caminhosApps || []);
     renderConfVeiculos();
+    renderConfAssinaturas();
     renderConfApps();
     renderConfResumoLateral();
 }
@@ -2660,9 +2984,10 @@ function renderConfVeiculos() {
     }
     el.innerHTML = lista.map(v => {
         const ativo = isCenarioAtivo('VEICULO', v.id);
-        const custo = custoMensalConsolidado?.VEICULO?.[v.id] || 0;
+        const custo = custoMensalConsolidado?.VEICULO?.[v.id] || calcularCustoMensalVeiculoLocal(v, false);
         return `
             <div class="conf-item${ativo ? ' cenario-ativo-global' : ''}">
+                <div class="conf-item-thumb">${renderImagemModalidade({ tipo: 'VEICULO', raw: v, nome: v.nome }, 'conf-item-image')}</div>
                 <div class="conf-item-info">
                     <div class="conf-item-nome">${escapeHtml(v.nome)} <span class="card-badge ${v.status === 'ATIVO' ? 'status-ativo' : 'status-simulado'}">${escapeHtml(v.status)}</span></div>
                     <div class="conf-item-sub">${escapeHtml(v.tipo)} · ${escapeHtml(v.combustivel)} · ${v.autonomia_km_l} km/L</div>
@@ -2692,6 +3017,45 @@ function renderConfVeiculos() {
     }).join('');
 }
 
+function renderConfAssinaturas() {
+    const el = document.getElementById('conf-assinaturas-lista');
+    if (!el) return;
+    const lista = caminhosAssinaturas || [];
+    if (!lista.length) {
+        el.innerHTML = `
+            <div class="conf-vazio-card">
+                <div class="conf-vazio-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16h16M6 16l2-7h8l2 7M9 9V6h6v3"/><circle cx="8" cy="19" r="1"/><circle cx="16" cy="19" r="1"/></svg>
+                </div>
+                <h4 class="conf-vazio-titulo">Nenhuma assinatura cadastrada</h4>
+                <p class="conf-vazio-sub">Cadastre um carro por assinatura para comparar contrato mensal com veículo próprio e app/táxi.</p>
+                <button class="btn btn-primary btn-sm" style="margin-top:8px;" onclick="abrirModalAssinaturaNovo()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:13px;height:13px;margin-right:4px;"><path d="M12 5v14M5 12h14"/></svg>
+                    Nova assinatura
+                </button>
+            </div>
+        `;
+        return;
+    }
+    el.innerHTML = lista.map(a => {
+        const ativo = isCenarioAtivo('ASSINATURA', a.id);
+        return `
+            <div class="conf-item${ativo ? ' cenario-ativo-global' : ''}">
+                <div class="conf-item-thumb">${renderImagemModalidade({ tipo: 'ASSINATURA', raw: a, nome: a.nome }, 'conf-item-image')}</div>
+                <div class="conf-item-info">
+                    <div class="conf-item-nome">${escapeHtml(a.nome || 'Carro por Assinatura')} <span class="card-badge ${a.status === 'ATIVO' ? 'status-ativo' : 'status-simulado'}">${escapeHtml(a.status || 'ATIVO')}</span></div>
+                    <div class="conf-item-sub">Contrato mensal · recorrência ao ativar</div>
+                </div>
+                <div class="conf-item-custo">${formatarMoeda(a.valor_mensal || 0)}/mês</div>
+                <div class="conf-item-acoes">
+                    <button class="row-action-button" onclick="abrirModalAssinaturaEditar(${a.id})" title="Editar" aria-label="Editar">${veiculosIcon('edit')}</button>
+                    <button class="row-action-button success" onclick="abrirModalAtivacaoMobilidade('ASSINATURA', ${a.id})" title="Selecionar" aria-label="Selecionar">${veiculosIcon('check')}</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
 function renderConfApps() {
     const el = document.getElementById('conf-apps-lista');
     if (!el) return;
@@ -2716,6 +3080,7 @@ function renderConfApps() {
         const ativo = isCenarioAtivo('TRANSPORTE_APP', c.id);
         return `
             <div class="conf-item${ativo ? ' cenario-ativo-global' : ''}">
+                <div class="conf-item-thumb">${renderImagemModalidade({ tipo: 'TRANSPORTE_APP', raw: c, nome: c.nome }, 'conf-item-image')}</div>
                 <div class="conf-item-info">
                     <div class="conf-item-nome">${escapeHtml(c.nome || 'Transporte por App')}</div>
                     <div class="conf-item-sub">${Number(c.km_mensal_estimado || 0).toLocaleString('pt-BR')} km/mês · ${formatarMoeda(c.preco_medio_por_km || 0)} /km</div>
@@ -2751,7 +3116,7 @@ async function iniciarEfetivacao() {
     const sel = document.getElementById('efet-cenario-select');
     if (!sel) return;
 
-    const tipoLabel = (c) => c.tipo === 'VEICULO' ? 'Veiculo' : 'App';
+    const tipoLabel = (c) => labelTipoCenario(c);
     const opcoes = todosOsCenarios.map(c => {
         const label = `[${tipoLabel(c)}] ${c.nome} — ${formatarMoeda(c.custoMensal)}/mes`;
         const selected = (efetCenarioTipo === c.tipo && Number(efetCenarioId) === Number(c.id));
@@ -2794,15 +3159,10 @@ function _renderEfetivacaoBannerVazio() {
 function _renderEfetivacaoBanner(cenario) {
     const banner = document.getElementById('efet-banner');
     if (!banner || !cenario) return;
-    const tipoLabel = cenario.tipo === 'VEICULO' ? 'Veículo Próprio' : 'Transporte por App';
+    const tipoLabel = labelTipoCenario(cenario);
     banner.innerHTML = `
         <div class="efet-banner">
-            <div class="efet-banner-icone">
-                ${cenario.tipo === 'VEICULO'
-                    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M7 17l2.5-8h5L17 17M9 13h6"/><circle cx="8" cy="19" r="1"/><circle cx="16" cy="19" r="1"/></svg>'
-                    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>'
-                }
-            </div>
+            <div class="efet-banner-icone efet-banner-icone-img">${renderImagemModalidade(cenario, 'efet-banner-image')}</div>
             <div class="efet-banner-info">
                 <h3 class="efet-banner-titulo">Modalidade ativa: ${escapeHtml(tipoLabel)} — ${escapeHtml(cenario.nome)}</h3>
                 <p class="efet-banner-sub">Todas as despesas listadas abaixo serão criadas conforme a configuração escolhida.</p>
@@ -2882,8 +3242,17 @@ async function carregarEfetivacao() {
         let url;
         if (tipo === 'VEICULO') {
             url = `${API_VEICULOS}/${efetCenarioId}/projecoes?meses=24`;
-        } else {
+        } else if (tipo === 'TRANSPORTE_APP') {
             url = `${API_MOBILIDADE_APP}/${efetCenarioId}/projecoes?meses=24`;
+        } else {
+            efetProjecoes = [];
+            renderEfetivacaoResumo();
+            renderEfetivacaoGrade();
+            const nota = document.getElementById('efet-nota');
+            const rodape = document.getElementById('efet-rodape');
+            if (nota) nota.style.display = 'none';
+            if (rodape) rodape.style.display = 'none';
+            return;
         }
         const resp = await fetch(url);
         const data = await resp.json();
@@ -3001,7 +3370,7 @@ function renderEfetivacaoGrade() {
         if (p.status === 'PREVISTA') {
             acoes = `
                 <div class="row-actions">
-                    <button class="row-action-button success" onclick="confirmarPrevista(${p.id}, ${JSON.stringify({ id: p.id, descricao: tipo, valor: p.valor_previsto, data: data, categoria: catNome, categoria_id: p.categoria_id }).replace(/"/g, '&quot;')})" title="Confirmar e gerar lancamento" aria-label="Confirmar">${veiculosIcon('check')}</button>
+                    <button class="row-action-button success" onclick="confirmarPrevista(${p.id}, ${JSON.stringify({ id: p.id, descricao: tipo, valor: p.valor_previsto, data: data, categoria: catNome, categoria_id: p.categoria_id, origem: 'Mobilidade', origem_tipo: p.origem_tipo, tipo_evento: _normalizarTipoEvento(p) }).replace(/"/g, '&quot;')})" title="Confirmar e gerar lancamento" aria-label="Confirmar">${veiculosIcon('check')}</button>
                     <button class="row-action-button" onclick="abrirModalAdiar(${p.id}, '${escapeAttr(data)}')" title="Adiar" aria-label="Adiar">${veiculosIcon('clock')}</button>
                     <button class="row-action-button danger" onclick="ignorarPrevista(${p.id})" title="Ignorar" aria-label="Ignorar">${veiculosIcon('remove')}</button>
                 </div>
@@ -3059,11 +3428,20 @@ async function abrirModalConfirmar(despesaId, dadosPrevista) {
     // Preview
     const preview = document.getElementById('confirmar-preview');
     if (dadosPrevista) {
+        const origem = [dadosPrevista.origem || 'Mobilidade', dadosPrevista.origem_tipo, dadosPrevista.tipo_evento]
+            .filter(Boolean)
+            .join(' · ');
         preview.innerHTML = `
-            <div class="confirmar-preview-row"><span class="confirmar-preview-label">Descrição:</span><span class="confirmar-preview-valor">${escapeHtml(dadosPrevista.descricao || '—')}</span></div>
-            <div class="confirmar-preview-row"><span class="confirmar-preview-label">Valor:</span><span class="confirmar-preview-valor">${formatarMoeda(dadosPrevista.valor || 0)}</span></div>
-            <div class="confirmar-preview-row"><span class="confirmar-preview-label">Data prevista:</span><span class="confirmar-preview-valor">${formatarMesAno(dadosPrevista.data || '')}</span></div>
-            <div class="confirmar-preview-row"><span class="confirmar-preview-label">Categoria:</span><span class="confirmar-preview-valor">${escapeHtml(dadosPrevista.categoria || '—')}</span></div>
+            <div class="confirmar-preview-top">
+                <span class="confirmar-preview-pill">Mobilidade</span>
+                <strong>${escapeHtml(dadosPrevista.descricao || 'Despesa prevista')}</strong>
+            </div>
+            <div class="confirmar-preview-grid">
+                <div><span>Valor</span><strong>${formatarMoeda(dadosPrevista.valor || 0)}</strong></div>
+                <div><span>Data prevista</span><strong>${formatarMesAno(dadosPrevista.data || '')}</strong></div>
+                <div><span>Categoria de despesa</span><strong>${escapeHtml(dadosPrevista.categoria || '—')}</strong></div>
+                <div><span>Origem</span><strong>${escapeHtml(origem || 'Mobilidade')}</strong></div>
+            </div>
         `;
         // Pré-preenche data de vencimento
         const dataInput = document.getElementById('confirmar-data-vencimento');
@@ -3071,7 +3449,7 @@ async function abrirModalConfirmar(despesaId, dadosPrevista) {
             dataInput.value = String(dadosPrevista.data).slice(0, 10);
         }
     } else {
-        preview.innerHTML = `<div class="confirmar-preview-row"><span class="confirmar-preview-label">Despesa prevista #${despesaId}</span></div>`;
+        preview.innerHTML = `<div class="confirmar-preview-top"><span class="confirmar-preview-pill">Mobilidade</span><strong>Despesa prevista #${despesaId}</strong></div>`;
         const dataInput = document.getElementById('confirmar-data-vencimento');
         if (dataInput) dataInput.value = new Date().toISOString().slice(0, 10);
     }
@@ -3117,8 +3495,7 @@ async function carregarCartoesSelect() {
     try {
         const resp = await fetch(API_CARTOES);
         const data = await resp.json();
-        if (!data.success) throw new Error(data.error || 'Falha ao carregar cartões');
-        cartoesCacheGlobal = (data.data || []).filter(c => c.ativo !== false);
+        cartoesCacheGlobal = extrairListaApi(data).filter(c => c.ativo !== false);
         preencherSelectCartoes(cartoesCacheGlobal);
     } catch (e) {
         console.error(e);
@@ -3151,8 +3528,8 @@ async function carregarCategoriasCartaoConfirmacao(cartaoId) {
         const itens = (data.success ? (data.data || []) : []).filter(i => i.ativo !== false);
 
         if (!itens.length) {
-            wrap.style.display = 'none';
-            sel.innerHTML = '<option value="">— Nenhuma —</option>';
+            wrap.style.display = '';
+            sel.innerHTML = '<option value="">— Nenhuma categoria configurada —</option>';
             return;
         }
 
@@ -3166,7 +3543,8 @@ async function carregarCategoriasCartaoConfirmacao(cartaoId) {
         wrap.style.display = '';
     } catch (e) {
         console.warn('Categorias do Cartao nao carregadas:', e.message);
-        wrap.style.display = 'none';
+        wrap.style.display = '';
+        sel.innerHTML = '<option value="">— Nenhuma —</option>';
     }
 }
 
