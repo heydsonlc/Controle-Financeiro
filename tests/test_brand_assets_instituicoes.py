@@ -21,11 +21,9 @@ def test_aliases_principais_presentes_no_helper():
 
     for alias in [
         "caixa economica federal",
-        "caixa econômica federal",
         "banco do brasil",
         "bb",
         "itau",
-        "itaú",
         "santander",
         "nubank",
         "nu bank",
@@ -36,17 +34,27 @@ def test_aliases_principais_presentes_no_helper():
         "mercadopago",
         "picpay",
         "pic pay",
+        "visa",
+        "mastercard",
+        "master card",
     ]:
         assert alias in helper
 
 
-def test_assets_genericos_existem_sem_logos_reais():
+def test_assets_institucionais_existem_com_fallbacks():
     assets_dir = ROOT / "frontend/static/assets/instituicoes"
     assert (assets_dir / "default-bank.svg").is_file()
     assert (assets_dir / "default-card.svg").is_file()
 
     nomes = {path.name for path in assets_dir.iterdir() if path.is_file()}
-    assert nomes == {"default-bank.svg", "default-card.svg"}
+    assert {
+        "caixa.png",
+        "nubank.png",
+        "nubank-empresa.png",
+        "inter.png",
+        "visa.png",
+        "mastercard.png",
+    }.issubset(nomes)
 
 
 def test_sem_urls_externas_para_logos():
@@ -90,3 +98,17 @@ def test_fallback_nome_vazio_e_desconhecido_documentado_no_helper():
     assert "key: 'default'" in helper
     assert "default-bank.svg" in helper
     assert "default-card.svg" in helper
+
+
+def test_helper_usa_asset_real_quando_fornecido_pelo_usuario():
+    helper = read("frontend/static/js/instituicoes.js")
+    css = read("frontend/static/css/instituicoes.css")
+
+    assert "assetReal: 'caixa.png'" in helper
+    assert "assetReal: 'nubank.png'" in helper
+    assert "assetReal: 'nubank-empresa.png'" in helper
+    assert "assetReal: 'inter.png'" in helper
+    assert "assetReal: 'visa.png'" in helper
+    assert "assetReal: 'mastercard.png'" in helper
+    assert "institution-logo--real" in helper
+    assert ".institution-logo--real" in css

@@ -14,7 +14,8 @@
             nome: 'Caixa Economica Federal',
             tipo: 'banco',
             iniciais: 'CEF',
-            cor: '#2563eb'
+            cor: '#2563eb',
+            assetReal: 'caixa.png'
         },
         'banco-do-brasil': {
             key: 'banco-do-brasil',
@@ -42,14 +43,24 @@
             nome: 'Nubank',
             tipo: 'banco',
             iniciais: 'NU',
-            cor: '#7c3aed'
+            cor: '#7c3aed',
+            assetReal: 'nubank.png'
+        },
+        'nubank-empresa': {
+            key: 'nubank-empresa',
+            nome: 'Nubank Empresa',
+            tipo: 'banco',
+            iniciais: 'NU',
+            cor: '#7c3aed',
+            assetReal: 'nubank-empresa.png'
         },
         'inter': {
             key: 'inter',
             nome: 'Banco Inter',
             tipo: 'banco',
             iniciais: 'BI',
-            cor: '#f97316'
+            cor: '#f97316',
+            assetReal: 'inter.png'
         },
         'bradesco': {
             key: 'bradesco',
@@ -99,6 +110,22 @@
             tipo: 'banco',
             iniciais: 'NX',
             cor: '#22c55e'
+        },
+        'visa': {
+            key: 'visa',
+            nome: 'Visa',
+            tipo: 'cartao',
+            iniciais: 'VI',
+            cor: '#1d4ed8',
+            assetReal: 'visa.png'
+        },
+        'mastercard': {
+            key: 'mastercard',
+            nome: 'Mastercard',
+            tipo: 'cartao',
+            iniciais: 'MC',
+            cor: '#dc2626',
+            assetReal: 'mastercard.png'
         }
     };
 
@@ -107,16 +134,14 @@
         'cef': 'caixa',
         'caixa economica': 'caixa',
         'caixa economica federal': 'caixa',
-        'caixa econômica': 'caixa',
-        'caixa econômica federal': 'caixa',
         'banco do brasil': 'banco-do-brasil',
         'bb': 'banco-do-brasil',
         'itau': 'itau',
-        'itaú': 'itau',
         'santander': 'santander',
         'nubank': 'nubank',
         'nu': 'nubank',
         'nu bank': 'nubank',
+        'nubank empresa': 'nubank-empresa',
         'inter': 'inter',
         'banco inter': 'inter',
         'bradesco': 'bradesco',
@@ -129,8 +154,23 @@
         'pagbank': 'pagbank',
         'pag bank': 'pagbank',
         'neon': 'neon',
-        'next': 'next'
+        'next': 'next',
+        'visa': 'visa',
+        'mastercard': 'mastercard',
+        'master card': 'mastercard',
+        'martercard': 'mastercard'
     };
+
+    function resolverAlias(normalizado) {
+        if (ALIASES[normalizado]) {
+            return ALIASES[normalizado];
+        }
+
+        const texto = ` ${normalizado} `;
+        const aliasesOrdenados = Object.keys(ALIASES).sort((a, b) => b.length - a.length);
+        const aliasEncontrado = aliasesOrdenados.find((alias) => texto.includes(` ${alias} `));
+        return aliasEncontrado ? ALIASES[aliasEncontrado] : null;
+    }
 
     function escapeHtml(value) {
         return String(value ?? '').replace(/[&<>"']/g, (char) => ({
@@ -159,14 +199,17 @@
         return `${partes[0][0]}${partes[1][0]}`.toUpperCase();
     }
 
-    function resolverAsset(tipo) {
+    function resolverAsset(tipo, assetReal) {
+        if (assetReal) {
+            return `${ASSET_BASE}${assetReal}`;
+        }
         const asset = DEFAULT_ASSETS[tipo] || DEFAULT_ASSETS.default;
         return `${ASSET_BASE}${asset}`;
     }
 
     function resolverInstituicao(nome, tipo) {
         const normalizado = normalizarInstituicao(nome);
-        const key = ALIASES[normalizado];
+        const key = resolverAlias(normalizado);
         const base = key ? INSTITUICOES[key] : null;
         const tipoResolvido = tipo || base?.tipo || 'banco';
 
@@ -175,8 +218,8 @@
                 ...base,
                 tipo: tipoResolvido,
                 classe: `institution-logo--${base.key}`,
-                asset: resolverAsset(tipoResolvido),
-                usaAssetReal: false
+                asset: resolverAsset(tipoResolvido, base.assetReal),
+                usaAssetReal: Boolean(base.assetReal)
             };
         }
 
@@ -203,12 +246,13 @@
         const info = resolverInstituicao(nome, tipo);
         const label = info.nome || 'Instituicao financeira';
         const cssColor = escapeHtml(info.cor || '#64748b');
+        const realClass = info.usaAssetReal ? 'institution-logo--real' : 'institution-logo--fallback';
 
         return `
-            <span class="institution-logo institution-logo--${escapeHtml(tamanho)} ${escapeHtml(info.classe)}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}" data-institution-key="${escapeHtml(info.key)}" style="--institution-color:${cssColor}">
+            <span class="institution-logo institution-logo--${escapeHtml(tamanho)} ${escapeHtml(info.classe)} ${realClass}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}" data-institution-key="${escapeHtml(info.key)}" style="--institution-color:${cssColor}">
                 <span class="institution-logo__mark" aria-hidden="true">
                     <img class="institution-logo__icon" src="${escapeHtml(info.asset)}" alt="" loading="lazy">
-                    <span class="institution-logo__initials">${escapeHtml(info.iniciais)}</span>
+                    ${info.usaAssetReal ? '' : `<span class="institution-logo__initials">${escapeHtml(info.iniciais)}</span>`}
                 </span>
                 ${mostrarLabel ? `<span class="institution-logo__label">${escapeHtml(label)}</span>` : ''}
             </span>

@@ -33,6 +33,38 @@
     filter: grayscale(1);
 }
 
+.institution-logo--real .institution-logo__mark {
+    border-color: color-mix(in srgb, var(--institution-color) 18%, #dbe3ef);
+    background: #fff;
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+}
+
+.institution-logo--real .institution-logo__icon {
+    inset: 6px;
+    width: calc(100% - 12px);
+    height: calc(100% - 12px);
+    opacity: 1;
+    filter: none;
+}
+
+.institution-logo--real.institution-logo--sm .institution-logo__icon {
+    inset: 3px;
+    width: calc(100% - 6px);
+    height: calc(100% - 6px);
+}
+
+.institution-logo--real.institution-logo--lg .institution-logo__icon {
+    inset: 8px;
+    width: calc(100% - 16px);
+    height: calc(100% - 16px);
+}
+
+.institution-logo--real.institution-logo--xl .institution-logo__icon {
+    inset: 14px;
+    width: calc(100% - 28px);
+    height: calc(100% - 28px);
+}
+
 .institution-logo__initials {
     position: relative;
     z-index: 1;
