@@ -162,6 +162,20 @@
     color: #64748b;
 }
 
+.ir-panel-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.ir-saidas-report-actions .ir-secondary-btn {
+    min-height: 34px;
+    padding: 0 12px;
+    white-space: nowrap;
+}
+
 .ir-table-wrap {
     overflow-x: auto;
     overflow-y: hidden;
@@ -770,6 +784,12 @@
     .ir-upload-badges {
         align-items: flex-start;
         flex-direction: column;
+    }
+
+    .ir-panel-header {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 10px;
     }
 
     .ir-upload-extracted {

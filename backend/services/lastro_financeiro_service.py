@@ -392,6 +392,7 @@ class LastroFinanceiroService:
     @classmethod
     def _aplicar_filtros_basicos(cls, saidas, filtros):
         origem = str(filtros.get('origem') or '').strip().upper()
+        natureza = str(filtros.get('natureza') or '').strip().upper()
         busca = cls._normalizar_texto(filtros.get('busca'))
         valor_minimo = cls._decimal(filtros.get('valor_minimo') or filtros.get('valorMinimo') or 0)
 
@@ -401,6 +402,10 @@ class LastroFinanceiroService:
                 origem_saida = str(saida.get('origem') or '').strip().upper()
                 tipo_saida = str(saida.get('tipo_entidade') or '').strip().upper()
                 if origem not in {origem_saida, tipo_saida}:
+                    continue
+            if natureza and natureza not in {'TODOS', 'TODAS'}:
+                natureza_saida = str(saida.get('natureza_sugerida') or '').strip().upper()
+                if natureza_saida != natureza:
                     continue
             if busca:
                 texto = cls._normalizar_texto(' '.join([

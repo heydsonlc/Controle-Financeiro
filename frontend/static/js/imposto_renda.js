@@ -61,10 +61,13 @@
         $('ir-filtro-categoria')?.addEventListener('change', carregarComprovantes);
         $('ir-filtro-busca')?.addEventListener('input', debounce(carregarComprovantes, 250));
         $('ir-saidas-btn-atualizar')?.addEventListener('click', carregarSaidasSemDocumento);
+        $('ir-saidas-btn-excel')?.addEventListener('click', () => baixarRelatorioSaidasSemDocumento('excel'));
+        $('ir-saidas-btn-pdf')?.addEventListener('click', () => baixarRelatorioSaidasSemDocumento('pdf'));
         $('ir-saidas-filtro-ano')?.addEventListener('change', carregarSaidasSemDocumento);
         $('ir-saidas-filtro-mes')?.addEventListener('change', carregarSaidasSemDocumento);
         $('ir-saidas-filtro-origem')?.addEventListener('change', carregarSaidasSemDocumento);
         $('ir-saidas-filtro-status')?.addEventListener('change', carregarSaidasSemDocumento);
+        $('ir-saidas-filtro-natureza')?.addEventListener('change', carregarSaidasSemDocumento);
         $('ir-saidas-filtro-valor')?.addEventListener('input', debounce(carregarSaidasSemDocumento, 250));
         $('ir-saidas-filtro-busca')?.addEventListener('input', debounce(carregarSaidasSemDocumento, 250));
         $('ir-upload-submit')?.addEventListener('click', enviarArquivos);
@@ -266,6 +269,61 @@
         }, 1200);
     }
 
+    async function baixarRelatorioSaidasSemDocumento(tipo) {
+        if (!modoEmpresa()) {
+            mostrarAviso('Relatorio de lastro empresarial disponivel apenas no perfil Empresa.');
+            return;
+        }
+        const params = montarFiltrosSaidas();
+        const endpoint = tipo === 'pdf' ? 'relatorio-pdf' : 'relatorio-excel';
+        const botao = tipo === 'pdf' ? $('ir-saidas-btn-pdf') : $('ir-saidas-btn-excel');
+        const textoOriginal = botao?.textContent;
+        if (botao) {
+            botao.disabled = true;
+            botao.textContent = 'Gerando...';
+        }
+        try {
+            const resposta = await fetch(`/api/ir/lastro/saidas-sem-documento/${endpoint}?${params.toString()}`);
+            if (!resposta.ok) {
+                let mensagem = 'Nao foi possivel gerar o relatorio.';
+                try {
+                    const erro = await resposta.json();
+                    mensagem = erro.error || mensagem;
+                } catch (error) {
+                    mensagem = resposta.statusText || mensagem;
+                }
+                throw new Error(mensagem);
+            }
+            const blob = await resposta.blob();
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = nomeArquivoResposta(resposta, tipo === 'pdf' ? 'Saidas_sem_documento.pdf' : 'Saidas_sem_documento.xlsx');
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            mostrarAviso(error.message || 'Nao foi possivel gerar o relatorio.');
+        } finally {
+            if (botao) {
+                botao.disabled = false;
+                botao.textContent = textoOriginal;
+            }
+        }
+    }
+
+    function nomeArquivoResposta(resposta, fallback) {
+        const header = resposta.headers.get('Content-Disposition') || '';
+        const match = header.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i);
+        if (!match) return fallback;
+        try {
+            return decodeURIComponent(match[1].replace(/"/g, ''));
+        } catch (error) {
+            return match[1].replace(/"/g, '') || fallback;
+        }
+    }
+
     function renderComprovantes() {
         const tbody = $('ir-comprovantes-tbody');
         if (!tbody) return;
@@ -362,6 +420,8 @@
         if (origem) params.set('origem', origem);
         const status = $('ir-saidas-filtro-status')?.value;
         if (status) params.set('status', status);
+        const natureza = $('ir-saidas-filtro-natureza')?.value;
+        if (natureza) params.set('natureza', natureza);
         const valorMinimo = $('ir-saidas-filtro-valor')?.value;
         if (valorMinimo) params.set('valor_minimo', valorMinimo);
         const busca = $('ir-saidas-filtro-busca')?.value;

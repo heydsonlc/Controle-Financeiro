@@ -8,12 +8,14 @@ try:
     from backend.services.ir_documento_service import IrDocumentoService
     from backend.services.ir_relatorio_service import IrRelatorioService
     from backend.services.lastro_financeiro_service import LastroFinanceiroService
+    from backend.services.lastro_relatorio_service import LastroRelatorioService
 except ImportError:
     from models import db
     from services.documento_fiscal_service import DocumentoFiscalService
     from services.ir_documento_service import IrDocumentoService
     from services.ir_relatorio_service import IrRelatorioService
     from services.lastro_financeiro_service import LastroFinanceiroService
+    from services.lastro_relatorio_service import LastroRelatorioService
 
 
 ir_bp = Blueprint('ir', __name__)
@@ -262,6 +264,38 @@ def marcar_status_saida_sem_documento():
         return _json_error(str(exc), 403)
     except ValueError as exc:
         db.session.rollback()
+        return _json_error(str(exc), 400)
+
+
+@ir_bp.route('/lastro/saidas-sem-documento/relatorio-excel', methods=['GET'])
+def relatorio_saidas_sem_documento_excel():
+    try:
+        arquivo, nome = LastroRelatorioService.gerar_excel(request.args)
+        return send_file(
+            arquivo,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=nome,
+        )
+    except PermissionError as exc:
+        return _json_error(str(exc), 403)
+    except ValueError as exc:
+        return _json_error(str(exc), 400)
+
+
+@ir_bp.route('/lastro/saidas-sem-documento/relatorio-pdf', methods=['GET'])
+def relatorio_saidas_sem_documento_pdf():
+    try:
+        arquivo, nome = LastroRelatorioService.gerar_pdf(request.args)
+        return send_file(
+            arquivo,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=nome,
+        )
+    except PermissionError as exc:
+        return _json_error(str(exc), 403)
+    except ValueError as exc:
         return _json_error(str(exc), 400)
 
 

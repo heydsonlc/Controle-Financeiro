@@ -87,6 +87,10 @@
                     <h2>Saidas sem documento</h2>
                     <p id="ir-saidas-subtitulo">Nenhuma saida sem lastro carregada</p>
                 </div>
+                <div class="ir-panel-actions ir-saidas-report-actions">
+                    <button type="button" class="ir-secondary-btn" id="ir-saidas-btn-excel">Exportar Excel</button>
+                    <button type="button" class="ir-secondary-btn" id="ir-saidas-btn-pdf">Gerar PDF</button>
+                </div>
             </div>
             <div class="ir-lastro-kpis">
                 <article>
@@ -156,6 +160,22 @@
                         <option value="AGUARDANDO_CONTADOR">Aguardando contador</option>
                         <option value="NAO_APLICAVEL">Nao aplicavel</option>
                         <option value="TODOS">Todos sem documento</option>
+                    </select>
+                </label>
+                <label class="ir-filter">
+                    <span>Natureza</span>
+                    <select id="ir-saidas-filtro-natureza">
+                        <option value="">Todas</option>
+                        <option value="DESPESA_OPERACIONAL">Despesa operacional</option>
+                        <option value="PATRIMONIO_IMOBILIZADO">Patrimonio / Imobilizado</option>
+                        <option value="SOFTWARE_ASSINATURA">Software / Assinatura</option>
+                        <option value="IMPOSTO_TAXA">Imposto / taxa</option>
+                        <option value="PRO_LABORE">Pro-labore</option>
+                        <option value="DISTRIBUICAO_LUCROS">Distribuicao de lucros</option>
+                        <option value="REEMBOLSO">Reembolso</option>
+                        <option value="EMPRESTIMO">Emprestimo</option>
+                        <option value="ADIANTAMENTO">Adiantamento</option>
+                        <option value="OUTRO">Outro</option>
                     </select>
                 </label>
                 <label class="ir-filter ir-filter-sm">
