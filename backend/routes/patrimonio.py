@@ -19,10 +19,12 @@ from datetime import datetime, date
 try:
     from backend.models import db, ContaPatrimonio, Transferencia
     from backend.services.patrimonio_empresarial_service import PatrimonioEmpresarialService
+    from backend.services.patrimonio_sugestao_service import PatrimonioSugestaoService
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import db, ContaPatrimonio, Transferencia
     from services.patrimonio_empresarial_service import PatrimonioEmpresarialService
+    from services.patrimonio_sugestao_service import PatrimonioSugestaoService
     from services.perfil_financeiro_service import PerfilFinanceiroService
 
 # Criar blueprint
@@ -110,6 +112,15 @@ def criar_bem_a_partir_documento():
         return _json_success(bem, status=201, message='Bem criado a partir do documento fiscal')
     except Exception as e:
         db.session.rollback()
+        return _handle_empresarial_error(e)
+
+
+@patrimonio_bp.route('/bens/sugestao-a-partir-documento/<int:comprovante_id>', methods=['GET'])
+def sugestao_bem_a_partir_documento(comprovante_id):
+    try:
+        sugestao = PatrimonioSugestaoService.gerar_sugestao(comprovante_id)
+        return _json_success(sugestao)
+    except Exception as e:
         return _handle_empresarial_error(e)
 
 

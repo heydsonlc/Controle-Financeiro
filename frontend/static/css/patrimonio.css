@@ -1351,6 +1351,14 @@ body.patrimonio-empresa-mode .patrimonio-empresa-actions {
     padding: 18px 26px;
 }
 
+.patrimonio-field-hint {
+    color: #b45309;
+    display: block;
+    font-size: 12px;
+    line-height: 1.4;
+    margin-top: 6px;
+}
+
 @media (max-width: 1280px) {
     .patrimonio-summary-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));

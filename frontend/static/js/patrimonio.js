@@ -102,6 +102,7 @@ function configurarEventosEmpresa() {
     document.getElementById('form-bem')?.addEventListener('submit', salvarBemEmpresarial);
     document.getElementById('form-vincular-bem')?.addEventListener('submit', salvarVinculoBem);
     document.getElementById('btn-criar-bem-documento')?.addEventListener('click', criarBemAPartirDocumento);
+    document.getElementById('bem-comprovante')?.addEventListener('change', aplicarSugestaoDocumentoNoModal);
 }
 
 async function carregarPatrimonioEmpresarial() {
@@ -354,6 +355,7 @@ async function abrirModalNovoBem() {
     setValue('bem-id', '');
     setValue('bem-imagem-arquivo', '');
     setValue('bem-status-documental', 'SEM_DOCUMENTO');
+    renderizarAlertasSugestaoBem([]);
     await garantirDadosAuxiliaresBens();
     renderizarOpcoesDocumentos();
     renderizarImagensBens();
@@ -365,6 +367,7 @@ async function abrirModalEditarBem(id) {
     if (!bem) return;
     await garantirDadosAuxiliaresBens();
     preencherFormBem(bem);
+    renderizarAlertasSugestaoBem([]);
     renderizarOpcoesDocumentos();
     renderizarImagensBens();
     abrirModal('modal-bem');
@@ -420,6 +423,13 @@ async function criarBemAPartirDocumento() {
         mostrarErro('Selecione um documento fiscal para criar o bem.');
         return;
     }
+    if (!dados.nome) {
+        const sugestao = await buscarSugestaoDocumento(dados.comprovante_id);
+        if (sugestao) {
+            preencherFormComSugestaoDocumento(sugestao, true);
+            Object.assign(dados, dadosFormBem());
+        }
+    }
     try {
         const response = await fetch(`${API_BASE}/bens/criar-a-partir-documento`, {
             method: 'POST',
@@ -437,6 +447,78 @@ async function criarBemAPartirDocumento() {
         await carregarPatrimonioEmpresarial();
     } catch (error) {
         mostrarErro('Erro ao criar bem a partir do documento');
+    }
+}
+
+async function aplicarSugestaoDocumentoNoModal() {
+    const comprovanteId = Number(document.getElementById('bem-comprovante')?.value) || null;
+    if (!comprovanteId) {
+        renderizarAlertasSugestaoBem([]);
+        return;
+    }
+    const sugestao = await buscarSugestaoDocumento(comprovanteId);
+    if (sugestao) {
+        preencherFormComSugestaoDocumento(sugestao, true);
+    }
+}
+
+async function buscarSugestaoDocumento(comprovanteId) {
+    try {
+        const response = await fetch(`${API_BASE}/bens/sugestao-a-partir-documento/${comprovanteId}`);
+        const result = await response.json();
+        if (!result.success) {
+            mostrarErro(result.error || 'Nao foi possivel gerar sugestao do documento.');
+            return null;
+        }
+        return result.data;
+    } catch (error) {
+        mostrarErro('Erro ao gerar sugestao do documento fiscal');
+        return null;
+    }
+}
+
+function preencherFormComSugestaoDocumento(sugestao, sobrescrever) {
+    if (!sugestao) return;
+    const preencher = (id, valor) => {
+        const campo = document.getElementById(id);
+        if (!campo) return;
+        if (sobrescrever || !campo.value) {
+            campo.value = valor ?? '';
+        }
+    };
+    preencher('bem-nome', sugestao.nome);
+    preencher('bem-categoria', sugestao.categoria || 'Outros');
+    preencher('bem-status-documental', 'COM_LASTRO');
+    preencher('bem-descricao', sugestao.descricao);
+    preencher('bem-imagem-arquivo', sugestao.imagem_arquivo);
+    preencher('bem-valor', sugestao.valor_aquisicao ? formatarMoedaDisplay(sugestao.valor_aquisicao) : '');
+    preencher('bem-data', sugestao.data_aquisicao);
+    preencher('bem-fornecedor', sugestao.fornecedor);
+    preencher('bem-documento-numero', sugestao.documento_numero);
+    preencher('bem-vida-util', sugestao.vida_util_meses);
+    preencher('bem-centro-custo', sugestao.centro_custo);
+    preencher('bem-localizacao', sugestao.localizacao);
+    preencher('bem-responsavel', sugestao.responsavel);
+    preencher('bem-observacoes', sugestao.observacoes);
+    renderizarImagensBens();
+    renderizarAlertasSugestaoBem(sugestao.avisos || []);
+    const botaoCriar = document.getElementById('btn-criar-bem-documento');
+    if (botaoCriar) {
+        botaoCriar.disabled = Boolean(sugestao.bloqueado);
+        botaoCriar.textContent = sugestao.bloqueado ? 'Documento ja vinculado' : 'Criar a partir da nota';
+    }
+}
+
+function renderizarAlertasSugestaoBem(avisos) {
+    const campo = document.getElementById('bem-sugestao-alertas');
+    if (!campo) return;
+    const itens = (avisos || []).filter(Boolean);
+    campo.hidden = !itens.length;
+    campo.textContent = itens.join(' ');
+    const botaoCriar = document.getElementById('btn-criar-bem-documento');
+    if (botaoCriar && !itens.some((aviso) => /ja esta vinculado/i.test(aviso))) {
+        botaoCriar.disabled = false;
+        botaoCriar.textContent = 'Criar a partir da nota';
     }
 }
 

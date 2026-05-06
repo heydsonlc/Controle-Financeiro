@@ -12,6 +12,7 @@
         categoriaIrManual: false,
         contexto: { modo: 'IRPF' },
         sugestaoFinanceira: null,
+        sugestaoPatrimonio: null,
         cartoes: [],
         contasBancarias: [],
     };
@@ -81,6 +82,7 @@
         $('ir-review-validar')?.addEventListener('click', validarComprovante);
         $('ir-review-ocr-reprocess')?.addEventListener('click', reprocessarOcr);
         $('ir-review-financeiro')?.addEventListener('click', abrirSugestaoFinanceira);
+        $('ir-review-patrimonio')?.addEventListener('click', abrirSugestaoPatrimonio);
         $('ir-review-categoria')?.addEventListener('change', resolverCategoriaIrDaDespesa);
         $('ir-review-categoria-ir')?.addEventListener('change', () => {
             estado.categoriaIrManual = true;
@@ -96,6 +98,11 @@
         });
         $('ir-sugestao-cartao')?.addEventListener('change', resolverCategoriaCartaoSugestao);
         $('ir-sugestao-confirmar')?.addEventListener('click', confirmarSugestaoFinanceira);
+        $('ir-sugestao-patrimonio-close')?.addEventListener('click', fecharSugestaoPatrimonio);
+        $('ir-sugestao-patrimonio-cancel')?.addEventListener('click', fecharSugestaoPatrimonio);
+        $('ir-sugestao-patrimonio-confirmar')?.addEventListener('click', confirmarSugestaoPatrimonio);
+        $('ir-patrimonio-valor')?.addEventListener('input', atualizarDepreciacaoPatrimonio);
+        $('ir-patrimonio-vida-util')?.addEventListener('input', atualizarDepreciacaoPatrimonio);
         $('ir-link-close')?.addEventListener('click', fecharVinculo);
         $('ir-link-cancel')?.addEventListener('click', fecharVinculo);
         $('ir-link-save')?.addEventListener('click', salvarVinculo);
@@ -168,6 +175,7 @@
         if ($('ir-review-categoria-ir-label')) $('ir-review-categoria-ir-label').textContent = empresa ? 'Categoria fiscal' : 'Categoria IR';
         if ($('ir-lastro-panel')) $('ir-lastro-panel').hidden = !empresa;
         if ($('ir-saidas-sem-documento-panel')) $('ir-saidas-sem-documento-panel').hidden = !empresa;
+        if ($('ir-review-patrimonio')) $('ir-review-patrimonio').hidden = !empresa;
     }
 
     async function carregarCategoriasIr() {
@@ -1163,6 +1171,147 @@
         }
     }
 
+    async function abrirSugestaoPatrimonio() {
+        const id = $('ir-review-id')?.value;
+        if (!id) {
+            mostrarAviso('Abra a revisao de um documento antes de sugerir um bem patrimonial.');
+            return;
+        }
+        if (!modoEmpresa()) {
+            mostrarAviso('Sugestao patrimonial disponivel apenas no perfil Empresa.');
+            return;
+        }
+        const botao = $('ir-review-patrimonio');
+        const textoOriginal = botao?.textContent;
+        if (botao) {
+            botao.disabled = true;
+            botao.textContent = 'Gerando...';
+        }
+        try {
+            const resposta = await fetch(`/api/patrimonio/bens/sugestao-a-partir-documento/${id}`);
+            const json = await resposta.json();
+            if (!json.success) {
+                mostrarAviso(json.error || 'Nao foi possivel gerar a sugestao patrimonial.');
+                return;
+            }
+            estado.sugestaoPatrimonio = json.data;
+            preencherModalSugestaoPatrimonio(json.data);
+            $('ir-sugestao-patrimonio-modal')?.classList.add('open');
+            $('ir-sugestao-patrimonio-modal')?.setAttribute('aria-hidden', 'false');
+        } finally {
+            if (botao) {
+                botao.disabled = false;
+                botao.textContent = textoOriginal || 'Sugerir bem patrimonial';
+            }
+        }
+    }
+
+    function fecharSugestaoPatrimonio() {
+        $('ir-sugestao-patrimonio-modal')?.classList.remove('open');
+        $('ir-sugestao-patrimonio-modal')?.setAttribute('aria-hidden', 'true');
+    }
+
+    function preencherModalSugestaoPatrimonio(sugestao) {
+        if (!sugestao) return;
+        $('ir-patrimonio-comprovante-id').value = sugestao.comprovante_id;
+        $('ir-patrimonio-imagem-arquivo').value = sugestao.imagem_arquivo || '';
+        $('ir-patrimonio-nome').value = sugestao.nome || '';
+        $('ir-patrimonio-categoria').value = sugestao.categoria || 'Outros';
+        $('ir-patrimonio-fornecedor').value = sugestao.fornecedor || '';
+        $('ir-patrimonio-documento-numero').value = sugestao.documento_numero || '';
+        $('ir-patrimonio-data').value = sugestao.data_aquisicao || '';
+        $('ir-patrimonio-valor').value = sugestao.valor_aquisicao || '';
+        $('ir-patrimonio-vida-util').value = sugestao.vida_util_meses || '';
+        $('ir-patrimonio-centro-custo').value = sugestao.centro_custo || '';
+        $('ir-patrimonio-localizacao').value = sugestao.localizacao || '';
+        $('ir-patrimonio-responsavel').value = sugestao.responsavel || '';
+        $('ir-patrimonio-descricao').value = sugestao.descricao || '';
+        $('ir-patrimonio-observacoes').value = sugestao.observacoes || '';
+        $('ir-patrimonio-documento').innerHTML = `
+            <strong>${escapeHtml(sugestao.documento?.arquivo?.nome_arquivo || sugestao.documento?.label || 'Documento fiscal')}</strong>
+            <small>${escapeHtml(sugestao.fornecedor || 'Fornecedor nao identificado')}${sugestao.documento?.valor != null ? ` - ${formatarMoeda(sugestao.documento.valor)}` : ''}</small>
+        `;
+        renderAlertasPatrimonio(sugestao.avisos || []);
+        atualizarDepreciacaoPatrimonio();
+        const confirmar = $('ir-sugestao-patrimonio-confirmar');
+        if (confirmar) {
+            confirmar.disabled = Boolean(sugestao.bloqueado);
+            confirmar.textContent = sugestao.bloqueado ? 'Documento ja vinculado' : 'Criar bem patrimonial';
+        }
+    }
+
+    function renderAlertasPatrimonio(avisos) {
+        const box = $('ir-patrimonio-alertas');
+        if (!box) return;
+        const itens = (avisos || []).filter(Boolean);
+        if (!itens.length) {
+            box.hidden = true;
+            box.innerHTML = '';
+            return;
+        }
+        box.hidden = false;
+        box.innerHTML = `<ul>${itens.map((aviso) => `<li>${escapeHtml(aviso)}</li>`).join('')}</ul>`;
+    }
+
+    function atualizarDepreciacaoPatrimonio() {
+        const valor = Number($('ir-patrimonio-valor')?.value || 0);
+        const meses = Number($('ir-patrimonio-vida-util')?.value || 0);
+        const campo = $('ir-patrimonio-depreciacao');
+        if (!campo) return;
+        campo.value = valor > 0 && meses > 0 ? formatarMoeda(valor / meses) : '';
+    }
+
+    async function confirmarSugestaoPatrimonio() {
+        const id = $('ir-patrimonio-comprovante-id')?.value;
+        if (!id) return;
+        const botao = $('ir-sugestao-patrimonio-confirmar');
+        const textoOriginal = botao?.textContent;
+        if (botao) {
+            botao.disabled = true;
+            botao.textContent = 'Criando...';
+        }
+        const payload = {
+            comprovante_id: id,
+            nome: $('ir-patrimonio-nome').value,
+            categoria: $('ir-patrimonio-categoria').value,
+            descricao: $('ir-patrimonio-descricao').value,
+            fornecedor: $('ir-patrimonio-fornecedor').value,
+            documento_numero: $('ir-patrimonio-documento-numero').value,
+            data_aquisicao: $('ir-patrimonio-data').value,
+            valor_aquisicao: $('ir-patrimonio-valor').value,
+            vida_util_meses: $('ir-patrimonio-vida-util').value,
+            centro_custo: $('ir-patrimonio-centro-custo').value,
+            localizacao: $('ir-patrimonio-localizacao').value,
+            responsavel: $('ir-patrimonio-responsavel').value,
+            imagem_arquivo: $('ir-patrimonio-imagem-arquivo').value,
+            observacoes: $('ir-patrimonio-observacoes').value,
+            status_documental: 'COM_LASTRO',
+            natureza: 'PATRIMONIO_IMOBILIZADO',
+        };
+        try {
+            const resposta = await fetch('/api/patrimonio/bens/criar-a-partir-documento', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const json = await resposta.json();
+            if (!json.success) {
+                mostrarAviso(json.error || 'Nao foi possivel criar o bem patrimonial.');
+                return;
+            }
+            fecharSugestaoPatrimonio();
+            fecharRevisao();
+            await carregarComprovantes();
+            await carregarSaidasSemDocumento();
+            mostrarAviso('Bem patrimonial criado e vinculado ao documento fiscal.');
+        } finally {
+            if (botao) {
+                botao.disabled = false;
+                botao.textContent = textoOriginal || 'Criar bem patrimonial';
+            }
+        }
+    }
+
     function renderStatus(status) {
         const chave = String(status || 'IMPORTADO').toUpperCase();
         const mapa = {
@@ -1272,6 +1421,7 @@
         abrirStatusSaida,
         verOrigemSaida,
         abrirSugestaoFinanceira,
+        abrirSugestaoPatrimonio,
         carregarComprovantes,
         carregarSaidasSemDocumento,
         reprocessarOcr,

@@ -215,6 +215,7 @@ class PatrimonioEmpresarialService:
         comprovante = cls._obter_comprovante_perfil(cls._parse_int(dados.get('comprovante_id')), perfil_id)
         if not comprovante:
             raise ValueError('Documento fiscal e obrigatorio')
+        cls._validar_documento_sem_vinculo_patrimonial(comprovante.id, perfil_id)
 
         fornecedor = cls._texto(dados.get('fornecedor'), 255) or comprovante.prestador_nome
         nome = cls._texto(dados.get('nome'), 160)
@@ -371,6 +372,7 @@ class PatrimonioEmpresarialService:
         comprovante = cls._obter_comprovante_perfil(comprovante_id, bem.perfil_financeiro_id)
         if not comprovante:
             raise ValueError('Documento fiscal nao encontrado no perfil ativo')
+        cls._validar_documento_sem_vinculo_patrimonial(comprovante.id, bem.perfil_financeiro_id, bem.id)
 
         existentes = IrComprovanteVinculo.query.filter_by(
             perfil_financeiro_id=bem.perfil_financeiro_id,
@@ -406,6 +408,18 @@ class PatrimonioEmpresarialService:
             bem.documento_numero = f'DOC-{comprovante.id}'
         bem.depreciacao_mensal = cls._calcular_depreciacao(bem.valor_aquisicao, bem.vida_util_meses)
         return vinculo
+
+    @classmethod
+    def _validar_documento_sem_vinculo_patrimonial(cls, comprovante_id, perfil_id, bem_id_atual=None):
+        vinculo = IrComprovanteVinculo.query.filter_by(
+            comprovante_id=comprovante_id,
+            perfil_financeiro_id=perfil_id,
+            tipo_entidade='PATRIMONIO',
+            ativo=True,
+        ).first()
+        if vinculo and (bem_id_atual is None or int(vinculo.entidade_id or 0) != int(bem_id_atual or 0)):
+            raise ValueError('Documento fiscal ja esta vinculado a um bem patrimonial')
+        return True
 
     @classmethod
     def _obter_comprovante_perfil(cls, comprovante_id, perfil_id):

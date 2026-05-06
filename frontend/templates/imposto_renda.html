@@ -464,6 +464,7 @@
             <div class="ir-modal-footer">
                 <button type="button" class="ir-secondary-btn" id="ir-review-ocr-reprocess">Reprocessar OCR</button>
                 <button type="button" class="ir-secondary-btn" id="ir-review-financeiro">Gerar sugestao financeira</button>
+                <button type="button" class="ir-secondary-btn" id="ir-review-patrimonio">Sugerir bem patrimonial</button>
                 <button type="button" class="ir-secondary-btn" id="ir-review-save">Salvar revisao</button>
                 <button type="button" class="ir-primary-btn" id="ir-review-validar">Validar comprovante</button>
             </div>
@@ -521,6 +522,52 @@
             <div class="ir-modal-footer">
                 <button type="button" class="ir-secondary-btn" id="ir-sugestao-cancel">Cancelar</button>
                 <button type="button" class="ir-primary-btn" id="ir-sugestao-confirmar">Criar despesa</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="ir-sugestao-patrimonio-modal" class="ir-modal" aria-hidden="true">
+        <div class="ir-modal-dialog ir-sugestao-dialog" role="dialog" aria-modal="true" aria-labelledby="ir-sugestao-patrimonio-title">
+            <div class="ir-modal-header">
+                <div>
+                    <h2 id="ir-sugestao-patrimonio-title">Sugestao de bem patrimonial</h2>
+                    <p>Revise os campos antes de criar o bem empresarial e vincular o documento fiscal.</p>
+                </div>
+                <button type="button" class="ir-modal-close" id="ir-sugestao-patrimonio-close" aria-label="Fechar">&times;</button>
+            </div>
+            <form id="ir-sugestao-patrimonio-form" class="ir-review-form ir-sugestao-form">
+                <input type="hidden" id="ir-patrimonio-comprovante-id">
+                <input type="hidden" id="ir-patrimonio-imagem-arquivo">
+                <div class="ir-form-row-wide ir-sugestao-documento" id="ir-patrimonio-documento"></div>
+                <label class="ir-form-row-wide">Nome do bem<input id="ir-patrimonio-nome" type="text" maxlength="160" required></label>
+                <label>Categoria
+                    <select id="ir-patrimonio-categoria">
+                        <option value="Informatica">Informatica</option>
+                        <option value="Moveis">Moveis</option>
+                        <option value="Equipamentos">Equipamentos</option>
+                        <option value="Estrutura">Estrutura</option>
+                        <option value="Veiculos">Veiculos</option>
+                        <option value="Ferramentas">Ferramentas</option>
+                        <option value="Outros">Outros</option>
+                    </select>
+                </label>
+                <label>Fornecedor<input id="ir-patrimonio-fornecedor" type="text" maxlength="255"></label>
+                <label>Numero da nota<input id="ir-patrimonio-documento-numero" type="text" maxlength="80"></label>
+                <label>Data de aquisicao<input id="ir-patrimonio-data" type="date"></label>
+                <label>Valor de aquisicao<input id="ir-patrimonio-valor" type="number" step="0.01" min="0"></label>
+                <label>Vida util (meses)<input id="ir-patrimonio-vida-util" type="number" min="1"></label>
+                <label>Depreciacao mensal<input id="ir-patrimonio-depreciacao" type="text" readonly></label>
+                <label>Centro de custo<input id="ir-patrimonio-centro-custo" type="text" maxlength="120"></label>
+                <label>Localizacao<input id="ir-patrimonio-localizacao" type="text" maxlength="120"></label>
+                <label>Responsavel<input id="ir-patrimonio-responsavel" type="text" maxlength="120"></label>
+                <label class="ir-form-row-wide">Descricao<textarea id="ir-patrimonio-descricao" rows="3"></textarea></label>
+                <label class="ir-form-row-wide">Observacoes<textarea id="ir-patrimonio-observacoes" rows="4"></textarea></label>
+                <div class="ir-form-row-wide ir-sugestao-alertas" id="ir-patrimonio-alertas" hidden></div>
+                <small class="ir-form-row-wide ir-field-warning">Vida util e depreciacao sao informativas. A validacao contabil deve ser feita pelo contador.</small>
+            </form>
+            <div class="ir-modal-footer">
+                <button type="button" class="ir-secondary-btn" id="ir-sugestao-patrimonio-cancel">Cancelar</button>
+                <button type="button" class="ir-primary-btn" id="ir-sugestao-patrimonio-confirmar">Criar bem patrimonial</button>
             </div>
         </div>
     </div>
