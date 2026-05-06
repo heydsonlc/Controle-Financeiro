@@ -13,6 +13,7 @@ try:
         ContaBancaria,
         ConfigAgregador,
         DespesaPrevista,
+        DocumentoEmpresarialMetadata,
         ItemDespesa,
         LancamentoAgregado,
         MobilidadeAssinatura,
@@ -31,6 +32,7 @@ except ImportError:
         ContaBancaria,
         ConfigAgregador,
         DespesaPrevista,
+        DocumentoEmpresarialMetadata,
         ItemDespesa,
         LancamentoAgregado,
         MobilidadeAssinatura,
@@ -322,6 +324,22 @@ def _contas_a_vencer_7_dias():
     return lista, total
 
 
+def _alertas_documentais():
+    hoje = date.today()
+    limite = hoje + timedelta(days=30)
+    query = PerfilFinanceiroService.aplicar_perfil_query(
+        DocumentoEmpresarialMetadata.query,
+        DocumentoEmpresarialMetadata,
+    ).filter(DocumentoEmpresarialMetadata.data_validade.isnot(None))
+
+    vencidos = query.filter(DocumentoEmpresarialMetadata.data_validade < hoje).count()
+    vencendo = query.filter(
+        DocumentoEmpresarialMetadata.data_validade >= hoje,
+        DocumentoEmpresarialMetadata.data_validade <= limite,
+    ).count()
+    return int(vencidos or 0), int(vencendo or 0)
+
+
 def _alertas_operacionais(categorias, proximos_vencimentos):
     alertas = []
     vencendo_hoje = [item for item in proximos_vencimentos if item['status_visual'] == 'vence_hoje']
@@ -351,6 +369,20 @@ def _alertas_operacionais(categorias, proximos_vencimentos):
             'tipo': 'prevista',
             'nivel': 'atencao',
             'mensagem': f'{atrasadas} despesa(s) prevista(s) atrasada(s)',
+        })
+
+    documentos_vencidos, documentos_vencendo = _alertas_documentais()
+    if documentos_vencidos:
+        alertas.append({
+            'tipo': 'documento_empresarial',
+            'nivel': 'critico',
+            'mensagem': f'{documentos_vencidos} documento(s) empresarial(is) com validade vencida',
+        })
+    if documentos_vencendo:
+        alertas.append({
+            'tipo': 'documento_empresarial',
+            'nivel': 'atencao',
+            'mensagem': f'{documentos_vencendo} documento(s) empresarial(is) com validade vencendo em 30 dias',
         })
 
     return alertas

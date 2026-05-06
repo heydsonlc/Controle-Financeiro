@@ -13,8 +13,11 @@ from backend.models import (
     Conta,
     ContaBancaria,
     ItemDespesa,
+    DocumentoEmpresarialMetadata,
+    IrComprovante,
     LancamentoAgregado,
     MobilidadeCenarioAtivo,
+    PerfilFinanceiro,
 )
 from backend.routes.dashboard import dashboard_bp
 
@@ -213,6 +216,36 @@ def test_alerta_de_limite_acima_de_80_aparece(app_context):
 
     alertas = response.get_json()['data']['alertas']
     assert any('acima de 80%' in alerta['mensagem'] for alerta in alertas)
+
+
+def test_alerta_documental_empresarial_vencendo_aparece_no_dashboard(app_context):
+    empresa = PerfilFinanceiro(nome='Empresa Teste', tipo='EMPRESA', ativo=True, padrao=True)
+    db.session.add(empresa)
+    db.session.flush()
+    comprovante = IrComprovante(
+        perfil_financeiro_id=empresa.id,
+        ano_calendario=date.today().year,
+        prestador_nome='Alvara Empresa',
+        hash_arquivo='dashboard-doc-alerta',
+    )
+    db.session.add(comprovante)
+    db.session.flush()
+    db.session.add(DocumentoEmpresarialMetadata(
+        comprovante_id=comprovante.id,
+        perfil_financeiro_id=empresa.id,
+        tipo_documental='CERTIDAO_LICENCA',
+        categoria_documental='ALVARA_FUNCIONAMENTO',
+        data_validade=date.today() + timedelta(days=10),
+        status_documental='VENCENDO',
+        obrigatorio=True,
+    ))
+    db.session.commit()
+
+    with app_context.test_client() as client:
+        response = client.get('/api/dashboard/resumo')
+
+    alertas = response.get_json()['data']['alertas']
+    assert any('documento(s) empresarial(is) com validade vencendo em 30 dias' in alerta['mensagem'] for alerta in alertas)
 
 
 def test_json_contem_blocos_esperados(app_context):
