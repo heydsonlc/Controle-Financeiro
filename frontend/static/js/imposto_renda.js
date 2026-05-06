@@ -6,6 +6,8 @@
         categoriasDespesa: [],
         comprovantes: [],
         saidasSemDocumento: [],
+        paginaDocumentosEmpresa: 1,
+        paginaSaidas: 1,
         resumoSaidasSemDocumento: {},
         arquivosSelecionados: [],
         resumoImportacao: { enviados: 0, lidos: 0, pendentes: 0, erros: 0 },
@@ -18,6 +20,13 @@
         sugestaoPatrimonio: null,
         cartoes: [],
         contasBancarias: [],
+    };
+    const ITENS_POR_PAGINA_TABELA = 5;
+    const ICONES_ACAO_IMG = {
+        filter: '/static/img/icone_filtro.png',
+        'file-spreadsheet': '/static/img/documento_xlsx.png',
+        'file-text': '/static/img/documento_pdf.png',
+        archive: '/static/img/documento_zip.webp',
     };
 
     const $ = (id) => document.getElementById(id);
@@ -38,6 +47,7 @@
 
     async function inicializarIr() {
         definirAnoPadrao();
+        aplicarIconesAcoesEstaticas();
         vincularEventos();
         await carregarContexto();
         await carregarTaxonomiaDocumental();
@@ -64,9 +74,13 @@
         $('ir-btn-exportar')?.addEventListener('click', () => baixarRelatorio('excel'));
         $('ir-btn-excel')?.addEventListener('click', () => baixarRelatorio('excel'));
         $('ir-btn-pdf')?.addEventListener('click', () => baixarRelatorio('pdf'));
+        $('ir-filtros-avancados-toggle')?.addEventListener('click', alternarFiltrosAvancados);
         $('ir-filtro-ano')?.addEventListener('change', carregarComprovantes);
         $('ir-filtro-status')?.addEventListener('change', carregarComprovantes);
         $('ir-filtro-categoria')?.addEventListener('change', carregarComprovantes);
+        $('ir-filtro-categoria-fiscal-avancada')?.addEventListener('change', carregarComprovantes);
+        $('ir-filtro-validade')?.addEventListener('change', carregarComprovantes);
+        $('ir-filtro-obrigatorio')?.addEventListener('change', carregarComprovantes);
         $('ir-filtro-tipo-documental')?.addEventListener('change', () => {
             estado.tipoDocumentalAtivo = $('ir-filtro-tipo-documental')?.value || '';
             atualizarAbaDocumentalAtiva();
@@ -82,7 +96,7 @@
                 carregarComprovantes();
             });
         });
-        $('ir-saidas-btn-atualizar')?.addEventListener('click', carregarSaidasSemDocumento);
+        $('ir-saidas-filtros-toggle')?.addEventListener('click', alternarFiltrosSaidas);
         $('ir-saidas-btn-excel')?.addEventListener('click', () => baixarRelatorioSaidasSemDocumento('excel'));
         $('ir-saidas-btn-pdf')?.addEventListener('click', () => baixarRelatorioSaidasSemDocumento('pdf'));
         $('ir-saidas-filtro-ano')?.addEventListener('change', carregarSaidasSemDocumento);
@@ -195,11 +209,12 @@
     function aplicarContextoVisual() {
         const empresa = modoEmpresa();
         const titulo = estado.contexto?.titulo || (empresa ? 'Documentos da Empresa' : 'Imposto de Renda');
+        document.body.classList.toggle('ir-doc-empresa', empresa);
         const pageTitle = document.querySelector('.page-title, .topbar-title, .app-topbar-title span, [data-page-title]');
         if (pageTitle) pageTitle.textContent = titulo;
         document.title = titulo;
         if ($('ir-btn-importar')) $('ir-btn-importar').textContent = empresa ? 'Importar documentos' : 'Importar comprovantes';
-        if ($('ir-lista-titulo')) $('ir-lista-titulo').textContent = empresa ? 'Documentos da empresa' : 'Comprovantes';
+        if ($('ir-lista-titulo')) $('ir-lista-titulo').textContent = empresa ? 'Documentos da Empresa' : 'Comprovantes';
         if ($('ir-kpi-total-label')) $('ir-kpi-total-label').textContent = empresa ? 'Documentos cadastrados' : 'Comprovantes';
         if ($('ir-kpi-total-sub')) $('ir-kpi-total-sub').textContent = empresa ? 'todos os tipos' : 'documentos cadastrados';
         if ($('ir-kpi-valor-label')) $('ir-kpi-valor-label').textContent = empresa ? 'Documentos obrigatorios' : 'Valor potencialmente dedutivel';
@@ -208,15 +223,66 @@
         if ($('ir-kpi-pendentes-sub')) $('ir-kpi-pendentes-sub').textContent = empresa ? 'acompanhar renovacoes' : 'aguardando validacao';
         if ($('ir-kpi-categorias-label')) $('ir-kpi-categorias-label').textContent = empresa ? 'Sem lastro' : 'Categorias IR usadas';
         if ($('ir-kpi-categorias-sub')) $('ir-kpi-categorias-sub').textContent = empresa ? 'pagamentos e notas sem vinculo' : 'classificacao potencial';
+        aplicarIconesKpi(empresa);
         if ($('ir-pendencias-titulo')) $('ir-pendencias-titulo').textContent = empresa ? 'Pendencias de lastro' : 'Pendencias';
         if ($('ir-filtro-categoria-label')) $('ir-filtro-categoria-label').textContent = empresa ? 'Categoria fiscal' : 'Categoria IR';
+        if ($('ir-filtro-categoria-wrap')) $('ir-filtro-categoria-wrap').hidden = empresa;
         if ($('ir-review-categoria-ir-label')) $('ir-review-categoria-ir-label').textContent = empresa ? 'Categoria fiscal' : 'Categoria IR';
-        if ($('ir-lastro-panel')) $('ir-lastro-panel').hidden = !empresa;
         if ($('ir-saidas-sem-documento-panel')) $('ir-saidas-sem-documento-panel').hidden = !empresa;
         if ($('ir-review-patrimonio')) $('ir-review-patrimonio').hidden = !empresa;
         document.querySelectorAll('.ir-empresa-only').forEach((el) => { el.hidden = !empresa; });
         document.querySelectorAll('.ir-irpf-side').forEach((el) => { el.hidden = empresa; });
         atualizarStatusSelectPorContexto();
+    }
+
+    function aplicarIconesKpi(empresa) {
+        const mapa = empresa
+            ? [
+                ['.ir-kpi-card.blue .ir-kpi-icon', 'receipt', 'Doc'],
+                ['.ir-kpi-card.green .ir-kpi-icon', 'shield', '$'],
+                ['.ir-kpi-card.yellow .ir-kpi-icon', 'calendar', '!'],
+                ['.ir-kpi-card.purple .ir-kpi-icon', 'tag', '#'],
+                ['.ir-kpi-card.orange .ir-kpi-icon', 'briefcase', '!'],
+            ]
+            : [
+                ['.ir-kpi-card.blue .ir-kpi-icon', 'receipt', 'Doc'],
+                ['.ir-kpi-card.green .ir-kpi-icon', 'cash', '$'],
+                ['.ir-kpi-card.yellow .ir-kpi-icon', 'tag', '!'],
+                ['.ir-kpi-card.purple .ir-kpi-icon', 'book', '#'],
+            ];
+        mapa.forEach(([selector, icone, fallback]) => {
+            const el = document.querySelector(selector);
+            if (!el) return;
+            el.innerHTML = typeof window.renderIcon === 'function'
+                ? window.renderIcon(icone, { size: '24px' })
+                : fallback;
+        });
+    }
+
+    function aplicarIconesAcoesEstaticas() {
+        document.querySelectorAll('[data-ir-icon]').forEach((el) => {
+            const label = el.textContent.trim() || el.getAttribute('aria-label') || el.title || 'Acao';
+            const icone = renderIconeAcao(el.getAttribute('data-ir-icon'));
+            el.innerHTML = `${icone}<span>${escapeHtml(label)}</span>`;
+        });
+    }
+
+    function alternarFiltrosAvancados() {
+        const panel = $('ir-filtros-avancados-panel');
+        const trigger = $('ir-filtros-avancados-toggle');
+        if (!panel || !trigger) return;
+        const aberto = panel.hidden;
+        panel.hidden = !aberto;
+        trigger.setAttribute('aria-expanded', String(aberto));
+    }
+
+    function alternarFiltrosSaidas() {
+        const panel = $('ir-saidas-filtros-panel');
+        const trigger = $('ir-saidas-filtros-toggle');
+        if (!panel || !trigger) return;
+        const aberto = panel.hidden;
+        panel.hidden = !aberto;
+        trigger.setAttribute('aria-expanded', String(aberto));
     }
 
     function preencherSelectsTaxonomiaDocumental() {
@@ -297,6 +363,7 @@
 
     function preencherSelectCategoriasIr() {
         const filtro = $('ir-filtro-categoria');
+        const filtroAvancado = $('ir-filtro-categoria-fiscal-avancada');
         const review = $('ir-review-categoria-ir');
         if (filtro) {
             const atual = filtro.value;
@@ -304,6 +371,13 @@
                 `<option value="${cat.id}">${escapeHtml(cat.nome)}</option>`
             )).join('');
             filtro.value = atual;
+        }
+        if (filtroAvancado) {
+            const atual = filtroAvancado.value;
+            filtroAvancado.innerHTML = '<option value="">Todas</option>' + estado.categoriasIr.map((cat) => (
+                `<option value="${cat.id}">${escapeHtml(cat.nome)}</option>`
+            )).join('');
+            filtroAvancado.value = atual;
         }
         if (review) {
             const vazio = estado.categoriasIr.length ? 'Selecione...' : 'Nenhuma Categoria IR cadastrada';
@@ -357,6 +431,7 @@
         const resposta = await fetch(`/api/ir/comprovantes?${params.toString()}`);
         const json = await resposta.json();
         estado.comprovantes = json.data || [];
+        estado.paginaDocumentosEmpresa = 1;
         renderComprovantes();
         renderResumo(json.resumo || {});
     }
@@ -372,8 +447,16 @@
         if (modoEmpresa() && tipoDocumental) params.set('tipo_documental', tipoDocumental);
         const categoriaDocumental = $('ir-filtro-categoria-documental')?.value;
         if (modoEmpresa() && categoriaDocumental) params.set('categoria_documental', categoriaDocumental);
-        const categoriaIr = $('ir-filtro-categoria')?.value;
+        const categoriaIr = modoEmpresa()
+            ? $('ir-filtro-categoria-fiscal-avancada')?.value
+            : $('ir-filtro-categoria')?.value;
         if (categoriaIr) params.set('categoria_ir_id', categoriaIr);
+        if (modoEmpresa()) {
+            const validade = $('ir-filtro-validade')?.value;
+            const obrigatorio = $('ir-filtro-obrigatorio')?.value;
+            if (validade) params.set('validade', validade);
+            if (obrigatorio) params.set('obrigatorio', obrigatorio);
+        }
         const busca = $('ir-filtro-busca')?.value;
         if (busca) params.set('busca', busca);
         return params;
@@ -405,10 +488,10 @@
         const params = montarFiltrosSaidas();
         const endpoint = tipo === 'pdf' ? 'relatorio-pdf' : 'relatorio-excel';
         const botao = tipo === 'pdf' ? $('ir-saidas-btn-pdf') : $('ir-saidas-btn-excel');
-        const textoOriginal = botao?.textContent;
+        const textoOriginal = botao?.innerHTML;
         if (botao) {
             botao.disabled = true;
-            botao.textContent = 'Gerando...';
+            botao.innerHTML = 'Gerando...';
         }
         try {
             const resposta = await fetch(`/api/ir/lastro/saidas-sem-documento/${endpoint}?${params.toString()}`);
@@ -436,7 +519,7 @@
         } finally {
             if (botao) {
                 botao.disabled = false;
-                botao.textContent = textoOriginal;
+                botao.innerHTML = textoOriginal;
             }
         }
     }
@@ -459,17 +542,27 @@
         if (!estado.comprovantes.length) {
             const colunas = modoEmpresa() ? 7 : 10;
             tbody.innerHTML = `<tr><td colspan="${colunas}" class="ir-empty">Nenhum documento cadastrado para este ano.</td></tr>`;
-            $('ir-lista-subtitulo').textContent = modoEmpresa() ? '0 documentos encontrados' : '0 comprovantes encontrados';
+            $('ir-lista-subtitulo').textContent = modoEmpresa() ? '- (0 documento(s) encontrado(s))' : '0 comprovantes encontrados';
+            renderPaginacaoTabela('ir-comprovantes-pagination', 0, 1, 'irParaPaginaDocumentos');
             return;
         }
 
         $('ir-lista-subtitulo').textContent = modoEmpresa()
-            ? `${estado.comprovantes.length} documento(s) encontrado(s)`
+            ? `- (${estado.comprovantes.length} documento(s) encontrado(s))`
             : `${estado.comprovantes.length} comprovante(s) encontrado(s)`;
         if (modoEmpresa()) {
-            tbody.innerHTML = estado.comprovantes.map((item) => renderLinhaDocumentoEmpresa(item)).join('');
+            estado.paginaDocumentosEmpresa = paginaValida(estado.paginaDocumentosEmpresa, estado.comprovantes.length);
+            const itens = itensDaPagina(estado.comprovantes, estado.paginaDocumentosEmpresa);
+            tbody.innerHTML = itens.map((item) => renderLinhaDocumentoEmpresa(item)).join('');
+            renderPaginacaoTabela(
+                'ir-comprovantes-pagination',
+                estado.comprovantes.length,
+                estado.paginaDocumentosEmpresa,
+                'irParaPaginaDocumentos'
+            );
             return;
         }
+        renderPaginacaoTabela('ir-comprovantes-pagination', 0, 1, 'irParaPaginaDocumentos');
         tbody.innerHTML = estado.comprovantes.map((item) => `
             <tr>
                 <td>${formatarData(item.data_documento)}</td>
@@ -483,9 +576,9 @@
                 <td>${renderStatus(item.status)}</td>
                 <td>
                     <span class="ir-row-actions">
-                        <button type="button" class="ir-icon-btn" title="Revisar" onclick="window.IRDoc.abrirRevisao(${item.id})">Ver</button>
+                        ${renderBotaoAcaoLinha('eye', 'Revisar', `window.IRDoc.abrirRevisao(${item.id})`)}
                         ${modoEmpresa() ? `<button type="button" class="ir-icon-btn" title="Vincular" onclick="window.IRDoc.abrirVinculo(${item.id})">Vincular</button>` : ''}
-                        <a class="ir-icon-btn" title="Abrir arquivo" href="/api/ir/comprovantes/${item.id}/arquivo" target="_blank" rel="noopener">PDF</a>
+                        ${renderLinkAcaoLinha('file-text', 'Abrir arquivo', `/api/ir/comprovantes/${item.id}/arquivo`)}
                     </span>
                 </td>
             </tr>
@@ -499,11 +592,11 @@
             head.innerHTML = `
                 <tr>
                     <th>Documento</th>
-                    <th>Tipo</th>
                     <th>Categoria</th>
                     <th>Emissao</th>
-                    <th>Validade</th>
                     <th>Status</th>
+                    <th>Tipo</th>
+                    <th>Validade</th>
                     <th>Acoes</th>
                 </tr>
             `;
@@ -528,32 +621,70 @@
     function renderLinhaDocumentoEmpresa(item) {
         const metadata = item.metadata_empresarial || {};
         const icone = renderIconeDocumental(item.icone_documental || metadata.icone || 'tag');
+        const classeIcone = classeIconeDocumental(item.tipo_documental || metadata.tipo_documental, item.categoria_documental || metadata.categoria_documental);
         const nome = item.prestador_nome || item.arquivo?.nome_arquivo || `Documento #${item.id}`;
-        const arquivo = item.arquivo?.nome_arquivo || '';
         return `
             <tr>
                 <td>
                     <span class="ir-doc-cell">
-                        <span class="ir-doc-icon">${icone}</span>
-                        <span>
-                            <strong>${escapeHtml(nome)}</strong>
-                            <small>${escapeHtml(arquivo || item.prestador_cpf_cnpj || 'Documento empresarial')}</small>
-                        </span>
+                        <span class="ir-doc-icon ${classeIcone}">${icone}</span>
+                        <strong title="${escapeHtml(nome)}">${escapeHtml(nome)}</strong>
                     </span>
                 </td>
-                <td>${escapeHtml(item.tipo_documental_label || metadata.tipo_documental_label || 'Outro')}</td>
                 <td>${escapeHtml(item.categoria_documental_label || metadata.categoria_documental_label || 'Sem categoria')}</td>
                 <td>${formatarData(metadata.data_emissao || item.data_documento)}</td>
-                <td>${metadata.data_validade ? formatarData(metadata.data_validade) : 'Permanente'}</td>
                 <td>${renderStatusDocumental(item.status_documental || metadata.status_documental)}</td>
+                <td>${escapeHtml(item.tipo_documental_label || metadata.tipo_documental_label || 'Outro')}</td>
+                <td>${metadata.data_validade ? formatarData(metadata.data_validade) : 'Permanente'}</td>
                 <td>
                     <span class="ir-row-actions">
-                        <button type="button" class="ir-icon-btn" title="Revisar" onclick="window.IRDoc.abrirRevisao(${item.id})">Ver</button>
-                        <button type="button" class="ir-icon-btn" title="Vincular" onclick="window.IRDoc.abrirVinculo(${item.id})">Vincular</button>
-                        <a class="ir-icon-btn" title="Abrir arquivo" href="/api/ir/comprovantes/${item.id}/arquivo" target="_blank" rel="noopener">PDF</a>
+                        ${renderBotaoAcaoLinha('eye', 'Revisar', `window.IRDoc.abrirRevisao(${item.id})`)}
+                        ${renderBotaoAcaoLinha('link', 'Vincular', `window.IRDoc.abrirVinculo(${item.id})`)}
+                        ${renderLinkAcaoLinha('file-text', 'Abrir arquivo', `/api/ir/comprovantes/${item.id}/arquivo`)}
                     </span>
                 </td>
             </tr>
+        `;
+    }
+
+    function itensDaPagina(lista, pagina) {
+        const inicio = (pagina - 1) * ITENS_POR_PAGINA_TABELA;
+        return lista.slice(inicio, inicio + ITENS_POR_PAGINA_TABELA);
+    }
+
+    function paginaValida(pagina, total) {
+        const totalPaginas = Math.max(1, Math.ceil(total / ITENS_POR_PAGINA_TABELA));
+        return Math.min(Math.max(Number(pagina) || 1, 1), totalPaginas);
+    }
+
+    function renderPaginacaoTabela(id, total, pagina, acao) {
+        const destino = $(id);
+        if (!destino) return;
+        if (!total) {
+            destino.hidden = true;
+            destino.innerHTML = '';
+            return;
+        }
+        const totalPaginas = Math.max(1, Math.ceil(total / ITENS_POR_PAGINA_TABELA));
+        const paginaAtual = paginaValida(pagina, total);
+        const inicio = ((paginaAtual - 1) * ITENS_POR_PAGINA_TABELA) + 1;
+        const fim = Math.min(total, paginaAtual * ITENS_POR_PAGINA_TABELA);
+        const primeiroBotao = Math.max(1, Math.min(paginaAtual - 2, Math.max(1, totalPaginas - 4)));
+        const ultimoBotao = Math.min(totalPaginas, primeiroBotao + 4);
+        const botoes = [];
+        for (let numero = primeiroBotao; numero <= ultimoBotao; numero += 1) {
+            botoes.push(`
+                <button type="button" class="${numero === paginaAtual ? 'active' : ''}" onclick="window.IRDoc.${acao}(${numero})" aria-label="Ir para pagina ${numero}">${numero}</button>
+            `);
+        }
+        destino.hidden = false;
+        destino.innerHTML = `
+            <span>Exibindo ${inicio} a ${fim} de ${total} registros</span>
+            <div class="ir-pagination-controls">
+                <button type="button" onclick="window.IRDoc.${acao}(${paginaAtual - 1})" ${paginaAtual <= 1 ? 'disabled' : ''} aria-label="Pagina anterior">${renderIconeAcao('chevron-left')}</button>
+                ${botoes.join('')}
+                <button type="button" onclick="window.IRDoc.${acao}(${paginaAtual + 1})" ${paginaAtual >= totalPaginas ? 'disabled' : ''} aria-label="Proxima pagina">${renderIconeAcao('chevron-right')}</button>
+            </div>
         `;
     }
 
@@ -578,14 +709,6 @@
         $('ir-pendencias').innerHTML = modoEmpresa()
             ? `<span>${lastro.documentos_sem_vinculo || 0} documentos sem vinculo de lastro</span>`
             : `<span>${resumo.pendentes_revisao || 0} documentos pendentes de revisao</span>`;
-        if ($('ir-lastro-resumo')) {
-            $('ir-lastro-resumo').innerHTML = `
-                <span>${lastro.documentos_vinculados || 0} documentos vinculados</span>
-                <span>${lastro.documentos_sem_vinculo || 0} sem vinculo</span>
-                <span>${formatarMoeda(lastro.valor_sem_lastro || 0)} sem lastro</span>
-            `;
-        }
-
         const totais = resumo.totais_por_categoria_ir || [];
         const destino = $('ir-totais-categorias');
         if (!destino) return;
@@ -613,39 +736,41 @@
     }
 
     function renderPainelDocumentosEmpresa(resumo) {
-        const vencimentos = $('ir-proximos-vencimentos');
-        if (vencimentos) {
-            const itens = resumo.proximos_vencimentos || [];
-            vencimentos.innerHTML = itens.length ? itens.map((item) => `
-                <div class="ir-side-item">
-                    <span>${escapeHtml(item.documento)}<small>${escapeHtml(item.categoria_documental_label || '')}</small></span>
-                    <strong>${formatarData(item.data_validade)}</strong>
-                </div>
-            `).join('') : '<p class="ir-empty">Nenhum vencimento proximo.</p>';
-        }
         const tipos = $('ir-tipos-documentos');
         if (tipos) {
             const itens = resumo.distribuicao_por_tipo || [];
-            tipos.innerHTML = itens.length ? itens.map((item) => `
-                <div class="ir-side-item">
-                    <span>${renderIconeDocumental(item.icone)} ${escapeHtml(item.rotulo)}</span>
-                    <strong>${item.quantidade || 0}</strong>
+            const maior = Math.max(...itens.map((item) => Number(item.quantidade) || 0), 1);
+            tipos.innerHTML = itens.length ? itens.map((item, index) => {
+                const quantidade = Number(item.quantidade) || 0;
+                const largura = Math.max(8, Math.round((quantidade / maior) * 100));
+                const cor = classeSequencial(index);
+                return `
+                <div class="ir-side-item ir-side-item--type">
+                    <span class="ir-side-type-name">${escapeHtml(item.rotulo)}</span>
+                    <strong>${quantidade}</strong>
+                    <span class="ir-side-bar"><span class="${escapeHtml(cor)}" style="width:${largura}%"></span></span>
                 </div>
-            `).join('') : '<p class="ir-empty">Nenhum tipo consolidado.</p>';
+            `;
+            }).join('') : '<p class="ir-empty">Nenhum tipo consolidado.</p>';
         }
         const checklist = $('ir-checklist-empresarial');
         if (checklist) {
             const itens = resumo.checklist_empresarial || [];
             checklist.innerHTML = itens.length ? itens.map((item) => {
                 const status = String(item.status || 'pendente').toLowerCase();
+                const icone = status === 'ok' ? 'shield' : 'calendar';
                 return `
                     <div class="ir-check-item">
-                        <span>${escapeHtml(item.label)}</span>
+                        <span class="ir-check-label"><span class="ir-check-icon ${escapeHtml(status)}">${renderIconeDocumental(icone)}</span>${escapeHtml(item.label)}</span>
                         <span class="ir-check-status ${escapeHtml(status)}">${escapeHtml(status)}</span>
                     </div>
                 `;
             }).join('') : '<p class="ir-empty">Checklist ainda sem documentos.</p>';
         }
+    }
+
+    function classeSequencial(index) {
+        return ['c-blue', 'c-purple', 'c-green', 'c-orange', 'c-teal', 'c-red'][index % 6];
     }
 
     function preencherSelectsNaturezaLastro() {
@@ -695,6 +820,7 @@
             if (!listaJson.success) throw new Error(listaJson.error || 'Erro ao carregar saidas sem documento.');
             if (!resumoJson.success) throw new Error(resumoJson.error || 'Erro ao carregar resumo de lastro.');
             estado.saidasSemDocumento = listaJson.data || [];
+            estado.paginaSaidas = 1;
             estado.resumoSaidasSemDocumento = resumoJson.data || {};
             renderResumoSaidasSemDocumento(estado.resumoSaidasSemDocumento);
             renderSaidasSemDocumento();
@@ -718,39 +844,61 @@
         if (!tbody) return;
         if (!modoEmpresa()) {
             tbody.innerHTML = '<tr><td colspan="8" class="ir-empty">Disponivel apenas no perfil Empresa.</td></tr>';
-            if (subtitulo) subtitulo.textContent = 'Disponivel apenas no perfil Empresa';
+            if (subtitulo) subtitulo.textContent = '- (Disponivel apenas no perfil Empresa)';
+            renderPaginacaoTabela('ir-saidas-pagination', 0, 1, 'irParaPaginaSaidas');
             return;
         }
         if (!estado.saidasSemDocumento.length) {
             tbody.innerHTML = '<tr><td colspan="8" class="ir-empty">Nenhuma saida sem documento no periodo.</td></tr>';
-            if (subtitulo) subtitulo.textContent = '0 saidas sem documento encontradas';
+            if (subtitulo) subtitulo.textContent = '- (0 saida(s) sem documento encontrada(s))';
+            renderPaginacaoTabela('ir-saidas-pagination', 0, 1, 'irParaPaginaSaidas');
             return;
         }
-        if (subtitulo) subtitulo.textContent = `${estado.saidasSemDocumento.length} saida(s) sem documento encontrada(s)`;
-        tbody.innerHTML = estado.saidasSemDocumento.map((saida) => `
+        if (subtitulo) subtitulo.textContent = `- (${estado.saidasSemDocumento.length} saida(s) sem documento encontrada(s))`;
+        estado.paginaSaidas = paginaValida(estado.paginaSaidas, estado.saidasSemDocumento.length);
+        const itens = itensDaPagina(estado.saidasSemDocumento, estado.paginaSaidas);
+        renderPaginacaoTabela('ir-saidas-pagination', estado.saidasSemDocumento.length, estado.paginaSaidas, 'irParaPaginaSaidas');
+        tbody.innerHTML = itens.map((saida) => `
             <tr>
-                <td>${formatarData(saida.data)}</td>
-                <td>${escapeHtml(saida.origem || '-')}</td>
                 <td>
-                    <span class="ir-saida-descricao">
-                        <strong>${escapeHtml(saida.descricao || 'Saida financeira')}</strong>
-                        <small>${escapeHtml(saida.tipo_entidade)} #${escapeHtml(saida.entidade_id)}</small>
+                    <span class="ir-saida-cell">
+                        <span class="ir-doc-icon ${escapeHtml(classeIconeSaida(saida))}">${renderIconeDocumental(iconeSaidaLastro(saida))}</span>
+                        <span class="ir-saida-descricao" title="${escapeHtml(saida.descricao || 'Saida financeira')}">${escapeHtml(saida.descricao || 'Saida financeira')}</span>
                     </span>
                 </td>
                 <td>${escapeHtml(saida.categoria || '-')}</td>
+                <td>${formatarData(saida.data)}</td>
+                <td>${renderLastro(saida.status_lastro)}</td>
+                <td>${escapeHtml(saida.origem || '-')}</td>
                 <td>${formatarMoeda(saida.valor)}</td>
                 <td>${formatarNatureza(saida.natureza_sugerida)}</td>
-                <td>${renderLastro(saida.status_lastro)}</td>
                 <td>
                     <span class="ir-saida-actions">
-                        <button type="button" class="ir-icon-btn" title="Vincular documento" onclick="window.IRDoc.abrirVinculoSaida('${saida.tipo_entidade}', ${saida.entidade_id})">Vincular</button>
-                        <button type="button" class="ir-icon-btn" title="Aguardando contador" onclick="window.IRDoc.abrirStatusSaida('${saida.tipo_entidade}', ${saida.entidade_id}, 'AGUARDANDO_CONTADOR')">Contador</button>
-                        <button type="button" class="ir-icon-btn" title="Nao aplicavel" onclick="window.IRDoc.abrirStatusSaida('${saida.tipo_entidade}', ${saida.entidade_id}, 'NAO_APLICAVEL')">N/A</button>
-                        <button type="button" class="ir-icon-btn" title="Ver origem" onclick="window.IRDoc.verOrigemSaida('${saida.tipo_entidade}', ${saida.entidade_id})">Origem</button>
+                        ${renderBotaoAcaoLinha('link', 'Vincular documento', `window.IRDoc.abrirVinculoSaida('${saida.tipo_entidade}', ${saida.entidade_id})`)}
+                        ${renderBotaoAcaoLinha('user', 'Aguardando contador', `window.IRDoc.abrirStatusSaida('${saida.tipo_entidade}', ${saida.entidade_id}, 'AGUARDANDO_CONTADOR')`)}
+                        ${renderBotaoAcaoLinha('ban', 'Nao aplicavel', `window.IRDoc.abrirStatusSaida('${saida.tipo_entidade}', ${saida.entidade_id}, 'NAO_APLICAVEL')`)}
+                        ${renderBotaoAcaoLinha('info', 'Ver origem', `window.IRDoc.verOrigemSaida('${saida.tipo_entidade}', ${saida.entidade_id})`)}
                     </span>
                 </td>
             </tr>
         `).join('');
+    }
+
+    function iconeSaidaLastro(saida) {
+        const status = String(saida?.status_lastro || '').toUpperCase();
+        if (status === 'AGUARDANDO_CONTADOR') return 'user';
+        if (status === 'NAO_APLICAVEL') return 'ban';
+        const origem = String(saida?.origem || saida?.tipo_entidade || '').toUpperCase();
+        if (origem.includes('LANCAMENTO') || origem.includes('MOVIMENTO')) return 'receipt';
+        if (origem.includes('CONTA') || origem.includes('DESPESA')) return 'tag';
+        return 'receipt';
+    }
+
+    function classeIconeSaida(saida) {
+        const status = String(saida?.status_lastro || '').toUpperCase();
+        if (status === 'AGUARDANDO_CONTADOR') return 'document-type--procuracao';
+        if (status === 'NAO_APLICAVEL') return 'document-type--contrato';
+        return 'document-type--financeiro';
     }
 
     function buscarSaida(tipoEntidade, entidadeId) {
@@ -887,6 +1035,7 @@
     function selecionarArquivos(fileList) {
         estado.arquivosSelecionados = Array.from(fileList || []);
         $('ir-upload-count').textContent = `${estado.arquivosSelecionados.length} arquivo(s) selecionado(s)`;
+        atualizarResumoImportacao();
         renderArquivosSelecionados();
     }
 
@@ -947,10 +1096,20 @@
             return renderUploadComprovante(comprovante, resultado.data || {}, status, anoUpload);
         }).join('');
         estado.resumoImportacao = resumo;
-        $('ir-import-enviados').textContent = resumo.enviados;
-        $('ir-import-lidos').textContent = resumo.lidos;
-        $('ir-import-pendentes').textContent = resumo.pendentes;
-        $('ir-import-erros').textContent = resumo.erros;
+        atualizarResumoImportacao();
+    }
+
+    function atualizarResumoImportacao() {
+        const resumo = estado.resumoImportacao || {};
+        const enviados = estado.arquivosSelecionados.length || resumo.enviados || 0;
+        [
+            ['ir-import-enviados', resumo.enviados || enviados],
+            ['ir-import-lidos', resumo.lidos || 0],
+            ['ir-import-pendentes', resumo.pendentes || (estado.arquivosSelecionados.length ? estado.arquivosSelecionados.length : 0)],
+            ['ir-import-erros', resumo.erros || 0],
+        ].forEach(([id, valor]) => {
+            if ($(id)) $(id).textContent = String(valor);
+        });
     }
 
     function renderUploadComprovante(comprovante, resultado, status, anoUpload) {
@@ -1604,18 +1763,26 @@
         const mapa = {
             ATIVO: ['validado', 'Ativo'],
             VALIDO: ['validado', 'Valido'],
-            VENCENDO: ['pendente', 'Vencendo'],
+            VENCENDO: ['vencendo', 'Vencendo'],
             VENCIDO: ['erro', 'Vencido'],
             PENDENTE: ['pendente', 'Pendente'],
             EM_REVISAO: ['pendente', 'Em revisao'],
-            AGUARDANDO_CONTADOR: ['pendente', 'Aguardando contador'],
-            SEM_LASTRO: ['erro', 'Sem lastro'],
+            AGUARDANDO_CONTADOR: ['contador', 'Aguardando contador'],
+            SEM_LASTRO: ['sem-lastro', 'Sem lastro'],
             COM_LASTRO: ['classificado', 'Com lastro'],
-            NAO_APLICAVEL: ['importado', 'Nao aplicavel'],
-            ARQUIVADO: ['importado', 'Arquivado'],
+            NAO_APLICAVEL: ['neutral', 'Nao aplicavel'],
+            ARQUIVADO: ['neutral', 'Arquivado'],
         };
         const [classe, label] = mapa[chave] || mapa.ATIVO;
         return `<span class="ir-status ${classe}">${label}</span>`;
+    }
+
+    function classeStatusDocumental(status) {
+        const chave = String(status || '').toUpperCase();
+        if (['ATIVO', 'VALIDO', 'COM_LASTRO'].includes(chave)) return 'ok';
+        if (chave === 'VENCENDO' || chave === 'AGUARDANDO_CONTADOR') return 'warning';
+        if (chave === 'VENCIDO' || chave === 'SEM_LASTRO') return 'danger';
+        return 'neutral';
     }
 
     function renderIconeDocumental(chave) {
@@ -1623,6 +1790,43 @@
             return window.renderIcon(chave || 'tag', { size: '18px' });
         }
         return '';
+    }
+
+    function renderIconeAcao(chave) {
+        if (ICONES_ACAO_IMG[chave]) {
+            return `<img class="ir-action-img" src="${ICONES_ACAO_IMG[chave]}" alt="" aria-hidden="true">`;
+        }
+        if (typeof window.renderIcon === 'function') {
+            return window.renderIcon(chave || 'default', { size: '15px' });
+        }
+        return '';
+    }
+
+    function renderBotaoAcaoLinha(icone, label, onclick) {
+        return `
+            <button type="button" class="ir-icon-btn ir-icon-only" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}" onclick="${escapeHtml(onclick)}">
+                ${renderIconeAcao(icone)}<span class="sr-only">${escapeHtml(label)}</span>
+            </button>
+        `;
+    }
+
+    function renderLinkAcaoLinha(icone, label, href) {
+        return `
+            <a class="ir-icon-btn ir-icon-only" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}" href="${escapeHtml(href)}" target="_blank" rel="noopener">
+                ${renderIconeAcao(icone)}<span class="sr-only">${escapeHtml(label)}</span>
+            </a>
+        `;
+    }
+
+    function classeIconeDocumental(tipo, categoria) {
+        const chave = String(tipo || categoria || '').toUpperCase();
+        if (['DOCUMENTO_OBRIGATORIO', 'CERTIDAO_LICENCA'].includes(chave)) return 'document-type--obrigatorio';
+        if (['DOCUMENTO_SOCIETARIO'].includes(chave)) return 'document-type--societario';
+        if (['PROCURACAO_REPRESENTACAO'].includes(chave)) return 'document-type--procuracao';
+        if (['PAGAMENTO_REALIZADO', 'NOTA_FISCAL_RECEBIDA', 'NOTA_FISCAL_EMITIDA'].includes(chave)) return 'document-type--financeiro';
+        if (['PATRIMONIO_IMOBILIZADO'].includes(chave)) return 'document-type--patrimonio';
+        if (['CONTRATO_INSTRUMENTO', 'CONTABIL_FISCAL'].includes(chave)) return 'document-type--contrato';
+        return 'document-type--default';
     }
 
     function renderLastro(status) {
@@ -1711,6 +1915,16 @@
         };
     }
 
+    function irParaPaginaDocumentos(pagina) {
+        estado.paginaDocumentosEmpresa = paginaValida(pagina, estado.comprovantes.length);
+        renderComprovantes();
+    }
+
+    function irParaPaginaSaidas(pagina) {
+        estado.paginaSaidas = paginaValida(pagina, estado.saidasSemDocumento.length);
+        renderSaidasSemDocumento();
+    }
+
     window.IRDoc = {
         abrirRevisao,
         abrirVinculo,
@@ -1721,6 +1935,8 @@
         abrirSugestaoPatrimonio,
         carregarComprovantes,
         carregarSaidasSemDocumento,
+        irParaPaginaDocumentos,
+        irParaPaginaSaidas,
         reprocessarOcr,
         verAno(ano) {
             if ($('ir-filtro-ano')) {

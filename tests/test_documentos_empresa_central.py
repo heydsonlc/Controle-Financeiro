@@ -201,6 +201,7 @@ def test_ui_contem_abas_kpis_e_fluxos_existentes():
 
     assert 'ir-doc-tabs' in template
     assert 'Documentos obrigatorios' in template
+    assert 'Filtros avancados' in template
     assert 'Vencendo em 30 dias' in js
     assert 'ir-review-metadata-block' in template
     assert 'Gerar sugestao financeira' in template

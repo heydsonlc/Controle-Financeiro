@@ -33,6 +33,18 @@ const ICONS_CATALOG = {
     'pet':           '<path d="M10 5.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM14 5.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM6 9.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM18 9.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM12 22c-3 0-6-2-6-5 0-2 1-4 4-5h4c3 1 4 3 4 5 0 3-3 5-6 5Z"/>',
     'kortex-logo':   '<path d="M5 4v16M19 4 8 12l11 8M10.5 10l7.5-6M10.5 14l7.5 6"/><path d="M5 12h3.5"/>',
     'cbmgo-logo':    '<path d="M12 3 5 6.5v5.8c0 4 2.8 7.5 7 8.7 4.2-1.2 7-4.7 7-8.7V6.5L12 3Z"/><path d="M12 7.2c2.2 2.3 3.2 4.1 3.2 5.8A3.2 3.2 0 0 1 12 16.3 3.2 3.2 0 0 1 8.8 13c0-1.3.8-2.5 1.9-3.8-.1 1 .3 1.8 1.3 2.5.7-1.2.7-2.5 0-4.5Z"/><path d="M8.8 18h6.4"/>',
+    'eye':           '<path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="3"/>',
+    'link':          '<path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.1 0l-2 2A5 5 0 0 0 12 20.1l1.1-1.1"/>',
+    'download':      '<path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/>',
+    'user':          '<circle cx="12" cy="7" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+    'ban':           '<circle cx="12" cy="12" r="9"/><path d="M6.5 6.5l11 11"/>',
+    'info':          '<circle cx="12" cy="12" r="9"/><path d="M12 10v6M12 7h.1"/>',
+    'file-spreadsheet': '<path d="M6 2h8l4 4v16H6V2Z"/><path d="M14 2v5h5M8 11h8M8 15h8M11 9v10"/>',
+    'file-text':     '<path d="M6 2h8l4 4v16H6V2Z"/><path d="M14 2v5h5M8 11h8M8 15h8M8 19h5"/>',
+    'archive':       '<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9M10 13h4"/>',
+    'filter':        '<path d="M4 5h16l-6 7v5l-4 2v-7L4 5Z"/>',
+    'chevron-left':  '<path d="M15 18l-6-6 6-6"/>',
+    'chevron-right': '<path d="M9 18l6-6-6-6"/>',
     'default':       '<rect x="4" y="4" width="16" height="16" rx="3"/>'
 };
 

@@ -8,50 +8,56 @@
 
 {% block action_bar %}
 <section class="module-actionbar ir-actionbar" aria-label="Filtros e acoes do Imposto de Renda">
-    <label class="ir-filter">
-        <span>Ano-calendario</span>
-        <select id="ir-filtro-ano">
-            <option value="2026">2026</option>
-            <option value="2025">2025</option>
-            <option value="2024">2024</option>
-            <option value="2023">2023</option>
-        </select>
-    </label>
-    <label class="ir-filter">
-        <span>Status</span>
-        <select id="ir-filtro-status">
-            <option value="TODOS">Todos</option>
-            <option value="CLASSIFICADO">Classificados</option>
-            <option value="PENDENTE_REVISAO">Pendentes</option>
-            <option value="VALIDADO">Validados</option>
-            <option value="ERRO_LEITURA">Erro de leitura</option>
-        </select>
-    </label>
-    <label class="ir-filter ir-empresa-only" id="ir-filtro-tipo-wrap" hidden>
-        <span>Tipo de documento</span>
-        <select id="ir-filtro-tipo-documental">
-            <option value="">Todos</option>
-        </select>
-    </label>
-    <label class="ir-filter ir-empresa-only" id="ir-filtro-categoria-documental-wrap" hidden>
-        <span>Categoria</span>
-        <select id="ir-filtro-categoria-documental">
-            <option value="">Todas</option>
-        </select>
-    </label>
-    <label class="ir-filter">
-        <span id="ir-filtro-categoria-label">Categoria IR</span>
-        <select id="ir-filtro-categoria">
-            <option value="">Todas</option>
-        </select>
-    </label>
-    <label class="ir-search">
-        <span class="sr-only">Buscar comprovantes</span>
-        <input id="ir-filtro-busca" type="search" placeholder="Buscar comprovantes...">
-    </label>
-    <button type="button" class="ir-secondary-btn" id="ir-btn-atualizar">Atualizar</button>
-    <button type="button" class="ir-primary-btn" id="ir-btn-importar">Importar comprovantes</button>
-    <button type="button" class="ir-secondary-btn" id="ir-btn-exportar">Exportar</button>
+    <div class="module-actionbar-inner">
+        <div class="module-actionbar-filters ir-actionbar-filters">
+            <label class="module-filter-group ir-filter">
+                <span class="module-filter-label">Ano-calendario</span>
+                <select class="module-filter-control" id="ir-filtro-ano">
+                    <option value="2026">2026</option>
+                    <option value="2025">2025</option>
+                    <option value="2024">2024</option>
+                    <option value="2023">2023</option>
+                </select>
+            </label>
+            <label class="module-filter-group ir-filter">
+                <span class="module-filter-label">Status</span>
+                <select class="module-filter-control" id="ir-filtro-status">
+                    <option value="TODOS">Todos</option>
+                    <option value="CLASSIFICADO">Classificados</option>
+                    <option value="PENDENTE_REVISAO">Pendentes</option>
+                    <option value="VALIDADO">Validados</option>
+                    <option value="ERRO_LEITURA">Erro de leitura</option>
+                </select>
+            </label>
+            <label class="module-filter-group ir-filter ir-empresa-only" id="ir-filtro-tipo-wrap" hidden>
+                <span class="module-filter-label">Tipo de documento</span>
+                <select class="module-filter-control" id="ir-filtro-tipo-documental">
+                    <option value="">Todos</option>
+                </select>
+            </label>
+            <label class="module-filter-group ir-filter ir-empresa-only" id="ir-filtro-categoria-documental-wrap" hidden>
+                <span class="module-filter-label">Categoria</span>
+                <select class="module-filter-control" id="ir-filtro-categoria-documental">
+                    <option value="">Todas</option>
+                </select>
+            </label>
+            <label class="module-filter-group ir-filter" id="ir-filtro-categoria-wrap">
+                <span class="module-filter-label" id="ir-filtro-categoria-label">Categoria IR</span>
+                <select class="module-filter-control" id="ir-filtro-categoria">
+                    <option value="">Todas</option>
+                </select>
+            </label>
+            <label class="module-filter-group ir-search">
+                <span class="sr-only">Buscar comprovantes</span>
+                <input class="module-filter-control" id="ir-filtro-busca" type="search" placeholder="Buscar comprovantes...">
+            </label>
+        </div>
+        <div class="module-actionbar-actions ir-actionbar-actions">
+            <button type="button" class="ir-secondary-btn" id="ir-btn-atualizar">Atualizar</button>
+            <button type="button" class="ir-primary-btn" id="ir-btn-importar">Importar comprovantes</button>
+            <button type="button" class="ir-secondary-btn" id="ir-btn-exportar">Exportar</button>
+        </div>
+    </div>
 </section>
 {% endblock %}
 
@@ -101,156 +107,169 @@
             </article>
         </div>
 
-        <nav class="ir-doc-tabs ir-empresa-only" id="ir-doc-tabs" aria-label="Tipos de documentos da empresa" hidden>
-            <button type="button" class="active" data-tipo="">Todos</button>
-            <button type="button" data-tipo="PAGAMENTO_REALIZADO">Pagamentos realizados</button>
-            <button type="button" data-tipo="NOTA_FISCAL_RECEBIDA">Notas fiscais recebidas</button>
-            <button type="button" data-tipo="NOTA_FISCAL_EMITIDA">Notas fiscais emitidas</button>
-            <button type="button" data-tipo="DOCUMENTO_OBRIGATORIO">Documentos obrigatorios</button>
-            <button type="button" data-tipo="DOCUMENTO_SOCIETARIO">Societarios</button>
-            <button type="button" data-tipo="CERTIDAO_LICENCA">Certidoes e licencas</button>
-            <button type="button" data-tipo="PATRIMONIO_IMOBILIZADO">Patrimonio</button>
-        </nav>
-
-        <section class="ir-panel ir-saidas-panel" id="ir-saidas-sem-documento-panel" hidden>
-            <div class="ir-panel-header">
-                <div>
-                    <h2>Saidas sem documento</h2>
-                    <p id="ir-saidas-subtitulo">Nenhuma saida sem lastro carregada</p>
-                </div>
-                <div class="ir-panel-actions ir-saidas-report-actions">
-                    <button type="button" class="ir-secondary-btn" id="ir-saidas-btn-excel">Exportar Excel</button>
-                    <button type="button" class="ir-secondary-btn" id="ir-saidas-btn-pdf">Gerar PDF</button>
-                </div>
-            </div>
-            <div class="ir-lastro-kpis">
-                <article>
-                    <span>Saidas sem documento</span>
-                    <strong id="ir-saidas-kpi-quantidade">0</strong>
-                    <small>pendencias abertas</small>
-                </article>
-                <article>
-                    <span>Valor sem lastro</span>
-                    <strong id="ir-saidas-kpi-valor">R$ 0,00</strong>
-                    <small>periodo filtrado</small>
-                </article>
-                <article>
-                    <span>Aguardando contador</span>
-                    <strong id="ir-saidas-kpi-contador">0</strong>
-                    <small>classificacao pendente</small>
-                </article>
-                <article>
-                    <span>Nao aplicavel</span>
-                    <strong id="ir-saidas-kpi-na">0</strong>
-                    <small>tratadas manualmente</small>
-                </article>
-            </div>
-            <div class="ir-lastro-filtros">
-                <label class="ir-filter">
-                    <span>Ano</span>
-                    <select id="ir-saidas-filtro-ano">
-                        <option value="2026">2026</option>
-                        <option value="2025">2025</option>
-                        <option value="2024">2024</option>
-                        <option value="2023">2023</option>
-                    </select>
-                </label>
-                <label class="ir-filter">
-                    <span>Mes</span>
-                    <select id="ir-saidas-filtro-mes">
-                        <option value="">Todos</option>
-                        <option value="1">Janeiro</option>
-                        <option value="2">Fevereiro</option>
-                        <option value="3">Marco</option>
-                        <option value="4">Abril</option>
-                        <option value="5">Maio</option>
-                        <option value="6">Junho</option>
-                        <option value="7">Julho</option>
-                        <option value="8">Agosto</option>
-                        <option value="9">Setembro</option>
-                        <option value="10">Outubro</option>
-                        <option value="11">Novembro</option>
-                        <option value="12">Dezembro</option>
-                    </select>
-                </label>
-                <label class="ir-filter">
-                    <span>Origem</span>
-                    <select id="ir-saidas-filtro-origem">
-                        <option value="">Todas</option>
-                        <option value="DESPESA_PREVISTA">Despesa prevista</option>
-                        <option value="CONTA">Conta a pagar</option>
-                        <option value="LANCAMENTO">Lancamento no cartao</option>
-                        <option value="MOVIMENTO_FINANCEIRO">Movimento financeiro</option>
-                    </select>
-                </label>
-                <label class="ir-filter">
-                    <span>Status</span>
-                    <select id="ir-saidas-filtro-status">
-                        <option value="PENDENTES">Pendentes</option>
-                        <option value="SEM_DOCUMENTO">Sem documento</option>
-                        <option value="AGUARDANDO_CONTADOR">Aguardando contador</option>
-                        <option value="NAO_APLICAVEL">Nao aplicavel</option>
-                        <option value="TODOS">Todos sem documento</option>
-                    </select>
-                </label>
-                <label class="ir-filter">
-                    <span>Natureza</span>
-                    <select id="ir-saidas-filtro-natureza">
-                        <option value="">Todas</option>
-                        <option value="DESPESA_OPERACIONAL">Despesa operacional</option>
-                        <option value="PATRIMONIO_IMOBILIZADO">Patrimonio / Imobilizado</option>
-                        <option value="SOFTWARE_ASSINATURA">Software / Assinatura</option>
-                        <option value="IMPOSTO_TAXA">Imposto / taxa</option>
-                        <option value="PRO_LABORE">Pro-labore</option>
-                        <option value="DISTRIBUICAO_LUCROS">Distribuicao de lucros</option>
-                        <option value="REEMBOLSO">Reembolso</option>
-                        <option value="EMPRESTIMO">Emprestimo</option>
-                        <option value="ADIANTAMENTO">Adiantamento</option>
-                        <option value="OUTRO">Outro</option>
-                    </select>
-                </label>
-                <label class="ir-filter ir-filter-sm">
-                    <span>Valor minimo</span>
-                    <input id="ir-saidas-filtro-valor" type="number" min="0" step="0.01" placeholder="0,00">
-                </label>
-                <label class="ir-search">
-                    <span class="sr-only">Buscar saidas sem documento</span>
-                    <input id="ir-saidas-filtro-busca" type="search" placeholder="Buscar saidas...">
-                </label>
-                <button type="button" class="ir-secondary-btn" id="ir-saidas-btn-atualizar">Atualizar</button>
-            </div>
-            <div class="ir-table-wrap">
-                <table class="ir-table ir-saidas-table">
-                    <thead>
-                        <tr>
-                            <th>Data</th>
-                            <th>Origem</th>
-                            <th>Descricao</th>
-                            <th>Categoria</th>
-                            <th>Valor</th>
-                            <th>Natureza sugerida</th>
-                            <th>Status</th>
-                            <th>Acoes</th>
-                        </tr>
-                    </thead>
-                    <tbody id="ir-saidas-tbody">
-                        <tr>
-                            <td colspan="8" class="ir-empty">Nenhuma saida sem documento no periodo.</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
         <div class="ir-layout">
+            <div class="ir-main-column">
+            <section class="ir-panel ir-saidas-panel" id="ir-saidas-sem-documento-panel" hidden>
+                <div class="ir-panel-header">
+                    <div>
+                        <h2>Lastro financeiro: saidas sem documento</h2>
+                        <p id="ir-saidas-subtitulo">Nenhuma saida sem lastro carregada</p>
+                    </div>
+                    <div class="ir-panel-actions ir-saidas-report-actions">
+                        <button type="button" class="ir-secondary-btn ir-advanced-filter-trigger" id="ir-saidas-filtros-toggle" aria-expanded="false" aria-controls="ir-saidas-filtros-panel" data-ir-icon="filter">Filtros avancados</button>
+                        <button type="button" class="ir-secondary-btn ir-report-btn" id="ir-saidas-btn-excel" title="Exportar Excel" aria-label="Exportar Excel" data-ir-icon="file-spreadsheet">Excel</button>
+                        <button type="button" class="ir-secondary-btn ir-report-btn" id="ir-saidas-btn-pdf" title="Gerar PDF" aria-label="Gerar PDF" data-ir-icon="file-text">PDF</button>
+                        <button type="button" class="ir-secondary-btn ir-report-btn" id="ir-saidas-btn-zip" title="ZIP para contador ainda nao implementado" aria-label="ZIP para contador ainda nao implementado" data-ir-icon="archive" disabled>ZIP</button>
+                    </div>
+                </div>
+                <div class="ir-lastro-filtros" id="ir-saidas-filtros-panel" hidden>
+                    <label class="ir-filter">
+                        <span>Ano</span>
+                        <select id="ir-saidas-filtro-ano">
+                            <option value="2026">2026</option>
+                            <option value="2025">2025</option>
+                            <option value="2024">2024</option>
+                            <option value="2023">2023</option>
+                        </select>
+                    </label>
+                    <label class="ir-filter">
+                        <span>Mes</span>
+                        <select id="ir-saidas-filtro-mes">
+                            <option value="">Todos</option>
+                            <option value="1">Janeiro</option>
+                            <option value="2">Fevereiro</option>
+                            <option value="3">Marco</option>
+                            <option value="4">Abril</option>
+                            <option value="5">Maio</option>
+                            <option value="6">Junho</option>
+                            <option value="7">Julho</option>
+                            <option value="8">Agosto</option>
+                            <option value="9">Setembro</option>
+                            <option value="10">Outubro</option>
+                            <option value="11">Novembro</option>
+                            <option value="12">Dezembro</option>
+                        </select>
+                    </label>
+                    <label class="ir-filter">
+                        <span>Origem</span>
+                        <select id="ir-saidas-filtro-origem">
+                            <option value="">Todas</option>
+                            <option value="DESPESA_PREVISTA">Despesa prevista</option>
+                            <option value="CONTA">Conta a pagar</option>
+                            <option value="LANCAMENTO">Lancamento no cartao</option>
+                            <option value="MOVIMENTO_FINANCEIRO">Movimento financeiro</option>
+                        </select>
+                    </label>
+                    <label class="ir-filter">
+                        <span>Status</span>
+                        <select id="ir-saidas-filtro-status">
+                            <option value="PENDENTES">Pendentes</option>
+                            <option value="SEM_DOCUMENTO">Sem documento</option>
+                            <option value="AGUARDANDO_CONTADOR">Aguardando contador</option>
+                            <option value="NAO_APLICAVEL">Nao aplicavel</option>
+                            <option value="TODOS">Todos sem documento</option>
+                        </select>
+                    </label>
+                    <label class="ir-filter">
+                        <span>Natureza</span>
+                        <select id="ir-saidas-filtro-natureza">
+                            <option value="">Todas</option>
+                            <option value="DESPESA_OPERACIONAL">Despesa operacional</option>
+                            <option value="PATRIMONIO_IMOBILIZADO">Patrimonio / Imobilizado</option>
+                            <option value="SOFTWARE_ASSINATURA">Software / Assinatura</option>
+                            <option value="IMPOSTO_TAXA">Imposto / taxa</option>
+                            <option value="PRO_LABORE">Pro-labore</option>
+                            <option value="DISTRIBUICAO_LUCROS">Distribuicao de lucros</option>
+                            <option value="REEMBOLSO">Reembolso</option>
+                            <option value="EMPRESTIMO">Emprestimo</option>
+                            <option value="ADIANTAMENTO">Adiantamento</option>
+                            <option value="OUTRO">Outro</option>
+                        </select>
+                    </label>
+                    <label class="ir-filter ir-filter-sm">
+                        <span>Valor minimo</span>
+                        <input id="ir-saidas-filtro-valor" type="number" min="0" step="0.01" placeholder="0,00">
+                    </label>
+                    <label class="ir-search">
+                        <span class="sr-only">Buscar saidas sem documento</span>
+                        <input id="ir-saidas-filtro-busca" type="search" placeholder="Buscar saidas...">
+                    </label>
+                </div>
+                <div class="ir-table-wrap ir-fixed-table-wrap">
+                    <table class="ir-table ir-saidas-table">
+                        <thead>
+                            <tr>
+                                <th>Descricao</th>
+                                <th>Categoria</th>
+                                <th>Data</th>
+                                <th>Status</th>
+                                <th>Origem</th>
+                                <th>Valor</th>
+                                <th>Natureza sugerida</th>
+                                <th>Acoes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ir-saidas-tbody">
+                            <tr>
+                                <td colspan="8" class="ir-empty">Nenhuma saida sem documento no periodo.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="ir-table-pagination" id="ir-saidas-pagination" hidden></div>
+            </section>
+
             <section class="ir-panel ir-table-panel">
+                <nav class="ir-doc-tabs ir-empresa-only" id="ir-doc-tabs" aria-label="Tipos de documentos da empresa" hidden>
+                    <button type="button" class="active" data-tipo="">Todos</button>
+                    <button type="button" data-tipo="PAGAMENTO_REALIZADO">Pagamentos realizados</button>
+                    <button type="button" data-tipo="NOTA_FISCAL_RECEBIDA">Notas fiscais recebidas</button>
+                    <button type="button" data-tipo="NOTA_FISCAL_EMITIDA">Notas fiscais emitidas</button>
+                    <button type="button" data-tipo="DOCUMENTO_OBRIGATORIO">Documentos obrigatorios</button>
+                    <button type="button" data-tipo="DOCUMENTO_SOCIETARIO">Societarios</button>
+                    <button type="button" data-tipo="CERTIDAO_LICENCA">Certidoes e licencas</button>
+                    <button type="button" data-tipo="PATRIMONIO_IMOBILIZADO">Patrimonio</button>
+                </nav>
                 <div class="ir-panel-header">
                     <div>
                         <h2 id="ir-lista-titulo">Comprovantes</h2>
                         <p id="ir-lista-subtitulo">Nenhum comprovante carregado</p>
                     </div>
+                    <div class="ir-panel-actions ir-empresa-only" id="ir-filtros-avancados-shell" hidden>
+                        <div class="ir-advanced-filter-shell">
+                            <button type="button" class="ir-secondary-btn ir-advanced-filter-trigger" id="ir-filtros-avancados-toggle" aria-expanded="false" aria-controls="ir-filtros-avancados-panel" data-ir-icon="filter">Filtros avancados</button>
+                        </div>
+                        <button type="button" class="ir-secondary-btn ir-report-btn" id="ir-btn-excel" title="Gerar Excel" aria-label="Gerar Excel" data-ir-icon="file-spreadsheet">Excel</button>
+                        <button type="button" class="ir-secondary-btn ir-report-btn" id="ir-btn-pdf" title="Gerar PDF" aria-label="Gerar PDF" data-ir-icon="file-text">PDF</button>
+                        <button type="button" class="ir-secondary-btn ir-report-btn" id="ir-doc-btn-zip" title="ZIP para contador ainda nao implementado" aria-label="ZIP para contador ainda nao implementado" data-ir-icon="archive" disabled>ZIP</button>
+                    </div>
                 </div>
-                <div class="ir-table-wrap">
+                <div class="ir-advanced-filter-panel" id="ir-filtros-avancados-panel" hidden>
+                    <label class="ir-filter">
+                        <span>Categoria fiscal</span>
+                        <select id="ir-filtro-categoria-fiscal-avancada">
+                            <option value="">Todas</option>
+                        </select>
+                    </label>
+                    <label class="ir-filter">
+                        <span>Validade</span>
+                        <select id="ir-filtro-validade">
+                            <option value="">Todas</option>
+                            <option value="VENCENDO">Vencendo em 30 dias</option>
+                            <option value="VENCIDOS">Vencidos</option>
+                            <option value="SEM_VALIDADE">Sem validade</option>
+                        </select>
+                    </label>
+                    <label class="ir-filter">
+                        <span>Obrigatoriedade</span>
+                        <select id="ir-filtro-obrigatorio">
+                            <option value="">Todos</option>
+                            <option value="true">Obrigatorios</option>
+                            <option value="false">Nao obrigatorios</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="ir-table-wrap ir-fixed-table-wrap">
                     <table class="ir-table">
                         <thead id="ir-comprovantes-head">
                             <tr>
@@ -273,7 +292,10 @@
                         </tbody>
                     </table>
                 </div>
+                <div class="ir-table-pagination" id="ir-comprovantes-pagination" hidden></div>
             </section>
+
+            </div>
 
             <aside class="ir-side">
                 <section class="ir-panel ir-irpf-side">
@@ -292,22 +314,6 @@
                         <span>0 documentos pendentes</span>
                     </div>
                 </section>
-                <section class="ir-panel ir-lastro-card" id="ir-lastro-panel" hidden>
-                    <div class="ir-panel-header compact">
-                        <h2>Lastro financeiro</h2>
-                    </div>
-                    <div id="ir-lastro-resumo" class="ir-pendencias">
-                        <span>0 documentos sem vinculo</span>
-                    </div>
-                </section>
-                <section class="ir-panel ir-empresa-only" id="ir-vencimentos-panel" hidden>
-                    <div class="ir-panel-header compact">
-                        <h2>Proximos vencimentos</h2>
-                    </div>
-                    <div id="ir-proximos-vencimentos" class="ir-side-list">
-                        <p class="ir-empty">Nenhum vencimento proximo.</p>
-                    </div>
-                </section>
                 <section class="ir-panel ir-empresa-only" id="ir-tipos-documentos-panel" hidden>
                     <div class="ir-panel-header compact">
                         <h2>Tipos de documento</h2>
@@ -323,14 +329,6 @@
                     <div id="ir-checklist-empresarial" class="ir-side-list">
                         <p class="ir-empty">Checklist ainda sem documentos.</p>
                     </div>
-                </section>
-                <section class="ir-panel">
-                    <div class="ir-panel-header compact">
-                        <h2>Acoes para o contador</h2>
-                    </div>
-                    <button type="button" class="ir-side-action" id="ir-btn-excel">Gerar Excel <small>.xlsx</small></button>
-                    <button type="button" class="ir-side-action" id="ir-btn-pdf">Gerar PDF <small>.pdf</small></button>
-                    <button type="button" class="ir-side-action" disabled>Separar documentos <small>em breve</small></button>
                 </section>
             </aside>
         </div>
