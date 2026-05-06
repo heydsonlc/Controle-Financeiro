@@ -7,6 +7,7 @@ try:
     from backend.services.documento_empresarial_service import DocumentoEmpresarialService
     from backend.services.documento_financeiro_sugestao_service import DocumentoFinanceiroSugestaoService
     from backend.services.documento_fiscal_service import DocumentoFiscalService
+    from backend.services.documento_zip_service import DocumentoZipService
     from backend.services.ir_documento_service import IrDocumentoService
     from backend.services.ir_relatorio_service import IrRelatorioService
     from backend.services.lastro_financeiro_service import LastroFinanceiroService
@@ -16,6 +17,7 @@ except ImportError:
     from services.documento_empresarial_service import DocumentoEmpresarialService
     from services.documento_financeiro_sugestao_service import DocumentoFinanceiroSugestaoService
     from services.documento_fiscal_service import DocumentoFiscalService
+    from services.documento_zip_service import DocumentoZipService
     from services.ir_documento_service import IrDocumentoService
     from services.ir_relatorio_service import IrRelatorioService
     from services.lastro_financeiro_service import LastroFinanceiroService
@@ -142,6 +144,22 @@ def resumo_documentos_empresa():
         return _json_success(DocumentoEmpresarialService.resumo_documentos_empresa(request.args))
     except PermissionError as exc:
         return _json_error(str(exc), 403)
+
+
+@ir_bp.route('/documentos-empresa/exportar-zip', methods=['GET'])
+def exportar_zip_documentos_empresa():
+    try:
+        arquivo, nome = DocumentoZipService.gerar_zip_documentos_empresa(request.args)
+        return send_file(
+            arquivo,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=nome,
+        )
+    except PermissionError as exc:
+        return _json_error(str(exc), 403)
+    except ValueError as exc:
+        return _json_error(str(exc), 400)
 
 
 @ir_bp.route('/comprovantes/<int:comprovante_id>/metadata-empresarial', methods=['GET'])

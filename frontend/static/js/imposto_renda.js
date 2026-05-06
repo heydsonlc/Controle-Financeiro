@@ -74,6 +74,7 @@
         $('ir-btn-exportar')?.addEventListener('click', () => baixarRelatorio('excel'));
         $('ir-btn-excel')?.addEventListener('click', () => baixarRelatorio('excel'));
         $('ir-btn-pdf')?.addEventListener('click', () => baixarRelatorio('pdf'));
+        $('ir-doc-btn-zip')?.addEventListener('click', baixarPacoteDocumentosEmpresa);
         $('ir-filtros-avancados-toggle')?.addEventListener('click', alternarFiltrosAvancados);
         $('ir-filtro-ano')?.addEventListener('change', carregarComprovantes);
         $('ir-filtro-status')?.addEventListener('change', carregarComprovantes);
@@ -520,6 +521,54 @@
             if (botao) {
                 botao.disabled = false;
                 botao.innerHTML = textoOriginal;
+            }
+        }
+    }
+
+    async function baixarPacoteDocumentosEmpresa() {
+        if (!modoEmpresa()) {
+            mostrarAviso('Pacote de documentos empresariais disponivel apenas no perfil Empresa.');
+            return;
+        }
+        const params = montarFiltrosRelatorio();
+        const botao = $('ir-doc-btn-zip');
+        const htmlOriginal = botao?.innerHTML;
+        const tituloOriginal = botao?.title || '';
+        if (botao) {
+            botao.disabled = true;
+            botao.title = 'Gerando pacote ZIP...';
+            botao.setAttribute('aria-label', 'Gerando pacote ZIP para contador');
+            botao.innerHTML = `${renderIconeAcao('archive')}<span>Gerando...</span>`;
+        }
+        try {
+            const resposta = await fetch(`/api/ir/documentos-empresa/exportar-zip?${params.toString()}`);
+            if (!resposta.ok) {
+                let mensagem = 'Nao foi possivel gerar o pacote ZIP.';
+                try {
+                    const erro = await resposta.json();
+                    mensagem = erro.error || mensagem;
+                } catch (error) {
+                    mensagem = resposta.statusText || mensagem;
+                }
+                throw new Error(mensagem);
+            }
+            const blob = await resposta.blob();
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = nomeArquivoResposta(resposta, 'Documentos_Empresa_Contador.zip');
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            mostrarAviso(error.message || 'Nao foi possivel gerar o pacote ZIP.');
+        } finally {
+            if (botao) {
+                botao.disabled = false;
+                botao.title = tituloOriginal;
+                botao.setAttribute('aria-label', 'Gerar pacote ZIP para contador');
+                botao.innerHTML = htmlOriginal;
             }
         }
     }
