@@ -21,6 +21,7 @@ try:
         db,
     )
     from backend.services.categoria_palavra_chave_service import CategoriaPalavraChaveService
+    from backend.services.documento_empresarial_service import DocumentoEmpresarialService
     from backend.services.ir_nfse_goiania_parser import eh_nfse_goiania, extrair_dados_nfse_goiania
     from backend.services.ocr_service import OcrService
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
@@ -36,6 +37,7 @@ except ImportError:
         db,
     )
     from services.categoria_palavra_chave_service import CategoriaPalavraChaveService
+    from services.documento_empresarial_service import DocumentoEmpresarialService
     from services.ir_nfse_goiania_parser import eh_nfse_goiania, extrair_dados_nfse_goiania
     from services.ocr_service import OcrService
     from services.perfil_financeiro_service import PerfilFinanceiroService
@@ -142,12 +144,14 @@ class IrDocumentoService:
         return {
             'perfil': PerfilFinanceiroService.serializar_perfil(perfil_obj),
             'modo': 'DOCUMENTOS_FISCAIS_EMPRESA' if modo_empresa else 'IRPF',
-            'titulo': 'Documentos Fiscais e Lastro' if modo_empresa else 'Imposto de Renda',
+            'titulo': 'Documentos da Empresa' if modo_empresa else 'Imposto de Renda',
             'subtitulo': (
-                'Organize documentos fiscais e vincule comprovantes as saidas financeiras da empresa.'
+                'Organize documentos fiscais, obrigatorios, societarios e vinculos de lastro da empresa.'
                 if modo_empresa
                 else 'Organize comprovantes potencialmente dedutiveis para sua declaracao anual.'
             ),
+            'central_documentos_empresa': modo_empresa,
+            'taxonomia_documental': DocumentoEmpresarialService.obter_taxonomia() if modo_empresa else None,
             'categorias': [categoria.to_dict() for categoria in categorias],
         }
 
@@ -273,6 +277,9 @@ class IrDocumentoService:
     def listar_comprovantes(cls, filtros=None):
         filtros = filtros or {}
         query = PerfilFinanceiroService.aplicar_perfil_query(IrComprovante.query, IrComprovante)
+        perfil_id = PerfilFinanceiroService.obter_perfil_ativo_id()
+        perfil = PerfilFinanceiroService.obter_perfil_por_id(perfil_id)
+        modo_empresa = perfil is not None and (perfil.tipo or '').upper() == 'EMPRESA'
 
         ano = cls._parse_int(filtros.get('ano'))
         if ano:
@@ -285,6 +292,9 @@ class IrDocumentoService:
         categoria_ir_id = cls._parse_int(filtros.get('categoria_ir_id'))
         if categoria_ir_id:
             query = query.filter(IrComprovante.categoria_ir_id == categoria_ir_id)
+
+        if modo_empresa:
+            query = DocumentoEmpresarialService.aplicar_filtros_listagem(query, filtros)
 
         busca = str(filtros.get('busca') or '').strip()
         if busca:
@@ -300,12 +310,15 @@ class IrDocumentoService:
         return query.order_by(IrComprovante.data_documento.desc(), IrComprovante.created_at.desc()).all()
 
     @classmethod
-    def resumo(cls, comprovantes):
+    def resumo(cls, comprovantes, filtros=None):
         total = len(comprovantes)
         valor_potencial = Decimal('0')
         pendentes = 0
         categorias = set()
         por_categoria = {}
+        perfil_id = PerfilFinanceiroService.obter_perfil_ativo_id()
+        perfil = PerfilFinanceiroService.obter_perfil_por_id(perfil_id)
+        modo_empresa = perfil is not None and (perfil.tipo or '').upper() == 'EMPRESA'
 
         for comprovante in comprovantes:
             if comprovante.status in {'PENDENTE_REVISAO', 'ERRO_LEITURA', 'IMPORTADO'}:
@@ -329,6 +342,7 @@ class IrDocumentoService:
                 {'categoria_ir_nome': nome, 'valor': float(valor)}
                 for nome, valor in sorted(por_categoria.items(), key=lambda item: item[0])
             ],
+            'documentos_empresa': DocumentoEmpresarialService.resumo_documentos_empresa(filtros) if modo_empresa else None,
         }
 
     @staticmethod

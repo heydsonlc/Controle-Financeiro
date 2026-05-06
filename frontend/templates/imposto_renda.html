@@ -27,6 +27,18 @@
             <option value="ERRO_LEITURA">Erro de leitura</option>
         </select>
     </label>
+    <label class="ir-filter ir-empresa-only" id="ir-filtro-tipo-wrap" hidden>
+        <span>Tipo de documento</span>
+        <select id="ir-filtro-tipo-documental">
+            <option value="">Todos</option>
+        </select>
+    </label>
+    <label class="ir-filter ir-empresa-only" id="ir-filtro-categoria-documental-wrap" hidden>
+        <span>Categoria</span>
+        <select id="ir-filtro-categoria-documental">
+            <option value="">Todas</option>
+        </select>
+    </label>
     <label class="ir-filter">
         <span id="ir-filtro-categoria-label">Categoria IR</span>
         <select id="ir-filtro-categoria">
@@ -79,7 +91,26 @@
                     <small id="ir-kpi-categorias-sub">classificacao potencial</small>
                 </div>
             </article>
+            <article class="ir-kpi-card orange ir-empresa-only" id="ir-kpi-extra-card" hidden>
+                <span class="ir-kpi-icon" aria-hidden="true">!</span>
+                <div>
+                    <span id="ir-kpi-extra-label">Aguardando contador</span>
+                    <strong id="ir-kpi-extra">0</strong>
+                    <small id="ir-kpi-extra-sub">classificacao contabil</small>
+                </div>
+            </article>
         </div>
+
+        <nav class="ir-doc-tabs ir-empresa-only" id="ir-doc-tabs" aria-label="Tipos de documentos da empresa" hidden>
+            <button type="button" class="active" data-tipo="">Todos</button>
+            <button type="button" data-tipo="PAGAMENTO_REALIZADO">Pagamentos realizados</button>
+            <button type="button" data-tipo="NOTA_FISCAL_RECEBIDA">Notas fiscais recebidas</button>
+            <button type="button" data-tipo="NOTA_FISCAL_EMITIDA">Notas fiscais emitidas</button>
+            <button type="button" data-tipo="DOCUMENTO_OBRIGATORIO">Documentos obrigatorios</button>
+            <button type="button" data-tipo="DOCUMENTO_SOCIETARIO">Societarios</button>
+            <button type="button" data-tipo="CERTIDAO_LICENCA">Certidoes e licencas</button>
+            <button type="button" data-tipo="PATRIMONIO_IMOBILIZADO">Patrimonio</button>
+        </nav>
 
         <section class="ir-panel ir-saidas-panel" id="ir-saidas-sem-documento-panel" hidden>
             <div class="ir-panel-header">
@@ -221,7 +252,7 @@
                 </div>
                 <div class="ir-table-wrap">
                     <table class="ir-table">
-                        <thead>
+                        <thead id="ir-comprovantes-head">
                             <tr>
                                 <th>Data</th>
                                 <th>Prestador</th>
@@ -245,7 +276,7 @@
             </section>
 
             <aside class="ir-side">
-                <section class="ir-panel">
+                <section class="ir-panel ir-irpf-side">
                     <div class="ir-panel-header compact">
                         <h2>Totais por Categoria IR</h2>
                     </div>
@@ -253,7 +284,7 @@
                         <p class="ir-empty">Nenhuma categoria consolidada.</p>
                     </div>
                 </section>
-                <section class="ir-panel">
+                <section class="ir-panel ir-irpf-side">
                     <div class="ir-panel-header compact">
                         <h2 id="ir-pendencias-titulo">Pendencias</h2>
                     </div>
@@ -267,6 +298,30 @@
                     </div>
                     <div id="ir-lastro-resumo" class="ir-pendencias">
                         <span>0 documentos sem vinculo</span>
+                    </div>
+                </section>
+                <section class="ir-panel ir-empresa-only" id="ir-vencimentos-panel" hidden>
+                    <div class="ir-panel-header compact">
+                        <h2>Proximos vencimentos</h2>
+                    </div>
+                    <div id="ir-proximos-vencimentos" class="ir-side-list">
+                        <p class="ir-empty">Nenhum vencimento proximo.</p>
+                    </div>
+                </section>
+                <section class="ir-panel ir-empresa-only" id="ir-tipos-documentos-panel" hidden>
+                    <div class="ir-panel-header compact">
+                        <h2>Tipos de documento</h2>
+                    </div>
+                    <div id="ir-tipos-documentos" class="ir-side-list">
+                        <p class="ir-empty">Nenhum tipo consolidado.</p>
+                    </div>
+                </section>
+                <section class="ir-panel ir-empresa-only" id="ir-checklist-panel" hidden>
+                    <div class="ir-panel-header compact">
+                        <h2>Checklist empresarial</h2>
+                    </div>
+                    <div id="ir-checklist-empresarial" class="ir-side-list">
+                        <p class="ir-empty">Checklist ainda sem documentos.</p>
                     </div>
                 </section>
                 <section class="ir-panel">
@@ -458,6 +513,47 @@
                         <small id="ir-review-categoria-aviso" class="ir-field-warning" hidden></small>
                     </label>
                     <label><span id="ir-review-categoria-ir-label">Categoria IR</span><select id="ir-review-categoria-ir"></select></label>
+                    <div class="ir-form-row-wide ir-metadata-block ir-empresa-only" id="ir-review-metadata-block" hidden>
+                        <h3>Metadados empresariais</h3>
+                        <p>A obrigatoriedade e o prazo de guarda dos documentos devem ser validados com o contador ou orgao competente, conforme atividade, municipio e regime da empresa.</p>
+                        <div class="ir-metadata-grid">
+                            <label>Tipo de documento
+                                <select id="ir-review-tipo-documental"></select>
+                            </label>
+                            <label>Categoria documental
+                                <select id="ir-review-categoria-documental"></select>
+                            </label>
+                            <label>Numero/protocolo
+                                <input id="ir-review-numero-documento" type="text" maxlength="120">
+                            </label>
+                            <label>Orgao emissor
+                                <input id="ir-review-orgao-emissor" type="text" maxlength="160">
+                            </label>
+                            <label>Data de emissao
+                                <input id="ir-review-data-emissao" type="date">
+                            </label>
+                            <label>Validade
+                                <input id="ir-review-data-validade" type="date">
+                            </label>
+                            <label>Status documental
+                                <select id="ir-review-status-documental"></select>
+                            </label>
+                            <label>Responsavel interno
+                                <input id="ir-review-responsavel-interno" type="text" maxlength="120">
+                            </label>
+                            <label class="ir-checkbox-label">
+                                <input id="ir-review-obrigatorio" type="checkbox">
+                                Documento obrigatorio gerencial
+                            </label>
+                            <label class="ir-checkbox-label">
+                                <input id="ir-review-renovavel" type="checkbox">
+                                Renovavel
+                            </label>
+                            <label>Alerta dias antes
+                                <input id="ir-review-alerta-dias" type="number" min="0" step="1" placeholder="30">
+                            </label>
+                        </div>
+                    </div>
                     <label>Observacoes<textarea id="ir-review-observacoes" rows="4"></textarea></label>
                 </form>
             </div>

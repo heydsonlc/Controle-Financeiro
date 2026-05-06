@@ -95,7 +95,7 @@ def test_contexto_irpf_pessoal_e_documentos_fiscais_empresa(client):
 
     assert empresa.status_code == 200
     assert empresa.get_json()['data']['modo'] == 'DOCUMENTOS_FISCAIS_EMPRESA'
-    assert empresa.get_json()['data']['titulo'] == 'Documentos Fiscais e Lastro'
+    assert empresa.get_json()['data']['titulo'] == 'Documentos da Empresa'
     assert 'Despesa operacional' in nomes
     assert 'Patrimonio / Imobilizado' in nomes
     assert 'Saude' not in nomes

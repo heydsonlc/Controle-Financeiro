@@ -11,6 +11,9 @@
         resumoImportacao: { enviados: 0, lidos: 0, pendentes: 0, erros: 0 },
         categoriaIrManual: false,
         contexto: { modo: 'IRPF' },
+        taxonomiaDocumental: { tipos_documentais: [], categorias_documentais: [], status_documentais: [] },
+        resumoDocumentosEmpresa: {},
+        tipoDocumentalAtivo: '',
         sugestaoFinanceira: null,
         sugestaoPatrimonio: null,
         cartoes: [],
@@ -37,6 +40,7 @@
         definirAnoPadrao();
         vincularEventos();
         await carregarContexto();
+        await carregarTaxonomiaDocumental();
         await Promise.all([carregarCategoriasIr(), carregarCategoriasDespesa()]);
         preencherSelectsNaturezaLastro();
         await carregarComprovantes();
@@ -63,7 +67,21 @@
         $('ir-filtro-ano')?.addEventListener('change', carregarComprovantes);
         $('ir-filtro-status')?.addEventListener('change', carregarComprovantes);
         $('ir-filtro-categoria')?.addEventListener('change', carregarComprovantes);
+        $('ir-filtro-tipo-documental')?.addEventListener('change', () => {
+            estado.tipoDocumentalAtivo = $('ir-filtro-tipo-documental')?.value || '';
+            atualizarAbaDocumentalAtiva();
+            carregarComprovantes();
+        });
+        $('ir-filtro-categoria-documental')?.addEventListener('change', carregarComprovantes);
         $('ir-filtro-busca')?.addEventListener('input', debounce(carregarComprovantes, 250));
+        document.querySelectorAll('#ir-doc-tabs button[data-tipo]').forEach((botao) => {
+            botao.addEventListener('click', () => {
+                estado.tipoDocumentalAtivo = botao.dataset.tipo || '';
+                if ($('ir-filtro-tipo-documental')) $('ir-filtro-tipo-documental').value = estado.tipoDocumentalAtivo;
+                atualizarAbaDocumentalAtiva();
+                carregarComprovantes();
+            });
+        });
         $('ir-saidas-btn-atualizar')?.addEventListener('click', carregarSaidasSemDocumento);
         $('ir-saidas-btn-excel')?.addEventListener('click', () => baixarRelatorioSaidasSemDocumento('excel'));
         $('ir-saidas-btn-pdf')?.addEventListener('click', () => baixarRelatorioSaidasSemDocumento('pdf'));
@@ -88,6 +106,7 @@
             estado.categoriaIrManual = true;
             atualizarAvisoVinculo('');
         });
+        $('ir-review-categoria-documental')?.addEventListener('change', sincronizarTipoPorCategoriaDocumental);
         $('ir-sugestao-close')?.addEventListener('click', fecharSugestaoFinanceira);
         $('ir-sugestao-cancel')?.addEventListener('click', fecharSugestaoFinanceira);
         $('ir-sugestao-tipo-destino')?.addEventListener('change', atualizarCamposSugestaoFinanceira);
@@ -143,11 +162,30 @@
             const json = await resposta.json();
             if (json.success && json.data) {
                 estado.contexto = json.data;
+                estado.taxonomiaDocumental = json.data.taxonomia_documental || estado.taxonomiaDocumental;
                 aplicarContextoVisual();
             }
         } catch (error) {
             estado.contexto = { modo: 'IRPF' };
         }
+    }
+
+    async function carregarTaxonomiaDocumental() {
+        if (!modoEmpresa()) {
+            estado.taxonomiaDocumental = { tipos_documentais: [], categorias_documentais: [], status_documentais: [] };
+            preencherSelectsTaxonomiaDocumental();
+            return;
+        }
+        try {
+            const resposta = await fetch('/api/ir/documentos-empresa/taxonomia');
+            const json = await resposta.json();
+            if (json.success && json.data) {
+                estado.taxonomiaDocumental = json.data;
+            }
+        } catch (error) {
+            estado.taxonomiaDocumental = { tipos_documentais: [], categorias_documentais: [], status_documentais: [] };
+        }
+        preencherSelectsTaxonomiaDocumental();
     }
 
     function modoEmpresa() {
@@ -156,26 +194,86 @@
 
     function aplicarContextoVisual() {
         const empresa = modoEmpresa();
-        const titulo = estado.contexto?.titulo || (empresa ? 'Documentos Fiscais e Lastro' : 'Imposto de Renda');
-        const pageTitle = document.querySelector('.page-title, .topbar-title, [data-page-title]');
+        const titulo = estado.contexto?.titulo || (empresa ? 'Documentos da Empresa' : 'Imposto de Renda');
+        const pageTitle = document.querySelector('.page-title, .topbar-title, .app-topbar-title span, [data-page-title]');
         if (pageTitle) pageTitle.textContent = titulo;
         document.title = titulo;
         if ($('ir-btn-importar')) $('ir-btn-importar').textContent = empresa ? 'Importar documentos' : 'Importar comprovantes';
-        if ($('ir-lista-titulo')) $('ir-lista-titulo').textContent = empresa ? 'Documentos fiscais' : 'Comprovantes';
-        if ($('ir-kpi-total-label')) $('ir-kpi-total-label').textContent = empresa ? 'Documentos fiscais' : 'Comprovantes';
-        if ($('ir-kpi-total-sub')) $('ir-kpi-total-sub').textContent = empresa ? 'documentos cadastrados' : 'documentos cadastrados';
-        if ($('ir-kpi-valor-label')) $('ir-kpi-valor-label').textContent = empresa ? 'Valor documentado' : 'Valor potencialmente dedutivel';
-        if ($('ir-kpi-valor-sub')) $('ir-kpi-valor-sub').textContent = empresa ? 'com documento importado' : 'sujeito a revisao';
-        if ($('ir-kpi-pendentes-label')) $('ir-kpi-pendentes-label').textContent = empresa ? 'Sem lastro' : 'Pendentes de revisao';
-        if ($('ir-kpi-pendentes-sub')) $('ir-kpi-pendentes-sub').textContent = empresa ? 'sem vinculo financeiro' : 'aguardando validacao';
-        if ($('ir-kpi-categorias-label')) $('ir-kpi-categorias-label').textContent = empresa ? 'Aguardando contador' : 'Categorias IR usadas';
-        if ($('ir-kpi-categorias-sub')) $('ir-kpi-categorias-sub').textContent = empresa ? 'classificacao contabil' : 'classificacao potencial';
+        if ($('ir-lista-titulo')) $('ir-lista-titulo').textContent = empresa ? 'Documentos da empresa' : 'Comprovantes';
+        if ($('ir-kpi-total-label')) $('ir-kpi-total-label').textContent = empresa ? 'Documentos cadastrados' : 'Comprovantes';
+        if ($('ir-kpi-total-sub')) $('ir-kpi-total-sub').textContent = empresa ? 'todos os tipos' : 'documentos cadastrados';
+        if ($('ir-kpi-valor-label')) $('ir-kpi-valor-label').textContent = empresa ? 'Documentos obrigatorios' : 'Valor potencialmente dedutivel';
+        if ($('ir-kpi-valor-sub')) $('ir-kpi-valor-sub').textContent = empresa ? 'cadastros, licencas e certidoes' : 'sujeito a revisao';
+        if ($('ir-kpi-pendentes-label')) $('ir-kpi-pendentes-label').textContent = empresa ? 'Vencendo em 30 dias' : 'Pendentes de revisao';
+        if ($('ir-kpi-pendentes-sub')) $('ir-kpi-pendentes-sub').textContent = empresa ? 'acompanhar renovacoes' : 'aguardando validacao';
+        if ($('ir-kpi-categorias-label')) $('ir-kpi-categorias-label').textContent = empresa ? 'Sem lastro' : 'Categorias IR usadas';
+        if ($('ir-kpi-categorias-sub')) $('ir-kpi-categorias-sub').textContent = empresa ? 'pagamentos e notas sem vinculo' : 'classificacao potencial';
         if ($('ir-pendencias-titulo')) $('ir-pendencias-titulo').textContent = empresa ? 'Pendencias de lastro' : 'Pendencias';
         if ($('ir-filtro-categoria-label')) $('ir-filtro-categoria-label').textContent = empresa ? 'Categoria fiscal' : 'Categoria IR';
         if ($('ir-review-categoria-ir-label')) $('ir-review-categoria-ir-label').textContent = empresa ? 'Categoria fiscal' : 'Categoria IR';
         if ($('ir-lastro-panel')) $('ir-lastro-panel').hidden = !empresa;
         if ($('ir-saidas-sem-documento-panel')) $('ir-saidas-sem-documento-panel').hidden = !empresa;
         if ($('ir-review-patrimonio')) $('ir-review-patrimonio').hidden = !empresa;
+        document.querySelectorAll('.ir-empresa-only').forEach((el) => { el.hidden = !empresa; });
+        document.querySelectorAll('.ir-irpf-side').forEach((el) => { el.hidden = empresa; });
+        atualizarStatusSelectPorContexto();
+    }
+
+    function preencherSelectsTaxonomiaDocumental() {
+        const tipos = estado.taxonomiaDocumental.tipos_documentais || [];
+        const categorias = estado.taxonomiaDocumental.categorias_documentais || [];
+        const status = estado.taxonomiaDocumental.status_documentais || [];
+        const tipoOptions = '<option value="">Todos</option>' + tipos.map((item) => (
+            `<option value="${escapeHtml(item.codigo)}">${escapeHtml(item.rotulo)}</option>`
+        )).join('');
+        const categoriaOptions = '<option value="">Todas</option>' + categorias.map((item) => (
+            `<option value="${escapeHtml(item.codigo)}" data-tipo="${escapeHtml(item.tipo_documental || '')}">${escapeHtml(item.rotulo)}</option>`
+        )).join('');
+        const statusOptions = status.map((item) => (
+            `<option value="${escapeHtml(item.codigo)}">${escapeHtml(item.rotulo)}</option>`
+        )).join('');
+
+        if ($('ir-filtro-tipo-documental')) $('ir-filtro-tipo-documental').innerHTML = tipoOptions;
+        if ($('ir-filtro-categoria-documental')) $('ir-filtro-categoria-documental').innerHTML = categoriaOptions;
+        if ($('ir-review-tipo-documental')) $('ir-review-tipo-documental').innerHTML = tipoOptions.replace('Todos', 'Selecione...');
+        if ($('ir-review-categoria-documental')) $('ir-review-categoria-documental').innerHTML = categoriaOptions.replace('Todas', 'Selecione...');
+        if ($('ir-review-status-documental')) $('ir-review-status-documental').innerHTML = statusOptions;
+    }
+
+    function atualizarStatusSelectPorContexto() {
+        const select = $('ir-filtro-status');
+        if (!select) return;
+        const atual = select.value;
+        if (modoEmpresa()) {
+            const status = estado.taxonomiaDocumental.status_documentais || [];
+            select.innerHTML = '<option value="TODOS">Todos</option>' + status.map((item) => (
+                `<option value="${escapeHtml(item.codigo)}">${escapeHtml(item.rotulo)}</option>`
+            )).join('');
+            select.value = atual && Array.from(select.options).some((opcao) => opcao.value === atual) ? atual : 'TODOS';
+            return;
+        }
+        select.innerHTML = `
+            <option value="TODOS">Todos</option>
+            <option value="CLASSIFICADO">Classificados</option>
+            <option value="PENDENTE_REVISAO">Pendentes</option>
+            <option value="VALIDADO">Validados</option>
+            <option value="ERRO_LEITURA">Erro de leitura</option>
+        `;
+        select.value = atual && Array.from(select.options).some((opcao) => opcao.value === atual) ? atual : 'TODOS';
+    }
+
+    function atualizarAbaDocumentalAtiva() {
+        document.querySelectorAll('#ir-doc-tabs button[data-tipo]').forEach((botao) => {
+            botao.classList.toggle('active', (botao.dataset.tipo || '') === (estado.tipoDocumentalAtivo || ''));
+        });
+    }
+
+    function sincronizarTipoPorCategoriaDocumental() {
+        const categoria = $('ir-review-categoria-documental');
+        const tipo = $('ir-review-tipo-documental');
+        if (!categoria || !tipo) return;
+        const tipoCategoria = categoria.options[categoria.selectedIndex]?.dataset?.tipo;
+        if (tipoCategoria) tipo.value = tipoCategoria;
     }
 
     async function carregarCategoriasIr() {
@@ -267,7 +365,13 @@
         const params = new URLSearchParams();
         params.set('ano', $('ir-filtro-ano')?.value || new Date().getFullYear());
         const status = $('ir-filtro-status')?.value || 'TODOS';
-        if (status && status !== 'TODOS') params.set('status', status);
+        if (status && status !== 'TODOS') {
+            params.set(modoEmpresa() ? 'status_documental' : 'status', status);
+        }
+        const tipoDocumental = $('ir-filtro-tipo-documental')?.value || estado.tipoDocumentalAtivo || '';
+        if (modoEmpresa() && tipoDocumental) params.set('tipo_documental', tipoDocumental);
+        const categoriaDocumental = $('ir-filtro-categoria-documental')?.value;
+        if (modoEmpresa() && categoriaDocumental) params.set('categoria_documental', categoriaDocumental);
         const categoriaIr = $('ir-filtro-categoria')?.value;
         if (categoriaIr) params.set('categoria_ir_id', categoriaIr);
         const busca = $('ir-filtro-busca')?.value;
@@ -351,8 +455,10 @@
     function renderComprovantes() {
         const tbody = $('ir-comprovantes-tbody');
         if (!tbody) return;
+        renderCabecalhoComprovantes();
         if (!estado.comprovantes.length) {
-            tbody.innerHTML = '<tr><td colspan="10" class="ir-empty">Nenhum comprovante cadastrado para este ano.</td></tr>';
+            const colunas = modoEmpresa() ? 7 : 10;
+            tbody.innerHTML = `<tr><td colspan="${colunas}" class="ir-empty">Nenhum documento cadastrado para este ano.</td></tr>`;
             $('ir-lista-subtitulo').textContent = modoEmpresa() ? '0 documentos encontrados' : '0 comprovantes encontrados';
             return;
         }
@@ -360,6 +466,10 @@
         $('ir-lista-subtitulo').textContent = modoEmpresa()
             ? `${estado.comprovantes.length} documento(s) encontrado(s)`
             : `${estado.comprovantes.length} comprovante(s) encontrado(s)`;
+        if (modoEmpresa()) {
+            tbody.innerHTML = estado.comprovantes.map((item) => renderLinhaDocumentoEmpresa(item)).join('');
+            return;
+        }
         tbody.innerHTML = estado.comprovantes.map((item) => `
             <tr>
                 <td>${formatarData(item.data_documento)}</td>
@@ -382,18 +492,89 @@
         `).join('');
     }
 
+    function renderCabecalhoComprovantes() {
+        const head = $('ir-comprovantes-head');
+        if (!head) return;
+        if (modoEmpresa()) {
+            head.innerHTML = `
+                <tr>
+                    <th>Documento</th>
+                    <th>Tipo</th>
+                    <th>Categoria</th>
+                    <th>Emissao</th>
+                    <th>Validade</th>
+                    <th>Status</th>
+                    <th>Acoes</th>
+                </tr>
+            `;
+            return;
+        }
+        head.innerHTML = `
+            <tr>
+                <th>Data</th>
+                <th>Prestador</th>
+                <th>Categoria IR</th>
+                <th>Categoria de Despesa</th>
+                <th>Valor</th>
+                <th>Ano</th>
+                <th>Natureza</th>
+                <th>Lastro</th>
+                <th>Status</th>
+                <th>Acoes</th>
+            </tr>
+        `;
+    }
+
+    function renderLinhaDocumentoEmpresa(item) {
+        const metadata = item.metadata_empresarial || {};
+        const icone = renderIconeDocumental(item.icone_documental || metadata.icone || 'tag');
+        const nome = item.prestador_nome || item.arquivo?.nome_arquivo || `Documento #${item.id}`;
+        const arquivo = item.arquivo?.nome_arquivo || '';
+        return `
+            <tr>
+                <td>
+                    <span class="ir-doc-cell">
+                        <span class="ir-doc-icon">${icone}</span>
+                        <span>
+                            <strong>${escapeHtml(nome)}</strong>
+                            <small>${escapeHtml(arquivo || item.prestador_cpf_cnpj || 'Documento empresarial')}</small>
+                        </span>
+                    </span>
+                </td>
+                <td>${escapeHtml(item.tipo_documental_label || metadata.tipo_documental_label || 'Outro')}</td>
+                <td>${escapeHtml(item.categoria_documental_label || metadata.categoria_documental_label || 'Sem categoria')}</td>
+                <td>${formatarData(metadata.data_emissao || item.data_documento)}</td>
+                <td>${metadata.data_validade ? formatarData(metadata.data_validade) : 'Permanente'}</td>
+                <td>${renderStatusDocumental(item.status_documental || metadata.status_documental)}</td>
+                <td>
+                    <span class="ir-row-actions">
+                        <button type="button" class="ir-icon-btn" title="Revisar" onclick="window.IRDoc.abrirRevisao(${item.id})">Ver</button>
+                        <button type="button" class="ir-icon-btn" title="Vincular" onclick="window.IRDoc.abrirVinculo(${item.id})">Vincular</button>
+                        <a class="ir-icon-btn" title="Abrir arquivo" href="/api/ir/comprovantes/${item.id}/arquivo" target="_blank" rel="noopener">PDF</a>
+                    </span>
+                </td>
+            </tr>
+        `;
+    }
+
     function renderResumo(resumo) {
         const lastro = resumo.lastro || {};
-        $('ir-kpi-total').textContent = String(resumo.total_comprovantes || 0);
+        const documentosEmpresa = resumo.documentos_empresa || {};
+        estado.resumoDocumentosEmpresa = documentosEmpresa;
+        $('ir-kpi-total').textContent = String(modoEmpresa() ? (documentosEmpresa.documentos_cadastrados || 0) : (resumo.total_comprovantes || 0));
         $('ir-kpi-valor').textContent = formatarMoeda(
             modoEmpresa() ? (lastro.valor_com_lastro || 0) : (resumo.valor_potencialmente_dedutivel || 0)
         );
+        if (modoEmpresa()) {
+            $('ir-kpi-valor').textContent = String(documentosEmpresa.documentos_obrigatorios || 0);
+        }
         $('ir-kpi-pendentes').textContent = String(
-            modoEmpresa() ? (lastro.documentos_sem_vinculo || 0) : (resumo.pendentes_revisao || 0)
+            modoEmpresa() ? (documentosEmpresa.vencendo_30_dias || 0) : (resumo.pendentes_revisao || 0)
         );
         $('ir-kpi-categorias').textContent = String(
-            modoEmpresa() ? (lastro.documentos_aguardando_contador || 0) : (resumo.categorias_ir_usadas || 0)
+            modoEmpresa() ? (documentosEmpresa.sem_lastro || 0) : (resumo.categorias_ir_usadas || 0)
         );
+        if ($('ir-kpi-extra')) $('ir-kpi-extra').textContent = String(documentosEmpresa.aguardando_contador || 0);
         $('ir-pendencias').innerHTML = modoEmpresa()
             ? `<span>${lastro.documentos_sem_vinculo || 0} documentos sem vinculo de lastro</span>`
             : `<span>${resumo.pendentes_revisao || 0} documentos pendentes de revisao</span>`;
@@ -410,6 +591,9 @@
         if (!destino) return;
         if (!totais.length) {
             destino.innerHTML = '<p class="ir-empty">Nenhuma categoria consolidada.</p>';
+            if (modoEmpresa()) {
+                renderPainelDocumentosEmpresa(documentosEmpresa);
+            }
             return;
         }
         const maior = Math.max(...totais.map((item) => Number(item.valor) || 0), 1);
@@ -423,6 +607,45 @@
                 </div>
             `;
         }).join('');
+        if (modoEmpresa()) {
+            renderPainelDocumentosEmpresa(documentosEmpresa);
+        }
+    }
+
+    function renderPainelDocumentosEmpresa(resumo) {
+        const vencimentos = $('ir-proximos-vencimentos');
+        if (vencimentos) {
+            const itens = resumo.proximos_vencimentos || [];
+            vencimentos.innerHTML = itens.length ? itens.map((item) => `
+                <div class="ir-side-item">
+                    <span>${escapeHtml(item.documento)}<small>${escapeHtml(item.categoria_documental_label || '')}</small></span>
+                    <strong>${formatarData(item.data_validade)}</strong>
+                </div>
+            `).join('') : '<p class="ir-empty">Nenhum vencimento proximo.</p>';
+        }
+        const tipos = $('ir-tipos-documentos');
+        if (tipos) {
+            const itens = resumo.distribuicao_por_tipo || [];
+            tipos.innerHTML = itens.length ? itens.map((item) => `
+                <div class="ir-side-item">
+                    <span>${renderIconeDocumental(item.icone)} ${escapeHtml(item.rotulo)}</span>
+                    <strong>${item.quantidade || 0}</strong>
+                </div>
+            `).join('') : '<p class="ir-empty">Nenhum tipo consolidado.</p>';
+        }
+        const checklist = $('ir-checklist-empresarial');
+        if (checklist) {
+            const itens = resumo.checklist_empresarial || [];
+            checklist.innerHTML = itens.length ? itens.map((item) => {
+                const status = String(item.status || 'pendente').toLowerCase();
+                return `
+                    <div class="ir-check-item">
+                        <span>${escapeHtml(item.label)}</span>
+                        <span class="ir-check-status ${escapeHtml(status)}">${escapeHtml(status)}</span>
+                    </div>
+                `;
+            }).join('') : '<p class="ir-empty">Checklist ainda sem documentos.</p>';
+        }
     }
 
     function preencherSelectsNaturezaLastro() {
@@ -808,9 +1031,25 @@
         if (!item.categoria_ir_id) {
             resolverCategoriaIrDaDespesa();
         }
+        preencherMetadataRevisao(item.metadata_empresarial || {});
         $('ir-review-observacoes').value = item.observacoes || '';
         $('ir-review-modal').classList.add('open');
         $('ir-review-modal').setAttribute('aria-hidden', 'false');
+    }
+
+    function preencherMetadataRevisao(metadata) {
+        if (!modoEmpresa()) return;
+        if ($('ir-review-tipo-documental')) $('ir-review-tipo-documental').value = metadata.tipo_documental || 'OUTRO';
+        if ($('ir-review-categoria-documental')) $('ir-review-categoria-documental').value = metadata.categoria_documental || 'SEM_CATEGORIA';
+        if ($('ir-review-numero-documento')) $('ir-review-numero-documento').value = metadata.numero_documento || '';
+        if ($('ir-review-orgao-emissor')) $('ir-review-orgao-emissor').value = metadata.orgao_emissor || '';
+        if ($('ir-review-data-emissao')) $('ir-review-data-emissao').value = metadata.data_emissao || $('ir-review-data')?.value || '';
+        if ($('ir-review-data-validade')) $('ir-review-data-validade').value = metadata.data_validade || '';
+        if ($('ir-review-status-documental')) $('ir-review-status-documental').value = metadata.status_documental || 'ATIVO';
+        if ($('ir-review-responsavel-interno')) $('ir-review-responsavel-interno').value = metadata.responsavel_interno || '';
+        if ($('ir-review-obrigatorio')) $('ir-review-obrigatorio').checked = Boolean(metadata.obrigatorio);
+        if ($('ir-review-renovavel')) $('ir-review-renovavel').checked = Boolean(metadata.renovavel);
+        if ($('ir-review-alerta-dias')) $('ir-review-alerta-dias').value = metadata.alerta_dias_antes || 30;
     }
 
     function renderAvisoOcrRevisao(item) {
@@ -909,8 +1148,40 @@
             mostrarAviso(json.error || 'Nao foi possivel salvar a revisao.');
             return;
         }
+        if (modoEmpresa()) {
+            const metadataOk = await salvarMetadataEmpresarial(id);
+            if (!metadataOk) return;
+        }
         fecharRevisao();
         await carregarComprovantes();
+    }
+
+    async function salvarMetadataEmpresarial(id) {
+        const payload = {
+            tipo_documental: $('ir-review-tipo-documental')?.value || 'OUTRO',
+            categoria_documental: $('ir-review-categoria-documental')?.value || 'SEM_CATEGORIA',
+            numero_documento: $('ir-review-numero-documento')?.value || '',
+            orgao_emissor: $('ir-review-orgao-emissor')?.value || '',
+            data_emissao: $('ir-review-data-emissao')?.value || $('ir-review-data')?.value || '',
+            data_validade: $('ir-review-data-validade')?.value || '',
+            status_documental: $('ir-review-status-documental')?.value || 'ATIVO',
+            obrigatorio: Boolean($('ir-review-obrigatorio')?.checked),
+            renovavel: Boolean($('ir-review-renovavel')?.checked),
+            alerta_dias_antes: $('ir-review-alerta-dias')?.value || 30,
+            responsavel_interno: $('ir-review-responsavel-interno')?.value || '',
+            origem_documental: 'USUARIO',
+        };
+        const resposta = await fetch(`/api/ir/comprovantes/${id}/metadata-empresarial`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const json = await resposta.json();
+        if (!json.success) {
+            mostrarAviso(json.error || 'Nao foi possivel salvar os metadados empresariais.');
+            return false;
+        }
+        return true;
     }
 
     async function validarComprovante() {
@@ -1326,6 +1597,32 @@
         };
         const [classe, label] = mapa[chave] || mapa.IMPORTADO;
         return `<span class="ir-status ${classe}">${label}</span>`;
+    }
+
+    function renderStatusDocumental(status) {
+        const chave = String(status || 'ATIVO').toUpperCase();
+        const mapa = {
+            ATIVO: ['validado', 'Ativo'],
+            VALIDO: ['validado', 'Valido'],
+            VENCENDO: ['pendente', 'Vencendo'],
+            VENCIDO: ['erro', 'Vencido'],
+            PENDENTE: ['pendente', 'Pendente'],
+            EM_REVISAO: ['pendente', 'Em revisao'],
+            AGUARDANDO_CONTADOR: ['pendente', 'Aguardando contador'],
+            SEM_LASTRO: ['erro', 'Sem lastro'],
+            COM_LASTRO: ['classificado', 'Com lastro'],
+            NAO_APLICAVEL: ['importado', 'Nao aplicavel'],
+            ARQUIVADO: ['importado', 'Arquivado'],
+        };
+        const [classe, label] = mapa[chave] || mapa.ATIVO;
+        return `<span class="ir-status ${classe}">${label}</span>`;
+    }
+
+    function renderIconeDocumental(chave) {
+        if (typeof window.renderIcon === 'function') {
+            return window.renderIcon(chave || 'tag', { size: '18px' });
+        }
+        return '';
     }
 
     function renderLastro(status) {

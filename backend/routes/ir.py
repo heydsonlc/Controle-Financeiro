@@ -4,6 +4,7 @@ from flask import Blueprint, jsonify, request, send_file
 
 try:
     from backend.models import db
+    from backend.services.documento_empresarial_service import DocumentoEmpresarialService
     from backend.services.documento_financeiro_sugestao_service import DocumentoFinanceiroSugestaoService
     from backend.services.documento_fiscal_service import DocumentoFiscalService
     from backend.services.ir_documento_service import IrDocumentoService
@@ -12,6 +13,7 @@ try:
     from backend.services.lastro_relatorio_service import LastroRelatorioService
 except ImportError:
     from models import db
+    from services.documento_empresarial_service import DocumentoEmpresarialService
     from services.documento_financeiro_sugestao_service import DocumentoFinanceiroSugestaoService
     from services.documento_fiscal_service import DocumentoFiscalService
     from services.ir_documento_service import IrDocumentoService
@@ -97,10 +99,18 @@ def inativar_vinculo_ir(vinculo_id):
 @ir_bp.route('/comprovantes', methods=['GET'])
 def listar_comprovantes():
     comprovantes = IrDocumentoService.listar_comprovantes(request.args)
+    contexto = IrDocumentoService.obter_contexto()
+    modo_empresa = contexto.get('modo') == 'DOCUMENTOS_FISCAIS_EMPRESA'
+    dados = []
+    for comprovante in comprovantes:
+        item = comprovante.to_dict()
+        if modo_empresa:
+            item = DocumentoEmpresarialService.enriquecer_comprovante_dict(comprovante, item)
+        dados.append(item)
     return _json_success(
-        [comprovante.to_dict() for comprovante in comprovantes],
+        dados,
         total=len(comprovantes),
-        resumo=IrDocumentoService.resumo(comprovantes),
+        resumo=IrDocumentoService.resumo(comprovantes, request.args),
     )
 
 
@@ -108,9 +118,57 @@ def listar_comprovantes():
 def obter_comprovante(comprovante_id):
     try:
         comprovante = IrDocumentoService.obter_comprovante(comprovante_id)
-        return _json_success(comprovante.to_dict(include_texto=True, include_eventos=True))
+        data = comprovante.to_dict(include_texto=True, include_eventos=True)
+        contexto = IrDocumentoService.obter_contexto()
+        if contexto.get('modo') == 'DOCUMENTOS_FISCAIS_EMPRESA':
+            data = DocumentoEmpresarialService.enriquecer_comprovante_dict(comprovante, data)
+        return _json_success(data)
     except ValueError as exc:
         return _json_error(str(exc), 404)
+
+
+@ir_bp.route('/documentos-empresa/taxonomia', methods=['GET'])
+def taxonomia_documentos_empresa():
+    try:
+        DocumentoEmpresarialService.garantir_perfil_empresa()
+        return _json_success(DocumentoEmpresarialService.obter_taxonomia())
+    except PermissionError as exc:
+        return _json_error(str(exc), 403)
+
+
+@ir_bp.route('/documentos-empresa/resumo', methods=['GET'])
+def resumo_documentos_empresa():
+    try:
+        return _json_success(DocumentoEmpresarialService.resumo_documentos_empresa(request.args))
+    except PermissionError as exc:
+        return _json_error(str(exc), 403)
+
+
+@ir_bp.route('/comprovantes/<int:comprovante_id>/metadata-empresarial', methods=['GET'])
+def obter_metadata_empresarial(comprovante_id):
+    try:
+        return _json_success(DocumentoEmpresarialService.obter_metadata(comprovante_id))
+    except PermissionError as exc:
+        return _json_error(str(exc), 403)
+    except ValueError as exc:
+        return _json_error(str(exc), 404)
+
+
+@ir_bp.route('/comprovantes/<int:comprovante_id>/metadata-empresarial', methods=['PUT'])
+def atualizar_metadata_empresarial(comprovante_id):
+    try:
+        metadata = DocumentoEmpresarialService.atualizar_metadata(
+            comprovante_id,
+            request.get_json(silent=True) or {},
+        )
+        db.session.commit()
+        return _json_success(metadata)
+    except PermissionError as exc:
+        db.session.rollback()
+        return _json_error(str(exc), 403)
+    except ValueError as exc:
+        db.session.rollback()
+        return _json_error(str(exc), 400)
 
 
 @ir_bp.route('/comprovantes/upload', methods=['POST'])

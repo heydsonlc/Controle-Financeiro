@@ -262,6 +262,7 @@ class IrComprovante(db.Model):
     arquivo = db.relationship('IrComprovanteArquivo', back_populates='comprovante', uselist=False, cascade='all, delete-orphan')
     eventos = db.relationship('IrComprovanteEvento', back_populates='comprovante', lazy='dynamic', cascade='all, delete-orphan')
     vinculos = db.relationship('IrComprovanteVinculo', back_populates='comprovante', lazy='dynamic', cascade='all, delete-orphan')
+    metadata_empresarial = db.relationship('DocumentoEmpresarialMetadata', back_populates='comprovante', uselist=False, cascade='all, delete-orphan')
 
     __table_args__ = (
         db.UniqueConstraint('perfil_financeiro_id', 'hash_arquivo', name='ux_ir_comprovante_perfil_hash'),
@@ -303,6 +304,71 @@ class IrComprovante(db.Model):
         if include_eventos:
             data['eventos'] = [evento.to_dict() for evento in self.eventos.order_by(IrComprovanteEvento.created_at.asc()).all()]
         return data
+
+
+class DocumentoEmpresarialMetadata(db.Model):
+    """
+    Camada empresarial de classificacao e validade para documentos da empresa.
+    Mantem IrComprovante como base documental e arquivo unico.
+    """
+    __tablename__ = 'documento_empresarial_metadata'
+
+    id = db.Column(db.Integer, primary_key=True)
+    comprovante_id = db.Column(db.Integer, db.ForeignKey('ir_comprovante.id'), nullable=False, unique=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=False, index=True)
+    tipo_documental = db.Column(db.String(60), nullable=False, default='OUTRO')
+    categoria_documental = db.Column(db.String(80), nullable=False, default='SEM_CATEGORIA')
+    subtipo = db.Column(db.String(120), nullable=True)
+    numero_documento = db.Column(db.String(120), nullable=True)
+    orgao_emissor = db.Column(db.String(160), nullable=True)
+    data_emissao = db.Column(db.Date, nullable=True)
+    data_validade = db.Column(db.Date, nullable=True)
+    status_documental = db.Column(db.String(40), nullable=False, default='ATIVO')
+    obrigatorio = db.Column(db.Boolean, nullable=False, default=False)
+    renovavel = db.Column(db.Boolean, nullable=False, default=False)
+    alerta_dias_antes = db.Column(db.Integer, nullable=True)
+    responsavel_interno = db.Column(db.String(120), nullable=True)
+    origem_documental = db.Column(db.String(40), nullable=True)
+    tags = db.Column(db.Text, nullable=True)
+    observacoes = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    comprovante = db.relationship('IrComprovante', back_populates='metadata_empresarial')
+
+    __table_args__ = (
+        db.Index('ix_documento_emp_metadata_perfil', 'perfil_financeiro_id'),
+        db.Index('ix_documento_emp_metadata_comprovante', 'comprovante_id'),
+        db.Index('ix_documento_emp_metadata_tipo', 'tipo_documental'),
+        db.Index('ix_documento_emp_metadata_categoria', 'categoria_documental'),
+        db.Index('ix_documento_emp_metadata_status', 'status_documental'),
+        db.Index('ix_documento_emp_metadata_validade', 'data_validade'),
+        db.Index('ix_documento_emp_metadata_obrigatorio', 'obrigatorio'),
+    )
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'comprovante_id': self.comprovante_id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
+            'tipo_documental': self.tipo_documental,
+            'categoria_documental': self.categoria_documental,
+            'subtipo': self.subtipo,
+            'numero_documento': self.numero_documento,
+            'orgao_emissor': self.orgao_emissor,
+            'data_emissao': self.data_emissao.isoformat() if self.data_emissao else None,
+            'data_validade': self.data_validade.isoformat() if self.data_validade else None,
+            'status_documental': self.status_documental,
+            'obrigatorio': bool(self.obrigatorio),
+            'renovavel': bool(self.renovavel),
+            'alerta_dias_antes': self.alerta_dias_antes,
+            'responsavel_interno': self.responsavel_interno,
+            'origem_documental': self.origem_documental,
+            'tags': self.tags,
+            'observacoes': self.observacoes,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
 
 
 class IrComprovanteVinculo(db.Model):
