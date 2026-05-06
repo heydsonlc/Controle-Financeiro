@@ -12,6 +12,7 @@
         backup: {
             status: null,
             historico: [],
+            testesRestauracao: [],
             carregado: false
         },
         secao: 'perfis-financeiros'
@@ -161,12 +162,14 @@
     async function carregarBackup() {
         if (!$('config-section-backup')) return;
         try {
-            const [status, historico] = await Promise.all([
+            const [status, historico, testesRestauracao] = await Promise.all([
                 requestJson(`${API_BACKUP}/status`),
-                requestJson(`${API_BACKUP}/historico`)
+                requestJson(`${API_BACKUP}/historico`),
+                requestJson(`${API_BACKUP}/testes-restauracao`)
             ]);
             state.backup.status = status;
             state.backup.historico = historico.data || [];
+            state.backup.testesRestauracao = testesRestauracao.data || [];
             state.backup.carregado = true;
             renderBackup();
         } catch (error) {
@@ -179,6 +182,7 @@
         renderBackupAgendamento();
         renderBackupFerramentas();
         renderBackupHistorico();
+        renderBackupTestesRestauracao();
         if (state.secao === 'backup') {
             renderBackupPainel();
         }
@@ -244,6 +248,7 @@
     function renderBackupHistorico() {
         const tbody = $('backup-history-body');
         const seletor = $('backup-restore-file');
+        const seletorTeste = $('backup-test-restore-file');
         if (!tbody) return;
 
         if (!state.backup.historico.length) {
@@ -271,6 +276,67 @@
                 `<option value="${escapeHtml(item.arquivo)}">${escapeHtml(item.arquivo)} · ${escapeHtml(item.tamanho_formatado || '')}</option>`
             )).join('');
         }
+    }
+
+    function renderBackupTestesRestauracao() {
+        const seletorTeste = $('backup-test-restore-file');
+        if (seletorTeste) {
+            const selecionaveis = state.backup.historico.filter((item) => item.arquivo && item.status === 'concluido');
+            seletorTeste.innerHTML = '<option value="">Selecione um backup</option>' + selecionaveis.map((item) => (
+                `<option value="${escapeHtml(item.arquivo)}">${escapeHtml(item.arquivo)} - ${escapeHtml(item.tamanho_formatado || '')}</option>`
+            )).join('');
+        }
+
+        const tbody = $('backup-restore-test-history-body');
+        if (!tbody) return;
+        const historico = state.backup.testesRestauracao || [];
+        if (!historico.length) {
+            tbody.innerHTML = '<tr><td colspan="5">Nenhum teste de restauracao registrado.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = historico.slice(0, 8).map((item) => `
+            <tr>
+                <td>${escapeHtml(formatarDataHora(item.data_hora))}</td>
+                <td>${escapeHtml(item.backup_arquivo || '-')}</td>
+                <td><span class="config-backup-status ${escapeHtml(item.status)}">${escapeHtml(statusLabel(item.status))}</span></td>
+                <td>${escapeHtml(formatarDuracao(item.duracao_segundos))}</td>
+                <td>${item.removido_apos_teste ? 'Sim' : 'Nao'}</td>
+            </tr>
+        `).join('');
+    }
+
+    function formatarDuracao(valor) {
+        const segundos = Number(valor || 0);
+        if (!Number.isFinite(segundos) || segundos <= 0) return '-';
+        if (segundos < 60) return `${segundos.toFixed(1).replace('.', ',')}s`;
+        const minutos = Math.floor(segundos / 60);
+        const resto = Math.round(segundos % 60);
+        return `${minutos}min ${resto}s`;
+    }
+
+    function renderBackupTesteResultado(resultado) {
+        const alvo = $('backup-test-restore-result');
+        if (!alvo) return;
+        if (!resultado) {
+            alvo.hidden = true;
+            alvo.innerHTML = '';
+            return;
+        }
+        const validacoes = resultado.validacoes || [];
+        alvo.hidden = false;
+        alvo.dataset.status = resultado.status || 'erro';
+        alvo.innerHTML = `
+            <strong>${escapeHtml(resultado.mensagem || 'Teste de restauracao processado.')}</strong>
+            <span>Banco descartavel: ${escapeHtml(resultado.database_teste || '-')} ${resultado.removido_apos_teste ? '- removido ao final' : '- mantido para inspecao'}</span>
+            ${validacoes.length ? `
+                <ul>
+                    ${validacoes.slice(0, 8).map((item) => `
+                        <li class="${item.ok ? 'ok' : 'warn'}">${escapeHtml(item.item || 'validacao')}: ${escapeHtml(item.mensagem || (item.ok ? 'OK' : 'Atencao'))}</li>
+                    `).join('')}
+                </ul>
+            ` : ''}
+        `;
     }
 
     function renderBackupPainel() {
@@ -464,6 +530,51 @@
             mostrarBackupMensagem(resposta.message || 'Restauração concluída.', 'success');
         } catch (error) {
             mostrarBackupMensagem(error.message, 'error');
+        }
+    }
+
+    async function testarRestauracaoBackup() {
+        const arquivo = obterCampo('backup-test-restore-file');
+        const confirmacao = obterCampo('backup-test-restore-confirmation').trim();
+        const manterBanco = obterCheckbox('backup-test-restore-keep');
+        const botao = $('backup-test-restore-start');
+        renderBackupTesteResultado(null);
+        if (!arquivo) {
+            mostrarBackupMensagem('Selecione um backup para testar.');
+            return;
+        }
+        if (confirmacao !== 'TESTAR RESTAURACAO') {
+            mostrarBackupMensagem('Digite TESTAR RESTAURACAO para liberar o teste de restauracao.');
+            return;
+        }
+
+        mostrarBackupMensagem('Executando teste de restauracao em banco descartavel...', 'info');
+        if (botao) {
+            botao.disabled = true;
+            botao.textContent = 'Testando...';
+        }
+        try {
+            const resposta = await requestJson(`${API_BACKUP}/testar-restauracao`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    arquivo,
+                    confirmacao,
+                    manter_banco: manterBanco
+                })
+            });
+            renderBackupTesteResultado(resposta.data);
+            mostrarBackupMensagem(resposta.message || 'Teste de restauracao concluido.', 'success');
+            await carregarBackup();
+        } catch (error) {
+            const data = error.data || null;
+            if (data) renderBackupTesteResultado(data);
+            mostrarBackupMensagem(error.message, 'error');
+            await carregarBackup();
+        } finally {
+            if (botao) {
+                botao.disabled = false;
+                botao.textContent = 'Testar restauracao';
+            }
         }
     }
 
@@ -796,6 +907,7 @@
         $('backup-tools-save')?.addEventListener('click', salvarFerramentasBackup);
         $('backup-schedule-save')?.addEventListener('click', salvarAgendamentoBackup);
         $('backup-restore-start')?.addEventListener('click', restaurarBackup);
+        $('backup-test-restore-start')?.addEventListener('click', testarRestauracaoBackup);
         $('backup-history-body')?.addEventListener('click', (event) => {
             const botao = event.target.closest('[data-backup-download]');
             if (!botao) return;

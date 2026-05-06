@@ -26,6 +26,16 @@ def historico_backup():
     }), 200
 
 
+@backup_bp.route('/testes-restauracao', methods=['GET'])
+def historico_testes_restauracao():
+    historico = BackupService.listar_testes_restauracao()
+    return jsonify({
+        'success': True,
+        'data': historico,
+        'total': len(historico),
+    }), 200
+
+
 @backup_bp.route('/executar', methods=['POST'])
 def executar_backup():
     resultado = BackupService.executar_backup_manual()
@@ -38,6 +48,35 @@ def executar_backup():
     return jsonify({
         'success': True,
         'message': resultado.get('mensagem') or 'Backup concluído.',
+        'data': resultado,
+    }), 200
+
+
+@backup_bp.route('/testar-restauracao', methods=['POST'])
+def testar_restauracao_backup():
+    payload = request.get_json(silent=True) or {}
+    try:
+        resultado = BackupService.testar_restauracao_backup(
+            payload.get('arquivo'),
+            payload.get('confirmacao'),
+            bool(payload.get('manter_banco')),
+        )
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except FileNotFoundError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 404
+    except RuntimeError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 503
+
+    if resultado.get('status') != 'concluido':
+        return jsonify({
+            'success': False,
+            'error': resultado.get('mensagem') or 'Falha no teste de restauraÃ§Ã£o.',
+            'data': resultado,
+        }), 200
+    return jsonify({
+        'success': True,
+        'message': resultado.get('mensagem') or 'Teste de restauraÃ§Ã£o concluÃ­do.',
         'data': resultado,
     }), 200
 

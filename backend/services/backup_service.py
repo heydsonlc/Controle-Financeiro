@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import uuid
@@ -19,7 +20,10 @@ from flask import current_app
 
 
 CONFIRMACAO_RESTORE = 'CONFIRMO RESTAURACAO'
+CONFIRMACAO_TESTE_RESTORE = 'TESTAR RESTAURACAO'
+PREFIXO_BANCO_TESTE_RESTORE = 'controle_financeiro_restore_test_'
 EXEMPLO_PG_DUMP_WINDOWS = r'C:\Program Files\PostgreSQL\18\bin\pg_dump.exe'
+NOMES_BANCO_PROTEGIDOS = {'postgres', 'template0', 'template1'}
 
 POSTGRES_TOOLS = {
     'pg_dump': {
@@ -412,6 +416,182 @@ class BackupService:
         }
 
     @staticmethod
+    def testar_restauracao_backup(
+        nome_arquivo: str,
+        confirmacao: str | None,
+        manter_banco: bool = False,
+    ) -> dict[str, Any]:
+        if str(confirmacao or '').strip() != CONFIRMACAO_TESTE_RESTORE:
+            raise ValueError('Confirmacao forte obrigatoria para teste de restauracao.')
+
+        caminho = BackupService._safe_backup_path(nome_arquivo, must_exist=True)
+        banco = BackupService._database_config()
+        if not banco['is_postgres']:
+            raise RuntimeError('Teste de restauracao disponivel apenas para PostgreSQL.')
+
+        banco_teste = BackupService.gerar_nome_banco_teste()
+        BackupService.validar_nome_banco_descartavel(banco_teste)
+        if banco_teste == banco.get('database'):
+            raise RuntimeError('Banco descartavel nao pode ser igual ao banco principal.')
+
+        inicio = datetime.utcnow()
+        criado = False
+        removido = False
+        validacoes: list[dict[str, Any]] = []
+        status = 'erro'
+        mensagem = ''
+        erro_controlado = ''
+
+        try:
+            BackupService.criar_banco_teste(banco_teste)
+            criado = True
+            BackupService._restaurar_arquivo_em_banco_teste(caminho, banco_teste, banco)
+            resultado_validacao = BackupService.validar_restore_banco_teste(banco_teste)
+            validacoes = resultado_validacao.get('validacoes') or []
+            if not resultado_validacao.get('ok'):
+                raise RuntimeError(resultado_validacao.get('mensagem') or 'Validacao basica do restore falhou.')
+            status = 'concluido'
+            mensagem = 'Teste de restauracao concluido em banco descartavel.'
+        except Exception as exc:
+            mensagem = BackupService._sanitize_message(str(exc), banco)
+            erro_controlado = mensagem
+        finally:
+            if criado and not manter_banco:
+                try:
+                    BackupService.remover_banco_teste(banco_teste)
+                    removido = True
+                except Exception as exc:  # pragma: no cover - depende de permissao/ambiente
+                    aviso = BackupService._sanitize_message(str(exc), banco)
+                    validacoes.append({
+                        'item': 'remocao_banco_descartavel',
+                        'ok': False,
+                        'mensagem': aviso,
+                    })
+                    if status == 'concluido':
+                        status = 'erro'
+                        mensagem = f'Teste restaurou o backup, mas falhou ao remover o banco descartavel: {aviso}'
+                        erro_controlado = aviso
+
+        duracao = max(0.0, (datetime.utcnow() - inicio).total_seconds())
+        return BackupService._registrar_historico_teste_restauracao({
+            'backup_arquivo': caminho.name,
+            'database_teste': banco_teste,
+            'status': status,
+            'duracao_segundos': round(duracao, 2),
+            'validacoes': validacoes,
+            'mensagem': mensagem or erro_controlado or 'Falha controlada no teste de restauracao.',
+            'removido_apos_teste': removido,
+            'erro_controlado': erro_controlado,
+        })
+
+    @staticmethod
+    def gerar_nome_banco_teste() -> str:
+        sufixo = uuid.uuid4().hex[:6]
+        return f"{PREFIXO_BANCO_TESTE_RESTORE}{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{sufixo}"
+
+    @staticmethod
+    def validar_nome_banco_descartavel(nome: str) -> None:
+        banco = BackupService._database_config()
+        valor = str(nome or '').strip()
+        if not valor.startswith(PREFIXO_BANCO_TESTE_RESTORE):
+            raise ValueError('Nome do banco descartavel deve usar prefixo seguro.')
+        if not re.fullmatch(r'[a-zA-Z0-9_]+', valor):
+            raise ValueError('Nome do banco descartavel contem caracteres invalidos.')
+        if valor.lower() in NOMES_BANCO_PROTEGIDOS:
+            raise ValueError('Nome de banco protegido nao pode ser usado.')
+        if valor == banco.get('database'):
+            raise ValueError('Banco descartavel nao pode ser o banco principal.')
+
+    @staticmethod
+    def criar_banco_teste(nome: str) -> dict[str, Any]:
+        BackupService.validar_nome_banco_descartavel(nome)
+        banco = BackupService._database_config()
+        comando = BackupService._psql_command('postgres', f'CREATE DATABASE "{nome}"')
+        resultado = BackupService._run_postgres_command(comando, banco, timeout=120)
+        if resultado.returncode != 0:
+            mensagem = resultado.stderr or resultado.stdout or 'Falha ao criar banco descartavel.'
+            texto = BackupService._sanitize_message(mensagem, banco)
+            if 'permission denied' in texto.lower() or 'permiss' in texto.lower():
+                raise RuntimeError('Usuario do PostgreSQL nao possui permissao para criar banco descartavel.')
+            raise RuntimeError(texto)
+        return {'database': nome, 'status': 'criado'}
+
+    @staticmethod
+    def remover_banco_teste(nome: str) -> dict[str, Any]:
+        BackupService.validar_nome_banco_descartavel(nome)
+        banco = BackupService._database_config()
+        comando = BackupService._psql_command('postgres', f'DROP DATABASE IF EXISTS "{nome}" WITH (FORCE)')
+        resultado = BackupService._run_postgres_command(comando, banco, timeout=120)
+        if resultado.returncode != 0:
+            mensagem = resultado.stderr or resultado.stdout or 'Falha ao remover banco descartavel.'
+            raise RuntimeError(BackupService._sanitize_message(mensagem, banco))
+        return {'database': nome, 'status': 'removido'}
+
+    @staticmethod
+    def validar_restore_banco_teste(nome: str) -> dict[str, Any]:
+        BackupService.validar_nome_banco_descartavel(nome)
+        validacoes: list[dict[str, Any]] = []
+
+        tabelas = BackupService._psql_scalar(
+            nome,
+            "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'",
+        )
+        try:
+            total_tabelas = int(tabelas or 0)
+        except ValueError:
+            total_tabelas = 0
+        validacoes.append({
+            'item': 'tabelas_publicas',
+            'ok': total_tabelas > 0,
+            'valor': total_tabelas,
+            'mensagem': f'{total_tabelas} tabela(s) publicas encontradas.',
+        })
+
+        tabelas_principais = [
+            'perfil_financeiro',
+            'categoria',
+            'conta_bancaria',
+            'item_despesa',
+            'ir_comprovante',
+            'bem_patrimonial',
+            'alembic_version',
+        ]
+        for tabela in tabelas_principais:
+            existe = BackupService._psql_scalar(nome, f"SELECT to_regclass('public.{tabela}') IS NOT NULL")
+            existe_bool = str(existe).strip().lower() in {'t', 'true', '1'}
+            validacao = {
+                'item': f'tabela_{tabela}',
+                'ok': True if tabela != 'perfil_financeiro' else existe_bool,
+                'presente': existe_bool,
+                'mensagem': 'Tabela encontrada.' if existe_bool else 'Tabela nao encontrada neste backup.',
+            }
+            if existe_bool:
+                try:
+                    registros = int(BackupService._psql_scalar(nome, f'SELECT count(*) FROM "{tabela}"') or 0)
+                except ValueError:
+                    registros = 0
+                validacao['registros'] = registros
+            validacoes.append(validacao)
+
+        ok = all(
+            item.get('ok')
+            for item in validacoes
+            if item.get('item') in {'tabelas_publicas', 'tabela_perfil_financeiro'}
+        )
+        return {
+            'ok': ok,
+            'validacoes': validacoes,
+            'mensagem': 'Validacoes basicas concluidas.' if ok else 'Validacao basica encontrou pendencias.',
+        }
+
+    @staticmethod
+    def listar_testes_restauracao(limit: int = 20) -> list[dict[str, Any]]:
+        historico = BackupService._read_json(BackupService._restore_test_history_file(), [])
+        historico = historico if isinstance(historico, list) else []
+        historico = sorted(historico, key=lambda item: item.get('data_hora') or '', reverse=True)
+        return historico[:limit]
+
+    @staticmethod
     def exportar_configuracoes() -> dict[str, Any]:
         try:
             from backend.models import PerfilFinanceiro, Preferencia
@@ -484,6 +664,123 @@ class BackupService:
         historico.insert(0, item)
         BackupService._write_json(BackupService._history_file(), historico[:200])
         return item
+
+    @staticmethod
+    def _registrar_historico_teste_restauracao(dados: dict[str, Any]) -> dict[str, Any]:
+        BackupService._ensure_dirs()
+        item = {
+            'id': str(uuid.uuid4()),
+            'data_hora': BackupService._now_iso(),
+            'backup_arquivo': dados.get('backup_arquivo'),
+            'database_teste': dados.get('database_teste'),
+            'status': dados.get('status') or 'erro',
+            'duracao_segundos': float(dados.get('duracao_segundos') or 0),
+            'validacoes': dados.get('validacoes') or [],
+            'mensagem': dados.get('mensagem') or '',
+            'removido_apos_teste': bool(dados.get('removido_apos_teste')),
+            'erro_controlado': dados.get('erro_controlado') or '',
+        }
+        historico = BackupService._read_json(BackupService._restore_test_history_file(), [])
+        if not isinstance(historico, list):
+            historico = []
+        historico.insert(0, item)
+        BackupService._write_json(BackupService._restore_test_history_file(), historico[:200])
+        return item
+
+    @staticmethod
+    def _restaurar_arquivo_em_banco_teste(caminho: Path, banco_teste: str, banco: dict[str, Any]) -> None:
+        BackupService.validar_nome_banco_descartavel(banco_teste)
+        if caminho.suffix.lower() == '.dump':
+            ferramenta = BackupService._resolver_ferramenta_postgres('pg_restore')
+            if not ferramenta.get('caminho'):
+                raise RuntimeError('pg_restore nao encontrado. Configure o caminho em Configuracoes > Backup.')
+            comando = [
+                ferramenta['caminho'],
+                '--clean',
+                '--if-exists',
+                '--no-owner',
+                '--host',
+                banco['host'],
+                '--port',
+                str(banco['port']),
+                '--username',
+                banco['username'],
+                '--dbname',
+                banco_teste,
+                str(caminho),
+            ]
+        elif caminho.suffix.lower() == '.sql':
+            ferramenta = BackupService._resolver_ferramenta_postgres('psql')
+            if not ferramenta.get('caminho'):
+                raise RuntimeError('psql nao encontrado. Configure o caminho em Configuracoes > Backup.')
+            comando = [
+                ferramenta['caminho'],
+                '--host',
+                banco['host'],
+                '--port',
+                str(banco['port']),
+                '--username',
+                banco['username'],
+                '--dbname',
+                banco_teste,
+                '--file',
+                str(caminho),
+            ]
+        else:
+            raise ValueError('Formato de backup invalido para teste de restauracao.')
+
+        resultado = BackupService._run_postgres_command(comando, banco, timeout=1800)
+        if resultado.returncode != 0:
+            mensagem = resultado.stderr or resultado.stdout or 'Falha ao restaurar backup no banco descartavel.'
+            raise RuntimeError(BackupService._sanitize_message(mensagem, banco))
+
+    @staticmethod
+    def _psql_command(database: str, sql: str) -> list[str]:
+        banco = BackupService._database_config()
+        ferramenta = BackupService._resolver_ferramenta_postgres('psql')
+        if not ferramenta.get('caminho'):
+            raise RuntimeError('psql nao encontrado. Configure o caminho em Configuracoes > Backup.')
+        return [
+            ferramenta['caminho'],
+            '--host',
+            banco['host'],
+            '--port',
+            str(banco['port']),
+            '--username',
+            banco['username'],
+            '--dbname',
+            database,
+            '--command',
+            sql,
+        ]
+
+    @staticmethod
+    def _psql_scalar(database: str, sql: str) -> str:
+        banco = BackupService._database_config()
+        comando = BackupService._psql_command(database, sql)
+        comando.extend(['--tuples-only', '--no-align'])
+        resultado = BackupService._run_postgres_command(comando, banco, timeout=120)
+        if resultado.returncode != 0:
+            mensagem = resultado.stderr or resultado.stdout or 'Falha ao consultar banco descartavel.'
+            raise RuntimeError(BackupService._sanitize_message(mensagem, banco))
+        return (resultado.stdout or '').strip().splitlines()[-1].strip() if (resultado.stdout or '').strip() else ''
+
+    @staticmethod
+    def _run_postgres_command(comando: list[str], banco: dict[str, Any], timeout: int) -> subprocess.CompletedProcess:
+        env = os.environ.copy()
+        if banco.get('password'):
+            env['PGPASSWORD'] = banco['password']
+        try:
+            return subprocess.run(
+                comando,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                check=False,
+            )
+        except Exception as exc:  # pragma: no cover - depende do sistema operacional
+            raise RuntimeError(BackupService._sanitize_message(str(exc), banco)) from exc
 
     @staticmethod
     def _database_config() -> dict[str, Any]:
@@ -676,6 +973,10 @@ class BackupService:
     @staticmethod
     def _history_file() -> Path:
         return BackupService._base_dir() / 'backup_history.json'
+
+    @staticmethod
+    def _restore_test_history_file() -> Path:
+        return BackupService._base_dir() / 'restore_test_history.json'
 
     @staticmethod
     def _config_file() -> Path:

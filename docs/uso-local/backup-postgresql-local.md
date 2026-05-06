@@ -76,6 +76,33 @@ CONFIRMO RESTAURACAO
 
 Sem essa confirmação textual a aplicação bloqueia o restore.
 
+## Teste de restauracao em banco descartavel
+
+Antes de confiar em um backup para dados reais, use a acao `Teste de restauracao` em `/configuracoes#backup`.
+
+O fluxo seguro e:
+
+1. Selecione um backup `.dump` ou `.sql` no bloco `Teste de restauracao`.
+2. Digite exatamente:
+
+```text
+TESTAR RESTAURACAO
+```
+
+3. A aplicacao cria um banco descartavel com prefixo:
+
+```text
+controle_financeiro_restore_test_
+```
+
+4. O backup e restaurado nesse banco descartavel.
+5. A aplicacao valida conexao, tabelas publicas e tabelas principais como `perfil_financeiro`, `categoria`, `conta_bancaria`, `item_despesa`, `ir_comprovante` e `bem_patrimonial`, quando existirem.
+6. Por padrao, o banco descartavel e removido apos o teste.
+
+O banco principal nunca deve ser usado nesse fluxo. Se o usuario do PostgreSQL nao tiver permissao para criar ou remover databases, a aplicacao retorna erro amigavel. Nesse caso, use um usuario com permissao administrativa local ou execute um teste manual em ambiente descartavel.
+
+Para confirmar que o banco principal nao foi alterado, verifique que o nome retornado pela tela sempre comeca com `controle_financeiro_restore_test_` e que a acao usada foi `Teste de restauracao`, nao a restauracao principal.
+
 ## Cuidados com dados reais
 
 - Não compartilhe arquivos de backup sem avaliar dados sensíveis.

@@ -833,6 +833,56 @@
     padding: 14px 0 0;
 }
 
+.config-backup-test-fields {
+    grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto auto;
+    padding: 14px 16px;
+}
+
+.config-backup-keep-db {
+    align-self: end;
+    min-height: 40px;
+    color: #0f172a;
+}
+
+.config-backup-test-result {
+    display: grid;
+    gap: 8px;
+    margin: 0 16px 14px;
+    padding: 12px 14px;
+    border: 1px solid #bfdbfe;
+    border-radius: 10px;
+    background: #eff6ff;
+    color: #1e3a8a;
+    font-size: 0.84rem;
+}
+
+.config-backup-test-result[data-status="concluido"] {
+    border-color: #bbf7d0;
+    background: #f0fdf4;
+    color: #166534;
+}
+
+.config-backup-test-result[data-status="erro"] {
+    border-color: #fecaca;
+    background: #fef2f2;
+    color: #991b1b;
+}
+
+.config-backup-test-result ul {
+    display: grid;
+    gap: 4px;
+    margin: 0;
+    padding-left: 18px;
+}
+
+.config-backup-test-result li.ok {
+    color: #166534;
+}
+
+.config-backup-test-result li.warn {
+    color: #991b1b;
+}
+
 .config-danger-action {
     min-height: 40px;
     display: inline-flex;

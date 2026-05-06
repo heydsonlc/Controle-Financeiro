@@ -477,6 +477,53 @@
                         </div>
                     </article>
 
+                    <article class="config-backup-box config-backup-restore-test">
+                        <header>
+                            <span class="config-backup-inline-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false"><path d="M4 7c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3Z"/><path d="M4 7v5c0 1.7 3.6 3 8 3s8-1.3 8-3V7"/><path d="M4 12v5c0 1.7 3.6 3 8 3s8-1.3 8-3v-5"/><path d="m9 17 2 2 4-5"/></svg>
+                            </span>
+                            <div>
+                                <h3>Teste de restaura&ccedil;&atilde;o</h3>
+                                <p>Valide se um backup pode ser restaurado em um banco descart&aacute;vel sem afetar o banco principal.</p>
+                            </div>
+                        </header>
+                        <p class="config-backup-note">Este teste cria um banco descart&aacute;vel, restaura o backup nele, executa valida&ccedil;&otilde;es b&aacute;sicas e remove o banco ao final por padr&atilde;o.</p>
+                        <div class="config-backup-restore-fields config-backup-test-fields">
+                            <label>
+                                <span>Backup</span>
+                                <select id="backup-test-restore-file">
+                                    <option value="">Selecione um backup</option>
+                                </select>
+                            </label>
+                            <label>
+                                <span>Confirma&ccedil;&atilde;o</span>
+                                <input type="text" id="backup-test-restore-confirmation" placeholder="TESTAR RESTAURACAO">
+                            </label>
+                            <label class="config-backup-switch config-backup-keep-db">
+                                <input type="checkbox" id="backup-test-restore-keep">
+                                <span>Manter banco de teste</span>
+                            </label>
+                            <button type="button" class="config-primary-action" id="backup-test-restore-start">Testar restaura&ccedil;&atilde;o</button>
+                        </div>
+                        <div class="config-backup-test-result" id="backup-test-restore-result" hidden></div>
+                        <div class="config-backup-table-wrap">
+                            <table class="config-backup-table">
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th>Backup</th>
+                                        <th>Status</th>
+                                        <th>Dura&ccedil;&atilde;o</th>
+                                        <th>Removido</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="backup-restore-test-history-body">
+                                    <tr><td colspan="5">Nenhum teste de restaura&ccedil;&atilde;o registrado.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </article>
+
                     <article class="config-backup-box">
                         <header>
                             <span class="config-backup-inline-icon" aria-hidden="true">
