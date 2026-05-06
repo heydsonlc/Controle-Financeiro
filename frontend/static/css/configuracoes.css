@@ -741,6 +741,78 @@
     flex-wrap: wrap;
 }
 
+.config-ocr-card {
+    margin-top: 0;
+}
+
+.config-ocr-card > header {
+    align-items: flex-start;
+}
+
+.config-ocr-card > header p {
+    margin: 4px 0 0;
+    color: #64748b;
+    line-height: 1.45;
+}
+
+.config-ocr-alert {
+    margin: 14px 16px 0;
+}
+
+.config-ocr-status-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+    padding: 14px 16px 0;
+}
+
+.config-ocr-status-grid article {
+    display: grid;
+    gap: 7px;
+    min-height: 96px;
+    padding: 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #f8fafc;
+}
+
+.config-ocr-status-grid span,
+.config-ocr-status-grid small {
+    color: #64748b;
+    font-weight: 800;
+}
+
+.config-ocr-tools-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    padding: 14px 16px;
+}
+
+.config-ocr-tools-grid label {
+    display: grid;
+    gap: 7px;
+    color: #0f172a;
+    font-size: 0.8rem;
+    font-weight: 900;
+}
+
+.config-ocr-tools-grid input {
+    min-height: 40px;
+    width: 100%;
+    border: 1px solid #cfd8e6;
+    border-radius: 10px;
+    padding: 8px 10px;
+    background: #ffffff;
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 0.82rem;
+}
+
+.config-ocr-actions .config-backup-note {
+    margin: 0;
+    flex: 1;
+}
+
 .config-backup-table-wrap {
     overflow-x: auto;
 }
@@ -1103,6 +1175,8 @@
     .config-backup-grid-two,
     .config-backup-tools-status,
     .config-backup-tools-grid,
+    .config-ocr-status-grid,
+    .config-ocr-tools-grid,
     .config-backup-practices {
         grid-template-columns: 1fr;
     }
@@ -1137,6 +1211,8 @@
     .config-backup-schedule,
     .config-backup-tools-status,
     .config-backup-tools-grid,
+    .config-ocr-status-grid,
+    .config-ocr-tools-grid,
     .config-backup-restore-fields {
         grid-template-columns: 1fr;
     }

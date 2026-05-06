@@ -4,6 +4,7 @@
     const API_PERFIS = '/api/perfis-financeiros';
     const API_PREFERENCIAS = '/api/preferencias';
     const API_BACKUP = '/api/backup';
+    const API_OCR = '/api/ocr';
     const state = {
         perfis: [],
         ativo: null,
@@ -13,6 +14,10 @@
             status: null,
             historico: [],
             testesRestauracao: [],
+            carregado: false
+        },
+        ocr: {
+            status: null,
             carregado: false
         },
         secao: 'perfis-financeiros'
@@ -116,6 +121,14 @@
         alert.hidden = !message;
     }
 
+    function mostrarOcrMensagem(message, tipo = 'info') {
+        const alert = $('ocr-alert');
+        if (!alert) return;
+        alert.textContent = message || '';
+        alert.dataset.tipo = tipo;
+        alert.hidden = !message;
+    }
+
     function formatarDataHora(valor) {
         if (!valor) return '-';
         const data = new Date(valor);
@@ -176,6 +189,50 @@
             mostrarBackupMensagem(error.message);
             renderBackup();
         }
+    }
+
+    async function carregarOcr() {
+        if (!$('config-section-ia-automacao')) return;
+        try {
+            state.ocr.status = await requestJson(`${API_OCR}/status`);
+            state.ocr.carregado = true;
+            renderOcr();
+        } catch (error) {
+            mostrarOcrMensagem(error.message, 'error');
+            renderOcr();
+        }
+    }
+
+    function renderOcr() {
+        const status = state.ocr.status || {};
+        const config = status.configuracao || {};
+        preencherCampoFerramenta('ocr-tesseract-path', config.tesseract_path);
+        preencherCampoFerramenta('ocr-poppler-path', config.poppler_path);
+        renderOcrBadge('ocr-status-tesseract', status.tesseract?.disponivel, status.tesseract?.disponivel ? 'Disponivel' : 'Nao encontrado', status.tesseract?.mensagem);
+        renderOcrBadge('ocr-status-por', status.tesseract?.por_disponivel, status.tesseract?.por_disponivel ? 'Disponivel' : 'Ausente', status.tesseract?.mensagem);
+        renderOcrBadge('ocr-status-poppler', status.poppler?.disponivel, status.poppler?.disponivel ? 'Disponivel' : 'Nao encontrado', status.poppler?.mensagem);
+        renderOcrBadge('ocr-status-images', status.pronto_para_imagens, status.pronto_para_imagens ? 'Preparado' : 'Indisponivel');
+        renderOcrBadge('ocr-status-pdf', status.pronto_para_pdf_escaneado, status.pronto_para_pdf_escaneado ? 'Preparado' : 'Indisponivel');
+        const detalhe = $('ocr-status-tesseract-detail');
+        if (detalhe) detalhe.textContent = status.tesseract?.versao || '-';
+        const recomendacao = $('ocr-recommendation');
+        if (recomendacao) recomendacao.textContent = (status.recomendacoes || ['OCR ainda nao processa documentos nesta etapa.']).join(' ');
+        if (status.tesseract?.disponivel && !status.tesseract?.por_disponivel) {
+            mostrarOcrMensagem('Tesseract encontrado, mas o idioma portugues nao esta instalado. O OCR pode funcionar, mas tera menor precisao em documentos brasileiros.', 'error');
+        } else if (status.poppler && !status.poppler.disponivel) {
+            mostrarOcrMensagem('Poppler nao encontrado. OCR em imagens podera ser preparado futuramente, mas PDF escaneado exigira conversao de paginas.', 'error');
+        } else if (status.tesseract || status.poppler) {
+            mostrarOcrMensagem('Ferramentas OCR configuradas.', 'success');
+        }
+    }
+
+    function renderOcrBadge(id, ok, label, title = '') {
+        const badge = $(id);
+        if (!badge) return;
+        badge.className = 'config-backup-status';
+        badge.classList.add(ok ? 'disponivel' : 'nao-encontrado');
+        badge.textContent = label || (ok ? 'Disponivel' : 'Nao encontrado');
+        badge.title = title || '';
     }
 
     function renderBackup() {
@@ -479,6 +536,52 @@
             mostrarBackupMensagem(resposta.disponivel ? 'Caminhos salvos e validados.' : 'Caminhos salvos, mas alguma ferramenta não foi validada.', resposta.disponivel ? 'success' : 'error');
         } catch (error) {
             mostrarBackupMensagem(error.message, 'error');
+        }
+    }
+
+    async function validarFerramentasOcr() {
+        try {
+            state.ocr.status = await requestJson(`${API_OCR}/validar`, {
+                method: 'POST',
+                body: '{}'
+            });
+            state.ocr.carregado = true;
+            renderOcr();
+            mostrarOcrMensagem(state.ocr.status.pronto_para_imagens ? 'Ferramentas OCR validadas.' : 'Ferramentas OCR incompletas.', state.ocr.status.pronto_para_imagens ? 'success' : 'error');
+        } catch (error) {
+            mostrarOcrMensagem(error.message, 'error');
+        }
+    }
+
+    async function autodetectarFerramentasOcr() {
+        try {
+            state.ocr.status = await requestJson(`${API_OCR}/autodetectar`, {
+                method: 'POST',
+                body: '{}'
+            });
+            state.ocr.carregado = true;
+            renderOcr();
+            mostrarOcrMensagem(state.ocr.status.mensagem || 'Autodeteccao OCR concluida.', state.ocr.status.pronto_para_imagens ? 'success' : 'error');
+        } catch (error) {
+            mostrarOcrMensagem(error.message, 'error');
+        }
+    }
+
+    async function salvarFerramentasOcr() {
+        const payload = {
+            tesseract_path: obterCampo('ocr-tesseract-path').trim(),
+            poppler_path: obterCampo('ocr-poppler-path').trim()
+        };
+        try {
+            state.ocr.status = await requestJson(`${API_OCR}/configurar`, {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+            state.ocr.carregado = true;
+            renderOcr();
+            mostrarOcrMensagem(state.ocr.status.message || 'Caminhos OCR salvos.', state.ocr.status.pronto_para_imagens ? 'success' : 'error');
+        } catch (error) {
+            mostrarOcrMensagem(error.message, 'error');
         }
     }
 
@@ -824,6 +927,9 @@
                 renderBackupPainel();
             }
         }
+        if (state.secao === 'ia-automacao' && !state.ocr.carregado) {
+            carregarOcr();
+        }
         if (window.location.hash !== `#${state.secao}`) {
             history.replaceState(null, '', `#${state.secao}`);
         }
@@ -905,6 +1011,9 @@
         $('backup-tools-autodetect')?.addEventListener('click', autodetectarFerramentasBackup);
         $('backup-tools-validate')?.addEventListener('click', validarFerramentasBackup);
         $('backup-tools-save')?.addEventListener('click', salvarFerramentasBackup);
+        $('ocr-tools-autodetect')?.addEventListener('click', autodetectarFerramentasOcr);
+        $('ocr-tools-validate')?.addEventListener('click', validarFerramentasOcr);
+        $('ocr-tools-save')?.addEventListener('click', salvarFerramentasOcr);
         $('backup-schedule-save')?.addEventListener('click', salvarAgendamentoBackup);
         $('backup-restore-start')?.addEventListener('click', restaurarBackup);
         $('backup-test-restore-start')?.addEventListener('click', testarRestauracaoBackup);

@@ -247,6 +247,7 @@ def register_blueprints(app):
         from backend.routes.ir import ir_bp
         from backend.routes.perfis import perfis_bp
         from backend.routes.backup import backup_bp
+        from backend.routes.ocr_tools import ocr_tools_bp
     except ImportError:
         from routes.categorias import categorias_bp, categorias_cartao_bp
         from routes.despesas import despesas_bp
@@ -268,6 +269,7 @@ def register_blueprints(app):
         from routes.ir import ir_bp
         from routes.perfis import perfis_bp
         from routes.backup import backup_bp
+        from routes.ocr_tools import ocr_tools_bp
 
     # Registrar blueprints
     app.register_blueprint(categorias_bp, url_prefix='/api/categorias')
@@ -291,6 +293,7 @@ def register_blueprints(app):
     app.register_blueprint(ir_bp, url_prefix='/api/ir')
     app.register_blueprint(perfis_bp)
     app.register_blueprint(backup_bp, url_prefix='/api/backup')
+    app.register_blueprint(ocr_tools_bp, url_prefix='/api/ocr')
 
 
 def register_error_handlers(app):

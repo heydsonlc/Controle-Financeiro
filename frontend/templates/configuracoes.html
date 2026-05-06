@@ -574,6 +574,60 @@
                         <button type="button" class="config-primary-action" data-preferences-save="ia">Salvar IA e automação</button>
                     </div>
                 </div>
+                <article class="config-form-card config-ocr-card" aria-labelledby="config-ocr-title">
+                    <header>
+                        <div>
+                            <h3 id="config-ocr-title">OCR local</h3>
+                            <p>Configure as ferramentas locais usadas para ler textos em imagens, PDFs escaneados e comprovantes sem texto pesquisavel.</p>
+                        </div>
+                    </header>
+                    <div class="config-alert config-ocr-alert" id="ocr-alert" hidden></div>
+                    <div class="config-ocr-status-grid">
+                        <article>
+                            <span>Tesseract</span>
+                            <strong id="ocr-status-tesseract" class="config-backup-status">Carregando</strong>
+                            <small id="ocr-status-tesseract-detail">-</small>
+                        </article>
+                        <article>
+                            <span>Idioma portugues</span>
+                            <strong id="ocr-status-por" class="config-backup-status">Carregando</strong>
+                            <small>por.traineddata</small>
+                        </article>
+                        <article>
+                            <span>Poppler</span>
+                            <strong id="ocr-status-poppler" class="config-backup-status">Carregando</strong>
+                            <small>pdftoppm / pdfinfo</small>
+                        </article>
+                        <article>
+                            <span>OCR para imagens</span>
+                            <strong id="ocr-status-images" class="config-backup-status">Carregando</strong>
+                            <small>PNG, JPG, WEBP</small>
+                        </article>
+                        <article>
+                            <span>OCR para PDF escaneado</span>
+                            <strong id="ocr-status-pdf" class="config-backup-status">Carregando</strong>
+                            <small>conversao de paginas</small>
+                        </article>
+                    </div>
+                    <div class="config-ocr-tools-grid">
+                        <label>
+                            <span>Caminho do Tesseract</span>
+                            <input type="text" id="ocr-tesseract-path" placeholder="C:\Program Files\Tesseract-OCR\tesseract.exe">
+                        </label>
+                        <label>
+                            <span>Caminho do Poppler</span>
+                            <input type="text" id="ocr-poppler-path" placeholder="C:\Program Files\poppler\Library\bin">
+                        </label>
+                    </div>
+                    <div class="config-backup-row-actions config-ocr-actions">
+                        <p class="config-backup-note" id="ocr-recommendation">OCR ainda nao processa documentos nesta etapa.</p>
+                        <div class="config-backup-tool-actions">
+                            <button type="button" class="config-secondary-action" id="ocr-tools-autodetect">Autodetectar</button>
+                            <button type="button" class="config-secondary-action" id="ocr-tools-validate">Validar ferramentas</button>
+                            <button type="button" class="config-primary-action" id="ocr-tools-save">Salvar caminhos</button>
+                        </div>
+                    </div>
+                </article>
             </section>
 
             <section class="config-panel" id="config-section-documentos-fiscais" data-config-section="documentos-fiscais">

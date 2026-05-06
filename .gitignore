@@ -35,6 +35,7 @@ ENV/
 data/gastos.db
 data/uploads/
 data/backups/
+data/ocr/
 backups/
 
 # Environment Variables
