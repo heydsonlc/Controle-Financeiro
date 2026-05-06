@@ -22,6 +22,7 @@ try:
     )
     from backend.services.categoria_palavra_chave_service import CategoriaPalavraChaveService
     from backend.services.ir_nfse_goiania_parser import eh_nfse_goiania, extrair_dados_nfse_goiania
+    from backend.services.ocr_service import OcrService
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import (
@@ -36,6 +37,7 @@ except ImportError:
     )
     from services.categoria_palavra_chave_service import CategoriaPalavraChaveService
     from services.ir_nfse_goiania_parser import eh_nfse_goiania, extrair_dados_nfse_goiania
+    from services.ocr_service import OcrService
     from services.perfil_financeiro_service import PerfilFinanceiroService
 
 
@@ -51,6 +53,7 @@ class IrDocumentoService:
         'image/webp',
     }
     TAMANHO_MAXIMO = 10 * 1024 * 1024
+    MIN_CARACTERES_TEXTO = 50
     CATEGORIAS_IR_INICIAIS = [
         ('Saude', 'Despesas medicas e assistenciais', True, 10, 'DEDUCAO_IRPF'),
         ('Odontologia', 'Tratamentos odontologicos', True, 20, 'DEDUCAO_IRPF'),
@@ -430,6 +433,25 @@ class IrDocumentoService:
         return comprovante.arquivo
 
     @classmethod
+    def reprocessar_ocr(cls, comprovante_id):
+        comprovante = cls.obter_comprovante(comprovante_id)
+        if not comprovante.arquivo:
+            raise ValueError('Arquivo do comprovante nao encontrado')
+        if comprovante.arquivo.mime_type not in {'application/pdf', 'image/png', 'image/jpeg', 'image/webp'}:
+            raise ValueError('Tipo de arquivo sem suporte para OCR local')
+
+        resultado_ocr = OcrService.executar_ocr_documento(
+            comprovante.arquivo.conteudo,
+            comprovante.arquivo.mime_type,
+            comprovante.arquivo.nome_arquivo,
+        )
+        if not cls._aplicar_resultado_ocr(comprovante, resultado_ocr, 'Reprocessamento manual de OCR acionado.'):
+            comprovante.status = 'PENDENTE_REVISAO'
+            comprovante.observacoes = resultado_ocr.get('erro') or 'OCR local nao retornou texto suficiente.'
+        comprovante.updated_at = datetime.utcnow()
+        return comprovante
+
+    @classmethod
     def processar_uploads(cls, arquivos, ano_calendario):
         ano = cls._parse_int(ano_calendario) or date.today().year
         resultados = []
@@ -488,7 +510,7 @@ class IrDocumentoService:
         cls._analisar_comprovante(comprovante, conteudo, extensao)
         return {
             'duplicado': False,
-            'comprovante': comprovante.to_dict(include_texto=True),
+            'comprovante': comprovante.to_dict(include_texto=True, include_eventos=True),
             'mensagem': 'Arquivo importado.',
         }
 
@@ -498,33 +520,45 @@ class IrDocumentoService:
             try:
                 texto = cls.extrair_texto_pdf(conteudo)
             except Exception:
+                resultado_ocr = OcrService.executar_ocr_documento(
+                    conteudo,
+                    'application/pdf',
+                    comprovante.arquivo.nome_arquivo if comprovante.arquivo else None,
+                )
+                if cls._aplicar_resultado_ocr(comprovante, resultado_ocr, 'PDF textual falhou; OCR local acionado.'):
+                    return
                 comprovante.status = 'ERRO_LEITURA'
-                comprovante.observacoes = 'PDF armazenado, mas a leitura textual falhou. OCR fica para etapa futura.'
+                comprovante.observacoes = 'PDF armazenado, mas a leitura textual e o OCR local falharam.'
                 cls._registrar_evento(comprovante, 'ERRO_LEITURA', 'Falha ao extrair texto do PDF.')
                 return
 
             if not cls._texto_suficiente(texto):
+                resultado_ocr = OcrService.executar_ocr_documento(
+                    conteudo,
+                    'application/pdf',
+                    comprovante.arquivo.nome_arquivo if comprovante.arquivo else None,
+                )
+                if cls._aplicar_resultado_ocr(comprovante, resultado_ocr, 'PDF sem texto suficiente; OCR local acionado.'):
+                    return
                 comprovante.status = 'PENDENTE_REVISAO'
-                comprovante.observacoes = 'PDF armazenado, mas sem texto suficiente. OCR fica para etapa futura.'
+                comprovante.observacoes = 'PDF armazenado, mas sem texto suficiente. OCR local nao retornou texto para leitura automatica.'
                 cls._registrar_evento(comprovante, 'PENDENTE_REVISAO', 'PDF sem texto suficiente para leitura automatica.')
                 return
 
-            comprovante.texto_extraido = texto
-            cls._registrar_evento(comprovante, 'TEXTO_EXTRAIDO', 'Texto extraido de PDF textual.')
-            texto_classificacao = texto
-            if eh_nfse_goiania(texto):
-                dados_nfse = extrair_dados_nfse_goiania(texto)
-                cls._aplicar_dados_nfse_goiania(comprovante, dados_nfse)
-                texto_classificacao = dados_nfse.get('texto_classificacao') or texto
-                cls._registrar_evento(comprovante, 'TEXTO_EXTRAIDO', 'Parser especifico NFS-e Goiania aplicado.')
-            else:
-                cls._extrair_dados_simples(comprovante, texto)
-            cls._classificar_comprovante(comprovante, texto_classificacao)
+            cls._processar_texto_extraido(comprovante, texto, 'TEXTO_EXTRAIDO', 'Texto extraido de PDF textual.')
             return
 
+        mime_type = comprovante.arquivo.mime_type if comprovante.arquivo else cls._mime_por_extensao(extensao)
+        resultado_ocr = OcrService.executar_ocr_documento(
+            conteudo,
+            mime_type,
+            comprovante.arquivo.nome_arquivo if comprovante.arquivo else None,
+        )
+        if cls._aplicar_resultado_ocr(comprovante, resultado_ocr, 'Imagem processada por OCR local.'):
+            return
         comprovante.status = 'PENDENTE_REVISAO'
-        comprovante.observacoes = 'Imagem armazenada. OCR nao disponivel neste MVP.'
-        cls._registrar_evento(comprovante, 'PENDENTE_REVISAO', 'Imagem aguardando OCR futuro.')
+        comprovante.observacoes = resultado_ocr.get('erro') or 'Imagem armazenada. OCR local nao retornou texto suficiente.'
+        cls._registrar_evento(comprovante, 'OCR_FALHOU', 'OCR local nao retornou texto para imagem.')
 
     @staticmethod
     def extrair_texto_pdf(conteudo):
@@ -533,6 +567,39 @@ class IrDocumentoService:
             for pagina in pdf.pages:
                 paginas.append(pagina.extract_text() or '')
         return '\n'.join(paginas).strip()
+
+    @classmethod
+    def _processar_texto_extraido(cls, comprovante, texto, tipo_evento, descricao_evento):
+        comprovante.texto_extraido = texto
+        cls._registrar_evento(comprovante, tipo_evento, descricao_evento)
+        texto_classificacao = texto
+        if eh_nfse_goiania(texto):
+            dados_nfse = extrair_dados_nfse_goiania(texto)
+            cls._aplicar_dados_nfse_goiania(comprovante, dados_nfse)
+            texto_classificacao = dados_nfse.get('texto_classificacao') or texto
+            cls._registrar_evento(comprovante, tipo_evento, 'Parser especifico NFS-e Goiania aplicado.')
+        else:
+            cls._extrair_dados_simples(comprovante, texto)
+        cls._classificar_comprovante(comprovante, texto_classificacao)
+
+    @classmethod
+    def _aplicar_resultado_ocr(cls, comprovante, resultado_ocr, contexto):
+        resultado_ocr = resultado_ocr or {}
+        avisos = resultado_ocr.get('avisos') or []
+        if not resultado_ocr.get('sucesso') or not cls._texto_suficiente(resultado_ocr.get('texto')):
+            erro = resultado_ocr.get('erro') or 'OCR local nao retornou texto suficiente.'
+            cls._registrar_evento(comprovante, 'OCR_FALHOU', f'{contexto} {erro}')
+            return False
+
+        paginas = resultado_ocr.get('paginas_processadas') or 0
+        cls._registrar_evento(comprovante, 'OCR_EXECUTADO', f'OCR local executado. Paginas processadas: {paginas}.')
+        if any('3 primeiras paginas' in aviso for aviso in avisos):
+            cls._registrar_evento(comprovante, 'OCR_LIMITADO', 'OCR limitado as 3 primeiras paginas do documento.')
+        cls._processar_texto_extraido(comprovante, resultado_ocr.get('texto') or '', 'TEXTO_EXTRAIDO_OCR', 'Texto extraido por OCR local.')
+        observacoes = ['Texto extraido por OCR local. Revise os dados antes de validar.']
+        observacoes.extend(str(aviso) for aviso in avisos if aviso)
+        cls._adicionar_observacoes(comprovante, observacoes)
+        return True
 
     @classmethod
     def _extrair_dados_simples(cls, comprovante, texto):
@@ -660,6 +727,16 @@ class IrDocumentoService:
             descricao=descricao,
         ))
 
+    @staticmethod
+    def _adicionar_observacoes(comprovante, mensagens):
+        existentes = str(comprovante.observacoes or '').strip()
+        partes = [existentes] if existentes else []
+        for mensagem in mensagens or []:
+            texto = str(mensagem or '').strip()
+            if texto and texto not in partes:
+                partes.append(texto)
+        comprovante.observacoes = ' '.join(partes)[:1000] if partes else comprovante.observacoes
+
     @classmethod
     def _validar_arquivo(cls, nome, extensao, mime_type, conteudo):
         if not nome:
@@ -705,7 +782,7 @@ class IrDocumentoService:
 
     @staticmethod
     def _texto_suficiente(texto):
-        return len((texto or '').strip()) >= 30
+        return len(re.sub(r'\s+', '', texto or '')) >= IrDocumentoService.MIN_CARACTERES_TEXTO
 
     @staticmethod
     def _parse_int(valor):

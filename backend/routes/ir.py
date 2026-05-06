@@ -150,6 +150,18 @@ def validar_comprovante(comprovante_id):
         return _json_error(str(exc), 404)
 
 
+@ir_bp.route('/comprovantes/<int:comprovante_id>/reprocessar-ocr', methods=['POST'])
+def reprocessar_ocr_comprovante(comprovante_id):
+    try:
+        comprovante = IrDocumentoService.reprocessar_ocr(comprovante_id)
+        db.session.commit()
+        return _json_success(comprovante.to_dict(include_texto=True, include_eventos=True))
+    except ValueError as exc:
+        db.session.rollback()
+        status = 404 if 'nao encontrado' in str(exc).lower() else 400
+        return _json_error(str(exc), status)
+
+
 @ir_bp.route('/comprovantes/<int:comprovante_id>/arquivo', methods=['GET'])
 def obter_arquivo(comprovante_id):
     try:

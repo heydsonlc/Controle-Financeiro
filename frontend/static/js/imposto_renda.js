@@ -76,6 +76,7 @@
         $('ir-review-close')?.addEventListener('click', fecharRevisao);
         $('ir-review-save')?.addEventListener('click', salvarRevisao);
         $('ir-review-validar')?.addEventListener('click', validarComprovante);
+        $('ir-review-ocr-reprocess')?.addEventListener('click', reprocessarOcr);
         $('ir-review-categoria')?.addEventListener('change', resolverCategoriaIrDaDespesa);
         $('ir-review-categoria-ir')?.addEventListener('change', () => {
             estado.categoriaIrManual = true;
@@ -709,6 +710,7 @@
     function renderUploadComprovante(comprovante, resultado, status, anoUpload) {
         const arquivo = comprovante.arquivo || {};
         const extraido = Boolean(comprovante.texto_extraido);
+        const resumoOcr = obterResumoOcr(comprovante);
         const anoDocumento = comprovante.ano_calendario ? String(comprovante.ano_calendario) : '';
         const anoDiferente = anoDocumento && anoUpload && anoDocumento !== anoUpload;
         const resumo = [
@@ -725,7 +727,10 @@
             : '';
         const trecho = comprovante.texto_extraido
             ? `<details class="ir-upload-text"><summary>Ver texto extraido</summary><pre>${escapeHtml(comprovante.texto_extraido.slice(0, 1400))}</pre></details>`
-            : '<p class="ir-upload-muted">Nenhum texto extraido disponivel. Se for imagem ou PDF escaneado, ficara para OCR futuro.</p>';
+            : '<p class="ir-upload-muted">Nenhum texto extraido disponivel. Revise manualmente ou reprocesse OCR depois de configurar as ferramentas locais.</p>';
+        const avisoOcr = resumoOcr.mensagem
+            ? `<div class="ir-ocr-alert">${escapeHtml(resumoOcr.mensagem)}</div>`
+            : '';
 
         return `
             <div class="ir-upload-item ir-upload-card">
@@ -736,6 +741,7 @@
                     </div>
                     <div class="ir-upload-badges">
                         ${extraido ? '<span class="ir-mini-badge ok">Texto extraido</span>' : '<span class="ir-mini-badge">Sem texto</span>'}
+                        ${resumoOcr.usouOcr ? '<span class="ir-mini-badge ok">OCR local</span>' : ''}
                         ${renderStatus(status)}
                     </div>
                 </div>
@@ -743,6 +749,7 @@
                 <div class="ir-upload-extracted">
                     ${resumo.map(([label, value]) => `<span><small>${label}</small><strong>${escapeHtml(value)}</strong></span>`).join('')}
                 </div>
+                ${avisoOcr}
                 ${trecho}
                 <div class="ir-upload-actions">
                     <button type="button" class="ir-secondary-btn" onclick="window.IRDoc.abrirRevisao(${comprovante.id})">Revisar dados</button>
@@ -766,7 +773,8 @@
         $('ir-review-id').value = item.id;
         $('ir-review-file-name').textContent = item.arquivo?.nome_arquivo || 'Comprovante';
         $('ir-review-file-link').href = `/api/ir/comprovantes/${item.id}/arquivo`;
-        $('ir-review-texto').textContent = item.texto_extraido || 'Texto extraido indisponivel. Documento pendente de revisao manual ou OCR futuro.';
+        $('ir-review-texto').textContent = item.texto_extraido || 'Texto extraido indisponivel. Documento pendente de revisao manual ou OCR local.';
+        renderAvisoOcrRevisao(item);
         $('ir-review-data').value = item.data_documento || '';
         $('ir-review-prestador').value = item.prestador_nome || '';
         $('ir-review-doc').value = item.prestador_cpf_cnpj || '';
@@ -780,6 +788,14 @@
         $('ir-review-observacoes').value = item.observacoes || '';
         $('ir-review-modal').classList.add('open');
         $('ir-review-modal').setAttribute('aria-hidden', 'false');
+    }
+
+    function renderAvisoOcrRevisao(item) {
+        const alerta = $('ir-review-ocr-alert');
+        if (!alerta) return;
+        const resumo = obterResumoOcr(item);
+        alerta.textContent = resumo.mensagem || '';
+        alerta.hidden = !resumo.mensagem;
     }
 
     function fecharRevisao() {
@@ -887,6 +903,42 @@
         await carregarComprovantes();
     }
 
+    async function reprocessarOcr() {
+        const id = $('ir-review-id').value;
+        if (!id) return;
+        const botao = $('ir-review-ocr-reprocess');
+        const textoOriginal = botao?.textContent;
+        if (botao) {
+            botao.disabled = true;
+            botao.textContent = 'Processando...';
+        }
+        try {
+            const resposta = await fetch(`/api/ir/comprovantes/${id}/reprocessar-ocr`, { method: 'POST' });
+            const json = await resposta.json();
+            if (!json.success) {
+                mostrarAviso(json.error || 'Nao foi possivel reprocessar OCR.');
+                return;
+            }
+            const item = json.data;
+            $('ir-review-texto').textContent = item.texto_extraido || 'Texto extraido indisponivel. Documento pendente de revisao manual ou OCR local.';
+            $('ir-review-data').value = item.data_documento || '';
+            $('ir-review-prestador').value = item.prestador_nome || '';
+            $('ir-review-doc').value = item.prestador_cpf_cnpj || '';
+            $('ir-review-valor').value = item.valor != null ? item.valor : '';
+            $('ir-review-ano').value = item.ano_calendario || '';
+            $('ir-review-categoria').value = item.categoria_id || '';
+            $('ir-review-categoria-ir').value = item.categoria_ir_id || '';
+            $('ir-review-observacoes').value = item.observacoes || '';
+            renderAvisoOcrRevisao(item);
+            await carregarComprovantes();
+        } finally {
+            if (botao) {
+                botao.disabled = false;
+                botao.textContent = textoOriginal || 'Reprocessar OCR';
+            }
+        }
+    }
+
     function renderStatus(status) {
         const chave = String(status || 'IMPORTADO').toUpperCase();
         const mapa = {
@@ -916,6 +968,23 @@
         };
         const [classe, label] = mapa[chave] || mapa.SEM_DOCUMENTO;
         return `<span class="ir-status ${classe}">${label}</span>`;
+    }
+
+    function obterResumoOcr(item) {
+        const eventos = item?.eventos || [];
+        const usouOcr = eventos.some((evento) => ['OCR_EXECUTADO', 'TEXTO_EXTRAIDO_OCR', 'OCR_LIMITADO'].includes(String(evento.tipo_evento || '').toUpperCase()));
+        const falhou = eventos.some((evento) => String(evento.tipo_evento || '').toUpperCase() === 'OCR_FALHOU');
+        const limitado = eventos.some((evento) => String(evento.tipo_evento || '').toUpperCase() === 'OCR_LIMITADO')
+            || /3 primeiras paginas/i.test(item?.observacoes || '');
+        if (usouOcr) {
+            const partes = ['Texto extraido por OCR local. Revise os dados antes de validar.'];
+            if (limitado) partes.push('OCR limitado as 3 primeiras paginas do documento.');
+            return { usouOcr: true, mensagem: partes.join(' ') };
+        }
+        if (falhou) {
+            return { usouOcr: false, mensagem: 'OCR local nao retornou texto suficiente. Revise manualmente ou verifique as ferramentas em Configuracoes > IA e Automacao.' };
+        }
+        return { usouOcr: false, mensagem: '' };
     }
 
     function formatarNatureza(valor) {
@@ -980,6 +1049,7 @@
         verOrigemSaida,
         carregarComprovantes,
         carregarSaidasSemDocumento,
+        reprocessarOcr,
         verAno(ano) {
             if ($('ir-filtro-ano')) {
                 const valor = String(ano);

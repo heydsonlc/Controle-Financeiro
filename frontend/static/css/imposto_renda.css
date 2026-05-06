@@ -73,6 +73,18 @@
     color: #0f172a;
 }
 
+.ir-ocr-alert {
+    margin: 10px 0;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    background: #eff6ff;
+    color: #1e3a8a;
+    padding: 9px 11px;
+    font-size: .82rem;
+    font-weight: 800;
+    line-height: 1.35;
+}
+
 .ir-kpi-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));

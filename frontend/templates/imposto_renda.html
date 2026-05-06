@@ -305,7 +305,7 @@
                         <span class="ir-drop-icon" aria-hidden="true">&uarr;</span>
                         <strong>Arraste arquivos aqui</strong>
                         <button type="button" id="ir-select-files">selecione no computador</button>
-                        <small>Formatos aceitos: PDF, JPG, PNG e WEBP. OCR fica para etapa futura.</small>
+                        <small>Formatos aceitos: PDF, JPG, PNG e WEBP. OCR local sera usado quando o documento nao tiver texto pesquisavel.</small>
                     </div>
                 </section>
 
@@ -442,6 +442,7 @@
                         <strong id="ir-review-file-name">Arquivo</strong>
                         <a id="ir-review-file-link" href="#" target="_blank" rel="noopener">Abrir arquivo</a>
                     </div>
+                    <div id="ir-review-ocr-alert" class="ir-ocr-alert" hidden></div>
                     <pre id="ir-review-texto">Texto extraido indisponivel.</pre>
                 </section>
                 <form id="ir-review-form" class="ir-review-form">
@@ -461,6 +462,7 @@
                 </form>
             </div>
             <div class="ir-modal-footer">
+                <button type="button" class="ir-secondary-btn" id="ir-review-ocr-reprocess">Reprocessar OCR</button>
                 <button type="button" class="ir-secondary-btn" id="ir-review-save">Salvar revisao</button>
                 <button type="button" class="ir-primary-btn" id="ir-review-validar">Validar comprovante</button>
             </div>
