@@ -206,7 +206,8 @@ def test_upload_ir_empresa_nao_aparece_no_pessoal_e_id_de_outro_perfil_retorna_4
         assert IrComprovante.query.get(comprovante['id']).perfil_financeiro_id == empresa['id']
 
 
-def test_importacao_cartao_lista_apenas_categorias_do_perfil_ativo(client):
+def test_importacao_cartao_lista_categorias_globais(client):
+    # Categoria de Despesa é global — aparece em todos os perfis
     _trocar_perfil(client, 'Empresa')
     _criar_categoria(client, 'Categoria Importacao Empresa CTX4')
     assert 'Categoria Importacao Empresa CTX4' in {
@@ -214,7 +215,7 @@ def test_importacao_cartao_lista_apenas_categorias_do_perfil_ativo(client):
     }
 
     _trocar_perfil(client, 'Pessoal')
-    assert 'Categoria Importacao Empresa CTX4' not in {
+    assert 'Categoria Importacao Empresa CTX4' in {
         item['nome'] for item in client.get('/api/importacao-cartao/categorias').get_json()['categorias']
     }
 

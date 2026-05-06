@@ -382,12 +382,9 @@ class DocumentoFinanceiroSugestaoService:
             if obrigatoria:
                 raise ValueError('Categoria de Despesa e obrigatoria')
             return None
-        categoria = Categoria.query.filter(
-            Categoria.id == categoria_id,
-            PerfilFinanceiroService.condicao_perfil(Categoria),
-        ).first()
+        categoria = Categoria.query.get(categoria_id)
         if not categoria or not categoria.ativo:
-            raise ValueError('Categoria de Despesa nao encontrada no perfil ativo')
+            raise ValueError('Categoria de Despesa nao encontrada')
         return categoria
 
     @staticmethod

@@ -233,10 +233,7 @@ def criar_recorrencia():
             return jsonify({'success': False, 'error': 'Valor e obrigatorio'}), 400
         if not categoria_id:
             return jsonify({'success': False, 'error': 'Categoria e obrigatoria'}), 400
-        if not Categoria.query.filter(
-            Categoria.id == categoria_id,
-            PerfilFinanceiroService.condicao_perfil(Categoria),
-        ).first():
+        if not Categoria.query.get(categoria_id):
             return jsonify({'success': False, 'error': 'Categoria nao encontrada'}), 404
 
         tipo_recorrencia = _normalizar_tipo_recorrencia(dados)
@@ -314,10 +311,7 @@ def atualizar_recorrencia(item_id):
                 item.valor = valor
         if 'categoria_id' in dados:
             categoria_id = _to_int(dados.get('categoria_id'))
-            if categoria_id and Categoria.query.filter(
-                Categoria.id == categoria_id,
-                PerfilFinanceiroService.condicao_perfil(Categoria),
-            ).first():
+            if categoria_id and Categoria.query.get(categoria_id):
                 item.categoria_id = categoria_id
         if 'data_vencimento' in dados:
             item.data_vencimento = _to_date(dados.get('data_vencimento'))

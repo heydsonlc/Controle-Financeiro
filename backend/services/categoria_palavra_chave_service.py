@@ -7,10 +7,8 @@ from datetime import datetime
 
 try:
     from backend.models import Categoria, CategoriaPalavraChave, db
-    from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import Categoria, CategoriaPalavraChave, db
-    from services.perfil_financeiro_service import PerfilFinanceiroService
 
 
 class CategoriaPalavraChaveService:
@@ -40,11 +38,8 @@ class CategoriaPalavraChaveService:
         if not descricao_normalizada:
             return cls._resultado_sem_match()
 
-        perfil_id = PerfilFinanceiroService.obter_perfil_ativo_id()
-        todas = CategoriaPalavraChave.query.join(Categoria).filter(
-            CategoriaPalavraChave.ativo == True,  # noqa: E712
-            PerfilFinanceiroService.condicao_perfil(Categoria, perfil_id),
-        ).all()
+        # Categoria de Despesa é global — sem filtro por perfil
+        todas = CategoriaPalavraChave.query.filter_by(ativo=True).all()
         if not todas:
             return cls._resultado_sem_match()
 
@@ -68,10 +63,7 @@ class CategoriaPalavraChaveService:
 
         categorias_candidatas = []
         for cat_id, palavras in matches_por_categoria.items():
-            categoria = Categoria.query.filter(
-                Categoria.id == cat_id,
-                PerfilFinanceiroService.condicao_perfil(Categoria, perfil_id),
-            ).first()
+            categoria = Categoria.query.get(cat_id)
             if categoria:
                 categorias_candidatas.append({
                     'categoria_id': cat_id,
@@ -144,10 +136,8 @@ class CategoriaPalavraChaveService:
 
     @staticmethod
     def _validar_categoria(categoria_id):
-        categoria = Categoria.query.filter(
-            Categoria.id == categoria_id,
-            PerfilFinanceiroService.condicao_perfil(Categoria),
-        ).first()
+        # Categoria de Despesa é global — sem filtro por perfil
+        categoria = Categoria.query.get(categoria_id)
         if not categoria:
             raise ValueError('Categoria de Despesa nao encontrada')
         return categoria

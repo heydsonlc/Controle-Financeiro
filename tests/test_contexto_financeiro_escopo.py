@@ -80,22 +80,20 @@ def _nomes(response):
     return {item['nome'] for item in itens}
 
 
-def test_categoria_criada_em_um_perfil_nao_aparece_no_outro(client):
-    pessoal = _perfil(client, 'Pessoal')
-    categoria_pessoal = _criar_categoria(client, 'Alimentacao CTX')
+def test_categoria_despesa_e_global_aparece_em_todos_os_perfis(client):
+    # Categoria de Despesa é global — deve aparecer em qualquer perfil
+    categoria = _criar_categoria(client, 'Alimentacao CTX')
 
     _trocar_perfil(client, 'Empresa')
-    assert 'Alimentacao CTX' not in _nomes(client.get('/api/categorias'))
-
-    categoria_empresa = _criar_categoria(client, 'Alimentacao CTX')
-    assert categoria_empresa['id'] != categoria_pessoal['id']
-
-    with client.session_transaction() as sess:
-        sess['perfil_financeiro_id'] = pessoal['id']
-
-    response = client.get(f"/api/categorias/{categoria_empresa['id']}")
-    assert response.status_code == 404
     assert 'Alimentacao CTX' in _nomes(client.get('/api/categorias'))
+
+    # Mesma categoria acessível por id independente do perfil ativo
+    response = client.get(f"/api/categorias/{categoria['id']}")
+    assert response.status_code == 200
+
+    # Criar duplicata deve retornar 400 (nome único global)
+    dup = client.post('/api/categorias', json={'nome': 'Alimentacao CTX', 'cor': '#abc123'})
+    assert dup.status_code == 400
 
 
 def test_conta_cartao_receita_despesa_e_recorrencia_sao_isolados_por_perfil(client, app):
@@ -173,21 +171,29 @@ def test_conta_cartao_receita_despesa_e_recorrencia_sao_isolados_por_perfil(clie
         assert ItemReceita.query.get(receita['id']).perfil_financeiro_id == perfil_id
 
 
-def test_vinculo_categoria_cartao_nao_permite_cruzar_perfis(client, app):
-    categoria_pessoal = _criar_categoria(client, 'Categoria Pessoal CTX')
+def test_vinculo_categoria_cartao_por_perfil_impede_duplicata_no_mesmo_perfil(client, app):
+    # Categoria de Despesa é global — pode ser vinculada a CategoriaCartao de qualquer perfil.
+    # Mas dentro de um mesmo perfil, não pode estar ativa em duas CategoriaCartao diferentes.
+    cat_desp = _criar_categoria(client, 'Categoria Global CTX')
 
     _trocar_perfil(client, 'Empresa')
-    categoria_cartao_empresa = _criar_categoria_cartao(client, 'Categoria Cartao Empresa CTX')
+    cat_cartao1 = _criar_categoria_cartao(client, 'Categoria Cartao Empresa CTX 1')
+    cat_cartao2 = _criar_categoria_cartao(client, 'Categoria Cartao Empresa CTX 2')
 
-    response = client.post(
-        f"/api/categorias-cartao/{categoria_cartao_empresa['id']}/despesas",
-        json={'categoria_id': categoria_pessoal['id']},
+    r1 = client.post(
+        f"/api/categorias-cartao/{cat_cartao1['id']}/despesas",
+        json={'categoria_id': cat_desp['id']},
     )
+    assert r1.status_code in (200, 201), r1.get_data(as_text=True)
 
-    assert response.status_code == 400
-    assert response.get_json()['success'] is False
+    r2 = client.post(
+        f"/api/categorias-cartao/{cat_cartao2['id']}/despesas",
+        json={'categoria_id': cat_desp['id']},
+    )
+    assert r2.status_code == 400
+    assert r2.get_json()['success'] is False
     with app.app_context():
-        assert CategoriaCartaoDespesa.query.count() == 0
+        assert CategoriaCartaoDespesa.query.filter_by(ativo=True).count() == 1
 
 
 def test_lancamento_de_cartao_e_fatura_nao_vazam_entre_perfis(client, app):
@@ -232,18 +238,12 @@ def test_lancamento_de_cartao_e_fatura_nao_vazam_entre_perfis(client, app):
         assert Conta.query.filter_by(item_despesa_id=cartao['id']).first().perfil_financeiro_id == empresa['id']
 
 
-def test_backfill_migration_conceitual_atribui_registros_existentes_ao_pessoal(app):
+def test_categoria_despesa_sem_perfil_e_acessivel_globalmente(app):
+    # Categoria de Despesa não tem perfil_financeiro_id — é global por definição
     with app.app_context():
-        pessoal = PerfilFinanceiro.query.filter_by(nome='Pessoal').first()
-        categoria = Categoria(nome='Sem Perfil Antigo', cor='#64748b', ativo=True)
+        categoria = Categoria(nome='Sem Perfil Global', cor='#64748b', ativo=True)
         db.session.add(categoria)
         db.session.commit()
 
         assert categoria.perfil_financeiro_id is None
-
-        Categoria.query.filter(Categoria.perfil_financeiro_id.is_(None)).update({
-            'perfil_financeiro_id': pessoal.id
-        })
-        db.session.commit()
-
-        assert Categoria.query.get(categoria.id).perfil_financeiro_id == pessoal.id
+        assert Categoria.query.get(categoria.id) is not None

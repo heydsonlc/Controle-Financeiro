@@ -294,9 +294,7 @@ def processar_importacao():
 @bp.route('/categorias', methods=['GET'])
 def listar_categorias():
     """Lista categorias de despesas disponíveis"""
-    categorias = PerfilFinanceiroService.aplicar_perfil_query(
-        Categoria.query, Categoria
-    ).filter_by(ativo=True).all()
+    categorias = Categoria.query.filter_by(ativo=True).all()
     return jsonify({
         'success': True,
         'categorias': [cat.to_dict() for cat in categorias]

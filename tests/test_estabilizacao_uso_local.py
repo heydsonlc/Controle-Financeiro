@@ -124,7 +124,7 @@ def test_fluxos_centrais_respeitam_isolamento_apos_troca_de_perfil(client, app):
     despesas_pessoal = _nomes(client.get('/api/despesas/').get_json())
 
     assert 'ESTAB Pessoal Residencial' in categorias_pessoal
-    assert 'ESTAB Empresa Operacional' not in categorias_pessoal
+    assert 'ESTAB Empresa Operacional' in categorias_pessoal  # global — visível em qualquer perfil
     assert 'ESTAB Conta Empresa' not in contas_pessoal
     assert 'ESTAB Despesa Empresa' not in despesas_pessoal
     assert client.get('/api/ir/comprovantes?ano=2026').get_json()['total'] == 0
@@ -139,7 +139,7 @@ def test_fluxos_centrais_respeitam_isolamento_apos_troca_de_perfil(client, app):
     despesas_empresa = _nomes(client.get('/api/despesas/').get_json())
 
     assert 'ESTAB Empresa Operacional' in categorias_empresa
-    assert 'ESTAB Pessoal Residencial' not in categorias_empresa
+    assert 'ESTAB Pessoal Residencial' in categorias_empresa  # global — visível em qualquer perfil
     assert 'ESTAB Conta Empresa' in contas_empresa
     assert 'ESTAB Despesa Empresa' in despesas_empresa
     assert client.get('/api/ir/comprovantes?ano=2026').get_json()['total'] == 1

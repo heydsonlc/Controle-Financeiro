@@ -419,10 +419,7 @@ class ImportacaoCartaoUnificadoService:
             categoria_id = linha.get('categoria_id') or linha.get('categoria_despesa_id')
             categoria_cartao_id = linha.get('categoria_cartao_id')
 
-            categoria = Categoria.query.filter(
-                Categoria.id == int(categoria_id),
-                PerfilFinanceiroService.condicao_perfil(Categoria),
-            ).first() if categoria_id else None
+            categoria = Categoria.query.get(int(categoria_id)) if categoria_id else None
             categoria_cartao = CategoriaCartao.query.filter(
                 CategoriaCartao.id == int(categoria_cartao_id),
                 PerfilFinanceiroService.condicao_perfil(CategoriaCartao),

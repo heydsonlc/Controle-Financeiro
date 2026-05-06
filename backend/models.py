@@ -88,7 +88,7 @@ class Categoria(db.Model):
     palavras_chave = db.relationship('CategoriaPalavraChave', back_populates='categoria', lazy='dynamic')
 
     __table_args__ = (
-        db.UniqueConstraint('perfil_financeiro_id', 'nome', name='ux_categoria_perfil_nome'),
+        db.UniqueConstraint('nome', name='ux_categoria_nome_global'),
         db.Index('ix_categoria_perfil_ativo', 'perfil_financeiro_id', 'ativo'),
     )
 

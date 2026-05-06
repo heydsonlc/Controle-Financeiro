@@ -93,13 +93,10 @@ def criar_cartao():
     try:
         dados = request.json
 
-        # Se nÃ£o especificou categoria, usa a categoria padrÃ£o "CartÃµes de CrÃ©dito"
+        # Se nÃ£o especificou categoria, usa a categoria padrÃ£o "CartÃµes de CrÃ©dito" — Categoria global
         categoria_id = dados.get('categoria_id')
         if not categoria_id:
-            categoria_padrao = Categoria.query.filter(
-                Categoria.nome == 'Cartoes de Credito',
-                PerfilFinanceiroService.condicao_perfil(Categoria),
-            ).first()
+            categoria_padrao = Categoria.query.filter_by(nome='Cartoes de Credito').first()
             if categoria_padrao:
                 categoria_id = categoria_padrao.id
 

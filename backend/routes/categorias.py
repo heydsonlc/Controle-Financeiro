@@ -25,6 +25,8 @@ except ImportError:
     from services.categoria_palavra_chave_service import CategoriaPalavraChaveService
     from services.perfil_financeiro_service import PerfilFinanceiroService
 
+# PerfilFinanceiroService permanece importado para uso nos endpoints de CategoriaCartao
+
 # Criar blueprint
 categorias_bp = Blueprint('categorias', __name__)
 categorias_cartao_bp = Blueprint('categorias_cartao', __name__)
@@ -133,11 +135,12 @@ def _perfil_id():
 
 
 def _query_categorias():
-    return PerfilFinanceiroService.aplicar_perfil_query(Categoria.query, Categoria)
+    # Categoria de Despesa é global — sem filtro por perfil
+    return Categoria.query
 
 
 def _obter_categoria_no_perfil(categoria_id):
-    return _query_categorias().filter(Categoria.id == categoria_id).first()
+    return Categoria.query.filter(Categoria.id == categoria_id).first()
 
 
 @categorias_bp.route('', methods=['GET'])
@@ -238,18 +241,19 @@ def criar_categoria():
                 'error': 'Nome é obrigatório'
             }), 400
 
-        # Verificar se já existe categoria com mesmo nome
-        existe = _query_categorias().filter_by(nome=data['nome'].strip()).first()
+        # Verificar se já existe categoria com mesmo nome (unicidade global)
+        existe = Categoria.query.filter(
+            db.func.lower(Categoria.nome) == data['nome'].strip().lower()
+        ).first()
         if existe:
             return jsonify({
                 'success': False,
                 'error': 'Já existe uma categoria com este nome'
             }), 400
 
-        # Criar categoria
+        # Criar categoria — perfil_financeiro_id legado, não mais usado funcionalmente
         icone_raw = data.get('icone', '') or ''
         categoria = Categoria(
-            perfil_financeiro_id=_perfil_id(),
             nome=data['nome'].strip(),
             descricao=data.get('descricao', '').strip(),
             cor=data.get('cor', '#6c757d'),
@@ -319,11 +323,10 @@ def atualizar_categoria(id):
                     'error': 'Nome não pode ser vazio'
                 }), 400
 
-            # Verificar se já existe outra categoria com mesmo nome
+            # Verificar se já existe outra categoria com mesmo nome (unicidade global)
             existe = Categoria.query.filter(
-                Categoria.nome == nome,
+                db.func.lower(Categoria.nome) == nome.lower(),
                 Categoria.id != id,
-                PerfilFinanceiroService.condicao_perfil(Categoria)
             ).first()
 
             if existe:

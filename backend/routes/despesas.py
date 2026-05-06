@@ -472,13 +472,10 @@ def obter_despesa(id):
         if conta.item_despesa_id:
             item_despesa = _query_itens().filter(ItemDespesa.id == conta.item_despesa_id).first()
 
-        # Buscar categoria se existir
+        # Buscar categoria se existir — Categoria de Despesa é global
         categoria = None
         if item_despesa and item_despesa.categoria_id:
-            categoria = Categoria.query.filter(
-                Categoria.id == item_despesa.categoria_id,
-                PerfilFinanceiroService.condicao_perfil(Categoria),
-            ).first()
+            categoria = Categoria.query.get(item_despesa.categoria_id)
 
         # Montar dados da conta
         conta_dict = {
@@ -541,11 +538,8 @@ def criar_despesa():
                 'error': 'Categoria Ã© obrigatÃ³ria'
             }), 400
 
-        # Verificar se categoria existe
-        categoria = Categoria.query.filter(
-            Categoria.id == dados.get('categoria_id'),
-            PerfilFinanceiroService.condicao_perfil(Categoria),
-        ).first()
+        # Verificar se categoria existe — Categoria de Despesa é global
+        categoria = Categoria.query.get(dados.get('categoria_id'))
         if not categoria:
             return jsonify({
                 'success': False,
@@ -816,10 +810,7 @@ def atualizar_despesa_OLD(id):
             }), 400
 
         if 'categoria_id' in dados:
-            categoria = Categoria.query.filter(
-                Categoria.id == dados['categoria_id'],
-                PerfilFinanceiroService.condicao_perfil(Categoria),
-            ).first()
+            categoria = Categoria.query.get(dados['categoria_id'])
             if not categoria:
                 return jsonify({
                     'success': False,

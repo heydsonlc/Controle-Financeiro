@@ -339,10 +339,7 @@ class CategoriaCartaoService:
         categoria_id = CategoriaCartaoService._to_int(categoria_id)
         if not categoria_id:
             raise ValueError('categoria_id invalido')
-        categoria = Categoria.query.filter(
-            Categoria.id == categoria_id,
-            PerfilFinanceiroService.condicao_perfil(Categoria),
-        ).first()
+        categoria = Categoria.query.get(categoria_id)
         if not categoria:
             raise ValueError('Categoria de despesa nao encontrada')
         return categoria

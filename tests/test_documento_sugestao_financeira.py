@@ -271,7 +271,9 @@ def test_perfil_pessoal_nao_acessa_documento_empresa(client, app):
     assert 'Comprovante nao encontrado' in response.get_json()['error']
 
 
-def test_categoria_e_cartao_de_outro_perfil_sao_bloqueados(client, app):
+def test_cartao_de_outro_perfil_e_bloqueado_categoria_global_aceita(client, app):
+    # Categoria de Despesa é global — pode ser usada de qualquer perfil.
+    # Cartão permanece isolado por perfil — usar cartão de outro perfil deve ser bloqueado.
     pessoal = _trocar_perfil(client, 'Pessoal')
     with app.app_context():
         categoria_pessoal = _categoria(pessoal['id'], nome='Pessoal categoria', palavra=None)
@@ -288,14 +290,18 @@ def test_categoria_e_cartao_de_outro_perfil_sao_bloqueados(client, app):
         comprovante_id = comprovante.id
         db.session.commit()
 
+    # Categoria global: usar categoria_pessoal no perfil Empresa agora é aceito
     categoria_response = client.post(f'/api/ir/comprovantes/{comprovante_id}/criar-financeiro', json={
         'tipo_destino': 'DESPESA',
-        'descricao': 'Categoria errada',
+        'descricao': 'Categoria global usada no perfil empresa',
         'valor': '50.00',
         'data': '2026-05-10',
         'categoria_id': categoria_pessoal_id,
         'forma_pagamento': 'pix',
     })
+    assert categoria_response.status_code == 201
+
+    # Cartão de outro perfil: ainda bloqueado
     cartao_response = client.post(f'/api/ir/comprovantes/{comprovante_id}/criar-financeiro', json={
         'tipo_destino': 'LANCAMENTO',
         'descricao': 'Cartao errado',
@@ -305,10 +311,7 @@ def test_categoria_e_cartao_de_outro_perfil_sao_bloqueados(client, app):
         'forma_pagamento': 'cartao',
         'cartao_id': cartao_pessoal_id,
     })
-
-    assert categoria_response.status_code == 400
     assert cartao_response.status_code in {400, 404}
-    assert IrComprovanteVinculo.query.count() == 0
 
 
 def test_sugestao_sem_categoria_ou_valor_retorna_avisos_sem_criar_entidade(client, app):

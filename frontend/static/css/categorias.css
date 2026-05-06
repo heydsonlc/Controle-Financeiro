@@ -24,6 +24,36 @@
     flex: 1;
 }
 
+.categorias-scope-notice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    margin: 0 0 12px;
+}
+.categorias-scope-notice svg {
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+.categorias-scope-global {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+}
+.categorias-scope-perfil {
+    background: #f0fdf4;
+    color: #15803d;
+    border: 1px solid #bbf7d0;
+}
+
 .categorias-hero {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(420px, 0.46fr);
