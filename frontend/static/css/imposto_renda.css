@@ -633,6 +633,44 @@
     width: min(760px, 96vw);
 }
 
+.ir-sugestao-dialog {
+    width: min(900px, 96vw);
+}
+
+.ir-review-form .ir-form-row-wide {
+    grid-column: 1 / -1;
+}
+
+.ir-sugestao-documento,
+.ir-sugestao-alertas {
+    border: 1px solid #dbe5f2;
+    border-radius: 10px;
+    background: #fff;
+    padding: 12px 14px;
+    color: #334155;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.ir-sugestao-documento small,
+.ir-sugestao-alertas small {
+    display: block;
+    margin-top: 4px;
+    color: #64748b;
+    font-weight: 700;
+}
+
+.ir-sugestao-alertas {
+    border-color: #fde68a;
+    background: #fffbeb;
+    color: #92400e;
+}
+
+.ir-sugestao-alertas ul {
+    margin: 0;
+    padding-left: 18px;
+}
+
 .ir-lastro-card .ir-pendencias {
     gap: 8px;
 }

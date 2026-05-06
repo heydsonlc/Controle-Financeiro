@@ -4,6 +4,7 @@ from flask import Blueprint, jsonify, request, send_file
 
 try:
     from backend.models import db
+    from backend.services.documento_financeiro_sugestao_service import DocumentoFinanceiroSugestaoService
     from backend.services.documento_fiscal_service import DocumentoFiscalService
     from backend.services.ir_documento_service import IrDocumentoService
     from backend.services.ir_relatorio_service import IrRelatorioService
@@ -11,6 +12,7 @@ try:
     from backend.services.lastro_relatorio_service import LastroRelatorioService
 except ImportError:
     from models import db
+    from services.documento_financeiro_sugestao_service import DocumentoFinanceiroSugestaoService
     from services.documento_fiscal_service import DocumentoFiscalService
     from services.ir_documento_service import IrDocumentoService
     from services.ir_relatorio_service import IrRelatorioService
@@ -156,6 +158,31 @@ def reprocessar_ocr_comprovante(comprovante_id):
         comprovante = IrDocumentoService.reprocessar_ocr(comprovante_id)
         db.session.commit()
         return _json_success(comprovante.to_dict(include_texto=True, include_eventos=True))
+    except ValueError as exc:
+        db.session.rollback()
+        status = 404 if 'nao encontrado' in str(exc).lower() else 400
+        return _json_error(str(exc), status)
+
+
+@ir_bp.route('/comprovantes/<int:comprovante_id>/sugestao-financeira', methods=['GET'])
+def gerar_sugestao_financeira(comprovante_id):
+    try:
+        sugestao = DocumentoFinanceiroSugestaoService.gerar_sugestao(comprovante_id)
+        return _json_success(sugestao)
+    except ValueError as exc:
+        status = 404 if 'nao encontrado' in str(exc).lower() else 400
+        return _json_error(str(exc), status)
+
+
+@ir_bp.route('/comprovantes/<int:comprovante_id>/criar-financeiro', methods=['POST'])
+def criar_financeiro_comprovante(comprovante_id):
+    try:
+        resultado = DocumentoFinanceiroSugestaoService.criar_financeiro(
+            comprovante_id,
+            request.get_json(silent=True) or {},
+        )
+        db.session.commit()
+        return _json_success(resultado, 201)
     except ValueError as exc:
         db.session.rollback()
         status = 404 if 'nao encontrado' in str(exc).lower() else 400

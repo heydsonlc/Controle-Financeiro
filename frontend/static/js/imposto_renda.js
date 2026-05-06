@@ -11,6 +11,9 @@
         resumoImportacao: { enviados: 0, lidos: 0, pendentes: 0, erros: 0 },
         categoriaIrManual: false,
         contexto: { modo: 'IRPF' },
+        sugestaoFinanceira: null,
+        cartoes: [],
+        contasBancarias: [],
     };
 
     const $ = (id) => document.getElementById(id);
@@ -77,11 +80,22 @@
         $('ir-review-save')?.addEventListener('click', salvarRevisao);
         $('ir-review-validar')?.addEventListener('click', validarComprovante);
         $('ir-review-ocr-reprocess')?.addEventListener('click', reprocessarOcr);
+        $('ir-review-financeiro')?.addEventListener('click', abrirSugestaoFinanceira);
         $('ir-review-categoria')?.addEventListener('change', resolverCategoriaIrDaDespesa);
         $('ir-review-categoria-ir')?.addEventListener('change', () => {
             estado.categoriaIrManual = true;
             atualizarAvisoVinculo('');
         });
+        $('ir-sugestao-close')?.addEventListener('click', fecharSugestaoFinanceira);
+        $('ir-sugestao-cancel')?.addEventListener('click', fecharSugestaoFinanceira);
+        $('ir-sugestao-tipo-destino')?.addEventListener('change', atualizarCamposSugestaoFinanceira);
+        $('ir-sugestao-forma-pagamento')?.addEventListener('change', atualizarCamposSugestaoFinanceira);
+        $('ir-sugestao-categoria')?.addEventListener('change', () => {
+            atualizarCategoriaIrSugestao();
+            resolverCategoriaCartaoSugestao();
+        });
+        $('ir-sugestao-cartao')?.addEventListener('change', resolverCategoriaCartaoSugestao);
+        $('ir-sugestao-confirmar')?.addEventListener('click', confirmarSugestaoFinanceira);
         $('ir-link-close')?.addEventListener('click', fecharVinculo);
         $('ir-link-cancel')?.addEventListener('click', fecharVinculo);
         $('ir-link-save')?.addEventListener('click', salvarVinculo);
@@ -195,11 +209,12 @@
 
     function preencherSelectCategoriasDespesa() {
         const select = $('ir-review-categoria');
-        if (!select) return;
         const vazio = estado.categoriasDespesa.length ? 'Selecione...' : 'Nenhuma categoria cadastrada';
-        select.innerHTML = `<option value="">${vazio}</option>` + estado.categoriasDespesa.map((cat) => (
-            `<option value="${cat.id}" data-categoria-ir-id="${cat.categoria_ir_id || ''}">${escapeHtml(cat.nome)}</option>`
+        const options = `<option value="">${vazio}</option>` + estado.categoriasDespesa.map((cat) => (
+            `<option value="${cat.id}" data-categoria-ir-id="${cat.categoria_ir_id || ''}" data-categoria-ir-nome="${escapeHtml(cat.categoria_ir_nome || '')}">${escapeHtml(cat.nome)}</option>`
         )).join('');
+        if (select) select.innerHTML = options;
+        if ($('ir-sugestao-categoria')) $('ir-sugestao-categoria').innerHTML = options;
     }
 
     function resolverCategoriaIrDaDespesa() {
@@ -939,6 +954,215 @@
         }
     }
 
+    async function abrirSugestaoFinanceira() {
+        const id = $('ir-review-id')?.value;
+        if (!id) {
+            mostrarAviso('Abra a revisao de um documento antes de gerar a sugestao financeira.');
+            return;
+        }
+        const botao = $('ir-review-financeiro');
+        const textoOriginal = botao?.textContent;
+        if (botao) {
+            botao.disabled = true;
+            botao.textContent = 'Gerando...';
+        }
+        try {
+            await carregarRecursosFinanceirosSugestao();
+            const resposta = await fetch(`/api/ir/comprovantes/${id}/sugestao-financeira`);
+            const json = await resposta.json();
+            if (!json.success) {
+                mostrarAviso(json.error || 'Nao foi possivel gerar a sugestao financeira.');
+                return;
+            }
+            estado.sugestaoFinanceira = json.data;
+            preencherModalSugestaoFinanceira(json.data);
+            $('ir-sugestao-financeira-modal')?.classList.add('open');
+            $('ir-sugestao-financeira-modal')?.setAttribute('aria-hidden', 'false');
+        } finally {
+            if (botao) {
+                botao.disabled = false;
+                botao.textContent = textoOriginal || 'Gerar sugestao financeira';
+            }
+        }
+    }
+
+    function fecharSugestaoFinanceira() {
+        $('ir-sugestao-financeira-modal')?.classList.remove('open');
+        $('ir-sugestao-financeira-modal')?.setAttribute('aria-hidden', 'true');
+    }
+
+    async function carregarRecursosFinanceirosSugestao() {
+        const [cartoesResposta, contasResposta] = await Promise.all([
+            fetch('/api/cartoes').catch(() => null),
+            fetch('/api/contas').catch(() => null),
+        ]);
+
+        if (cartoesResposta?.ok) {
+            const jsonCartoes = await cartoesResposta.json();
+            estado.cartoes = Array.isArray(jsonCartoes) ? jsonCartoes : (jsonCartoes.data || []);
+        }
+        if (contasResposta?.ok) {
+            const jsonContas = await contasResposta.json();
+            estado.contasBancarias = jsonContas.data || [];
+        }
+    }
+
+    function preencherModalSugestaoFinanceira(sugestao) {
+        if (!sugestao) return;
+        $('ir-sugestao-comprovante-id').value = sugestao.comprovante_id;
+        $('ir-sugestao-tipo-destino').value = sugestao.tipo_destino_sugerido || 'DESPESA';
+        $('ir-sugestao-forma-pagamento').value = sugestao.forma_pagamento || 'outros';
+        $('ir-sugestao-descricao').value = sugestao.descricao || '';
+        $('ir-sugestao-valor').value = sugestao.valor || '';
+        $('ir-sugestao-data').value = sugestao.data || '';
+        $('ir-sugestao-competencia').value = sugestao.competencia || (sugestao.data ? String(sugestao.data).slice(0, 7) : '');
+        preencherSelectCategoriasDespesa();
+        $('ir-sugestao-categoria').value = sugestao.categoria_id || '';
+        $('ir-sugestao-observacoes').value = sugestao.observacoes || '';
+        $('ir-sugestao-documento').innerHTML = `
+            <strong>${escapeHtml(sugestao.documento?.nome_arquivo || 'Documento fiscal')}</strong>
+            <small>${escapeHtml(sugestao.fornecedor || 'Fornecedor nao identificado')}${sugestao.cpf_cnpj ? ` - ${escapeHtml(sugestao.cpf_cnpj)}` : ''}</small>
+        `;
+        preencherSelectCartoesSugestao();
+        preencherSelectContasSugestao();
+        renderAlertasSugestao(sugestao.avisos || []);
+        atualizarCategoriaIrSugestao(sugestao.categoria_ir_nome || '');
+        atualizarCamposSugestaoFinanceira();
+    }
+
+    function preencherSelectCartoesSugestao() {
+        const select = $('ir-sugestao-cartao');
+        if (!select) return;
+        const vazio = estado.cartoes.length ? 'Selecione o cartao...' : 'Nenhum cartao ativo';
+        select.innerHTML = `<option value="">${vazio}</option>` + estado.cartoes.map((cartao) => (
+            `<option value="${cartao.id}">${escapeHtml(cartao.nome || `Cartao #${cartao.id}`)}</option>`
+        )).join('');
+    }
+
+    function preencherSelectContasSugestao() {
+        const select = $('ir-sugestao-conta-bancaria');
+        if (!select) return;
+        const vazio = estado.contasBancarias.length ? 'Opcional para baixa financeira...' : 'Nenhuma conta bancaria ativa';
+        select.innerHTML = `<option value="">${vazio}</option>` + estado.contasBancarias.map((conta) => (
+            `<option value="${conta.id}">${escapeHtml(conta.nome || `Conta #${conta.id}`)}${conta.instituicao ? ` - ${escapeHtml(conta.instituicao)}` : ''}</option>`
+        )).join('');
+    }
+
+    function atualizarCamposSugestaoFinanceira() {
+        const tipoDestino = $('ir-sugestao-tipo-destino')?.value || 'DESPESA';
+        const forma = $('ir-sugestao-forma-pagamento')?.value || 'outros';
+        const usarCartao = forma === 'cartao';
+        if ($('ir-sugestao-cartao-wrap')) $('ir-sugestao-cartao-wrap').hidden = !usarCartao;
+        if ($('ir-sugestao-conta-wrap')) $('ir-sugestao-conta-wrap').hidden = usarCartao || tipoDestino === 'DESPESA';
+        if ($('ir-sugestao-confirmar')) {
+            $('ir-sugestao-confirmar').textContent = tipoDestino === 'LANCAMENTO' ? 'Criar lancamento' : 'Criar despesa';
+        }
+        resolverCategoriaCartaoSugestao();
+    }
+
+    function atualizarCategoriaIrSugestao(fallback = '') {
+        const select = $('ir-sugestao-categoria');
+        const campo = $('ir-sugestao-categoria-ir');
+        const aviso = $('ir-sugestao-categoria-aviso');
+        if (!select || !campo) return;
+        const opcao = select.options[select.selectedIndex];
+        const nomeIr = opcao?.dataset?.categoriaIrNome || fallback || '';
+        campo.value = nomeIr || 'Sem vinculo configurado';
+        if (aviso) {
+            const mensagem = select.value && !nomeIr ? 'Categoria de Despesa ainda sem vinculo com Categoria IR/Fiscal.' : '';
+            aviso.textContent = mensagem;
+            aviso.hidden = !mensagem;
+        }
+    }
+
+    async function resolverCategoriaCartaoSugestao() {
+        const info = $('ir-sugestao-categoria-cartao-info');
+        const forma = $('ir-sugestao-forma-pagamento')?.value || '';
+        const cartaoId = $('ir-sugestao-cartao')?.value || '';
+        const categoriaId = $('ir-sugestao-categoria')?.value || '';
+        if (!info) return;
+        if (forma !== 'cartao') {
+            info.textContent = '';
+            info.hidden = true;
+            return;
+        }
+        if (!cartaoId || !categoriaId) {
+            info.textContent = 'Categoria do Cartao sera resolvida automaticamente apos selecionar cartao e Categoria de Despesa.';
+            info.hidden = false;
+            return;
+        }
+        try {
+            const params = new URLSearchParams({ cartao_id: cartaoId, categoria_id: categoriaId });
+            const resposta = await fetch(`/api/categorias-cartao/resolver?${params.toString()}`);
+            const json = await resposta.json();
+            const resolucao = json.data || json;
+            info.textContent = resolucao.aviso || 'Categoria do Cartao resolvida automaticamente.';
+            info.hidden = false;
+        } catch (error) {
+            info.textContent = 'Nao foi possivel consultar a Categoria do Cartao automaticamente.';
+            info.hidden = false;
+        }
+    }
+
+    function renderAlertasSugestao(avisos) {
+        const box = $('ir-sugestao-alertas');
+        if (!box) return;
+        const itens = (avisos || []).filter(Boolean);
+        if (!itens.length) {
+            box.hidden = true;
+            box.innerHTML = '';
+            return;
+        }
+        box.hidden = false;
+        box.innerHTML = `<ul>${itens.map((aviso) => `<li>${escapeHtml(aviso)}</li>`).join('')}</ul>`;
+    }
+
+    async function confirmarSugestaoFinanceira() {
+        const id = $('ir-sugestao-comprovante-id')?.value;
+        if (!id) return;
+        const botao = $('ir-sugestao-confirmar');
+        const textoOriginal = botao?.textContent;
+        if (botao) {
+            botao.disabled = true;
+            botao.textContent = 'Criando...';
+        }
+        const payload = {
+            tipo_destino: $('ir-sugestao-tipo-destino').value,
+            descricao: $('ir-sugestao-descricao').value,
+            valor: $('ir-sugestao-valor').value,
+            data: $('ir-sugestao-data').value,
+            competencia: $('ir-sugestao-competencia').value,
+            categoria_id: $('ir-sugestao-categoria').value || null,
+            forma_pagamento: $('ir-sugestao-forma-pagamento').value,
+            cartao_id: $('ir-sugestao-cartao').value || null,
+            conta_bancaria_id: $('ir-sugestao-conta-bancaria').value || null,
+            observacoes: $('ir-sugestao-observacoes').value,
+        };
+        try {
+            const resposta = await fetch(`/api/ir/comprovantes/${id}/criar-financeiro`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const json = await resposta.json();
+            if (!json.success) {
+                mostrarAviso(json.error || 'Nao foi possivel criar a entidade financeira.');
+                return;
+            }
+            const avisos = json.data?.avisos || [];
+            if (avisos.length) mostrarAviso(avisos.join('\n'));
+            fecharSugestaoFinanceira();
+            fecharRevisao();
+            await carregarComprovantes();
+            await carregarSaidasSemDocumento();
+        } finally {
+            if (botao) {
+                botao.disabled = false;
+                botao.textContent = textoOriginal || 'Criar despesa';
+            }
+        }
+    }
+
     function renderStatus(status) {
         const chave = String(status || 'IMPORTADO').toUpperCase();
         const mapa = {
@@ -1047,6 +1271,7 @@
         abrirVinculoSaida,
         abrirStatusSaida,
         verOrigemSaida,
+        abrirSugestaoFinanceira,
         carregarComprovantes,
         carregarSaidasSemDocumento,
         reprocessarOcr,
