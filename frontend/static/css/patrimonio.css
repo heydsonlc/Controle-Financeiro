@@ -162,21 +162,151 @@ body.patrimonio-empresa-mode .patrimonio-empresa-actions {
 }
 
 .patrimonio-empresa-layout {
-    align-items: start;
+    align-items: stretch;
     display: grid;
     gap: var(--app-section-gap, 16px);
-    grid-template-columns: minmax(0, 1.7fr) minmax(360px, 0.85fr);
+    grid-template-columns: minmax(0, 1.72fr) minmax(330px, 0.68fr);
 }
 
 .patrimonio-empresa-main {
     display: flex;
     flex-direction: column;
     gap: var(--app-section-gap, 16px);
+    height: 100%;
     min-width: 0;
+}
+
+.patrimonio-empresa-side {
+    display: grid;
+    gap: var(--app-section-gap, 16px);
+    grid-template-rows: auto minmax(86px, auto) minmax(0, 1fr);
+    height: 100%;
+    min-height: 0;
+}
+
+.patrimonio-empresa-kpis {
+    gap: 12px;
+}
+
+.patrimonio-empresa-kpis .patrimonio-summary-card {
+    gap: 10px;
+    min-height: 92px;
+    padding: 14px 16px;
+}
+
+.patrimonio-empresa-kpis .patrimonio-summary-icon {
+    flex-basis: 44px;
+    height: 44px;
+    width: 44px;
+}
+
+.patrimonio-empresa-kpis .patrimonio-summary-card strong {
+    font-size: 1.18rem;
+}
+
+.patrimonio-empresa-kpis .patrimonio-summary-card small,
+.patrimonio-empresa-kpis .patrimonio-summary-card span {
+    line-height: 1.25;
 }
 
 .patrimonio-table-wrap {
     overflow-x: auto;
+}
+
+.patrimonio-panel-actions {
+    align-items: center;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.patrimonio-panel-title-inline {
+    align-items: baseline;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+}
+
+.patrimonio-panel-title-inline small {
+    color: #475569;
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.patrimonio-filter-trigger,
+.patrimonio-report-btn {
+    align-items: center;
+    display: inline-flex;
+    gap: 7px;
+    height: 34px;
+    justify-content: center;
+    white-space: nowrap;
+}
+
+.patrimonio-filter-trigger img,
+.patrimonio-report-btn img,
+.patrimonio-report-fallback {
+    display: block;
+    height: 18px;
+    object-fit: contain;
+    width: 18px;
+}
+
+.patrimonio-report-fallback {
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.8;
+}
+
+.patrimonio-report-btn {
+    padding: 0;
+    width: 36px;
+}
+
+.patrimonio-report-btn span {
+    border: 0;
+    clip: rect(0 0 0 0);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+}
+
+.patrimonio-advanced-filters {
+    align-items: end;
+    background: #f8fafc;
+    border-top: 1px solid #e5e7eb;
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding: 14px 16px;
+}
+
+.patrimonio-advanced-filters[hidden] {
+    display: none !important;
+}
+
+.patrimonio-filter {
+    color: #0f172a;
+    display: grid;
+    gap: 6px;
+    font-size: 0.77rem;
+    font-weight: 800;
+}
+
+.patrimonio-filter select {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 9px;
+    color: #0f172a;
+    height: 36px;
+    padding: 0 10px;
 }
 
 .patrimonio-bens-table {
@@ -205,11 +335,79 @@ body.patrimonio-empresa-mode .patrimonio-empresa-actions {
 
 .patrimonio-bens-table tbody tr {
     cursor: pointer;
+    height: 56px;
 }
 
 .patrimonio-bens-table tbody tr:hover,
 .patrimonio-bens-table tbody tr.selected {
     background: #f8fbff;
+}
+
+.patrimonio-bens-table tbody tr.bem-placeholder-row {
+    background: #ffffff;
+    cursor: default;
+}
+
+.patrimonio-bens-table tbody tr.bem-placeholder-row:hover {
+    background: transparent;
+}
+
+.patrimonio-bens-table tbody tr.bem-placeholder-row td {
+    background: #ffffff;
+    border-bottom: 0;
+    color: transparent;
+    pointer-events: none;
+}
+
+.patrimonio-table-pagination {
+    align-items: center;
+    border-top: 1px solid #e5e7eb;
+    color: #0f172a;
+    display: flex;
+    font-size: 0.78rem;
+    font-weight: 800;
+    justify-content: space-between;
+    min-height: 48px;
+    padding: 10px 16px;
+}
+
+.patrimonio-page-controls {
+    align-items: center;
+    display: inline-flex;
+    gap: 6px;
+}
+
+.patrimonio-page-btn {
+    align-items: center;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    color: #1d4ed8;
+    cursor: pointer;
+    display: inline-flex;
+    font-size: 0.8rem;
+    font-weight: 850;
+    height: 30px;
+    justify-content: center;
+    min-width: 30px;
+    padding: 0 9px;
+}
+
+.patrimonio-page-btn.active {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #ffffff;
+}
+
+.patrimonio-page-btn:disabled {
+    color: #94a3b8;
+    cursor: not-allowed;
+    opacity: 0.72;
+}
+
+.patrimonio-page-ellipsis {
+    color: #64748b;
+    padding: 0 3px;
 }
 
 .bem-cell,
@@ -313,6 +511,148 @@ body.patrimonio-empresa-mode .patrimonio-empresa-actions {
     gap: 16px;
     grid-template-columns: auto minmax(0, 1fr) auto;
     padding: 18px 20px 22px;
+}
+
+.patrimonio-detail-side .patrimonio-panel-header,
+#bem-detalhe .patrimonio-panel-header {
+    align-items: flex-start;
+    min-height: 0;
+}
+
+#bem-detalhe .bem-detail-actions {
+    align-items: flex-end;
+    flex-direction: column;
+    gap: 8px;
+}
+
+#bem-detalhe .bem-detail-card {
+    grid-template-columns: auto minmax(0, 1fr);
+}
+
+#bem-detalhe .bem-detail-card > .bem-status {
+    grid-column: 1 / -1;
+    justify-self: start;
+}
+
+#bem-detalhe .bem-detail-grid {
+    grid-template-columns: 1fr;
+}
+
+#bem-detalhe .bem-detail-grid div,
+#bem-detalhe .bem-detail-grid div:nth-child(4n),
+#bem-detalhe .bem-detail-grid div:nth-child(2n) {
+    border-right: 0;
+}
+
+.bem-detail-header-compact {
+    align-items: center;
+    gap: 10px;
+}
+
+.bem-detail-header-compact .bem-status {
+    flex: 0 0 auto;
+}
+
+.bem-detail-header-actions {
+    align-items: center;
+    display: inline-flex;
+    flex: 0 0 auto;
+    gap: 6px;
+    justify-content: flex-end;
+    margin-left: auto;
+}
+
+.bem-detail-compact {
+    display: grid;
+    gap: 10px;
+    padding: 12px 14px 14px;
+}
+
+.bem-detail-topline {
+    align-items: center;
+    display: grid;
+    gap: 10px;
+    grid-template-columns: auto minmax(0, 1fr);
+}
+
+.bem-detail-compact .bem-thumb {
+    flex-basis: 36px;
+    height: 36px;
+    width: 36px;
+}
+
+.bem-detail-compact .bem-detail-main h3 {
+    font-size: 0.95rem;
+    line-height: 1.25;
+}
+
+.bem-detail-compact .bem-detail-main p {
+    font-size: 0.78rem;
+    line-height: 1.25;
+}
+
+.bem-detail-compact-grid {
+    display: grid;
+    gap: 7px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: 0;
+}
+
+.bem-detail-compact-grid div {
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    min-width: 0;
+    padding: 7px 8px;
+}
+
+.bem-detail-compact-grid dt {
+    color: #64748b;
+    font-size: 0.68rem;
+    font-weight: 850;
+    text-transform: uppercase;
+}
+
+.bem-detail-compact-grid dd {
+    color: #0f172a;
+    font-size: 0.78rem;
+    font-weight: 750;
+    margin: 4px 0 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bem-detail-actions-compact {
+    justify-content: flex-end;
+}
+
+.patrimonio-pendencias-card .patrimonio-side-header {
+    min-height: 46px;
+    padding-bottom: 9px;
+    padding-top: 9px;
+}
+
+.patrimonio-pendencias-card .patrimonio-pendencias-list {
+    gap: 6px;
+    max-height: 92px;
+    overflow: auto;
+    padding: 8px 12px 10px;
+}
+
+.patrimonio-pendencias-card .pendencia-bem-item {
+    gap: 8px;
+    min-height: 34px;
+    padding: 6px 8px;
+}
+
+.patrimonio-pendencias-card .pendencia-bem-item svg {
+    height: 15px;
+    width: 15px;
+}
+
+.patrimonio-detalhe-card {
+    align-self: stretch;
 }
 
 .bem-detail-main h3 {
@@ -824,6 +1164,13 @@ body.patrimonio-empresa-mode .patrimonio-empresa-actions {
     flex-direction: column;
     gap: var(--app-section-gap, 16px);
     min-width: 0;
+}
+
+.patrimonio-side-column.patrimonio-empresa-side {
+    display: grid;
+    grid-template-rows: auto minmax(86px, auto) minmax(0, 1fr);
+    height: 100%;
+    min-height: 0;
 }
 
 .patrimonio-link-btn {

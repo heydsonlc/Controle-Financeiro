@@ -485,12 +485,32 @@
     object-fit: contain;
 }
 
-.ir-report-btn .ir-action-img {
+.ir-action-img-box {
+    align-items: center;
+    display: inline-flex;
+    font-style: normal;
+    justify-content: center;
+}
+
+.ir-action-fallback {
+    display: block;
+    fill: none;
+    height: 16px;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.8;
+    width: 16px;
+}
+
+.ir-report-btn .ir-action-img,
+.ir-report-btn .ir-action-fallback {
     width: 18px;
     height: 18px;
 }
 
-.ir-advanced-filter-trigger .ir-action-img {
+.ir-advanced-filter-trigger .ir-action-img,
+.ir-advanced-filter-trigger .ir-action-fallback {
     width: 14px;
     height: 14px;
 }

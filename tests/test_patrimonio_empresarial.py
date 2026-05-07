@@ -81,10 +81,13 @@ def _payload_bem(nome='Notebook Dell Latitude', valor=6490.0, imagem_arquivo=Non
 def test_rota_patrimonio_contem_visao_empresarial_e_fluxo_pessoal(client):
     html = client.get('/patrimonio').get_data(as_text=True)
 
-    assert 'Patrim&ocirc;nio Empresarial' in html
     assert 'id="patrimonio-empresarial"' in html
     assert 'id="patrimonio-pessoal"' in html
     assert 'id="bem-imagens-grid"' in html
+    assert 'Bens Cadastrados' in html
+    assert 'Filtro avan&ccedil;ado' in html
+    assert 'Salvar Excel' in html
+    assert 'Gerar relat&oacute;rio em PDF' in html
     assert 'Novo bem' in html
     assert 'Vincular documento' in html
     assert 'Caixinhas' in html

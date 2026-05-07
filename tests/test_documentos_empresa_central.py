@@ -215,4 +215,5 @@ def test_fluxos_antigos_de_saidas_sem_documento_continuam_na_tela():
 
     assert 'ir-saidas-sem-documento-panel' in template
     assert 'Exportar Excel' in template
-    assert 'Gerar PDF' in template
+    assert 'Gerar relat&oacute;rio em PDF' in template
+    assert 'data-ir-icon="report-pdf"' in template

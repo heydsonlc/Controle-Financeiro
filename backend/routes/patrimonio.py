@@ -14,16 +14,18 @@ Endpoints Transferências:
 - POST   /api/patrimonio/transferencias      - Criar nova transferência
 - DELETE /api/patrimonio/transferencias/<id> - Deletar transferência
 """
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, send_file
 from datetime import datetime, date
 try:
     from backend.models import db, ContaPatrimonio, Transferencia
     from backend.services.patrimonio_empresarial_service import PatrimonioEmpresarialService
+    from backend.services.patrimonio_relatorio_service import PatrimonioRelatorioService
     from backend.services.patrimonio_sugestao_service import PatrimonioSugestaoService
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import db, ContaPatrimonio, Transferencia
     from services.patrimonio_empresarial_service import PatrimonioEmpresarialService
+    from services.patrimonio_relatorio_service import PatrimonioRelatorioService
     from services.patrimonio_sugestao_service import PatrimonioSugestaoService
     from services.perfil_financeiro_service import PerfilFinanceiroService
 
@@ -101,6 +103,34 @@ def listar_imagens_bens_empresariais():
 def resumo_bens_empresariais():
     try:
         return _json_success(PatrimonioEmpresarialService.resumo())
+    except Exception as e:
+        return _handle_empresarial_error(e)
+
+
+@patrimonio_bp.route('/bens/exportar-excel', methods=['GET'])
+def exportar_bens_excel():
+    try:
+        arquivo, nome = PatrimonioRelatorioService.gerar_excel(request.args)
+        return send_file(
+            arquivo,
+            mimetype=PatrimonioRelatorioService.MIME_EXCEL,
+            as_attachment=True,
+            download_name=nome,
+        )
+    except Exception as e:
+        return _handle_empresarial_error(e)
+
+
+@patrimonio_bp.route('/bens/exportar-pdf', methods=['GET'])
+def exportar_bens_pdf():
+    try:
+        arquivo, nome = PatrimonioRelatorioService.gerar_pdf(request.args)
+        return send_file(
+            arquivo,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=nome,
+        )
     except Exception as e:
         return _handle_empresarial_error(e)
 

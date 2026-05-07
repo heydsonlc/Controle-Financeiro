@@ -1,4 +1,5 @@
 const API_BASE = '/api/patrimonio';
+const ITENS_BENS_POR_PAGINA = 10;
 
 const estadoPatrimonio = {
     contas: [],
@@ -11,6 +12,7 @@ const estadoPatrimonio = {
     aba: 'contas',
     modoEmpresa: false,
     bemSelecionadoId: null,
+    paginaBens: 1,
 };
 
 let contaAtual = null;
@@ -96,6 +98,9 @@ function configurarEventosEmpresa() {
     });
     document.getElementById('bem-busca')?.addEventListener('input', debounce(carregarPatrimonioEmpresarial, 260));
     document.getElementById('btn-atualizar-bens')?.addEventListener('click', carregarPatrimonioEmpresarial);
+    document.getElementById('btn-filtros-bens')?.addEventListener('click', alternarFiltrosBens);
+    document.getElementById('btn-exportar-bens-excel')?.addEventListener('click', () => exportarBensEmpresariais('excel'));
+    document.getElementById('btn-exportar-bens-pdf')?.addEventListener('click', () => exportarBensEmpresariais('pdf'));
     document.getElementById('btn-novo-bem')?.addEventListener('click', abrirModalNovoBem);
     document.getElementById('btn-importar-nota')?.addEventListener('click', () => { window.location.href = '/imposto-renda'; });
     document.getElementById('btn-vincular-documento')?.addEventListener('click', () => abrirModalVincularBem());
@@ -119,6 +124,7 @@ async function carregarPatrimonioEmpresarial() {
         estadoPatrimonio.bens = bens.data || [];
         estadoPatrimonio.documentos = documentos.data || [];
         estadoPatrimonio.imagens = imagens.data || [];
+        estadoPatrimonio.paginaBens = 1;
 
         renderizarFiltrosCategoriaBens();
         renderizarResumoBens();
@@ -172,7 +178,7 @@ function renderizarResumoBens() {
 function renderizarTabelaBens() {
     const tbody = document.getElementById('bens-tabela-corpo');
     if (!tbody) return;
-    setText('bens-lista-meta', `${estadoPatrimonio.bens.length} ${estadoPatrimonio.bens.length === 1 ? 'bem exibido' : 'bens exibidos'}`);
+    setText('bens-lista-meta', `- (${estadoPatrimonio.bens.length} ${estadoPatrimonio.bens.length === 1 ? 'bem cadastrado' : 'bens cadastrados'})`);
     if (!estadoPatrimonio.bens.length) {
         tbody.innerHTML = `
             <tr>
@@ -183,11 +189,20 @@ function renderizarTabelaBens() {
                     </div>
                 </td>
             </tr>
+            ${linhasVaziasBens(ITENS_BENS_POR_PAGINA - 1)}
         `;
+        renderizarPaginacaoBens(0, 0, 0);
         return;
     }
 
-    tbody.innerHTML = estadoPatrimonio.bens.map((bem) => `
+    const total = estadoPatrimonio.bens.length;
+    const totalPaginas = Math.max(1, Math.ceil(total / ITENS_BENS_POR_PAGINA));
+    estadoPatrimonio.paginaBens = Math.min(Math.max(estadoPatrimonio.paginaBens || 1, 1), totalPaginas);
+    const inicio = (estadoPatrimonio.paginaBens - 1) * ITENS_BENS_POR_PAGINA;
+    const fim = Math.min(inicio + ITENS_BENS_POR_PAGINA, total);
+    const bensPagina = estadoPatrimonio.bens.slice(inicio, fim);
+
+    tbody.innerHTML = bensPagina.map((bem) => `
         <tr class="${bem.id === estadoPatrimonio.bemSelecionadoId ? 'selected' : ''}" onclick="selecionarBemEmpresarial(${bem.id})">
             <td>
                 <div class="bem-cell">
@@ -210,7 +225,130 @@ function renderizarTabelaBens() {
                 </div>
             </td>
         </tr>
+    `).join('') + linhasVaziasBens(ITENS_BENS_POR_PAGINA - bensPagina.length);
+    renderizarPaginacaoBens(total, inicio + 1, fim);
+}
+
+function linhasVaziasBens(quantidade) {
+    const total = Math.max(0, quantidade || 0);
+    return Array.from({ length: total }, () => `
+        <tr class="bem-placeholder-row" aria-hidden="true">
+            <td>&nbsp;</td>
+            <td>&nbsp;</td>
+            <td>&nbsp;</td>
+            <td>&nbsp;</td>
+            <td>&nbsp;</td>
+            <td>&nbsp;</td>
+            <td>&nbsp;</td>
+        </tr>
     `).join('');
+}
+
+function renderizarPaginacaoBens(total, inicio, fim) {
+    const container = document.getElementById('bens-paginacao');
+    if (!container) return;
+    if (!total) {
+        container.hidden = true;
+        container.innerHTML = '';
+        return;
+    }
+    const totalPaginas = Math.max(1, Math.ceil(total / ITENS_BENS_POR_PAGINA));
+    const pagina = Math.min(Math.max(estadoPatrimonio.paginaBens || 1, 1), totalPaginas);
+    const botoes = [];
+    botoes.push(`
+        <button type="button" class="patrimonio-page-btn" ${pagina === 1 ? 'disabled' : ''} onclick="mudarPaginaBens(${pagina - 1})" aria-label="Pagina anterior">
+            &lsaquo;
+        </button>
+    `);
+    for (let item = 1; item <= totalPaginas; item += 1) {
+        if (item <= 2 || item === totalPaginas || Math.abs(item - pagina) <= 1) {
+            botoes.push(`
+                <button type="button" class="patrimonio-page-btn ${item === pagina ? 'active' : ''}" onclick="mudarPaginaBens(${item})">
+                    ${item}
+                </button>
+            `);
+        } else if (botoes[botoes.length - 1] !== '<span class="patrimonio-page-ellipsis">...</span>') {
+            botoes.push('<span class="patrimonio-page-ellipsis">...</span>');
+        }
+    }
+    botoes.push(`
+        <button type="button" class="patrimonio-page-btn" ${pagina === totalPaginas ? 'disabled' : ''} onclick="mudarPaginaBens(${pagina + 1})" aria-label="Proxima pagina">
+            &rsaquo;
+        </button>
+    `);
+    container.hidden = false;
+    container.innerHTML = `
+        <span>Exibindo ${inicio} a ${fim} de ${total} bens filtrados</span>
+        <div class="patrimonio-page-controls">${botoes.join('')}</div>
+    `;
+}
+
+function mudarPaginaBens(pagina) {
+    estadoPatrimonio.paginaBens = pagina;
+    renderizarTabelaBens();
+}
+
+function alternarFiltrosBens() {
+    const painel = document.getElementById('bens-filtros-avancados');
+    const botao = document.getElementById('btn-filtros-bens');
+    if (!painel) return;
+    const abrir = painel.hidden;
+    painel.hidden = !abrir;
+    botao?.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+}
+
+async function exportarBensEmpresariais(tipo) {
+    const endpoint = tipo === 'pdf' ? 'exportar-pdf' : 'exportar-excel';
+    const botao = document.getElementById(tipo === 'pdf' ? 'btn-exportar-bens-pdf' : 'btn-exportar-bens-excel');
+    const htmlOriginal = botao?.innerHTML;
+    const tituloOriginal = botao?.title || '';
+    if (botao) {
+        botao.disabled = true;
+        botao.title = tipo === 'pdf' ? 'Gerando relatorio em PDF...' : 'Gerando Excel...';
+        botao.textContent = '...';
+    }
+    try {
+        const params = montarParamsBens();
+        const resposta = await fetch(`${API_BASE}/bens/${endpoint}?${params.toString()}`);
+        if (!resposta.ok) {
+            let mensagem = 'Nao foi possivel exportar a lista de bens.';
+            try {
+                const erro = await resposta.json();
+                mensagem = erro.error || mensagem;
+            } catch (error) {
+                mensagem = resposta.statusText || mensagem;
+            }
+            throw new Error(mensagem);
+        }
+        const blob = await resposta.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = nomeArquivoResposta(resposta, tipo === 'pdf' ? 'Bens_Patrimoniais.pdf' : 'Bens_Patrimoniais.xlsx');
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+    } catch (error) {
+        mostrarErro(error.message || 'Nao foi possivel exportar a lista de bens.');
+    } finally {
+        if (botao) {
+            botao.disabled = false;
+            botao.title = tituloOriginal;
+            botao.innerHTML = htmlOriginal;
+        }
+    }
+}
+
+function nomeArquivoResposta(resposta, fallback) {
+    const header = resposta.headers.get('Content-Disposition') || '';
+    const match = header.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i);
+    if (!match) return fallback;
+    try {
+        return decodeURIComponent(match[1].replace(/"/g, ''));
+    } catch (error) {
+        return match[1].replace(/"/g, '') || fallback;
+    }
 }
 
 function renderizarComposicaoBens() {
@@ -273,35 +411,32 @@ function renderizarDetalheBem() {
         return;
     }
     container.innerHTML = `
-        <div class="patrimonio-panel-header">
+        <div class="patrimonio-side-header bem-detail-header-compact">
             <div>
-                <h2>Detalhe do bem selecionado</h2>
-                <small>${escapeHtml(bem.status_documental_label || '-')}</small>
+                <h2>Detalhe do bem</h2>
+                <small>${escapeHtml(bem.codigo || 'Sem tag')} &middot; ${escapeHtml(bem.categoria || 'Sem categoria')}</small>
             </div>
-            <div class="bem-detail-actions">
-                <button type="button" class="patrimonio-secondary-btn" onclick="verDocumentoBem(${bem.id})">Ver documento</button>
-                <button type="button" class="patrimonio-primary-btn" onclick="abrirModalEditarBem(${bem.id})">Editar bem</button>
+            <div class="bem-detail-header-actions">
+                <span class="bem-status ${classeStatusDocumento(bem.status_documental)}">${escapeHtml(bem.status_documental_label || '-')}</span>
+                <button type="button" class="row-action-button" onclick="verDocumentoBem(${bem.id})" title="Ver documento" aria-label="Ver documento">${patrimonioIcon('view')}</button>
+                <button type="button" class="row-action-button" onclick="abrirModalEditarBem(${bem.id})" title="Editar bem" aria-label="Editar bem">${patrimonioIcon('edit')}</button>
             </div>
         </div>
-        <div class="bem-detail-card">
-            ${miniaturaBem(bem, true)}
-            <div class="bem-detail-main">
+        <div class="bem-detail-compact">
+            <div class="bem-detail-topline">
+                ${miniaturaBem(bem)}
+                <div class="bem-detail-main">
                 <h3>${escapeHtml(bem.nome)}</h3>
-                <p>${escapeHtml(bem.codigo || 'Sem tag')} &middot; ${escapeHtml(bem.categoria || 'Sem categoria')}</p>
-                <small>${escapeHtml(bem.descricao || 'Sem descricao cadastrada.')}</small>
+                    <p>${escapeHtml(bem.fornecedor || 'Fornecedor nao informado')}</p>
+                </div>
             </div>
-            <span class="bem-status ${classeStatusDocumento(bem.status_documental)}">${escapeHtml(bem.status_documental_label || '-')}</span>
-            <dl class="bem-detail-grid">
-                <div><dt>Fornecedor</dt><dd>${escapeHtml(bem.fornecedor || '-')}</dd></div>
-                <div><dt>Numero da nota</dt><dd>${escapeHtml(bem.documento_numero || '-')}</dd></div>
-                <div><dt>Data da compra</dt><dd>${formatarData(bem.data_aquisicao)}</dd></div>
-                <div><dt>Valor de aquisicao</dt><dd>${formatarMoedaDisplay(bem.valor_aquisicao || 0)}</dd></div>
-                <div><dt>Vida util estimada</dt><dd>${bem.vida_util_meses ? `${bem.vida_util_meses} meses` : '-'}</dd></div>
-                <div><dt>Depreciacao mensal</dt><dd>${bem.depreciacao_mensal ? formatarMoedaDisplay(bem.depreciacao_mensal) : '-'}</dd></div>
-                <div><dt>Centro de custo</dt><dd>${escapeHtml(bem.centro_custo || '-')}</dd></div>
+            <dl class="bem-detail-compact-grid">
+                <div><dt>Data</dt><dd>${formatarData(bem.data_aquisicao)}</dd></div>
+                <div><dt>Valor</dt><dd>${formatarMoedaDisplay(bem.valor_aquisicao || 0)}</dd></div>
+                <div><dt>Documento</dt><dd>${escapeHtml(bem.documento_label || 'Sem documento')}</dd></div>
+                <div><dt>Nota</dt><dd>${escapeHtml(bem.documento_numero || '-')}</dd></div>
                 <div><dt>Localizacao</dt><dd>${escapeHtml(bem.localizacao || '-')}</dd></div>
                 <div><dt>Responsavel</dt><dd>${escapeHtml(bem.responsavel || '-')}</dd></div>
-                <div><dt>Documento fiscal</dt><dd>${escapeHtml(bem.documento_label || 'Sem documento')}</dd></div>
             </dl>
         </div>
     `;

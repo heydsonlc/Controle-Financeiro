@@ -37,32 +37,6 @@
             </div>
 
             <div class="module-actionbar-filters patrimonio-empresa-controls" aria-label="Filtros de patrimonio empresarial">
-                <div class="module-filter-group">
-                    <label class="module-filter-label" for="bem-filtro-categoria">Categoria</label>
-                    <select class="module-filter-control" id="bem-filtro-categoria">
-                        <option value="">Todas</option>
-                    </select>
-                </div>
-                <div class="module-filter-group">
-                    <label class="module-filter-label" for="bem-filtro-status">Status</label>
-                    <select class="module-filter-control" id="bem-filtro-status">
-                        <option value="">Todos</option>
-                        <option value="ATIVO">Ativo</option>
-                        <option value="INATIVO">Inativo</option>
-                        <option value="EM_REVISAO">Em revis&atilde;o</option>
-                        <option value="BAIXADO">Baixado</option>
-                    </select>
-                </div>
-                <div class="module-filter-group">
-                    <label class="module-filter-label" for="bem-filtro-documento">Documento</label>
-                    <select class="module-filter-control" id="bem-filtro-documento">
-                        <option value="">Todos</option>
-                        <option value="COM_LASTRO">Com lastro</option>
-                        <option value="SEM_DOCUMENTO">Sem documento</option>
-                        <option value="PENDENTE">Pendente</option>
-                        <option value="AGUARDANDO_CONTADOR">Aguardando contador</option>
-                    </select>
-                </div>
                 <div class="module-filter-group patrimonio-search patrimonio-empresa-search">
                     <label class="module-filter-label" for="bem-busca">Busca</label>
                     <div class="module-search-control">
@@ -116,15 +90,9 @@
 {% block content %}
     <div class="container app-content-fluid patrimonio-page">
         <section id="patrimonio-empresarial" class="patrimonio-empresarial-shell" hidden>
-            <div class="patrimonio-empresa-heading">
-                <div>
-                    <h2>Patrim&ocirc;nio Empresarial</h2>
-                    <p>Bens patrimoniais com documento fiscal, fornecedor, valor de aquisi&ccedil;&atilde;o e status de lastro por perfil financeiro.</p>
-                </div>
-                <span class="patrimonio-empresa-badge">Perfil Empresa</span>
-            </div>
-
-            <section class="patrimonio-summary-grid patrimonio-empresa-kpis" aria-label="Resumo do patrimonio empresarial">
+            <div class="patrimonio-empresa-layout">
+                <div class="patrimonio-empresa-main">
+                    <section class="patrimonio-summary-grid patrimonio-empresa-kpis" aria-label="Resumo do patrimonio empresarial">
                 <article class="patrimonio-summary-card blue">
                     <span class="patrimonio-summary-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" focusable="false"><path d="M4 20h16"/><path d="M6 20V9h4v11"/><path d="M14 20V4h4v16"/></svg>
@@ -165,17 +133,56 @@
                         <small id="bem-kpi-aquisicoes-legenda">0 novos bens</small>
                     </div>
                 </article>
-            </section>
-
-            <div class="patrimonio-empresa-layout">
-                <div class="patrimonio-empresa-main">
+                    </section>
                     <section class="patrimonio-main-panel">
                         <div class="patrimonio-panel-header">
-                            <div>
-                                <h2>Bens cadastrados</h2>
+                            <div class="patrimonio-panel-title-inline">
+                                <h2>Bens Cadastrados</h2>
                                 <small id="bens-lista-meta">Carregando bens...</small>
                             </div>
-                            <button type="button" class="patrimonio-link-btn" id="btn-atualizar-bens">Atualizar</button>
+                            <div class="patrimonio-panel-actions">
+                                <button type="button" class="patrimonio-secondary-btn patrimonio-filter-trigger" id="btn-filtros-bens" aria-expanded="false" aria-controls="bens-filtros-avancados">
+                                    <img src="{{ url_for('static', filename='img/icone_filtro.png') }}" alt="" aria-hidden="true">
+                                    <span>Filtro avan&ccedil;ado</span>
+                                </button>
+                                <button type="button" class="patrimonio-secondary-btn patrimonio-report-btn" id="btn-exportar-bens-excel" title="Salvar Excel" aria-label="Salvar Excel">
+                                    <img src="{{ url_for('static', filename='img/documento_xlsx.png') }}" alt="" aria-hidden="true">
+                                    <span>Salvar Excel</span>
+                                </button>
+                                <button type="button" class="patrimonio-secondary-btn patrimonio-report-btn" id="btn-exportar-bens-pdf" title="Gerar relat&oacute;rio em PDF" aria-label="Gerar relat&oacute;rio em PDF">
+                                    <img src="{{ url_for('static', filename='img/documento_relatorio.png') }}" alt="" aria-hidden="true" onerror="this.hidden=true; this.nextElementSibling.hidden=false">
+                                    <svg class="patrimonio-report-fallback" viewBox="0 0 24 24" aria-hidden="true" focusable="false" hidden><path d="M6 3h9l3 3v15H6V3Z"/><path d="M15 3v4h4"/><path d="M9 12h6M9 16h6M9 20h4"/></svg>
+                                    <span>Gerar relat&oacute;rio em PDF</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="patrimonio-advanced-filters" id="bens-filtros-avancados" hidden>
+                            <label class="patrimonio-filter">
+                                <span>Categoria</span>
+                                <select id="bem-filtro-categoria">
+                                    <option value="">Todas</option>
+                                </select>
+                            </label>
+                            <label class="patrimonio-filter">
+                                <span>Status</span>
+                                <select id="bem-filtro-status">
+                                    <option value="">Todos</option>
+                                    <option value="ATIVO">Ativo</option>
+                                    <option value="INATIVO">Inativo</option>
+                                    <option value="EM_REVISAO">Em revis&atilde;o</option>
+                                    <option value="BAIXADO">Baixado</option>
+                                </select>
+                            </label>
+                            <label class="patrimonio-filter">
+                                <span>Documento</span>
+                                <select id="bem-filtro-documento">
+                                    <option value="">Todos</option>
+                                    <option value="COM_LASTRO">Com lastro</option>
+                                    <option value="SEM_DOCUMENTO">Sem documento</option>
+                                    <option value="PENDENTE">Pendente</option>
+                                    <option value="AGUARDANDO_CONTADOR">Aguardando contador</option>
+                                </select>
+                            </label>
                         </div>
                         <div class="patrimonio-table-wrap">
                             <table class="patrimonio-bens-table">
@@ -195,18 +202,12 @@
                                 </tbody>
                             </table>
                         </div>
-                    </section>
-
-                    <section class="patrimonio-main-panel" id="bem-detalhe">
-                        <div class="empty-state">
-                            <strong>Selecione um bem.</strong>
-                            <span>O detalhe exibe documento fiscal, fornecedor, valor, local e status documental.</span>
-                        </div>
+                        <div class="patrimonio-table-pagination" id="bens-paginacao" hidden></div>
                     </section>
                 </div>
 
                 <aside class="patrimonio-side-column patrimonio-empresa-side">
-                    <section class="patrimonio-side-card">
+                    <section class="patrimonio-side-card patrimonio-imobilizado-card">
                         <div class="patrimonio-side-header">
                             <h2>Resumo do imobilizado</h2>
                         </div>
@@ -215,25 +216,20 @@
                         </div>
                     </section>
 
-                    <section class="patrimonio-side-card">
-                        <div class="patrimonio-side-header">
-                            <h2>Fluxo sugerido</h2>
-                        </div>
-                        <div class="patrimonio-fluxo">
-                            <div><span>1</span><strong>Importar nota</strong><small>Upload da NF no m&oacute;dulo fiscal</small></div>
-                            <div><span>2</span><strong>Extrair dados</strong><small>Valida&ccedil;&atilde;o no lastro</small></div>
-                            <div><span>3</span><strong>Criar bem</strong><small>Cadastro do ativo</small></div>
-                            <div><span>4</span><strong>Vincular lastro</strong><small>Documento fiscal</small></div>
-                        </div>
-                    </section>
-
-                    <section class="patrimonio-side-card">
+                    <section class="patrimonio-side-card patrimonio-pendencias-card">
                         <div class="patrimonio-side-header">
                             <h2>Pend&ecirc;ncias priorit&aacute;rias</h2>
                             <span class="patrimonio-counter" id="bens-pendencias-count">0</span>
                         </div>
                         <div id="bens-pendencias" class="patrimonio-pendencias-list">
                             <p class="loading">Carregando pend&ecirc;ncias...</p>
+                        </div>
+                    </section>
+
+                    <section class="patrimonio-side-card patrimonio-detalhe-card" id="bem-detalhe">
+                        <div class="empty-state">
+                            <strong>Selecione um bem.</strong>
+                            <span>O detalhe exibe documento fiscal, fornecedor, valor, local e status documental.</span>
                         </div>
                     </section>
                 </aside>

@@ -26,6 +26,7 @@
         filter: '/static/img/icone_filtro.png',
         'file-spreadsheet': '/static/img/documento_xlsx.png',
         'file-text': '/static/img/documento_pdf.png',
+        'report-pdf': '/static/img/documento_relatorio.png',
         archive: '/static/img/documento_zip.webp',
     };
 
@@ -1843,7 +1844,12 @@
 
     function renderIconeAcao(chave) {
         if (ICONES_ACAO_IMG[chave]) {
-            return `<img class="ir-action-img" src="${ICONES_ACAO_IMG[chave]}" alt="" aria-hidden="true">`;
+            return `
+                <i class="ir-action-img-box" aria-hidden="true">
+                    <img class="ir-action-img" src="${ICONES_ACAO_IMG[chave]}" alt="" aria-hidden="true" onerror="this.hidden=true; this.nextElementSibling.hidden=false">
+                    <svg class="ir-action-fallback" viewBox="0 0 24 24" focusable="false" hidden><path d="M6 3h9l3 3v15H6V3Z"/><path d="M15 3v4h4"/><path d="M9 12h6M9 16h6M9 20h4"/></svg>
+                </i>
+            `;
         }
         if (typeof window.renderIcon === 'function') {
             return window.renderIcon(chave || 'default', { size: '15px' });
