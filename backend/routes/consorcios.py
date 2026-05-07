@@ -2,7 +2,9 @@
 Rotas para gerenciamento de Consórcios
 """
 from flask import Blueprint, request, jsonify
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal, ROUND_HALF_UP
+import re
 from dateutil.relativedelta import relativedelta
 
 try:
@@ -11,6 +13,165 @@ except ImportError:
     from models import db, ContratoConsorcio, ItemDespesa, ItemReceita, Categoria, Conta, ReceitaRealizada
 
 consorcios_bp = Blueprint('consorcios', __name__, url_prefix='/api/consorcios')
+
+MOEDA_QUANT = Decimal('0.01')
+
+
+def _decimal(valor, padrao='0'):
+    if valor is None or valor == '':
+        valor = padrao
+    return Decimal(str(valor))
+
+
+def _quantizar_moeda(valor):
+    return _decimal(valor).quantize(MOEDA_QUANT, rounding=ROUND_HALF_UP)
+
+
+def _data_base_de_valor(valor):
+    if not valor:
+        return None
+    if isinstance(valor, datetime):
+        return valor.date().replace(day=1)
+    if isinstance(valor, date):
+        return valor.replace(day=1)
+
+    texto = str(valor).strip()
+    if re.fullmatch(r'\d{4}-\d{2}-\d{2}', texto):
+        return datetime.strptime(texto, '%Y-%m-%d').date().replace(day=1)
+    if re.fullmatch(r'\d{4}-\d{2}', texto):
+        return datetime.strptime(f'{texto}-01', '%Y-%m-%d').date()
+    if re.fullmatch(r'\d{1,2}/\d{4}', texto):
+        mes, ano = texto.split('/')
+        return date(int(ano), int(mes), 1)
+    return None
+
+
+def normalizar_mes_referencia(valor, data_base=None, campo='mes_inicio'):
+    if valor is None or valor == '':
+        return None
+    if isinstance(valor, datetime):
+        return valor.date().replace(day=1)
+    if isinstance(valor, date):
+        return valor.replace(day=1)
+
+    texto = str(valor).strip()
+    label = 'inicio' if campo == 'mes_inicio' else 'contemplacao'
+
+    try:
+        if re.fullmatch(r'\d{4}-\d{2}-\d{2}', texto):
+            return datetime.strptime(texto, '%Y-%m-%d').date().replace(day=1)
+        if re.fullmatch(r'\d{4}-\d{2}', texto):
+            return datetime.strptime(f'{texto}-01', '%Y-%m-%d').date()
+        if re.fullmatch(r'\d{1,2}/\d{4}', texto):
+            mes, ano = texto.split('/')
+            mes_int = int(mes)
+            if mes_int < 1 or mes_int > 12:
+                raise ValueError
+            return date(int(ano), mes_int, 1)
+        if re.fullmatch(r'\d{1,2}', texto):
+            mes_int = int(texto)
+            if mes_int < 1 or mes_int > 12:
+                raise ValueError
+            base = data_base or date.today()
+            if isinstance(base, datetime):
+                ano = base.year
+            elif isinstance(base, date):
+                ano = base.year
+            else:
+                ano = date.today().year
+            return date(ano, mes_int, 1)
+    except ValueError:
+        raise ValueError(f'Mes de {label} invalido. Informe um mes entre 1 e 12.')
+
+    raise ValueError(f'Mes de {label} invalido. Informe uma data no formato YYYY-MM, YYYY-MM-DD ou mes entre 1 e 12.')
+
+
+def calcular_posicao_contemplacao(mes_inicio, mes_contemplacao, numero_parcelas):
+    if not mes_contemplacao:
+        return None
+
+    diferenca_meses = (
+        (mes_contemplacao.year - mes_inicio.year) * 12
+        + (mes_contemplacao.month - mes_inicio.month)
+    )
+    posicao = diferenca_meses + 1
+
+    if posicao < 1 or posicao > numero_parcelas:
+        raise ValueError('Mes de contemplacao deve estar dentro do periodo do consorcio.')
+    return posicao
+
+
+def calcular_valor_parcela_consorcio(valor_inicial, tipo_reajuste, valor_reajuste, posicao):
+    base = _decimal(valor_inicial)
+    reajuste = _decimal(valor_reajuste)
+    passos = Decimal(posicao - 1)
+
+    if tipo_reajuste == 'fixo' and reajuste > 0:
+        return _quantizar_moeda(base + (passos * reajuste))
+    if tipo_reajuste == 'percentual' and reajuste > 0:
+        fator = Decimal('1') + ((passos * reajuste) / Decimal('100'))
+        return _quantizar_moeda(base * fator)
+    return _quantizar_moeda(base)
+
+
+def calcular_valor_premio(valor_inicial, numero_parcelas, tipo_reajuste, valor_reajuste, posicao_contemplacao):
+    if not posicao_contemplacao:
+        return None
+    parcela = calcular_valor_parcela_consorcio(
+        valor_inicial,
+        tipo_reajuste,
+        valor_reajuste,
+        posicao_contemplacao,
+    )
+    return _quantizar_moeda(parcela * Decimal(numero_parcelas))
+
+
+def normalizar_dados_consorcio(dados, consorcio_atual=None):
+    numero_parcelas = int(dados.get('numero_parcelas') or getattr(consorcio_atual, 'numero_parcelas', 0) or 0)
+    if numero_parcelas < 1:
+        raise ValueError('Numero de parcelas deve ser maior que zero.')
+
+    valor_inicial = _quantizar_moeda(dados.get('valor_inicial', getattr(consorcio_atual, 'valor_inicial', 0)))
+    tipo_reajuste = dados.get('tipo_reajuste', getattr(consorcio_atual, 'tipo_reajuste', 'nenhum') or 'nenhum')
+    valor_reajuste = _quantizar_moeda(dados.get('valor_reajuste', getattr(consorcio_atual, 'valor_reajuste', 0)))
+
+    base_para_inicio = (
+        _data_base_de_valor(dados.get('mes_contemplacao'))
+        or getattr(consorcio_atual, 'mes_inicio', None)
+        or date.today()
+    )
+    mes_inicio = normalizar_mes_referencia(
+        dados.get('mes_inicio', getattr(consorcio_atual, 'mes_inicio', None)),
+        data_base=base_para_inicio,
+        campo='mes_inicio',
+    )
+    if not mes_inicio:
+        raise ValueError('Mes de inicio e obrigatorio.')
+
+    mes_contemplacao = normalizar_mes_referencia(
+        dados.get('mes_contemplacao', getattr(consorcio_atual, 'mes_contemplacao', None)),
+        data_base=mes_inicio,
+        campo='mes_contemplacao',
+    )
+    posicao = calcular_posicao_contemplacao(mes_inicio, mes_contemplacao, numero_parcelas)
+    valor_premio = calcular_valor_premio(
+        valor_inicial,
+        numero_parcelas,
+        tipo_reajuste,
+        valor_reajuste,
+        posicao,
+    )
+
+    return {
+        'valor_inicial': float(valor_inicial),
+        'tipo_reajuste': tipo_reajuste,
+        'valor_reajuste': float(valor_reajuste),
+        'numero_parcelas': numero_parcelas,
+        'mes_inicio': mes_inicio,
+        'mes_contemplacao': mes_contemplacao,
+        'posicao_contemplacao': posicao,
+        'valor_premio': float(valor_premio) if valor_premio is not None else None,
+    }
 
 
 def gerar_parcelas_consorcio(consorcio, categoria_id):
@@ -31,21 +192,16 @@ def gerar_parcelas_consorcio(consorcio, categoria_id):
 
     mes_atual = consorcio.mes_inicio
     # O valor_inicial já é o valor da parcela, não dividir pelo número de parcelas
-    valor_parcela_base = consorcio.valor_inicial
-
     parcelas_criadas = []
 
     for i in range(consorcio.numero_parcelas):
         # Calcular o valor com reajuste
-        valor_ajustado = valor_parcela_base
-
-        if consorcio.tipo_reajuste == 'percentual' and consorcio.valor_reajuste > 0:
-            # Reajuste percentual progressivo: valor_base × (1 + taxa%)^mês
-            fator_reajuste = (1 + (consorcio.valor_reajuste / 100)) ** i
-            valor_ajustado = valor_parcela_base * fator_reajuste
-        elif consorcio.tipo_reajuste == 'fixo' and consorcio.valor_reajuste > 0:
-            # Reajuste fixo: valor_base + (reajuste × mês)
-            valor_ajustado = valor_parcela_base + (consorcio.valor_reajuste * i)
+        valor_ajustado = float(calcular_valor_parcela_consorcio(
+            consorcio.valor_inicial,
+            consorcio.tipo_reajuste,
+            consorcio.valor_reajuste,
+            i + 1,
+        ))
 
         # Criar a despesa para o mês
         data_vencimento = mes_atual.replace(day=5)
@@ -214,21 +370,22 @@ def criar_consorcio():
                 }), 400
 
         # Converter datas
-        mes_inicio = datetime.strptime(dados['mes_inicio'], '%Y-%m-%d').date()
+        dados_normalizados = normalizar_dados_consorcio(dados)
+        mes_inicio = dados_normalizados['mes_inicio']
         mes_contemplacao = None
         if dados.get('mes_contemplacao'):
-            mes_contemplacao = datetime.strptime(dados['mes_contemplacao'], '%Y-%m-%d').date()
+            mes_contemplacao = dados_normalizados['mes_contemplacao']
 
         # Criar consórcio
         consorcio = ContratoConsorcio(
             nome=dados['nome'],
-            valor_inicial=float(dados['valor_inicial']),
-            tipo_reajuste=dados.get('tipo_reajuste', 'nenhum'),
-            valor_reajuste=float(dados.get('valor_reajuste', 0)),
-            numero_parcelas=int(dados['numero_parcelas']),
+            valor_inicial=dados_normalizados['valor_inicial'],
+            tipo_reajuste=dados_normalizados['tipo_reajuste'],
+            valor_reajuste=dados_normalizados['valor_reajuste'],
+            numero_parcelas=dados_normalizados['numero_parcelas'],
             mes_inicio=mes_inicio,
             mes_contemplacao=mes_contemplacao,
-            valor_premio=float(dados['valor_premio']) if dados.get('valor_premio') else None,
+            valor_premio=dados_normalizados['valor_premio'],
             item_despesa_id=dados.get('item_despesa_id'),  # Opcional (legacy)
             item_receita_id=dados.get('item_receita_id'),
             observacoes=dados.get('observacoes')
@@ -243,7 +400,7 @@ def criar_consorcio():
 
         # Gerar receita se houver contemplação
         receita = None
-        if mes_contemplacao and dados.get('valor_premio'):
+        if mes_contemplacao and consorcio.valor_premio:
             receita = gerar_receita_contemplacao(consorcio)
 
         db.session.commit()
@@ -256,6 +413,12 @@ def criar_consorcio():
             'receita_gerada': receita is not None
         }), 201
 
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 400
     except Exception as e:
         db.session.rollback()
         return jsonify({
@@ -282,13 +445,23 @@ def atualizar_consorcio(id):
             consorcio.nome = dados['nome']
         if 'observacoes' in dados:
             consorcio.observacoes = dados['observacoes']
-        if 'mes_contemplacao' in dados:
-            if dados['mes_contemplacao']:
-                consorcio.mes_contemplacao = datetime.strptime(dados['mes_contemplacao'][:10], '%Y-%m-%d').date()
-            else:
-                consorcio.mes_contemplacao = None
-        if 'valor_premio' in dados:
-            consorcio.valor_premio = float(dados['valor_premio']) if dados['valor_premio'] else None
+        campos_motor = {
+            'valor_inicial',
+            'numero_parcelas',
+            'mes_inicio',
+            'mes_contemplacao',
+            'tipo_reajuste',
+            'valor_reajuste',
+        }
+        if any(campo in dados for campo in campos_motor):
+            dados_normalizados = normalizar_dados_consorcio(dados, consorcio_atual=consorcio)
+            consorcio.valor_inicial = dados_normalizados['valor_inicial']
+            consorcio.tipo_reajuste = dados_normalizados['tipo_reajuste']
+            consorcio.valor_reajuste = dados_normalizados['valor_reajuste']
+            consorcio.numero_parcelas = dados_normalizados['numero_parcelas']
+            consorcio.mes_inicio = dados_normalizados['mes_inicio']
+            consorcio.mes_contemplacao = dados_normalizados['mes_contemplacao']
+            consorcio.valor_premio = dados_normalizados['valor_premio']
         if 'ativo' in dados:
             consorcio.ativo = dados['ativo']
 
@@ -305,6 +478,12 @@ def atualizar_consorcio(id):
             'receita_gerada': receita is not None
         })
 
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 400
     except Exception as e:
         db.session.rollback()
         return jsonify({

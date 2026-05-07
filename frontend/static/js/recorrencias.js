@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await carregarDadosBase();
     await carregarRecorrencias();
     prepararFormularioNovaRecorrencia();
+    configurarCalculoPremioConsorcio();
 });
 
 async function carregarDadosBase() {
@@ -421,6 +422,7 @@ function alternarTipoCadastro() {
     }
     alternarFrequencia();
     alternarMeioPagamento();
+    calcularValorPremioConsorcio();
 }
 
 function alternarFrequencia() {
@@ -500,15 +502,18 @@ async function salvarRecorrenciaSimples() {
 
 async function salvarConsorcio() {
     const id = document.getElementById('recorrencia-id').value;
+    const mesContemplacaoValor = document.getElementById('mes-contemplacao').value;
+    const mesContemplacao = converterMesParaData(mesContemplacaoValor);
+    calcularValorPremioConsorcio();
     const dados = {
         nome: document.getElementById('nome').value.trim(),
         valor_inicial: Number(document.getElementById('valor').value),
         categoria_id: Number(document.getElementById('categoria-id').value),
         numero_parcelas: Number(document.getElementById('numero-parcelas').value),
-        mes_inicio: converterMesParaData(document.getElementById('mes-inicio').value),
+        mes_inicio: converterMesParaData(document.getElementById('mes-inicio').value, mesContemplacao),
         tipo_reajuste: document.getElementById('tipo-reajuste').value,
         valor_reajuste: Number(document.getElementById('valor-reajuste').value || 0),
-        mes_contemplacao: converterMesParaData(document.getElementById('mes-contemplacao').value),
+        mes_contemplacao: mesContemplacao,
         valor_premio: document.getElementById('valor-premio').value ? Number(document.getElementById('valor-premio').value) : null,
         observacoes: document.getElementById('observacoes').value.trim()
     };
@@ -551,6 +556,7 @@ async function editarRecorrencia(origem, id) {
         setValue('valor-premio', item.valor_premio || '');
         setValue('observacoes', item.observacoes || '');
         document.getElementById('recorrencia-ativa').checked = item.ativo !== false;
+        calcularValorPremioConsorcio();
         document.getElementById('nome')?.focus();
         return;
     }
@@ -680,8 +686,86 @@ function formatarDiaSemana(valor) {
     return data.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '');
 }
 
-function converterMesParaData(valor) {
-    return valor ? `${valor}-01` : null;
+function configurarCalculoPremioConsorcio() {
+    ['valor', 'numero-parcelas', 'mes-inicio', 'mes-contemplacao', 'tipo-reajuste', 'valor-reajuste'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input', calcularValorPremioConsorcio);
+        el.addEventListener('change', calcularValorPremioConsorcio);
+    });
+}
+
+function converterMesParaData(valor, dataBase = null) {
+    if (valor === null || valor === undefined || String(valor).trim() === '') return null;
+
+    const texto = String(valor).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) return texto.slice(0, 10);
+    if (/^\d{4}-\d{2}$/.test(texto)) return `${texto}-01`;
+    if (/^\d{1,2}\/\d{4}$/.test(texto)) {
+        const [mes, ano] = texto.split('/');
+        const mesNumero = Number(mes);
+        if (mesNumero < 1 || mesNumero > 12) return null;
+        return `${ano}-${String(mesNumero).padStart(2, '0')}-01`;
+    }
+    if (/^\d{1,2}$/.test(texto)) {
+        const mesNumero = Number(texto);
+        if (mesNumero < 1 || mesNumero > 12) return null;
+        const baseTexto = dataBase === null || dataBase === undefined ? '' : String(dataBase).trim();
+        const base = baseTexto && !/^\d{1,2}$/.test(baseTexto)
+            ? converterMesParaData(baseTexto)
+            : new Date().toISOString().slice(0, 10);
+        const ano = String(base).slice(0, 4);
+        return `${ano}-${String(mesNumero).padStart(2, '0')}-01`;
+    }
+
+    return null;
+}
+
+function calcularPosicaoContemplacaoConsorcio(mesInicio, mesContemplacao) {
+    const inicio = converterMesParaData(mesInicio, mesContemplacao);
+    const contemplacao = converterMesParaData(mesContemplacao, inicio);
+    if (!inicio || !contemplacao) return null;
+
+    const [anoInicio, mesInicioNum] = inicio.split('-').map(Number);
+    const [anoContemplacao, mesContemplacaoNum] = contemplacao.split('-').map(Number);
+    return ((anoContemplacao - anoInicio) * 12) + (mesContemplacaoNum - mesInicioNum) + 1;
+}
+
+function calcularValorParcelaConsorcio(valorInicial, tipoReajuste, valorReajuste, posicao) {
+    const base = Number(valorInicial || 0);
+    const reajuste = Number(valorReajuste || 0);
+    const passos = Math.max(Number(posicao || 1) - 1, 0);
+
+    if (tipoReajuste === 'fixo' && reajuste > 0) {
+        return base + (passos * reajuste);
+    }
+    if (tipoReajuste === 'percentual' && reajuste > 0) {
+        return base * (1 + ((passos * reajuste) / 100));
+    }
+    return base;
+}
+
+function calcularValorPremioConsorcio() {
+    const campoPremio = document.getElementById('valor-premio');
+    if (!campoPremio) return null;
+
+    const valorInicial = Number(document.getElementById('valor')?.value || 0);
+    const numeroParcelas = Number(document.getElementById('numero-parcelas')?.value || 0);
+    const mesInicio = document.getElementById('mes-inicio')?.value;
+    const mesContemplacao = document.getElementById('mes-contemplacao')?.value;
+    const tipoReajuste = document.getElementById('tipo-reajuste')?.value || 'nenhum';
+    const valorReajuste = Number(document.getElementById('valor-reajuste')?.value || 0);
+    const posicao = calcularPosicaoContemplacaoConsorcio(mesInicio, mesContemplacao);
+
+    if (!valorInicial || !numeroParcelas || !posicao || posicao < 1 || posicao > numeroParcelas) {
+        campoPremio.value = '';
+        return null;
+    }
+
+    const parcela = calcularValorParcelaConsorcio(valorInicial, tipoReajuste, valorReajuste, posicao);
+    const premio = Math.round((parcela * numeroParcelas + Number.EPSILON) * 100) / 100;
+    campoPremio.value = premio.toFixed(2);
+    return premio;
 }
 
 function normalizarMes(valor) {

@@ -307,7 +307,8 @@
                                 </div>
                                 <div class="form-group">
                                     <label for="valor-premio">Valor do premio</label>
-                                    <input type="number" id="valor-premio" step="0.01" min="0" placeholder="0,00">
+                                    <input type="number" id="valor-premio" step="0.01" min="0" placeholder="0,00" readonly aria-describedby="valor-premio-ajuda">
+                                    <small id="valor-premio-ajuda">Calculado automaticamente pela parcela da contemplacao multiplicada pela quantidade de parcelas.</small>
                                 </div>
                             </div>
 
