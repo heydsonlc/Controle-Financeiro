@@ -583,9 +583,17 @@
 .card-name-main {
     min-width: 0;
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 2px;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 6px;
+    flex-wrap: nowrap;
+}
+
+.card-final-inline {
+    color: #94a3b8;
+    font-size: 0.74rem;
+    font-weight: 400;
+    white-space: nowrap;
 }
 
 .card-brand {
@@ -631,13 +639,14 @@
 }
 
 .progress-line {
-    display: block;
+    display: inline-block;
     height: 6px;
-    width: 100%;
+    width: 60px;
+    flex: 0 0 60px;
     border-radius: 999px;
     background: #e7edf5;
     overflow: hidden;
-    margin-top: 0;
+    vertical-align: middle;
 }
 
 .progress-line em {
@@ -647,9 +656,16 @@
     border-radius: inherit;
 }
 
-.cards-table .progress-line {
-    width: min(130px, 100%);
-    margin-top: 5px;
+.card-utilizado-cell {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.card-utilizado-cell .card-pct {
+    color: #64748b;
+    font-size: 0.76rem;
 }
 
 .positive {

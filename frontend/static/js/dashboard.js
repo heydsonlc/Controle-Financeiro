@@ -340,15 +340,13 @@ function renderCartoesLimites(bloco) {
             <span class="card-name-cell">
                 ${renderBandeiraCartao(cartao)}
                 <span class="card-name-main">
-                    <b>${escapeHtml(cartao.nome)}</b>
-                    <small>${cartao.final ? `**** ${escapeHtml(cartao.final)}` : 'Final nao informado'}</small>
+                    <b>${escapeHtml(cartao.nome)}</b>${cartao.final ? `<small class="card-final-inline">**** ${escapeHtml(cartao.final)}</small>` : ''}
                 </span>
             </span>
             <span>${formatarMoeda(cartao.limite_total)}</span>
-            <span>
-                ${formatarMoeda(cartao.utilizado)}
-                <small>${cartao.percentual || 0}%</small>
+            <span class="card-utilizado-cell">
                 <b class="progress-line"><em style="width:${Math.min(cartao.percentual || 0, 100)}%"></em></b>
+                ${formatarMoeda(cartao.utilizado)}<small class="card-pct">${cartao.percentual || 0}%</small>
             </span>
             <span class="positive">${formatarMoeda(cartao.disponivel)}</span>
             <span><mark class="status-pill ${escapeHtml(cartao.status)}">${rotuloStatus(cartao.status)}</mark></span>
