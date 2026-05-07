@@ -318,6 +318,16 @@ def listar_despesas():
                 # Continua em modo degradado, mas com rastreabilidade
                 logger.warning('Falha no lazy generation de despesas; seguindo com dados existentes', exc_info=True)
 
+        # DA-AUTO-STATUS-1: baixar débitos automáticos vencidos com saldo suficiente
+        try:
+            from backend.services.debito_automatico_service import executar_baixa_debito_automatico
+        except ImportError:
+            from services.debito_automatico_service import executar_baixa_debito_automatico
+        try:
+            executar_baixa_debito_automatico(perfil_id=_perfil_id())
+        except Exception:
+            logger.warning('Falha na baixa automática de débitos automáticos; seguindo', exc_info=True)
+
         resultado = []
 
         # 1. Buscar CONTAS que NÃƒO sÃ£o faturas de cartÃ£o de crÃ©dito
