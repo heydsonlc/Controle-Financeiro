@@ -60,7 +60,7 @@ function renderFormaPagamentoDespesa(despesa) {
     if (window.FormasPagamentoUI?.renderFormaPagamento) {
         return window.FormasPagamentoUI.renderFormaPagamento(valor || 'Nao informado', {
             size: 'sm',
-            showLabel: false,
+            showLabel: true,
             className: 'despesa-forma-pagamento-icon despesa-payment-method'
         });
     }
@@ -481,6 +481,41 @@ function calcularTotaisAgrupamento(ocorrencias) {
     };
 }
 
+function escapeHtmlDespesa(value) {
+    return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+}
+
+function textoLinhaUnica(value, fallback = '&mdash;') {
+    const texto = String(value ?? '').trim();
+    return texto ? escapeHtmlDespesa(texto) : `<span class="despesa-muted">${fallback}</span>`;
+}
+
+function obterDetalheDespesa(despesa, contexto = {}) {
+    if (!despesa) return '';
+    const candidatos = [
+        despesa.fornecedor,
+        despesa.prestador_nome,
+        despesa.observacoes,
+        despesa.descricao,
+        contexto.isFaturaCartao ? 'Fatura de cartao' : '',
+        contexto.isParcela ? `Parcela ${despesa.numero_parcela || ''}/${despesa.total_parcelas || ''}` : '',
+        contexto.isRecorrente ? 'Recorrencia' : '',
+        contexto.categoriaNome,
+        contexto.tipoTexto
+    ];
+    return candidatos.find(item => String(item || '').trim()) || '';
+}
+
+function renderizarCelulaTexto(classe, texto, fallback = '&mdash;') {
+    const title = String(texto || '').trim();
+    return `<div class="despesa-cell ${classe}" title="${escapeHtmlDespesa(title)}">${textoLinhaUnica(texto, fallback)}</div>`;
+}
+
 /**
  * Renderiza um agrupador de despesas semanais
  * Usa o MESMO layout visual de uma despesa comum
@@ -499,6 +534,46 @@ function renderizarAgrupadorSemanal(agrupador, index) {
 
     // Descrição agregada: Nome — MM/YYYY — pagas/total — R$ valor
     const descricaoAgrupada = `${agrupador.nome} — ${competencia} — ${totais.pagas}/${totais.total_ocorrencias}`;
+
+    const primeiraOcorrencia = agrupador.ocorrencias[0] || {};
+    const formaPagamentoIconeHtml = renderFormaPagamentoDespesa(primeiraOcorrencia);
+    const detalheAgrupado = `${competencia || 'Recorrencia'} - ${totais.pagas}/${totais.total_ocorrencias} pagas`;
+
+    return `
+        <div class="despesa-card despesa-card-padrao despesa-row-group ${statusClass} tipo-recorrente agrupador-semanal" data-agrupador-index="${index}">
+            <div class="despesa-linha-principal">
+                ${renderizarCelulaTexto('despesa-cell-nome despesa-descricao', agrupador.nome)}
+                ${renderizarCelulaTexto('despesa-cell-detalhe', detalheAgrupado)}
+                <div class="despesa-cell despesa-cell-forma-pagamento" title="Forma de pagamento">
+                    ${formaPagamentoIconeHtml}
+                </div>
+                <div class="despesa-cell despesa-cell-status despesa-status">
+                    <span class="status-badge status-badge-${statusClass}">${statusTexto}</span>
+                </div>
+                ${renderizarCelulaTexto('despesa-cell-vencimento', '')}
+                ${renderizarCelulaTexto('despesa-cell-categoria', categoriaNome)}
+                <div class="despesa-cell despesa-cell-valor despesa-valor-principal">
+                    R$ ${totais.valor_total.toFixed(2).replace('.', ',')}
+                </div>
+                <div class="despesa-cell despesa-cell-acoes row-actions despesa-actions">
+                    <button class="row-action-button success" onclick="pagarTodasOcorrencias(${index})" title="${todasPagas ? 'Todas ocorrencias ja pagas' : 'Pagar todas as ocorrencias pendentes'}" aria-label="${todasPagas ? 'Todas ocorrencias ja pagas' : 'Pagar todas as ocorrencias pendentes'}" ${todasPagas ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                    </button>
+                    <button class="row-action-button" onclick="toggleAgrupadorSemanal(${index})" title="Expandir ocorrencias" aria-label="Expandir ocorrencias">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="agrupador-detalhes" id="agrupador-detalhes-${index}" style="display: none;">
+                ${agrupador.ocorrencias.map(ocorrencia => renderizarOcorrenciaIndividual(ocorrencia)).join('')}
+            </div>
+        </div>
+    `;
 
     return `
         <div class="despesa-card despesa-card-padrao despesa-row-group ${statusClass} tipo-recorrente agrupador-semanal" data-agrupador-index="${index}">
@@ -568,6 +643,36 @@ function renderizarOcorrenciaIndividual(despesa) {
         ? new Date(despesa.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR')
         : '';
     const descricao = despesa.nome || despesa.descricao || 'Ocorrencia';
+    const detalhe = obterDetalheDespesa(despesa, { isRecorrente: true, categoriaNome, tipoTexto: 'Ocorrencia' });
+    const formaPagamentoIconeHtml = renderFormaPagamentoDespesa(despesa);
+
+    return `
+        <div class="despesa-card despesa-card-padrao despesa-row-child ocorrencia-item ${cancelada ? 'cancelada' : ''}">
+            <div class="despesa-linha-principal">
+                ${renderizarCelulaTexto('despesa-cell-nome despesa-descricao', descricao)}
+                ${renderizarCelulaTexto('despesa-cell-detalhe', detalhe)}
+                <div class="despesa-cell despesa-cell-forma-pagamento" title="Forma de pagamento">
+                    ${formaPagamentoIconeHtml}
+                </div>
+                <div class="despesa-cell despesa-cell-status despesa-status">
+                    <span class="status-badge status-badge-${statusClass}">${cancelada ? 'Cancelado' : statusTexto}</span>
+                </div>
+                ${renderizarCelulaTexto('despesa-cell-vencimento', vencimento)}
+                ${renderizarCelulaTexto('despesa-cell-categoria', categoriaNome)}
+                <div class="despesa-cell despesa-cell-valor despesa-valor-principal">
+                    R$ ${parseFloat(despesa.valor).toFixed(2).replace('.', ',')}
+                </div>
+                <div class="despesa-cell despesa-cell-acoes row-actions despesa-actions">
+                    <button class="row-action-button success" onclick="marcarComoPago(${despesa.id})" title="${pagoFlag ? 'Ja pago' : 'Marcar como pago'}" aria-label="${pagoFlag ? 'Ja pago' : 'Marcar como pago'}" ${pagoFlag ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                    </button>
+                    <button class="row-action-button" onclick="editarDespesa(${despesa.id})" title="Editar" aria-label="Editar">${despesasIcon('edit')}</button>
+                </div>
+            </div>
+        </div>
+    `;
 
     return `
         <div class="despesa-card despesa-card-padrao despesa-row-child ocorrencia-item ${cancelada ? 'cancelada' : ''}">
@@ -828,6 +933,7 @@ function renderizarDespesas(despesasParaRenderizar) {
         const categoriaHtml = isFaturaCartao
             ? `${origemTexto}${despesa.status_fatura ? `<span class="despesa-pill despesa-pill-inline">${despesa.status_fatura}</span>` : ''}`
             : `${categoriaIconeHtml ? `<span class="despesa-icon-inline">${categoriaIconeHtml}</span>` : ''}${origemTexto}`;
+        const detalheDespesa = obterDetalheDespesa(despesa, { isFaturaCartao, isParcela, isRecorrente, categoriaNome, tipoTexto });
 
         // Ações disponíveis
         const acoesHTML = isFaturaCartao ? `
@@ -861,6 +967,37 @@ function renderizarDespesas(despesasParaRenderizar) {
                 </button>
             </div>
         `);
+
+        return `
+            <div class="despesa-card despesa-card-padrao ${statusClass} ${tipoClass}" data-despesa-id="${despesa.id}">
+                <div class="despesa-linha-principal">
+                    ${renderizarCelulaTexto('despesa-cell-nome despesa-descricao', despesa.nome)}
+                    ${renderizarCelulaTexto('despesa-cell-detalhe', detalheDespesa)}
+                    <div class="despesa-cell despesa-cell-forma-pagamento" title="Forma de pagamento">
+                        ${formaPagamentoIconeHtml}
+                    </div>
+                    <div class="despesa-cell despesa-cell-status despesa-status">
+                        <span class="status-badge status-badge-${statusClass}">${statusTexto}</span>
+                    </div>
+                    ${renderizarCelulaTexto('despesa-cell-vencimento', vencimento)}
+                    <div class="despesa-cell despesa-cell-categoria" title="${escapeHtmlDespesa(origemTexto)}">
+                        ${categoriaHtml || textoLinhaUnica(categoriaNome)}
+                    </div>
+                    <div class="despesa-cell despesa-cell-valor despesa-valor-principal">
+                        R$ ${valorDespesa.toFixed(2).replace('.', ',')}
+                    </div>
+                    <div class="despesa-cell despesa-cell-acoes">
+                        ${acoesHTML || '<span class="despesa-muted">&mdash;</span>'}
+                    </div>
+                </div>
+
+                ${isFaturaCartao ? `
+                    <div class="fatura-detalhes" id="fatura-detalhes-${despesa.id}" style="display: none;">
+                        <div class="loading-detalhes">Carregando detalhes...</div>
+                    </div>
+                ` : ''}
+            </div>
+        `;
 
         // Layout padronizado para TODAS as despesas
         return `
@@ -976,13 +1113,12 @@ function renderizarDespesas(despesasParaRenderizar) {
     const partesHTML = [`
         <div class="despesas-grade">
             <div class="despesas-grade-header">
-                <div>Forma</div>
-                <div>Pagamento</div>
-                <div>Descri&ccedil;&atilde;o</div>
+                <div>Nome da despesa</div>
+                <div>Detalhe da despesa</div>
+                <div>Forma de pagamento</div>
+                <div>Status</div>
                 <div>Vencimento</div>
-                <div>Compet&ecirc;ncia</div>
-                <div>Tipo</div>
-                <div>Categoria / Origem</div>
+                <div>Categoria da despesa</div>
                 <div>Valor</div>
                 <div>A&ccedil;&otilde;es</div>
             </div>
@@ -1062,18 +1198,14 @@ const SIDEBAR_COLORS = [
 function renderizarSidebar(sidebar) {
     if (!sidebar) return;
 
-    // Cards extras (vencendo 7d, recorrentes, cartoes)
+    // Cards extras (vencendo 7d, cartoes)
     const elV7d = document.getElementById('total-vencendo-7d');
     const elV7dSub = document.getElementById('summary-vencendo-sub');
-    const elRec = document.getElementById('total-recorrentes');
-    const elRecSub = document.getElementById('summary-recorrentes-sub');
     const elCart = document.getElementById('total-cartoes');
     const elCartSub = document.getElementById('summary-cartoes-sub');
 
     if (elV7d) elV7d.textContent = `R$ ${(sidebar.vencendo_7d_valor || 0).toFixed(2).replace('.', ',')}`;
     if (elV7dSub) elV7dSub.textContent = `${sidebar.vencendo_7d_count || 0} despesa(s)`;
-    if (elRec) elRec.textContent = `R$ ${(sidebar.recorrentes_valor || 0).toFixed(2).replace('.', ',')}`;
-    if (elRecSub) elRecSub.textContent = `${sidebar.recorrentes_count || 0} despesa(s)`;
     if (elCart) elCart.textContent = `R$ ${(sidebar.cartoes_valor || 0).toFixed(2).replace('.', ',')}`;
     if (elCartSub) elCartSub.textContent = `${sidebar.cartoes_count || 0} fatura(s)`;
 
