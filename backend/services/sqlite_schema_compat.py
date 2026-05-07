@@ -22,6 +22,14 @@ def _sqlite_has_table(conn, table: str) -> bool:
     return bool(row and row[0] == table)
 
 
+def _sqlite_has_index(conn, index: str) -> bool:
+    row = conn.execute(
+        text("SELECT name FROM sqlite_master WHERE type='index' AND name=:name"),
+        {'name': index},
+    ).fetchone()
+    return bool(row and row[0] == index)
+
+
 def ensure_sqlite_schema_compat() -> None:
     """
     Garante compatibilidade de schema em SQLite quando o banco existe
@@ -65,3 +73,25 @@ def ensure_sqlite_schema_compat() -> None:
         if _sqlite_has_table(conn, 'conta'):
             if not _sqlite_has_column(conn, 'conta', 'conta_bancaria_id'):
                 conn.execute(text('ALTER TABLE conta ADD COLUMN conta_bancaria_id INTEGER'))
+
+        if _sqlite_has_table(conn, 'contrato_consorcio'):
+            if not _sqlite_has_column(conn, 'contrato_consorcio', 'perfil_financeiro_id'):
+                conn.execute(text('ALTER TABLE contrato_consorcio ADD COLUMN perfil_financeiro_id INTEGER'))
+            if not _sqlite_has_index(conn, 'ix_contrato_consorcio_perfil_financeiro_id'):
+                conn.execute(text(
+                    'CREATE INDEX ix_contrato_consorcio_perfil_financeiro_id '
+                    'ON contrato_consorcio (perfil_financeiro_id)'
+                ))
+            if _sqlite_has_table(conn, 'perfil_financeiro'):
+                pessoal_id = conn.execute(
+                    text("SELECT id FROM perfil_financeiro WHERE nome = 'Pessoal' ORDER BY id LIMIT 1")
+                ).scalar()
+                if pessoal_id:
+                    conn.execute(
+                        text(
+                            'UPDATE contrato_consorcio '
+                            'SET perfil_financeiro_id = :perfil_id '
+                            'WHERE perfil_financeiro_id IS NULL'
+                        ),
+                        {'perfil_id': pessoal_id},
+                    )

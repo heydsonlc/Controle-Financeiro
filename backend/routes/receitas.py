@@ -15,10 +15,12 @@ from decimal import Decimal
 try:
     from backend.models import db, ItemReceita, ReceitaOrcamento, ReceitaRealizada, ContratoConsorcio
     from backend.services.receita_service import ReceitaService
+    from backend.services.consorcio_receita_service import gerar_ou_atualizar_receita_contemplacao
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import db, ItemReceita, ReceitaOrcamento, ReceitaRealizada, ContratoConsorcio
     from services.receita_service import ReceitaService
+    from services.consorcio_receita_service import gerar_ou_atualizar_receita_contemplacao
     from services.perfil_financeiro_service import PerfilFinanceiroService
 
 # Criar blueprint
@@ -37,8 +39,7 @@ def _internal_error(contexto='receitas'):
 
 def _backfill_receitas_contemplacao_consorcios(ano: int | None = None) -> None:
     """
-    Backfill idempotente para consÃ³rcios antigos (jÃ¡ cadastrados antes da automaÃ§Ã£o),
-    garantindo que contemplaÃ§Ãµes gerem ReceitaRealizada e apareÃ§am no mÃ³dulo de receitas.
+    Backfill idempotente para consorcios ativos com contemplacao.
     """
     query = ContratoConsorcio.query.filter(ContratoConsorcio.ativo == True)
     if ano:
@@ -54,69 +55,14 @@ def _backfill_receitas_contemplacao_consorcios(ano: int | None = None) -> None:
     if not consorcios:
         return
 
-    item_padrao = ItemReceita.query.filter(
-        ItemReceita.nome == 'ContemplaÃ§Ã£o de ConsÃ³rcio',
-        PerfilFinanceiroService.condicao_perfil(ItemReceita),
-    ).first()
-    if not item_padrao:
-        item_padrao = ItemReceita(
-            perfil_financeiro_id=_perfil_id(),
-            nome='ContemplaÃ§Ã£o de ConsÃ³rcio',
-            tipo='OUTROS',
-            descricao='Receita pontual gerada automaticamente por consÃ³rcio contemplado.',
-            ativo=True,
-            recorrente=False,
-            valor_base_mensal=None,
-            dia_previsto_pagamento=None,
-            conta_origem_id=None,
-        )
-        db.session.add(item_padrao)
-        db.session.flush()
-
     alterou = False
 
     for consorcio in consorcios:
         if not consorcio.mes_contemplacao or not consorcio.valor_premio:
             continue
-
-        competencia = consorcio.mes_contemplacao.replace(day=1)
-        marcador = f"consorcio_id={consorcio.id}"
-
-        existente = ReceitaRealizada.query.filter(
-            ReceitaRealizada.item_receita_id == item_padrao.id,
-            PerfilFinanceiroService.condicao_perfil(ReceitaRealizada),
-            ReceitaRealizada.mes_referencia == competencia,
-            ReceitaRealizada.observacoes.ilike(f"%{marcador}%"),
-        ).first()
-
-        descricao = f"ConsÃ³rcio {consorcio.nome} - contemplaÃ§Ã£o (ID {consorcio.id})"
-
-        if existente:
-            # Atualizar para refletir possÃ­veis mudanÃ§as no contrato
-            existente.data_recebimento = consorcio.mes_contemplacao
-            existente.valor_recebido = consorcio.valor_premio
-            existente.mes_referencia = competencia
-            existente.descricao = descricao
-            if not existente.observacoes:
-                existente.observacoes = marcador
-            elif marcador not in existente.observacoes:
-                existente.observacoes = f"{existente.observacoes}\n{marcador}".strip()
+        receita = gerar_ou_atualizar_receita_contemplacao(consorcio)
+        if receita:
             alterou = True
-            continue
-
-        receita = ReceitaRealizada(
-            perfil_financeiro_id=_perfil_id(),
-            item_receita_id=item_padrao.id,
-            data_recebimento=consorcio.mes_contemplacao,
-            valor_recebido=consorcio.valor_premio,
-            mes_referencia=competencia,
-            conta_origem_id=None,
-            descricao=descricao,
-            orcamento_id=None,
-            observacoes=marcador,
-        )
-        db.session.add(receita)
-        alterou = True
 
     if alterou:
         db.session.commit()

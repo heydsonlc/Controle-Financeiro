@@ -465,7 +465,10 @@ class ReceitaService:
 
         if ano_mes:
             if isinstance(ano_mes, str):
-                ano_mes = datetime.strptime(ano_mes[:10], '%Y-%m-%d').date()
+                ano_mes_texto = ano_mes.strip()
+                if len(ano_mes_texto) == 7:
+                    ano_mes_texto = f'{ano_mes_texto}-01'
+                ano_mes = datetime.strptime(ano_mes_texto[:10], '%Y-%m-%d').date()
             ano_mes = ano_mes.replace(day=1)
             query = query.filter_by(mes_referencia=ano_mes)
 

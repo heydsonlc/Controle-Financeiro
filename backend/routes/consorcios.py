@@ -6,15 +6,33 @@ from datetime import date, datetime
 from decimal import Decimal, ROUND_HALF_UP
 import re
 from dateutil.relativedelta import relativedelta
+from sqlalchemy import or_
 
 try:
-    from backend.models import db, ContratoConsorcio, ItemDespesa, ItemReceita, Categoria, Conta, ReceitaRealizada
+    from backend.models import db, ContratoConsorcio, ItemDespesa, Categoria, Conta
+    from backend.services.consorcio_receita_service import gerar_ou_atualizar_receita_contemplacao, perfil_id_consorcio
+    from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
-    from models import db, ContratoConsorcio, ItemDespesa, ItemReceita, Categoria, Conta, ReceitaRealizada
+    from models import db, ContratoConsorcio, ItemDespesa, Categoria, Conta
+    from services.consorcio_receita_service import gerar_ou_atualizar_receita_contemplacao, perfil_id_consorcio
+    from services.perfil_financeiro_service import PerfilFinanceiroService
 
 consorcios_bp = Blueprint('consorcios', __name__, url_prefix='/api/consorcios')
 
 MOEDA_QUANT = Decimal('0.01')
+
+
+def _to_int(valor):
+    if valor is None or valor == '':
+        return None
+    try:
+        return int(valor)
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalizar_meio_pagamento(valor):
+    return (valor or '').strip().lower() or None
 
 
 def _decimal(valor, padrao='0'):
@@ -43,6 +61,18 @@ def _data_base_de_valor(valor):
     if re.fullmatch(r'\d{1,2}/\d{4}', texto):
         mes, ano = texto.split('/')
         return date(int(ano), int(mes), 1)
+    return None
+
+
+def _mes_numerico(valor):
+    if valor is None or valor == '':
+        return None
+    if isinstance(valor, int):
+        return valor if 1 <= valor <= 12 else None
+    texto = str(valor).strip()
+    if re.fullmatch(r'\d{1,2}', texto):
+        mes = int(texto)
+        return mes if 1 <= mes <= 12 else None
     return None
 
 
@@ -75,10 +105,15 @@ def normalizar_mes_referencia(valor, data_base=None, campo='mes_inicio'):
             base = data_base or date.today()
             if isinstance(base, datetime):
                 ano = base.year
+                mes_base = base.month
             elif isinstance(base, date):
                 ano = base.year
+                mes_base = base.month
             else:
                 ano = date.today().year
+                mes_base = date.today().month
+            if campo == 'mes_contemplacao' and mes_int < mes_base:
+                ano += 1
             return date(ano, mes_int, 1)
     except ValueError:
         raise ValueError(f'Mes de {label} invalido. Informe um mes entre 1 e 12.')
@@ -126,6 +161,94 @@ def calcular_valor_premio(valor_inicial, numero_parcelas, tipo_reajuste, valor_r
     return _quantizar_moeda(parcela * Decimal(numero_parcelas))
 
 
+def normalizar_pagamento_consorcio(dados):
+    meio_pagamento = _normalizar_meio_pagamento(dados.get('meio_pagamento'))
+    cartao_id = _to_int(dados.get('cartao_id'))
+    conta_bancaria_id = _to_int(dados.get('conta_bancaria_id'))
+    categoria_cartao_id = _to_int(dados.get('categoria_cartao_id'))
+
+    if meio_pagamento != 'cartao':
+        cartao_id = None
+        categoria_cartao_id = None
+
+    if meio_pagamento != 'debito_automatico':
+        conta_bancaria_id = None
+
+    return {
+        'meio_pagamento': meio_pagamento,
+        'cartao_id': cartao_id,
+        'conta_bancaria_id': conta_bancaria_id,
+        'categoria_cartao_id': categoria_cartao_id,
+    }
+
+
+def pagamento_de_parcela(parcela):
+    if not parcela:
+        return {
+            'meio_pagamento': None,
+            'cartao_id': None,
+            'conta_bancaria_id': None,
+            'categoria_cartao_id': None,
+        }
+    return {
+        'meio_pagamento': parcela.meio_pagamento,
+        'cartao_id': parcela.cartao_id,
+        'conta_bancaria_id': parcela.conta_bancaria_id,
+        'categoria_cartao_id': parcela.categoria_cartao_id,
+    }
+
+
+def query_parcelas_consorcio(consorcio, nomes=None):
+    nomes_consorcio = [nome for nome in (nomes or [consorcio.nome]) if nome]
+    if not nomes_consorcio:
+        nomes_consorcio = [consorcio.nome]
+    filtros_nome = [ItemDespesa.nome.like(f"{nome} - Parcela%") for nome in nomes_consorcio]
+    perfil_id = perfil_id_consorcio(consorcio)
+    return ItemDespesa.query.filter(
+        ItemDespesa.tipo == 'Consorcio',
+        PerfilFinanceiroService.condicao_perfil(ItemDespesa, perfil_id),
+        or_(*filtros_nome),
+    )
+
+
+def primeira_parcela_consorcio(consorcio):
+    return query_parcelas_consorcio(consorcio).order_by(ItemDespesa.data_vencimento, ItemDespesa.id).first()
+
+
+def aplicar_pagamento_parcela(parcela, pagamento):
+    meio_pagamento = pagamento.get('meio_pagamento')
+    parcela.meio_pagamento = meio_pagamento
+    parcela.cartao_id = pagamento.get('cartao_id') if meio_pagamento == 'cartao' else None
+    parcela.categoria_cartao_id = pagamento.get('categoria_cartao_id') if meio_pagamento == 'cartao' else None
+    parcela.conta_bancaria_id = pagamento.get('conta_bancaria_id') if meio_pagamento == 'debito_automatico' else None
+
+
+def aplicar_pagamento_conta(conta, pagamento):
+    meio_pagamento = pagamento.get('meio_pagamento')
+    conta.debito_automatico = meio_pagamento == 'debito_automatico'
+    conta.conta_bancaria_id = pagamento.get('conta_bancaria_id') if meio_pagamento == 'debito_automatico' else None
+
+
+def atualizar_pagamento_parcelas_consorcio(consorcio, pagamento, nomes=None):
+    parcelas = query_parcelas_consorcio(consorcio, nomes=nomes).all()
+    for parcela in parcelas:
+        aplicar_pagamento_parcela(parcela, pagamento)
+        conta = Conta.query.filter_by(item_despesa_id=parcela.id).first()
+        if conta:
+            aplicar_pagamento_conta(conta, pagamento)
+    return parcelas
+
+
+def consorcio_to_dict(consorcio):
+    dados = consorcio.to_dict()
+    parcela = primeira_parcela_consorcio(consorcio)
+    pagamento = pagamento_de_parcela(parcela)
+    dados.update(pagamento)
+    dados['categoria_id'] = parcela.categoria_id if parcela else None
+    dados['categoria_nome'] = parcela.categoria.nome if parcela and parcela.categoria else None
+    return dados
+
+
 def normalizar_dados_consorcio(dados, consorcio_atual=None):
     numero_parcelas = int(dados.get('numero_parcelas') or getattr(consorcio_atual, 'numero_parcelas', 0) or 0)
     if numero_parcelas < 1:
@@ -135,13 +258,28 @@ def normalizar_dados_consorcio(dados, consorcio_atual=None):
     tipo_reajuste = dados.get('tipo_reajuste', getattr(consorcio_atual, 'tipo_reajuste', 'nenhum') or 'nenhum')
     valor_reajuste = _quantizar_moeda(dados.get('valor_reajuste', getattr(consorcio_atual, 'valor_reajuste', 0)))
 
-    base_para_inicio = (
-        _data_base_de_valor(dados.get('mes_contemplacao'))
-        or getattr(consorcio_atual, 'mes_inicio', None)
-        or date.today()
+    valor_mes_inicio = dados.get('mes_inicio', getattr(consorcio_atual, 'mes_inicio', None))
+    valor_mes_contemplacao = dados.get('mes_contemplacao', getattr(consorcio_atual, 'mes_contemplacao', None))
+    data_base_inicial = (
+        _data_base_de_valor(dados.get('data_inicial'))
+        or _data_base_de_valor(dados.get('data_vencimento'))
     )
+    data_base_contemplacao = _data_base_de_valor(valor_mes_contemplacao)
+    mes_inicio_numerico = _mes_numerico(valor_mes_inicio)
+
+    base_para_inicio = data_base_inicial or getattr(consorcio_atual, 'mes_inicio', None)
+    if not base_para_inicio and data_base_contemplacao:
+        if mes_inicio_numerico and mes_inicio_numerico > data_base_contemplacao.month:
+            base_para_inicio = date(data_base_contemplacao.year - 1, mes_inicio_numerico, 1)
+        else:
+            base_para_inicio = data_base_contemplacao
+    if not base_para_inicio:
+        base_para_inicio = date.today()
+    if not valor_mes_inicio and data_base_inicial:
+        valor_mes_inicio = data_base_inicial
+
     mes_inicio = normalizar_mes_referencia(
-        dados.get('mes_inicio', getattr(consorcio_atual, 'mes_inicio', None)),
+        valor_mes_inicio,
         data_base=base_para_inicio,
         campo='mes_inicio',
     )
@@ -149,7 +287,7 @@ def normalizar_dados_consorcio(dados, consorcio_atual=None):
         raise ValueError('Mes de inicio e obrigatorio.')
 
     mes_contemplacao = normalizar_mes_referencia(
-        dados.get('mes_contemplacao', getattr(consorcio_atual, 'mes_contemplacao', None)),
+        valor_mes_contemplacao,
         data_base=mes_inicio,
         campo='mes_contemplacao',
     )
@@ -174,7 +312,7 @@ def normalizar_dados_consorcio(dados, consorcio_atual=None):
     }
 
 
-def gerar_parcelas_consorcio(consorcio, categoria_id):
+def gerar_parcelas_consorcio(consorcio, categoria_id, pagamento=None):
     """
     Gera automaticamente as parcelas do consórcio como ItemDespesa
 
@@ -192,6 +330,7 @@ def gerar_parcelas_consorcio(consorcio, categoria_id):
 
     mes_atual = consorcio.mes_inicio
     # O valor_inicial já é o valor da parcela, não dividir pelo número de parcelas
+    pagamento = pagamento or normalizar_pagamento_consorcio({})
     parcelas_criadas = []
 
     for i in range(consorcio.numero_parcelas):
@@ -206,6 +345,7 @@ def gerar_parcelas_consorcio(consorcio, categoria_id):
         # Criar a despesa para o mês
         data_vencimento = mes_atual.replace(day=5)
         despesa = ItemDespesa(
+            perfil_financeiro_id=perfil_id_consorcio(consorcio),
             nome=f"{consorcio.nome} - Parcela {i+1}/{consorcio.numero_parcelas}",
             descricao=f"Parcela {i+1} do consórcio {consorcio.nome}",
             valor=valor_ajustado,
@@ -216,6 +356,7 @@ def gerar_parcelas_consorcio(consorcio, categoria_id):
             tipo='Consorcio',
             mes_competencia=mes_atual.strftime('%Y-%m')
         )
+        aplicar_pagamento_parcela(despesa, pagamento)
 
         db.session.add(despesa)
         db.session.flush()  # Garantir despesa.id para vincular a Conta
@@ -224,6 +365,7 @@ def gerar_parcelas_consorcio(consorcio, categoria_id):
         existente = Conta.query.filter_by(item_despesa_id=despesa.id, mes_referencia=mes_referencia).first()
         if not existente:
             conta = Conta(
+                perfil_financeiro_id=perfil_id_consorcio(consorcio),
                 item_despesa_id=despesa.id,
                 mes_referencia=mes_referencia,
                 descricao=despesa.nome,
@@ -231,7 +373,8 @@ def gerar_parcelas_consorcio(consorcio, categoria_id):
                 data_vencimento=data_vencimento,
                 data_pagamento=None,
                 status_pagamento='Pendente',
-                debito_automatico=False,
+                debito_automatico=pagamento.get('meio_pagamento') == 'debito_automatico',
+                conta_bancaria_id=pagamento.get('conta_bancaria_id') if pagamento.get('meio_pagamento') == 'debito_automatico' else None,
                 numero_parcela=i + 1,
                 total_parcelas=consorcio.numero_parcelas,
                 observacoes=None,
@@ -260,70 +403,20 @@ def gerar_receita_contemplacao(consorcio):
     Args:
         consorcio: Objeto ContratoConsorcio
     """
-    if not consorcio.mes_contemplacao or not consorcio.valor_premio:
-        return None
-
-    # Fonte genérica (pontual, não recorrente)
-    item_padrao = ItemReceita.query.filter_by(nome='Contemplação de Consórcio').first()
-    if not item_padrao:
-        item_padrao = ItemReceita(
-            nome='Contemplação de Consórcio',
-            tipo='OUTROS',
-            descricao='Receita pontual gerada automaticamente por consórcio contemplado.',
-            ativo=True,
-            recorrente=False,
-            valor_base_mensal=None,
-            dia_previsto_pagamento=None,
-            conta_origem_id=None,
-        )
-        db.session.add(item_padrao)
-        db.session.flush()
-
-    competencia = consorcio.mes_contemplacao.replace(day=1)
-    marcador = f"consorcio_id={consorcio.id}"
-
-    existente = ReceitaRealizada.query.filter(
-        ReceitaRealizada.item_receita_id == item_padrao.id,
-        ReceitaRealizada.mes_referencia == competencia,
-        ReceitaRealizada.observacoes.ilike(f"%{marcador}%"),
-    ).first()
-
-    descricao = f"Consórcio {consorcio.nome} - contemplação (ID {consorcio.id})"
-
-    if existente:
-        existente.item_receita_id = item_padrao.id
-        existente.data_recebimento = consorcio.mes_contemplacao
-        existente.valor_recebido = consorcio.valor_premio
-        existente.mes_referencia = competencia
-        existente.descricao = descricao
-        existente.observacoes = (existente.observacoes or '').strip() or marcador
-        if marcador not in existente.observacoes:
-            existente.observacoes = f"{existente.observacoes}\n{marcador}".strip()
-        return existente
-
-    receita = ReceitaRealizada(
-        item_receita_id=item_padrao.id,
-        data_recebimento=consorcio.mes_contemplacao,
-        valor_recebido=consorcio.valor_premio,
-        mes_referencia=competencia,
-        conta_origem_id=None,
-        descricao=descricao,
-        orcamento_id=None,
-        observacoes=marcador,
-    )
-
-    db.session.add(receita)
-    return receita
+    return gerar_ou_atualizar_receita_contemplacao(consorcio)
 
 
 @consorcios_bp.route('/', methods=['GET'])
 def listar_consorcios():
     """Lista todos os consórcios"""
     try:
-        consorcios = ContratoConsorcio.query.filter_by(ativo=True).all()
+        consorcios = PerfilFinanceiroService.aplicar_perfil_query(
+            ContratoConsorcio.query.filter_by(ativo=True),
+            ContratoConsorcio,
+        ).all()
         return jsonify({
             'success': True,
-            'data': [c.to_dict() for c in consorcios]
+            'data': [consorcio_to_dict(c) for c in consorcios]
         })
     except Exception as e:
         return jsonify({
@@ -336,7 +429,10 @@ def listar_consorcios():
 def obter_consorcio(id):
     """Obtém um consórcio específico"""
     try:
-        consorcio = ContratoConsorcio.query.get(id)
+        consorcio = PerfilFinanceiroService.aplicar_perfil_query(
+            ContratoConsorcio.query,
+            ContratoConsorcio,
+        ).filter(ContratoConsorcio.id == id).first()
         if not consorcio:
             return jsonify({
                 'success': False,
@@ -345,7 +441,7 @@ def obter_consorcio(id):
 
         return jsonify({
             'success': True,
-            'data': consorcio.to_dict()
+            'data': consorcio_to_dict(consorcio)
         })
     except Exception as e:
         return jsonify({
@@ -361,7 +457,7 @@ def criar_consorcio():
         dados = request.get_json()
 
         # Validações
-        campos_obrigatorios = ['nome', 'valor_inicial', 'numero_parcelas', 'mes_inicio', 'categoria_id']
+        campos_obrigatorios = ['nome', 'valor_inicial', 'numero_parcelas', 'categoria_id']
         for campo in campos_obrigatorios:
             if not dados.get(campo):
                 return jsonify({
@@ -372,12 +468,12 @@ def criar_consorcio():
         # Converter datas
         dados_normalizados = normalizar_dados_consorcio(dados)
         mes_inicio = dados_normalizados['mes_inicio']
-        mes_contemplacao = None
-        if dados.get('mes_contemplacao'):
-            mes_contemplacao = dados_normalizados['mes_contemplacao']
+        mes_contemplacao = dados_normalizados['mes_contemplacao']
+        pagamento = normalizar_pagamento_consorcio(dados)
 
         # Criar consórcio
         consorcio = ContratoConsorcio(
+            perfil_financeiro_id=PerfilFinanceiroService.obter_perfil_ativo_id(),
             nome=dados['nome'],
             valor_inicial=dados_normalizados['valor_inicial'],
             tipo_reajuste=dados_normalizados['tipo_reajuste'],
@@ -396,7 +492,7 @@ def criar_consorcio():
 
         # Gerar parcelas automaticamente (usando categoria_id)
         categoria_id = int(dados['categoria_id'])
-        parcelas = gerar_parcelas_consorcio(consorcio, categoria_id)
+        parcelas = gerar_parcelas_consorcio(consorcio, categoria_id, pagamento=pagamento)
 
         # Gerar receita se houver contemplação
         receita = None
@@ -408,7 +504,7 @@ def criar_consorcio():
         return jsonify({
             'success': True,
             'message': 'Consórcio criado com sucesso',
-            'data': consorcio.to_dict(),
+            'data': consorcio_to_dict(consorcio),
             'parcelas_geradas': len(parcelas),
             'receita_gerada': receita is not None
         }), 201
@@ -431,7 +527,10 @@ def criar_consorcio():
 def atualizar_consorcio(id):
     """Atualiza um consórcio existente"""
     try:
-        consorcio = ContratoConsorcio.query.get(id)
+        consorcio = PerfilFinanceiroService.aplicar_perfil_query(
+            ContratoConsorcio.query,
+            ContratoConsorcio,
+        ).filter(ContratoConsorcio.id == id).first()
         if not consorcio:
             return jsonify({
                 'success': False,
@@ -439,6 +538,7 @@ def atualizar_consorcio(id):
             }), 404
 
         dados = request.get_json()
+        nome_anterior = consorcio.nome
 
         # Atualizar campos
         if 'nome' in dados:
@@ -465,6 +565,15 @@ def atualizar_consorcio(id):
         if 'ativo' in dados:
             consorcio.ativo = dados['ativo']
 
+        campos_pagamento = {'meio_pagamento', 'cartao_id', 'conta_bancaria_id', 'categoria_cartao_id'}
+        if any(campo in dados for campo in campos_pagamento):
+            pagamento = normalizar_pagamento_consorcio(dados)
+            atualizar_pagamento_parcelas_consorcio(
+                consorcio,
+                pagamento,
+                nomes={nome_anterior, consorcio.nome},
+            )
+
         receita = None
         if consorcio.mes_contemplacao and consorcio.valor_premio:
             receita = gerar_receita_contemplacao(consorcio)
@@ -474,7 +583,7 @@ def atualizar_consorcio(id):
         return jsonify({
             'success': True,
             'message': 'Consórcio atualizado com sucesso',
-            'data': consorcio.to_dict(),
+            'data': consorcio_to_dict(consorcio),
             'receita_gerada': receita is not None
         })
 
@@ -496,7 +605,10 @@ def atualizar_consorcio(id):
 def deletar_consorcio(id):
     """Deleta um consórcio (marca como inativo)"""
     try:
-        consorcio = ContratoConsorcio.query.get(id)
+        consorcio = PerfilFinanceiroService.aplicar_perfil_query(
+            ContratoConsorcio.query,
+            ContratoConsorcio,
+        ).filter(ContratoConsorcio.id == id).first()
         if not consorcio:
             return jsonify({
                 'success': False,
@@ -507,7 +619,7 @@ def deletar_consorcio(id):
         consorcio.ativo = False
 
         # Inativar parcelas (planejamento) e remover contas pendentes associadas
-        parcelas = ItemDespesa.query.filter_by(tipo='Consorcio').filter(
+        parcelas = query_parcelas_consorcio(consorcio).filter(
             ItemDespesa.nome.like(f"{consorcio.nome} - Parcela%")
         ).all()
         parcela_ids = [p.id for p in parcelas]
@@ -541,7 +653,10 @@ def deletar_consorcio(id):
 def regenerar_parcelas(id):
     """Regenera as parcelas de um consórcio"""
     try:
-        consorcio = ContratoConsorcio.query.get(id)
+        consorcio = PerfilFinanceiroService.aplicar_perfil_query(
+            ContratoConsorcio.query,
+            ContratoConsorcio,
+        ).filter(ContratoConsorcio.id == id).first()
         if not consorcio:
             return jsonify({
                 'success': False,
@@ -551,12 +666,14 @@ def regenerar_parcelas(id):
         # Buscar categoria de uma parcela existente (ou receber via body)
         dados = request.get_json() or {}
         categoria_id = dados.get('categoria_id')
+        parcela_pagamento = query_parcelas_consorcio(consorcio).filter(
+            ItemDespesa.nome.like(f"{consorcio.nome} - Parcela%")
+        ).first()
+        pagamento = pagamento_de_parcela(parcela_pagamento)
 
         if not categoria_id:
             # Tentar pegar de uma parcela existente
-            parcela_antiga = ItemDespesa.query.filter_by(tipo='Consorcio').filter(
-                ItemDespesa.nome.like(f"{consorcio.nome} - Parcela%")
-            ).first()
+            parcela_antiga = parcela_pagamento
 
             if parcela_antiga:
                 categoria_id = parcela_antiga.categoria_id
@@ -567,7 +684,7 @@ def regenerar_parcelas(id):
                 }), 400
 
         # Deletar parcelas antigas do consórcio (e suas Contas) antes de regenerar
-        parcelas_query = ItemDespesa.query.filter_by(tipo='Consorcio').filter(
+        parcelas_query = query_parcelas_consorcio(consorcio).filter(
             ItemDespesa.nome.like(f"{consorcio.nome} - Parcela%")
         )
         parcelas_antigas = parcelas_query.all()
@@ -577,7 +694,7 @@ def regenerar_parcelas(id):
         parcelas_query.delete(synchronize_session=False)
 
         # Gerar novas parcelas
-        parcelas = gerar_parcelas_consorcio(consorcio, categoria_id)
+        parcelas = gerar_parcelas_consorcio(consorcio, categoria_id, pagamento=pagamento)
         db.session.commit()
 
         return jsonify({

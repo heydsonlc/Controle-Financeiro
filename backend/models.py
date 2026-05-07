@@ -1366,6 +1366,7 @@ class ContratoConsorcio(db.Model):
     __tablename__ = 'contrato_consorcio'
 
     id = db.Column(db.Integer, primary_key=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
     nome = db.Column(db.String(100), nullable=False)
     valor_inicial = db.Column(db.Numeric(10, 2), nullable=False)
     taxa_correcao = db.Column(db.Numeric(5, 2), default=0)  # Percentual - deprecated, usar tipo_reajuste
@@ -1387,6 +1388,7 @@ class ContratoConsorcio(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
             'nome': self.nome,
             'valor_inicial': float(self.valor_inicial),
             'taxa_correcao': float(self.taxa_correcao) if self.taxa_correcao else 0,
