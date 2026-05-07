@@ -366,28 +366,6 @@ function renderizarDetalheCartao() {
             </div>
         </header>
 
-        <section class="detail-card cartao-resumo-card">
-            <h3>Resumo do Cart&atilde;o</h3>
-            <div class="resumo-grid">
-                <div>
-                    <span>Nome do cart&atilde;o</span>
-                    <strong>${escapeHtml(cartao.nome)}</strong>
-                </div>
-                <div>
-                    <span>Banco / Emissor</span>
-                    <strong class="cartao-institution-value">${renderizarMarcaCartao(cartao, 'sm')}${escapeHtml(obterInstituicaoCartao(cartao) || '-')}</strong>
-                </div>
-                <div>
-                    <span>Final do cart&atilde;o</span>
-                    <strong>**** ${escapeHtml(final)}</strong>
-                </div>
-                <div>
-                    <span>Vencimento da fatura</span>
-                    <strong>Dia ${escapeHtml(cartao.config?.dia_vencimento || '-')}</strong>
-                </div>
-            </div>
-        </section>
-
         <section class="detail-card categorias-vinculadas-card">
             <h3>Categorias do Cart&atilde;o Vinculadas</h3>
             ${renderizarTabelaLimites(limites)}
@@ -677,9 +655,8 @@ function renderizarCategoriasDisponiveis(disponiveis) {
                 <article class="available-category">
                     <span class="categoria-icon" style="color:${escapeHtml(categoria.cor || '#2563eb')}">${renderizarIconeCategoriaCartao(categoria, '20px')}</span>
                     <strong>${escapeHtml(categoria.nome)}</strong>
-                    <button class="cf-button cf-button-secondary" type="button" data-action="vincular-disponivel" data-categoria-cartao-id="${categoria.id}">
+                    <button class="cf-button cf-button-secondary cf-button--icon" type="button" data-action="vincular-disponivel" data-categoria-cartao-id="${categoria.id}" title="Vincular" aria-label="Vincular ${escapeHtml(categoria.nome)}">
                         <span aria-hidden="true">+</span>
-                        <span>Vincular</span>
                     </button>
                 </article>
             `).join('')}

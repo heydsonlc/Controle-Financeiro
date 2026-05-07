@@ -895,23 +895,24 @@
 
 .available-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 8px;
 }
 
 .available-category {
-    min-height: 74px;
-    display: grid;
-    grid-template-columns: 32px minmax(0, 1fr);
-    gap: 8px;
+    min-height: unset;
+    display: flex;
+    flex-direction: row;
     align-items: center;
-    padding: 10px;
+    gap: 8px;
+    padding: 8px 10px;
     border: 1px solid rgba(15, 23, 42, 0.08);
     border-radius: 7px;
     background: #ffffff;
 }
 
 .available-category strong {
+    flex: 1;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -920,11 +921,18 @@
     font-size: 13px;
 }
 
-.available-category .cf-button {
-    grid-column: 2;
-    justify-self: start;
-    min-height: 30px;
-    padding: 6px 10px;
+.available-category .cf-button--icon {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    min-height: unset;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 700;
+    border-radius: 6px;
 }
 
 .fatura-action {
