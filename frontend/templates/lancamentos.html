@@ -80,6 +80,17 @@
                     </span>
                     <span class="action-button-label">Filtros</span>
                 </button>
+                <button class="action-icon-button secondary" id="btn-lanc-a-partir-doc" type="button" onclick="abrirSeletorDocumento()" title="A partir de documento" aria-label="A partir de documento">
+                    <span class="action-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="12" y1="18" x2="12" y2="12"/>
+                            <line x1="9" y1="15" x2="15" y2="15"/>
+                        </svg>
+                    </span>
+                    <span class="action-button-label">A partir de documento</span>
+                </button>
                 <button class="action-icon-button primary" id="btn-novo-lancamento" type="button" onclick="abrirModalLancamento()" title="Novo Lan&ccedil;amento" aria-label="Novo Lan&ccedil;amento">
                     <span class="action-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -352,6 +363,86 @@
                         <button type="submit" class="btn btn-primary">Confirmar recebimento</button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Selecionar documento para criar lancamento -->
+    <div id="doc-atalho-seletor-modal" class="modal" aria-hidden="true" role="dialog" aria-labelledby="doc-atalho-seletor-titulo">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2 id="doc-atalho-seletor-titulo">Selecionar documento</h2>
+                <span class="close" onclick="fecharSeletorDocumento()" aria-label="Fechar">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="doc-atalho-filtros">
+                    <input type="text" id="doc-atalho-busca" placeholder="Buscar por nome, CNPJ..." oninput="filtrarDocumentosAtalho()" autocomplete="off">
+                    <label class="doc-atalho-check"><input type="checkbox" id="doc-atalho-sem-vinculo" onchange="filtrarDocumentosAtalho()"> Apenas sem v&iacute;nculo</label>
+                </div>
+                <div id="doc-atalho-lista" class="doc-atalho-lista" aria-live="polite">
+                    <p class="doc-atalho-vazio">Carregando documentos...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Sugestao financeira a partir de documento (lancamentos) -->
+    <div id="doc-atalho-sugestao-modal" class="modal" aria-hidden="true" role="dialog" aria-labelledby="doc-atalho-sugestao-titulo">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="doc-atalho-sugestao-titulo">Criar lan&ccedil;amento a partir de documento</h2>
+                <span class="close" onclick="fecharSugestaoDocAtlho()" aria-label="Fechar">&times;</span>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="doc-atalho-comprovante-id">
+                <div id="doc-atalho-documento-info" class="doc-atalho-info-box"></div>
+                <form id="doc-atalho-form" class="form-grid">
+                    <div class="form-group form-group-wide">
+                        <label for="doc-atalho-descricao">Descri&ccedil;&atilde;o</label>
+                        <input type="text" id="doc-atalho-descricao" maxlength="200">
+                    </div>
+                    <div class="form-group">
+                        <label for="doc-atalho-valor">Valor (R$)</label>
+                        <input type="number" id="doc-atalho-valor" step="0.01" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="doc-atalho-data">Data</label>
+                        <input type="date" id="doc-atalho-data">
+                    </div>
+                    <div class="form-group">
+                        <label for="doc-atalho-competencia">Compet&ecirc;ncia</label>
+                        <input type="month" id="doc-atalho-competencia">
+                    </div>
+                    <div class="form-group">
+                        <label for="doc-atalho-forma-pagamento">Forma de pagamento</label>
+                        <select id="doc-atalho-forma-pagamento">
+                            <option value="pix">Pix</option>
+                            <option value="dinheiro">Dinheiro</option>
+                            <option value="cartao">Cart&atilde;o</option>
+                            <option value="boleto">Boleto</option>
+                            <option value="transferencia">Transfer&ecirc;ncia</option>
+                            <option value="debito_automatico">D&eacute;bito autom&aacute;tico</option>
+                            <option value="outros" selected>Outros / N&atilde;o informado</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="doc-atalho-cartao-wrap" hidden>
+                        <label for="doc-atalho-cartao">Cart&atilde;o</label>
+                        <select id="doc-atalho-cartao"></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="doc-atalho-categoria">Categoria de Despesa</label>
+                        <select id="doc-atalho-categoria"></select>
+                    </div>
+                    <div class="form-group form-group-wide">
+                        <label for="doc-atalho-observacoes">Observa&ccedil;&otilde;es</label>
+                        <textarea id="doc-atalho-observacoes" rows="3"></textarea>
+                    </div>
+                </form>
+                <div id="doc-atalho-alertas" class="form-alertas" hidden></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="fecharSugestaoDocAtlho()">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="doc-atalho-confirmar" onclick="confirmarDocAtalho()">Criar lan&ccedil;amento</button>
             </div>
         </div>
     </div>

@@ -61,6 +61,15 @@
                     </svg>
                     Atualizar
                 </button>
+                <button type="button" class="btn-doc-atalho-despesa" onclick="abrirSeletorDocumentoDespesa()" aria-label="A partir de documento">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="12" y1="18" x2="12" y2="12"/>
+                        <line x1="9" y1="15" x2="15" y2="15"/>
+                    </svg>
+                    A partir de documento
+                </button>
                 <button type="button" class="btn-nova-despesa" onclick="abrirModal()" aria-label="Nova despesa">
                     <span aria-hidden="true">+</span>
                     Nova despesa
@@ -574,6 +583,70 @@
                         Cancelar
                     </button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Selecionar documento para criar despesa -->
+    <div id="doc-desp-seletor-modal" class="modal" aria-hidden="true" role="dialog" aria-labelledby="doc-desp-seletor-titulo">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2 id="doc-desp-seletor-titulo">Selecionar documento</h2>
+                <span class="close" onclick="fecharSeletorDocumentoDespesa()" aria-label="Fechar">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="doc-atalho-filtros">
+                    <input type="text" id="doc-desp-busca" placeholder="Buscar por nome, CNPJ..." oninput="filtrarDocumentosDespesa()" autocomplete="off">
+                    <label class="doc-atalho-check"><input type="checkbox" id="doc-desp-sem-vinculo" onchange="filtrarDocumentosDespesa()"> Apenas sem v&iacute;nculo</label>
+                </div>
+                <div id="doc-desp-lista" class="doc-atalho-lista" aria-live="polite">
+                    <p class="doc-atalho-vazio">Carregando documentos...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Sugestao financeira a partir de documento (despesas) -->
+    <div id="doc-desp-sugestao-modal" class="modal" aria-hidden="true" role="dialog" aria-labelledby="doc-desp-sugestao-titulo">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="doc-desp-sugestao-titulo">Criar despesa a partir de documento</h2>
+                <span class="close" onclick="fecharSugestaoDocDesp()" aria-label="Fechar">&times;</span>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="doc-desp-comprovante-id">
+                <div id="doc-desp-documento-info" class="doc-atalho-info-box"></div>
+                <form id="doc-desp-form" class="form-grid">
+                    <div class="form-group form-group-wide">
+                        <label for="doc-desp-descricao">Descri&ccedil;&atilde;o</label>
+                        <input type="text" id="doc-desp-descricao" maxlength="200">
+                    </div>
+                    <div class="form-group">
+                        <label for="doc-desp-valor">Valor (R$)</label>
+                        <input type="number" id="doc-desp-valor" step="0.01" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="doc-desp-data">Data prevista</label>
+                        <input type="date" id="doc-desp-data">
+                    </div>
+                    <div class="form-group">
+                        <label for="doc-desp-competencia">Compet&ecirc;ncia</label>
+                        <input type="month" id="doc-desp-competencia">
+                    </div>
+                    <div class="form-group">
+                        <label for="doc-desp-categoria">Categoria de Despesa</label>
+                        <select id="doc-desp-categoria"></select>
+                    </div>
+                    <div class="form-group form-group-wide">
+                        <label for="doc-desp-observacoes">Observa&ccedil;&otilde;es</label>
+                        <textarea id="doc-desp-observacoes" rows="3"></textarea>
+                    </div>
+                </form>
+                <div id="doc-desp-alertas" class="form-alertas" hidden></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="fecharSugestaoDocDesp()">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="doc-desp-confirmar" onclick="confirmarDocDesp()">Criar despesa</button>
             </div>
         </div>
     </div>

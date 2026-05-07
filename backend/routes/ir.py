@@ -116,6 +116,31 @@ def listar_comprovantes():
     )
 
 
+@ir_bp.route('/comprovantes/documentos-para-financeiro', methods=['GET'])
+def documentos_para_financeiro():
+    destino = str(request.args.get('destino') or '').strip().upper()
+    sem_vinculo = str(request.args.get('sem_vinculo') or 'false').strip().lower() == 'true'
+    filtros = dict(request.args)
+    comprovantes = IrDocumentoService.listar_comprovantes(filtros)
+    if sem_vinculo:
+        comprovantes = [c for c in comprovantes if c.vinculos.filter_by(ativo=True).count() == 0]
+    dados = []
+    for c in comprovantes:
+        item = {
+            'id': c.id,
+            'prestador_nome': c.prestador_nome,
+            'prestador_cpf_cnpj': c.prestador_cpf_cnpj,
+            'data_documento': c.data_documento.isoformat() if c.data_documento else None,
+            'valor': float(c.valor) if c.valor is not None else None,
+            'status': c.status,
+            'categoria_nome': c.categoria.nome if c.categoria else None,
+            'arquivo_nome': c.arquivo.nome_arquivo if c.arquivo else None,
+            'vinculos_count': c.vinculos.filter_by(ativo=True).count(),
+        }
+        dados.append(item)
+    return _json_success(dados, total=len(dados), destino=destino or None)
+
+
 @ir_bp.route('/comprovantes/<int:comprovante_id>', methods=['GET'])
 def obter_comprovante(comprovante_id):
     try:

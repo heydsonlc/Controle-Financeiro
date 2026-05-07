@@ -1334,3 +1334,170 @@ window.onclick = function(event) {
         event.target.style.display = 'none';
     }
 }
+
+// ===================================
+// ATALHO: A PARTIR DE DOCUMENTO
+// ===================================
+
+let _docAtalhoTodos = [];
+
+async function abrirSeletorDocumento() {
+    const modal = document.getElementById('doc-atalho-seletor-modal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    modal.setAttribute('aria-hidden', 'false');
+    document.getElementById('doc-atalho-busca').value = '';
+    document.getElementById('doc-atalho-sem-vinculo').checked = false;
+    document.getElementById('doc-atalho-lista').innerHTML = '<p class="doc-atalho-vazio">Carregando documentos...</p>';
+    try {
+        const resp = await fetch('/api/ir/comprovantes/documentos-para-financeiro?destino=LANCAMENTO');
+        const json = await resp.json();
+        _docAtalhoTodos = json.data || [];
+        renderizarListaDocumentos(_docAtalhoTodos);
+    } catch {
+        document.getElementById('doc-atalho-lista').innerHTML = '<p class="doc-atalho-vazio">Erro ao carregar documentos.</p>';
+    }
+}
+
+function fecharSeletorDocumento() {
+    const modal = document.getElementById('doc-atalho-seletor-modal');
+    if (modal) { modal.style.display = 'none'; modal.setAttribute('aria-hidden', 'true'); }
+}
+
+function filtrarDocumentosAtalho() {
+    const busca = (document.getElementById('doc-atalho-busca')?.value || '').toLowerCase();
+    const semVinculo = document.getElementById('doc-atalho-sem-vinculo')?.checked;
+    let lista = _docAtalhoTodos;
+    if (semVinculo) lista = lista.filter(d => !d.vinculos_count);
+    if (busca) lista = lista.filter(d =>
+        (d.prestador_nome || '').toLowerCase().includes(busca) ||
+        (d.prestador_cpf_cnpj || '').toLowerCase().includes(busca) ||
+        (d.arquivo_nome || '').toLowerCase().includes(busca)
+    );
+    renderizarListaDocumentos(lista);
+}
+
+function renderizarListaDocumentos(lista) {
+    const el = document.getElementById('doc-atalho-lista');
+    if (!el) return;
+    if (!lista.length) { el.innerHTML = '<p class="doc-atalho-vazio">Nenhum documento encontrado.</p>'; return; }
+    el.innerHTML = lista.map(d => {
+        const nome = d.prestador_nome || d.arquivo_nome || `Documento #${d.id}`;
+        const valor = d.valor != null ? `R$ ${d.valor.toFixed(2).replace('.', ',')}` : '—';
+        const data = d.data_documento ? d.data_documento.slice(0, 10) : '—';
+        const vinc = d.vinculos_count ? `<span class="doc-atalho-tag-vinculado">vinculado</span>` : '';
+        return `<button type="button" class="doc-atalho-item" onclick="selecionarDocumentoAtalho(${d.id})">
+            <span class="doc-atalho-nome">${nome}</span>
+            <span class="doc-atalho-meta">${data} &bull; ${valor} ${vinc}</span>
+        </button>`;
+    }).join('');
+}
+
+async function selecionarDocumentoAtalho(comprovanteId) {
+    fecharSeletorDocumento();
+    try {
+        const resp = await fetch(`/api/ir/comprovantes/${comprovanteId}/sugestao-financeira`);
+        const json = await resp.json();
+        if (!json.success) { alert(json.error || 'Erro ao obter sugestao.'); return; }
+        preencherSugestaoDocAtalho(json.data);
+        const modal = document.getElementById('doc-atalho-sugestao-modal');
+        if (modal) { modal.style.display = 'flex'; modal.setAttribute('aria-hidden', 'false'); }
+    } catch {
+        alert('Erro ao obter sugestao financeira.');
+    }
+}
+
+function preencherSugestaoDocAtalho(sugestao) {
+    document.getElementById('doc-atalho-comprovante-id').value = sugestao.comprovante_id || '';
+    document.getElementById('doc-atalho-descricao').value = sugestao.descricao || '';
+    document.getElementById('doc-atalho-valor').value = sugestao.valor || '';
+    document.getElementById('doc-atalho-data').value = sugestao.data || '';
+    document.getElementById('doc-atalho-competencia').value = sugestao.competencia || (sugestao.data ? String(sugestao.data).slice(0, 7) : '');
+    document.getElementById('doc-atalho-forma-pagamento').value = sugestao.forma_pagamento || 'outros';
+    document.getElementById('doc-atalho-observacoes').value = sugestao.observacoes || '';
+
+    const infoEl = document.getElementById('doc-atalho-documento-info');
+    if (infoEl && sugestao.documento) {
+        infoEl.innerHTML = `<strong>${sugestao.documento.prestador_nome || 'Documento'}</strong>` +
+            (sugestao.documento.prestador_cpf_cnpj ? ` &bull; ${sugestao.documento.prestador_cpf_cnpj}` : '');
+    }
+
+    const selectCat = document.getElementById('doc-atalho-categoria');
+    if (selectCat) {
+        selectCat.innerHTML = '<option value="">-- Sem categoria --</option>';
+        ((sugestao.opcoes && sugestao.opcoes.categorias_despesa) || []).forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = c.nome;
+            if (c.id === sugestao.categoria_id) opt.selected = true;
+            selectCat.appendChild(opt);
+        });
+    }
+
+    const selectCartao = document.getElementById('doc-atalho-cartao');
+    if (selectCartao) {
+        selectCartao.innerHTML = '<option value="">-- Selecione --</option>';
+        (state.cartoes || []).forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = c.nome;
+            selectCartao.appendChild(opt);
+        });
+    }
+
+    atualizarCamposDocAtalho();
+    document.getElementById('doc-atalho-alertas').hidden = true;
+}
+
+function atualizarCamposDocAtalho() {
+    const forma = document.getElementById('doc-atalho-forma-pagamento')?.value;
+    const cartaoWrap = document.getElementById('doc-atalho-cartao-wrap');
+    if (cartaoWrap) cartaoWrap.hidden = forma !== 'cartao';
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('doc-atalho-forma-pagamento')?.addEventListener('change', atualizarCamposDocAtalho);
+});
+
+function fecharSugestaoDocAtlho() {
+    const modal = document.getElementById('doc-atalho-sugestao-modal');
+    if (modal) { modal.style.display = 'none'; modal.setAttribute('aria-hidden', 'true'); }
+}
+
+async function confirmarDocAtalho() {
+    const id = document.getElementById('doc-atalho-comprovante-id')?.value;
+    if (!id) return;
+    const botao = document.getElementById('doc-atalho-confirmar');
+    if (botao) { botao.disabled = true; botao.textContent = 'Criando...'; }
+    const payload = {
+        tipo_destino: 'LANCAMENTO',
+        descricao: document.getElementById('doc-atalho-descricao')?.value,
+        valor: document.getElementById('doc-atalho-valor')?.value,
+        data: document.getElementById('doc-atalho-data')?.value,
+        competencia: document.getElementById('doc-atalho-competencia')?.value,
+        categoria_id: document.getElementById('doc-atalho-categoria')?.value || null,
+        forma_pagamento: document.getElementById('doc-atalho-forma-pagamento')?.value,
+        cartao_id: document.getElementById('doc-atalho-cartao')?.value || null,
+        observacoes: document.getElementById('doc-atalho-observacoes')?.value,
+    };
+    try {
+        const resp = await fetch(`/api/ir/comprovantes/${id}/criar-financeiro`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const json = await resp.json();
+        if (!json.success) {
+            const alertas = document.getElementById('doc-atalho-alertas');
+            if (alertas) { alertas.textContent = json.error || 'Erro ao criar lancamento.'; alertas.hidden = false; }
+            return;
+        }
+        fecharSugestaoDocAtlho();
+        await carregarLancamentos();
+    } catch {
+        const alertas = document.getElementById('doc-atalho-alertas');
+        if (alertas) { alertas.textContent = 'Erro de conexao.'; alertas.hidden = false; }
+    } finally {
+        if (botao) { botao.disabled = false; botao.textContent = 'Criar lancamento'; }
+    }
+}
