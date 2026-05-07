@@ -12,12 +12,12 @@ from dateutil.relativedelta import relativedelta
 from sqlalchemy import or_
 
 try:
-    from backend.models import db, ItemDespesa, Categoria
+    from backend.models import db, ItemDespesa, Categoria, ContaBancaria
     from backend.services.categoria_cartao_service import CategoriaCartaoService
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
     from backend.routes.despesas import calcular_competencia, gerar_execucao_despesa_recorrente
 except ImportError:
-    from models import db, ItemDespesa, Categoria
+    from models import db, ItemDespesa, Categoria, ContaBancaria
     from services.categoria_cartao_service import CategoriaCartaoService
     from services.perfil_financeiro_service import PerfilFinanceiroService
     from routes.despesas import calcular_competencia, gerar_execucao_despesa_recorrente
@@ -61,6 +61,24 @@ def _to_date(value):
 
 def _normalizar_meio_pagamento(value):
     return (value or '').strip().lower() or None
+
+
+def _validar_conta_bancaria_debito_automatico(dados, meio_pagamento, conta_atual_id=None):
+    if meio_pagamento != 'debito_automatico':
+        return None
+
+    conta_id = _to_int(dados.get('conta_bancaria_id')) if 'conta_bancaria_id' in dados else _to_int(conta_atual_id)
+    if not conta_id:
+        raise ValueError('Conta bancária é obrigatória para recorrência em débito automático.')
+
+    conta = ContaBancaria.query.filter(
+        ContaBancaria.id == conta_id,
+        ContaBancaria.status == 'ATIVO',
+        PerfilFinanceiroService.condicao_perfil(ContaBancaria),
+    ).first()
+    if not conta:
+        raise ValueError('Conta bancária não encontrada no perfil financeiro ativo.')
+    return conta.id
 
 
 def _normalizar_tipo_recorrencia(dados):
@@ -187,6 +205,8 @@ def _item_to_dict(item):
         'frequencia_semanas': detalhes['intervalo_semanas'],
         'meio_pagamento': item.meio_pagamento,
         'cartao_id': item.cartao_id,
+        'conta_bancaria_id': item.conta_bancaria_id,
+        'conta_bancaria_nome': item.conta_bancaria.nome if item.conta_bancaria else None,
         'categoria_cartao_id': item.categoria_cartao_id,
         'categoria_cartao_nome': item.categoria_cartao.nome if item.categoria_cartao else None,
         'ativo': bool(item.ativo),
@@ -261,6 +281,7 @@ def criar_recorrencia():
         meio_pagamento = _normalizar_meio_pagamento(dados.get('meio_pagamento'))
         cartao_id = _to_int(dados.get('cartao_id'))
         categoria_cartao_id = None
+        conta_bancaria_id = _validar_conta_bancaria_debito_automatico(dados, meio_pagamento)
 
         if meio_pagamento == 'cartao' and cartao_id:
             resolucao_cartao = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(
@@ -287,6 +308,7 @@ def criar_recorrencia():
             tipo='Simples',
             meio_pagamento=meio_pagamento,
             cartao_id=cartao_id,
+            conta_bancaria_id=conta_bancaria_id,
             item_agregado_id=None,
             categoria_cartao_id=categoria_cartao_id,
         )
@@ -342,6 +364,12 @@ def atualizar_recorrencia(item_id):
             item.cartao_id = _to_int(dados.get('cartao_id'))
         if 'ativo' in dados:
             item.ativo = bool(dados.get('ativo'))
+
+        item.conta_bancaria_id = _validar_conta_bancaria_debito_automatico(
+            dados,
+            item.meio_pagamento,
+            conta_atual_id=item.conta_bancaria_id,
+        )
 
         if item.meio_pagamento == 'cartao' and item.cartao_id:
             resolucao_cartao = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(

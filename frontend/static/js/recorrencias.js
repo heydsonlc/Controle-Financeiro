@@ -2,12 +2,14 @@ const API_RECORRENCIAS = '/api/recorrencias';
 const API_CONSORCIOS = '/api/consorcios/';
 const API_CATEGORIAS = '/api/categorias';
 const API_CARTOES = '/api/cartoes';
+const API_CONTAS_BANCARIAS = '/api/contas?status=ATIVO';
 
 let estadoRecorrencias = {
     recorrencias: [],
     consorcios: [],
     categorias: [],
     cartoes: [],
+    contasBancarias: [],
     modoEdicao: null
 };
 
@@ -18,16 +20,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function carregarDadosBase() {
-    const [categoriasResp, cartoesResp] = await Promise.all([
+    const [categoriasResp, cartoesResp, contasResp] = await Promise.all([
         fetch(`${API_CATEGORIAS}?ativo=true`).then(r => r.json()).catch(() => ({ success: false, data: [] })),
-        fetch(API_CARTOES).then(r => r.json()).catch(() => ({ success: false, data: [] }))
+        fetch(API_CARTOES).then(r => r.json()).catch(() => ({ success: false, data: [] })),
+        fetch(API_CONTAS_BANCARIAS).then(r => r.json()).catch(() => ({ success: false, data: [] }))
     ]);
 
     estadoRecorrencias.categorias = categoriasResp.success ? (categoriasResp.data || []) : [];
     estadoRecorrencias.cartoes = cartoesResp.success ? (cartoesResp.data || []) : [];
+    estadoRecorrencias.contasBancarias = contasResp.success ? (contasResp.data || []) : [];
 
     preencherSelectCategorias();
     preencherSelectCartoes();
+    preencherSelectContasBancarias();
 }
 
 function preencherSelectCategorias() {
@@ -50,6 +55,15 @@ function preencherSelectCartoes() {
 
     select.innerHTML = '<option value="">Selecione...</option>' + estadoRecorrencias.cartoes
         .map(cartao => `<option value="${cartao.id}">${escapeHtml(cartao.nome)}</option>`)
+        .join('');
+}
+
+function preencherSelectContasBancarias() {
+    const select = document.getElementById('conta-bancaria-id');
+    if (!select) return;
+
+    select.innerHTML = '<option value="">Selecione...</option>' + estadoRecorrencias.contasBancarias
+        .map(conta => `<option value="${conta.id}">${escapeHtml(`${conta.nome || 'Conta'}${conta.instituicao ? ` (${conta.instituicao})` : ''}`)}</option>`)
         .join('');
 }
 
@@ -421,9 +435,22 @@ function alternarFrequencia() {
 
 function alternarMeioPagamento() {
     const meio = document.getElementById('meio-pagamento')?.value || '';
+    const contaBancaria = document.getElementById('conta-bancaria-id');
     document.querySelectorAll('.recorrencia-cartao').forEach(el => {
         el.hidden = meio !== 'cartao';
     });
+    document.querySelectorAll('.recorrencia-conta-bancaria').forEach(el => {
+        el.hidden = meio !== 'debito_automatico';
+    });
+    if (contaBancaria) {
+        contaBancaria.required = meio === 'debito_automatico';
+        if (meio !== 'debito_automatico') contaBancaria.value = '';
+    }
+    if (meio !== 'cartao') {
+        setValue('cartao-id', '');
+        setValue('categoria-cartao-id', '');
+        atualizarAvisoCategoriaCartaoRecorrencia('Resolvida automaticamente pela Categoria de Despesa.', 'neutral');
+    }
     if (meio === 'cartao') resolverCategoriaCartaoRecorrencia();
 }
 
@@ -452,6 +479,7 @@ async function salvarRecorrenciaSimples() {
         dia_semana: document.getElementById('dia-semana').value || null,
         meio_pagamento: document.getElementById('meio-pagamento').value || null,
         cartao_id: document.getElementById('cartao-id').value || null,
+        conta_bancaria_id: document.getElementById('conta-bancaria-id')?.value || null,
         ativo: document.getElementById('recorrencia-ativa')?.checked ?? true
     };
 
@@ -538,6 +566,7 @@ async function editarRecorrencia(origem, id) {
     setValue('dia-semana', item.dia_semana ?? '');
     setValue('meio-pagamento', item.meio_pagamento || '');
     setValue('cartao-id', item.cartao_id || '');
+    setValue('conta-bancaria-id', item.conta_bancaria_id || '');
     document.getElementById('recorrencia-ativa').checked = item.ativo !== false;
     alternarFrequencia();
     alternarMeioPagamento();

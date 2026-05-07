@@ -536,6 +536,7 @@ class ItemDespesa(db.Model):
     # Campos para recorrência paga via cartão
     meio_pagamento = db.Column(db.String(20))  # 'boleto', 'debito', 'cartao', 'pix', etc. (None = não especificado)
     cartao_id = db.Column(db.Integer, db.ForeignKey('item_despesa.id'), nullable=True)  # Obrigatório quando meio_pagamento='cartao'
+    conta_bancaria_id = db.Column(db.Integer, db.ForeignKey('conta_bancaria.id'), nullable=True, index=True)
     item_agregado_id = db.Column(db.Integer, db.ForeignKey('item_agregado.id'), nullable=True)  # Compatibilidade transitória — preferir categoria_cartao_id
 
     # VEIC-2: rastreabilidade de origem e Categoria do Cartão
@@ -567,6 +568,7 @@ class ItemDespesa(db.Model):
         post_update=True,
         uselist=False
     )
+    conta_bancaria = db.relationship('ContaBancaria', foreign_keys=[conta_bancaria_id])
     categoria_cartao = db.relationship('CategoriaCartao', foreign_keys=[categoria_cartao_id])
 
     def __repr__(self):
@@ -591,6 +593,7 @@ class ItemDespesa(db.Model):
             'mes_competencia': self.mes_competencia,
             'meio_pagamento': self.meio_pagamento,
             'cartao_id': self.cartao_id,
+            'conta_bancaria_id': self.conta_bancaria_id,
             'item_agregado_id': self.item_agregado_id,
             'origem_tipo': self.origem_tipo,
             'origem_id': self.origem_id,

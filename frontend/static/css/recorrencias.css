@@ -500,13 +500,15 @@
 
 .recorrencias-form-section[hidden],
 .recorrencia-cartao[hidden],
+.recorrencia-conta-bancaria[hidden],
 .consorcio-campos[hidden],
 .recorrencia-campo[hidden],
 .recorrencia-semanal[hidden] {
     display: none;
 }
 
-.categoria-cartao-auto-info {
+.categoria-cartao-auto-info,
+.recorrencia-conta-info {
     min-height: 40px;
     display: flex;
     align-items: center;

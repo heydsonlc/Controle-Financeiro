@@ -1282,6 +1282,8 @@ def gerar_contas_despesa_recorrente(item_despesa_id, meses_futuros=12, mes_refer
             valor=item.valor,
             data_vencimento=data_venc,
             status_pagamento='Pendente',
+            debito_automatico=item.meio_pagamento == 'debito_automatico',
+            conta_bancaria_id=item.conta_bancaria_id,
             observacoes=item.descricao or ''
         )
         db.session.add(nova)
