@@ -516,7 +516,16 @@
 }
 
 .cards-table .table-row {
-    grid-template-columns: 1.1fr 0.85fr 1fr 0.9fr 0.7fr;
+    grid-template-columns: 1.7fr 0.85fr 1fr 0.9fr 0.7fr;
+}
+
+/* Títulos e células das colunas 2-5 centralizados */
+.cards-table .table-head span:not(:first-child),
+.cards-table .card-row > span:not(:first-child) {
+    text-align: center;
+    justify-content: center;
+    display: flex;
+    align-items: center;
 }
 
 .table-head {
