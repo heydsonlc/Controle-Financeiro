@@ -208,14 +208,41 @@ function datasetLinha(label, data, color, fill) {
     };
 }
 
+const CATEGORIAS_POR_PAGINA = 5;
+let _categoriasCartaoTodas = [];
+let _categoriasPaginaAtual = 0;
+
 function renderCategoriasCartao(categorias) {
+    _categoriasCartaoTodas = categorias || [];
+    _categoriasPaginaAtual = 0;
+    _renderPaginaCategoria();
+}
+
+function mudarPaginaCategoria(delta) {
+    const totalPaginas = Math.ceil(_categoriasCartaoTodas.length / CATEGORIAS_POR_PAGINA);
+    _categoriasPaginaAtual = Math.max(0, Math.min(_categoriasPaginaAtual + delta, totalPaginas - 1));
+    _renderPaginaCategoria();
+}
+
+function _renderPaginaCategoria() {
     const container = document.getElementById('categorias-cartao-lista');
+    const paginacao = document.getElementById('categorias-cartao-paginacao');
+    const infoEl = document.getElementById('categorias-pag-info');
+    const btnPrev = document.getElementById('categorias-pag-prev');
+    const btnNext = document.getElementById('categorias-pag-next');
     if (!container) return;
+
+    const categorias = _categoriasCartaoTodas;
 
     if (!categorias.length) {
         container.innerHTML = estadoVazio('Configure Categorias do Cartao para acompanhar consumo.');
+        if (paginacao) paginacao.hidden = true;
         return;
     }
+
+    const totalPaginas = Math.ceil(categorias.length / CATEGORIAS_POR_PAGINA);
+    const inicio = _categoriasPaginaAtual * CATEGORIAS_POR_PAGINA;
+    const pagina = categorias.slice(inicio, inicio + CATEGORIAS_POR_PAGINA);
 
     const total = categorias.reduce((acc, item) => {
         acc.limite += Number(item.limite || 0);
@@ -224,7 +251,7 @@ function renderCategoriasCartao(categorias) {
         return acc;
     }, { limite: 0, gasto: 0, disponivel: 0 });
 
-    const linhas = categorias.map((item) => {
+    const _linhaCategoria = (item) => {
         const percentual = Math.max(0, Math.min(item.percentual || 0, 100));
         const iconeCategoria = window.CategoriaCartaoIconesUI?.renderIconeCategoriaCartao
             ? window.CategoriaCartaoIconesUI.renderIconeCategoriaCartao(item, {
@@ -233,8 +260,7 @@ function renderCategoriasCartao(categorias) {
                 label: item.nome
             })
             : `<i style="--item-color:${escapeAttr(item.cor || '#2563eb')}"></i>`;
-        return `
-        <div class="table-row category-row">
+        return `<div class="table-row category-row">
             <span class="category-cell">
                 ${iconeCategoria}
                 <span>${escapeHtml(item.nome)}</span>
@@ -247,19 +273,34 @@ function renderCategoriasCartao(categorias) {
             <span>${formatarMoeda(item.limite)}</span>
             <span>${formatarMoeda(item.gasto)}</span>
             <span class="positive">${formatarMoeda(item.disponivel)}</span>
-        </div>
-        `;
-    }).join('');
+        </div>`;
+    };
 
-    container.innerHTML = `${linhas}
-        <div class="table-row category-row category-total-row">
-            <strong>Total</strong>
-            <span class="category-progress-cell"></span>
-            <strong>${formatarMoeda(total.limite)}</strong>
-            <strong>${formatarMoeda(total.gasto)}</strong>
-            <strong class="positive">${formatarMoeda(total.disponivel)}</strong>
-        </div>
-    `;
+    // 5 linhas sempre: dados + placeholders vazios
+    let html = pagina.map(_linhaCategoria).join('');
+    const vazias = CATEGORIAS_POR_PAGINA - pagina.length;
+    for (let i = 0; i < vazias; i++) {
+        html += `<div class="table-row category-row category-row--empty" aria-hidden="true"></div>`;
+    }
+
+    // Linha total separada
+    html += `<div class="table-row category-row category-total-row">
+        <strong>Total</strong>
+        <span class="category-progress-cell"></span>
+        <strong>${formatarMoeda(total.limite)}</strong>
+        <strong>${formatarMoeda(total.gasto)}</strong>
+        <strong class="positive">${formatarMoeda(total.disponivel)}</strong>
+    </div>`;
+
+    container.innerHTML = html;
+
+    // Paginação
+    if (paginacao) {
+        paginacao.hidden = totalPaginas <= 1;
+        if (infoEl) infoEl.textContent = `${_categoriasPaginaAtual + 1} / ${totalPaginas}`;
+        if (btnPrev) btnPrev.disabled = _categoriasPaginaAtual === 0;
+        if (btnNext) btnNext.disabled = _categoriasPaginaAtual >= totalPaginas - 1;
+    }
 }
 
 function renderProximosVencimentos(vencimentos) {

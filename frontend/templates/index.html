@@ -130,6 +130,45 @@
     </section>
 
     <main class="dashboard-analytics-grid">
+        <!-- Linha 1 esquerda: Cartoes e limites -->
+        <article class="dashboard-panel dashboard-panel--with-footer dash-cartoes-panel">
+            <h2>Cart&otilde;es e limites</h2>
+            <div class="dashboard-table cards-table">
+                <div class="table-row table-head">
+                    <span>Cart&atilde;o</span>
+                    <span>Limite total</span>
+                    <span>Utilizado</span>
+                    <span>Dispon&iacute;vel</span>
+                    <span>Status</span>
+                </div>
+                <div id="cartoes-limites-lista"></div>
+            </div>
+            <a class="panel-link dashboard-card__footer-link" href="/cartoes">Gerenciar cart&otilde;es e limites</a>
+        </article>
+
+        <!-- Linha 1 direita: Consumo por Categoria -->
+        <section class="dashboard-panel dash-consumo-panel">
+            <h2>Consumo por Categoria do Cart&atilde;o</h2>
+            <div class="dashboard-table category-table">
+                <div class="table-row table-head">
+                    <span>Categoria</span>
+                    <span class="category-bar-head" aria-label="Barra de consumo"></span>
+                    <span>Limite</span>
+                    <span>Gasto</span>
+                    <span>Dispon&iacute;vel</span>
+                </div>
+                <div id="categorias-cartao-lista"></div>
+            </div>
+            <div class="dash-consumo-footer">
+                <div id="categorias-cartao-paginacao" class="dash-paginacao" hidden>
+                    <button type="button" class="dash-pag-btn" id="categorias-pag-prev" aria-label="P&aacute;gina anterior" onclick="mudarPaginaCategoria(-1)">&#8249;</button>
+                    <span id="categorias-pag-info" class="dash-pag-info"></span>
+                    <button type="button" class="dash-pag-btn" id="categorias-pag-next" aria-label="Pr&oacute;xima p&aacute;gina" onclick="mudarPaginaCategoria(1)">&#8250;</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Linha 2 esquerda: Fluxo de caixa -->
         <section class="dashboard-panel dashboard-flow-panel">
             <div class="panel-heading">
                 <div>
@@ -166,50 +205,12 @@
             </div>
         </section>
 
-        <section class="dashboard-bottom-grid">
-            <article class="dashboard-panel dashboard-panel--with-footer">
-                <h2>Cart&otilde;es e limites</h2>
-                <div class="dashboard-table cards-table">
-                    <div class="table-row table-head">
-                        <span>Cart&atilde;o</span>
-                        <span>Limite total</span>
-                        <span>Utilizado</span>
-                        <span>Dispon&iacute;vel</span>
-                        <span>Status</span>
-                    </div>
-                    <div id="cartoes-limites-lista"></div>
-                </div>
-                <a class="panel-link dashboard-card__footer-link" href="/cartoes">Gerenciar cart&otilde;es e limites</a>
-            </article>
-
-            <article class="dashboard-panel dashboard-panel--with-footer mobility-panel">
-                <h2>Resumo de mobilidade <span class="info-dot">i</span></h2>
-                <div class="mobility-cards" id="mobilidade-resumo"></div>
-                <a class="panel-link dashboard-card__footer-link" href="/veiculos">Ver compara&ccedil;&atilde;o completa</a>
-            </article>
+        <!-- Linha 2 direita: Proximos vencimentos -->
+        <section class="dashboard-panel dashboard-panel--with-footer dash-vencimentos-panel">
+            <h2>Pr&oacute;ximos vencimentos</h2>
+            <div class="due-list" id="proximos-vencimentos"></div>
+            <a class="panel-link dashboard-card__footer-link" href="/despesas">Ver todos os vencimentos</a>
         </section>
-
-        <aside class="dashboard-side-stack">
-            <section class="dashboard-panel">
-                <h2>Consumo por Categoria do Cart&atilde;o</h2>
-                <div class="dashboard-table category-table">
-                    <div class="table-row table-head">
-                        <span>Categoria</span>
-                        <span class="category-bar-head" aria-label="Barra de consumo"></span>
-                        <span>Limite</span>
-                        <span>Gasto</span>
-                        <span>Dispon&iacute;vel</span>
-                    </div>
-                    <div id="categorias-cartao-lista"></div>
-                </div>
-            </section>
-
-            <section class="dashboard-panel dashboard-panel--with-footer">
-                <h2>Pr&oacute;ximos vencimentos</h2>
-                <div class="due-list" id="proximos-vencimentos"></div>
-                <a class="panel-link dashboard-card__footer-link" href="/despesas">Ver todos os vencimentos</a>
-            </section>
-        </aside>
     </main>
 </div>
 {% endblock %}

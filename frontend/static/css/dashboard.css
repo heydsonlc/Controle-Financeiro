@@ -334,24 +334,39 @@
 
 .dashboard-analytics-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1.2fr) minmax(500px, 0.8fr);
+    grid-template-columns: minmax(0, 1.2fr) minmax(420px, 0.8fr);
+    grid-template-rows: 310px 380px;
     grid-template-areas:
-        "flow side"
-        "bottom side";
+        "cartoes consumo"
+        "fluxo   vencimentos";
     gap: var(--dashboard-gap);
-    align-items: start;
+    align-items: stretch;
     padding: 0;
     margin-bottom: 0;
 }
 
-.dashboard-flow-panel {
-    grid-area: flow;
+.dash-cartoes-panel {
+    grid-area: cartoes;
+    display: flex;
+    flex-direction: column;
 }
 
-.dashboard-side-stack {
-    grid-area: side;
-    display: grid;
-    gap: var(--dashboard-gap);
+.dash-cartoes-panel .dashboard-table {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.dash-consumo-panel  { grid-area: consumo; }
+.dashboard-flow-panel { grid-area: fluxo; }
+.dash-vencimentos-panel { grid-area: vencimentos; }
+
+/* Todos os paineis da analytics-grid ocupam 100% da célula */
+.dashboard-analytics-grid > * {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    box-sizing: border-box;
 }
 
 .dashboard-panel {
@@ -366,6 +381,8 @@
 
 .dashboard-flow-panel {
     padding-bottom: 12px;
+    display: flex;
+    flex-direction: column;
 }
 
 .dashboard-panel h2 {
@@ -423,8 +440,16 @@
 }
 
 .dashboard-chart-wrap {
-    height: 260px;
+    height: 200px;
     border-bottom: 1px solid #e2e8f0;
+    flex-shrink: 0;
+}
+
+/* Dentro do painel de fluxo com altura fixa, o chart ocupa o espaço disponível */
+.dashboard-flow-panel .dashboard-chart-wrap {
+    height: auto;
+    flex: 1;
+    min-height: 140px;
 }
 
 .flow-summary {
@@ -433,8 +458,9 @@
     gap: 0;
     border: 1px solid #e2e8f0;
     border-radius: 10px;
-    margin-top: 16px;
+    margin-top: 10px;
     overflow: hidden;
+    flex-shrink: 0;
 }
 
 .flow-summary div {
@@ -712,29 +738,108 @@
     align-self: flex-end;
 }
 
-.dashboard-bottom-grid {
-    grid-area: bottom;
-    display: grid;
-    grid-template-columns: minmax(0, 1.35fr) minmax(230px, 0.65fr);
-    gap: var(--dashboard-gap);
-    margin-bottom: 0;
+/* Painel Consumo por Categoria — tabela com 5 linhas fixas + paginação */
+.dash-consumo-panel {
+    display: flex;
+    flex-direction: column;
 }
 
-.mobility-cards {
-    display: grid;
-    gap: 8px;
+.dash-consumo-panel .dashboard-table {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
 }
 
-.mobility-panel h2 {
-    margin-bottom: 12px;
+/* 5 linhas fixas de 42px + cabeçalho 30px */
+.dash-consumo-panel .category-table {
+    display: flex;
+    flex-direction: column;
 }
 
-.mobility-panel .panel-link {
-    margin-top: 10px;
+.dash-consumo-panel #categorias-cartao-lista {
+    display: flex;
+    flex-direction: column;
 }
 
-.mobility-panel .panel-link.dashboard-card__footer-link {
-    margin-top: auto;
+.dash-consumo-panel .category-row {
+    height: 42px;
+    min-height: 42px;
+    max-height: 42px;
+    overflow: hidden;
+}
+
+/* linha vazia (placeholder) */
+.dash-consumo-panel .category-row--empty {
+    border-bottom: 1px solid #e9eef5;
+    background: transparent;
+    pointer-events: none;
+}
+
+/* linha total fica fora das 5 linhas de dados */
+.dash-consumo-panel .category-total-row {
+    height: 40px;
+    min-height: 40px;
+    background: #f8fafc;
+    border-top: 1px solid #cbd5e1;
+    border-bottom: none;
+}
+
+.dash-consumo-footer {
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-height: 28px;
+}
+
+.dash-paginacao {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.dash-pag-btn {
+    background: none;
+    border: 1px solid #d1d5db;
+    border-radius: 5px;
+    width: 26px;
+    height: 26px;
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+    color: #374151;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background .15s;
+}
+
+.dash-pag-btn:hover:not(:disabled) {
+    background: #eff6ff;
+    border-color: #93c5fd;
+}
+
+.dash-pag-btn:disabled {
+    opacity: .4;
+    cursor: default;
+}
+
+.dash-pag-info {
+    font-size: .78rem;
+    color: #64748b;
+    white-space: nowrap;
+}
+
+/* Painel Proximos Vencimentos — scroll interno */
+.dash-vencimentos-panel {
+    display: flex;
+    flex-direction: column;
+}
+
+.dash-vencimentos-panel .due-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
 }
 
 .mobility-options-grid {
@@ -973,15 +1078,22 @@
 
 @media (max-width: 1280px) {
     .dashboard-analytics-grid {
-        grid-template-areas:
-            "flow"
-            "bottom"
-            "side";
         grid-template-columns: 1fr;
+        grid-template-rows: auto auto auto auto;
+        grid-template-areas:
+            "cartoes"
+            "consumo"
+            "fluxo"
+            "vencimentos";
     }
 
-    .dashboard-bottom-grid {
-        grid-template-columns: 1fr;
+    .dashboard-analytics-grid > * {
+        height: auto;
+        overflow: visible;
+    }
+
+    .dash-vencimentos-panel .due-list {
+        overflow: visible;
     }
 }
 

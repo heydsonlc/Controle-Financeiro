@@ -107,7 +107,7 @@ def test_links_auxiliares_usam_classe_global_do_dashboard():
     html = _read(INDEX_HTML)
     css = _read(DASHBOARD_CSS)
 
-    assert html.count('dashboard-card__footer-link') >= 6
+    assert html.count('dashboard-card__footer-link') >= 5  # painel mobilidade removido
     assert '.dashboard-card__footer-link' in css
     assert 'align-self: flex-end' in css
     assert 'margin-top: auto' in css
