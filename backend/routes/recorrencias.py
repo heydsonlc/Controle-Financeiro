@@ -43,6 +43,14 @@ def _to_decimal(value):
     return Decimal(str(value))
 
 
+def _dia_semana_ui_para_python(value):
+    dia_semana = _to_int(value)
+    if dia_semana is None:
+        return None
+    # UI e storage usam 0=domingo; date.weekday() usa 0=segunda.
+    return (dia_semana - 1) % 7
+
+
 def _to_date(value):
     if not value:
         return None
@@ -116,20 +124,23 @@ def _proximo_vencimento(item):
     atual = item.data_vencimento
     tipo = item.tipo_recorrencia or 'mensal'
 
-    if atual >= hoje:
-        return atual
-
     if tipo == 'mensal':
+        if atual >= hoje:
+            return atual
         while atual < hoje:
             atual += relativedelta(months=1)
         return atual
 
     if tipo == 'anual':
+        if atual >= hoje:
+            return atual
         while atual < hoje:
             atual += relativedelta(years=1)
         return atual
 
     if tipo == 'a_cada_2_semanas':
+        if atual >= hoje:
+            return atual
         while atual < hoje:
             atual += timedelta(weeks=2)
         return atual
@@ -139,10 +150,16 @@ def _proximo_vencimento(item):
         intervalo = detalhes.get('intervalo_semanas') or 1
         dia_semana = detalhes.get('dia_semana')
         if dia_semana is not None:
-            dias_ate_alvo = (dia_semana - atual.weekday()) % 7
+            dia_semana_python = _dia_semana_ui_para_python(dia_semana)
+            dias_ate_alvo = (dia_semana_python - atual.weekday()) % 7
             atual += timedelta(days=dias_ate_alvo)
+        if atual >= hoje:
+            return atual
         while atual < hoje:
             atual += timedelta(weeks=intervalo)
+        return atual
+
+    if atual >= hoje:
         return atual
 
     return None

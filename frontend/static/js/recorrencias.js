@@ -628,7 +628,7 @@ function diasAte(valor) {
 function formatarFrequencia(frequencia, item) {
     if (frequencia === 'mensal') return 'Mensal';
     if (frequencia === 'semanal') return 'Semanal';
-    if (frequencia === 'quinzenal') return 'Quinzenal';
+    if (frequencia === 'quinzenal') return 'A cada 2 semanas';
     if (frequencia === 'anual') return 'Anual';
     if (frequencia === 'parcelas') return `${item?.numero_parcelas || 0} parcelas`;
     return frequencia || '-';

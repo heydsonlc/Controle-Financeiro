@@ -51,6 +51,14 @@ def _normalizar_meio_pagamento(value):
     return (value or '').strip().lower() or None
 
 
+def _dia_semana_ui_para_python(value):
+    dia_semana = _to_int(value)
+    if dia_semana is None:
+        return None
+    # UI e storage usam 0=domingo; date.weekday() usa 0=segunda.
+    return (dia_semana - 1) % 7
+
+
 def _perfil_id():
     return PerfilFinanceiroService.obter_perfil_ativo_id()
 
@@ -1243,7 +1251,8 @@ def gerar_contas_despesa_recorrente(item_despesa_id, meses_futuros=12, mes_refer
 
         data_atual = max(data_inicio, inicio_janela)
         if dia_semana_alvo is not None:
-            dias_ate_alvo = (dia_semana_alvo - data_atual.weekday()) % 7
+            dia_semana_python = _dia_semana_ui_para_python(dia_semana_alvo)
+            dias_ate_alvo = (dia_semana_python - data_atual.weekday()) % 7
             data_atual += timedelta(days=dias_ate_alvo)
 
         while data_atual <= data_fim_base:

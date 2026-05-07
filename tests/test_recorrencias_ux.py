@@ -1,4 +1,5 @@
 from pathlib import Path
+from datetime import date
 
 import pytest
 from flask import Flask, render_template
@@ -7,8 +8,10 @@ from backend.models import (
     db,
     Categoria,
     ConfigAgregador,
+    Conta,
     ItemDespesa,
 )
+from backend.routes.despesas import gerar_contas_despesa_recorrente
 from backend.routes.consorcios import consorcios_bp
 from backend.routes.recorrencias import recorrencias_bp
 from backend.services.categoria_cartao_service import CategoriaCartaoService
@@ -155,6 +158,13 @@ def test_painel_nova_recorrencia_preserva_campos_e_handlers(client):
         assert campo in html
 
 
+def test_quinzenal_usa_rotulo_a_cada_2_semanas_e_debito_automatico(client):
+    html = client.get('/recorrencias').get_data(as_text=True)
+
+    assert '<option value="quinzenal">A cada 2 semanas</option>' in html
+    assert '<option value="debito_automatico">D&eacute;bito Autom&aacute;tico / D.A.</option>' in html
+
+
 def test_banco_vazio_nao_quebra_listagem_api(client):
     response = client.get('/api/recorrencias?status=todas')
     data = response.get_json()
@@ -207,3 +217,38 @@ def test_recorrencia_com_cartao_preserva_categoria_cartao_sem_item_agregado(clie
     recorrencia = ItemDespesa.query.filter_by(nome='Combustivel recorrente').one()
     assert recorrencia.item_agregado_id is None
     assert recorrencia.categoria_cartao_id == categoria_cartao.id
+
+
+def test_recorrencia_a_cada_2_semanas_respeita_dia_semana_frontend(client):
+    categoria = _categoria()
+
+    response = client.post('/api/recorrencias', json={
+        'nome': 'Diarista alternada',
+        'descricao': 'Segunda-feira a cada 2 semanas',
+        'valor': '250.00',
+        'categoria_id': categoria.id,
+        'data_vencimento': '2026-05-08',
+        'tipo_recorrencia': 'semanal',
+        'frequencia_semanas': 2,
+        'dia_semana': 1,
+    })
+    data = response.get_json()
+
+    assert response.status_code == 201
+    assert data['data']['tipo_recorrencia'] == 'semanal_2_1'
+    assert data['data']['frequencia'] == 'quinzenal'
+    assert data['data']['dia_semana'] == 1
+
+    item = ItemDespesa.query.filter_by(nome='Diarista alternada').one()
+    gerar_contas_despesa_recorrente(item.id, meses_futuros=2, mes_referencia=date(2026, 5, 1))
+    db.session.commit()
+
+    vencimentos = [
+        conta.data_vencimento
+        for conta in Conta.query.filter_by(item_despesa_id=item.id).order_by(Conta.data_vencimento.asc()).all()
+    ]
+    assert vencimentos[:3] == [
+        date(2026, 5, 11),
+        date(2026, 5, 25),
+        date(2026, 6, 8),
+    ]
