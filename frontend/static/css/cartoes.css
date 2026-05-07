@@ -368,9 +368,9 @@
 }
 
 .cartao-detail-brand {
-    width: 54px;
-    height: 54px;
-    font-size: 18px;
+    width: 40px;
+    height: 40px;
+    font-size: 14px;
 }
 
 .cartao-brand,
@@ -387,9 +387,9 @@
 }
 
 .cartao-detail-brand .institution-logo__mark {
-    width: 54px;
-    height: 54px;
-    border-radius: 12px;
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
 }
 
 .cartao-institution-value {
@@ -470,36 +470,41 @@
 .cartao-detail-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 16px;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 10px 14px;
+    background: #ffffff;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 7px;
 }
 
 .cartao-detail-identity {
     min-width: 0;
+    flex: 1;
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 10px;
 }
 
 .cartao-detail-identity h2 {
     margin: 0;
     color: #0f172a;
-    font-size: 20px;
+    font-size: 16px;
     line-height: 1.2;
 }
 
 .cartao-detail-identity p {
-    margin: 4px 0 0;
+    margin: 2px 0 0;
     color: #64748b;
-    font-size: 12px;
+    font-size: 11px;
 }
 
 .cartao-detail-actions {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    flex-wrap: wrap;
-    gap: 10px;
+    flex-shrink: 0;
+    gap: 8px;
 }
 
 .detail-card,
