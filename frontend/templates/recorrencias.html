@@ -162,10 +162,29 @@
                 </section>
 
                 <aside class="recorrencias-side-column">
+                    <section class="recorrencias-panel composicao-panel">
+                        <div class="recorrencias-section-title">
+                            <div>
+                                <h2>Composicao das recorrencias</h2>
+                            </div>
+                        </div>
+                        <div id="recorrencias-composicao">
+                            <p class="loading">Carregando composicao...</p>
+                        </div>
+                    </section>
+
                     <section class="recorrencias-panel recorrencias-form-section" id="secao-formulario">
                         <div class="recorrencias-section-title">
                             <div>
                                 <h2 id="form-titulo">Nova recorrencia</h2>
+                            </div>
+                            <div class="recorrencia-form-title-actions">
+                                <button type="button" class="recorrencia-icon-btn recorrencia-icon-btn--cancel" onclick="fecharFormularioRecorrencia()" title="Cancelar" aria-label="Cancelar">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                </button>
+                                <button type="submit" form="form-recorrencia" class="recorrencia-icon-btn recorrencia-icon-btn--save" title="Salvar recorrencia" aria-label="Salvar recorrencia">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                                </button>
                             </div>
                         </div>
 
@@ -285,9 +304,12 @@
                                     <label for="numero-parcelas">Numero de parcelas *</label>
                                     <input type="number" id="numero-parcelas" min="1" placeholder="Ex: 60">
                                 </div>
-                                <div class="form-group">
-                                    <label for="mes-inicio">Mes de inicio *</label>
-                                    <input type="month" id="mes-inicio">
+                                <div class="form-group consorcio-inicio-auto">
+                                    <input type="hidden" id="mes-inicio">
+                                    <label>Mes de inicio</label>
+                                    <div class="recorrencia-conta-info">
+                                        Calculado automaticamente pela Data inicial.
+                                    </div>
                                 </div>
                                 <div class="form-group">
                                     <label for="tipo-reajuste">Tipo de reajuste</label>
@@ -317,22 +339,7 @@
                                 <textarea id="observacoes" rows="3" placeholder="Detalhes opcionais"></textarea>
                             </div>
 
-                            <div class="recorrencia-form-actions">
-                                <button type="button" class="recorrencias-secondary-btn" onclick="fecharFormularioRecorrencia()">Cancelar</button>
-                                <button type="submit" class="recorrencias-primary-btn">Salvar recorrencia</button>
-                            </div>
                         </form>
-                    </section>
-
-                    <section class="recorrencias-panel composicao-panel">
-                        <div class="recorrencias-section-title">
-                            <div>
-                                <h2>Composicao das recorrencias</h2>
-                            </div>
-                        </div>
-                        <div id="recorrencias-composicao">
-                            <p class="loading">Carregando composicao...</p>
-                        </div>
                     </section>
                 </aside>
             </div>
