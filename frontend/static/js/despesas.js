@@ -57,10 +57,10 @@ function obterFormaPagamentoDespesa(despesa) {
 function renderFormaPagamentoDespesa(despesa) {
     const chave = obterFormaPagamentoDespesa(despesa);
     const valor = chave === 'debito_automatico' ? 'debito automatico' : (chave === 'nao_informado' ? '' : chave);
-    if (window.FormasPagamentoUI?.renderFormaPagamento) {
-        return window.FormasPagamentoUI.renderFormaPagamento(valor || 'Nao informado', {
+    // renderPaymentIcon sempre showLabel=false (sem texto, só ícone)
+    if (window.renderPaymentIcon) {
+        return window.renderPaymentIcon(valor || 'Nao informado', {
             size: 'sm',
-            showLabel: false,
             className: 'despesa-forma-pagamento-icon despesa-payment-method'
         });
     }
