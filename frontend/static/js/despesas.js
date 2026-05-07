@@ -60,7 +60,7 @@ function renderFormaPagamentoDespesa(despesa) {
     if (window.FormasPagamentoUI?.renderFormaPagamento) {
         return window.FormasPagamentoUI.renderFormaPagamento(valor || 'Nao informado', {
             size: 'sm',
-            showLabel: true,
+            showLabel: false,
             className: 'despesa-forma-pagamento-icon despesa-payment-method'
         });
     }

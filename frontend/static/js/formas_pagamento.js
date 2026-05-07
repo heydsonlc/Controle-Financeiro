@@ -26,7 +26,7 @@
             key: 'cartao',
             nome: 'Cartao',
             tipo: 'cartao',
-            assetReal: 'logo_bandeira_cartao_visa.png',
+            assetReal: 'formaPagamento_cartao.webp',
             iconeFallback: 'CT',
             classe: 'payment-method--cartao',
             cor: '#2563eb'
