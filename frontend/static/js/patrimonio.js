@@ -424,7 +424,7 @@ function renderizarDetalheBem() {
         </div>
         <div class="bem-detail-compact">
             <div class="bem-detail-topline">
-                ${miniaturaBem(bem)}
+                ${miniaturaBem(bem, true)}
                 <div class="bem-detail-main">
                 <h3>${escapeHtml(bem.nome)}</h3>
                     <p>${escapeHtml(bem.fornecedor || 'Fornecedor nao informado')}</p>

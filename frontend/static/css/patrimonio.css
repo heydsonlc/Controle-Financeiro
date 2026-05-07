@@ -564,46 +564,62 @@ body.patrimonio-empresa-mode .patrimonio-empresa-actions {
 
 .bem-detail-compact {
     display: grid;
-    gap: 10px;
-    padding: 12px 14px 14px;
+    flex: 1;
+    gap: 16px;
+    grid-template-rows: auto 1fr;
+    min-height: 0;
+    padding: 16px 18px 18px;
 }
 
 .bem-detail-topline {
-    align-items: center;
+    align-items: flex-start;
     display: grid;
-    gap: 10px;
+    gap: 14px;
     grid-template-columns: auto minmax(0, 1fr);
 }
 
 .bem-detail-compact .bem-thumb {
-    flex-basis: 36px;
-    height: 36px;
-    width: 36px;
+    border-radius: 12px;
+    flex-basis: 84px;
+    height: 84px;
+    width: 84px;
 }
 
 .bem-detail-compact .bem-detail-main h3 {
-    font-size: 0.95rem;
-    line-height: 1.25;
+    display: -webkit-box;
+    font-size: 0.98rem;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-height: 1.24;
+    overflow: hidden;
 }
 
 .bem-detail-compact .bem-detail-main p {
     font-size: 0.78rem;
     line-height: 1.25;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .bem-detail-compact-grid {
+    align-content: start;
     display: grid;
-    gap: 7px;
+    gap: 14px 22px;
+    grid-auto-rows: minmax(54px, auto);
     grid-template-columns: repeat(2, minmax(0, 1fr));
     margin: 0;
 }
 
 .bem-detail-compact-grid div {
-    background: #f8fafc;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
     min-width: 0;
-    padding: 7px 8px;
+    padding: 0;
 }
 
 .bem-detail-compact-grid dt {
@@ -615,7 +631,7 @@ body.patrimonio-empresa-mode .patrimonio-empresa-actions {
 
 .bem-detail-compact-grid dd {
     color: #0f172a;
-    font-size: 0.78rem;
+    font-size: 0.83rem;
     font-weight: 750;
     margin: 4px 0 0;
     overflow: hidden;
@@ -653,6 +669,8 @@ body.patrimonio-empresa-mode .patrimonio-empresa-actions {
 
 .patrimonio-detalhe-card {
     align-self: stretch;
+    display: flex;
+    flex-direction: column;
 }
 
 .bem-detail-main h3 {
