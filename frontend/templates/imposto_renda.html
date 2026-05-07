@@ -496,6 +496,36 @@
                         <a id="ir-review-file-link" href="#" target="_blank" rel="noopener">Abrir arquivo</a>
                     </div>
                     <div id="ir-review-ocr-alert" class="ir-ocr-alert" hidden></div>
+                    <div id="ir-cupom-fiscal-bloco" class="ir-cupom-fiscal-bloco" hidden>
+                        <div class="ir-cupom-fiscal-header">
+                            <span class="ir-cupom-fiscal-badge" aria-hidden="true">&#x1F9FE;</span>
+                            <strong>Cupom fiscal detectado</strong>
+                            <span id="ir-cupom-tipo-badge" class="ir-cupom-tipo-badge"></span>
+                        </div>
+                        <dl class="ir-cupom-dados">
+                            <div class="ir-cupom-linha" id="ir-cupom-estabelecimento-row">
+                                <dt>Estabelecimento</dt>
+                                <dd id="ir-cupom-estabelecimento"></dd>
+                            </div>
+                            <div class="ir-cupom-linha" id="ir-cupom-cnpj-row">
+                                <dt>CNPJ</dt>
+                                <dd id="ir-cupom-cnpj"></dd>
+                            </div>
+                            <div class="ir-cupom-linha" id="ir-cupom-data-row">
+                                <dt>Data</dt>
+                                <dd id="ir-cupom-data"></dd>
+                            </div>
+                            <div class="ir-cupom-linha" id="ir-cupom-valor-row">
+                                <dt>Valor total</dt>
+                                <dd id="ir-cupom-valor"></dd>
+                            </div>
+                            <div class="ir-cupom-linha" id="ir-cupom-chave-row">
+                                <dt>Chave de acesso</dt>
+                                <dd id="ir-cupom-chave" class="ir-cupom-chave-acesso"></dd>
+                            </div>
+                        </dl>
+                        <div id="ir-cupom-avisos" class="ir-cupom-avisos" hidden></div>
+                    </div>
                     <pre id="ir-review-texto">Texto extraido indisponivel.</pre>
                 </section>
                 <form id="ir-review-form" class="ir-review-form">

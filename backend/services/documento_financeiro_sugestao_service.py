@@ -343,13 +343,19 @@ class DocumentoFinanceiroSugestaoService:
     @staticmethod
     def _descricao_sugerida(comprovante, categoria=None):
         fornecedor = (comprovante.prestador_nome or '').strip()
+        # Detecta se veio de cupom fiscal pelo evento registrado
+        eh_cupom = comprovante.eventos.filter_by(tipo_evento='CUPOM_FISCAL_DETECTADO').first() is not None
+        sufixo_cupom = ' — Cupom fiscal' if eh_cupom else ''
         complemento = categoria.nome if categoria else None
-        if fornecedor and complemento:
+        if fornecedor and complemento and not eh_cupom:
             return DocumentoFinanceiroSugestaoService._limitar(f'{fornecedor} - {complemento}', 200)
         if fornecedor:
-            return DocumentoFinanceiroSugestaoService._limitar(fornecedor, 200)
+            desc = f'{fornecedor}{sufixo_cupom}'
+            if complemento:
+                desc = f'{desc} - {complemento}'
+            return DocumentoFinanceiroSugestaoService._limitar(desc, 200)
         arquivo = comprovante.arquivo.nome_arquivo if comprovante.arquivo else None
-        return DocumentoFinanceiroSugestaoService._limitar(f'Documento fiscal - {arquivo or comprovante.id}', 200)
+        return DocumentoFinanceiroSugestaoService._limitar(f'Cupom fiscal - {arquivo or comprovante.id}' if eh_cupom else f'Documento fiscal - {arquivo or comprovante.id}', 200)
 
     @staticmethod
     def _observacoes_sugeridas(comprovante):

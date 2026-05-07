@@ -1230,6 +1230,7 @@
         $('ir-review-file-link').href = `/api/ir/comprovantes/${item.id}/arquivo`;
         $('ir-review-texto').textContent = item.texto_extraido || 'Texto extraido indisponivel. Documento pendente de revisao manual ou OCR local.';
         renderAvisoOcrRevisao(item);
+        renderBlocoCupomFiscal(item);
         $('ir-review-data').value = item.data_documento || '';
         $('ir-review-prestador').value = item.prestador_nome || '';
         $('ir-review-doc').value = item.prestador_cpf_cnpj || '';
@@ -1267,6 +1268,63 @@
         const resumo = obterResumoOcr(item);
         alerta.textContent = resumo.mensagem || '';
         alerta.hidden = !resumo.mensagem;
+    }
+
+    function renderBlocoCupomFiscal(item) {
+        const bloco = $('ir-cupom-fiscal-bloco');
+        if (!bloco) return;
+        const eventos = Array.isArray(item.eventos) ? item.eventos : [];
+        const evDetect = eventos.find(e => e.tipo_evento === 'CUPOM_FISCAL_DETECTADO');
+        if (!evDetect) {
+            bloco.hidden = true;
+            return;
+        }
+
+        // Tipo detectado a partir da descricao do evento
+        const descEvento = evDetect.descricao || '';
+        const tipoMatch = descEvento.match(/\(([^)]+)\)/);
+        const tipoBadge = $('ir-cupom-tipo-badge');
+        if (tipoBadge) tipoBadge.textContent = tipoMatch ? tipoMatch[1] : 'CUPOM_FISCAL';
+
+        function setRow(rowId, ddId, valor) {
+            const row = $(rowId);
+            const dd = $(ddId);
+            if (!row || !dd) return;
+            if (valor) {
+                dd.textContent = valor;
+                row.hidden = false;
+            } else {
+                row.hidden = true;
+            }
+        }
+
+        setRow('ir-cupom-estabelecimento-row', 'ir-cupom-estabelecimento', item.prestador_nome || '');
+        setRow('ir-cupom-cnpj-row', 'ir-cupom-cnpj', item.prestador_cpf_cnpj || '');
+        setRow('ir-cupom-data-row', 'ir-cupom-data', item.data_documento || '');
+        const valorFmt = item.valor != null ? 'R$ ' + Number(item.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '';
+        setRow('ir-cupom-valor-row', 'ir-cupom-valor', valorFmt);
+
+        // Chave de acesso nas observacoes
+        const obs = item.observacoes || '';
+        const chaveMatch = obs.match(/Chave de acesso:\s*(\d{44})/);
+        setRow('ir-cupom-chave-row', 'ir-cupom-chave', chaveMatch ? chaveMatch[1] : '');
+
+        // Avisos do evento de extracao
+        const evExtract = eventos.find(e => e.tipo_evento === 'CUPOM_FISCAL_EXTRAIDO');
+        const avisosDiv = $('ir-cupom-avisos');
+        if (avisosDiv) {
+            const textoAvisos = evExtract && evExtract.descricao && evExtract.descricao.includes('avisos:')
+                ? evExtract.descricao.replace('Extracao concluida com avisos:', '').trim()
+                : '';
+            if (textoAvisos) {
+                avisosDiv.innerHTML = textoAvisos.split(';').map(a => `<p class="ir-cupom-aviso-item">${a.trim()}</p>`).join('');
+                avisosDiv.hidden = false;
+            } else {
+                avisosDiv.hidden = true;
+            }
+        }
+
+        bloco.hidden = false;
     }
 
     function fecharRevisao() {
@@ -1424,6 +1482,8 @@
             }
             const item = json.data;
             $('ir-review-texto').textContent = item.texto_extraido || 'Texto extraido indisponivel. Documento pendente de revisao manual ou OCR local.';
+            renderAvisoOcrRevisao(item);
+            renderBlocoCupomFiscal(item);
             $('ir-review-data').value = item.data_documento || '';
             $('ir-review-prestador').value = item.prestador_nome || '';
             $('ir-review-doc').value = item.prestador_cpf_cnpj || '';

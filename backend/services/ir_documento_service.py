@@ -22,6 +22,7 @@ try:
     )
     from backend.services.categoria_palavra_chave_service import CategoriaPalavraChaveService
     from backend.services.documento_empresarial_service import DocumentoEmpresarialService
+    from backend.services.cupom_fiscal_parser import eh_cupom_fiscal, extrair_dados_cupom_fiscal
     from backend.services.ir_nfse_goiania_parser import eh_nfse_goiania, extrair_dados_nfse_goiania
     from backend.services.ocr_service import OcrService
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
@@ -38,6 +39,7 @@ except ImportError:
     )
     from services.categoria_palavra_chave_service import CategoriaPalavraChaveService
     from services.documento_empresarial_service import DocumentoEmpresarialService
+    from services.cupom_fiscal_parser import eh_cupom_fiscal, extrair_dados_cupom_fiscal
     from services.ir_nfse_goiania_parser import eh_nfse_goiania, extrair_dados_nfse_goiania
     from services.ocr_service import OcrService
     from services.perfil_financeiro_service import PerfilFinanceiroService
@@ -592,6 +594,10 @@ class IrDocumentoService:
             cls._aplicar_dados_nfse_goiania(comprovante, dados_nfse)
             texto_classificacao = dados_nfse.get('texto_classificacao') or texto
             cls._registrar_evento(comprovante, tipo_evento, 'Parser especifico NFS-e Goiania aplicado.')
+        elif eh_cupom_fiscal(texto):
+            dados_cupom = extrair_dados_cupom_fiscal(texto)
+            cls._aplicar_dados_cupom_fiscal(comprovante, dados_cupom)
+            texto_classificacao = dados_cupom.get('texto_classificacao') or texto
         else:
             cls._extrair_dados_simples(comprovante, texto)
         cls._classificar_comprovante(comprovante, texto_classificacao)
@@ -668,6 +674,55 @@ class IrDocumentoService:
         avisos = dados.get('avisos') or []
         if avisos:
             comprovante.observacoes = ' '.join(avisos)[:1000]
+
+    @classmethod
+    def _aplicar_dados_cupom_fiscal(cls, comprovante, dados):
+        if not dados:
+            return
+        if dados.get('data_emissao'):
+            comprovante.data_documento = cls._parse_date(dados['data_emissao'])
+        if dados.get('ano_calendario'):
+            comprovante.ano_calendario = dados['ano_calendario']
+        elif comprovante.data_documento:
+            comprovante.ano_calendario = comprovante.data_documento.year
+        if dados.get('estabelecimento'):
+            comprovante.prestador_nome = cls._limitar_texto(dados['estabelecimento'], 255)
+        if dados.get('cnpj'):
+            comprovante.prestador_cpf_cnpj = cls._limitar_texto(dados['cnpj'], 20)
+        if dados.get('valor_total') is not None:
+            comprovante.valor = cls._parse_decimal(str(dados['valor_total']))
+        avisos = dados.get('avisos') or []
+        obs_partes = []
+        if dados.get('chave_acesso'):
+            obs_partes.append(f"Chave de acesso: {dados['chave_acesso']}")
+        if dados.get('numero_documento'):
+            obs_partes.append(f"Numero do documento: {dados['numero_documento']}")
+        obs_partes.extend(avisos)
+        if obs_partes:
+            cls._adicionar_observacoes(comprovante, obs_partes)
+        tipo = dados.get('tipo_detectado', 'CUPOM_FISCAL')
+        confianca = dados.get('confianca_extracao', 'media')
+        cls._registrar_evento(
+            comprovante,
+            'CUPOM_FISCAL_DETECTADO',
+            f'Cupom fiscal detectado ({tipo}). Confianca: {confianca}. Campos extraidos: '
+            + ', '.join(
+                c for c, v in [
+                    ('estabelecimento', dados.get('estabelecimento')),
+                    ('cnpj', dados.get('cnpj')),
+                    ('data', dados.get('data_emissao')),
+                    ('valor', dados.get('valor_total')),
+                ] if v
+            ) or 'nenhum',
+        )
+        if avisos:
+            cls._registrar_evento(
+                comprovante,
+                'CUPOM_FISCAL_EXTRAIDO',
+                f'Extracao concluida com avisos: {"; ".join(avisos[:3])}',
+            )
+        else:
+            cls._registrar_evento(comprovante, 'CUPOM_FISCAL_EXTRAIDO', 'Extracao concluida sem avisos.')
 
     @staticmethod
     def _extrair_prestador(texto):
