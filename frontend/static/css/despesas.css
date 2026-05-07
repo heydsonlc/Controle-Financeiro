@@ -1256,7 +1256,7 @@ body.mobile-view .breadcrumb {
     font-weight: 600;
     color: #1d1d1f;
     min-width: 90px;
-    text-align: right;
+    text-align: center;
     white-space: nowrap;
     letter-spacing: -0.02em;
     flex-shrink: 0;
