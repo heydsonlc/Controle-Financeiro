@@ -7,7 +7,7 @@ from decimal import Decimal
 import json
 import logging
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 try:
     from backend.models import db, ItemDespesa, Categoria, LancamentoAgregado, CartaoCategoriaLimite, Conta
@@ -57,6 +57,76 @@ def _dia_semana_ui_para_python(value):
         return None
     # UI e storage usam 0=domingo; date.weekday() usa 0=segunda.
     return (dia_semana - 1) % 7
+
+
+def _descricao_recorrencia_com_data(item, data_venc):
+    return f"{item.nome} - {data_venc.strftime('%d/%m')}"
+
+
+def _conta_recorrente_automatica_pendente(conta, item):
+    descricao = conta.descricao or ''
+    return (
+        conta.status_pagamento == 'Pendente'
+        and conta.data_pagamento is None
+        and not conta.is_fatura_cartao
+        and descricao.startswith(f"{item.nome} - ")
+    )
+
+
+def _ciclo_recorrencia(data_venc, datas_esperadas, intervalo):
+    dias_ciclo = max(int(intervalo or 1), 1) * 7
+    for data_esperada in datas_esperadas:
+        if data_esperada <= data_venc < data_esperada + timedelta(days=dias_ciclo):
+            return data_esperada
+    return None
+
+
+def _reconciliar_ocorrencias_semanais(item, datas_esperadas, inicio_janela, data_fim_base, intervalo):
+    if not datas_esperadas:
+        return
+
+    datas_esperadas = sorted(set(datas_esperadas))
+    datas_set = set(datas_esperadas)
+    contas = _query_contas().filter(
+        Conta.item_despesa_id == item.id,
+        Conta.data_vencimento >= inicio_janela,
+        Conta.data_vencimento <= data_fim_base,
+        or_(
+            Conta.is_fatura_cartao == False,  # noqa: E712
+            Conta.is_fatura_cartao.is_(None)
+        )
+    ).order_by(Conta.data_vencimento.asc(), Conta.id.asc()).all()
+
+    ocupadas = {conta.data_vencimento for conta in contas if conta.data_vencimento in datas_set}
+    usadas = set()
+
+    for data_esperada in datas_esperadas:
+        if data_esperada in ocupadas:
+            continue
+
+        candidata = next((
+            conta for conta in contas
+            if conta.id not in usadas
+            and conta.data_vencimento not in datas_set
+            and _conta_recorrente_automatica_pendente(conta, item)
+            and _ciclo_recorrencia(conta.data_vencimento, [data_esperada], intervalo) == data_esperada
+        ), None)
+        if not candidata:
+            continue
+
+        candidata.data_vencimento = data_esperada
+        candidata.mes_referencia = data_esperada.replace(day=1)
+        candidata.descricao = _descricao_recorrencia_com_data(item, data_esperada)
+        usadas.add(candidata.id)
+        ocupadas.add(data_esperada)
+
+    for conta in contas:
+        if conta.id in usadas or conta.data_vencimento in datas_set:
+            continue
+        if not _conta_recorrente_automatica_pendente(conta, item):
+            continue
+        if _ciclo_recorrencia(conta.data_vencimento, datas_esperadas, intervalo):
+            db.session.delete(conta)
 
 
 def _perfil_id():
@@ -1255,10 +1325,15 @@ def gerar_contas_despesa_recorrente(item_despesa_id, meses_futuros=12, mes_refer
             dias_ate_alvo = (dia_semana_python - data_atual.weekday()) % 7
             data_atual += timedelta(days=dias_ate_alvo)
 
+        datas_esperadas = []
         while data_atual <= data_fim_base:
             if data_atual >= inicio_geracao:
-                criar_conta(data_atual, descricao_custom=f"{item.nome} - {data_atual.strftime('%d/%m')}")
+                datas_esperadas.append(data_atual)
             data_atual += timedelta(weeks=intervalo)
+
+        _reconciliar_ocorrencias_semanais(item, datas_esperadas, inicio_janela, data_fim_base, intervalo)
+        for data_venc in datas_esperadas:
+            criar_conta(data_venc, descricao_custom=_descricao_recorrencia_com_data(item, data_venc))
 
     elif tipo_recorrencia == 'dias_semana':
         dias_lista = normalizar_dias_semana(getattr(item, 'dias_semana', None))
