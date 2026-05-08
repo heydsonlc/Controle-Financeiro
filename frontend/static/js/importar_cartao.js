@@ -793,15 +793,6 @@ function abrirModalValidacao() {
             `<option value="${categoria.id}">${escapeHtml(categoria.nome)}</option>`
         )).join('')}`;
 
-    const opcoesCategoriasCartao =
-        `<option value="">Selecione linha a linha</option>${estado.categoriasCartao.map((categoria) => (
-            `<option value="${categoria.id}">${escapeHtml(categoria.nome)}</option>`
-        )).join('')}`;
-
-    document.getElementById('modalCategoriaCartaoPadraoCaixa').innerHTML = opcoesCategoriasCartao;
-    document.getElementById('modalCategoriaCartaoPadraoNubank').innerHTML = opcoesCategoriasCartao;
-    document.getElementById('modalCategoriaCartaoPadraoManual').innerHTML = opcoesCategoriasCartao;
-
     atualizarCamposPerfilModal();
     renderizarAmostraModal();
     document.getElementById('perfilModal').style.display = 'flex';
@@ -821,10 +812,6 @@ function atualizarCamposPerfilModal() {
 
 function obterConfiguracaoModal() {
     const perfil = document.getElementById('modalPerfil').value;
-    const categoriaCartaoPadraoId = perfil === PERFIS.CAIXA
-        ? 'modalCategoriaCartaoPadraoCaixa'
-        : (perfil === PERFIS.NUBANK ? 'modalCategoriaCartaoPadraoNubank' : 'modalCategoriaCartaoPadraoManual');
-
     return {
         perfil,
         mapeamento: {
@@ -837,8 +824,7 @@ function obterConfiguracaoModal() {
         },
         regraNubank: document.getElementById('modalRegraNubank').value,
         regraCaixa: document.getElementById('modalRegraCaixa').value,
-        categoriaPadrao: toIntOrNull(document.getElementById('modalCategoriaPadrao').value),
-        categoriaCartaoPadrao: toIntOrNull(document.getElementById(categoriaCartaoPadraoId).value)
+        categoriaPadrao: toIntOrNull(document.getElementById('modalCategoriaPadrao').value)
     };
 }
 
@@ -896,8 +882,8 @@ function interpretarLinhaPorPerfil(linhaCsv, config) {
             descricao_exibida: String(descricao).trim(),
             valor: formatarValor(valor),
             categoria_id: config.categoriaPadrao,
-            categoria_cartao_id: config.categoriaCartaoPadrao,
-            categoria_cartao_origem: config.categoriaCartaoPadrao ? 'manual' : null,
+            categoria_cartao_id: null,
+            categoria_cartao_origem: null,
             categoria_sugerida_origem: 'fallback_lote',
             categoria_detectada_label: 'fallback do lote',
             parcela: `${numeroParcela}/${totalParcelas}`,
@@ -1131,32 +1117,26 @@ function nomeCategoriaDespesa(id) {
     return categoria ? categoria.nome : '';
 }
 
-function nomeCategoriaCartao(id) {
-    const categoria = estado.categoriasCartao.find((item) => Number(item.id) === Number(id));
-    return categoria ? categoria.nome : '';
-}
-
 function categoriaCartaoIdLinha(linha) {
     return toIntOrNull(linha.categoria_cartao_id);
 }
 
-function origemCategoriaCartaoLabel(linha) {
+function avisoCategoriaCartaoMapeamentoLinha(linha) {
+    if (!toIntOrNull(linha.categoria_id || linha.categoria_despesa_id)) return '';
     const origem = linha.categoria_cartao_origem;
-    if (origem === 'manual') return 'Origem: manual';
-    if (origem === 'mapa_categoria_despesa') return 'Origem: resolvida por categoria de despesa';
-    if (origem === 'categoria_cartao_nao_vinculada' || origem === 'nao_vinculada_ao_cartao') return 'Categoria sem limite neste cartao';
-    if (origem === 'nao_configurada') return 'Categoria do Cartao nao configurada';
-    return 'Categoria do Cartao nao configurada';
+    if (linha.status_classificacao === 'categoria_cartao_nao_vinculada'
+        || origem === 'categoria_cartao_nao_vinculada'
+        || origem === 'nao_vinculada_ao_cartao') {
+        return 'Esta categoria da despesa ainda nao esta vinculada ao cartao selecionado.';
+    }
+    if (linha.status_classificacao === 'categoria_cartao_pendente' || origem === 'nao_configurada') {
+        return 'Esta categoria da despesa nao possui mapeamento para o cartao. Ajuste em Categorias antes de importar.';
+    }
+    return '';
 }
 
 function opcoesCategoriaSelect(selecionado) {
     return `<option value="">Selecione uma categoria</option>${estado.categorias.map((categoria) => (
-        `<option value="${categoria.id}" ${Number(selecionado) === Number(categoria.id) ? 'selected' : ''}>${escapeHtml(categoria.nome)}</option>`
-    )).join('')}`;
-}
-
-function opcoesCategoriaCartaoSelect(selecionado) {
-    return `<option value="">Selecione uma categoria</option>${estado.categoriasCartao.map((categoria) => (
         `<option value="${categoria.id}" ${Number(selecionado) === Number(categoria.id) ? 'selected' : ''}>${escapeHtml(categoria.nome)}</option>`
     )).join('')}`;
 }
@@ -1403,7 +1383,7 @@ function statusLinha(linha) {
         return { texto: 'Sem limite no cartao', classe: 'missing' };
     }
     if (linha.status_classificacao === 'categoria_cartao_pendente') {
-        return { texto: 'Categoria do cartao pendente', classe: 'missing' };
+        return { texto: 'Mapeamento pendente', classe: 'missing' };
     }
     if (linha.status_classificacao === 'classificada') {
         return { texto: 'Classificada', classe: 'valid' };
@@ -1416,9 +1396,6 @@ function statusLinha(linha) {
     }
     if (linha.status === 'revisar') {
         return { texto: 'Revisar', classe: 'review' };
-    }
-    if (!categoriaCartaoIdLinha(linha)) {
-        return { texto: 'Sem categoria do cartão', classe: 'missing' };
     }
     if (!linha.categoria_id) {
         return { texto: 'Revisar', classe: 'review' };
@@ -1724,7 +1701,6 @@ function renderizarGrupoNovosConfronto(itens) {
                             <th>Descricao amigavel</th>
                             <th>Valor</th>
                             <th>Categoria da despesa</th>
-                            <th>Categoria do cartao</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1739,6 +1715,7 @@ function renderizarGrupoNovosConfronto(itens) {
 function renderizarLinhaNovoConfronto(linha, index) {
     const descricaoOriginal = descricaoOriginalLinha(linha);
     const descricaoAmigavel = linha.descricao_exibida || linha.descricao || descricaoOriginal;
+    const avisoCategoriaCartao = avisoCategoriaCartaoMapeamentoLinha(linha);
     return `
         <tr>
             <td>${escapeHtml(linha.data_compra || '-')}</td>
@@ -1753,12 +1730,7 @@ function renderizarLinhaNovoConfronto(linha, index) {
                 <select class="form-control form-control-sm" onchange="atualizarLinhaClassificacao(${index}, 'categoria_id', this.value)">
                     ${opcoesCategoriaSelect(linha.categoria_id || linha.categoria_despesa_id)}
                 </select>
-            </td>
-            <td class="import-category-cell">
-                <select class="form-control form-control-sm import-card-category-select" onchange="atualizarLinhaClassificacao(${index}, 'categoria_cartao_id', this.value)">
-                    ${opcoesCategoriaCartaoSelect(linha.categoria_cartao_id)}
-                </select>
-                ${linha.categoria_cartao_origem ? `<span class="import-detected-note">${escapeHtml(origemCategoriaCartaoLabel(linha))}</span>` : ''}
+                ${avisoCategoriaCartao ? `<span class="import-detected-note">${escapeHtml(avisoCategoriaCartao)}</span>` : ''}
             </td>
         </tr>
     `;
@@ -2021,7 +1993,7 @@ function preencherSelectValor(id, opcoesHtml, valor) {
 async function abrirModalParcelamento(index) {
     const linha = estado.linhasMapeadas[index];
     if (!linha) return;
-    if (!estado.categorias.length || !estado.categoriasCartao.length) {
+    if (!estado.categorias.length) {
         await carregarCategorias();
     }
 
@@ -2031,7 +2003,13 @@ async function abrirModalParcelamento(index) {
         return;
     }
 
-    estado.parcelamentoModal = { index, linha, parcela };
+    estado.parcelamentoModal = {
+        index,
+        linha,
+        parcela,
+        categoriaCartaoId: toIntOrNull(linha.categoria_cartao_id),
+        categoriaCartaoAviso: ''
+    };
     const descricaoOriginal = descricaoOriginalLinha(linha);
     const descricaoSugerida = parcela.descricaoLimpa || detectarParcelamentoTexto(descricaoOriginal)?.descricaoLimpa || descricaoOriginal;
 
@@ -2043,11 +2021,14 @@ async function abrirModalParcelamento(index) {
     document.getElementById('parcelamentoTotalParcelas').value = parcela.total;
     document.getElementById('parcelamentoCartaoLabel').value = cartaoSelecionadoNome();
     document.getElementById('parcelamentoCompetenciaLabel').value = document.getElementById('competenciaInput')?.value || '';
-    preencherSelectValor('parcelamentoCategoriaDespesa', opcoesCategoriaSelect(linha.categoria_id || linha.categoria_despesa_id), linha.categoria_id || linha.categoria_despesa_id);
-    preencherSelectValor('parcelamentoCategoriaCartao', opcoesCategoriaCartaoSelect(linha.categoria_cartao_id), linha.categoria_cartao_id);
+    const categoriaInicial = linha.categoria_id || linha.categoria_despesa_id;
+    preencherSelectValor('parcelamentoCategoriaDespesa', opcoesCategoriaSelect(categoriaInicial), categoriaInicial);
 
     const feedback = document.getElementById('parcelamentoFeedback');
     if (feedback) feedback.innerHTML = '';
+    if (categoriaInicial) {
+        await atualizarCategoriaDespesaParcelamento(categoriaInicial);
+    }
     renderizarPreviewParcelamentoModal();
     document.getElementById('parcelamentoModal').hidden = false;
 }
@@ -2070,7 +2051,7 @@ function obterDadosModalParcelamento() {
         numeroParcela: numero,
         totalParcelas: total,
         categoriaId: toIntOrNull(document.getElementById('parcelamentoCategoriaDespesa')?.value),
-        categoriaCartaoId: toIntOrNull(document.getElementById('parcelamentoCategoriaCartao')?.value)
+        categoriaCartaoId: toIntOrNull(estado.parcelamentoModal?.categoriaCartaoId)
     };
 }
 
@@ -2115,16 +2096,32 @@ function renderizarPreviewParcelamentoModal() {
 
 async function atualizarCategoriaDespesaParcelamento(valor) {
     const categoriaId = toIntOrNull(valor);
+    if (!estado.parcelamentoModal) return;
+    estado.parcelamentoModal.categoriaCartaoId = null;
+    estado.parcelamentoModal.categoriaCartaoAviso = '';
+
     if (!categoriaId) {
-        preencherSelectValor('parcelamentoCategoriaCartao', opcoesCategoriaCartaoSelect(''), '');
+        const feedback = document.getElementById('parcelamentoFeedback');
+        if (feedback) feedback.innerHTML = '';
         return;
     }
 
     try {
         const cartaoId = parseInt(document.getElementById('cartaoSelect')?.value || '', 10);
         const resolucao = await buscarResolucaoCategoriaCartao(categoriaId, cartaoId);
-        if (resolucao.categoria_cartao_id) {
-            preencherSelectValor('parcelamentoCategoriaCartao', opcoesCategoriaCartaoSelect(resolucao.categoria_cartao_id), resolucao.categoria_cartao_id);
+        const categoriaCartaoId = toIntOrNull(resolucao.categoria_cartao_id);
+        if (categoriaCartaoId && resolucao.vinculada_ao_cartao !== false) {
+            estado.parcelamentoModal.categoriaCartaoId = categoriaCartaoId;
+        } else if (toIntOrNull(resolucao.categoria_cartao_resolvida_id || resolucao.categoria_cartao_id)) {
+            estado.parcelamentoModal.categoriaCartaoAviso = 'Esta categoria da despesa ainda nao esta vinculada ao cartao selecionado.';
+        } else {
+            estado.parcelamentoModal.categoriaCartaoAviso = 'Esta categoria da despesa nao possui mapeamento para o cartao. Ajuste em Categorias antes de importar.';
+        }
+        const feedback = document.getElementById('parcelamentoFeedback');
+        if (feedback) {
+            feedback.innerHTML = estado.parcelamentoModal.categoriaCartaoAviso
+                ? `<div class="import-feedback warning">${escapeHtml(estado.parcelamentoModal.categoriaCartaoAviso)}</div>`
+                : '';
         }
     } catch (error) {
         console.warn('Falha ao resolver Categoria do Cartao para parcelamento:', error);
@@ -2136,7 +2133,7 @@ async function confirmarParcelamentoImportado() {
     if (!validarConfiguracaoBasica()) return;
 
     const { index, linha } = estado.parcelamentoModal;
-    const dados = obterDadosModalParcelamento();
+    let dados = obterDadosModalParcelamento();
     const feedback = document.getElementById('parcelamentoFeedback');
     if (feedback) feedback.innerHTML = '';
 
@@ -2151,6 +2148,11 @@ async function confirmarParcelamentoImportado() {
     if (!dados.descricaoAmigavel || !dados.dataCompra || !dados.valor || parseValorNumerico(dados.valor) <= 0) {
         if (feedback) feedback.innerHTML = '<div class="import-feedback error">Preencha descricao, data e valor da parcela.</div>';
         return;
+    }
+
+    if (dados.categoriaId && !dados.categoriaCartaoId) {
+        await atualizarCategoriaDespesaParcelamento(dados.categoriaId);
+        dados = obterDadosModalParcelamento();
     }
 
     const payload = {
@@ -2247,12 +2249,10 @@ function atualizarLinhaEdicao(index, campo, valor) {
             linha.confianca_categoria = linha.categoria_confianca;
             linha.palavras_chave_encontradas = [];
             linha.categorias_candidatas = [];
-            if (linha.categoria_cartao_origem !== 'manual') {
-                linha.categoria_cartao_id = null;
-                linha.categoria_cartao_origem = null;
-                linha.categoria_cartao_nome = null;
-                linha.categoria_cartao_vinculada_ao_cartao = false;
-            }
+            linha.categoria_cartao_id = null;
+            linha.categoria_cartao_origem = null;
+            linha.categoria_cartao_nome = null;
+            linha.categoria_cartao_vinculada_ao_cartao = false;
         }
         if (campo === 'categoria_cartao_id') {
             linha.categoria_cartao_origem = linha[campo] ? 'manual' : null;
@@ -2299,12 +2299,10 @@ function atualizarLinhaClassificacao(index, campo, valor) {
             linha.confianca_categoria = linha.categoria_confianca;
             linha.palavras_chave_encontradas = [];
             linha.categorias_candidatas = [];
-            if (linha.categoria_cartao_origem !== 'manual') {
-                linha.categoria_cartao_id = null;
-                linha.categoria_cartao_origem = null;
-                linha.categoria_cartao_nome = null;
-                linha.categoria_cartao_vinculada_ao_cartao = false;
-            }
+            linha.categoria_cartao_id = null;
+            linha.categoria_cartao_origem = null;
+            linha.categoria_cartao_nome = null;
+            linha.categoria_cartao_vinculada_ao_cartao = false;
         }
         if (campo === 'categoria_cartao_id') {
             linha.categoria_cartao_origem = linha[campo] ? 'manual' : null;
@@ -2358,12 +2356,10 @@ async function aplicarCategoriaDespesaLote() {
         linha.palavras_chave_encontradas = [];
         linha.categorias_candidatas = [];
         linha.status = 'valido';
-        if (linha.categoria_cartao_origem !== 'manual') {
-            linha.categoria_cartao_id = null;
-            linha.categoria_cartao_origem = null;
-            linha.categoria_cartao_nome = null;
-            linha.categoria_cartao_vinculada_ao_cartao = false;
-        }
+        linha.categoria_cartao_id = null;
+        linha.categoria_cartao_origem = null;
+        linha.categoria_cartao_nome = null;
+        linha.categoria_cartao_vinculada_ao_cartao = false;
     }
 
     estado.linhasSelecionadas = new Set();
@@ -2371,35 +2367,6 @@ async function aplicarCategoriaDespesaLote() {
     renderizarEditorPrePersistencia();
 
     await Promise.all(selecionados.map((index) => resolverCategoriaCartaoLinha(index)));
-}
-
-function aplicarCategoriaCartaoLote() {
-    const categoriaCartaoId = toIntOrNull(document.getElementById('bulkCategoriaCartao')?.value);
-    const selecionados = indicesSelecionados();
-    if (!selecionados.length) {
-        alert('Selecione ao menos uma linha.');
-        return;
-    }
-    if (!categoriaCartaoId) {
-        alert('Selecione uma Categoria do Cartao para aplicar.');
-        return;
-    }
-
-    selecionados.forEach((index) => {
-        const linha = estado.linhasMapeadas[index];
-        if (!linha) return;
-        linha.categoria_cartao_id = categoriaCartaoId;
-        linha.categoria_cartao_origem = 'manual';
-        linha.categoria_cartao_vinculada_ao_cartao = true;
-        if (linha.categoria_id) {
-            linha.status = 'valido';
-            linha.status_classificacao = 'classificada';
-        }
-    });
-
-    estado.linhasSelecionadas = new Set();
-    invalidarPrevia();
-    renderizarEditorPrePersistencia();
 }
 
 function ignorarLinhasSelecionadas() {

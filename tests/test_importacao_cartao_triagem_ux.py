@@ -112,8 +112,10 @@ def test_categoria_aparece_somente_no_confronto_de_novos():
     assert 'Categoria da despesa' not in triagem
     assert 'Categoria do cartao' not in triagem
     assert 'Categoria da despesa' in novos
+    assert 'Categoria do cartao' not in novos
     assert 'opcoesCategoriaSelect' in linha_novo
-    assert 'opcoesCategoriaCartaoSelect' in linha_novo
+    assert 'opcoesCategoriaCartaoSelect' not in linha_novo
+    assert 'import-card-category-select' not in linha_novo
     assert 'Criar parcelamento' in parcelamentos
     assert 'opcoesCategoriaSelect' not in parcelamentos
     assert 'opcoesCategoriaCartaoSelect' not in parcelamentos
@@ -132,8 +134,24 @@ def test_template_nao_exibe_classificacao_como_etapa_principal():
     assert 'parcelamentoModal' in html
     assert 'Criar parcelamento a partir do lançamento importado' in html
     assert 'Categoria da despesa' in html
+    assert 'parcelamentoCategoriaCartao' not in html
+    assert 'modalCategoriaCartaoPadrao' not in html
     assert 'Valor a importar' in html
     assert 'Duplicados protegidos' in html
+
+
+def test_categoria_cartao_derivada_sem_select_manual_na_importacao():
+    js = JS_PATH.read_text(encoding='utf-8')
+    route = ROUTE_PATH.read_text(encoding='utf-8')
+
+    assert 'parcelamentoCategoriaCartao' not in js
+    assert 'modalCategoriaCartaoPadrao' not in js
+    assert 'opcoesCategoriaCartaoSelect' not in js
+    assert 'import-card-category-select' not in js
+    assert 'buscarResolucaoCategoriaCartao' in js
+    assert 'resolverCategoriaCartaoLinha(index, { manterConfronto: true })' in js
+    assert 'CategoriaCartaoService.resolver_categoria_cartao_para_lancamento' in route
+    assert "linha['categoria_cartao_id'] = int(categoria_cartao_resolvida)" in route
 
 
 def test_backend_cria_parcelamento_atual_e_futuro_sem_migration():

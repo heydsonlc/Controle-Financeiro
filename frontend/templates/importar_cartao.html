@@ -268,10 +268,6 @@
                     <option value="auto">Auto (débito e fallback crédito)</option>
                 </select>
             </div>
-            <div class="import-field import-deferred-classification" hidden>
-                <label for="modalCategoriaCartaoPadraoCaixa">Categoria do cartão padrão</label>
-                <select id="modalCategoriaCartaoPadraoCaixa" onchange="renderizarAmostraModal();"></select>
-            </div>
         </div>
 
         <div class="perfil-modal-grid" id="boxCamposNubank" hidden>
@@ -283,17 +279,9 @@
                     <option value="despesas_positivas">Despesas são valores positivos</option>
                 </select>
             </div>
-            <div class="import-field import-deferred-classification" hidden>
-                <label for="modalCategoriaCartaoPadraoNubank">Categoria do cartão padrão</label>
-                <select id="modalCategoriaCartaoPadraoNubank" onchange="renderizarAmostraModal();"></select>
-            </div>
         </div>
 
         <div class="perfil-modal-grid" id="boxCamposManual">
-            <div class="import-field import-deferred-classification" hidden>
-                <label for="modalCategoriaCartaoPadraoManual">Categoria do cartão padrão</label>
-                <select id="modalCategoriaCartaoPadraoManual" onchange="renderizarAmostraModal();"></select>
-            </div>
         </div>
 
         <div id="modalAmostraInterpretada" class="modal-sample"></div>
@@ -340,10 +328,6 @@
             <div class="import-field">
                 <label for="parcelamentoCategoriaDespesa">Categoria da despesa</label>
                 <select id="parcelamentoCategoriaDespesa" class="form-control" onchange="atualizarCategoriaDespesaParcelamento(this.value);"></select>
-            </div>
-            <div class="import-field">
-                <label for="parcelamentoCategoriaCartao">Categoria do cartão</label>
-                <select id="parcelamentoCategoriaCartao" class="form-control"></select>
             </div>
             <div class="import-field">
                 <label for="parcelamentoCartaoLabel">Cartão</label>

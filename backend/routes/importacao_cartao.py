@@ -135,6 +135,7 @@ def _validar_payload_importacao(data):
     for idx, linha in enumerate(linhas, start=1):
         if linha.get('ignorar'):
             continue
+        categoria_id = linha.get('categoria_id')
         categoria_cartao_id = linha.get('categoria_cartao_id')
         if categoria_cartao_id:
             try:
@@ -147,9 +148,27 @@ def _validar_payload_importacao(data):
                 )
             linha['categoria_cartao_id'] = categoria_cartao_id
         else:
-            linha.setdefault('avisos', []).append(
-                'Categoria do Cartao ainda nao configurada para esta Categoria de Despesa.'
-            )
+            try:
+                resolucao_cartao = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(
+                    cartao_id=cartao_id,
+                    categoria_id=categoria_id,
+                ) if categoria_id else {}
+            except ValueError as exc:
+                return None, (str(exc), 400)
+
+            categoria_cartao_resolvida = resolucao_cartao.get('categoria_cartao_id')
+            if categoria_cartao_resolvida:
+                linha['categoria_cartao_id'] = int(categoria_cartao_resolvida)
+                linha['categoria_cartao_origem'] = resolucao_cartao.get('origem') or 'mapa_categoria_despesa'
+            elif categoria_id:
+                if resolucao_cartao.get('categoria_cartao_resolvida_id'):
+                    linha.setdefault('avisos', []).append(
+                        'Esta categoria da despesa ainda nao esta vinculada ao cartao selecionado.'
+                    )
+                else:
+                    linha.setdefault('avisos', []).append(
+                        'Esta categoria da despesa nao possui mapeamento para o cartao. Ajuste em Categorias antes de importar.'
+                    )
 
     try:
         competencia = datetime.strptime(competencia_str, '%Y-%m-%d').date().replace(day=1)
