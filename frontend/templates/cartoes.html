@@ -280,6 +280,52 @@
             </form>
         </div>
     </div>
+    <!-- Modal: Editar lançamento de fatura -->
+    <div id="modal-editar-lancamento" class="modal">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h2>Editar lan&ccedil;amento</h2>
+                <button class="modal-close" type="button" data-close-modal="modal-editar-lancamento" aria-label="Fechar">&times;</button>
+            </div>
+            <form id="form-editar-lancamento" onsubmit="salvarEdicaoLancamento(event)">
+                <input type="hidden" id="lancamento-edit-id">
+                <div class="form-row two-cols">
+                    <div class="form-group">
+                        <label for="lancamento-edit-descricao">Descri&ccedil;&atilde;o *</label>
+                        <input type="text" id="lancamento-edit-descricao" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="lancamento-edit-valor">Valor *</label>
+                        <input type="number" id="lancamento-edit-valor" step="0.01" min="0" required>
+                    </div>
+                </div>
+                <div class="form-row two-cols">
+                    <div class="form-group">
+                        <label for="lancamento-edit-data">Data da compra *</label>
+                        <input type="date" id="lancamento-edit-data" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="lancamento-edit-categoria">Categoria de Despesa</label>
+                        <select id="lancamento-edit-categoria"></select>
+                    </div>
+                </div>
+                <div class="form-row two-cols">
+                    <div class="form-group">
+                        <label for="lancamento-edit-parcela">Parcela atual</label>
+                        <input type="number" id="lancamento-edit-parcela" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="lancamento-edit-total-parcelas">Total de parcelas</label>
+                        <input type="number" id="lancamento-edit-total-parcelas" min="1">
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="cf-button cf-button-secondary" data-close-modal="modal-editar-lancamento">Cancelar</button>
+                    <button type="submit" class="cf-button cf-button-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
 {% endblock %}
 
 {% block extra_js %}

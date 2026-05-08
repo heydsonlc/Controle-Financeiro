@@ -564,11 +564,19 @@ function renderizarLancamentosFatura(cartao) {
                             </div>
                             <div>
                                 <span>Categoria do Cart&atilde;o</span>
-                                <strong>${escapeHtml(lancamento.categoria_cartao_nome || 'Sem Categoria do Cart&atilde;o')}</strong>
+                                <strong>${escapeHtml(lancamento.categoria_cartao_nome || 'Sem Categoria do Cartão')}</strong>
                             </div>
                             <div class="lancamento-value">
                                 <strong>${formatarMoeda(lancamento.valor)}</strong>
                                 <span>${escapeHtml(lancamento.parcela_atual || 1)}/${escapeHtml(lancamento.parcelas_total || 1)}</span>
+                            </div>
+                            <div class="lancamento-acoes">
+                                <button class="lancamento-icon-btn" type="button" data-action="editar-lancamento" data-lancamento-id="${lancamento.id}" title="Editar lançamento" aria-label="Editar">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                </button>
+                                <button class="lancamento-icon-btn lancamento-icon-btn--danger" type="button" data-action="excluir-lancamento" data-lancamento-id="${lancamento.id}" data-lancamento-desc="${escapeHtml(lancamento.descricao)}" title="Excluir lançamento" aria-label="Excluir">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                                </button>
                             </div>
                         </article>
                     `).join('')}
@@ -685,6 +693,10 @@ async function tratarCliqueDetalhe(event) {
         estadoCartoes.filtroLancamentosFatura = button.dataset.filtroFatura || 'todos';
         await carregarLancamentosFaturaCartao(cartao.id, estadoCartoes.filtroLancamentosFatura);
         renderizarDetalheCartao();
+    } else if (action === 'editar-lancamento') {
+        abrirModalEditarLancamento(Number(button.dataset.lancamentoId));
+    } else if (action === 'excluir-lancamento') {
+        await confirmarExcluirLancamento(Number(button.dataset.lancamentoId), button.dataset.lancamentoDesc);
     }
 }
 
@@ -893,6 +905,80 @@ async function alternarLimite(limiteId) {
     } catch (error) {
         console.error('Erro ao atualizar vinculo:', error);
         mostrarErro(`Erro ao atualizar vinculo: ${error.message}`);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Editar / Excluir lançamento de fatura
+// ---------------------------------------------------------------------------
+
+function _obterLancamentoPorId(id) {
+    for (const lista of estadoCartoes.lancamentosFatura.values()) {
+        const found = lista.find((l) => l.id === id);
+        if (found) return found;
+    }
+    return null;
+}
+
+async function abrirModalEditarLancamento(lancamentoId) {
+    const lanc = _obterLancamentoPorId(lancamentoId);
+    if (!lanc) return;
+
+    document.getElementById('lancamento-edit-id').value = lanc.id;
+    document.getElementById('lancamento-edit-descricao').value = lanc.descricao || '';
+    document.getElementById('lancamento-edit-valor').value = lanc.valor || '';
+    document.getElementById('lancamento-edit-data').value = lanc.data || '';
+    document.getElementById('lancamento-edit-parcela').value = lanc.parcela_atual || 1;
+    document.getElementById('lancamento-edit-total-parcelas').value = lanc.parcelas_total || 1;
+
+    const selCat = document.getElementById('lancamento-edit-categoria');
+    if (!selCat.options.length) {
+        try {
+            const resp = await fetchJson('/api/categorias/?tipo=despesa');
+            const cats = resp.data || resp || [];
+            selCat.innerHTML = cats.map((c) => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
+        } catch (_) { /* sem categorias */ }
+    }
+    if (lanc.categoria_id) selCat.value = lanc.categoria_id;
+
+    abrirModal('modal-editar-lancamento');
+}
+
+async function salvarEdicaoLancamento(event) {
+    event.preventDefault();
+    const id = Number(document.getElementById('lancamento-edit-id').value);
+    const payload = {
+        descricao: document.getElementById('lancamento-edit-descricao').value.trim(),
+        valor: parseFloat(document.getElementById('lancamento-edit-valor').value),
+        data_compra: document.getElementById('lancamento-edit-data').value,
+        categoria_id: document.getElementById('lancamento-edit-categoria').value || null,
+        numero_parcela: parseInt(document.getElementById('lancamento-edit-parcela').value, 10) || 1,
+        total_parcelas: parseInt(document.getElementById('lancamento-edit-total-parcelas').value, 10) || 1,
+    };
+    try {
+        await fetchJson(`/api/cartoes/lancamentos/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        fecharModal('modal-editar-lancamento');
+        const cartao = obterCartaoSelecionado();
+        if (cartao) {
+            await carregarFaturaSelecionada();
+            renderizarDetalheCartao();
+        }
+    } catch (err) {
+        mostrarErro(`Erro ao salvar lançamento: ${err.message}`);
+    }
+}
+
+async function confirmarExcluirLancamento(lancamentoId, descricao) {
+    if (!confirm(`Excluir o lançamento "${descricao}"?\nEsta ação não pode ser desfeita.`)) return;
+    try {
+        await fetchJson(`/api/cartoes/lancamentos/${lancamentoId}`, { method: 'DELETE' });
+        const cartao = obterCartaoSelecionado();
+        if (cartao) {
+            await carregarFaturaSelecionada();
+            renderizarDetalheCartao();
+        }
+    } catch (err) {
+        mostrarErro(`Erro ao excluir lançamento: ${err.message}`);
     }
 }
 

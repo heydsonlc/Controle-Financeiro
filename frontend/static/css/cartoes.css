@@ -959,13 +959,45 @@
 
 .fatura-lancamento-item {
     display: grid;
-    grid-template-columns: minmax(180px, 1.35fr) minmax(130px, 0.9fr) minmax(140px, 0.9fr) minmax(90px, 0.55fr);
+    grid-template-columns: minmax(180px, 1.35fr) minmax(130px, 0.9fr) minmax(140px, 0.9fr) minmax(90px, 0.55fr) 60px;
     gap: 12px;
     align-items: center;
     padding: 10px 12px;
     border: 1px solid rgba(15, 23, 42, 0.08);
     border-radius: 7px;
     background: #ffffff;
+}
+
+.lancamento-acoes {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+}
+
+.lancamento-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border: none;
+    border-radius: 6px;
+    background: #f1f5f9;
+    color: #64748b;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    flex-shrink: 0;
+}
+
+.lancamento-icon-btn:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+}
+
+.lancamento-icon-btn--danger:hover {
+    background: #fee2e2;
+    color: #dc2626;
 }
 
 .fatura-lancamento-item.needs-review {
