@@ -526,6 +526,28 @@
     text-align: left;
 }
 
+/* Tabela processamento: centraliza tudo; exceção col 4 = Descrição original (left) */
+.import-operational-table th,
+.import-operational-table td {
+    text-align: center;
+}
+
+.import-operational-table th:nth-child(4),
+.import-operational-table td:nth-child(4) {
+    text-align: left;
+}
+
+/* Tabela retirados: centraliza tudo; exceção col 3 = Descrição original (left) */
+.import-retired-table th,
+.import-retired-table td {
+    text-align: center;
+}
+
+.import-retired-table th:nth-child(3),
+.import-retired-table td:nth-child(3) {
+    text-align: left;
+}
+
 .import-preview-table tr:last-child td {
     border-bottom: 0;
 }
@@ -1368,20 +1390,20 @@ body.app-shell-body .import-row-action {
 }
 
 .import-operational-table {
-    min-width: 1500px;
+    min-width: 1390px;
     table-layout: fixed;
 }
 
-.import-operational-table th:nth-child(1) { width: 42px; }
-.import-operational-table th:nth-child(2) { width: 118px; }
-.import-operational-table th:nth-child(3) { width: 112px; }
-.import-operational-table th:nth-child(4) { width: 260px; }
-.import-operational-table th:nth-child(5) { width: 100px; }
-.import-operational-table th:nth-child(6) { width: 140px; }
-.import-operational-table th:nth-child(7) { width: 150px; }
-.import-operational-table th:nth-child(8) { width: 190px; }
-.import-operational-table th:nth-child(9) { width: 180px; }
-.import-operational-table th:nth-child(10) { width: 250px; }
+.import-operational-table th:nth-child(1)  { width: 42px; }
+.import-operational-table th:nth-child(2)  { width: 118px; }
+.import-operational-table th:nth-child(3)  { width: 112px; }
+.import-operational-table th:nth-child(4)  { width: 260px; }
+.import-operational-table th:nth-child(5)  { width: 100px; }
+.import-operational-table th:nth-child(6)  { width: 140px; }
+.import-operational-table th:nth-child(7)  { width: 150px; }
+.import-operational-table th:nth-child(8)  { width: 190px; }
+.import-operational-table th:nth-child(9)  { width: 180px; }
+.import-operational-table th:nth-child(10) { width: 96px; }
 
 .import-operational-table td,
 .import-retired-table td {
@@ -1411,8 +1433,11 @@ body.app-shell-body .import-row-action {
 }
 
 .row-actions.operational {
+    display: flex;
     flex-wrap: nowrap;
-    gap: 6px;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
 }
 
 .row-actions.operational .import-row-action {
@@ -1440,6 +1465,99 @@ body.app-shell-body .import-row-action {
     color: #b42318;
     background: #fff5f4;
     border-color: rgba(180, 35, 24, 0.28);
+}
+
+/* Icon-only action buttons */
+.import-row-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid rgba(15, 23, 42, 0.14);
+    border-radius: 6px;
+    background: #f8fafc;
+    color: #475569;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+    flex-shrink: 0;
+}
+
+.import-row-icon svg {
+    width: 13px;
+    height: 13px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    pointer-events: none;
+}
+
+.import-row-icon:hover:not(:disabled) {
+    background: #f1f5f9;
+    border-color: rgba(15, 23, 42, 0.22);
+}
+
+.import-row-icon:disabled {
+    opacity: 0.32;
+    cursor: not-allowed;
+}
+
+.import-row-icon.success {
+    color: #065f46;
+    background: #ecfdf5;
+    border-color: rgba(5, 150, 105, 0.28);
+}
+
+.import-row-icon.success:hover:not(:disabled) {
+    background: #d1fae5;
+    border-color: rgba(5, 150, 105, 0.45);
+}
+
+.import-row-icon.primary {
+    color: #1d4ed8;
+    background: #eff6ff;
+    border-color: rgba(37, 99, 235, 0.28);
+}
+
+.import-row-icon.primary:hover:not(:disabled) {
+    background: #dbeafe;
+    border-color: rgba(37, 99, 235, 0.45);
+}
+
+.import-row-icon.parcel {
+    color: #7c3aed;
+    background: #f5f3ff;
+    border-color: rgba(124, 58, 237, 0.28);
+}
+
+.import-row-icon.parcel:hover:not(:disabled) {
+    background: #ede9fe;
+    border-color: rgba(124, 58, 237, 0.45);
+}
+
+.import-row-icon.danger {
+    color: #b42318;
+    background: #fff5f4;
+    border-color: rgba(180, 35, 24, 0.28);
+}
+
+.import-row-icon.danger:hover:not(:disabled) {
+    background: #fee2e2;
+    border-color: rgba(180, 35, 24, 0.45);
+}
+
+.import-row-icon.neutral {
+    color: #374151;
+    background: #f9fafb;
+    border-color: rgba(55, 65, 81, 0.2);
+}
+
+.import-row-icon.neutral:hover:not(:disabled) {
+    background: #f3f4f6;
+    border-color: rgba(55, 65, 81, 0.35);
 }
 
 .import-pagination {
@@ -1490,7 +1608,7 @@ body.app-shell-body .import-row-action {
 
 .import-bottom-operational {
     display: grid;
-    grid-template-columns: minmax(520px, 1.05fr) minmax(420px, 0.95fr);
+    grid-template-columns: minmax(760px, 1.75fr) minmax(280px, 0.55fr);
     gap: 12px;
     align-items: stretch;
 }
@@ -1501,15 +1619,16 @@ body.app-shell-body .import-row-action {
 }
 
 .import-retired-table {
-    min-width: 760px;
+    min-width: 1120px;
     table-layout: fixed;
 }
 
-.import-retired-table th:nth-child(1) { width: 170px; }
+.import-retired-table th:nth-child(1) { width: 180px; }
 .import-retired-table th:nth-child(2) { width: 110px; }
-.import-retired-table th:nth-child(3) { width: 300px; }
+.import-retired-table th:nth-child(3) { width: 310px; }
 .import-retired-table th:nth-child(4) { width: 110px; }
-.import-retired-table th:nth-child(5) { width: 120px; }
+.import-retired-table th:nth-child(5) { width: 330px; }
+.import-retired-table th:nth-child(6) { width: 80px; }
 
 .import-retired-reason {
     color: #334155;
@@ -1517,26 +1636,26 @@ body.app-shell-body .import-row-action {
 }
 
 .import-kpi-panel {
-    padding: 14px 16px 16px;
+    padding: 12px;
 }
 
 .import-kpi-panel .import-table-title {
-    margin-bottom: 12px;
+    margin-bottom: 10px;
 }
 
 .import-kpi-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
 }
 
 .import-kpi-card {
-    min-height: 70px;
+    min-height: 58px;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: 5px;
-    padding: 12px;
+    gap: 4px;
+    padding: 10px;
     border: 1px solid rgba(15, 23, 42, 0.08);
     border-radius: 8px;
     background: #ffffff;
@@ -1545,13 +1664,13 @@ body.app-shell-body .import-row-action {
 .import-kpi-card span,
 .import-kpi-card small {
     color: #475569;
-    font-size: 0.76rem;
+    font-size: 0.7rem;
     font-weight: 650;
 }
 
 .import-kpi-card strong {
     color: #0f62fe;
-    font-size: 1.35rem;
+    font-size: 1.15rem;
     font-weight: 800;
     line-height: 1;
 }

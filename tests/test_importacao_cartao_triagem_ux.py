@@ -9,6 +9,10 @@ TEMPLATE_PATH = ROOT / 'frontend' / 'templates' / 'importar_cartao.html'
 CSS_PATH = ROOT / 'frontend' / 'static' / 'css' / 'importar_cartao.css'
 SERVICE_PATH = ROOT / 'backend' / 'services' / 'importacao_cartao_service.py'
 ROUTE_PATH = ROOT / 'backend' / 'routes' / 'importacao_cartao.py'
+CARTOES_JS_PATH = ROOT / 'frontend' / 'static' / 'js' / 'cartoes.js'
+CARTOES_TEMPLATE_PATH = ROOT / 'frontend' / 'templates' / 'cartoes.html'
+CARTOES_CSS_PATH = ROOT / 'frontend' / 'static' / 'css' / 'cartoes.css'
+CARTOES_ROUTE_PATH = ROOT / 'backend' / 'routes' / 'cartoes.py'
 
 
 def _trecho(texto, inicio, fim):
@@ -80,22 +84,37 @@ def test_tabela_inferior_tem_colunas_filtros_paginacao_e_acoes():
     js = JS_PATH.read_text(encoding='utf-8')
     retirados = _trecho(js, 'function renderizarTabelaRetirados', 'function renderizarLinhaRetirada')
 
-    for coluna in ['Motivo', 'Data', 'Descrição original', 'Valor', 'Ação']:
+    for coluna in ['Motivo', 'Data', 'Descrição original', 'Valor', 'Observação', 'Ação']:
         assert coluna in retirados
 
     assert "paginarItens(retirados, 'retirados')" in retirados
-    assert "motivo === 'Retirado pelo usuário'" in js
+    assert "codigo === 'retirado_usuario'" in js
     assert "botaoOperacional('success', 'Restaurar'" in js
     assert "botaoOperacional('', 'Ver'" in js
+    assert 'function detalharLinhaRetirada' in js
     assert "['parcelamento', 'Parcelamento tratado'" in js
     assert "['credito', 'Crédito/estorno'" in js
+
+
+def test_motivos_de_retirada_sao_auditaveis_e_restrigem_restauracao():
+    js = JS_PATH.read_text(encoding='utf-8')
+
+    assert 'function motivoRetiradaCodigo' in js
+    assert "'duplicado_fatura'" in js
+    assert "'ja_existe_fatura'" in js
+    assert "'parcelamento_tratado'" in js
+    assert 'function observacaoRetiradaLinha' in js
+    assert 'function detalheRetiradaLinha' in js
+    assert 'linhaDuplicadaPorReconhecimento(linha)' in js
+    assert 'linha.ignorar' in _trecho(js, 'function linhaRestauravel', 'function obterInfoOperacional')
+    assert '!linhaDuplicadaOperacional(linha)' in _trecho(js, 'function linhaRestauravel', 'function obterInfoOperacional')
 
 
 def test_kpis_ficam_na_area_inferior_e_nao_na_barra_superior():
     html = TEMPLATE_PATH.read_text(encoding='utf-8')
     js = JS_PATH.read_text(encoding='utf-8')
     css = CSS_PATH.read_text(encoding='utf-8')
-    topbar = _trecho(html, '<section class="import-topbar-compact"', '<div id="uploadResult"')
+    topbar = _trecho(html, '<section class="import-topbar-compact', '<div id="uploadResult"')
 
     for kpi in [
         'Encontrados',
@@ -114,6 +133,8 @@ def test_kpis_ficam_na_area_inferior_e_nao_na_barra_superior():
     assert 'function renderizarKpisImportacao' in js
     assert '.import-bottom-operational' in css
     assert '.import-kpi-panel' in css
+    assert 'minmax(760px, 1.75fr) minmax(280px, 0.55fr)' in css
+    assert '.import-retired-table th:nth-child(5)' in css
 
 
 def test_categoria_cartao_permanece_oculta_na_importacao():
@@ -221,3 +242,25 @@ def test_reconhecimento_flexivel_prioriza_valor_cartao_e_keyword():
     assert "score < 60" in service
     assert "tipo = 'duplicado_atual'" in service
     assert "@bp.route('/reconhecer', methods=['POST'])" in route
+
+
+def test_modal_edicao_lancamento_cartao_carrega_categoria_despesa_e_oculta_categoria_cartao():
+    js = CARTOES_JS_PATH.read_text(encoding='utf-8')
+    html = CARTOES_TEMPLATE_PATH.read_text(encoding='utf-8')
+    css = CARTOES_CSS_PATH.read_text(encoding='utf-8')
+    route = CARTOES_ROUTE_PATH.read_text(encoding='utf-8')
+    modal = _trecho(html, '<div id="modal-editar-lancamento"', '{% endblock %}')
+
+    assert 'const API_CATEGORIAS = \'/api/categorias\'' in js
+    assert 'async function carregarCategoriasDespesaLancamento' in js
+    assert 'async function preencherCategoriasDespesaLancamento' in js
+    assert 'Não foi possível carregar as categorias de despesa.' in js
+    assert 'fetchJson(`${API_CATEGORIAS}?ativo=true`)' in js
+    assert 'categoria_id: document.getElementById(\'lancamento-edit-categoria\').value || null' in js
+    assert 'Categoria de Despesa' in modal
+    assert 'Categoria do Cartão' not in modal
+    assert 'lancamento-edit-aviso' in modal
+    assert 'Esta edi&ccedil;&atilde;o altera' in modal
+    assert 'modal-content modal-md lancamento-edit-modal' in modal
+    assert '.lancamento-edit-modal' in css
+    assert 'CategoriaCartaoService.resolver_categoria_cartao_para_lancamento' in route

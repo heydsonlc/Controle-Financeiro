@@ -228,7 +228,9 @@ function iconSvg(nome) {
         trash: '<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/>',
         undo: '<path d="M9 14 5 10l4-4"/><path d="M5 10h9a5 5 0 0 1 0 10h-3"/>',
         check: '<path d="M5 12.5l4 4L19 7"/>',
-        warning: '<path d="M12 8v5M12 17h.1"/><path d="M12 3 3.5 19h17L12 3Z"/>'
+        warning: '<path d="M12 8v5M12 17h.1"/><path d="M12 3 3.5 19h17L12 3Z"/>',
+        parcel: '<rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><path d="M13 17h8M17 13v8"/>',
+        new: '<path d="M12 5v14M5 12h14"/>'
     };
 
     return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${icons[nome] || icons.file}</svg>`;
@@ -1515,13 +1517,74 @@ function linhaRetiradaEfetivacao(linha) {
     );
 }
 
+function motivoRetiradaCodigo(linha) {
+    if (linhaTratadaParcelamento(linha)) return 'parcelamento_tratado';
+    if (linhaDuplicadaPorReconhecimento(linha)) return 'ja_existe_fatura';
+    if (linhaDuplicada(linha)) return 'duplicado_fatura';
+    if (linhaComErro(linha)) return 'erro_validacao';
+    if (linhaCredito(linha)) return 'credito_estorno';
+    if (linha.ignorar) return 'retirado_usuario';
+    return 'outro_tecnico';
+}
+
 function motivoRetiradaLinha(linha) {
-    if (linhaTratadaParcelamento(linha)) return 'Parcelamento tratado';
-    if (linhaDuplicadaOperacional(linha)) return 'Já existe na fatura';
-    if (linhaComErro(linha)) return 'Erro';
-    if (linhaCredito(linha)) return 'Crédito/estorno';
-    if (linha.ignorar) return 'Retirado pelo usuário';
-    return 'Outro motivo técnico';
+    const motivos = {
+        retirado_usuario: 'Retirado pelo usuário',
+        duplicado_fatura: 'Duplicado na fatura',
+        ja_existe_fatura: 'Já existe na fatura',
+        conhecida_alta_confianca: 'Conhecida com alta confiança',
+        parcelamento_tratado: 'Parcelamento tratado',
+        credito_estorno: 'Crédito/estorno',
+        erro_validacao: 'Erro de validação',
+        outro_tecnico: 'Outro motivo técnico'
+    };
+    return motivos[motivoRetiradaCodigo(linha)] || motivos.outro_tecnico;
+}
+
+function observacaoRetiradaLinha(linha) {
+    const reconhecimento = reconhecimentoLinha(linha) || {};
+    const parcelaCriada = linha.parcelamento_criado || {};
+    const motivos = Array.isArray(reconhecimento.motivos) ? reconhecimento.motivos.join(', ') : '';
+
+    if (linhaTratadaParcelamento(linha)) {
+        const resumo = parcelaCriada.total_criados
+            ? `${parcelaCriada.total_criados} parcela(s) gerada(s)`
+            : 'Parcelamento criado';
+        return `${resumo}${parcelaCriada.descricao ? ` · ${parcelaCriada.descricao}` : ''}`;
+    }
+    if (linhaDuplicadaPorReconhecimento(linha)) {
+        const score = reconhecimento.score ? `Score ${reconhecimento.score}` : 'Alta confiança';
+        const sugestao = reconhecimento.descricao_sugerida || reconhecimento.descricao_match || 'match na fatura atual';
+        return `${score}: ${sugestao}${motivos ? ` · ${motivos}` : ''}`;
+    }
+    if (linhaDuplicada(linha)) {
+        return linha.motivo_duplicidade || linha.duplicidade || 'Duplicado exato ou já bloqueado pela prévia.';
+    }
+    if (linhaComErro(linha)) {
+        return (linha.mensagens || linha.avisos || []).join(' | ') || 'Linha bloqueada pela validação técnica.';
+    }
+    if (linhaCredito(linha)) {
+        return 'Crédito ou estorno não entra como nova despesa.';
+    }
+    if (linha.ignorar) {
+        return 'Retirado manualmente antes da efetivação.';
+    }
+    return 'Linha fora da efetivação por regra técnica.';
+}
+
+function detalheRetiradaLinha(linha) {
+    const reconhecimento = reconhecimentoLinha(linha) || {};
+    return [
+        `Motivo: ${motivoRetiradaLinha(linha)}`,
+        `Descrição importada: ${descricaoOriginalLinha(linha) || '-'}`,
+        `Valor importado: ${formatarValorLinha(linha)}`,
+        linha.data_compra ? `Data: ${linha.data_compra}` : null,
+        reconhecimento.descricao_sugerida ? `Match encontrado: ${reconhecimento.descricao_sugerida}` : null,
+        reconhecimento.score ? `Score/confiança: ${reconhecimento.score} (${reconhecimento.confianca || 'sem confiança'})` : null,
+        reconhecimento.competencia_referencia ? `Competência do match: ${reconhecimento.competencia_referencia}` : null,
+        reconhecimento.valor_referencia ? `Valor do match: ${formatarMoeda(reconhecimento.valor_referencia)}` : null,
+        `Observação: ${observacaoRetiradaLinha(linha)}`
+    ].filter(Boolean).join('\n');
 }
 
 function linhaRestauravel(linha) {
@@ -1644,12 +1707,12 @@ function passaFiltroPrincipal(item, filtro = estado.filtroPrincipal) {
 }
 
 function passaFiltroRetirados(item, filtro = estado.filtroRetirados) {
-    const motivo = motivoRetiradaLinha(item.linha);
+    const codigo = motivoRetiradaCodigo(item.linha);
     if (filtro === 'todos') return true;
-    if (filtro === 'usuario') return motivo === 'Retirado pelo usuário';
-    if (filtro === 'existente') return motivo === 'Já existe na fatura';
-    if (filtro === 'duplicado') return linhaDuplicadaOperacional(item.linha);
-    if (filtro === 'parcelamento') return motivo === 'Parcelamento tratado';
+    if (filtro === 'usuario') return codigo === 'retirado_usuario';
+    if (filtro === 'existente') return codigo === 'ja_existe_fatura';
+    if (filtro === 'duplicado') return codigo === 'duplicado_fatura';
+    if (filtro === 'parcelamento') return codigo === 'parcelamento_tratado';
     if (filtro === 'bloqueado') return linhaComErro(item.linha) || linhaCredito(item.linha);
     if (filtro === 'credito') return linhaCredito(item.linha);
     if (filtro === 'erro') return linhaComErro(item.linha);
@@ -1717,7 +1780,7 @@ function renderizarFiltroAvancado(tipo) {
             ['todos', 'Todos', contarFiltroRetirados('todos')],
             ['usuario', 'Retirado pelo usuário', contarFiltroRetirados('usuario')],
             ['existente', 'Já existe na fatura', contarFiltroRetirados('existente')],
-            ['duplicado', 'Duplicado', contarFiltroRetirados('duplicado')],
+            ['duplicado', 'Duplicado na fatura', contarFiltroRetirados('duplicado')],
             ['parcelamento', 'Parcelamento tratado', contarFiltroRetirados('parcelamento')],
             ['bloqueado', 'Bloqueado', contarFiltroRetirados('bloqueado')],
             ['credito', 'Crédito/estorno', contarFiltroRetirados('credito')],
@@ -1995,33 +2058,56 @@ function renderizarLinhaOperacional(item) {
 
 function renderizarAcoesLinhaOperacional(item) {
     const { linha, index } = item;
-    const acoes = [];
     const confronto = temConfrontoAtivo();
     const categoriaOk = toIntOrNull(linha.categoria_id || linha.categoria_despesa_id);
 
+    // Sem confronto: triagem simples — apenas Retirar disponível
     if (!confronto) {
-        acoes.push(botaoOperacional('danger', 'Retirar', 'trash', `alternarIgnorarLinha(${index})`));
-        return `<div class="row-actions operational">${acoes.join('')}</div>`;
+        return `<div class="row-actions operational">
+            ${iconeBotaoAcao('success', 'check', '', null, true)}
+            ${iconeBotaoAcao('parcel', 'parcel', '', null, true)}
+            ${iconeBotaoAcao('danger', 'trash', 'Retirar', `alternarIgnorarLinha(${index})`)}
+        </div>`;
     }
 
     if (item.filtro === 'conhecidas') {
-        acoes.push(botaoOperacional('success', 'Usar sugestão', 'check', `usarSugestaoReconhecimento(${index})`));
-        acoes.push(botaoOperacional('', 'Tratar como novo', '', `tratarReconhecimentoComoNovo(${index})`));
-        acoes.push(botaoOperacional('danger', 'Retirar', 'trash', `ignorarReconhecimento(${index})`));
-    } else if (item.filtro === 'parcelados') {
-        acoes.push(botaoOperacional('success', 'Criar parcelamento', 'check', `abrirModalParcelamento(${index})`));
-        acoes.push(botaoOperacional('danger', 'Retirar', 'trash', `alternarIgnorarLinha(${index})`));
-    } else if (item.filtro === 'recorrencias') {
-        if (item.reconhecimento) {
-            acoes.push(botaoOperacional('success', 'Usar sugestão', 'check', `usarSugestaoReconhecimento(${index})`));
-        }
-        acoes.push(botaoOperacional('danger', 'Retirar', 'trash', `alternarIgnorarLinha(${index})`));
-    } else {
-        acoes.push(botaoOperacional('primary', 'Criar despesa', 'check', 'finalizarImportacao()', !categoriaOk));
-        acoes.push(botaoOperacional('danger', 'Retirar', 'trash', `alternarIgnorarLinha(${index})`));
+        return `<div class="row-actions operational">
+            ${iconeBotaoAcao('success', 'check', 'Usar sugestão', `usarSugestaoReconhecimento(${index})`)}
+            ${iconeBotaoAcao('neutral', 'new', 'Tratar como novo', `tratarReconhecimentoComoNovo(${index})`)}
+            ${iconeBotaoAcao('danger', 'trash', 'Retirar', `ignorarReconhecimento(${index})`)}
+        </div>`;
     }
 
-    return `<div class="row-actions operational">${acoes.join('')}</div>`;
+    if (item.filtro === 'parcelados') {
+        return `<div class="row-actions operational">
+            ${iconeBotaoAcao('success', 'check', 'Usar sugestão', null, true)}
+            ${iconeBotaoAcao('parcel', 'parcel', 'Criar parcelamento', `abrirModalParcelamento(${index})`)}
+            ${iconeBotaoAcao('danger', 'trash', 'Retirar', `alternarIgnorarLinha(${index})`)}
+        </div>`;
+    }
+
+    if (item.filtro === 'recorrencias') {
+        const temSugestao = Boolean(item.reconhecimento);
+        return `<div class="row-actions operational">
+            ${iconeBotaoAcao('success', 'check', 'Usar sugestão', temSugestao ? `usarSugestaoReconhecimento(${index})` : null, !temSugestao)}
+            ${iconeBotaoAcao('parcel', 'parcel', 'Criar parcelamento', null, true)}
+            ${iconeBotaoAcao('danger', 'trash', 'Retirar', `alternarIgnorarLinha(${index})`)}
+        </div>`;
+    }
+
+    // novos / default
+    return `<div class="row-actions operational">
+        ${iconeBotaoAcao('primary', 'check', 'Criar despesa', 'finalizarImportacao()', !categoriaOk)}
+        ${iconeBotaoAcao('parcel', 'parcel', 'Criar parcelamento', null, true)}
+        ${iconeBotaoAcao('danger', 'trash', 'Retirar', `alternarIgnorarLinha(${index})`)}
+    </div>`;
+}
+
+function iconeBotaoAcao(classe, icone, titulo, acao, desabilitado = false) {
+    const classeBotao = classe ? ` ${classe}` : '';
+    const onclickAttr = acao && !desabilitado ? ` onclick="${acao}"` : '';
+    const titleAttr = titulo ? ` title="${escapeAttr(titulo)}" aria-label="${escapeAttr(titulo)}"` : '';
+    return `<button class="row-action-icon import-row-icon${classeBotao}" type="button"${onclickAttr}${titleAttr} ${desabilitado ? 'disabled' : ''}>${iconSvg(icone)}</button>`;
 }
 
 function botaoOperacional(classe, texto, icone, acao, desabilitado = false) {
@@ -2962,13 +3048,14 @@ function renderizarTabelaRetirados() {
                         <th>Data</th>
                         <th>Descrição original</th>
                         <th>Valor</th>
+                        <th>Observação</th>
                         <th>Ação</th>
                     </tr>
                 </thead>
                 <tbody>
                     ${paginaInfo.itens.length
                         ? paginaInfo.itens.map(({ linha, index }) => renderizarLinhaRetirada(linha, index)).join('')
-                        : '<tr><td colspan="5"><div class="import-empty-state compact">Nenhum lançamento retirado da efetivação para este filtro.</div></td></tr>'}
+                        : '<tr><td colspan="6"><div class="import-empty-state compact">Nenhum lançamento retirado da efetivação para este filtro.</div></td></tr>'}
                 </tbody>
             </table>
         </div>
@@ -2980,6 +3067,7 @@ function renderizarLinhaRetirada(linha, index) {
     const motivo = motivoRetiradaLinha(linha);
     const restauravel = linhaRestauravel(linha);
     const descricaoOriginal = descricaoOriginalLinha(linha);
+    const observacao = observacaoRetiradaLinha(linha);
     return `
         <tr>
             <td><span class="import-retired-reason">${escapeHtml(motivo)}</span></td>
@@ -2988,15 +3076,23 @@ function renderizarLinhaRetirada(linha, index) {
                 <span class="import-raw-description" title="${escapeAttr(descricaoOriginal)}">${escapeHtml(descricaoOriginal || '-')}</span>
             </td>
             <td>${formatarValorLinha(linha)}</td>
+            <td class="import-description-cell one-line">
+                <span title="${escapeAttr(observacao)}">${escapeHtml(observacao || '-')}</span>
+            </td>
             <td>
                 <div class="row-actions operational">
-                    ${restauravel
-                        ? botaoOperacional('success', 'Restaurar', 'undo', `alternarIgnorarLinha(${index})`)
-                        : botaoOperacional('', 'Ver', 'eye', `detalharLinha(${index})`)}
+                    ${iconeBotaoAcao('success', 'undo', 'Restaurar', restauravel ? `alternarIgnorarLinha(${index})` : null, !restauravel)}
+                    ${iconeBotaoAcao('neutral', 'eye', 'Ver detalhes', `detalharLinhaRetirada(${index})`)}
                 </div>
             </td>
         </tr>
     `;
+}
+
+function detalharLinhaRetirada(index) {
+    const linha = estado.linhasMapeadas[index];
+    if (!linha) return;
+    alert(detalheRetiradaLinha(linha));
 }
 
 function calcularKpisImportacao() {

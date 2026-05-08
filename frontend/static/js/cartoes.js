@@ -3,10 +3,12 @@
  */
 
 const API_CARTOES = '/api/cartoes';
+const API_CATEGORIAS = '/api/categorias';
 const API_CATEGORIAS_CARTAO = '/api/categorias-cartao';
 
 const estadoCartoes = {
     cartoes: [],
+    categoriasDespesa: [],
     categoriasCartao: [],
     limitesPorCartao: new Map(),
     faturasPorCartao: new Map(),
@@ -920,6 +922,36 @@ function _obterLancamentoPorId(id) {
     return null;
 }
 
+async function carregarCategoriasDespesaLancamento() {
+    if (estadoCartoes.categoriasDespesa.length) return estadoCartoes.categoriasDespesa;
+
+    const resp = await fetchJson(`${API_CATEGORIAS}?ativo=true`);
+    const categorias = resp.data || resp || [];
+    estadoCartoes.categoriasDespesa = categorias;
+    return categorias;
+}
+
+async function preencherCategoriasDespesaLancamento(select, selecionadaId = null) {
+    if (!select) return false;
+
+    select.disabled = true;
+    select.innerHTML = '<option value="">Carregando categorias...</option>';
+
+    try {
+        const categorias = await carregarCategoriasDespesaLancamento();
+        select.innerHTML = '<option value="">Selecione uma categoria</option>' + categorias.map((categoria) => (
+            `<option value="${categoria.id}" ${Number(selecionadaId) === Number(categoria.id) ? 'selected' : ''}>${escapeHtml(categoria.nome)}</option>`
+        )).join('');
+        select.disabled = false;
+        return true;
+    } catch (error) {
+        select.innerHTML = '<option value="">Não foi possível carregar as categorias de despesa.</option>';
+        select.disabled = true;
+        mostrarErro('Não foi possível carregar as categorias de despesa.');
+        return false;
+    }
+}
+
 async function abrirModalEditarLancamento(lancamentoId) {
     const lanc = _obterLancamentoPorId(lancamentoId);
     if (!lanc) return;
@@ -927,19 +959,12 @@ async function abrirModalEditarLancamento(lancamentoId) {
     document.getElementById('lancamento-edit-id').value = lanc.id;
     document.getElementById('lancamento-edit-descricao').value = lanc.descricao || '';
     document.getElementById('lancamento-edit-valor').value = lanc.valor || '';
-    document.getElementById('lancamento-edit-data').value = lanc.data || '';
-    document.getElementById('lancamento-edit-parcela').value = lanc.parcela_atual || 1;
-    document.getElementById('lancamento-edit-total-parcelas').value = lanc.parcelas_total || 1;
+    document.getElementById('lancamento-edit-data').value = lanc.data_compra || lanc.data || '';
+    document.getElementById('lancamento-edit-parcela').value = lanc.numero_parcela || lanc.parcela_atual || 1;
+    document.getElementById('lancamento-edit-total-parcelas').value = lanc.total_parcelas || lanc.parcelas_total || 1;
 
     const selCat = document.getElementById('lancamento-edit-categoria');
-    if (!selCat.options.length) {
-        try {
-            const resp = await fetchJson('/api/categorias/?tipo=despesa');
-            const cats = resp.data || resp || [];
-            selCat.innerHTML = cats.map((c) => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
-        } catch (_) { /* sem categorias */ }
-    }
-    if (lanc.categoria_id) selCat.value = lanc.categoria_id;
+    await preencherCategoriasDespesaLancamento(selCat, lanc.categoria_id);
 
     abrirModal('modal-editar-lancamento');
 }

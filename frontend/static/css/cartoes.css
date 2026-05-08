@@ -1000,6 +1000,23 @@
     color: #dc2626;
 }
 
+.lancamento-edit-modal {
+    max-width: 720px;
+}
+
+.lancamento-edit-modal form {
+    display: grid;
+    gap: 14px;
+}
+
+.lancamento-edit-modal .form-row {
+    margin: 0;
+}
+
+.lancamento-edit-modal .form-actions {
+    margin-top: 4px;
+}
+
 .lancamento-edit-aviso {
     display: flex;
     align-items: flex-start;

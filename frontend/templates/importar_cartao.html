@@ -7,7 +7,7 @@
 {% endblock %}
 
 {% block action_bar %}
-    <div class="module-actionbar import-actionbar" id="step1" aria-label="Importação do Cartão">
+    <section class="import-topbar-compact module-actionbar import-actionbar" id="step1" aria-label="Importação do Cartão">
         <div class="module-actionbar-inner">
             <div class="module-actionbar-filters">
                 <div class="import-inline-field">
@@ -30,7 +30,7 @@
                 </div>
 
                 <div class="import-inline-field import-inline-field--file" id="uploadArea">
-                    <label for="csvFile">Arquivo</label>
+                    <label for="csvFile">Arquivo selecionado</label>
                     <input type="file" id="csvFile" accept=".csv,.xlsx,.pdf" hidden>
                     <div class="import-file-inline" id="selectedFileInfo">
                         <span class="file-icon neutral" aria-hidden="true">
@@ -47,7 +47,7 @@
                 </button>
             </div>
         </div>
-    </div>
+    </section>
 {% endblock %}
 
 {% block content %}
