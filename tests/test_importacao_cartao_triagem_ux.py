@@ -6,6 +6,7 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 JS_PATH = ROOT / 'frontend' / 'static' / 'js' / 'importar_cartao.js'
 TEMPLATE_PATH = ROOT / 'frontend' / 'templates' / 'importar_cartao.html'
+CSS_PATH = ROOT / 'frontend' / 'static' / 'css' / 'importar_cartao.css'
 SERVICE_PATH = ROOT / 'backend' / 'services' / 'importacao_cartao_service.py'
 ROUTE_PATH = ROOT / 'backend' / 'routes' / 'importacao_cartao.py'
 
@@ -16,44 +17,131 @@ def _trecho(texto, inicio, fim):
     return texto[start:end]
 
 
-def test_primeira_tabela_e_triagem_bruta_sem_classificacao():
+def test_tela_unica_operacional_sem_wizard_grande():
+    html = TEMPLATE_PATH.read_text(encoding='utf-8')
+
+    assert 'import-topbar-compact' in html
+    assert 'Cartão' in html
+    assert 'Competência' in html
+    assert 'Formato' in html
+    assert 'Arquivo selecionado' in html
+    assert 'Importar' in html
+    assert 'import-step-chip' not in html
+    assert '1. Configuração' not in html
+    assert '2. Documento' not in html
+    assert '3. Validação' not in html
+    assert '4. Triagem' not in html
+    assert '5. Confronto e Resultado' not in html
+
+
+def test_layout_tem_tabela_principal_retirados_e_kpis_inferiores():
+    html = TEMPLATE_PATH.read_text(encoding='utf-8')
+
+    assert 'Lançamentos em processamento' in html
+    assert 'Filtro avançado' in html
+    assert 'Confrontar resultado' in html
+    assert 'Criar despesas' in html
+    assert 'Lançamentos retirados da efetivação' in html
+    assert 'KPIs da importação' in html
+    assert 'import-bottom-operational' in html
+    assert html.index('Lançamentos retirados da efetivação') < html.index('KPIs da importação')
+    assert html.index('KPIs da importação') > html.index('Lançamentos em processamento')
+
+
+def test_tabela_principal_tem_colunas_fixas_paginacao_e_filtros():
+    js = JS_PATH.read_text(encoding='utf-8')
+    render = _trecho(js, 'function renderizarEditorPrePersistencia', 'function renderizarLinhaOperacional')
+
+    for coluna in [
+        'Status',
+        'Data',
+        'Descrição original',
+        'Valor',
+        'Tipo detectado',
+        'Sugestão',
+        'Descrição amigável',
+        'Categoria da despesa',
+        'Ação',
+    ]:
+        assert coluna in render
+
+    assert 'Categoria do Cartão' not in render
+    assert 'Categoria do cartao' not in render
+    assert 'renderizarPaginacaoTabela' in render
+    assert "paginarItens(linhasFiltradas, 'principal')" in render
+    assert 'linhasPorPagina: 10' in js
+    assert "['conhecidas', 'Conhecidas'" in js
+    assert "['parcelados', 'Parcelados'" in js
+    assert "['novos', 'Novos'" in js
+    assert "['usar_sugestao', 'Usar sugestão'" in js
+
+
+def test_tabela_inferior_tem_colunas_filtros_paginacao_e_acoes():
+    js = JS_PATH.read_text(encoding='utf-8')
+    retirados = _trecho(js, 'function renderizarTabelaRetirados', 'function renderizarLinhaRetirada')
+
+    for coluna in ['Motivo', 'Data', 'Descrição original', 'Valor', 'Ação']:
+        assert coluna in retirados
+
+    assert "paginarItens(retirados, 'retirados')" in retirados
+    assert "motivo === 'Retirado pelo usuário'" in js
+    assert "botaoOperacional('success', 'Restaurar'" in js
+    assert "botaoOperacional('', 'Ver'" in js
+    assert "['parcelamento', 'Parcelamento tratado'" in js
+    assert "['credito', 'Crédito/estorno'" in js
+
+
+def test_kpis_ficam_na_area_inferior_e_nao_na_barra_superior():
+    html = TEMPLATE_PATH.read_text(encoding='utf-8')
+    js = JS_PATH.read_text(encoding='utf-8')
+    css = CSS_PATH.read_text(encoding='utf-8')
+    topbar = _trecho(html, '<section class="import-topbar-compact"', '<div id="uploadResult"')
+
+    for kpi in [
+        'Encontrados',
+        'Em processamento',
+        'Retirados',
+        'Possíveis conhecidas',
+        'Parcelamentos',
+        'Novos',
+        'Valor em processamento',
+        'Pendências',
+    ]:
+        assert kpi in html
+        assert kpi not in topbar
+
+    assert 'function calcularKpisImportacao' in js
+    assert 'function renderizarKpisImportacao' in js
+    assert '.import-bottom-operational' in css
+    assert '.import-kpi-panel' in css
+
+
+def test_categoria_cartao_permanece_oculta_na_importacao():
+    html = TEMPLATE_PATH.read_text(encoding='utf-8')
     js = JS_PATH.read_text(encoding='utf-8')
 
-    tabela = _trecho(js, 'function renderizarEditorPrePersistencia', 'function renderizarLinhaPrevia')
-    linha = _trecho(js, 'function renderizarLinhaPrevia', 'function renderizarConfrontoClassificacao')
-
-    assert 'Descrição original' in tabela
-    assert 'Categoria da Despesa' not in tabela
-    assert 'Categoria do Cartão' not in tabela
-    assert '<th>Parcela</th>' not in tabela
-
-    assert 'opcoesCategoriaSelect' not in linha
-    assert 'opcoesCategoriaCartaoSelect' not in linha
-    assert "atualizarLinhaEdicao" not in linha
-    assert 'gerar_parcelas_futuras' not in linha
+    assert 'parcelamentoCategoriaCartao' not in html
+    assert 'modalCategoriaCartaoPadrao' not in html
+    assert 'Categoria do Cartão' not in html
+    assert 'opcoesCategoriaCartaoSelect' not in js
+    assert 'import-card-category-select' not in js
+    assert 'buscarResolucaoCategoriaCartao' in js
+    assert 'resolverCategoriaCartaoLinha(index, { manterConfronto: true })' in js
+    assert 'CategoriaCartaoService.resolver_categoria_cartao_para_lancamento' in ROUTE_PATH.read_text(encoding='utf-8')
 
 
-def test_triagem_tem_filtros_contadores_e_payload_filtrado():
+def test_fluxos_existentes_continuam_presentes():
+    html = TEMPLATE_PATH.read_text(encoding='utf-8')
     js = JS_PATH.read_text(encoding='utf-8')
 
-    assert "['a_importar', 'A importar'" in js
-    assert "['ignorados', 'Ignorados'" in js
-    assert "['todas', 'Todos'" in js
-    assert 'function linhaImportavel' in js
-    assert '.filter(linhaImportavel)' in js
-    assert 'Nenhum lançamento selecionado para importação.' in js
-
-
-def test_confronto_separa_novos_duplicados_e_parcelamentos():
-    js = JS_PATH.read_text(encoding='utf-8')
-    confronto = _trecho(js, 'function montarAnaliseConfronto', 'function linhasNovasConfirmaveis')
-
-    assert 'grupos.novos.push' in confronto
-    assert 'grupos.duplicados.push' in confronto
-    assert 'grupos.parcelamentos.push' in confronto
-    assert 'if (linha.ignorar && !linhaDuplicada(linha) && !linhaComErro(linha)) return;' in confronto
-    assert 'linhaDuplicada(linha)' in confronto
-    assert 'detectarParcelamentoLinha(linha)' in confronto
+    assert 'parcelamentoModal' in html
+    assert 'Criar parcelamento a partir do lançamento importado' in html
+    assert 'Criar parcelamento' in js
+    assert 'Criar despesa' in js
+    assert 'Confrontar resultado' in html
+    assert 'async function aplicarReconhecimentoFlexivel' in js
+    assert 'function usarSugestaoReconhecimento' in js
+    assert 'function montarPayloadImportacao' in js
 
 
 def test_regex_de_parcelamento_e_payload_final_so_usam_novos():
@@ -101,59 +189,6 @@ console.log(JSON.stringify({{ validos, invalidos }}));
     assert dados['invalidos'] == [None, None, None, None, None]
 
 
-def test_categoria_aparece_somente_no_confronto_de_novos():
-    js = JS_PATH.read_text(encoding='utf-8')
-    triagem = _trecho(js, 'function renderizarEditorPrePersistencia', 'function renderizarConfrontoClassificacao')
-    novos = _trecho(js, 'function renderizarGrupoNovosConfronto', 'function renderizarLinhaNovoConfronto')
-    linha_novo = _trecho(js, 'function renderizarLinhaNovoConfronto', 'function renderizarGrupoAlertaConfronto')
-    alertas = _trecho(js, 'function renderizarGrupoAlertaConfronto', 'function statusConfrontoLabel')
-    parcelamentos = _trecho(js, 'function renderizarGrupoParcelamentosConfronto', 'function renderizarGrupoAlertaConfronto')
-
-    assert 'Categoria da despesa' not in triagem
-    assert 'Categoria do cartao' not in triagem
-    assert 'Categoria da despesa' in novos
-    assert 'Categoria do cartao' not in novos
-    assert 'opcoesCategoriaSelect' in linha_novo
-    assert 'opcoesCategoriaCartaoSelect' not in linha_novo
-    assert 'import-card-category-select' not in linha_novo
-    assert 'Criar parcelamento' in parcelamentos
-    assert 'opcoesCategoriaSelect' not in parcelamentos
-    assert 'opcoesCategoriaCartaoSelect' not in parcelamentos
-    assert 'opcoesCategoriaSelect' not in alertas
-    assert 'opcoesCategoriaCartaoSelect' not in alertas
-
-
-def test_template_nao_exibe_classificacao_como_etapa_principal():
-    html = TEMPLATE_PATH.read_text(encoding='utf-8')
-
-    assert '4. Triagem' in html
-    assert '4. Classificação' not in html
-    assert '5. Confronto e Resultado' in html
-    assert 'confrontoContainer' in html
-    assert 'Confrontar selecionados' in html
-    assert 'parcelamentoModal' in html
-    assert 'Criar parcelamento a partir do lançamento importado' in html
-    assert 'Categoria da despesa' in html
-    assert 'parcelamentoCategoriaCartao' not in html
-    assert 'modalCategoriaCartaoPadrao' not in html
-    assert 'Valor a importar' in html
-    assert 'Duplicados protegidos' in html
-
-
-def test_categoria_cartao_derivada_sem_select_manual_na_importacao():
-    js = JS_PATH.read_text(encoding='utf-8')
-    route = ROUTE_PATH.read_text(encoding='utf-8')
-
-    assert 'parcelamentoCategoriaCartao' not in js
-    assert 'modalCategoriaCartaoPadrao' not in js
-    assert 'opcoesCategoriaCartaoSelect' not in js
-    assert 'import-card-category-select' not in js
-    assert 'buscarResolucaoCategoriaCartao' in js
-    assert 'resolverCategoriaCartaoLinha(index, { manterConfronto: true })' in js
-    assert 'CategoriaCartaoService.resolver_categoria_cartao_para_lancamento' in route
-    assert "linha['categoria_cartao_id'] = int(categoria_cartao_resolvida)" in route
-
-
 def test_backend_cria_parcelamento_atual_e_futuro_sem_migration():
     service = SERVICE_PATH.read_text(encoding='utf-8')
     route = ROUTE_PATH.read_text(encoding='utf-8')
@@ -186,17 +221,3 @@ def test_reconhecimento_flexivel_prioriza_valor_cartao_e_keyword():
     assert "score < 60" in service
     assert "tipo = 'duplicado_atual'" in service
     assert "@bp.route('/reconhecer', methods=['POST'])" in route
-
-
-def test_frontend_exibe_possivel_conhecido_sem_aplicar_categoria_automaticamente():
-    js = JS_PATH.read_text(encoding='utf-8')
-
-    assert 'async function aplicarReconhecimentoFlexivel' in js
-    assert "fetch(`${API_BASE}/reconhecer`" in js
-    assert 'function renderizarGrupoConhecidosConfronto' in js
-    assert 'Possiveis conhecidos / assinaturas' in js
-    assert 'Usar sugestao' in js
-    assert 'Tratar como novo' in js
-    assert 'function usarSugestaoReconhecimento' in js
-    assert 'linha.sugestao_reconhecimento_aplicada = true' in js
-    assert 'function linhaReconhecimentoPendente' in js
