@@ -58,6 +58,13 @@ def _categoria():
     return categoria
 
 
+def _cartao():
+    cartao = ItemDespesa(nome='Cartao Teste', tipo='Agregador', ativo=True)
+    db.session.add(cartao)
+    db.session.commit()
+    return cartao
+
+
 def _payload(categoria_id, **overrides):
     payload = {
         'nome': 'Consorcio Teste',
@@ -124,6 +131,33 @@ def test_mes_contemplacao_fora_das_parcelas_retorna_erro(client):
     assert 'Mes de contemplacao deve estar dentro do periodo do consorcio' in data['error']
 
 
+def test_contemplacao_numerica_pode_avancar_para_ano_seguinte(client):
+    categoria = _categoria()
+
+    response = client.post(
+        '/api/consorcios/',
+        json=_payload(
+            categoria.id,
+            data_inicial='2025-10-01',
+            mes_inicio=None,
+            numero_parcelas=9,
+            valor_reajuste=10,
+            mes_contemplacao=6,
+        ),
+    )
+    data = response.get_json()
+
+    assert response.status_code == 201
+    assert data['data']['mes_inicio'] == '2025-10-01'
+    assert data['data']['mes_contemplacao'] == '2026-06-01'
+    assert data['data']['valor_premio'] == 5220.0
+    assert data['receita_gerada'] is True
+
+    receita = ReceitaRealizada.query.one()
+    assert receita.data_recebimento == date(2026, 6, 1)
+    assert float(receita.valor_recebido) == 5220.0
+
+
 def test_premio_fixo_e_receita_sao_calculados_pela_posicao(client):
     categoria = _categoria()
 
@@ -146,6 +180,66 @@ def test_premio_fixo_e_receita_sao_calculados_pela_posicao(client):
     assert float(receita.valor_recebido) == 5400.0
     assert receita.data_recebimento == date(2026, 3, 1)
     assert receita.mes_referencia == date(2026, 3, 1)
+
+
+def test_consorcio_persiste_meio_pagamento_nas_parcelas(client):
+    categoria = _categoria()
+
+    response = client.post('/api/consorcios/', json=_payload(categoria.id, meio_pagamento='pix'))
+    data = response.get_json()
+
+    assert response.status_code == 201
+    assert data['data']['meio_pagamento'] == 'pix'
+
+    parcelas = ItemDespesa.query.filter_by(tipo='Consorcio').all()
+    assert len(parcelas) == 10
+    assert {parcela.meio_pagamento for parcela in parcelas} == {'pix'}
+
+    contas = Conta.query.all()
+    assert contas
+    assert all(conta.debito_automatico is False for conta in contas)
+
+
+def test_consorcio_persiste_cartao_nas_parcelas(client):
+    categoria = _categoria()
+    cartao = _cartao()
+
+    response = client.post(
+        '/api/consorcios/',
+        json=_payload(categoria.id, meio_pagamento='cartao', cartao_id=cartao.id),
+    )
+    data = response.get_json()
+
+    assert response.status_code == 201
+    assert data['data']['meio_pagamento'] == 'cartao'
+    assert data['data']['cartao_id'] == cartao.id
+
+    parcelas = ItemDespesa.query.filter_by(tipo='Consorcio').all()
+    assert parcelas
+    assert {parcela.meio_pagamento for parcela in parcelas} == {'cartao'}
+    assert {parcela.cartao_id for parcela in parcelas} == {cartao.id}
+
+
+def test_editar_consorcio_atualiza_meio_pagamento_das_parcelas(client):
+    categoria = _categoria()
+    cartao = _cartao()
+    criado = client.post('/api/consorcios/', json=_payload(categoria.id, meio_pagamento='pix')).get_json()
+    consorcio_id = criado['data']['id']
+
+    response = client.put(
+        f'/api/consorcios/{consorcio_id}',
+        json={'meio_pagamento': 'cartao', 'cartao_id': cartao.id},
+    )
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data['data']['meio_pagamento'] == 'cartao'
+    assert data['data']['cartao_id'] == cartao.id
+
+    parcelas = ItemDespesa.query.filter_by(tipo='Consorcio').all()
+    assert parcelas
+    assert {parcela.meio_pagamento for parcela in parcelas} == {'cartao'}
+    assert {parcela.cartao_id for parcela in parcelas} == {cartao.id}
 
 
 def test_premio_percentual_usa_juros_simples_e_nao_composto(client):
@@ -187,5 +281,5 @@ def test_template_indica_premio_automatico_readonly(client):
 
     assert 'id="valor-premio"' in html
     assert 'readonly' in html
+    assert 'Calculado automaticamente pela Data inicial.' in html
     assert 'Calculado automaticamente pela parcela da contemplacao' in html
-

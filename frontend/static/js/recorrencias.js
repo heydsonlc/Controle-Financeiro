@@ -20,6 +20,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     configurarCalculoPremioConsorcio();
 });
 
+function extrairListaRespostaApi(resposta) {
+    if (Array.isArray(resposta)) return resposta;
+    if (resposta?.success && Array.isArray(resposta.data)) return resposta.data;
+    if (Array.isArray(resposta?.data)) return resposta.data;
+    return [];
+}
+
 async function carregarDadosBase() {
     const [categoriasResp, cartoesResp, contasResp] = await Promise.all([
         fetch(`${API_CATEGORIAS}?ativo=true`).then(r => r.json()).catch(() => ({ success: false, data: [] })),
@@ -27,9 +34,9 @@ async function carregarDadosBase() {
         fetch(API_CONTAS_BANCARIAS).then(r => r.json()).catch(() => ({ success: false, data: [] }))
     ]);
 
-    estadoRecorrencias.categorias = categoriasResp.success ? (categoriasResp.data || []) : [];
-    estadoRecorrencias.cartoes = cartoesResp.success ? (cartoesResp.data || []) : [];
-    estadoRecorrencias.contasBancarias = contasResp.success ? (contasResp.data || []) : [];
+    estadoRecorrencias.categorias = extrairListaRespostaApi(categoriasResp);
+    estadoRecorrencias.cartoes = extrairListaRespostaApi(cartoesResp);
+    estadoRecorrencias.contasBancarias = extrairListaRespostaApi(contasResp);
 
     preencherSelectCategorias();
     preencherSelectCartoes();
@@ -196,6 +203,8 @@ function obterItensUnificados() {
         valor: Number(item.valor_inicial || 0),
         categoriaId: item.categoria_id || '',
         categoriaNome: item.categoria_nome || '-',
+        meioPagamento: item.meio_pagamento || null,
+        categoriaCartaoId: item.categoria_cartao_id || null,
         status: item.ativo ? 'ativa' : 'inativa',
         statusLabel: item.ativo ? 'Ativo' : 'Inativo',
         detalhe: `${item.numero_parcelas || 0} parcelas`,
@@ -502,19 +511,27 @@ async function salvarRecorrenciaSimples() {
 
 async function salvarConsorcio() {
     const id = document.getElementById('recorrencia-id').value;
+    const dataInicial = document.getElementById('data-vencimento').value || null;
+    const mesInicioInput = document.getElementById('mes-inicio')?.value || null;
+    const mesInicio = converterMesParaData(mesInicioInput || dataInicial, dataInicial);
     const mesContemplacaoValor = document.getElementById('mes-contemplacao').value;
-    const mesContemplacao = converterMesParaData(mesContemplacaoValor);
+    const mesContemplacao = converterMesParaData(mesContemplacaoValor, mesInicio || dataInicial);
     calcularValorPremioConsorcio();
     const dados = {
         nome: document.getElementById('nome').value.trim(),
         valor_inicial: Number(document.getElementById('valor').value),
         categoria_id: Number(document.getElementById('categoria-id').value),
+        data_inicial: dataInicial,
         numero_parcelas: Number(document.getElementById('numero-parcelas').value),
-        mes_inicio: converterMesParaData(document.getElementById('mes-inicio').value, mesContemplacao),
+        mes_inicio: mesInicio,
         tipo_reajuste: document.getElementById('tipo-reajuste').value,
         valor_reajuste: Number(document.getElementById('valor-reajuste').value || 0),
         mes_contemplacao: mesContemplacao,
         valor_premio: document.getElementById('valor-premio').value ? Number(document.getElementById('valor-premio').value) : null,
+        meio_pagamento: document.getElementById('meio-pagamento').value || null,
+        cartao_id: document.getElementById('cartao-id').value || null,
+        conta_bancaria_id: document.getElementById('conta-bancaria-id')?.value || null,
+        categoria_cartao_id: document.getElementById('categoria-cartao-id')?.value || null,
         observacoes: document.getElementById('observacoes').value.trim()
     };
 
@@ -548,14 +565,24 @@ async function editarRecorrencia(origem, id) {
         setValue('nome', item.nome || '');
         setValue('valor', item.valor_inicial || '');
         setValue('categoria-id', item.categoria_id || '');
+        setValue('data-vencimento', item.mes_inicio ? String(item.mes_inicio).slice(0, 10) : '');
         setValue('numero-parcelas', item.numero_parcelas || '');
         setValue('mes-inicio', normalizarMes(item.mes_inicio));
         setValue('tipo-reajuste', item.tipo_reajuste || 'nenhum');
         setValue('valor-reajuste', item.valor_reajuste || '');
         setValue('mes-contemplacao', normalizarMes(item.mes_contemplacao));
         setValue('valor-premio', item.valor_premio || '');
+        setValue('meio-pagamento', item.meio_pagamento || '');
+        setValue('cartao-id', item.cartao_id || '');
+        setValue('conta-bancaria-id', item.conta_bancaria_id || '');
         setValue('observacoes', item.observacoes || '');
         document.getElementById('recorrencia-ativa').checked = item.ativo !== false;
+        alternarMeioPagamento();
+        if (item.meio_pagamento === 'cartao' && item.cartao_id) {
+            await carregarCategoriasCartaoSelecionado();
+            setValue('categoria-cartao-id', item.categoria_cartao_id || '');
+            resolverCategoriaCartaoRecorrencia();
+        }
         calcularValorPremioConsorcio();
         document.getElementById('nome')?.focus();
         return;
@@ -687,7 +714,7 @@ function formatarDiaSemana(valor) {
 }
 
 function configurarCalculoPremioConsorcio() {
-    ['valor', 'numero-parcelas', 'mes-inicio', 'mes-contemplacao', 'tipo-reajuste', 'valor-reajuste'].forEach(id => {
+    ['valor', 'numero-parcelas', 'data-vencimento', 'mes-inicio', 'mes-contemplacao', 'tipo-reajuste', 'valor-reajuste'].forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
         el.addEventListener('input', calcularValorPremioConsorcio);
@@ -714,7 +741,9 @@ function converterMesParaData(valor, dataBase = null) {
         const base = baseTexto && !/^\d{1,2}$/.test(baseTexto)
             ? converterMesParaData(baseTexto)
             : new Date().toISOString().slice(0, 10);
-        const ano = String(base).slice(0, 4);
+        const anoBase = Number(String(base).slice(0, 4));
+        const mesBase = Number(String(base).slice(5, 7));
+        const ano = mesBase && mesNumero < mesBase ? anoBase + 1 : anoBase;
         return `${ano}-${String(mesNumero).padStart(2, '0')}-01`;
     }
 
@@ -722,7 +751,8 @@ function converterMesParaData(valor, dataBase = null) {
 }
 
 function calcularPosicaoContemplacaoConsorcio(mesInicio, mesContemplacao) {
-    const inicio = converterMesParaData(mesInicio, mesContemplacao);
+    const dataInicial = document.getElementById('data-vencimento')?.value || null;
+    const inicio = converterMesParaData(mesInicio || dataInicial, dataInicial);
     const contemplacao = converterMesParaData(mesContemplacao, inicio);
     if (!inicio || !contemplacao) return null;
 
@@ -751,7 +781,8 @@ function calcularValorPremioConsorcio() {
 
     const valorInicial = Number(document.getElementById('valor')?.value || 0);
     const numeroParcelas = Number(document.getElementById('numero-parcelas')?.value || 0);
-    const mesInicio = document.getElementById('mes-inicio')?.value;
+    const dataInicial = document.getElementById('data-vencimento')?.value || null;
+    const mesInicio = document.getElementById('mes-inicio')?.value || dataInicial;
     const mesContemplacao = document.getElementById('mes-contemplacao')?.value;
     const tipoReajuste = document.getElementById('tipo-reajuste')?.value || 'nenhum';
     const valorReajuste = Number(document.getElementById('valor-reajuste')?.value || 0);

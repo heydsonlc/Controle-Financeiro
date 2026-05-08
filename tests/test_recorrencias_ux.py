@@ -165,6 +165,23 @@ def test_quinzenal_usa_rotulo_a_cada_2_semanas_e_debito_automatico(client):
     assert '<option value="debito_automatico">D&eacute;bito Autom&aacute;tico / D.A.</option>' in html
 
 
+def test_frontend_aceita_lista_direta_de_cartoes():
+    js = (Path(__file__).resolve().parents[1] / 'frontend' / 'static' / 'js' / 'recorrencias.js').read_text(encoding='utf-8')
+
+    assert 'function extrairListaRespostaApi' in js
+    assert 'Array.isArray(resposta)' in js
+    assert 'estadoRecorrencias.cartoes = extrairListaRespostaApi(cartoesResp)' in js
+
+
+def test_frontend_envia_meio_pagamento_no_consorcio():
+    js = (Path(__file__).resolve().parents[1] / 'frontend' / 'static' / 'js' / 'recorrencias.js').read_text(encoding='utf-8')
+
+    trecho = js[js.index('async function salvarConsorcio'):js.index('async function editarRecorrencia')]
+    assert "meio_pagamento: document.getElementById('meio-pagamento').value || null" in trecho
+    assert "cartao_id: document.getElementById('cartao-id').value || null" in trecho
+    assert "conta_bancaria_id: document.getElementById('conta-bancaria-id')?.value || null" in trecho
+
+
 def test_banco_vazio_nao_quebra_listagem_api(client):
     response = client.get('/api/recorrencias?status=todas')
     data = response.get_json()
