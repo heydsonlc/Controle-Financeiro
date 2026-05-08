@@ -557,39 +557,39 @@ function renderizarLancamentosFatura(cartao) {
                 <button class="cf-button cf-button-secondary" type="button" data-action="ver-lancamentos-fatura" data-filtro-fatura="todos">Todos</button>
             </div>
             ${lancamentos.length ? `
-                <div class="fatura-lancamentos-list">
+                <div class="fatura-lancamentos-table">
+                    <div class="fatura-lancamentos-thead">
+                        <span>Descri&ccedil;&atilde;o</span>
+                        <span>Data</span>
+                        <span>Cat. Despesa</span>
+                        <span>Cat. Cart&atilde;o</span>
+                        <span>Parcela</span>
+                        <span>Valor</span>
+                        <span>A&ccedil;&otilde;es</span>
+                    </div>
                     ${lancamentos.map((lancamento) => `
-                        <article class="fatura-lancamento-item ${lancamento.status_classificacao !== 'classificado' ? 'needs-review' : ''}">
-                            <div>
+                        <div class="fatura-lancamento-row ${lancamento.status_classificacao !== 'classificado' ? 'needs-review' : ''}">
+                            <div class="fatura-lancamento-desc">
                                 <strong>${escapeHtml(lancamento.descricao)}</strong>
-                                <span>${escapeHtml(lancamento.data || '-')} &bull; ${escapeHtml(lancamento.origem || '-')}</span>
+                                <small>${escapeHtml(lancamento.origem || '-')}</small>
                             </div>
-                            <div>
-                                <span>Categoria de Despesa</span>
-                                <strong>${escapeHtml(lancamento.categoria_nome || '-')}</strong>
-                            </div>
-                            <div>
-                                <span>Categoria do Cart&atilde;o</span>
-                                <strong>${escapeHtml(lancamento.categoria_cartao_nome || 'Sem Categoria do Cartão')}</strong>
-                            </div>
-                            <div class="lancamento-value">
-                                <strong>${formatarMoeda(lancamento.valor)}</strong>
-                                <span>${escapeHtml(lancamento.parcela_atual || 1)}/${escapeHtml(lancamento.parcelas_total || 1)}</span>
-                            </div>
+                            <span class="fatura-lancamento-cell">${escapeHtml(lancamento.data || '-')}</span>
+                            <span class="fatura-lancamento-cell">${escapeHtml(lancamento.categoria_nome || '—')}</span>
+                            <span class="fatura-lancamento-cell ${!lancamento.categoria_cartao_nome ? 'fatura-cell--sem-cat' : ''}">${escapeHtml(lancamento.categoria_cartao_nome || 'Sem categoria')}</span>
+                            <span class="fatura-lancamento-cell">${escapeHtml(String(lancamento.parcela_atual || 1))}/${escapeHtml(String(lancamento.parcelas_total || 1))}</span>
+                            <span class="fatura-lancamento-cell fatura-lancamento-valor">${formatarMoeda(lancamento.valor)}</span>
                             <div class="lancamento-acoes">
                                 <button class="lancamento-icon-btn" type="button" data-action="editar-lancamento" data-lancamento-id="${lancamento.id}" title="Editar lançamento" aria-label="Editar">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                                 </button>
-                                ${lancamentoTemParcelamentoGerenciavel(lancamento) ? `
-                                    <button class="lancamento-icon-btn lancamento-icon-btn--parcelamento" type="button" data-action="gerenciar-parcelamento" data-lancamento-id="${lancamento.id}" title="Gerenciar parcelamento" aria-label="Gerenciar parcelamento">
-                                        ${cartoesIcon('layers')}
-                                    </button>
-                                ` : ''}
+                                <button class="lancamento-icon-btn lancamento-icon-btn--parcelamento ${lancamentoTemParcelamentoGerenciavel(lancamento) ? '' : 'is-disabled'}" type="button" ${lancamentoTemParcelamentoGerenciavel(lancamento) ? `data-action="gerenciar-parcelamento" data-lancamento-id="${lancamento.id}"` : 'disabled'} title="Gerenciar parcelamento" aria-label="Gerenciar parcelamento">
+                                    ${cartoesIcon('layers')}
+                                </button>
                                 <button class="lancamento-icon-btn lancamento-icon-btn--danger" type="button" data-action="excluir-lancamento" data-lancamento-id="${lancamento.id}" data-lancamento-desc="${escapeHtml(lancamento.descricao)}" title="Excluir lançamento" aria-label="Excluir">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/></svg>
                                 </button>
                             </div>
-                        </article>
+                        </div>
                     `).join('')}
                 </div>
             ` : `
