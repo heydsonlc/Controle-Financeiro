@@ -516,16 +516,37 @@
 }
 
 .cards-table .table-row {
-    grid-template-columns: 1.7fr 0.85fr 1fr 0.9fr 0.7fr;
+    grid-template-columns: 1.7fr 0.85fr 80px 0.85fr 52px 0.9fr 0.7fr;
 }
 
-/* Títulos e células das colunas 2-5 centralizados */
+/* Títulos e células das colunas 2-7 centralizados, exceto col 1 */
 .cards-table .table-head span:not(:first-child),
 .cards-table .card-row > span:not(:first-child) {
     text-align: center;
     justify-content: center;
     display: flex;
     align-items: center;
+}
+
+.card-bar-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.card-bar-cell .progress-line {
+    width: 100%;
+}
+
+.card-utilizado-valor {
+    font-size: 0.85rem;
+    color: #0f172a;
+    font-weight: 600;
+}
+
+.card-pct-cell .card-pct {
+    color: #64748b;
+    font-size: 0.76rem;
 }
 
 .table-head {

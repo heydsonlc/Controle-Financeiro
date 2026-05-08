@@ -344,10 +344,9 @@ function renderCartoesLimites(bloco) {
                 </span>
             </span>
             <span>${formatarMoeda(cartao.limite_total)}</span>
-            <span class="card-utilizado-cell">
-                <b class="progress-line"><em style="width:${Math.min(cartao.percentual || 0, 100)}%"></em></b>
-                ${formatarMoeda(cartao.utilizado)}<small class="card-pct">${cartao.percentual || 0}%</small>
-            </span>
+            <span class="card-bar-cell"><b class="progress-line"><em style="width:${Math.min(cartao.percentual || 0, 100)}%"></em></b></span>
+            <span class="card-utilizado-valor">${formatarMoeda(cartao.utilizado)}</span>
+            <span class="card-pct-cell"><small class="card-pct">${cartao.percentual || 0}%</small></span>
             <span class="positive">${formatarMoeda(cartao.disponivel)}</span>
             <span><mark class="status-pill ${escapeHtml(cartao.status)}">${rotuloStatus(cartao.status)}</mark></span>
         </div>
