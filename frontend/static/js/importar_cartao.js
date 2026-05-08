@@ -33,6 +33,11 @@ const estado = {
     regraNubank: 'absoluto',
     regraCaixa: 'debito',
     filtroPrevia: 'a_importar',
+    filtroPrincipal: 'todos',
+    filtroRetirados: 'todos',
+    paginaPrincipal: 1,
+    paginaRetirados: 1,
+    linhasPorPagina: 10,
     linhasSelecionadas: new Set(),
 };
 
@@ -360,26 +365,35 @@ function mostrarArquivoSelecionado(file) {
 
     const tipo = formatoArquivo(file);
     chip.hidden = false;
+    chip.className = 'import-file-inline import-file-inline--selected';
     chip.innerHTML = `
         <span class="file-icon ${tipo === 'pdf' ? '' : 'neutral'}">${iconSvg(tipo === 'pdf' ? 'pdf' : 'file')}</span>
-        <span>
-            <strong title="${escapeAttr(file.name)}">${escapeHtml(file.name)}</strong>
-            <span>${formatarTamanho(file.size)}</span>
-        </span>
+        <span class="import-file-inline-text" title="${escapeAttr(file.name)}">${escapeHtml(file.name)}<small class="import-file-size">${formatarTamanho(file.size)}</small></span>
         <button class="import-file-remove" type="button" onclick="removerArquivoSelecionado(event)" title="Remover arquivo" aria-label="Remover arquivo">${iconSvg('close')}</button>
     `;
+}
+
+function renderizarArquivoPlaceholder() {
+    const chip = document.getElementById('selectedFileInfo');
+    if (!chip) return;
+    chip.hidden = false;
+    chip.className = 'import-file-inline';
+    chip.innerHTML = `
+        <span class="file-icon neutral" aria-hidden="true">${iconSvg('file')}</span>
+        <span class="import-file-inline-text">Selecione Arquivo — pdf, csv ou xlsx</span>
+    `;
+}
+
+function abrirSeletorArquivo() {
+    document.getElementById('csvFile')?.click();
 }
 
 function removerArquivoSelecionado(event) {
     if (event) event.stopPropagation();
     const input = document.getElementById('csvFile');
-    const chip = document.getElementById('selectedFileInfo');
 
     if (input) input.value = '';
-    if (chip) {
-        chip.hidden = true;
-        chip.innerHTML = '';
-    }
+    renderizarArquivoPlaceholder();
 
     estado.arquivoSelecionado = null;
     limparDadosImportacao();
@@ -399,6 +413,10 @@ function limparDadosImportacao() {
     estado.parcelamentoModal = null;
     estado.perfilSelecionado = PERFIS.MANUAL;
     estado.filtroPrevia = 'a_importar';
+    estado.filtroPrincipal = 'todos';
+    estado.filtroRetirados = 'todos';
+    estado.paginaPrincipal = 1;
+    estado.paginaRetirados = 1;
     estado.linhasSelecionadas = new Set();
     estado.mapeamentoAtual = {
         data_compra: null,
@@ -419,8 +437,11 @@ function limparDadosImportacao() {
     document.getElementById('resumoPreviaTecnica').innerHTML = '';
     const confronto = document.getElementById('confrontoContainer');
     if (confronto) confronto.innerHTML = '';
+    const retirados = document.getElementById('retiradosContainer');
+    if (retirados) retirados.innerHTML = '<div class="import-empty-state compact">Nenhum lançamento retirado da efetivação.</div>';
     document.getElementById('resultadoContainer').innerHTML = '';
     renderizarClassificacao();
+    renderizarKpisImportacao();
 }
 
 function selecionarArquivo(file) {
@@ -562,6 +583,10 @@ function aplicarPayloadUnificado(data) {
     estado.analiseConfronto = null;
     estado.faseImportacao = 'triagem';
     estado.filtroPrevia = 'a_importar';
+    estado.filtroPrincipal = 'todos';
+    estado.filtroRetirados = 'todos';
+    estado.paginaPrincipal = 1;
+    estado.paginaRetirados = 1;
     estado.linhasSelecionadas = new Set();
 
     const origemLabel = (data?.origem || '').toUpperCase();
@@ -628,6 +653,10 @@ async function processarCSV(file) {
         estado.analiseConfronto = null;
         estado.faseImportacao = 'triagem';
         estado.filtroPrevia = 'a_importar';
+        estado.filtroPrincipal = 'todos';
+        estado.filtroRetirados = 'todos';
+        estado.paginaPrincipal = 1;
+        estado.paginaRetirados = 1;
         estado.linhasSelecionadas = new Set();
         estado.perfilSelecionado = dados.perfil_detectado || PERFIS.MANUAL;
         estado.mapeamentoAtual = {
@@ -721,9 +750,11 @@ function invalidarPrevia(opcoes = {}) {
     if (!opcoes.manterConfronto) {
         estado.analiseConfronto = null;
         estado.faseImportacao = 'triagem';
+        estado.paginaPrincipal = 1;
         const confronto = document.getElementById('confrontoContainer');
         if (confronto) confronto.innerHTML = '';
     }
+    estado.paginaRetirados = 1;
     const resumo = document.getElementById('resumoPreviaTecnica');
     if (resumo) resumo.innerHTML = '';
     const resultado = document.getElementById('resultadoContainer');
@@ -1461,15 +1492,307 @@ function linhaPrecisaRevisao(linha) {
         || linha.categoria_confianca === 'baixa';
 }
 
-function linhasPreviaFiltradas() {
+function valorNumericoLinha(linha) {
+    return parseValorNumerico(linha?.valor) || 0;
+}
+
+function formatarValorLinha(linha) {
+    return formatarMoeda(valorNumericoLinha(linha));
+}
+
+function temConfrontoAtivo() {
+    return Boolean(estado.analiseConfronto);
+}
+
+function linhaDuplicadaOperacional(linha) {
+    return linhaDuplicada(linha) || linhaDuplicadaPorReconhecimento(linha);
+}
+
+function linhaRetiradaEfetivacao(linha) {
+    return Boolean(
+        linha.ignorar
+        || linhaTratadaParcelamento(linha)
+        || linhaDuplicadaOperacional(linha)
+        || linhaComErro(linha)
+        || linhaCredito(linha)
+    );
+}
+
+function motivoRetiradaLinha(linha) {
+    if (linhaTratadaParcelamento(linha)) return 'Parcelamento tratado';
+    if (linhaDuplicadaOperacional(linha)) return 'Já existe na fatura';
+    if (linhaComErro(linha)) return 'Erro';
+    if (linhaCredito(linha)) return 'Crédito/estorno';
+    if (linha.ignorar) return 'Retirado pelo usuário';
+    return 'Outro motivo técnico';
+}
+
+function linhaRestauravel(linha) {
+    return Boolean(
+        linha.ignorar
+        && !linhaTratadaParcelamento(linha)
+        && !linhaDuplicadaOperacional(linha)
+        && !linhaComErro(linha)
+        && !linhaCredito(linha)
+    );
+}
+
+function obterInfoOperacional(linha, index) {
+    const confronto = temConfrontoAtivo();
+    const reconhecimento = reconhecimentoLinha(linha);
+    const parcela = detectarParcelamentoLinha(linha);
+
+    if (!confronto) {
+        return {
+            linha,
+            index,
+            status: 'A importar',
+            classe: 'valid',
+            tipo: '—',
+            filtro: 'pendentes',
+            sugestao: '—',
+            descricaoEditavel: false,
+            categoriaEditavel: false,
+            parcela,
+            reconhecimento
+        };
+    }
+
+    if (parcela) {
+        return {
+            linha,
+            index,
+            status: 'Parcelado',
+            classe: 'parcelment',
+            tipo: 'Parcelamento',
+            filtro: 'parcelados',
+            sugestao: `${parcela.rotulo} detectado`,
+            descricaoEditavel: false,
+            categoriaEditavel: false,
+            parcela,
+            reconhecimento
+        };
+    }
+
+    if (linhaReconhecimentoPendente(linha)) {
+        return {
+            linha,
+            index,
+            status: 'Conhecida',
+            classe: 'known',
+            tipo: reconhecimento?.tipo === 'recorrencia' ? 'Recorrência' : 'Assinatura',
+            filtro: 'conhecidas',
+            sugestao: reconhecimento?.descricao_sugerida || 'Possível conhecida',
+            descricaoEditavel: false,
+            categoriaEditavel: false,
+            parcela,
+            reconhecimento
+        };
+    }
+
+    if (linhaPossivelRecorrencia(linha)) {
+        return {
+            linha,
+            index,
+            status: 'Recorrência',
+            classe: 'recurrence',
+            tipo: 'Recorrência',
+            filtro: 'recorrencias',
+            sugestao: linha.descricao_exibida || linha.descricao || 'Possível recorrência',
+            descricaoEditavel: false,
+            categoriaEditavel: false,
+            parcela,
+            reconhecimento
+        };
+    }
+
+    return {
+        linha,
+        index,
+        status: 'Novo',
+        classe: 'valid',
+        tipo: 'Novo',
+        filtro: 'novos',
+        sugestao: '—',
+        descricaoEditavel: true,
+        categoriaEditavel: true,
+        parcela,
+        reconhecimento
+    };
+}
+
+function linhasProcessamentoBase() {
     return estado.linhasMapeadas
         .map((linha, index) => ({ linha, index }))
-        .filter(({ linha }) => {
-            if (estado.filtroPrevia === 'a_importar') return linhaImportavel(linha);
-            if (estado.filtroPrevia === 'ignorados') return linha.ignorar && !linhaDuplicada(linha) && !linhaTratadaParcelamento(linha);
-            if (estado.filtroPrevia === 'duplicadas') return linhaDuplicada(linha);
-            return true;
-        });
+        .filter(({ linha }) => !linhaRetiradaEfetivacao(linha))
+        .map(({ linha, index }) => obterInfoOperacional(linha, index));
+}
+
+function linhasRetiradasBase() {
+    return estado.linhasMapeadas
+        .map((linha, index) => ({ linha, index }))
+        .filter(({ linha }) => linhaRetiradaEfetivacao(linha));
+}
+
+function passaFiltroPrincipal(item, filtro = estado.filtroPrincipal) {
+    if (filtro === 'todos') return true;
+    if (filtro === 'conhecidas' || filtro === 'possiveis_conhecidas') return item.filtro === 'conhecidas';
+    if (filtro === 'parcelados' || filtro === 'criar_parcelamento') return item.filtro === 'parcelados';
+    if (filtro === 'novos' || filtro === 'criar_despesa') return item.filtro === 'novos';
+    if (filtro === 'recorrencias') return item.filtro === 'recorrencias';
+    if (filtro === 'duplicados') return linhaDuplicadaOperacional(item.linha);
+    if (filtro === 'pendentes') return item.filtro !== 'novos' || !toIntOrNull(item.linha.categoria_id || item.linha.categoria_despesa_id);
+    if (filtro === 'usar_sugestao') return item.filtro === 'conhecidas';
+    return true;
+}
+
+function passaFiltroRetirados(item, filtro = estado.filtroRetirados) {
+    const motivo = motivoRetiradaLinha(item.linha);
+    if (filtro === 'todos') return true;
+    if (filtro === 'usuario') return motivo === 'Retirado pelo usuário';
+    if (filtro === 'existente') return motivo === 'Já existe na fatura';
+    if (filtro === 'duplicado') return linhaDuplicadaOperacional(item.linha);
+    if (filtro === 'parcelamento') return motivo === 'Parcelamento tratado';
+    if (filtro === 'bloqueado') return linhaComErro(item.linha) || linhaCredito(item.linha);
+    if (filtro === 'credito') return linhaCredito(item.linha);
+    if (filtro === 'erro') return linhaComErro(item.linha);
+    return true;
+}
+
+function linhasProcessamentoFiltradas() {
+    return linhasProcessamentoBase().filter((item) => passaFiltroPrincipal(item));
+}
+
+function linhasRetiradasFiltradas() {
+    return linhasRetiradasBase().filter((item) => passaFiltroRetirados(item));
+}
+
+function contarFiltroPrincipal(filtro) {
+    return linhasProcessamentoBase().filter((item) => passaFiltroPrincipal(item, filtro)).length;
+}
+
+function contarFiltroRetirados(filtro) {
+    return linhasRetiradasBase().filter((item) => passaFiltroRetirados(item, filtro)).length;
+}
+
+function alterarFiltroPrincipal(filtro) {
+    estado.filtroPrincipal = filtro || 'todos';
+    estado.paginaPrincipal = 1;
+    estado.linhasSelecionadas = new Set();
+    renderizarEditorPrePersistencia();
+}
+
+function alterarFiltroRetirados(filtro) {
+    estado.filtroRetirados = filtro || 'todos';
+    estado.paginaRetirados = 1;
+    renderizarTabelaRetirados();
+    renderizarFiltroAvancado('retirados');
+}
+
+function alternarFiltroAvancado(tipo) {
+    const id = tipo === 'retirados' ? 'retiradosFilterPanel' : 'principalFilterPanel';
+    const painel = document.getElementById(id);
+    if (!painel) return;
+    renderizarFiltroAvancado(tipo);
+    painel.hidden = !painel.hidden;
+}
+
+function renderizarFiltroAvancado(tipo) {
+    const principal = tipo !== 'retirados';
+    const painel = document.getElementById(principal ? 'principalFilterPanel' : 'retiradosFilterPanel');
+    if (!painel) return;
+
+    const filtros = principal
+        ? [
+            ['todos', 'Todos', contarFiltroPrincipal('todos')],
+            ['conhecidas', 'Conhecidas', contarFiltroPrincipal('conhecidas')],
+            ['possiveis_conhecidas', 'Possíveis conhecidas', contarFiltroPrincipal('possiveis_conhecidas')],
+            ['parcelados', 'Parcelados', contarFiltroPrincipal('parcelados')],
+            ['novos', 'Novos', contarFiltroPrincipal('novos')],
+            ['recorrencias', 'Recorrências', contarFiltroPrincipal('recorrencias')],
+            ['duplicados', 'Duplicados', contarFiltroPrincipal('duplicados')],
+            ['pendentes', 'Pendentes de ação', contarFiltroPrincipal('pendentes')],
+            ['criar_parcelamento', 'Criar parcelamento', contarFiltroPrincipal('criar_parcelamento')],
+            ['criar_despesa', 'Criar despesa', contarFiltroPrincipal('criar_despesa')],
+            ['usar_sugestao', 'Usar sugestão', contarFiltroPrincipal('usar_sugestao')]
+        ]
+        : [
+            ['todos', 'Todos', contarFiltroRetirados('todos')],
+            ['usuario', 'Retirado pelo usuário', contarFiltroRetirados('usuario')],
+            ['existente', 'Já existe na fatura', contarFiltroRetirados('existente')],
+            ['duplicado', 'Duplicado', contarFiltroRetirados('duplicado')],
+            ['parcelamento', 'Parcelamento tratado', contarFiltroRetirados('parcelamento')],
+            ['bloqueado', 'Bloqueado', contarFiltroRetirados('bloqueado')],
+            ['credito', 'Crédito/estorno', contarFiltroRetirados('credito')],
+            ['erro', 'Erro', contarFiltroRetirados('erro')]
+        ];
+
+    const filtroAtivo = principal ? estado.filtroPrincipal : estado.filtroRetirados;
+    const handler = principal ? 'alterarFiltroPrincipal' : 'alterarFiltroRetirados';
+    painel.innerHTML = filtros.map(([id, label, total]) => `
+        <button class="import-review-filter ${filtroAtivo === id ? 'is-active' : ''}" type="button" onclick="${handler}('${id}')">
+            ${escapeHtml(label)} <span>${total}</span>
+        </button>
+    `).join('');
+}
+
+function paginaTabela(tipo) {
+    return tipo === 'retirados' ? estado.paginaRetirados : estado.paginaPrincipal;
+}
+
+function definirPaginaTabela(tipo, pagina) {
+    if (tipo === 'retirados') estado.paginaRetirados = pagina;
+    else estado.paginaPrincipal = pagina;
+}
+
+function paginarItens(itens, tipo) {
+    const porPagina = estado.linhasPorPagina;
+    const totalPaginas = Math.max(1, Math.ceil(itens.length / porPagina));
+    const pagina = Math.min(Math.max(1, paginaTabela(tipo)), totalPaginas);
+    definirPaginaTabela(tipo, pagina);
+    const inicio = (pagina - 1) * porPagina;
+    return {
+        itens: itens.slice(inicio, inicio + porPagina),
+        pagina,
+        totalPaginas,
+        inicio,
+        fim: Math.min(inicio + porPagina, itens.length),
+        total: itens.length
+    };
+}
+
+function alterarPaginaTabela(tipo, pagina) {
+    definirPaginaTabela(tipo, Number(pagina) || 1);
+    if (tipo === 'retirados') renderizarTabelaRetirados();
+    else renderizarEditorPrePersistencia();
+}
+
+function renderizarPaginacaoTabela(tipo, paginaInfo) {
+    const paginas = Array.from({ length: paginaInfo.totalPaginas }, (_, idx) => idx + 1)
+        .filter((pagina) => paginaInfo.totalPaginas <= 5 || Math.abs(pagina - paginaInfo.pagina) <= 2 || pagina === 1 || pagina === paginaInfo.totalPaginas);
+    const intervalo = paginaInfo.total
+        ? `${paginaInfo.inicio + 1}-${paginaInfo.fim} de ${paginaInfo.total}`
+        : '0-0 de 0';
+
+    return `
+        <div class="import-pagination">
+            <span>${escapeHtml(intervalo)}</span>
+            <div class="import-page-buttons">
+                <button type="button" onclick="alterarPaginaTabela('${tipo}', 1)" ${paginaInfo.pagina === 1 ? 'disabled' : ''}>«</button>
+                <button type="button" onclick="alterarPaginaTabela('${tipo}', ${paginaInfo.pagina - 1})" ${paginaInfo.pagina === 1 ? 'disabled' : ''}>‹</button>
+                ${paginas.map((pagina) => `
+                    <button type="button" class="${pagina === paginaInfo.pagina ? 'is-active' : ''}" onclick="alterarPaginaTabela('${tipo}', ${pagina})">${pagina}</button>
+                `).join('')}
+                <button type="button" onclick="alterarPaginaTabela('${tipo}', ${paginaInfo.pagina + 1})" ${paginaInfo.pagina === paginaInfo.totalPaginas ? 'disabled' : ''}>›</button>
+                <button type="button" onclick="alterarPaginaTabela('${tipo}', ${paginaInfo.totalPaginas})" ${paginaInfo.pagina === paginaInfo.totalPaginas ? 'disabled' : ''}>»</button>
+            </div>
+            <span>10 por página</span>
+        </div>
+    `;
+}
+
+function linhasPreviaFiltradas() {
+    return linhasProcessamentoFiltradas();
 }
 
 function contarFiltroPrevia(filtro) {
@@ -1533,7 +1856,7 @@ function renderizarBarraRevisaoLote(linhasFiltradas) {
     `;
 }
 
-function renderizarEditorPrePersistencia() {
+function renderizarEditorPrePersistenciaLegado() {
     const container = document.getElementById('editorPrePersistencia');
     if (!container) return;
 
@@ -1583,6 +1906,137 @@ function renderizarEditorPrePersistencia() {
     atualizarResumoPainel();
 }
 
+function renderizarEditorPrePersistencia() {
+    const container = document.getElementById('editorPrePersistencia');
+    if (!container) return;
+
+    const previaContainer = document.getElementById('previaContainer');
+    if (previaContainer) previaContainer.innerHTML = '';
+    renderizarFiltroAvancado('principal');
+
+    const linhasFiltradas = linhasProcessamentoFiltradas();
+    const paginaInfo = paginarItens(linhasFiltradas, 'principal');
+    const indicesVisiveis = paginaInfo.itens.map(({ index }) => Number(index));
+    const todasVisiveisSelecionadas = indicesVisiveis.length > 0
+        && indicesVisiveis.every((index) => estado.linhasSelecionadas.has(index));
+
+    container.innerHTML = `
+        <div class="import-preview-shell operational">
+            <div class="import-preview-table-wrap operational">
+                <table class="import-preview-table import-operational-table">
+                    <thead>
+                        <tr>
+                            <th class="import-row-check">
+                                <input type="checkbox" ${todasVisiveisSelecionadas ? 'checked' : ''} onchange="alternarSelecaoTodasPrevia(this.checked)" aria-label="Selecionar linhas visíveis">
+                            </th>
+                            <th>Status</th>
+                            <th>Data</th>
+                            <th>Descrição original</th>
+                            <th>Valor</th>
+                            <th>Tipo detectado</th>
+                            <th>Sugestão</th>
+                            <th>Descrição amigável</th>
+                            <th>Categoria da despesa</th>
+                            <th>Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${paginaInfo.itens.length
+                            ? paginaInfo.itens.map((item) => renderizarLinhaOperacional(item)).join('')
+                            : '<tr><td colspan="10"><div class="import-empty-state compact">Nenhum lançamento em processamento para este filtro.</div></td></tr>'}
+                    </tbody>
+                </table>
+            </div>
+            ${renderizarPaginacaoTabela('principal', paginaInfo)}
+        </div>
+    `;
+
+    renderizarTabelaRetirados();
+    renderizarKpisImportacao();
+    atualizarControlesImportacao();
+}
+
+function renderizarLinhaOperacional(item) {
+    const { linha, index } = item;
+    const descricaoOriginal = descricaoOriginalLinha(linha);
+    const descricaoAmigavel = linha.descricao_exibida || linha.descricao || descricaoOriginal;
+    const categoriaId = linha.categoria_id || linha.categoria_despesa_id;
+    const avisoCategoriaCartao = avisoCategoriaCartaoMapeamentoLinha(linha);
+
+    return `
+        <tr>
+            <td class="import-row-check">
+                <input type="checkbox" ${estado.linhasSelecionadas.has(Number(index)) ? 'checked' : ''} onchange="alternarSelecaoLinha(${index}, this.checked)" aria-label="Selecionar linha ${index + 1}">
+            </td>
+            <td><span class="import-status-pill ${item.classe}">${escapeHtml(item.status)}</span></td>
+            <td><span class="import-raw-text">${escapeHtml(linha.data_compra || '-')}</span></td>
+            <td class="import-description-cell one-line">
+                <span class="import-raw-description" title="${escapeAttr(descricaoOriginal)}">${escapeHtml(descricaoOriginal || '-')}</span>
+            </td>
+            <td><span class="import-raw-value">${formatarValorLinha(linha)}</span></td>
+            <td>${escapeHtml(item.tipo || '—')}</td>
+            <td class="import-description-cell one-line">
+                <span title="${escapeAttr(item.sugestao || '—')}">${escapeHtml(item.sugestao || '—')}</span>
+            </td>
+            <td class="import-operational-edit-cell">
+                ${item.descricaoEditavel ? `
+                    <input class="form-control form-control-sm import-inline-input" type="text" value="${escapeAttr(descricaoAmigavel)}" onchange="atualizarLinhaClassificacao(${index}, 'descricao_exibida', this.value)">
+                ` : '<span class="import-muted-cell">—</span>'}
+            </td>
+            <td class="import-category-cell">
+                ${item.categoriaEditavel ? `
+                    <select class="form-control form-control-sm import-inline-select" onchange="atualizarLinhaClassificacao(${index}, 'categoria_id', this.value)">
+                        ${opcoesCategoriaSelect(categoriaId)}
+                    </select>
+                    ${avisoCategoriaCartao ? `<span class="import-detected-note">${escapeHtml(avisoCategoriaCartao)}</span>` : ''}
+                ` : '<span class="import-muted-cell">—</span>'}
+            </td>
+            <td>${renderizarAcoesLinhaOperacional(item)}</td>
+        </tr>
+    `;
+}
+
+function renderizarAcoesLinhaOperacional(item) {
+    const { linha, index } = item;
+    const acoes = [];
+    const confronto = temConfrontoAtivo();
+    const categoriaOk = toIntOrNull(linha.categoria_id || linha.categoria_despesa_id);
+
+    if (!confronto) {
+        acoes.push(botaoOperacional('danger', 'Retirar', 'trash', `alternarIgnorarLinha(${index})`));
+        return `<div class="row-actions operational">${acoes.join('')}</div>`;
+    }
+
+    if (item.filtro === 'conhecidas') {
+        acoes.push(botaoOperacional('success', 'Usar sugestão', 'check', `usarSugestaoReconhecimento(${index})`));
+        acoes.push(botaoOperacional('', 'Tratar como novo', '', `tratarReconhecimentoComoNovo(${index})`));
+        acoes.push(botaoOperacional('danger', 'Retirar', 'trash', `ignorarReconhecimento(${index})`));
+    } else if (item.filtro === 'parcelados') {
+        acoes.push(botaoOperacional('success', 'Criar parcelamento', 'check', `abrirModalParcelamento(${index})`));
+        acoes.push(botaoOperacional('danger', 'Retirar', 'trash', `alternarIgnorarLinha(${index})`));
+    } else if (item.filtro === 'recorrencias') {
+        if (item.reconhecimento) {
+            acoes.push(botaoOperacional('success', 'Usar sugestão', 'check', `usarSugestaoReconhecimento(${index})`));
+        }
+        acoes.push(botaoOperacional('danger', 'Retirar', 'trash', `alternarIgnorarLinha(${index})`));
+    } else {
+        acoes.push(botaoOperacional('primary', 'Criar despesa', 'check', 'finalizarImportacao()', !categoriaOk));
+        acoes.push(botaoOperacional('danger', 'Retirar', 'trash', `alternarIgnorarLinha(${index})`));
+    }
+
+    return `<div class="row-actions operational">${acoes.join('')}</div>`;
+}
+
+function botaoOperacional(classe, texto, icone, acao, desabilitado = false) {
+    const classeBotao = classe ? ` ${classe}` : '';
+    return `
+        <button class="row-action-button import-row-action${classeBotao}" type="button" onclick="${acao}" ${desabilitado ? 'disabled' : ''}>
+            ${icone ? iconSvg(icone) : ''}
+            <span>${escapeHtml(texto)}</span>
+        </button>
+    `;
+}
+
 function renderizarLinhaPrevia(linha, index) {
     const status = statusLinha(linha);
     const tratadaParcelamento = linhaTratadaParcelamento(linha);
@@ -1627,7 +2081,7 @@ function renderizarLinhaPrevia(linha, index) {
     `;
 }
 
-function renderizarConfrontoClassificacao() {
+function renderizarConfrontoClassificacaoLegado() {
     const container = document.getElementById('confrontoContainer');
     if (!container) return;
 
@@ -1680,6 +2134,15 @@ function renderizarConfrontoClassificacao() {
         </div>
     `;
 
+    atualizarResumoPainel();
+}
+
+function renderizarConfrontoClassificacao() {
+    const confronto = document.getElementById('confrontoContainer');
+    if (confronto) confronto.innerHTML = '';
+    renderizarEditorPrePersistencia();
+    renderizarTabelaRetirados();
+    renderizarKpisImportacao();
     atualizarResumoPainel();
 }
 
@@ -2485,6 +2948,97 @@ function detalharLinha(index) {
     );
 }
 
+function renderizarTabelaRetirados() {
+    const container = document.getElementById('retiradosContainer');
+    if (!container) return;
+    renderizarFiltroAvancado('retirados');
+
+    const retirados = linhasRetiradasFiltradas();
+    const paginaInfo = paginarItens(retirados, 'retirados');
+
+    container.innerHTML = `
+        <div class="import-preview-table-wrap retired">
+            <table class="import-preview-table import-retired-table">
+                <thead>
+                    <tr>
+                        <th>Motivo</th>
+                        <th>Data</th>
+                        <th>Descrição original</th>
+                        <th>Valor</th>
+                        <th>Ação</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${paginaInfo.itens.length
+                        ? paginaInfo.itens.map(({ linha, index }) => renderizarLinhaRetirada(linha, index)).join('')
+                        : '<tr><td colspan="5"><div class="import-empty-state compact">Nenhum lançamento retirado da efetivação para este filtro.</div></td></tr>'}
+                </tbody>
+            </table>
+        </div>
+        ${renderizarPaginacaoTabela('retirados', paginaInfo)}
+    `;
+}
+
+function renderizarLinhaRetirada(linha, index) {
+    const motivo = motivoRetiradaLinha(linha);
+    const restauravel = linhaRestauravel(linha);
+    const descricaoOriginal = descricaoOriginalLinha(linha);
+    return `
+        <tr>
+            <td><span class="import-retired-reason">${escapeHtml(motivo)}</span></td>
+            <td>${escapeHtml(linha.data_compra || '-')}</td>
+            <td class="import-description-cell one-line">
+                <span class="import-raw-description" title="${escapeAttr(descricaoOriginal)}">${escapeHtml(descricaoOriginal || '-')}</span>
+            </td>
+            <td>${formatarValorLinha(linha)}</td>
+            <td>
+                <div class="row-actions operational">
+                    ${restauravel
+                        ? botaoOperacional('success', 'Restaurar', 'undo', `alternarIgnorarLinha(${index})`)
+                        : botaoOperacional('', 'Ver', 'eye', `detalharLinha(${index})`)}
+                </div>
+            </td>
+        </tr>
+    `;
+}
+
+function calcularKpisImportacao() {
+    const encontrados = estado.csvData?.total_linhas || estado.linhasMapeadas.length || 0;
+    const processamento = linhasProcessamentoBase();
+    const retirados = linhasRetiradasBase();
+    const conhecidas = processamento.filter((item) => item.filtro === 'conhecidas').length;
+    const parcelamentos = processamento.filter((item) => item.filtro === 'parcelados').length;
+    const novos = processamento.filter((item) => item.filtro === 'novos').length;
+    const valorProcessamento = processamento.reduce((acc, item) => acc + valorNumericoLinha(item.linha), 0);
+    const pendencias = processamento.filter((item) => {
+        if (item.filtro === 'novos') return !toIntOrNull(item.linha.categoria_id || item.linha.categoria_despesa_id);
+        return item.filtro !== 'novos';
+    }).length + estado.linhasInvalidasIniciais.length;
+
+    return {
+        encontrados,
+        processamento: processamento.length,
+        retirados: retirados.length,
+        conhecidas,
+        parcelamentos,
+        novos,
+        valorProcessamento,
+        pendencias
+    };
+}
+
+function renderizarKpisImportacao() {
+    const kpis = calcularKpisImportacao();
+    setText('kpiEncontrados', kpis.encontrados);
+    setText('kpiProcessamento', kpis.processamento);
+    setText('kpiRetirados', kpis.retirados);
+    setText('kpiConhecidas', kpis.conhecidas);
+    setText('kpiParcelamentos', kpis.parcelamentos);
+    setText('kpiNovos', kpis.novos);
+    setText('kpiValorProcessamento', formatarMoeda(kpis.valorProcessamento));
+    setText('kpiPendencias', kpis.pendencias);
+}
+
 function calcularResumoLocal() {
     const linhas = estado.linhasMapeadas;
     const ativas = linhas.filter(linhaImportavel);
@@ -2540,6 +3094,7 @@ function atualizarResumoPainel() {
     setText('ignoredCount', resumo.ignoradas);
     setText('confirmedCardCategoryCount', duplicados);
     setText('pendingCardCategoryCount', estado.analiseConfronto ? `${novosConfronto} novos` : `${resumo.importaveis.length} a importar`);
+    renderizarKpisImportacao();
 
     atualizarControlesImportacao(resumo);
     renderizarClassificacao();
@@ -2563,8 +3118,8 @@ function atualizarControlesImportacao(resumo = calcularResumoLocal()) {
         const quantidade = estado.analiseConfronto ? linhasNovasConfirmaveis().length : 0;
         btnImportar.disabled = !estado.analiseConfronto || quantidade === 0 || novasSemCategoriaDespesa().length > 0;
         btnImportar.innerHTML = `
-            Confirmar importação de ${quantidade} ${quantidade === 1 ? 'lançamento' : 'lançamentos'}
-            <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12h14M15 8l4 4-4 4"/></svg></span>
+            <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+            Criar despesas (${quantidade})
         `;
     }
 }

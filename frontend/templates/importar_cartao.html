@@ -7,208 +7,170 @@
 {% endblock %}
 
 {% block action_bar %}
-    <div class="module-actionbar import-actionbar" aria-label="Etapas de importação de cartão">
+    <div class="module-actionbar import-actionbar" id="step1" aria-label="Importação do Cartão">
         <div class="module-actionbar-inner">
-            <div class="module-actionbar-tabs import-steps" aria-label="Etapas do painel">
-                <span class="import-step-chip is-active">1. Configuração</span>
-                <span class="import-step-chip">2. Documento</span>
-                <span class="import-step-chip">3. Validação</span>
-                <span class="import-step-chip">4. Triagem</span>
-                <span class="import-step-chip">5. Confronto e Resultado</span>
+            <div class="module-actionbar-filters">
+                <div class="import-inline-field">
+                    <label for="cartaoSelect">Cartão</label>
+                    <select id="cartaoSelect" class="module-filter-control"></select>
+                </div>
+
+                <div class="import-inline-field import-inline-field--sm">
+                    <label for="competenciaInput">Competência</label>
+                    <input type="text" id="competenciaInput" class="module-filter-control" placeholder="MM/AAAA" maxlength="7" inputmode="numeric">
+                </div>
+
+                <div class="import-inline-field import-inline-field--format">
+                    <label>Formato</label>
+                    <div class="import-segmented-control" role="radiogroup" aria-label="Formato do arquivo">
+                        <button type="button" class="import-format-option is-selected" data-format="auto" aria-pressed="true">Aut.</button>
+                        <button type="button" class="import-format-option" data-format="pdf" aria-pressed="false">PDF</button>
+                        <button type="button" class="import-format-option" data-format="csv" aria-pressed="false">Excel</button>
+                    </div>
+                </div>
+
+                <div class="import-inline-field import-inline-field--file" id="uploadArea">
+                    <label for="csvFile">Arquivo</label>
+                    <input type="file" id="csvFile" accept=".csv,.xlsx,.pdf" hidden>
+                    <div class="import-file-inline" id="selectedFileInfo">
+                        <span class="file-icon neutral" aria-hidden="true">
+                            <svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6V3Z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></svg>
+                        </span>
+                        <span class="import-file-inline-text">Selecione Arquivo — pdf, csv ou xlsx</span>
+                    </div>
+                </div>
+            </div>
+            <div class="module-actionbar-actions">
+                <button class="btn btn-primary" type="button" id="btnTopImportar" onclick="abrirSeletorArquivo()">
+                    <span aria-hidden="true"><svg viewBox="0 0 24 24" width="13" height="13"><path d="M12 16V4M8 8l4-4 4 4"/><path d="M4 16.5A4.5 4.5 0 0 0 8.5 21h7a4.5 4.5 0 0 0 1.2-8.8A6 6 0 0 0 5.1 13"/></svg></span>
+                    Importar
+                </button>
             </div>
         </div>
     </div>
 {% endblock %}
 
 {% block content %}
-<div class="content-fluid import-page">
-    <section class="import-section import-configuration-panel" id="step1">
-        <div class="import-section-title">
-            <span class="import-section-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" focusable="false"><path d="M12 8.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Zm0-4v2M12 17.5v2M5.6 7.1 7 8.5M17 15.5l1.4 1.4M4 12h2M18 12h2M5.6 16.9 7 15.5M17 8.5l1.4-1.4"/></svg>
-            </span>
-            <h2>1. Configuração</h2>
-        </div>
+<div class="content-fluid import-page import-operational-page">
 
-        <div class="import-config-grid">
-            <div class="import-field">
-                <label for="cartaoSelect">Cartão</label>
-                <select id="cartaoSelect"></select>
-            </div>
+    <div id="uploadResult" class="import-feedback-slot"></div>
+    <div id="mapeamentoContainer" class="import-inline-status"></div>
+    <div id="resumoConfiguracaoImportacao" class="import-inline-status"></div>
 
-            <div class="import-field">
-                <label for="competenciaInput">Competência</label>
-                <input type="text" id="competenciaInput" placeholder="MM/AAAA" maxlength="7" inputmode="numeric">
-            </div>
-
-            <div class="import-field import-format-field">
-                <span class="import-field-label">Formato</span>
-                <div class="import-segmented-control" role="radiogroup" aria-label="Formato do arquivo">
-                    <button type="button" class="import-format-option is-selected" data-format="auto" aria-pressed="true">Automático</button>
-                    <button type="button" class="import-format-option" data-format="csv" aria-pressed="false">CSV/XLSX</button>
-                    <button type="button" class="import-format-option" data-format="pdf" aria-pressed="false">PDF</button>
-                </div>
-            </div>
-
-            <p class="import-help-text">O sistema identifica automaticamente se o arquivo é CSV/XLSX ou PDF.</p>
-        </div>
-    </section>
-
-    <section class="import-section import-document-panel" id="step2">
-        <div class="import-section-title">
-            <span class="import-section-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" focusable="false"><path d="M6 3h8l4 4v14H6V3Z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></svg>
-            </span>
-            <h2>2. Documento</h2>
-        </div>
-
-        <div class="import-upload-zone" id="uploadArea">
-            <input type="file" id="csvFile" accept=".csv,.xlsx,.pdf" hidden>
-            <div class="import-upload-copy">
-                <span class="import-upload-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" focusable="false"><path d="M12 16V4M8 8l4-4 4 4"/><path d="M4 16.5A4.5 4.5 0 0 0 8.5 21h7a4.5 4.5 0 0 0 1.2-8.8A6 6 0 0 0 5.1 13"/></svg>
-                </span>
-                <div>
-                    <strong>Clique ou arraste o arquivo aqui</strong>
-                    <span>Formatos aceitos: CSV, XLSX ou PDF</span>
-                </div>
-            </div>
-            <div class="import-file-chip" id="selectedFileInfo" hidden></div>
-        </div>
-
-        <div id="uploadResult" class="import-feedback-slot"></div>
-
-        <div class="import-summary-row" aria-label="Resumo do documento">
-            <div class="import-summary-card">
-                <span class="summary-icon success" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5l4 4L19 7"/></svg></span>
-                <strong id="detectedCount">0</strong>
-                <span>lançamentos detectados</span>
-            </div>
-            <div class="import-summary-card">
-                <span class="summary-icon warning" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4V7Z"/><path d="M7 11h10"/></svg></span>
-                <strong id="parceladoCount">0</strong>
-                <span>a importar</span>
-            </div>
-            <div class="import-summary-card">
-                <span class="summary-icon info" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 17h.1M12 13a3 3 0 1 0-3-3"/><path d="M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg></span>
-                <strong id="duplicateCount">0</strong>
-                <span>possível duplicado</span>
-            </div>
-        </div>
-    </section>
-
-    <section class="import-section import-validation-panel" id="step3">
-        <div class="import-section-title">
-            <span class="import-section-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" focusable="false"><path d="M12 3 4 7v5c0 4.5 3.5 8.7 8 10 4.5-1.3 8-5.5 8-10V7l-8-4Z"/><path d="M8.5 12.5 11 15l4.5-5"/></svg>
-            </span>
-            <h2>3. Validação</h2>
-        </div>
-
-        <div class="import-validation-actions">
-            <button class="btn btn-secondary" type="button" id="btnStep3" onclick="proximaEtapa(3)" disabled>Validar layout</button>
-            <button class="btn btn-primary" type="button" id="btnStep4" onclick="proximaEtapa(4)" disabled>Confrontar selecionados</button>
-        </div>
-
-        <div class="import-summary-row import-validation-summary" aria-label="Resumo da validação">
-            <div class="import-summary-card">
-                <span class="summary-icon success" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5l4 4L19 7"/></svg></span>
-                <span>A importar</span>
-                <strong id="validCount">0</strong>
-            </div>
-            <div class="import-summary-card">
-                <span class="summary-icon warning" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 8v5M12 17h.1"/><path d="M12 3 3.5 19h17L12 3Z"/></svg></span>
-                <span>Ignorados</span>
-                <strong id="reviewCount">0</strong>
-            </div>
-            <div class="import-summary-card">
-                <span class="summary-icon info" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 17h.1M12 13a3 3 0 1 0-3-3"/><path d="M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg></span>
-                <span>Bloqueados</span>
-                <strong id="missingCardCategoryCount">0</strong>
-            </div>
-            <div class="import-summary-card">
-                <span class="summary-icon neutral" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 8h8v8H8V8Z"/><path d="M4 4h8v8H4V4ZM12 12h8v8h-8v-8Z"/></svg></span>
-                <span>Duplicados</span>
-                <strong id="validationDuplicateCount">0</strong>
-            </div>
-            <div class="import-summary-card">
-                <span class="summary-icon warning" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 8v5M12 17h.1"/><path d="M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg></span>
-                <span>Valor a importar</span>
-                <strong id="uncategorizedCardValue">R$ 0,00</strong>
-            </div>
-        </div>
-
-        <div id="mapeamentoContainer" class="import-inline-status"></div>
-        <div id="resumoConfiguracaoImportacao" class="import-inline-status"></div>
-        <div id="previaContainer">
-            <div class="import-empty-state">Carregue um documento para validar o layout e revisar os lançamentos.</div>
-        </div>
-        <div id="editorPrePersistencia"></div>
-        <div id="resumoPreviaTecnica" class="import-inline-status"></div>
-    </section>
-
-    <div class="import-bottom-grid">
-        <section class="import-section import-classification-panel" id="step4">
-            <div class="import-section-title">
+    <section class="import-section import-main-grid-section" id="step5">
+        <div class="import-table-header">
+            <div class="import-table-title">
                 <span class="import-section-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" focusable="false"><path d="M20 7.5V4a1 1 0 0 0-1-1h-3.5a1 1 0 0 0-.7.3l-9 9a2 2 0 0 0 0 2.8l4.1 4.1a2 2 0 0 0 2.8 0l9-9a1 1 0 0 0 .3-.7ZM15 7h.1"/></svg>
+                    <svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h16"/><path d="M8 5v14"/></svg>
                 </span>
-                <h2>4. Triagem</h2>
+                <h2>Lançamentos em processamento</h2>
             </div>
-
-            <div class="import-classification-content">
-                <div class="import-category-list" id="classificationList">
-                    <div class="import-empty-state compact">Carregue um documento para iniciar a triagem.</div>
-                </div>
-                <div class="import-info-box">
-                    <span class="summary-icon info" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 11v6M12 7h.1"/><path d="M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg></span>
-                    <p>Use a triagem para decidir quais lançamentos seguem na importação.</p>
-                </div>
-            </div>
-        </section>
-
-        <section class="import-section import-result-panel" id="step5">
-            <div class="import-section-title">
-                <span class="import-section-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" focusable="false"><path d="M6 3h12v18H6V3Z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
-                </span>
-                <h2>5. Confronto e Resultado</h2>
-            </div>
-
-            <div class="import-result-summary" aria-label="Revisão da importação">
-                <div class="import-summary-card">
-                    <span>Total a importar</span>
-                    <strong id="plannedTotal">R$ 0,00</strong>
-                </div>
-                <div class="import-summary-card">
-                    <span>Novos lançamentos</span>
-                    <strong id="newCount">0</strong>
-                </div>
-                <div class="import-summary-card">
-                    <span>Ignorados</span>
-                    <strong id="ignoredCount">0</strong>
-                </div>
-                <div class="import-summary-card">
-                    <span>Duplicados protegidos</span>
-                    <strong id="confirmedCardCategoryCount">0</strong>
-                    <small id="pendingCardCategoryCount">0 a importar</small>
-                </div>
-            </div>
-
-            <div id="confrontoContainer" class="import-result-output"></div>
-            <div id="resultadoContainer" class="import-result-output"></div>
-
-            <div class="import-result-actions">
-                <button class="btn btn-secondary" type="button" id="btnDraft" disabled title="Rascunho será implementado em MVP futuro">
-                    <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 4v12M8 12l4 4 4-4"/><path d="M5 20h14"/></svg></span>
-                    Salvar rascunho
+            <div class="import-table-actions">
+                <button class="btn btn-secondary" type="button" onclick="alternarFiltroAvancado('principal')">
+                    <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg></span>
+                    Filtro avançado
+                </button>
+                <button class="btn btn-secondary" type="button" id="btnStep4" onclick="proximaEtapa(4)" disabled>
+                    <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4V4ZM13 13h7v7h-7v-7Z"/><path d="M15 4h5v5M20 4l-6 6M9 20H4v-5M4 20l6-6"/></svg></span>
+                    Confrontar resultado
                 </button>
                 <button class="btn btn-primary" id="btnImportar" type="button" onclick="finalizarImportacao()" disabled>
-                    Confirmar Importação
-                    <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12h14M15 8l4 4-4 4"/></svg></span>
+                    <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+                    Criar despesas
                 </button>
             </div>
+        </div>
+        <div id="principalFilterPanel" class="import-filter-panel" hidden></div>
+        <div id="editorPrePersistencia">
+            <div class="import-empty-state compact">Importe um arquivo para iniciar a triagem operacional.</div>
+        </div>
+        <div id="confrontoContainer" class="import-result-output" hidden></div>
+        <div id="resumoPreviaTecnica" class="import-inline-status"></div>
+        <div id="resultadoContainer" class="import-result-output"></div>
+    </section>
+
+    <div class="import-bottom-operational" id="step4">
+        <section class="import-section import-retired-section">
+            <div class="import-table-header compact">
+                <div class="import-table-title">
+                    <span class="import-section-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/></svg>
+                    </span>
+                    <h2>Lançamentos retirados da efetivação</h2>
+                </div>
+                <button class="btn btn-secondary" type="button" onclick="alternarFiltroAvancado('retirados')">
+                    <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg></span>
+                    Filtro avançado
+                </button>
+            </div>
+            <div id="retiradosFilterPanel" class="import-filter-panel" hidden></div>
+            <div id="retiradosContainer">
+                <div class="import-empty-state compact">Nenhum lançamento retirado da efetivação.</div>
+            </div>
         </section>
+
+        <aside class="import-section import-kpi-panel" id="kpisImportacaoPanel">
+            <div class="import-table-title">
+                <span class="import-section-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M5 19V9M12 19V5M19 19v-7"/></svg>
+                </span>
+                <h2>KPIs da importação</h2>
+            </div>
+            <div class="import-kpi-grid">
+                <div class="import-kpi-card">
+                    <span>Encontrados</span>
+                    <strong id="kpiEncontrados">0</strong>
+                </div>
+                <div class="import-kpi-card">
+                    <span>Em processamento</span>
+                    <strong id="kpiProcessamento">0</strong>
+                </div>
+                <div class="import-kpi-card danger">
+                    <span>Retirados</span>
+                    <strong id="kpiRetirados">0</strong>
+                </div>
+                <div class="import-kpi-card success">
+                    <span>Possíveis conhecidas</span>
+                    <strong id="kpiConhecidas">0</strong>
+                </div>
+                <div class="import-kpi-card purple">
+                    <span>Parcelamentos</span>
+                    <strong id="kpiParcelamentos">0</strong>
+                </div>
+                <div class="import-kpi-card success">
+                    <span>Novos</span>
+                    <strong id="kpiNovos">0</strong>
+                </div>
+                <div class="import-kpi-card wide">
+                    <span>Valor em processamento</span>
+                    <strong id="kpiValorProcessamento">R$ 0,00</strong>
+                </div>
+                <div class="import-kpi-card warning wide">
+                    <span>Pendências</span>
+                    <strong id="kpiPendencias">0</strong>
+                    <small>lançamentos exigem ação</small>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <div class="import-hidden-support" hidden>
+        <button class="btn btn-secondary" type="button" id="btnStep3" onclick="proximaEtapa(3)" disabled>Validar layout</button>
+        <div id="previaContainer"></div>
+        <div id="classificationList"></div>
+        <span id="detectedCount">0</span>
+        <span id="parceladoCount">0</span>
+        <span id="duplicateCount">0</span>
+        <span id="validCount">0</span>
+        <span id="reviewCount">0</span>
+        <span id="missingCardCategoryCount">0</span>
+        <span id="validationDuplicateCount">0</span>
+        <span id="plannedTotal">R$ 0,00</span>
+        <span id="uncategorizedCardValue">R$ 0,00</span>
+        <span id="newCount">0</span>
+        <span id="ignoredCount">0</span>
+        <span id="confirmedCardCategoryCount">0</span>
+        <span id="pendingCardCategoryCount">0 a importar</span>
     </div>
 </div>
 
@@ -281,8 +243,7 @@
             </div>
         </div>
 
-        <div class="perfil-modal-grid" id="boxCamposManual">
-        </div>
+        <div class="perfil-modal-grid" id="boxCamposManual"></div>
 
         <div id="modalAmostraInterpretada" class="modal-sample"></div>
 

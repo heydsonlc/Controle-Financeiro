@@ -1077,3 +1077,496 @@ body.app-shell-body .import-row-action {
         grid-template-columns: 1fr 1fr;
     }
 }
+
+.import-operational-page {
+    gap: 12px;
+}
+
+.import-topbar-compact {
+    display: grid;
+    grid-template-columns: minmax(220px, 1.15fr) minmax(130px, 0.55fr) minmax(260px, 1fr) minmax(280px, 1.35fr) minmax(130px, 0.5fr);
+    gap: 18px;
+    align-items: end;
+    padding: 12px 16px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+}
+
+.import-topbar-compact .import-field {
+    gap: 6px;
+}
+
+.import-topbar-button {
+    min-height: 38px;
+    width: 100%;
+}
+
+/* ── Action bar de importação ─────────────────────────────────────── */
+.import-actionbar .module-actionbar-filters {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: nowrap;
+}
+
+.import-inline-field {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.import-inline-field label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #64748b;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.import-inline-field .module-filter-control {
+    height: 32px;
+    font-size: 0.82rem;
+    padding: 0 8px;
+}
+
+.import-inline-field--sm .module-filter-control {
+    width: 100px;
+}
+
+.import-inline-field--format .import-segmented-control {
+    height: 32px;
+}
+
+.import-inline-field--format .import-format-option {
+    height: 32px;
+    padding: 0 9px;
+    font-size: 0.78rem;
+}
+
+.import-inline-field--file {
+    flex: 1;
+    min-width: 0;
+    max-width: 340px;
+    cursor: pointer;
+}
+
+.import-file-inline {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid rgba(29, 29, 31, 0.13);
+    border-radius: 7px;
+    background: #ffffff;
+    min-width: 0;
+    flex: 1;
+    cursor: pointer;
+    transition: border-color 0.15s;
+}
+
+.import-file-inline:hover {
+    border-color: #2563eb;
+}
+
+.import-file-inline .file-icon {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.import-file-inline .file-icon svg {
+    width: 14px;
+    height: 14px;
+}
+
+.import-file-inline-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.8rem;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.import-file-inline--selected .import-file-inline-text {
+    color: #0f172a;
+    font-weight: 500;
+}
+
+.import-file-size {
+    font-size: 0.72rem;
+    font-weight: 400;
+    color: #94a3b8;
+    flex-shrink: 0;
+}
+
+.import-file-inline .import-file-remove {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    color: #94a3b8;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.import-file-inline .import-file-remove:hover {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.import-file-compact {
+    cursor: pointer;
+}
+
+.import-file-placeholder,
+.import-file-chip {
+    min-height: 38px;
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) 24px;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 10px;
+    border: 1px solid rgba(29, 29, 31, 0.13);
+    border-radius: 7px;
+    background: #ffffff;
+}
+
+.import-file-placeholder > span:nth-child(2),
+.import-file-chip > span:nth-child(2) {
+    min-width: 0;
+}
+
+.import-file-placeholder strong,
+.import-file-placeholder span span,
+.import-file-chip strong,
+.import-file-chip span span {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.import-file-placeholder strong,
+.import-file-chip strong {
+    font-size: 0.82rem;
+    color: #111827;
+}
+
+.import-file-placeholder span span,
+.import-file-chip span span {
+    margin-top: 1px;
+    font-size: 0.7rem;
+    color: #64748b;
+}
+
+.import-main-grid-section {
+    overflow: hidden;
+}
+
+.import-table-header {
+    min-height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 12px 16px 10px;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.import-table-header.compact {
+    min-height: 48px;
+    padding-bottom: 8px;
+}
+
+.import-table-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+}
+
+.import-table-title h2 {
+    margin: 0;
+    color: #111827;
+    font-size: 1rem;
+    font-weight: 760;
+    line-height: 1.2;
+}
+
+.import-table-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.import-filter-panel {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+    background: #f8fafc;
+}
+
+.import-filter-panel[hidden] {
+    display: none !important;
+}
+
+.import-preview-shell.operational {
+    padding: 0 16px 10px;
+}
+
+.import-preview-table-wrap.operational {
+    border-radius: 7px;
+}
+
+.import-operational-table {
+    min-width: 1500px;
+    table-layout: fixed;
+}
+
+.import-operational-table th:nth-child(1) { width: 42px; }
+.import-operational-table th:nth-child(2) { width: 118px; }
+.import-operational-table th:nth-child(3) { width: 112px; }
+.import-operational-table th:nth-child(4) { width: 260px; }
+.import-operational-table th:nth-child(5) { width: 100px; }
+.import-operational-table th:nth-child(6) { width: 140px; }
+.import-operational-table th:nth-child(7) { width: 150px; }
+.import-operational-table th:nth-child(8) { width: 190px; }
+.import-operational-table th:nth-child(9) { width: 180px; }
+.import-operational-table th:nth-child(10) { width: 250px; }
+
+.import-operational-table td,
+.import-retired-table td {
+    height: 36px;
+    white-space: nowrap;
+}
+
+.import-description-cell.one-line,
+.import-description-cell.one-line .import-raw-description,
+.import-description-cell.one-line span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.import-operational-edit-cell .import-inline-input,
+.import-category-cell .import-inline-select {
+    min-height: 28px;
+    height: 28px;
+    padding: 4px 8px;
+    font-size: 0.74rem;
+}
+
+.import-muted-cell {
+    color: #94a3b8;
+    font-weight: 700;
+}
+
+.row-actions.operational {
+    flex-wrap: nowrap;
+    gap: 6px;
+}
+
+.row-actions.operational .import-row-action {
+    min-width: auto;
+    min-height: 27px;
+    height: 27px;
+    padding: 0 8px;
+    border-radius: 6px;
+    font-size: 0.68rem;
+}
+
+.row-actions.operational .import-row-action.primary {
+    color: #ffffff;
+    background: #0f62fe;
+    border-color: rgba(15, 98, 254, 0.85);
+}
+
+.import-row-action.success {
+    color: #065f46;
+    background: #ecfdf5;
+    border-color: rgba(5, 150, 105, 0.28);
+}
+
+.import-row-action.danger {
+    color: #b42318;
+    background: #fff5f4;
+    border-color: rgba(180, 35, 24, 0.28);
+}
+
+.import-pagination {
+    min-height: 38px;
+    display: grid;
+    grid-template-columns: minmax(110px, 1fr) auto minmax(110px, 1fr);
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px 0;
+    color: #475569;
+    font-size: 0.76rem;
+}
+
+.import-pagination > span:last-child {
+    text-align: right;
+}
+
+.import-page-buttons {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.import-page-buttons button {
+    min-width: 32px;
+    height: 28px;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    border-radius: 6px;
+    background: #ffffff;
+    color: #334155;
+    font: inherit;
+    font-size: 0.76rem;
+    cursor: pointer;
+}
+
+.import-page-buttons button.is-active {
+    color: #0f62fe;
+    border-color: rgba(15, 98, 254, 0.48);
+    background: #eff6ff;
+    font-weight: 760;
+}
+
+.import-page-buttons button:disabled {
+    color: #cbd5e1;
+    cursor: not-allowed;
+}
+
+.import-bottom-operational {
+    display: grid;
+    grid-template-columns: minmax(520px, 1.05fr) minmax(420px, 0.95fr);
+    gap: 12px;
+    align-items: stretch;
+}
+
+.import-retired-section,
+.import-kpi-panel {
+    min-width: 0;
+}
+
+.import-retired-table {
+    min-width: 760px;
+    table-layout: fixed;
+}
+
+.import-retired-table th:nth-child(1) { width: 170px; }
+.import-retired-table th:nth-child(2) { width: 110px; }
+.import-retired-table th:nth-child(3) { width: 300px; }
+.import-retired-table th:nth-child(4) { width: 110px; }
+.import-retired-table th:nth-child(5) { width: 120px; }
+
+.import-retired-reason {
+    color: #334155;
+    font-weight: 700;
+}
+
+.import-kpi-panel {
+    padding: 14px 16px 16px;
+}
+
+.import-kpi-panel .import-table-title {
+    margin-bottom: 12px;
+}
+
+.import-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.import-kpi-card {
+    min-height: 70px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    padding: 12px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 8px;
+    background: #ffffff;
+}
+
+.import-kpi-card span,
+.import-kpi-card small {
+    color: #475569;
+    font-size: 0.76rem;
+    font-weight: 650;
+}
+
+.import-kpi-card strong {
+    color: #0f62fe;
+    font-size: 1.35rem;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.import-kpi-card.success strong {
+    color: #138a4e;
+}
+
+.import-kpi-card.danger strong {
+    color: #c81e1e;
+}
+
+.import-kpi-card.purple strong {
+    color: #7c3aed;
+}
+
+.import-kpi-card.warning {
+    border-color: rgba(217, 119, 6, 0.24);
+    background: #fffbeb;
+}
+
+.import-kpi-card.warning strong {
+    color: #b45309;
+}
+
+.import-kpi-card.wide {
+    grid-column: span 2;
+}
+
+@media (max-width: 1240px) {
+    .import-topbar-compact,
+    .import-bottom-operational {
+        grid-template-columns: 1fr;
+    }
+
+    .import-table-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .import-table-actions {
+        width: 100%;
+        justify-content: flex-start;
+    }
+}
