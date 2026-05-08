@@ -504,10 +504,14 @@ def listar_realizadas():
     """
     try:
         ano_mes = request.args.get('ano_mes')
+        ano_mes_inicio = request.args.get('ano_mes_inicio')
+        ano_mes_fim = request.args.get('ano_mes_fim')
         item_receita_id = request.args.get('item_receita_id', type=int)
 
         receitas = ReceitaService.listar_receitas_realizadas(
             ano_mes=ano_mes,
+            ano_mes_inicio=ano_mes_inicio,
+            ano_mes_fim=ano_mes_fim,
             item_receita_id=item_receita_id
         )
 

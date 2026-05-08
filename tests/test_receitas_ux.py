@@ -98,10 +98,10 @@ def test_rota_principal_renderiza_layout_ux(client):
     assert 'Gerenciamento de Receitas' in html
     assert 'module-actionbar' in html
     assert 'receitas-busca' in html
-    assert 'Previsto no mês' in html
-    assert 'Receitas do mês' in html
+    assert 'Previsto aberto' in html
+    assert 'Receitas e pendências' in html
     assert 'Fontes de receita' in html
-    assert 'Próximos recebimentos' in html
+    assert 'Recebimentos pendentes' in html
     assert 'Nova Fonte de Receita' in html
     assert 'Pré-visualização' in html
 
@@ -299,3 +299,23 @@ def test_listagem_realizadas_retorna_receita_do_periodo(client):
     assert body['success'] is True
     assert len(body['data']) == 1
     assert body['data'][0]['valor_recebido'] == 500.0
+
+
+def test_listagem_realizadas_aceita_intervalo_de_competencia(client):
+    fonte = _criar_fonte(client)
+    for mes, valor in [(3, 300.0), (4, 400.0), (6, 600.0)]:
+        db.session.add(ReceitaRealizada(
+            item_receita_id=fonte['id'],
+            data_recebimento=date(2026, mes, 5),
+            valor_recebido=valor,
+            mes_referencia=date(2026, mes, 1),
+            descricao=f'Receita {mes}',
+        ))
+    db.session.commit()
+
+    response = client.get('/api/receitas/realizadas?ano_mes_inicio=2026-03&ano_mes_fim=2026-05')
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body['success'] is True
+    assert [item['mes_referencia'] for item in body['data']] == ['2026-03-01', '2026-04-01']

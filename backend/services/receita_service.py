@@ -450,13 +450,15 @@ class ReceitaService:
         return receita
 
     @staticmethod
-    def listar_receitas_realizadas(ano_mes=None, item_receita_id=None):
+    def listar_receitas_realizadas(ano_mes=None, item_receita_id=None, ano_mes_inicio=None, ano_mes_fim=None):
         """
         Lista receitas realizadas com filtros opcionais
 
         Args:
             ano_mes (str ou date, opcional): Filtrar por competência
             item_receita_id (int, opcional): Filtrar por fonte
+            ano_mes_inicio (str ou date, opcional): Inicio do intervalo de competencia
+            ano_mes_fim (str ou date, opcional): Fim do intervalo de competencia
 
         Returns:
             list[ReceitaRealizada]: Lista de receitas
@@ -472,10 +474,28 @@ class ReceitaService:
             ano_mes = ano_mes.replace(day=1)
             query = query.filter_by(mes_referencia=ano_mes)
 
+        if ano_mes_inicio:
+            if isinstance(ano_mes_inicio, str):
+                ano_mes_inicio_texto = ano_mes_inicio.strip()
+                if len(ano_mes_inicio_texto) == 7:
+                    ano_mes_inicio_texto = f'{ano_mes_inicio_texto}-01'
+                ano_mes_inicio = datetime.strptime(ano_mes_inicio_texto[:10], '%Y-%m-%d').date()
+            ano_mes_inicio = ano_mes_inicio.replace(day=1)
+            query = query.filter(ReceitaRealizada.mes_referencia >= ano_mes_inicio)
+
+        if ano_mes_fim:
+            if isinstance(ano_mes_fim, str):
+                ano_mes_fim_texto = ano_mes_fim.strip()
+                if len(ano_mes_fim_texto) == 7:
+                    ano_mes_fim_texto = f'{ano_mes_fim_texto}-01'
+                ano_mes_fim = datetime.strptime(ano_mes_fim_texto[:10], '%Y-%m-%d').date()
+            ano_mes_fim = ano_mes_fim.replace(day=1)
+            query = query.filter(ReceitaRealizada.mes_referencia <= ano_mes_fim)
+
         if item_receita_id:
             query = query.filter_by(item_receita_id=item_receita_id)
 
-        return query.order_by(ReceitaRealizada.data_recebimento.desc()).all()
+        return query.order_by(ReceitaRealizada.mes_referencia, ReceitaRealizada.data_recebimento.desc()).all()
 
     # ========================================================================
     # ANÁLISES E RELATÓRIOS (KPIs)

@@ -70,7 +70,7 @@
         <article class="receitas-kpi-card blue">
             <span class="receitas-kpi-accent" aria-hidden="true"></span>
             <div>
-                <div class="receitas-kpi-title">Previsto no mês <span title="Total previsto no período">i</span></div>
+                <div class="receitas-kpi-title">Previsto aberto <span title="Total previsto no período">i</span></div>
                 <strong id="total-previsto">R$ 0,00</strong>
                 <small id="previsto-indicador">Período selecionado</small>
             </div>
@@ -79,7 +79,7 @@
         <article class="receitas-kpi-card green">
             <span class="receitas-kpi-accent" aria-hidden="true"></span>
             <div>
-                <div class="receitas-kpi-title">Realizado no mês <span title="Total recebido no período">i</span></div>
+                <div class="receitas-kpi-title">Realizado no período <span title="Total recebido no período">i</span></div>
                 <strong id="total-realizado">R$ 0,00</strong>
                 <small id="realizado-indicador">Recebimentos registrados</small>
             </div>
@@ -106,11 +106,11 @@
     </section>
 
     <div class="receitas-workspace">
-        <section class="receitas-panel receitas-main-panel" aria-label="Receitas do mês">
+        <section class="receitas-panel receitas-main-panel" aria-label="Receitas e pendências">
             <div class="receitas-panel-header">
                 <div>
-                    <h2>Receitas do mês</h2>
-                    <p>Previsto, realizado e diferença por fonte.</p>
+                    <h2>Receitas e pendências</h2>
+                    <p>Previsto, realizado e pendente por competência.</p>
                 </div>
                 <div class="receitas-panel-actions">
                     <button type="button" class="receitas-secondary-btn" onclick="exportarReceitas()">
@@ -134,7 +134,7 @@
                 <span>Ações</span>
             </div>
             <div id="mes-lista" class="receitas-lista">
-                <div class="receitas-loading">Carregando receitas do mês...</div>
+                <div class="receitas-loading">Carregando receitas e pendências...</div>
             </div>
             <footer class="receitas-panel-footer">
                 <span id="receitas-total-encontradas">0 receitas encontradas</span>
@@ -154,15 +154,15 @@
                 <button type="button" class="receitas-link-btn" onclick="abrirModalFonte()">Ver todas as fontes</button>
             </section>
 
-            <section class="receitas-panel receitas-side-panel" aria-label="Próximos recebimentos">
+            <section class="receitas-panel receitas-side-panel" aria-label="Recebimentos pendentes">
                 <div class="receitas-side-header">
-                    <h2>Próximos recebimentos</h2>
+                    <h2>Recebimentos pendentes</h2>
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v4M17 3v4M4 9h16M5 5h14v15H5V5Z"/></svg>
                 </div>
                 <div id="proximos-recebimentos" class="receitas-proximos">
-                    <div class="receitas-loading small">Carregando próximos recebimentos...</div>
+                    <div class="receitas-loading small">Carregando recebimentos pendentes...</div>
                 </div>
-                <button type="button" class="receitas-link-btn" onclick="mostrarProximosRecebimentos()">Ver todos os próximos</button>
+                <button type="button" class="receitas-link-btn" onclick="mostrarProximosRecebimentos()">Ver todos os pendentes</button>
             </section>
         </aside>
     </div>
@@ -449,6 +449,9 @@
         <form id="form-consolidar-conta" onsubmit="confirmarConsolidacaoComConta(event)">
             <input type="hidden" id="consolidar-item-receita-id">
             <input type="hidden" id="consolidar-valor-previsto">
+            <input type="hidden" id="consolidar-receita-uid">
+            <input type="hidden" id="consolidar-realizada-id">
+            <input type="hidden" id="consolidar-competencia">
             <div class="receitas-form-grid one">
                 <label class="receitas-field">
                     <span>Conta bancária <em>*</em></span>

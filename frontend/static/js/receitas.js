@@ -134,13 +134,13 @@ async function atualizarDados() {
 
 function renderizarCarregando() {
     const lista = document.getElementById('mes-lista');
-    if (lista) lista.innerHTML = '<div class="receitas-loading">Carregando receitas do mês...</div>';
+    if (lista) lista.innerHTML = '<div class="receitas-loading">Carregando receitas e pendências...</div>';
 
     const fontes = document.getElementById('fontes-resumo');
     if (fontes) fontes.innerHTML = '<div class="receitas-loading small">Carregando fontes...</div>';
 
     const proximos = document.getElementById('proximos-recebimentos');
-    if (proximos) proximos.innerHTML = '<div class="receitas-loading small">Carregando próximos recebimentos...</div>';
+    if (proximos) proximos.innerHTML = '<div class="receitas-loading small">Carregando recebimentos pendentes...</div>';
 }
 
 async function carregarContasBancarias() {
@@ -165,10 +165,11 @@ async function carregarFontesReceita() {
 
 async function carregarReceitasMes() {
     const anoMes = getAnoMesSelecionado();
+    const inicioPendencias = `${estado.anoAtual}-01-01`;
 
     const [orcamentosResponse, realizadasResponse] = await Promise.all([
         fetch(`${API_RECEITAS}/orcamento?ano=${estado.anoAtual}`),
-        fetch(`${API_RECEITAS}/realizadas?ano_mes=${anoMes}`),
+        fetch(`${API_RECEITAS}/realizadas?ano_mes_inicio=${inicioPendencias}&ano_mes_fim=${anoMes}`),
     ]);
 
     const [orcamentosResult, realizadasResult] = await Promise.all([
@@ -187,35 +188,40 @@ async function carregarReceitasMes() {
 }
 
 function montarReceitasMes(orcamentos, realizadas, anoMes) {
-    const orcamentosDoMes = (orcamentos || []).filter((orcamento) => {
-        return normalizarDataMes(orcamento.ano_mes || orcamento.mes_referencia) === anoMes;
+    const realizadasEfetivas = (realizadas || []).filter((receita) => !receitaPendenteConfirmacao(receita));
+    const realizadasPendentes = (realizadas || []).filter(receitaPendenteConfirmacao);
+    const realizadasSelecionadas = realizadasEfetivas.filter((receita) => normalizarDataMes(receita.competencia || receita.mes_referencia) === anoMes);
+    const realizadasPorFonteCompetencia = new Map();
+
+    realizadasEfetivas.forEach((receita) => {
+        if (!receita.item_receita_id) return;
+        const competencia = normalizarDataMes(receita.competencia || receita.mes_referencia);
+        const chave = chaveReceita(receita.item_receita_id, competencia);
+        if (!realizadasPorFonteCompetencia.has(chave)) realizadasPorFonteCompetencia.set(chave, []);
+        realizadasPorFonteCompetencia.get(chave).push(receita);
     });
 
-    const realizadasPorFonte = new Map();
-    const realizadasSemOrcamento = [];
-
-    (realizadas || []).forEach((receita) => {
-        if (receita.item_receita_id) {
-            if (!realizadasPorFonte.has(receita.item_receita_id)) realizadasPorFonte.set(receita.item_receita_id, []);
-            realizadasPorFonte.get(receita.item_receita_id).push(receita);
-            return;
-        }
-        realizadasSemOrcamento.push(receita);
-    });
-
-    const idsPlanejados = new Set();
+    const idsPlanejadosNoMesSelecionado = new Set();
+    const chavesPlanejadas = new Set();
     const lista = [];
 
-    orcamentosDoMes.forEach((orcamento) => {
+    (orcamentos || [])
+        .filter((orcamento) => normalizarDataMes(orcamento.ano_mes || orcamento.mes_referencia) <= anoMes)
+        .forEach((orcamento) => {
         const itemId = orcamento.item_receita_id;
-        idsPlanejados.add(itemId);
+        const competencia = normalizarDataMes(orcamento.ano_mes || orcamento.mes_referencia);
+        const chave = chaveReceita(itemId, competencia);
 
         const fonte = buscarFonte(itemId);
-        const realizadasFonte = realizadasPorFonte.get(itemId) || [];
+        const realizadasFonte = realizadasPorFonteCompetencia.get(chave) || [];
         const valorPrevisto = Number(orcamento.valor_previsto ?? orcamento.valor_esperado ?? 0);
         const valorRealizado = soma(realizadasFonte, 'valor_recebido');
         const status = obterStatusReceita(valorPrevisto, valorRealizado);
 
+        if (competencia === anoMes) idsPlanejadosNoMesSelecionado.add(itemId);
+        if (competencia !== anoMes && status === 'REALIZADA') return;
+
+        chavesPlanejadas.add(chave);
         lista.push({
             uid: `orc-${orcamento.id || itemId}`,
             origem: 'orcamento',
@@ -224,7 +230,7 @@ function montarReceitasMes(orcamentos, realizadas, anoMes) {
             fonte,
             nome: fonte?.nome || orcamento.item_receita?.nome || 'Receita',
             descricao: fonte?.descricao || orcamento.observacoes || '',
-            competencia: anoMes,
+            competencia,
             tipo: fonte?.tipo || orcamento.item_receita?.tipo || 'OUTROS',
             status,
             conta: obterContaLinha(fonte, realizadasFonte[0]),
@@ -237,11 +243,28 @@ function montarReceitasMes(orcamentos, realizadas, anoMes) {
         });
     });
 
+    realizadasPendentes
+        .filter((receita) => normalizarDataMes(receita.competencia || receita.mes_referencia) <= anoMes)
+        .filter((receita) => {
+            const competencia = normalizarDataMes(receita.competencia || receita.mes_referencia);
+            return !receita.item_receita_id || !chavesPlanejadas.has(chaveReceita(receita.item_receita_id, competencia));
+        })
+        .forEach((receita) => {
+            lista.push(montarLinhaReceitaPendenteConfirmacao(receita, buscarFonte(receita.item_receita_id), anoMes));
+        });
+
+    const realizadasSelecionadasPorFonte = new Map();
+    realizadasSelecionadas.forEach((receita) => {
+        if (!receita.item_receita_id) return;
+        if (!realizadasSelecionadasPorFonte.has(receita.item_receita_id)) realizadasSelecionadasPorFonte.set(receita.item_receita_id, []);
+        realizadasSelecionadasPorFonte.get(receita.item_receita_id).push(receita);
+    });
+
     (estado.fontes || [])
-        .filter((fonte) => fonte.ativo && fonte.recorrente && !idsPlanejados.has(fonte.id))
-        .filter((fonte) => Number(fonte.valor_base_mensal || 0) > 0 || realizadasPorFonte.has(fonte.id))
+        .filter((fonte) => fonte.ativo && fonte.recorrente && !idsPlanejadosNoMesSelecionado.has(fonte.id))
+        .filter((fonte) => Number(fonte.valor_base_mensal || 0) > 0 || realizadasSelecionadasPorFonte.has(fonte.id))
         .forEach((fonte) => {
-            const realizadasFonte = realizadasPorFonte.get(fonte.id) || [];
+            const realizadasFonte = realizadasSelecionadasPorFonte.get(fonte.id) || [];
             const valorPrevisto = Number(fonte.valor_base_mensal || 0);
             const valorRealizado = soma(realizadasFonte, 'valor_recebido');
             const status = obterStatusReceita(valorPrevisto, valorRealizado);
@@ -266,22 +289,48 @@ function montarReceitasMes(orcamentos, realizadas, anoMes) {
             });
         });
 
-    (realizadas || [])
-        .filter((receita) => receita.item_receita_id && !idsPlanejados.has(receita.item_receita_id))
+    realizadasSelecionadas
+        .filter((receita) => receita.item_receita_id && !idsPlanejadosNoMesSelecionado.has(receita.item_receita_id))
         .filter((receita) => !(buscarFonte(receita.item_receita_id)?.recorrente))
         .forEach((receita) => {
             const fonte = buscarFonte(receita.item_receita_id);
             lista.push(montarLinhaRealizadaPontual(receita, fonte, anoMes));
         });
 
-    realizadasSemOrcamento.forEach((receita) => {
+    realizadasSelecionadas.filter((receita) => !receita.item_receita_id).forEach((receita) => {
         lista.push(montarLinhaRealizadaPontual(receita, null, anoMes));
     });
 
     return lista.sort((a, b) => {
         const statusOrder = { PREVISTA: 0, PARCIAL: 1, REALIZADA: 2, CANCELADA: 3 };
-        return (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9) || a.nome.localeCompare(b.nome);
+        return (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9)
+            || a.competencia.localeCompare(b.competencia)
+            || a.nome.localeCompare(b.nome);
     });
+}
+
+function montarLinhaReceitaPendenteConfirmacao(receita, fonte, anoMes) {
+    const valorPrevisto = Number(receita.valor_recebido || 0);
+    const competencia = normalizarDataMes(receita.competencia || receita.mes_referencia) || anoMes;
+    return {
+        uid: `pend-real-${receita.id}`,
+        origem: 'realizada_pendente',
+        id: receita.id,
+        item_receita_id: receita.item_receita_id,
+        fonte,
+        nome: receita.descricao || fonte?.nome || 'Receita prevista',
+        descricao: fonte?.descricao || receita.observacoes || '',
+        competencia,
+        tipo: fonte?.tipo || receita.item_receita?.tipo || 'OUTROS',
+        status: 'PREVISTA',
+        conta: obterContaLinha(fonte, null),
+        valor_previsto: valorPrevisto,
+        valor_realizado: 0,
+        diferenca: -valorPrevisto,
+        realizada_id: receita.id,
+        realizadas_count: 0,
+        dia_previsto_pagamento: Number(String(receita.data_recebimento || '').slice(8, 10)) || fonte?.dia_previsto_pagamento || null,
+    };
 }
 
 function montarLinhaRealizadaPontual(receita, fonte, anoMes) {
@@ -482,7 +531,7 @@ function renderizarProximosRecebimentos() {
         .filter((receita) => ['PREVISTA', 'PARCIAL'].includes(receita.status))
         .map((receita) => ({
             ...receita,
-            dataPrevista: montarDataPrevista(anoMes, receita.dia_previsto_pagamento),
+            dataPrevista: montarDataPrevista(receita.competencia || anoMes, receita.dia_previsto_pagamento),
         }))
         .sort((a, b) => a.dataPrevista.localeCompare(b.dataPrevista))
         .slice(0, 4);
@@ -490,7 +539,7 @@ function renderizarProximosRecebimentos() {
     if (!proximos.length) {
         container.innerHTML = `
             <div class="receitas-empty-state small">
-                <h3>Nenhum recebimento previsto.</h3>
+                <h3>Nenhum recebimento pendente.</h3>
                 <p>As previsões aparecerão quando houver fontes ativas.</p>
             </div>
         `;
@@ -566,7 +615,7 @@ function cancelarReceitaLinha(uid) {
     }
 
     if (receita.item_receita_id) {
-        excluirReceitaPrevista(receita.item_receita_id, receita.origem);
+        excluirReceitaPrevista(receita.item_receita_id, receita.origem, receita.competencia, receita.realizada_id);
     }
 }
 
@@ -845,6 +894,9 @@ function consolidarReceitaMes(itemReceitaId, valorPrevisto, uid = null) {
 
     setValue('consolidar-item-receita-id', itemReceitaId);
     setValue('consolidar-valor-previsto', valorPrevisto);
+    setValue('consolidar-receita-uid', uid || '');
+    setValue('consolidar-realizada-id', linha?.origem === 'realizada_pendente' ? linha.realizada_id : '');
+    setValue('consolidar-competencia', linha?.competencia || getAnoMesSelecionado());
     atualizarSelectsContasBancarias();
     setValue('consolidar-conta-bancaria', fonte?.conta_bancaria_id || linha?.conta?.id || '');
 
@@ -857,6 +909,10 @@ async function confirmarConsolidacaoComConta(event) {
     const itemReceitaId = parseInt(document.getElementById('consolidar-item-receita-id')?.value || '0', 10);
     const valorPrevisto = parseMoeda(document.getElementById('consolidar-valor-previsto')?.value);
     const contaId = document.getElementById('consolidar-conta-bancaria')?.value;
+    const realizadaId = document.getElementById('consolidar-realizada-id')?.value;
+    const uid = document.getElementById('consolidar-receita-uid')?.value;
+    const competencia = document.getElementById('consolidar-competencia')?.value || getAnoMesSelecionado();
+    const linha = uid ? buscarReceitaLinha(uid) : null;
     const fonte = buscarFonte(itemReceitaId);
     const hoje = new Date().toISOString().slice(0, 10);
 
@@ -866,16 +922,16 @@ async function confirmarConsolidacaoComConta(event) {
     }
 
     try {
-        const response = await fetch(`${API_RECEITAS}/realizadas`, {
-            method: 'POST',
+        const response = await fetch(realizadaId ? `${API_RECEITAS}/realizadas/${realizadaId}` : `${API_RECEITAS}/realizadas`, {
+            method: realizadaId ? 'PUT' : 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 item_receita_id: itemReceitaId,
                 data_recebimento: hoje,
                 valor_recebido: valorPrevisto,
-                competencia: getAnoMesSelecionado(),
+                competencia,
                 conta_bancaria_id: parseInt(contaId, 10),
-                descricao: fonte?.nome || 'Receita',
+                descricao: linha?.nome || fonte?.nome || 'Receita',
                 observacoes: 'Consolidado pelo gerenciamento de receitas',
             }),
         });
@@ -895,10 +951,10 @@ async function confirmarConsolidacaoComConta(event) {
     }
 }
 
-function editarReceitaPrevista(itemReceitaId, origem, valorPrevisto) {
+function editarReceitaPrevista(itemReceitaId, origem, valorPrevisto, competencia = null) {
     if (origem === 'orcamento') {
         setValue('orc-fonte', itemReceitaId);
-        setValue('orc-ano-mes', getAnoMesSelecionado().slice(0, 7));
+        setValue('orc-ano-mes', (competencia || getAnoMesSelecionado()).slice(0, 7));
         setValue('orc-valor', formatarNumeroInput(Number(valorPrevisto || 0)));
         setValue('orc-periodicidade', 'MENSAL_FIXA');
         abrirModal('modal-orcamento');
@@ -908,13 +964,19 @@ function editarReceitaPrevista(itemReceitaId, origem, valorPrevisto) {
     abrirModalFonte(itemReceitaId);
 }
 
-async function excluirReceitaPrevista(itemReceitaId, origem) {
+async function excluirReceitaPrevista(itemReceitaId, origem, competencia = null, realizadaId = null) {
     const fonte = buscarFonte(Number(itemReceitaId));
 
     if (origem === 'orcamento') {
-        if (!confirm('Remover a previsão desta receita no mês selecionado?')) return;
+        if (!confirm('Remover a previsão desta receita na competência selecionada?')) return;
 
-        await salvarPrevisaoZerada(itemReceitaId, 'Removido pelo usuário');
+        await salvarPrevisaoZerada(itemReceitaId, 'Removido pelo usuário', competencia);
+        return;
+    }
+
+    if (origem === 'realizada_pendente' && realizadaId) {
+        if (!confirm('Remover esta receita prevista pendente de confirmação?')) return;
+        await deletarRealizada(realizadaId);
         return;
     }
 
@@ -922,14 +984,14 @@ async function excluirReceitaPrevista(itemReceitaId, origem) {
     abrirModalFonte(itemReceitaId);
 }
 
-async function salvarPrevisaoZerada(itemReceitaId, observacoes) {
+async function salvarPrevisaoZerada(itemReceitaId, observacoes, competencia = null) {
     try {
         const response = await fetch(`${API_RECEITAS}/orcamento`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 item_receita_id: itemReceitaId,
-                ano_mes: getAnoMesSelecionado(),
+                ano_mes: competencia || getAnoMesSelecionado(),
                 valor_previsto: 0,
                 periodicidade: 'MENSAL_FIXA',
                 observacoes,
@@ -1003,7 +1065,7 @@ function mostrarProximosRecebimentos() {
     if (busca) busca.value = '';
     estado.busca = '';
     aplicarFiltrosLocais();
-    mostrarToast('Mostrando próximos recebimentos do período selecionado.', 'info');
+    mostrarToast('Mostrando recebimentos pendentes do período selecionado.', 'info');
 }
 
 function abrirModal(id) {
@@ -1026,6 +1088,15 @@ function buscarReceitaLinha(uid) {
 
 function buscarFonte(id) {
     return (estado.fontes || []).find((fonte) => Number(fonte.id) === Number(id));
+}
+
+function chaveReceita(itemReceitaId, competencia) {
+    return `${itemReceitaId || 'sem-fonte'}|${normalizarDataMes(competencia)}`;
+}
+
+function receitaPendenteConfirmacao(receita) {
+    const observacoes = String(receita?.observacoes || '');
+    return /\bconsorcio_id=\d+\b/.test(observacoes) && !receita?.conta_bancaria_id;
 }
 
 function obterContaLinha(fonte, realizada) {
