@@ -856,6 +856,56 @@ def excluir_lancamento(lancamento_id):
         return _internal_error('cartoes')
 
 
+@cartoes_bp.route('/lancamentos/<int:lancamento_id>/parcelamento', methods=['GET'])
+def consultar_parcelamento_lancamento(lancamento_id):
+    """Consulta parcelas relacionadas a um parcelamento de cartao."""
+    try:
+        return jsonify({
+            'success': True,
+            'data': CartaoService.consultar_parcelamento_lancamento(lancamento_id)
+        }), 200
+    except ValueError as exc:
+        return _business_error(str(exc), 400)
+    except Exception:
+        return _internal_error('consultar_parcelamento_lancamento')
+
+
+@cartoes_bp.route('/lancamentos/<int:lancamento_id>/parcelamento/futuras', methods=['PUT'])
+def atualizar_parcelas_futuras(lancamento_id):
+    """Atualiza somente parcelas futuras do parcelamento."""
+    try:
+        resultado = CartaoService.atualizar_parcelas_futuras(lancamento_id, request.json or {})
+        return jsonify({
+            'success': True,
+            'data': resultado,
+            'message': 'Parcelas futuras atualizadas com sucesso'
+        }), 200
+    except ValueError as exc:
+        db.session.rollback()
+        return _business_error(str(exc), 400)
+    except Exception:
+        db.session.rollback()
+        return _internal_error('atualizar_parcelas_futuras')
+
+
+@cartoes_bp.route('/lancamentos/<int:lancamento_id>/parcelamento/cancelar-futuras', methods=['POST'])
+def cancelar_parcelas_futuras(lancamento_id):
+    """Cancela/exclui somente parcelas futuras do parcelamento."""
+    try:
+        resultado = CartaoService.cancelar_parcelas_futuras(lancamento_id)
+        return jsonify({
+            'success': True,
+            'data': resultado,
+            'message': 'Parcelas futuras canceladas com sucesso'
+        }), 200
+    except ValueError as exc:
+        db.session.rollback()
+        return _business_error(str(exc), 400)
+    except Exception:
+        db.session.rollback()
+        return _internal_error('cancelar_parcelas_futuras')
+
+
 # ============================================================================
 # ROTAS PARA RESUMO E RELATÃ“RIOS
 # ============================================================================

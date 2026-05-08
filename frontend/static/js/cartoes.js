@@ -14,6 +14,7 @@ const estadoCartoes = {
     faturasPorCartao: new Map(),
     lancamentosFatura: new Map(),
     cartaoSelecionadoId: null,
+    parcelamentoGestao: null,
     filtroLancamentosFatura: 'todos',
     buscaGeral: '',
     buscaLateral: '',
@@ -32,6 +33,7 @@ function cartoesIcon(name) {
         more: '<path d="M12 5h.1M12 12h.1M12 19h.1"/>',
         info: '<path d="M12 11v6"/><path d="M12 7h.1"/><path d="M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/>',
         alert: '<path d="M12 5 3.5 19h17L12 5Z"/><path d="M12 10v4M12 17h.1"/>',
+        layers: '<path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5"/><path d="m3 16 9 5 9-5"/>',
         default: '<rect x="4" y="4" width="16" height="16" rx="3"/>'
     };
     return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${icons[name] || icons.default}</svg>`;
@@ -128,6 +130,8 @@ function configurarEventosCartoes() {
     document.getElementById('form-cartao')?.addEventListener('submit', salvarCartao);
     document.getElementById('form-categoria-limite')?.addEventListener('submit', salvarCategoriaLimite);
     document.getElementById('form-revelar-cvv')?.addEventListener('submit', revelarCodigoSeguranca);
+    document.getElementById('form-gerenciar-parcelamento')?.addEventListener('submit', salvarParcelasFuturas);
+    document.getElementById('btn-cancelar-parcelas-futuras')?.addEventListener('click', cancelarParcelasFuturas);
 
     document.querySelectorAll('[data-close-modal]').forEach((button) => {
         button.addEventListener('click', () => fecharModal(button.dataset.closeModal));
@@ -576,6 +580,11 @@ function renderizarLancamentosFatura(cartao) {
                                 <button class="lancamento-icon-btn" type="button" data-action="editar-lancamento" data-lancamento-id="${lancamento.id}" title="Editar lançamento" aria-label="Editar">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                                 </button>
+                                ${lancamentoTemParcelamentoGerenciavel(lancamento) ? `
+                                    <button class="lancamento-icon-btn lancamento-icon-btn--parcelamento" type="button" data-action="gerenciar-parcelamento" data-lancamento-id="${lancamento.id}" title="Gerenciar parcelamento" aria-label="Gerenciar parcelamento">
+                                        ${cartoesIcon('layers')}
+                                    </button>
+                                ` : ''}
                                 <button class="lancamento-icon-btn lancamento-icon-btn--danger" type="button" data-action="excluir-lancamento" data-lancamento-id="${lancamento.id}" data-lancamento-desc="${escapeHtml(lancamento.descricao)}" title="Excluir lançamento" aria-label="Excluir">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
                                 </button>
@@ -591,6 +600,10 @@ function renderizarLancamentosFatura(cartao) {
             `}
         </section>
     `;
+}
+
+function lancamentoTemParcelamentoGerenciavel(lancamento) {
+    return Number(lancamento.parcelas_total || lancamento.total_parcelas || 1) > 1 && Boolean(lancamento.compra_id);
 }
 
 function filtrarLimitesPorStatus(limites) {
@@ -697,6 +710,8 @@ async function tratarCliqueDetalhe(event) {
         renderizarDetalheCartao();
     } else if (action === 'editar-lancamento') {
         abrirModalEditarLancamento(Number(button.dataset.lancamentoId));
+    } else if (action === 'gerenciar-parcelamento') {
+        await abrirModalGerenciarParcelamento(Number(button.dataset.lancamentoId));
     } else if (action === 'excluir-lancamento') {
         await confirmarExcluirLancamento(Number(button.dataset.lancamentoId), button.dataset.lancamentoDesc);
     }
@@ -1007,6 +1022,130 @@ async function confirmarExcluirLancamento(lancamentoId, descricao) {
     }
 }
 
+function formatarCompetenciaParcelamento(competencia) {
+    if (!competencia || !/^\d{4}-\d{2}/.test(competencia)) return competencia || '-';
+    const [ano, mes] = competencia.split('-');
+    return `${mes}/${ano}`;
+}
+
+function statusParcelaLabel(status) {
+    const labels = {
+        paga: 'Paga',
+        fechada: 'Fechada',
+        passada: 'Passada',
+        atual: 'Atual',
+        futura: 'Futura'
+    };
+    return labels[status] || 'Futura';
+}
+
+async function abrirModalGerenciarParcelamento(lancamentoId) {
+    try {
+        const resp = await fetchJson(`${API_CARTOES}/lancamentos/${lancamentoId}/parcelamento`);
+        estadoCartoes.parcelamentoGestao = resp.data;
+        await preencherCategoriasDespesaLancamento(
+            document.getElementById('parcelamento-gestao-categoria'),
+            resp.data?.base?.categoria_id
+        );
+        preencherModalGerenciarParcelamento(resp.data);
+        abrirModal('modal-gerenciar-parcelamento');
+    } catch (error) {
+        mostrarErro(`Erro ao carregar parcelamento: ${error.message}`);
+    }
+}
+
+function preencherModalGerenciarParcelamento(data) {
+    const base = data?.base || {};
+    const parcelas = data?.parcelas || [];
+    const descricaoInput = document.getElementById('parcelamento-gestao-descricao');
+    const valorInput = document.getElementById('parcelamento-gestao-valor');
+    const resumo = document.getElementById('parcelamento-gestao-resumo');
+    const tbody = document.getElementById('parcelamento-gestao-parcelas');
+    const btnCancelarFuturas = document.getElementById('btn-cancelar-parcelas-futuras');
+
+    if (descricaoInput) descricaoInput.value = base.descricao || '';
+    if (valorInput) valorInput.value = base.valor || '';
+    if (btnCancelarFuturas) btnCancelarFuturas.disabled = Number(base.futuras_editaveis || 0) === 0;
+
+    if (resumo) {
+        resumo.innerHTML = `
+            <div><span>Descri&ccedil;&atilde;o</span><strong>${escapeHtml(base.descricao || '-')}</strong></div>
+            <div><span>Cart&atilde;o</span><strong>${escapeHtml(base.cartao_nome || '-')}</strong></div>
+            <div><span>Valor da parcela</span><strong>${formatarMoeda(base.valor)}</strong></div>
+            <div><span>Parcela atual</span><strong>${escapeHtml(base.parcela_atual || '-')}/${escapeHtml(base.total_parcelas || '-')}</strong></div>
+            <div><span>Primeira compet&ecirc;ncia</span><strong>${escapeHtml(formatarCompetenciaParcelamento(base.primeira_competencia))}</strong></div>
+            <div><span>&Uacute;ltima compet&ecirc;ncia</span><strong>${escapeHtml(formatarCompetenciaParcelamento(base.ultima_competencia))}</strong></div>
+            <div><span>Categoria da despesa</span><strong>${escapeHtml(base.categoria_nome || '-')}</strong></div>
+            <div><span>Futuras edit&aacute;veis</span><strong>${escapeHtml(base.futuras_editaveis || 0)}</strong></div>
+        `;
+    }
+
+    if (tbody) {
+        tbody.innerHTML = parcelas.length ? parcelas.map((parcela) => `
+            <tr>
+                <td>${escapeHtml(parcela.parcela || '-')}</td>
+                <td>${escapeHtml(formatarCompetenciaParcelamento(parcela.competencia))}</td>
+                <td>${escapeHtml(parcela.data_compra || '-')}</td>
+                <td>${formatarMoeda(parcela.valor)}</td>
+                <td><span class="parcelamento-status ${escapeHtml(parcela.status || 'futura')}">${escapeHtml(statusParcelaLabel(parcela.status))}</span></td>
+                <td>${parcela.editavel ? 'Edit&aacute;vel neste MVP' : 'Preservada'}</td>
+            </tr>
+        `).join('') : '<tr><td colspan="6">Nenhuma parcela relacionada encontrada.</td></tr>';
+    }
+}
+
+async function salvarParcelasFuturas(event) {
+    event.preventDefault();
+    const baseId = estadoCartoes.parcelamentoGestao?.base?.id;
+    if (!baseId) return;
+
+    const payload = {
+        descricao: document.getElementById('parcelamento-gestao-descricao')?.value.trim(),
+        categoria_id: document.getElementById('parcelamento-gestao-categoria')?.value || null,
+        valor: document.getElementById('parcelamento-gestao-valor')?.value || null
+    };
+
+    try {
+        const resp = await fetchJson(`${API_CARTOES}/lancamentos/${baseId}/parcelamento/futuras`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        estadoCartoes.parcelamentoGestao = resp.data?.parcelamento || estadoCartoes.parcelamentoGestao;
+        preencherModalGerenciarParcelamento(estadoCartoes.parcelamentoGestao);
+        const cartao = obterCartaoSelecionado();
+        if (cartao) {
+            await carregarFaturaSelecionada();
+            renderizarDetalheCartao();
+        }
+        mostrarSucesso(`${resp.data?.atualizadas || 0} parcela(s) futura(s) atualizada(s).`);
+    } catch (error) {
+        mostrarErro(`Erro ao atualizar parcelas futuras: ${error.message}`);
+    }
+}
+
+async function cancelarParcelasFuturas() {
+    const baseId = estadoCartoes.parcelamentoGestao?.base?.id;
+    if (!baseId) return;
+    if (!confirm('Esta aÃ§Ã£o afetarÃ¡ apenas as parcelas futuras deste parcelamento. As parcelas anteriores nÃ£o serÃ£o alteradas.')) return;
+
+    try {
+        const resp = await fetchJson(`${API_CARTOES}/lancamentos/${baseId}/parcelamento/cancelar-futuras`, {
+            method: 'POST'
+        });
+        estadoCartoes.parcelamentoGestao = resp.data?.parcelamento || estadoCartoes.parcelamentoGestao;
+        preencherModalGerenciarParcelamento(estadoCartoes.parcelamentoGestao);
+        const cartao = obterCartaoSelecionado();
+        if (cartao) {
+            await carregarFaturaSelecionada();
+            renderizarDetalheCartao();
+        }
+        mostrarSucesso(`${resp.data?.canceladas || 0} parcela(s) futura(s) cancelada(s).`);
+    } catch (error) {
+        mostrarErro(`Erro ao cancelar parcelas futuras: ${error.message}`);
+    }
+}
+
 function abrirModal(modalId) {
     document.getElementById(modalId)?.classList.add('open');
 }
@@ -1015,6 +1154,9 @@ function fecharModal(modalId) {
     const modal = document.getElementById(modalId);
     if (!modal) return;
     modal.classList.remove('open');
+    if (modalId === 'modal-gerenciar-parcelamento') {
+        estadoCartoes.parcelamentoGestao = null;
+    }
     if (modalId === 'modal-categoria-limite') {
         document.getElementById('limite-categoria-cartao').disabled = false;
     }

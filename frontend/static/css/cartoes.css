@@ -1041,6 +1041,133 @@
     color: #92400e;
 }
 
+.lancamento-icon-btn--parcelamento {
+    color: #2563eb;
+}
+
+.lancamento-icon-btn--parcelamento:hover {
+    background: rgba(37, 99, 235, 0.08);
+    color: #1d4ed8;
+}
+
+.cf-button-danger {
+    background: #fee2e2;
+    border-color: #fecaca;
+    color: #b91c1c;
+}
+
+.cf-button-danger:hover {
+    background: #fecaca;
+    color: #991b1b;
+}
+
+.parcelamento-gestao-modal {
+    max-width: 980px;
+}
+
+.parcelamento-gestao-modal .modal-header p {
+    color: #64748b;
+    font-size: 13px;
+    margin: 4px 0 0;
+}
+
+.parcelamento-gestao-aviso {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 8px;
+    color: #92400e;
+    font-size: 13px;
+    margin-bottom: 14px;
+    padding: 10px 12px;
+}
+
+.parcelamento-gestao-resumo {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin-bottom: 16px;
+}
+
+.parcelamento-gestao-resumo div {
+    background: #f8fafc;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.parcelamento-gestao-resumo span {
+    color: #64748b;
+    display: block;
+    font-size: 11px;
+    margin-bottom: 4px;
+}
+
+.parcelamento-gestao-resumo strong {
+    color: #0f172a;
+    display: block;
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.parcelamento-gestao-lista {
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    border-radius: 8px;
+    max-height: 280px;
+    overflow: auto;
+}
+
+.parcelamento-gestao-table {
+    border-collapse: collapse;
+    font-size: 13px;
+    min-width: 720px;
+    width: 100%;
+}
+
+.parcelamento-gestao-table th,
+.parcelamento-gestao-table td {
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    padding: 9px 10px;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.parcelamento-gestao-table th {
+    background: #f8fafc;
+    color: #475569;
+    font-size: 11px;
+    font-weight: 700;
+    position: sticky;
+    text-transform: uppercase;
+    top: 0;
+}
+
+.parcelamento-status {
+    border-radius: 999px;
+    display: inline-flex;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px;
+}
+
+.parcelamento-status.futura {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.parcelamento-status.atual {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.parcelamento-status.passada,
+.parcelamento-status.fechada,
+.parcelamento-status.paga {
+    background: #f1f5f9;
+    color: #475569;
+}
+
 .fatura-lancamento-item.needs-review {
     border-color: rgba(249, 115, 22, 0.28);
     background: #fffaf5;
@@ -1272,6 +1399,10 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
+}
+
+.form-row.three-cols {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.8fr);
 }
 
 .checkbox-field {

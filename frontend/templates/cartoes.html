@@ -330,6 +330,61 @@
             </form>
         </div>
     </div>
+    <!-- Modal: Gerenciar parcelamento inteiro -->
+    <div id="modal-gerenciar-parcelamento" class="modal">
+        <div class="modal-content modal-lg parcelamento-gestao-modal">
+            <div class="modal-header">
+                <div>
+                    <h2>Gerenciar parcelamento</h2>
+                    <p>Altere dados das parcelas futuras ou visualize o conjunto completo do parcelamento.</p>
+                </div>
+                <button class="modal-close" type="button" data-close-modal="modal-gerenciar-parcelamento" aria-label="Fechar">&times;</button>
+            </div>
+            <form id="form-gerenciar-parcelamento">
+                <div class="parcelamento-gestao-aviso">
+                    As altera&ccedil;&otilde;es neste modal afetam o parcelamento, n&atilde;o apenas a parcela selecionada. Por seguran&ccedil;a, este MVP altera apenas parcelas futuras.
+                </div>
+                <div id="parcelamento-gestao-resumo" class="parcelamento-gestao-resumo"></div>
+
+                <div class="form-row three-cols">
+                    <div class="form-group">
+                        <label for="parcelamento-gestao-descricao">Descri&ccedil;&atilde;o para parcelas futuras</label>
+                        <input type="text" id="parcelamento-gestao-descricao">
+                    </div>
+                    <div class="form-group">
+                        <label for="parcelamento-gestao-categoria">Categoria da Despesa</label>
+                        <select id="parcelamento-gestao-categoria"></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="parcelamento-gestao-valor">Valor das parcelas futuras</label>
+                        <input type="number" id="parcelamento-gestao-valor" step="0.01" min="0">
+                    </div>
+                </div>
+
+                <div class="parcelamento-gestao-lista">
+                    <table class="parcelamento-gestao-table">
+                        <thead>
+                            <tr>
+                                <th>Parcela</th>
+                                <th>Compet&ecirc;ncia/Fatura</th>
+                                <th>Data</th>
+                                <th>Valor</th>
+                                <th>Status</th>
+                                <th>Observa&ccedil;&atilde;o</th>
+                            </tr>
+                        </thead>
+                        <tbody id="parcelamento-gestao-parcelas"></tbody>
+                    </table>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="cf-button cf-button-secondary" data-close-modal="modal-gerenciar-parcelamento">Cancelar</button>
+                    <button type="button" class="cf-button cf-button-danger" id="btn-cancelar-parcelas-futuras">Cancelar parcelas futuras</button>
+                    <button type="submit" class="cf-button cf-button-primary">Salvar altera&ccedil;&otilde;es futuras</button>
+                </div>
+            </form>
+        </div>
+    </div>
 {% endblock %}
 
 {% block extra_js %}

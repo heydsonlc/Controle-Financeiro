@@ -437,6 +437,7 @@ class CartaoService:
                 'origem': lancamento.origem_importacao or ('recorrencia' if lancamento.is_recorrente else 'manual'),
                 'parcela_atual': lancamento.numero_parcela,
                 'parcelas_total': lancamento.total_parcelas,
+                'compra_id': lancamento.compra_id,
                 'status_classificacao': status_classificacao,
             })
 
@@ -445,6 +446,186 @@ class CartaoService:
             'mes_referencia': mes_ref.strftime('%Y-%m'),
             'categoria_cartao_id': filtro,
             'lancamentos': resultado,
+        }
+
+    @staticmethod
+    def _obter_lancamento_parcelado(lancamento_id):
+        lancamento = LancamentoAgregado.query.filter(
+            PerfilFinanceiroService.condicao_perfil(LancamentoAgregado),
+            LancamentoAgregado.id == lancamento_id,
+        ).first()
+        if not lancamento:
+            raise ValueError('Lancamento nao encontrado')
+        if int(lancamento.total_parcelas or 1) <= 1:
+            raise ValueError('Lancamento nao pertence a parcelamento')
+        if not lancamento.compra_id:
+            raise ValueError('Parcelamento sem identificador de compra')
+        return lancamento
+
+    @staticmethod
+    def _parcelas_por_compra(lancamento):
+        return LancamentoAgregado.query.filter(
+            PerfilFinanceiroService.condicao_perfil(LancamentoAgregado),
+            LancamentoAgregado.cartao_id == lancamento.cartao_id,
+            LancamentoAgregado.compra_id == lancamento.compra_id,
+            LancamentoAgregado.total_parcelas == lancamento.total_parcelas,
+        ).order_by(
+            LancamentoAgregado.numero_parcela.asc(),
+            LancamentoAgregado.mes_fatura.asc(),
+            LancamentoAgregado.id.asc(),
+        ).all()
+
+    @staticmethod
+    def _fatura_lancamento(lancamento):
+        return Conta.query.filter(
+            PerfilFinanceiroService.condicao_perfil(Conta),
+            Conta.item_despesa_id == lancamento.cartao_id,
+            Conta.cartao_competencia == lancamento.mes_fatura,
+            Conta.is_fatura_cartao == True,  # noqa: E712
+        ).first()
+
+    @staticmethod
+    def _status_parcela_parcelamento(lancamento, base):
+        fatura = CartaoService._fatura_lancamento(lancamento)
+        status_fatura = fatura.status_fatura if fatura else None
+        status_pagamento = fatura.status_pagamento if fatura else None
+
+        if status_pagamento == 'Pago' or status_fatura == 'PAGA':
+            return 'paga'
+        if status_fatura == 'FECHADA':
+            return 'fechada'
+        if lancamento.mes_fatura < base.mes_fatura:
+            return 'passada'
+        if lancamento.mes_fatura == base.mes_fatura:
+            return 'atual'
+        return 'futura'
+
+    @staticmethod
+    def _parcela_futura_editavel(lancamento, base):
+        return (
+            lancamento.mes_fatura > base.mes_fatura
+            and CartaoService._status_parcela_parcelamento(lancamento, base) == 'futura'
+        )
+
+    @staticmethod
+    def _serializar_parcela_parcelamento(lancamento, base):
+        status = CartaoService._status_parcela_parcelamento(lancamento, base)
+        return {
+            'id': lancamento.id,
+            'parcela': f'{lancamento.numero_parcela}/{lancamento.total_parcelas}',
+            'numero_parcela': lancamento.numero_parcela,
+            'total_parcelas': lancamento.total_parcelas,
+            'competencia': lancamento.mes_fatura.strftime('%Y-%m') if lancamento.mes_fatura else None,
+            'data_compra': lancamento.data_compra.isoformat() if lancamento.data_compra else None,
+            'valor': float(lancamento.valor or 0),
+            'descricao': lancamento.descricao_exibida or lancamento.descricao,
+            'categoria_id': lancamento.categoria_id,
+            'categoria_nome': lancamento.categoria.nome if lancamento.categoria else None,
+            'categoria_cartao_id': lancamento.categoria_cartao_id,
+            'status': status,
+            'editavel': CartaoService._parcela_futura_editavel(lancamento, base),
+        }
+
+    @staticmethod
+    def consultar_parcelamento_lancamento(lancamento_id):
+        base = CartaoService._obter_lancamento_parcelado(lancamento_id)
+        parcelas = CartaoService._parcelas_por_compra(base)
+        if not parcelas:
+            parcelas = [base]
+
+        primeira = min((p.mes_fatura for p in parcelas if p.mes_fatura), default=None)
+        ultima = max((p.mes_fatura for p in parcelas if p.mes_fatura), default=None)
+        futuras = [p for p in parcelas if CartaoService._parcela_futura_editavel(p, base)]
+        bloqueadas = [
+            p for p in parcelas
+            if p.mes_fatura and p.mes_fatura > base.mes_fatura and not CartaoService._parcela_futura_editavel(p, base)
+        ]
+        cartao = ItemDespesa.query.get(base.cartao_id)
+
+        return {
+            'base': {
+                'id': base.id,
+                'compra_id': base.compra_id,
+                'cartao_id': base.cartao_id,
+                'cartao_nome': cartao.nome if cartao else None,
+                'descricao': base.descricao_exibida or base.descricao,
+                'valor': float(base.valor or 0),
+                'parcela_atual': base.numero_parcela,
+                'total_parcelas': base.total_parcelas,
+                'categoria_id': base.categoria_id,
+                'categoria_nome': base.categoria.nome if base.categoria else None,
+                'primeira_competencia': primeira.strftime('%Y-%m') if primeira else None,
+                'ultima_competencia': ultima.strftime('%Y-%m') if ultima else None,
+                'futuras_editaveis': len(futuras),
+                'futuras_bloqueadas': len(bloqueadas),
+            },
+            'parcelas': [
+                CartaoService._serializar_parcela_parcelamento(parcela, base)
+                for parcela in parcelas
+            ],
+        }
+
+    @staticmethod
+    def atualizar_parcelas_futuras(lancamento_id, dados):
+        base = CartaoService._obter_lancamento_parcelado(lancamento_id)
+        parcelas = CartaoService._parcelas_por_compra(base)
+        futuras = [p for p in parcelas if CartaoService._parcela_futura_editavel(p, base)]
+        if not futuras:
+            return {'atualizadas': 0, 'faturas_afetadas': [], 'parcelamento': CartaoService.consultar_parcelamento_lancamento(lancamento_id)}
+
+        descricao = (dados.get('descricao') or '').strip()
+        categoria_id = dados.get('categoria_id')
+        valor = dados.get('valor')
+        categoria_cartao_id = None
+        if categoria_id:
+            resolucao = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(
+                cartao_id=base.cartao_id,
+                categoria_id=categoria_id,
+                categoria_cartao_id=None,
+            )
+            categoria_cartao_id = resolucao.get('categoria_cartao_id')
+
+        valor_decimal = Decimal(str(valor)) if valor not in (None, '') else None
+        faturas_afetadas = set()
+        for parcela in futuras:
+            if descricao:
+                parcela.descricao = descricao
+                parcela.descricao_exibida = descricao
+            if categoria_id:
+                parcela.categoria_id = int(categoria_id)
+                parcela.categoria_cartao_id = categoria_cartao_id
+            if valor_decimal is not None:
+                parcela.valor = valor_decimal
+            faturas_afetadas.add(parcela.mes_fatura)
+
+        db.session.flush()
+        for competencia in sorted(faturas_afetadas):
+            CartaoService.recalcular_fatura(base.cartao_id, competencia)
+
+        return {
+            'atualizadas': len(futuras),
+            'faturas_afetadas': [competencia.strftime('%Y-%m') for competencia in sorted(faturas_afetadas)],
+            'parcelamento': CartaoService.consultar_parcelamento_lancamento(lancamento_id),
+        }
+
+    @staticmethod
+    def cancelar_parcelas_futuras(lancamento_id):
+        base = CartaoService._obter_lancamento_parcelado(lancamento_id)
+        parcelas = CartaoService._parcelas_por_compra(base)
+        futuras = [p for p in parcelas if CartaoService._parcela_futura_editavel(p, base)]
+        faturas_afetadas = {parcela.mes_fatura for parcela in futuras}
+
+        for parcela in futuras:
+            db.session.delete(parcela)
+
+        db.session.flush()
+        for competencia in sorted(faturas_afetadas):
+            CartaoService.recalcular_fatura(base.cartao_id, competencia)
+
+        return {
+            'canceladas': len(futuras),
+            'faturas_afetadas': [competencia.strftime('%Y-%m') for competencia in sorted(faturas_afetadas)],
+            'parcelamento': CartaoService.consultar_parcelamento_lancamento(lancamento_id),
         }
 
     # ==========================================================
