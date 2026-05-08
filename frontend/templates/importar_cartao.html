@@ -13,8 +13,8 @@
                 <span class="import-step-chip is-active">1. Configuração</span>
                 <span class="import-step-chip">2. Documento</span>
                 <span class="import-step-chip">3. Validação</span>
-                <span class="import-step-chip">4. Classificação</span>
-                <span class="import-step-chip">5. Revisão e Resultado</span>
+                <span class="import-step-chip">4. Triagem</span>
+                <span class="import-step-chip">5. Confronto e Resultado</span>
             </div>
         </div>
     </div>
@@ -87,7 +87,7 @@
             <div class="import-summary-card">
                 <span class="summary-icon warning" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4V7Z"/><path d="M7 11h10"/></svg></span>
                 <strong id="parceladoCount">0</strong>
-                <span>parcelados</span>
+                <span>a importar</span>
             </div>
             <div class="import-summary-card">
                 <span class="summary-icon info" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 17h.1M12 13a3 3 0 1 0-3-3"/><path d="M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg></span>
@@ -107,23 +107,23 @@
 
         <div class="import-validation-actions">
             <button class="btn btn-secondary" type="button" id="btnStep3" onclick="proximaEtapa(3)" disabled>Validar layout</button>
-            <button class="btn btn-primary" type="button" id="btnStep4" onclick="proximaEtapa(4)" disabled>Gerar prévia</button>
+            <button class="btn btn-primary" type="button" id="btnStep4" onclick="proximaEtapa(4)" disabled>Confrontar selecionados</button>
         </div>
 
         <div class="import-summary-row import-validation-summary" aria-label="Resumo da validação">
             <div class="import-summary-card">
                 <span class="summary-icon success" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5l4 4L19 7"/></svg></span>
-                <span>Válidos</span>
+                <span>A importar</span>
                 <strong id="validCount">0</strong>
             </div>
             <div class="import-summary-card">
                 <span class="summary-icon warning" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 8v5M12 17h.1"/><path d="M12 3 3.5 19h17L12 3Z"/></svg></span>
-                <span>Revisar</span>
+                <span>Ignorados</span>
                 <strong id="reviewCount">0</strong>
             </div>
             <div class="import-summary-card">
                 <span class="summary-icon info" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 17h.1M12 13a3 3 0 1 0-3-3"/><path d="M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg></span>
-                <span>Sem categoria do cartão</span>
+                <span>Bloqueados</span>
                 <strong id="missingCardCategoryCount">0</strong>
             </div>
             <div class="import-summary-card">
@@ -133,7 +133,7 @@
             </div>
             <div class="import-summary-card">
                 <span class="summary-icon warning" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 8v5M12 17h.1"/><path d="M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg></span>
-                <span>Valor sem Categoria do Cartão</span>
+                <span>Valor a importar</span>
                 <strong id="uncategorizedCardValue">R$ 0,00</strong>
             </div>
         </div>
@@ -153,16 +153,16 @@
                 <span class="import-section-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" focusable="false"><path d="M20 7.5V4a1 1 0 0 0-1-1h-3.5a1 1 0 0 0-.7.3l-9 9a2 2 0 0 0 0 2.8l4.1 4.1a2 2 0 0 0 2.8 0l9-9a1 1 0 0 0 .3-.7ZM15 7h.1"/></svg>
                 </span>
-                <h2>4. Classificação</h2>
+                <h2>4. Triagem</h2>
             </div>
 
             <div class="import-classification-content">
                 <div class="import-category-list" id="classificationList">
-                    <div class="import-empty-state compact">As categorias do cartão aparecem após selecionar o cartão.</div>
+                    <div class="import-empty-state compact">Carregue um documento para iniciar a triagem.</div>
                 </div>
                 <div class="import-info-box">
                     <span class="summary-icon info" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 11v6M12 7h.1"/><path d="M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg></span>
-                    <p>As categorias detectadas são sugestões. A confirmação final é manual.</p>
+                    <p>Use a triagem para decidir quais lançamentos seguem na importação.</p>
                 </div>
             </div>
         </section>
@@ -172,12 +172,12 @@
                 <span class="import-section-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" focusable="false"><path d="M6 3h12v18H6V3Z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
                 </span>
-                <h2>5. Revisão e Resultado</h2>
+                <h2>5. Confronto e Resultado</h2>
             </div>
 
             <div class="import-result-summary" aria-label="Revisão da importação">
                 <div class="import-summary-card">
-                    <span>Total importado previsto</span>
+                    <span>Total a importar</span>
                     <strong id="plannedTotal">R$ 0,00</strong>
                 </div>
                 <div class="import-summary-card">
@@ -189,12 +189,13 @@
                     <strong id="ignoredCount">0</strong>
                 </div>
                 <div class="import-summary-card">
-                    <span>Categorias confirmadas</span>
-                    <strong id="confirmedCardCategoryCount">0/0</strong>
-                    <small id="pendingCardCategoryCount">0 pendentes</small>
+                    <span>Duplicados protegidos</span>
+                    <strong id="confirmedCardCategoryCount">0</strong>
+                    <small id="pendingCardCategoryCount">0 a importar</small>
                 </div>
             </div>
 
+            <div id="confrontoContainer" class="import-result-output"></div>
             <div id="resultadoContainer" class="import-result-output"></div>
 
             <div class="import-result-actions">
@@ -224,7 +225,7 @@
                 <select id="modalPerfil" onchange="atualizarCamposPerfilModal(); renderizarAmostraModal();"></select>
             </div>
 
-            <div class="import-field">
+            <div class="import-field import-deferred-classification" hidden>
                 <label for="modalCategoriaPadrao">Categoria da despesa padrão *</label>
                 <select id="modalCategoriaPadrao" onchange="renderizarAmostraModal();"></select>
             </div>
@@ -244,7 +245,7 @@
                 <select id="modalMapValor" onchange="renderizarAmostraModal();"></select>
             </div>
 
-            <div class="import-field">
+            <div class="import-field" hidden>
                 <label for="modalMapParcela">Parcela (opcional)</label>
                 <select id="modalMapParcela" onchange="renderizarAmostraModal();"></select>
             </div>
@@ -267,7 +268,7 @@
                     <option value="auto">Auto (débito e fallback crédito)</option>
                 </select>
             </div>
-            <div class="import-field">
+            <div class="import-field import-deferred-classification" hidden>
                 <label for="modalCategoriaCartaoPadraoCaixa">Categoria do cartão padrão</label>
                 <select id="modalCategoriaCartaoPadraoCaixa" onchange="renderizarAmostraModal();"></select>
             </div>
@@ -282,14 +283,14 @@
                     <option value="despesas_positivas">Despesas são valores positivos</option>
                 </select>
             </div>
-            <div class="import-field">
+            <div class="import-field import-deferred-classification" hidden>
                 <label for="modalCategoriaCartaoPadraoNubank">Categoria do cartão padrão</label>
                 <select id="modalCategoriaCartaoPadraoNubank" onchange="renderizarAmostraModal();"></select>
             </div>
         </div>
 
         <div class="perfil-modal-grid" id="boxCamposManual">
-            <div class="import-field">
+            <div class="import-field import-deferred-classification" hidden>
                 <label for="modalCategoriaCartaoPadraoManual">Categoria do cartão padrão</label>
                 <select id="modalCategoriaCartaoPadraoManual" onchange="renderizarAmostraModal();"></select>
             </div>
@@ -300,6 +301,66 @@
         <div class="perfil-modal-actions">
             <button type="button" class="btn btn-secondary" onclick="fecharModalValidacao()">Cancelar</button>
             <button type="button" class="btn btn-primary" onclick="confirmarValidacaoModal()">Confirmar validação</button>
+        </div>
+    </div>
+</div>
+
+<div class="perfil-modal-overlay" id="parcelamentoModal" hidden>
+    <div class="perfil-modal-content import-parcel-modal-content">
+        <div class="perfil-modal-header">
+            <h2>Criar parcelamento a partir do lançamento importado</h2>
+            <p>Este fluxo cria o parcelamento do cartão e impede que este lançamento seja importado como despesa avulsa.</p>
+        </div>
+
+        <div class="perfil-modal-grid">
+            <div class="import-field import-field-wide">
+                <label for="parcelamentoDescricaoOriginal">Descrição original do cartão</label>
+                <input id="parcelamentoDescricaoOriginal" class="form-control" type="text" readonly>
+            </div>
+            <div class="import-field import-field-wide">
+                <label for="parcelamentoDescricaoAmigavel">Descrição amigável</label>
+                <input id="parcelamentoDescricaoAmigavel" class="form-control" type="text" onchange="renderizarPreviewParcelamentoModal();">
+            </div>
+            <div class="import-field">
+                <label for="parcelamentoDataCompra">Data da compra</label>
+                <input id="parcelamentoDataCompra" class="form-control" type="date" onchange="renderizarPreviewParcelamentoModal();">
+            </div>
+            <div class="import-field">
+                <label for="parcelamentoValor">Valor da parcela</label>
+                <input id="parcelamentoValor" class="form-control" type="text" inputmode="decimal" onchange="renderizarPreviewParcelamentoModal();">
+            </div>
+            <div class="import-field">
+                <label for="parcelamentoParcelaAtual">Parcela atual</label>
+                <input id="parcelamentoParcelaAtual" class="form-control" type="number" min="1" max="60" onchange="renderizarPreviewParcelamentoModal();">
+            </div>
+            <div class="import-field">
+                <label for="parcelamentoTotalParcelas">Total de parcelas</label>
+                <input id="parcelamentoTotalParcelas" class="form-control" type="number" min="2" max="60" onchange="renderizarPreviewParcelamentoModal();">
+            </div>
+            <div class="import-field">
+                <label for="parcelamentoCategoriaDespesa">Categoria da despesa</label>
+                <select id="parcelamentoCategoriaDespesa" class="form-control" onchange="atualizarCategoriaDespesaParcelamento(this.value);"></select>
+            </div>
+            <div class="import-field">
+                <label for="parcelamentoCategoriaCartao">Categoria do cartão</label>
+                <select id="parcelamentoCategoriaCartao" class="form-control"></select>
+            </div>
+            <div class="import-field">
+                <label for="parcelamentoCartaoLabel">Cartão</label>
+                <input id="parcelamentoCartaoLabel" class="form-control" type="text" readonly>
+            </div>
+            <div class="import-field">
+                <label for="parcelamentoCompetenciaLabel">Competência inicial</label>
+                <input id="parcelamentoCompetenciaLabel" class="form-control" type="text" readonly>
+            </div>
+        </div>
+
+        <div id="parcelamentoPreview" class="modal-sample"></div>
+        <div id="parcelamentoFeedback" class="import-inline-status"></div>
+
+        <div class="perfil-modal-actions">
+            <button type="button" class="btn btn-secondary" onclick="fecharModalParcelamento()">Cancelar</button>
+            <button type="button" class="btn btn-primary" onclick="confirmarParcelamentoImportado()">Criar parcelamento</button>
         </div>
     </div>
 </div>

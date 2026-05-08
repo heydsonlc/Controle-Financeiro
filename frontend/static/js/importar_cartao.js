@@ -4,6 +4,7 @@ const PERFIS = {
     CAIXA: 'caixa_credito_debito',
     MANUAL: 'manual_generico'
 };
+const MAX_PARCELAS_IMPORTACAO = 60;
 
 const estado = {
     cartoes: [],
@@ -17,6 +18,9 @@ const estado = {
     linhasMapeadas: [],
     linhasInvalidasIniciais: [],
     resumoPrevia: null,
+    analiseConfronto: null,
+    faseImportacao: 'triagem',
+    parcelamentoModal: null,
     perfilSelecionado: PERFIS.MANUAL,
     mapeamentoAtual: {
         data_compra: null,
@@ -28,7 +32,7 @@ const estado = {
     },
     regraNubank: 'absoluto',
     regraCaixa: 'debito',
-    filtroPrevia: 'todas',
+    filtroPrevia: 'a_importar',
     linhasSelecionadas: new Set(),
 };
 
@@ -144,32 +148,57 @@ function formatarMoeda(valor) {
     });
 }
 
-function detectarParcelaDescricao(descricao) {
-    const texto = String(descricao || '');
-    let match = texto.match(/(\d{1,2})\s*[/\-]\s*(\d{1,2})/);
-    if (match) {
+function validarNumerosParcelamento(numero, total) {
+    return Number.isInteger(numero)
+        && Number.isInteger(total)
+        && numero >= 1
+        && total > 1
+        && numero <= total
+        && total <= MAX_PARCELAS_IMPORTACAO;
+}
+
+function detectarParcelamentoTexto(descricao) {
+    const texto = String(descricao || '').trim();
+    if (!texto) return null;
+
+    const padroes = [
+        /\b(?:PARC(?:ELA)?\.?)\s*(\d{1,2})\s*(?:\/|DE)\s*(\d{1,2})\b/i,
+        /\b(\d{1,2})\s*\/\s*(\d{1,2})\b/i,
+        /\b(\d{1,2})\s+DE\s+(\d{1,2})\b/i
+    ];
+
+    for (const padrao of padroes) {
+        const match = texto.match(padrao);
+        if (!match) continue;
         const numero = parseInt(match[1], 10);
         const total = parseInt(match[2], 10);
-        if (numero >= 1 && total >= 1 && numero <= total) {
+        if (validarNumerosParcelamento(numero, total)) {
+            const descricaoLimpa = `${texto.slice(0, match.index)} ${texto.slice(match.index + match[0].length)}`
+                .replace(/\s+/g, ' ')
+                .replace(/^[\s\-–|]+|[\s\-–|]+$/g, '')
+                .trim();
             return {
-                numero_parcela: numero,
-                total_parcelas: total,
-                parcela: `${numero}/${total}`
+                ehParcelamento: true,
+                parcelaAtual: numero,
+                totalParcelas: total,
+                padraoDetectado: match[0],
+                descricaoLimpa: descricaoLimpa || texto,
+                rotulo: `${numero}/${total}`
             };
         }
     }
 
-    match = texto.match(/parcela\s*(\d{1,2})\s*de\s*(\d{1,2})/i);
-    if (match) {
-        const numero = parseInt(match[1], 10);
-        const total = parseInt(match[2], 10);
-        if (numero >= 1 && total >= 1 && numero <= total) {
-            return {
-                numero_parcela: numero,
-                total_parcelas: total,
-                parcela: `${numero}/${total}`
-            };
-        }
+    return null;
+}
+
+function detectarParcelaDescricao(descricao) {
+    const detectado = detectarParcelamentoTexto(descricao);
+    if (detectado) {
+        return {
+            numero_parcela: detectado.parcelaAtual,
+            total_parcelas: detectado.totalParcelas,
+            parcela: detectado.rotulo
+        };
     }
 
     return {
@@ -365,8 +394,11 @@ function limparDadosImportacao() {
     estado.linhasMapeadas = [];
     estado.linhasInvalidasIniciais = [];
     estado.resumoPrevia = null;
+    estado.analiseConfronto = null;
+    estado.faseImportacao = 'triagem';
+    estado.parcelamentoModal = null;
     estado.perfilSelecionado = PERFIS.MANUAL;
-    estado.filtroPrevia = 'todas';
+    estado.filtroPrevia = 'a_importar';
     estado.linhasSelecionadas = new Set();
     estado.mapeamentoAtual = {
         data_compra: null,
@@ -385,6 +417,8 @@ function limparDadosImportacao() {
     document.getElementById('previaContainer').innerHTML = '<div class="import-empty-state">Carregue um documento para validar o layout e revisar os lançamentos.</div>';
     document.getElementById('editorPrePersistencia').innerHTML = '';
     document.getElementById('resumoPreviaTecnica').innerHTML = '';
+    const confronto = document.getElementById('confrontoContainer');
+    if (confronto) confronto.innerHTML = '';
     document.getElementById('resultadoContainer').innerHTML = '';
     renderizarClassificacao();
 }
@@ -525,7 +559,9 @@ function aplicarPayloadUnificado(data) {
     estado.linhasMapeadas = (data?.linhas || []).map(converterLinhaIntermediaria);
     estado.linhasInvalidasIniciais = [];
     estado.resumoPrevia = null;
-    estado.filtroPrevia = 'todas';
+    estado.analiseConfronto = null;
+    estado.faseImportacao = 'triagem';
+    estado.filtroPrevia = 'a_importar';
     estado.linhasSelecionadas = new Set();
 
     const origemLabel = (data?.origem || '').toUpperCase();
@@ -589,7 +625,9 @@ async function processarCSV(file) {
         estado.linhasMapeadas = [];
         estado.linhasInvalidasIniciais = [];
         estado.resumoPrevia = null;
-        estado.filtroPrevia = 'todas';
+        estado.analiseConfronto = null;
+        estado.faseImportacao = 'triagem';
+        estado.filtroPrevia = 'a_importar';
         estado.linhasSelecionadas = new Set();
         estado.perfilSelecionado = dados.perfil_detectado || PERFIS.MANUAL;
         estado.mapeamentoAtual = {
@@ -648,11 +686,11 @@ async function proximaEtapa(numero) {
 
     if (numero === 4) {
         if (!estado.linhasMapeadas.length) {
-            alert('Analise o arquivo ou valide o perfil antes de gerar a prévia.');
+            alert('Analise o arquivo ou valide o perfil antes de confrontar os lançamentos.');
             return false;
         }
         await previsualizarImportacao();
-        rolarParaSecao('step3');
+        rolarParaSecao('step5');
         return true;
     }
 
@@ -678,8 +716,14 @@ function rolarParaSecao(id) {
     }
 }
 
-function invalidarPrevia() {
+function invalidarPrevia(opcoes = {}) {
     estado.resumoPrevia = null;
+    if (!opcoes.manterConfronto) {
+        estado.analiseConfronto = null;
+        estado.faseImportacao = 'triagem';
+        const confronto = document.getElementById('confrontoContainer');
+        if (confronto) confronto.innerHTML = '';
+    }
     const resumo = document.getElementById('resumoPreviaTecnica');
     if (resumo) resumo.innerHTML = '';
     const resultado = document.getElementById('resultadoContainer');
@@ -699,7 +743,7 @@ function renderizarMapeamento() {
     if (estado.payloadUnificado && !estado.usaMapeamentoManual) {
         container.innerHTML = `
             <div class="import-feedback success">
-                Arquivo normalizado pelo motor unificado. Revise as linhas, confirme Categoria da Despesa e Categoria do Cartão, e gere a prévia técnica.
+                Arquivo normalizado pelo motor unificado. Revise os lançamentos que seguem na importação e gere a prévia técnica.
             </div>
         `;
         return;
@@ -1023,7 +1067,6 @@ function renderizarAmostraModal() {
                         <th>Data</th>
                         <th>Descrição</th>
                         <th>Valor</th>
-                        <th>Parcela</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -1032,7 +1075,6 @@ function renderizarAmostraModal() {
                             <td>${escapeHtml(linha.data_compra)}</td>
                             <td>${escapeHtml(linha.descricao)}</td>
                             <td>${formatarMoeda(linha.valor)}</td>
-                            <td>${escapeHtml(linha.parcela)}</td>
                         </tr>
                     `).join('')}
                 </tbody>
@@ -1043,10 +1085,6 @@ function renderizarAmostraModal() {
 
 async function confirmarValidacaoModal() {
     const config = obterConfiguracaoModal();
-    if (!config.categoriaPadrao) {
-        alert('Categoria da despesa padrão do lote é obrigatória.');
-        return;
-    }
     if (config.mapeamento.data_compra === null || config.mapeamento.descricao === null) {
         alert('Mapeie data e descrição.');
         return;
@@ -1078,9 +1116,9 @@ async function confirmarValidacaoModal() {
     document.getElementById('resumoConfiguracaoImportacao').innerHTML = `
         <div class="import-feedback success">
             Perfil validado: <strong>${escapeHtml(nomePerfil(config.perfil))}</strong>.
-            Linhas editáveis: <strong>${estado.linhasMapeadas.length}</strong>.
+            Linhas na triagem: <strong>${estado.linhasMapeadas.length}</strong>.
             Linhas inválidas no parse inicial: <strong>${resultado.invalidas.length}</strong>.
-            Categoria da despesa sugerida por histórico/fallback pode ser ajustada antes de importar.
+            Revise quais lançamentos seguem na importação antes de confirmar.
         </div>
     `;
 
@@ -1123,7 +1161,185 @@ function opcoesCategoriaCartaoSelect(selecionado) {
     )).join('')}`;
 }
 
+function linhaDuplicada(linha) {
+    return linha.status === 'duplicado' || linha.status_classificacao === 'duplicada' || linha.duplicada === true;
+}
+
+function linhaComErro(linha) {
+    return linha.status === 'erro' || linha.status_classificacao === 'erro';
+}
+
+function linhaCredito(linha) {
+    return linha.tipo_movimento === 'credito';
+}
+
+function linhaTratadaParcelamento(linha) {
+    return Boolean(linha.tratada_como_parcelamento || linha.status === 'parcelamento_criado');
+}
+
+function linhaBloqueadaTecnica(linha) {
+    return linhaDuplicada(linha) || linhaComErro(linha) || linhaCredito(linha);
+}
+
+function linhaImportavel(linha) {
+    return !linha.ignorar && !linhaTratadaParcelamento(linha) && !linhaBloqueadaTecnica(linha);
+}
+
+function descricaoOriginalLinha(linha) {
+    return linha.descricao_original || linha.descricao_cartao || linha.descricao || linha.descricao_exibida || '';
+}
+
+function detectarParcelamentoLinha(linha) {
+    const numeroExistente = toIntOrNull(linha.numero_parcela || linha.parcela_atual);
+    const totalExistente = toIntOrNull(linha.total_parcelas);
+    if (validarNumerosParcelamento(numeroExistente, totalExistente)) {
+        return {
+            numero: numeroExistente,
+            total: totalExistente,
+            rotulo: `${numeroExistente}/${totalExistente}`,
+            origem: 'campo'
+        };
+    }
+
+    const detectado = detectarParcelamentoTexto(descricaoOriginalLinha(linha)) || detectarParcelamentoTexto(linha.parcela);
+    if (detectado) {
+        return {
+            numero: detectado.parcelaAtual,
+            total: detectado.totalParcelas,
+            rotulo: detectado.rotulo,
+            origem: 'descricao',
+            padraoDetectado: detectado.padraoDetectado,
+            descricaoLimpa: detectado.descricaoLimpa
+        };
+    }
+
+    return null;
+}
+
+function linhaPossivelParcelamento(linha) {
+    return !!detectarParcelamentoLinha(linha);
+}
+
+function linhaPossivelRecorrencia(linha) {
+    return Boolean(linha.is_recorrente || linha.recorrencia_id || linha.item_despesa_id);
+}
+
+function linhaNovaClassificavel(linha) {
+    return linhaImportavel(linha)
+        && !linhaPossivelParcelamento(linha)
+        && !linhaPossivelRecorrencia(linha);
+}
+
+function motivoConfrontoLinha(linha, tipo, parcela) {
+    if (tipo === 'duplicado') {
+        return linha.motivo_duplicidade || linha.duplicidade || 'Mesmo cartao, competencia, descricao e valor ja identificados.';
+    }
+    if (tipo === 'parcelamento') {
+        return `Padrao de parcela ${parcela?.rotulo || ''} detectado na descricao original.`;
+    }
+    if (tipo === 'recorrencia') {
+        return 'Linha tem indicio de recorrencia nos dados disponiveis.';
+    }
+    if (tipo === 'erro') {
+        return (linha.mensagens || linha.avisos || []).join(' | ') || 'Linha bloqueada pela validacao tecnica.';
+    }
+    return 'Sem alerta local. Classifique antes de importar.';
+}
+
+function montarAnaliseConfronto() {
+    const grupos = {
+        novos: [],
+        duplicados: [],
+        parcelamentos: [],
+        recorrencias: [],
+        erros: []
+    };
+
+    estado.linhasMapeadas.forEach((linha, index) => {
+        const itemBase = { linha, index };
+        if (linhaTratadaParcelamento(linha)) return;
+        if (linha.ignorar && !linhaDuplicada(linha) && !linhaComErro(linha)) return;
+
+        if (linhaComErro(linha) || linhaCredito(linha)) {
+            grupos.erros.push({
+                ...itemBase,
+                motivo: motivoConfrontoLinha(linha, 'erro')
+            });
+            return;
+        }
+        if (linhaDuplicada(linha)) {
+            grupos.duplicados.push({
+                ...itemBase,
+                motivo: motivoConfrontoLinha(linha, 'duplicado')
+            });
+            return;
+        }
+
+        const parcela = detectarParcelamentoLinha(linha);
+        if (parcela) {
+            grupos.parcelamentos.push({
+                ...itemBase,
+                parcela,
+                motivo: motivoConfrontoLinha(linha, 'parcelamento', parcela)
+            });
+            return;
+        }
+
+        if (linhaPossivelRecorrencia(linha)) {
+            grupos.recorrencias.push({
+                ...itemBase,
+                motivo: motivoConfrontoLinha(linha, 'recorrencia')
+            });
+            return;
+        }
+
+        if (linhaImportavel(linha)) {
+            grupos.novos.push({
+                ...itemBase,
+                motivo: motivoConfrontoLinha(linha, 'novo')
+            });
+        }
+    });
+
+    return {
+        ...grupos,
+        totalSelecionados: estado.linhasMapeadas.filter(linhaImportavel).length,
+        totalBloqueados: grupos.duplicados.length + grupos.parcelamentos.length + grupos.recorrencias.length + grupos.erros.length
+    };
+}
+
+function linhasNovasConfirmaveis() {
+    if (estado.analiseConfronto) {
+        return estado.analiseConfronto.novos
+            .map(({ linha }) => linha)
+            .filter(linhaNovaClassificavel);
+    }
+    return estado.linhasMapeadas.filter(linhaNovaClassificavel);
+}
+
+function novasSemCategoriaDespesa() {
+    return linhasNovasConfirmaveis().filter((linha) => !toIntOrNull(linha.categoria_id || linha.categoria_despesa_id));
+}
+
 function statusLinha(linha) {
+    if (linhaComErro(linha)) {
+        return { texto: 'Erro', classe: 'review' };
+    }
+    if (linhaDuplicada(linha)) {
+        return { texto: 'Duplicado / já existente', classe: 'duplicate' };
+    }
+    if (linhaTratadaParcelamento(linha)) {
+        return { texto: 'Parcelamento criado', classe: 'parcelment' };
+    }
+    if (linhaCredito(linha)) {
+        return { texto: 'Ignorado', classe: 'ignored' };
+    }
+    if (linha.ignorar || linha.status_classificacao === 'ignorada' || linha.status === 'ignorado') {
+        return { texto: 'Ignorado', classe: 'ignored' };
+    }
+    if (linhaImportavel(linha)) {
+        return { texto: 'A importar', classe: 'valid' };
+    }
     if (linha.status_classificacao === 'duplicada') {
         return { texto: 'Duplicado', classe: 'duplicate' };
     }
@@ -1228,17 +1444,9 @@ function linhasPreviaFiltradas() {
     return estado.linhasMapeadas
         .map((linha, index) => ({ linha, index }))
         .filter(({ linha }) => {
-            const status = statusLinha(linha);
-            const origem = linha.categoria_origem || linha.categoria_sugerida_origem;
-            const confianca = linha.categoria_confianca || linha.confianca_categoria;
-
-            if (estado.filtroPrevia === 'prontas') return status.classe === 'valid' || linha.status_classificacao === 'classificada';
-            if (estado.filtroPrevia === 'pendentes') return !linha.categoria_id || !categoriaCartaoIdLinha(linha);
-            if (estado.filtroPrevia === 'ambiguas') return linha.status_classificacao === 'ambigua' || origem === 'ambigua';
-            if (estado.filtroPrevia === 'duplicadas') return linha.status_classificacao === 'duplicada' || linha.status === 'duplicado';
-            if (estado.filtroPrevia === 'baixa_confianca') return confianca === 'baixa' || status.classe === 'low-confidence';
-            if (estado.filtroPrevia === 'sem_categoria_cartao') return !linha.ignorar && !categoriaCartaoIdLinha(linha);
-            if (estado.filtroPrevia === 'revisar') return linhaPrecisaRevisao(linha);
+            if (estado.filtroPrevia === 'a_importar') return linhaImportavel(linha);
+            if (estado.filtroPrevia === 'ignorados') return linha.ignorar && !linhaDuplicada(linha) && !linhaTratadaParcelamento(linha);
+            if (estado.filtroPrevia === 'duplicadas') return linhaDuplicada(linha);
             return true;
         });
 }
@@ -1252,7 +1460,7 @@ function contarFiltroPrevia(filtro) {
 }
 
 function alterarFiltroPrevia(filtro) {
-    estado.filtroPrevia = filtro || 'todas';
+    estado.filtroPrevia = filtro || 'a_importar';
     estado.linhasSelecionadas = new Set();
     renderizarEditorPrePersistencia();
 }
@@ -1279,14 +1487,10 @@ function indicesSelecionados() {
 function renderizarBarraRevisaoLote(linhasFiltradas) {
     const selecionadas = indicesSelecionados().length;
     const filtros = [
-        ['todas', 'Todas', estado.linhasMapeadas.length],
-        ['prontas', 'Prontas', contarFiltroPrevia('prontas')],
-        ['pendentes', 'Pendentes', contarFiltroPrevia('pendentes')],
-        ['ambiguas', 'Ambiguas', contarFiltroPrevia('ambiguas')],
-        ['duplicadas', 'Duplicadas', contarFiltroPrevia('duplicadas')],
-        ['baixa_confianca', 'Baixa confianca', contarFiltroPrevia('baixa_confianca')],
-        ['sem_categoria_cartao', 'Sem cartao', contarFiltroPrevia('sem_categoria_cartao')],
-        ['revisar', 'Revisar', contarFiltroPrevia('revisar')]
+        ['a_importar', 'A importar', contarFiltroPrevia('a_importar')],
+        ['ignorados', 'Ignorados', contarFiltroPrevia('ignorados')],
+        ['todas', 'Todos', estado.linhasMapeadas.length],
+        ['duplicadas', 'Duplicados', contarFiltroPrevia('duplicadas')]
     ].map(([id, label, total]) => `
         <button class="import-review-filter ${estado.filtroPrevia === id ? 'is-active' : ''}" type="button" onclick="alterarFiltroPrevia('${id}')">
             ${escapeHtml(label)} <span>${total}</span>
@@ -1296,17 +1500,13 @@ function renderizarBarraRevisaoLote(linhasFiltradas) {
     return `
         <div class="import-review-toolbar">
             <div class="import-review-summary">
-                <strong>Revisao em lote</strong>
+                <strong>Triagem</strong>
                 <span>${selecionadas} selecionada${selecionadas === 1 ? '' : 's'} de ${linhasFiltradas.length} visiveis</span>
             </div>
             <div class="import-review-filters">${filtros}</div>
             <div class="import-review-actions">
-                <select id="bulkCategoriaDespesa" class="import-inline-select">${opcoesCategoriaSelect('')}</select>
-                <button class="btn btn-secondary btn-sm" type="button" onclick="aplicarCategoriaDespesaLote()">Aplicar despesa</button>
-                <select id="bulkCategoriaCartao" class="import-inline-select">${opcoesCategoriaCartaoSelect('')}</select>
-                <button class="btn btn-secondary btn-sm" type="button" onclick="aplicarCategoriaCartaoLote()">Aplicar cartao</button>
-                <button class="btn btn-secondary btn-sm" type="button" onclick="marcarLinhasSelecionadasRevisadas()">Marcar revisadas</button>
-                <button class="btn btn-outline-danger btn-sm" type="button" onclick="ignorarLinhasSelecionadas()">Ignorar</button>
+                <button class="btn btn-outline-danger btn-sm" type="button" onclick="ignorarLinhasSelecionadas()">Ignorar lançamento</button>
+                <button class="btn btn-secondary btn-sm" type="button" onclick="restaurarLinhasSelecionadas()">Restaurar</button>
             </div>
         </div>
     `;
@@ -1339,20 +1539,17 @@ function renderizarEditorPrePersistencia() {
                             <th class="import-row-check">
                                 <input type="checkbox" ${todasVisiveisSelecionadas ? 'checked' : ''} onchange="alternarSelecaoTodasPrevia(this.checked)" aria-label="Selecionar linhas visiveis">
                             </th>
-                            <th>Status</th>
                             <th>Data</th>
-                            <th>Descrição</th>
-                            <th>Parcela</th>
+                            <th>Descrição original</th>
                             <th>Valor</th>
-                            <th>Categoria da Despesa</th>
-                            <th>Categoria do Cartão</th>
-                            <th>Ações</th>
+                            <th>Status</th>
+                            <th>Ação</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${linhasFiltradas.length
                             ? linhasFiltradas.map(({ linha, index }) => renderizarLinhaPrevia(linha, index)).join('')
-                            : '<tr><td colspan="9"><div class="import-empty-state compact">Nenhuma linha encontrada para este filtro.</div></td></tr>'}
+                            : '<tr><td colspan="6"><div class="import-empty-state compact">Nenhuma linha encontrada para este filtro.</div></td></tr>'}
                     </tbody>
                 </table>
             </div>
@@ -1367,13 +1564,17 @@ function renderizarEditorPrePersistencia() {
 
 function renderizarLinhaPrevia(linha, index) {
     const status = statusLinha(linha);
-    const baixaConfianca = status.classe === 'low-confidence';
-    const futurasDisabled = (!linha.parcelado || Number(linha.total_parcelas) <= 1) ? 'disabled' : '';
-    const avisos = [...new Set([...(linha.avisos || []), ...(linha.mensagens || [])].filter(Boolean))];
+    const tratadaParcelamento = linhaTratadaParcelamento(linha);
+    const bloqueada = linhaBloqueadaTecnica(linha) || tratadaParcelamento;
     const detalheOrigem = [linha.cartao_final ? `Cartão ${linha.cartao_final}` : null, linha.grupo]
         .filter(Boolean)
         .join(' | ');
     const selecionada = estado.linhasSelecionadas.has(Number(index));
+    const descricaoOriginal = linha.descricao_original || linha.descricao || linha.descricao_exibida || '';
+    const textoAcao = tratadaParcelamento ? 'Tratado' : (linha.ignorar ? 'Restaurar' : 'Ignorar lançamento');
+    const tituloAcao = bloqueada
+        ? (tratadaParcelamento ? 'Linha ja transformada em parcelamento' : 'Linha protegida pela regra técnica da importação')
+        : textoAcao;
 
     return `
         <tr class="${linha.ignorar ? 'is-ignored' : ''}">
@@ -1381,49 +1582,471 @@ function renderizarLinhaPrevia(linha, index) {
                 <input type="checkbox" ${selecionada ? 'checked' : ''} onchange="alternarSelecaoLinha(${index}, this.checked)" aria-label="Selecionar linha ${index + 1}">
             </td>
             <td>
-                <span class="import-status-pill ${status.classe}">${escapeHtml(status.texto)}</span>
-                ${avisos.length ? `<span class="import-detected-note warning-note">${escapeHtml(avisos[0])}</span>` : ''}
-            </td>
-            <td>
-                <input class="import-inline-input" type="text" value="${escapeAttr(linha.data_compra || '')}" onchange="atualizarLinhaEdicao(${index}, 'data_compra', this.value)">
+                <span class="import-raw-text">${escapeHtml(linha.data_compra || '-')}</span>
             </td>
             <td class="import-description-cell">
-                <input class="import-inline-input" type="text" value="${escapeAttr(linha.descricao_exibida || '')}" onchange="atualizarLinhaEdicao(${index}, 'descricao_exibida', this.value)">
+                <span class="import-raw-description" title="${escapeAttr(descricaoOriginal)}">${escapeHtml(descricaoOriginal || '-')}</span>
                 ${detalheOrigem ? `<span class="import-detected-note">${escapeHtml(detalheOrigem)}</span>` : ''}
             </td>
             <td>
-                <input class="import-inline-input" type="text" value="${escapeAttr(linha.parcela || '1/1')}" onchange="atualizarParcelaTexto(${index}, this.value)">
-                <label class="import-detected-note">
-                    <input type="checkbox" ${linha.gerar_parcelas_futuras ? 'checked' : ''} ${futurasDisabled} onchange="atualizarLinhaEdicao(${index}, 'gerar_parcelas_futuras', this.checked)">
-                    futuras
-                </label>
+                <span class="import-raw-value">${formatarMoeda(linha.valor)}</span>
             </td>
             <td>
-                <input class="import-inline-input" type="number" step="0.01" value="${escapeAttr(formatarValor(linha.valor))}" onchange="atualizarLinhaEdicao(${index}, 'valor', this.value)">
-            </td>
-            <td class="import-category-cell">
-                <select class="import-inline-select" onchange="atualizarLinhaEdicao(${index}, 'categoria_id', this.value)">
-                    ${opcoesCategoriaSelect(linha.categoria_id)}
-                </select>
-                <span class="import-detected-note ${baixaConfianca ? 'low-confidence' : ''}">${escapeHtml(origemCategoriaLabel(linha))}</span>
-                <div class="import-badge-row">${badgeConfianca(linha)}</div>
-                ${palavrasChaveEncontradas(linha)}
-                ${categoriasCandidatasHtml(linha)}
-            </td>
-            <td class="import-category-cell">
-                <select class="import-inline-select import-card-category-select ${categoriaCartaoIdLinha(linha) ? '' : 'needs-review'}" onchange="atualizarLinhaEdicao(${index}, 'categoria_cartao_id', this.value)">
-                    ${opcoesCategoriaCartaoSelect(categoriaCartaoIdLinha(linha))}
-                </select>
-                <span class="import-detected-note">${escapeHtml(origemCategoriaCartaoLabel(linha))}</span>
+                <span class="import-status-pill ${status.classe}">${escapeHtml(status.texto)}</span>
             </td>
             <td>
                 <div class="row-actions">
-                    <button class="row-action-button" type="button" onclick="detalharLinha(${index})" title="Detalhar" aria-label="Detalhar">${iconSvg('eye')}</button>
-                    <button class="row-action-button ${linha.ignorar ? 'success' : 'danger'}" type="button" onclick="alternarIgnorarLinha(${index})" title="${linha.ignorar ? 'Incluir na importação' : 'Ignorar lançamento'}" aria-label="${linha.ignorar ? 'Incluir na importação' : 'Ignorar lançamento'}">${iconSvg(linha.ignorar ? 'undo' : 'trash')}</button>
+                    <button class="row-action-button import-row-action ${linha.ignorar ? 'success' : 'danger'}" type="button" onclick="alternarIgnorarLinha(${index})" title="${escapeAttr(tituloAcao)}" aria-label="${escapeAttr(textoAcao)}" ${bloqueada ? 'disabled' : ''}>
+                        ${iconSvg(linha.ignorar ? 'undo' : 'trash')}
+                        <span>${escapeHtml(textoAcao)}</span>
+                    </button>
                 </div>
             </td>
         </tr>
     `;
+}
+
+function renderizarConfrontoClassificacao() {
+    const container = document.getElementById('confrontoContainer');
+    if (!container) return;
+
+    const analise = estado.analiseConfronto;
+    if (!analise) {
+        container.innerHTML = '';
+        return;
+    }
+
+    const totalAnalisado = analise.novos.length
+        + analise.duplicados.length
+        + analise.parcelamentos.length
+        + analise.recorrencias.length
+        + analise.erros.length;
+    const pendentesCategoria = novasSemCategoriaDespesa().length;
+
+    container.innerHTML = `
+        <div class="import-confront-shell">
+            <div class="import-confront-header">
+                <div>
+                    <strong>Confronto pos-triagem</strong>
+                    <span>${totalAnalisado} lancamento${totalAnalisado === 1 ? '' : 's'} analisado${totalAnalisado === 1 ? '' : 's'} antes da classificacao.</span>
+                </div>
+                <div class="import-confront-metrics" aria-label="Resumo do confronto">
+                    <span>Novos <strong>${analise.novos.length}</strong></span>
+                    <span>Duplicados <strong>${analise.duplicados.length}</strong></span>
+                    <span>Parcelamentos <strong>${analise.parcelamentos.length}</strong></span>
+                    <span>Recorrencias <strong>${analise.recorrencias.length}</strong></span>
+                </div>
+            </div>
+            ${pendentesCategoria ? `
+                <div class="import-feedback warning">
+                    <strong>Classificacao pendente.</strong>
+                    ${pendentesCategoria} lancamento${pendentesCategoria === 1 ? '' : 's'} novo${pendentesCategoria === 1 ? '' : 's'} precisa${pendentesCategoria === 1 ? '' : 'm'} de categoria da despesa antes da confirmacao.
+                </div>
+            ` : ''}
+            ${!analise.novos.length ? `
+                <div class="import-feedback warning">
+                    Nenhum lancamento novo importavel apos o confronto. Duplicados, possiveis parcelamentos e recorrencias ficam fora da confirmacao deste MVP.
+                </div>
+            ` : ''}
+            ${renderizarGrupoNovosConfronto(analise.novos)}
+            ${renderizarGrupoAlertaConfronto('Possiveis duplicados / ja existentes', analise.duplicados, 'duplicate')}
+            ${renderizarGrupoParcelamentosConfronto(analise.parcelamentos)}
+            ${renderizarGrupoAlertaConfronto('Possiveis recorrencias', analise.recorrencias, 'recurrence')}
+            ${renderizarGrupoAlertaConfronto('Bloqueados por validacao', analise.erros, 'review')}
+        </div>
+    `;
+
+    atualizarResumoPainel();
+}
+
+function renderizarGrupoNovosConfronto(itens) {
+    if (!itens.length) return '';
+
+    return `
+        <section class="import-confront-group">
+            <div class="import-confront-group-title">
+                <strong>Lancamentos novos para classificar</strong>
+                <span>Somente este grupo recebe categoria nesta etapa.</span>
+            </div>
+            <div class="import-preview-table-wrap">
+                <table class="import-preview-table import-confront-table">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Descricao original</th>
+                            <th>Descricao amigavel</th>
+                            <th>Valor</th>
+                            <th>Categoria da despesa</th>
+                            <th>Categoria do cartao</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itens.map(({ linha, index }) => renderizarLinhaNovoConfronto(linha, index)).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    `;
+}
+
+function renderizarLinhaNovoConfronto(linha, index) {
+    const descricaoOriginal = descricaoOriginalLinha(linha);
+    const descricaoAmigavel = linha.descricao_exibida || linha.descricao || descricaoOriginal;
+    return `
+        <tr>
+            <td>${escapeHtml(linha.data_compra || '-')}</td>
+            <td class="import-description-cell">
+                <span class="import-raw-description" title="${escapeAttr(descricaoOriginal)}">${escapeHtml(descricaoOriginal || '-')}</span>
+            </td>
+            <td>
+                <input class="form-control form-control-sm" type="text" value="${escapeAttr(descricaoAmigavel)}" onchange="atualizarLinhaClassificacao(${index}, 'descricao_exibida', this.value)">
+            </td>
+            <td>${formatarMoeda(linha.valor)}</td>
+            <td class="import-category-cell">
+                <select class="form-control form-control-sm" onchange="atualizarLinhaClassificacao(${index}, 'categoria_id', this.value)">
+                    ${opcoesCategoriaSelect(linha.categoria_id || linha.categoria_despesa_id)}
+                </select>
+            </td>
+            <td class="import-category-cell">
+                <select class="form-control form-control-sm import-card-category-select" onchange="atualizarLinhaClassificacao(${index}, 'categoria_cartao_id', this.value)">
+                    ${opcoesCategoriaCartaoSelect(linha.categoria_cartao_id)}
+                </select>
+                ${linha.categoria_cartao_origem ? `<span class="import-detected-note">${escapeHtml(origemCategoriaCartaoLabel(linha))}</span>` : ''}
+            </td>
+        </tr>
+    `;
+}
+
+function renderizarGrupoParcelamentosConfronto(itens) {
+    if (!itens.length) return '';
+
+    return `
+        <section class="import-confront-group is-alert">
+            <div class="import-confront-group-title">
+                <strong>Possiveis parcelamentos</strong>
+                <span>Confirme explicitamente antes de gerar parcelas futuras.</span>
+            </div>
+            <div class="import-preview-table-wrap">
+                <table class="import-preview-table import-confront-table">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Descricao original</th>
+                            <th>Valor da parcela</th>
+                            <th>Parcela</th>
+                            <th>Status</th>
+                            <th>Acao</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itens.map(({ linha, index, parcela }) => `
+                            <tr>
+                                <td>${escapeHtml(linha.data_compra || '-')}</td>
+                                <td class="import-description-cell">
+                                    <span class="import-raw-description">${escapeHtml(descricaoOriginalLinha(linha) || '-')}</span>
+                                    <span class="import-detected-note">Padrao detectado: ${escapeHtml(parcela?.padraoDetectado || parcela?.rotulo || '-')}</span>
+                                </td>
+                                <td>${formatarMoeda(linha.valor)}</td>
+                                <td>${escapeHtml(parcela?.rotulo || '-')}</td>
+                                <td><span class="import-status-pill parcelment">Possivel parcelamento</span></td>
+                                <td>
+                                    <button class="row-action-button import-row-action success" type="button" onclick="abrirModalParcelamento(${index})">
+                                        ${iconSvg('check')}
+                                        <span>Criar parcelamento</span>
+                                    </button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    `;
+}
+
+function renderizarGrupoAlertaConfronto(titulo, itens, classe) {
+    if (!itens.length) return '';
+
+    return `
+        <section class="import-confront-group is-alert">
+            <div class="import-confront-group-title">
+                <strong>${escapeHtml(titulo)}</strong>
+                <span>Fora da criacao de nova despesa neste MVP.</span>
+            </div>
+            <div class="import-preview-table-wrap">
+                <table class="import-preview-table import-confront-table">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Descricao original</th>
+                            <th>Valor</th>
+                            <th>Status</th>
+                            <th>Motivo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itens.map(({ linha, motivo, parcela }) => `
+                            <tr>
+                                <td>${escapeHtml(linha.data_compra || '-')}</td>
+                                <td class="import-description-cell">
+                                    <span class="import-raw-description">${escapeHtml(descricaoOriginalLinha(linha) || '-')}</span>
+                                    ${parcela ? `<span class="import-detected-note">Parcela detectada: ${escapeHtml(parcela.rotulo)}</span>` : ''}
+                                </td>
+                                <td>${formatarMoeda(linha.valor)}</td>
+                                <td><span class="import-status-pill ${classe}">${escapeHtml(statusConfrontoLabel(classe))}</span></td>
+                                <td>${escapeHtml(motivo || '-')}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    `;
+}
+
+function statusConfrontoLabel(classe) {
+    if (classe === 'duplicate') return 'Possivel duplicado';
+    if (classe === 'parcelment') return 'Possivel parcelamento';
+    if (classe === 'recurrence') return 'Possivel recorrencia';
+    return 'Bloqueado';
+}
+
+function competenciaCompletaApi() {
+    const valor = document.getElementById('competenciaInput')?.value || '';
+    if (!/^\d{2}\/\d{4}$/.test(valor)) return null;
+    const [mes, ano] = valor.split('/');
+    return `${ano}-${mes}-01`;
+}
+
+function cartaoSelecionadoNome() {
+    const cartaoId = toIntOrNull(document.getElementById('cartaoSelect')?.value);
+    const cartao = estado.cartoes.find((item) => Number(item.id) === Number(cartaoId));
+    return cartao?.nome || 'Cartao selecionado';
+}
+
+function addMesesDataIso(dataIso, meses) {
+    const data = new Date(`${dataIso}T00:00:00`);
+    if (Number.isNaN(data.getTime())) return dataIso;
+    data.setMonth(data.getMonth() + meses);
+    return data.toISOString().slice(0, 10);
+}
+
+function addMesesCompetenciaIso(competenciaIso, meses) {
+    const data = new Date(`${competenciaIso}T00:00:00`);
+    if (Number.isNaN(data.getTime())) return competenciaIso;
+    data.setMonth(data.getMonth() + meses);
+    return data.toISOString().slice(0, 10);
+}
+
+function formatarCompetenciaCurta(dataIso) {
+    const data = new Date(`${dataIso}T00:00:00`);
+    if (Number.isNaN(data.getTime())) return dataIso;
+    return data.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+}
+
+function preencherSelectValor(id, opcoesHtml, valor) {
+    const elemento = document.getElementById(id);
+    if (!elemento) return;
+    elemento.innerHTML = opcoesHtml;
+    elemento.value = valor || '';
+}
+
+async function abrirModalParcelamento(index) {
+    const linha = estado.linhasMapeadas[index];
+    if (!linha) return;
+    if (!estado.categorias.length || !estado.categoriasCartao.length) {
+        await carregarCategorias();
+    }
+
+    const parcela = detectarParcelamentoLinha(linha);
+    if (!parcela) {
+        alert('Nao foi possivel detectar os dados de parcelamento desta linha.');
+        return;
+    }
+
+    estado.parcelamentoModal = { index, linha, parcela };
+    const descricaoOriginal = descricaoOriginalLinha(linha);
+    const descricaoSugerida = parcela.descricaoLimpa || detectarParcelamentoTexto(descricaoOriginal)?.descricaoLimpa || descricaoOriginal;
+
+    document.getElementById('parcelamentoDescricaoOriginal').value = descricaoOriginal;
+    document.getElementById('parcelamentoDescricaoAmigavel').value = linha.descricao_exibida || descricaoSugerida;
+    document.getElementById('parcelamentoDataCompra').value = linha.data_compra || '';
+    document.getElementById('parcelamentoValor').value = formatarValor(parseValorNumerico(linha.valor));
+    document.getElementById('parcelamentoParcelaAtual').value = parcela.numero;
+    document.getElementById('parcelamentoTotalParcelas').value = parcela.total;
+    document.getElementById('parcelamentoCartaoLabel').value = cartaoSelecionadoNome();
+    document.getElementById('parcelamentoCompetenciaLabel').value = document.getElementById('competenciaInput')?.value || '';
+    preencherSelectValor('parcelamentoCategoriaDespesa', opcoesCategoriaSelect(linha.categoria_id || linha.categoria_despesa_id), linha.categoria_id || linha.categoria_despesa_id);
+    preencherSelectValor('parcelamentoCategoriaCartao', opcoesCategoriaCartaoSelect(linha.categoria_cartao_id), linha.categoria_cartao_id);
+
+    const feedback = document.getElementById('parcelamentoFeedback');
+    if (feedback) feedback.innerHTML = '';
+    renderizarPreviewParcelamentoModal();
+    document.getElementById('parcelamentoModal').hidden = false;
+}
+
+function fecharModalParcelamento() {
+    estado.parcelamentoModal = null;
+    const modal = document.getElementById('parcelamentoModal');
+    if (modal) modal.hidden = true;
+}
+
+function obterDadosModalParcelamento() {
+    const numero = parseInt(document.getElementById('parcelamentoParcelaAtual')?.value || '', 10);
+    const total = parseInt(document.getElementById('parcelamentoTotalParcelas')?.value || '', 10);
+    const valorNumerico = parseValorNumerico(document.getElementById('parcelamentoValor')?.value);
+    return {
+        descricaoOriginal: document.getElementById('parcelamentoDescricaoOriginal')?.value || '',
+        descricaoAmigavel: document.getElementById('parcelamentoDescricaoAmigavel')?.value || '',
+        dataCompra: document.getElementById('parcelamentoDataCompra')?.value || '',
+        valor: valorNumerico === null ? '' : formatarValor(valorNumerico),
+        numeroParcela: numero,
+        totalParcelas: total,
+        categoriaId: toIntOrNull(document.getElementById('parcelamentoCategoriaDespesa')?.value),
+        categoriaCartaoId: toIntOrNull(document.getElementById('parcelamentoCategoriaCartao')?.value)
+    };
+}
+
+function renderizarPreviewParcelamentoModal() {
+    const preview = document.getElementById('parcelamentoPreview');
+    if (!preview || !estado.parcelamentoModal) return;
+
+    const dados = obterDadosModalParcelamento();
+    const competenciaBase = competenciaCompletaApi();
+    if (!validarNumerosParcelamento(dados.numeroParcela, dados.totalParcelas) || !dados.dataCompra || !competenciaBase) {
+        preview.innerHTML = '<div class="import-empty-state compact">Informe parcela atual, total, data e competencia para ver a previa.</div>';
+        return;
+    }
+
+    const linhas = [];
+    for (let numero = dados.numeroParcela; numero <= dados.totalParcelas; numero += 1) {
+        const diff = numero - dados.numeroParcela;
+        linhas.push({
+            rotulo: `${numero}/${dados.totalParcelas}`,
+            competencia: formatarCompetenciaCurta(addMesesCompetenciaIso(competenciaBase, diff)),
+            data: addMesesDataIso(dados.dataCompra, diff),
+            valor: formatarMoeda(dados.valor)
+        });
+    }
+
+    preview.innerHTML = `
+        <div class="import-parcel-preview-summary">
+            Serao geradas ${linhas.length} parcela${linhas.length === 1 ? '' : 's'}, da ${linhas[0].rotulo} ate ${linhas[linhas.length - 1].rotulo}.
+        </div>
+        <div class="import-parcel-preview-list">
+            ${linhas.map((item) => `
+                <div class="import-parcel-preview-row">
+                    <strong>${escapeHtml(item.rotulo)}</strong>
+                    <span>${escapeHtml(item.competencia)}</span>
+                    <span>${escapeHtml(item.data)}</span>
+                    <span>${escapeHtml(item.valor)}</span>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+async function atualizarCategoriaDespesaParcelamento(valor) {
+    const categoriaId = toIntOrNull(valor);
+    if (!categoriaId) {
+        preencherSelectValor('parcelamentoCategoriaCartao', opcoesCategoriaCartaoSelect(''), '');
+        return;
+    }
+
+    try {
+        const cartaoId = parseInt(document.getElementById('cartaoSelect')?.value || '', 10);
+        const resolucao = await buscarResolucaoCategoriaCartao(categoriaId, cartaoId);
+        if (resolucao.categoria_cartao_id) {
+            preencherSelectValor('parcelamentoCategoriaCartao', opcoesCategoriaCartaoSelect(resolucao.categoria_cartao_id), resolucao.categoria_cartao_id);
+        }
+    } catch (error) {
+        console.warn('Falha ao resolver Categoria do Cartao para parcelamento:', error);
+    }
+}
+
+async function confirmarParcelamentoImportado() {
+    if (!estado.parcelamentoModal) return;
+    if (!validarConfiguracaoBasica()) return;
+
+    const { index, linha } = estado.parcelamentoModal;
+    const dados = obterDadosModalParcelamento();
+    const feedback = document.getElementById('parcelamentoFeedback');
+    if (feedback) feedback.innerHTML = '';
+
+    if (!validarNumerosParcelamento(dados.numeroParcela, dados.totalParcelas)) {
+        if (feedback) feedback.innerHTML = '<div class="import-feedback error">Parcela atual e total de parcelas estao fora do intervalo permitido.</div>';
+        return;
+    }
+    if (!dados.categoriaId) {
+        if (feedback) feedback.innerHTML = '<div class="import-feedback error">Categoria da despesa e obrigatoria para criar parcelamento.</div>';
+        return;
+    }
+    if (!dados.descricaoAmigavel || !dados.dataCompra || !dados.valor || parseValorNumerico(dados.valor) <= 0) {
+        if (feedback) feedback.innerHTML = '<div class="import-feedback error">Preencha descricao, data e valor da parcela.</div>';
+        return;
+    }
+
+    const payload = {
+        cartao_id: parseInt(document.getElementById('cartaoSelect').value, 10),
+        competencia: competenciaCompletaApi(),
+        linhas: [{
+            data_compra: dados.dataCompra,
+            descricao: dados.descricaoOriginal,
+            descricao_original: dados.descricaoOriginal,
+            descricao_exibida: dados.descricaoAmigavel,
+            valor: dados.valor,
+            parcela: `${dados.numeroParcela}/${dados.totalParcelas}`,
+            numero_parcela: dados.numeroParcela,
+            total_parcelas: dados.totalParcelas,
+            gerar_parcelas_futuras: true,
+            gerar_apenas_atual_e_futuras: true,
+            categoria_id: dados.categoriaId,
+            categoria_cartao_id: dados.categoriaCartaoId,
+            origem_importacao: linha.origem_importacao || estado.payloadUnificado?.origem || 'csv',
+            ignorar: false
+        }]
+    };
+
+    try {
+        const resposta = await fetch(`${API_BASE}/parcelamento`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const resultado = await resposta.json();
+        if (!resposta.ok || !resultado.success) {
+            throw new Error(resultado.message || 'Falha ao criar parcelamento.');
+        }
+        if ((resultado.erros || []).length && !resultado.inseridos && !resultado.duplicados) {
+            throw new Error((resultado.erros || []).map((item) => item.erro).join(' | ') || 'Parcelamento nao criado.');
+        }
+
+        linha.tratada_como_parcelamento = true;
+        linha.ignorar = true;
+        linha.status = 'parcelamento_criado';
+        linha.parcelamento_criado = {
+            inseridos: resultado.inseridos || 0,
+            duplicados: resultado.duplicados || 0,
+            numero_parcela: dados.numeroParcela,
+            total_parcelas: dados.totalParcelas
+        };
+
+        estado.analiseConfronto = montarAnaliseConfronto();
+        fecharModalParcelamento();
+        renderizarEditorPrePersistencia();
+        renderizarConfrontoClassificacao();
+        document.getElementById('resultadoContainer').innerHTML = `
+            <div class="import-feedback success">
+                <strong>Parcelamento criado.</strong>
+                Inseridos: <strong>${resultado.inseridos || 0}</strong>.
+                Duplicados protegidos: <strong>${resultado.duplicados || 0}</strong>.
+                A linha original nao sera importada como despesa avulsa.
+            </div>
+        `;
+        rolarParaSecao('step5');
+    } catch (error) {
+        if (feedback) feedback.innerHTML = `<div class="import-feedback error">${escapeHtml(error.message)}</div>`;
+    }
 }
 
 function atualizarParcelaTexto(index, valor) {
@@ -1492,6 +2115,55 @@ function atualizarLinhaEdicao(index, campo, valor) {
     renderizarEditorPrePersistencia();
     if (campo === 'categoria_id' && !categoriaCartaoIdLinha(linha)) {
         resolverCategoriaCartaoLinha(index);
+    }
+}
+
+function atualizarLinhaClassificacao(index, campo, valor) {
+    const linha = estado.linhasMapeadas[index];
+    if (!linha) return;
+
+    if (campo === 'categoria_id' || campo === 'categoria_cartao_id') {
+        linha[campo] = toIntOrNull(valor);
+        if (campo === 'categoria_id') {
+            linha.categoria_despesa_id = linha[campo];
+            linha.categoria_origem = linha[campo] ? 'manual' : 'sem_sugestao';
+            linha.categoria_sugerida_origem = linha.categoria_origem;
+            linha.categoria_confianca = linha[campo] ? 'manual' : 'baixa';
+            linha.confianca_categoria = linha.categoria_confianca;
+            linha.palavras_chave_encontradas = [];
+            linha.categorias_candidatas = [];
+            if (linha.categoria_cartao_origem !== 'manual') {
+                linha.categoria_cartao_id = null;
+                linha.categoria_cartao_origem = null;
+                linha.categoria_cartao_nome = null;
+                linha.categoria_cartao_vinculada_ao_cartao = false;
+            }
+        }
+        if (campo === 'categoria_cartao_id') {
+            linha.categoria_cartao_origem = linha[campo] ? 'manual' : null;
+            linha.categoria_cartao_vinculada_ao_cartao = !!linha[campo];
+        }
+    } else {
+        linha[campo] = valor;
+    }
+
+    if (campo === 'descricao_exibida') {
+        linha.descricao = valor;
+    }
+    if ((campo === 'categoria_id' || campo === 'categoria_cartao_id') && !['duplicado', 'ignorado'].includes(linha.status)) {
+        linha.status = linha.categoria_id ? 'valido' : 'revisar';
+        if (linha.categoria_id && linha.categoria_cartao_id) linha.status_classificacao = 'classificada';
+    }
+
+    estado.resumoPrevia = null;
+    const resumo = document.getElementById('resumoPreviaTecnica');
+    if (resumo) resumo.innerHTML = '';
+    const resultado = document.getElementById('resultadoContainer');
+    if (resultado) resultado.innerHTML = '';
+    renderizarConfrontoClassificacao();
+
+    if (campo === 'categoria_id' && !categoriaCartaoIdLinha(linha)) {
+        resolverCategoriaCartaoLinha(index, { manterConfronto: true });
     }
 }
 
@@ -1579,6 +2251,22 @@ function ignorarLinhasSelecionadas() {
     renderizarEditorPrePersistencia();
 }
 
+function restaurarLinhasSelecionadas() {
+    const selecionados = indicesSelecionados();
+    if (!selecionados.length) {
+        alert('Selecione ao menos uma linha.');
+        return;
+    }
+
+    selecionados.forEach((index) => {
+        const linha = estado.linhasMapeadas[index];
+        if (linha && !linhaBloqueadaTecnica(linha)) linha.ignorar = false;
+    });
+    estado.linhasSelecionadas = new Set();
+    invalidarPrevia();
+    renderizarEditorPrePersistencia();
+}
+
 function marcarLinhasSelecionadasRevisadas() {
     const selecionados = indicesSelecionados();
     if (!selecionados.length) {
@@ -1606,7 +2294,7 @@ function marcarLinhasSelecionadasRevisadas() {
     renderizarEditorPrePersistencia();
 }
 
-async function resolverCategoriaCartaoLinha(index) {
+async function resolverCategoriaCartaoLinha(index, opcoes = {}) {
     const linha = estado.linhasMapeadas[index];
     const cartaoId = parseInt(document.getElementById('cartaoSelect')?.value || '', 10);
     if (!linha || !linha.categoria_id || !cartaoId) return;
@@ -1615,8 +2303,9 @@ async function resolverCategoriaCartaoLinha(index) {
             linha,
             await buscarResolucaoCategoriaCartao(linha.categoria_id, cartaoId)
         );
-        invalidarPrevia();
-        renderizarEditorPrePersistencia();
+        invalidarPrevia({ manterConfronto: !!opcoes.manterConfronto });
+        if (opcoes.manterConfronto) renderizarConfrontoClassificacao();
+        else renderizarEditorPrePersistencia();
     } catch (error) {
         console.warn('Falha ao resolver Categoria do Cartao:', error);
     }
@@ -1643,6 +2332,7 @@ function alternarParcelado(index, marcado) {
 function alternarIgnorarLinha(index) {
     const linha = estado.linhasMapeadas[index];
     if (!linha) return;
+    if (linhaBloqueadaTecnica(linha)) return;
     linha.ignorar = !linha.ignorar;
     invalidarPrevia();
     renderizarEditorPrePersistencia();
@@ -1652,38 +2342,33 @@ function detalharLinha(index) {
     const linha = estado.linhasMapeadas[index];
     if (!linha) return;
 
-    const categoriaDespesa = nomeCategoriaDespesa(linha.categoria_id) || 'Sem categoria da despesa';
-    const categoriaCartao = nomeCategoriaCartao(categoriaCartaoIdLinha(linha)) || 'Sem categoria do cartão';
     alert(
         `Lançamento ${linha.linha_origem || index + 1}\n\n` +
         `Data: ${linha.data_compra}\n` +
-        `Descrição: ${linha.descricao_exibida || linha.descricao}\n` +
+        `Descrição original: ${linha.descricao_original || linha.descricao_exibida || linha.descricao}\n` +
         `Valor: ${formatarMoeda(linha.valor)}\n` +
-        `Parcela: ${linha.parcela || '1/1'}\n` +
-        `Categoria da Despesa: ${categoriaDespesa}\n` +
-        `Categoria do Cartão: ${categoriaCartao}`
+        `Status: ${statusLinha(linha).texto}`
     );
 }
 
 function calcularResumoLocal() {
     const linhas = estado.linhasMapeadas;
-    const ativas = linhas.filter((linha) => !linha.ignorar);
-    const pendentesCartao = ativas.filter((linha) => !categoriaCartaoIdLinha(linha)).length;
-    const pendentesDespesa = ativas.filter((linha) => !linha.categoria_id).length;
-    const validas = ativas.filter((linha) => linha.categoria_id).length;
-    const baixaConfianca = ativas.filter((linha) => statusLinha(linha).classe === 'low-confidence').length;
-    const ignoradas = linhas.filter((linha) => linha.ignorar).length;
-    const duplicadas = linhas.filter((linha) => linha.status === 'duplicado').length;
-    const creditos = linhas.filter((linha) => linha.tipo_movimento === 'credito').length;
+    const ativas = linhas.filter(linhaImportavel);
+    const pendentesCartao = 0;
+    const pendentesDespesa = 0;
+    const validas = ativas.length;
+    const baixaConfianca = 0;
+    const ignoradas = linhas.filter((linha) => linha.ignorar && !linhaDuplicada(linha) && !linhaTratadaParcelamento(linha)).length;
+    const duplicadas = linhas.filter(linhaDuplicada).length;
+    const creditos = linhas.filter(linhaCredito).length;
     const parceladas = linhas.filter((linha) => Number(linha.total_parcelas) > 1).length;
     const totalPrevisto = ativas.reduce((acc, linha) => acc + (parseValorNumerico(linha.valor) || 0), 0);
-    const valorSemCategoriaCartao = ativas
-        .filter((linha) => !categoriaCartaoIdLinha(linha))
-        .reduce((acc, linha) => acc + (parseValorNumerico(linha.valor) || 0), 0);
+    const valorSemCategoriaCartao = 0;
 
     return {
         linhas,
         ativas,
+        importaveis: ativas,
         pendentesCartao,
         pendentesDespesa,
         validas,
@@ -1701,22 +2386,26 @@ function atualizarResumoPainel() {
     const resumo = calcularResumoLocal();
     const totalDetectado = estado.csvData?.total_linhas || resumo.linhas.length || 0;
     const duplicados = estado.resumoPrevia?.duplicados ?? resumo.duplicadas;
-    const novos = estado.resumoPrevia ? estado.resumoPrevia.inseridos : resumo.ativas.length;
-    const confirmadasCartao = resumo.ativas.filter((linha) => categoriaCartaoIdLinha(linha)).length;
+    const novosConfronto = estado.analiseConfronto ? linhasNovasConfirmaveis().length : resumo.importaveis.length;
+    const novos = estado.resumoPrevia ? estado.resumoPrevia.inseridos : novosConfronto;
+    const bloqueados = resumo.duplicadas + resumo.creditos + estado.linhasInvalidasIniciais.length;
+    const valorPlanejado = estado.analiseConfronto
+        ? linhasNovasConfirmaveis().reduce((acc, linha) => acc + (parseValorNumerico(linha.valor) || 0), 0)
+        : resumo.totalPrevisto;
 
     setText('detectedCount', totalDetectado);
-    setText('parceladoCount', resumo.parceladas);
+    setText('parceladoCount', resumo.importaveis.length);
     setText('duplicateCount', duplicados);
     setText('validCount', resumo.validas);
-    setText('reviewCount', resumo.revisar);
-    setText('missingCardCategoryCount', resumo.pendentesCartao);
+    setText('reviewCount', resumo.ignoradas);
+    setText('missingCardCategoryCount', bloqueados);
     setText('validationDuplicateCount', duplicados);
-    setText('plannedTotal', formatarMoeda(resumo.totalPrevisto));
-    setText('uncategorizedCardValue', formatarMoeda(resumo.valorSemCategoriaCartao));
+    setText('plannedTotal', formatarMoeda(valorPlanejado));
+    setText('uncategorizedCardValue', formatarMoeda(resumo.totalPrevisto));
     setText('newCount', novos);
     setText('ignoredCount', resumo.ignoradas);
-    setText('confirmedCardCategoryCount', `${confirmadasCartao}/${resumo.ativas.length}`);
-    setText('pendingCardCategoryCount', `${resumo.pendentesCartao} pendentes`);
+    setText('confirmedCardCategoryCount', duplicados);
+    setText('pendingCardCategoryCount', estado.analiseConfronto ? `${novosConfronto} novos` : `${resumo.importaveis.length} a importar`);
 
     atualizarControlesImportacao(resumo);
     renderizarClassificacao();
@@ -1730,15 +2419,19 @@ function setText(id, valor) {
 function atualizarControlesImportacao(resumo = calcularResumoLocal()) {
     const btnPrevia = document.getElementById('btnStep4');
     const btnImportar = document.getElementById('btnImportar');
-    const semLinhasAtivas = resumo.ativas.length === 0;
-    const temPendenciasObrigatorias = resumo.pendentesDespesa > 0;
+    const semLinhasAtivas = resumo.importaveis.length === 0;
 
     if (btnPrevia) {
-        btnPrevia.disabled = semLinhasAtivas || temPendenciasObrigatorias;
+        btnPrevia.disabled = semLinhasAtivas;
     }
 
     if (btnImportar) {
-        btnImportar.disabled = !estado.resumoPrevia || estado.resumoPrevia.inseridos === 0 || temPendenciasObrigatorias;
+        const quantidade = estado.analiseConfronto ? linhasNovasConfirmaveis().length : 0;
+        btnImportar.disabled = !estado.analiseConfronto || quantidade === 0 || novasSemCategoriaDespesa().length > 0;
+        btnImportar.innerHTML = `
+            Confirmar importação de ${quantidade} ${quantidade === 1 ? 'lançamento' : 'lançamentos'}
+            <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12h14M15 8l4 4-4 4"/></svg></span>
+        `;
     }
 }
 
@@ -1746,49 +2439,41 @@ function renderizarClassificacao() {
     const container = document.getElementById('classificationList');
     if (!container) return;
 
-    if (!estado.categoriasCartao.length) {
-        container.innerHTML = '<div class="import-empty-state compact">As categorias do cartão aparecem após selecionar o cartão.</div>';
-        return;
-    }
+    const linhas = estado.linhasMapeadas;
+    const resumo = [
+        ['Total encontrados', estado.csvData?.total_linhas || linhas.length || 0],
+        ['A importar', linhas.filter(linhaImportavel).length],
+        ['Ignorados', linhas.filter((linha) => linha.ignorar && !linhaDuplicada(linha) && !linhaTratadaParcelamento(linha)).length],
+        ['Duplicados', linhas.filter(linhaDuplicada).length],
+    ];
 
-    const contagens = new Map();
-    estado.linhasMapeadas
-        .filter((linha) => !linha.ignorar && categoriaCartaoIdLinha(linha))
-        .forEach((linha) => {
-            const categoriaCartaoId = Number(categoriaCartaoIdLinha(linha));
-            contagens.set(categoriaCartaoId, (contagens.get(categoriaCartaoId) || 0) + 1);
-        });
-
-    container.innerHTML = estado.categoriasCartao.map((categoria) => {
-        const count = contagens.get(Number(categoria.id)) || 0;
-        return `
-            <div class="import-category-row">
-                <span class="import-category-name">
-                    <span class="import-category-dot" aria-hidden="true"></span>
-                    <span title="${escapeAttr(categoria.nome)}">${escapeHtml(categoria.nome)}</span>
-                </span>
-                <span class="import-category-count">${count} ${count === 1 ? 'item' : 'itens'}</span>
-            </div>
-        `;
-    }).join('');
+    container.innerHTML = resumo.map(([label, count]) => `
+        <div class="import-category-row">
+            <span class="import-category-name">
+                <span class="import-category-dot" aria-hidden="true"></span>
+                <span>${escapeHtml(label)}</span>
+            </span>
+            <span class="import-category-count">${count}</span>
+        </div>
+    `).join('');
 }
 
 function montarPayloadImportacao() {
     const cartaoId = parseInt(document.getElementById('cartaoSelect').value, 10);
     const [mes, ano] = document.getElementById('competenciaInput').value.split('/');
     const competencia = `${ano}-${mes}-01`;
-    const linhas = estado.linhasMapeadas
-        .filter((linha) => !linha.ignorar && linha.tipo_movimento !== 'credito' && linha.status !== 'duplicado')
+    const linhas = linhasNovasConfirmaveis()
         .map((linha) => {
             const payload = {
                 data_compra: linha.data_compra,
-                descricao: linha.descricao || linha.descricao_exibida,
-                descricao_exibida: linha.descricao_exibida || linha.descricao,
+                descricao_original: descricaoOriginalLinha(linha),
+                descricao: linha.descricao_exibida || linha.descricao || descricaoOriginalLinha(linha),
+                descricao_exibida: linha.descricao_exibida || linha.descricao || descricaoOriginalLinha(linha),
                 valor: linha.valor,
                 parcela: linha.parcela || `${linha.numero_parcela || 1}/${linha.total_parcelas || 1}`,
                 numero_parcela: linha.numero_parcela || 1,
                 total_parcelas: linha.total_parcelas || 1,
-                gerar_parcelas_futuras: !!linha.gerar_parcelas_futuras,
+                gerar_parcelas_futuras: false,
                 categoria_id: linha.categoria_id,
                 categoria_origem: linha.categoria_origem,
                 categoria_confianca: linha.categoria_confianca || linha.confianca_categoria,
@@ -1814,21 +2499,38 @@ function montarPayloadImportacao() {
 
 function validarPendenciasObrigatorias() {
     const resumo = calcularResumoLocal();
-    const importaveis = resumo.ativas.filter((linha) => linha.tipo_movimento !== 'credito' && linha.status !== 'duplicado');
+    const importaveis = resumo.importaveis;
     if (!importaveis.length) {
-        alert('Nenhuma linha restante para importar.');
-        return false;
-    }
-    if (importaveis.some((linha) => !linha.categoria_id)) {
-        alert('Existem linhas sem Categoria da Despesa. Ajuste antes da prévia.');
+        alert('Nenhum lançamento selecionado para importação.');
         return false;
     }
     return true;
 }
 
+function validarNovosClassificados() {
+    if (!estado.analiseConfronto) {
+        alert('Avance para o confronto pos-triagem antes de confirmar.');
+        return false;
+    }
+
+    const novos = linhasNovasConfirmaveis();
+    if (!novos.length) {
+        alert('Nenhum lancamento novo selecionado para importacao.');
+        return false;
+    }
+
+    const pendentes = novasSemCategoriaDespesa();
+    if (pendentes.length) {
+        alert('Classifique a categoria da despesa dos lancamentos novos antes de confirmar.');
+        return false;
+    }
+
+    return true;
+}
+
 async function previsualizarImportacao() {
     if (!estado.linhasMapeadas.length) {
-        alert('Valide perfil e mapeamento antes da prévia.');
+        alert('Valide perfil e mapeamento antes do confronto.');
         return;
     }
     if (!validarConfiguracaoBasica()) return;
@@ -1837,24 +2539,15 @@ async function previsualizarImportacao() {
         return;
     }
 
-    try {
-        const payload = montarPayloadImportacao();
-        const resposta = await fetch(`${API_BASE}/previsualizar`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        const dados = await resposta.json();
-        if (!resposta.ok || !dados.success) {
-            throw new Error(dados.message || 'Falha na pré-visualização');
-        }
-
-        estado.resumoPrevia = dados;
-        renderResumoPrevia(dados);
-        atualizarResumoPainel();
-    } catch (error) {
-        alert(`Erro na pré-visualização: ${error.message}`);
-    }
+    estado.analiseConfronto = montarAnaliseConfronto();
+    estado.faseImportacao = 'confronto';
+    estado.resumoPrevia = null;
+    const resumoTecnico = document.getElementById('resumoPreviaTecnica');
+    if (resumoTecnico) resumoTecnico.innerHTML = '';
+    const resultado = document.getElementById('resultadoContainer');
+    if (resultado) resultado.innerHTML = '';
+    renderizarConfrontoClassificacao();
+    rolarParaSecao('step5');
 }
 
 function renderResumoPrevia(dados) {
@@ -1863,7 +2556,7 @@ function renderResumoPrevia(dados) {
     const pendencias = dados.pendencias || {};
     const avisosLinhas = (dados.avisos_linhas || []).slice(0, 5);
     const resumo = calcularResumoLocal();
-    const futuras = estado.linhasMapeadas.filter((linha) => !linha.ignorar && linha.gerar_parcelas_futuras && Number(linha.total_parcelas) > 1).length;
+    const pendentesEtapaPosterior = (pendencias.categoria_despesa || 0) + (pendencias.categoria_cartao || 0);
 
     document.getElementById('resumoPreviaTecnica').innerHTML = `
         <div class="import-feedback success">
@@ -1872,15 +2565,12 @@ function renderResumoPrevia(dados) {
             Potencial para inserir: <strong>${dados.inseridos}</strong>.
             Duplicados detectados: <strong>${dados.duplicados}</strong>.
             Linhas ignoradas: <strong>${resumo.ignoradas}</strong>.
-            Linhas com criação de futuras: <strong>${futuras}</strong>.
-            Pendentes de Categoria da Despesa: <strong>${pendencias.categoria_despesa || resumo.pendentesDespesa}</strong>.
-            Pendentes de Categoria do Cartão: <strong>${pendencias.categoria_cartao || resumo.pendentesCartao}</strong>.
-            Valor sem Categoria do Cartão: <strong>${formatarMoeda(resumo.valorSemCategoriaCartao)}</strong>.
+            Dependem de etapa posterior: <strong>${pendentesEtapaPosterior}</strong>.
         </div>
         ${avisosLinhas.length ? `
             <div class="import-feedback warning">
-                <strong>Avisos de classificação</strong>
-                ${avisosLinhas.map((item) => `<div>Linha ${escapeHtml(item.linha || '-')}: ${(item.avisos || []).map(escapeHtml).join(' | ')}</div>`).join('')}
+                <strong>Avisos técnicos</strong>
+                <div>${avisosLinhas.length} linha${avisosLinhas.length === 1 ? '' : 's'} dependem de etapa posterior.</div>
             </div>
         ` : ''}
         ${duplicados.length ? `
@@ -1899,33 +2589,41 @@ function renderResumoPrevia(dados) {
 }
 
 async function finalizarImportacao() {
-    if (!estado.resumoPrevia) {
-        alert('Gere a pré-visualização técnica antes de importar.');
-        return;
-    }
-    if (!validarPendenciasObrigatorias()) {
+    if (!validarNovosClassificados()) {
         atualizarResumoPainel();
         return;
     }
-    if (estado.resumoPrevia.inseridos === 0) {
-        alert('Não há linhas novas para importar.');
-        return;
-    }
-
-    const resumo = calcularResumoLocal();
-    const futuras = estado.linhasMapeadas.filter((linha) => !linha.ignorar && linha.gerar_parcelas_futuras && Number(linha.total_parcelas) > 1).length;
-    const confirmado = confirm(
-        `Confirmar importação?\n\n` +
-        `Inseridos esperados: ${estado.resumoPrevia.inseridos}\n` +
-        `Duplicados esperados: ${estado.resumoPrevia.duplicados}\n` +
-        `Linhas ignoradas: ${resumo.ignoradas}\n` +
-        `Linhas com futuras: ${futuras}\n` +
-        `Categorias do cartão pendentes: ${resumo.pendentesCartao}`
-    );
-    if (!confirmado) return;
 
     try {
         const payload = montarPayloadImportacao();
+        const respostaPrevia = await fetch(`${API_BASE}/previsualizar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const previa = await respostaPrevia.json();
+        if (!respostaPrevia.ok || !previa.success) {
+            throw new Error(previa.message || 'Falha na pre-visualizacao');
+        }
+
+        estado.resumoPrevia = previa;
+        renderResumoPrevia(previa);
+        atualizarResumoPainel();
+
+        if (previa.inseridos === 0) {
+            alert('Nenhum lancamento novo selecionado para importacao.');
+            return;
+        }
+
+        const resumo = calcularResumoLocal();
+        const confirmado = confirm(
+            `Confirmar importacao de ${previa.inseridos} lancamentos novos?\n\n` +
+            `Ignorados: ${resumo.ignoradas}\n` +
+            `Duplicados protegidos: ${previa.duplicados}\n` +
+            `Possiveis parcelamentos fora deste MVP: ${estado.analiseConfronto?.parcelamentos.length || 0}`
+        );
+        if (!confirmado) return;
+
         const resposta = await fetch(`${API_BASE}/processar`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

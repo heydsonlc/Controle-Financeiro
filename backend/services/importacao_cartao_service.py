@@ -47,6 +47,7 @@ class ImportacaoCartaoService:
     PERFIL_NUBANK = 'nubank_csv_simples'
     PERFIL_CAIXA = 'caixa_credito_debito'
     PERFIL_MANUAL = 'manual_generico'
+    MAX_PARCELAS_IMPORTACAO = 60
 
     @staticmethod
     def _normalizar_coluna(coluna):
@@ -121,6 +122,46 @@ class ImportacaoCartaoService:
     # ========================================================================
 
     @staticmethod
+    def detectar_parcelamento_texto(descricao_bruta):
+        texto = str(descricao_bruta or '').strip()
+        if not texto:
+            return None
+
+        padroes = [
+            r'\b(?:PARC(?:ELA)?\.?)\s*(\d{1,2})\s*(?:/|DE)\s*(\d{1,2})\b',
+            r'\b(\d{1,2})\s*/\s*(\d{1,2})\b',
+            r'\b(\d{1,2})\s+DE\s+(\d{1,2})\b',
+        ]
+
+        for padrao in padroes:
+            match = re.search(padrao, texto, re.IGNORECASE)
+            if not match:
+                continue
+
+            numero_parcela = int(match.group(1))
+            total_parcelas = int(match.group(2))
+            if (
+                numero_parcela < 1
+                or total_parcelas <= 1
+                or numero_parcela > total_parcelas
+                or total_parcelas > ImportacaoCartaoService.MAX_PARCELAS_IMPORTACAO
+            ):
+                return None
+
+            descricao_limpa = f'{texto[:match.start()]} {texto[match.end():]}'.strip()
+            descricao_limpa = re.sub(r'\s+', ' ', descricao_limpa).strip(' -–|')
+
+            return {
+                'eh_parcelamento': True,
+                'parcela_atual': numero_parcela,
+                'total_parcelas': total_parcelas,
+                'padrao_detectado': match.group(0),
+                'descricao_limpa': descricao_limpa or texto,
+            }
+
+        return None
+
+    @staticmethod
     def normalizar_descricao(descricao_bruta):
         """
         Normaliza descriÃ§Ã£o e extrai informaÃ§Ãµes de parcelamento
@@ -140,24 +181,13 @@ class ImportacaoCartaoService:
         """
         descricao = descricao_bruta.strip()
 
-        # PadrÃµes de parcelamento (em ordem de especificidade)
-        padroes = [
-            r'(\d{1,2})/(\d{1,2})$',  # 12/12 ou 1/3
-            r'(\d{1,2})\s+DE\s+(\d{1,2})$',  # 12 DE 12 ou 1 DE 3
-            r'PARCELA\s+(\d{1,2})/(\d{1,2})$',  # PARCELA 1/12
-            r'PARC\s+(\d{1,2})/(\d{1,2})$',  # PARC 1/12
-        ]
-
-        for padrao in padroes:
-            match = re.search(padrao, descricao, re.IGNORECASE)
-            if match:
-                numero_parcela = int(match.group(1))
-                total_parcelas = int(match.group(2))
-
-                # Remover trecho de parcelamento da descriÃ§Ã£o
-                descricao_normalizada = descricao[:match.start()].strip()
-
-                return descricao_normalizada, numero_parcela, total_parcelas
+        detectado = ImportacaoCartaoService.detectar_parcelamento_texto(descricao)
+        if detectado:
+            return (
+                detectado['descricao_limpa'],
+                detectado['parcela_atual'],
+                detectado['total_parcelas'],
+            )
 
         # Sem parcelamento explÃ­cito
         return descricao, 1, 1
@@ -271,10 +301,11 @@ class ImportacaoCartaoService:
         competencia_base,
         categoria_cartao_id=None,
         compra_id=None,
-        origem_importacao='csv'
+        origem_importacao='csv',
+        numero_inicial=1
     ):
         """
-        Gera todas as parcelas (passadas, atual, futuras) de uma compra
+        Gera parcelas de uma compra.
 
         Args:
             descricao_normalizada (str): DescriÃ§Ã£o sem parcelamento
@@ -297,8 +328,13 @@ class ImportacaoCartaoService:
             compra_id = str(uuid.uuid4())
 
         parcelas = []
+        try:
+            numero_inicial = int(numero_inicial or 1)
+        except (TypeError, ValueError):
+            numero_inicial = 1
+        numero_inicial = max(1, min(numero_inicial, total_parcelas))
 
-        for numero in range(1, total_parcelas + 1):
+        for numero in range(numero_inicial, total_parcelas + 1):
             # Calcular meses de diferenÃ§a em relaÃ§Ã£o Ã  parcela atual
             meses_diff = numero - numero_parcela_atual
 
@@ -358,13 +394,9 @@ class ImportacaoCartaoService:
     def _parse_parcela_texto(parcela_str):
         if not parcela_str:
             return None
-        texto = str(parcela_str).strip()
-        match = re.search(r'(\d{1,2})\s*[/\-]\s*(\d{1,2})', texto)
-        if match:
-            return int(match.group(1)), int(match.group(2))
-        match = re.search(r'parcela\s*(\d{1,2})\s*de\s*(\d{1,2})', texto, re.IGNORECASE)
-        if match:
-            return int(match.group(1)), int(match.group(2))
+        detectado = ImportacaoCartaoService.detectar_parcelamento_texto(parcela_str)
+        if detectado:
+            return detectado['parcela_atual'], detectado['total_parcelas']
         return None
 
     @staticmethod
@@ -484,6 +516,12 @@ class ImportacaoCartaoService:
                     'erro': f'Parcela fora do intervalo: {numero_parcela}/{total_parcelas}'
                 })
                 continue
+            if total_parcelas > ImportacaoCartaoService.MAX_PARCELAS_IMPORTACAO:
+                linhas_invalidas.append({
+                    'linha': idx,
+                    'erro': f'Total de parcelas acima do limite: {total_parcelas}'
+                })
+                continue
 
             resolucao_cartao = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(
                 cartao_id=cartao_id,
@@ -500,6 +538,7 @@ class ImportacaoCartaoService:
             # Gerar todas as parcelas (passadas, atual, futuras)
             gerar_futuras = bool(linha.get('gerar_parcelas_futuras'))
             if gerar_futuras and total_parcelas > 1:
+                numero_inicial = numero_parcela if linha.get('gerar_apenas_atual_e_futuras') else 1
                 parcelas = ImportacaoCartaoService.gerar_parcelas(
                     descricao_normalizada=descricao_normalizada,
                     descricao_exibida=linha.get('descricao_exibida', descricao_normalizada),
@@ -513,7 +552,8 @@ class ImportacaoCartaoService:
                     competencia_base=competencia_alvo,
                     categoria_cartao_id=categoria_cartao_id,
                     compra_id=None,
-                    origem_importacao=origem_importacao
+                    origem_importacao=origem_importacao,
+                    numero_inicial=numero_inicial
                 )
             else:
                 compra_id = str(uuid.uuid4())

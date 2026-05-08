@@ -291,6 +291,50 @@ def processar_importacao():
         return jsonify({'success': False, 'message': 'Falha ao processar importacao'}), 500
 
 
+@bp.route('/parcelamento', methods=['POST'])
+def criar_parcelamento_importado():
+    """
+    Cria parcelamento oficial a partir de uma unica linha importada.
+    Gera somente a parcela atual e futuras.
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        linhas = data.get('linhas')
+        if linhas is None and data.get('linha'):
+            linhas = [data.get('linha')]
+        if not isinstance(linhas, list) or len(linhas) != 1:
+            return jsonify({'success': False, 'message': 'Informe exatamente uma linha para parcelamento'}), 400
+
+        linha = dict(linhas[0] or {})
+        try:
+            numero_parcela = int(linha.get('numero_parcela') or 1)
+            total_parcelas = int(linha.get('total_parcelas') or 1)
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'message': 'Parametros de parcela invalidos'}), 400
+
+        if numero_parcela < 1 or total_parcelas <= 1 or numero_parcela > total_parcelas:
+            return jsonify({'success': False, 'message': 'Parcela fora do intervalo permitido'}), 400
+        if total_parcelas > ImportacaoCartaoService.MAX_PARCELAS_IMPORTACAO:
+            return jsonify({'success': False, 'message': 'Total de parcelas acima do limite permitido'}), 400
+
+        linha['numero_parcela'] = numero_parcela
+        linha['total_parcelas'] = total_parcelas
+        linha['parcela'] = f'{numero_parcela}/{total_parcelas}'
+        linha['gerar_parcelas_futuras'] = True
+        linha['gerar_apenas_atual_e_futuras'] = True
+        linha['ignorar'] = False
+
+        payload = {
+            'cartao_id': data.get('cartao_id'),
+            'competencia': data.get('competencia'),
+            'linhas': [linha],
+        }
+        return _executar_importacao(payload, dry_run=False)
+    except Exception:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': 'Falha ao criar parcelamento importado'}), 500
+
+
 @bp.route('/categorias', methods=['GET'])
 def listar_categorias():
     """Lista categorias de despesas disponíveis"""
