@@ -281,13 +281,43 @@ def test_reconhecimento_flexivel_prioriza_valor_cartao_e_keyword():
     assert 'score += 5' in scoring
     assert "motivos.append('categoria igual')" in scoring
     assert "motivos.append('descricao amigavel igual')" in scoring
+    assert 'def _fornecedor_compativel' in service
+    assert "'confianca': 'alta' if score >= 80 and fornecedor_compativel else 'media'" in service
 
     assert "('APPLE', None, ('APPLECOMBILL'" in service
     assert "('AMAZON', 'AMAZON MUSIC'" in service
     assert "('AMAZON', 'AMAZON PRIME'" in service
+    assert 'AMAZONPRIMEBR' in service
+    assert 'DIGITALOCEA' in service
     assert "score < 60" in service
     assert "tipo = 'duplicado_atual'" in service
     assert "@bp.route('/reconhecer', methods=['POST'])" in route
+
+
+def test_alias_historico_sem_migration_e_com_conflito_para_revisao():
+    service = SERVICE_PATH.read_text(encoding='utf-8')
+    js = JS_PATH.read_text(encoding='utf-8')
+
+    assert 'LancamentoAgregado.query.filter' in service
+    assert 'descricao_original_normalizada' in service
+    assert 'descricao_exibida' in service
+    assert "'origem_alias': 'historico_lancamento'" in service
+    assert "'tipo_sugerido': tratamento_sugerido" in service
+    assert "'valor_referencia': float(candidato.get('valor'))" in service
+    assert 'historico com decisoes conflitantes' in service
+    assert "melhor['confianca'] = 'revisar'" in service
+    assert "melhor['score'] = min(melhor['score'], 79)" in service
+    assert 'alta confianca exige fornecedor compativel' in service
+    assert "status: confiancaReconhecimento === 'alta' ? 'Conhecida' : 'Revisar'" in js
+    assert "tipo: reconhecimento?.tipo_sugerido === 'recorrencia'" in js
+
+
+def test_alias_nao_cria_tabela_ou_migration():
+    service = SERVICE_PATH.read_text(encoding='utf-8')
+
+    assert 'Alias' not in service
+    assert 'create_table' not in service
+    assert 'op.create_table' not in service
 
 
 def test_modal_edicao_lancamento_cartao_carrega_categoria_despesa_e_oculta_categoria_cartao():

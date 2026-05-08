@@ -50,12 +50,13 @@ class ImportacaoCartaoService:
     MAX_PARCELAS_IMPORTACAO = 60
     TERMOS_GENERICOS_MATCH = {
         'SAO', 'PAULO', 'BRASIL', 'COM', 'BILL', 'PAG', 'PAGAMENTO',
-        'COMPRA', 'CARTAO', 'CARTAO', 'BR', 'BRA', 'LTDA', 'SA'
+        'COMPRA', 'CARTAO', 'CARTAO', 'BR', 'BRA', 'LTDA', 'SA',
+        'PAYPAL', 'PAGSEGURO', 'AUT', 'AUTORIZACAO'
     }
     FORNECEDORES_FORTES = [
-        ('DIGITAL OCEAN', 'DIGITAL OCEAN', ('DIGITALOCEAN', 'DIGITAL OCEAN')),
+        ('DIGITAL OCEAN', 'DIGITAL OCEAN', ('DIGITALOCEAN', 'DIGITALOCEA', 'DIGITAL OCEAN')),
         ('AMAZON', 'AMAZON MUSIC', ('AMAZONMUSIC', 'AMAZON MUSIC')),
-        ('AMAZON', 'AMAZON PRIME', ('AMAZONPRIME', 'AMAZON PRIME')),
+        ('AMAZON', 'AMAZON PRIME', ('AMAZONPRIME', 'AMAZON PRIME', 'AMAZONPRIMEBR')),
         ('APPLE', None, ('APPLECOMBILL', 'APPLE COM BILL', 'APPLE BILL', 'APPLE')),
         ('NETFLIX', None, ('NETFLIX',)),
         ('GOOGLE', None, ('GOOGLE',)),
@@ -422,6 +423,7 @@ class ImportacaoCartaoService:
         texto = unicodedata.normalize('NFKD', texto)
         texto = ''.join(char for char in texto if not unicodedata.combining(char))
         texto = re.sub(r'[^A-Z0-9]+', ' ', texto)
+        texto = re.sub(r'\b\d{6,}\b', ' ', texto)
         texto = re.sub(r'\s+', ' ', texto).strip()
         return texto
 
@@ -473,6 +475,26 @@ class ImportacaoCartaoService:
             return False
         intersecao = tokens_a.intersection(tokens_b)
         return len(intersecao) >= 1 and (len(intersecao) / max(len(tokens_a), len(tokens_b))) >= 0.34
+
+    @staticmethod
+    def _fornecedor_compativel(assinatura_a, assinatura_b):
+        keywords_a = set(assinatura_a.get('keywords') or [])
+        keywords_b = set(assinatura_b.get('keywords') or [])
+        if keywords_a and keywords_b and keywords_a.intersection(keywords_b):
+            return True
+        return ImportacaoCartaoService._descricao_parecida(assinatura_a, assinatura_b)
+
+    @staticmethod
+    def _decisao_alias(candidato):
+        descricao = ImportacaoCartaoService.normalizar_texto_match(candidato.get('descricao_exibida'))
+        tipo = 'parcelamento' if int(candidato.get('total_parcelas') or 1) > 1 else 'despesa_avulsa'
+        if candidato.get('origem') == 'recorrencia' or candidato.get('is_recorrente'):
+            tipo = 'recorrencia'
+        return (
+            descricao,
+            int(candidato.get('categoria_id') or 0),
+            tipo,
+        )
 
     @staticmethod
     def _score_candidato_match(linha_match, candidato):
@@ -559,8 +581,8 @@ class ImportacaoCartaoService:
     @staticmethod
     def _candidato_lancamento_match(lancamento):
         descricao_ref = (
-            lancamento.descricao_original
-            or lancamento.descricao_original_normalizada
+            lancamento.descricao_original_normalizada
+            or lancamento.descricao_original
             or lancamento.descricao_exibida
             or lancamento.descricao
         )
@@ -635,29 +657,48 @@ class ImportacaoCartaoService:
                     candidatos.append(ImportacaoCartaoService._candidato_recorrencia_match(item))
 
             melhor = None
+            sugestoes = []
             for candidato in candidatos:
                 score, motivos = ImportacaoCartaoService._score_candidato_match(linha_match, candidato)
                 if score < 60:
                     continue
+                fornecedor_compativel = ImportacaoCartaoService._fornecedor_compativel(
+                    linha_match['assinatura'],
+                    candidato['assinatura']
+                )
                 tipo = 'historico'
                 if candidato.get('origem') == 'recorrencia' or candidato.get('is_recorrente'):
                     tipo = 'recorrencia'
-                if candidato.get('mes_fatura') == competencia and int(candidato.get('cartao_id') or 0) == int(cartao_id) and score >= 80:
+                if (
+                    candidato.get('mes_fatura') == competencia
+                    and int(candidato.get('cartao_id') or 0) == int(cartao_id)
+                    and score >= 80
+                    and fornecedor_compativel
+                ):
                     tipo = 'duplicado_atual'
                 if candidato.get('total_parcelas', 1) and int(candidato.get('total_parcelas') or 1) > 1:
                     tipo = 'parcelamento_existente' if tipo != 'duplicado_atual' else tipo
 
+                tratamento_sugerido = 'despesa_avulsa'
+                if tipo == 'recorrencia':
+                    tratamento_sugerido = 'recorrencia'
+                elif tipo == 'parcelamento_existente':
+                    tratamento_sugerido = 'parcelamento'
+
                 sugestao = {
                     'indice': linha.get('indice', idx - 1),
                     'tipo': tipo,
+                    'tipo_sugerido': tratamento_sugerido,
+                    'origem_alias': 'historico_lancamento' if candidato.get('origem') == 'lancamento' else candidato.get('origem'),
                     'score': score,
-                    'confianca': 'alta' if score >= 80 else 'media',
-                    'motivos': motivos,
+                    'confianca': 'alta' if score >= 80 and fornecedor_compativel else 'media',
+                    'motivos': motivos if fornecedor_compativel or score < 80 else motivos + ['alta confianca exige fornecedor compativel'],
                     'keyword_principal': linha_match['assinatura'].get('keyword_principal'),
                     'keyword_secundaria': linha_match['assinatura'].get('keyword_secundaria'),
                     'descricao_original': linha_match['descricao_original'],
                     'descricao_sugerida': candidato.get('descricao_exibida'),
                     'descricao_original_referencia': candidato.get('descricao_original'),
+                    'valor_referencia': float(candidato.get('valor')) if candidato.get('valor') is not None else None,
                     'categoria_id': candidato.get('categoria_id'),
                     'categoria_cartao_id': candidato.get('categoria_cartao_id'),
                     'cartao_id_referencia': candidato.get('cartao_id'),
@@ -666,11 +707,25 @@ class ImportacaoCartaoService:
                     'total_parcelas_referencia': candidato.get('total_parcelas'),
                     'origem': candidato.get('origem'),
                     'referencia_id': candidato.get('id'),
+                    '_decisao_alias': ImportacaoCartaoService._decisao_alias(candidato),
                 }
+                sugestoes.append(sugestao)
                 if not melhor or sugestao['score'] > melhor['score']:
                     melhor = sugestao
 
             if melhor:
+                candidatos_conflitantes = [
+                    item for item in sugestoes
+                    if item['score'] >= max(60, melhor['score'] - 10)
+                    and item.get('_decisao_alias') != melhor.get('_decisao_alias')
+                ]
+                if candidatos_conflitantes:
+                    melhor['confianca'] = 'revisar'
+                    melhor['tipo'] = 'historico'
+                    melhor['score'] = min(melhor['score'], 79)
+                    melhor['motivos'] = list(melhor.get('motivos') or []) + ['historico com decisoes conflitantes']
+
+                melhor.pop('_decisao_alias', None)
                 reconhecimentos.append(melhor)
 
         return reconhecimentos

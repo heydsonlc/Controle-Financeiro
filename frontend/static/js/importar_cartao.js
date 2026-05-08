@@ -1647,12 +1647,15 @@ function obterInfoOperacional(linha, index) {
     }
 
     if (linhaReconhecimentoPendente(linha)) {
+        const confiancaReconhecimento = reconhecimento?.confianca || 'media';
         return {
             linha,
             index,
-            status: 'Conhecida',
-            classe: 'known',
-            tipo: reconhecimento?.tipo === 'recorrencia' ? 'Recorrência' : 'Assinatura',
+            status: confiancaReconhecimento === 'alta' ? 'Conhecida' : 'Revisar',
+            classe: confiancaReconhecimento === 'alta' ? 'known' : 'review',
+            tipo: reconhecimento?.tipo_sugerido === 'recorrencia'
+                ? 'Recorrência'
+                : (reconhecimento?.tipo_sugerido === 'parcelamento' ? 'Parcelamento conhecido' : 'Despesa conhecida'),
             filtro: 'conhecidas',
             sugestao: reconhecimento?.descricao_sugerida || 'Possível conhecida',
             descricaoEditavel: false,
