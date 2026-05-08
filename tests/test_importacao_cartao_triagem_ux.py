@@ -89,8 +89,8 @@ def test_tabela_inferior_tem_colunas_filtros_paginacao_e_acoes():
 
     assert "paginarItens(retirados, 'retirados')" in retirados
     assert "codigo === 'retirado_usuario'" in js
-    assert "botaoOperacional('success', 'Restaurar'" in js
-    assert "botaoOperacional('', 'Ver'" in js
+    assert "iconeBotaoAcao('success', 'undo', 'Restaurar'" in js
+    assert "iconeBotaoAcao('neutral', 'eye', 'Ver detalhes'" in js
     assert 'function detalharLinhaRetirada' in js
     assert "['parcelamento', 'Parcelamento tratado'" in js
     assert "['credito', 'Crédito/estorno'" in js
@@ -178,6 +178,18 @@ def test_regex_de_parcelamento_e_payload_final_so_usam_novos():
     assert 'gerar_parcelas_futuras: false' in payload
 
 
+def test_previa_inicial_sinaliza_parcelamento_sem_criar_parcelas():
+    js = JS_PATH.read_text(encoding='utf-8')
+    operacional = _trecho(js, 'function obterInfoOperacional', 'function linhasProcessamentoBase')
+
+    assert "status: 'A importar'" in operacional
+    assert "tipo: parcela ? 'Parcelamento' : '—'" in operacional
+    assert "sugestao: parcela ? sugestaoParcelamentoLinha(parcela) : '—'" in operacional
+    assert "filtro: 'pendentes'" in operacional
+    assert "sugestao: sugestaoParcelamentoLinha(parcela)" in operacional
+    assert "gerar_parcelas_futuras: false" in _trecho(js, 'function montarPayloadImportacao', 'function validarPendenciasObrigatorias')
+
+
 def test_detector_js_aceita_variacoes_e_rejeita_invalidos():
     js = JS_PATH.read_text(encoding='utf-8')
     detector = _trecho(js, 'function validarNumerosParcelamento', 'function detectarParcelaDescricao')
@@ -187,8 +199,11 @@ const MAX_PARCELAS_IMPORTACAO = 60;
 const validos = [
   'LOJA X 01/10',
   'LOJA X 1/10',
+  'BRASIL PARAL*Brpa 07 DE 12 SAO PAULO',
+  'ALFA SEGURAD*AUTO 05 DE 05 SAO PAULO',
   'LOJA X 07 de 10',
   'LOJA X 7 de 10',
+  'LOJA X 07/12',
   'LOJA X PARCELA 03 DE 05',
   'LOJA X PARC 3 de 5',
   'LOJA X PARC. 3 DE 5',
@@ -198,6 +213,9 @@ const invalidos = [
   'LOJA X 10 de 1',
   'LOJA X 0 de 10',
   'LOJA X 1 de 0',
+  'LOJA X 0 DE 10',
+  'LOJA X 1 DE 0',
+  'LOJA X 10 DE 1',
   'LOJA X 13 de 12',
   'LOJA X 99 de 100'
 ].map((texto) => detectarParcelamentoTexto(texto));
@@ -206,8 +224,36 @@ console.log(JSON.stringify({{ validos, invalidos }}));
     resultado = subprocess.run(['node', '-e', script], text=True, capture_output=True, check=True)
     dados = json.loads(resultado.stdout)
 
-    assert dados['validos'] == ['1/10', '1/10', '7/10', '7/10', '3/5', '3/5', '3/5', '2/12']
-    assert dados['invalidos'] == [None, None, None, None, None]
+    assert dados['validos'] == ['1/10', '1/10', '7/12', '5/5', '7/10', '7/10', '7/12', '3/5', '3/5', '3/5', '2/12']
+    assert dados['invalidos'] == [None, None, None, None, None, None, None, None]
+
+
+def test_sugestao_visual_de_parcelamento_usa_dois_digitos():
+    js = JS_PATH.read_text(encoding='utf-8')
+    detector = _trecho(js, 'function validarNumerosParcelamento', 'function detectarParcelaDescricao')
+    visual = _trecho(js, 'function rotuloParcelamentoVisual', 'function linhaPossivelParcelamento')
+    script = f"""
+const MAX_PARCELAS_IMPORTACAO = 60;
+const toIntOrNull = (valor) => {{
+  if (valor === '' || valor === null || valor === undefined) return null;
+  const numero = parseInt(valor, 10);
+  return Number.isNaN(numero) ? null : numero;
+}};
+{detector}
+{visual}
+const descricoes = [
+  'BRASIL PARAL*Brpa 07 DE 12 SAO PAULO',
+  'ALFA SEGURAD*AUTO 05 DE 05 SAO PAULO',
+  'LOJA X PARC. 3 DE 5'
+];
+const sugestoes = descricoes.map((descricao) => {{
+  const detectado = detectarParcelamentoTexto(descricao);
+  return sugestaoParcelamentoLinha({{ numero: detectado.parcelaAtual, total: detectado.totalParcelas, rotulo: detectado.rotulo }});
+}});
+console.log(JSON.stringify(sugestoes));
+"""
+    resultado = subprocess.run(['node', '-e', script], text=True, capture_output=True, check=True)
+    assert json.loads(resultado.stdout) == ['07/12 detectado', '05/05 detectado', '03/05 detectado']
 
 
 def test_backend_cria_parcelamento_atual_e_futuro_sem_migration():

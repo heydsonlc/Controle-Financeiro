@@ -1226,6 +1226,18 @@ function detectarParcelamentoLinha(linha) {
     return null;
 }
 
+function rotuloParcelamentoVisual(parcela) {
+    const numero = toIntOrNull(parcela?.numero);
+    const total = toIntOrNull(parcela?.total);
+    if (!numero || !total) return parcela?.rotulo || '';
+    return `${String(numero).padStart(2, '0')}/${String(total).padStart(2, '0')}`;
+}
+
+function sugestaoParcelamentoLinha(parcela) {
+    const rotulo = rotuloParcelamentoVisual(parcela);
+    return rotulo ? `${rotulo} detectado` : 'Parcelamento detectado';
+}
+
 function linhaPossivelParcelamento(linha) {
     return !!detectarParcelamentoLinha(linha);
 }
@@ -1608,9 +1620,9 @@ function obterInfoOperacional(linha, index) {
             index,
             status: 'A importar',
             classe: 'valid',
-            tipo: '—',
+            tipo: parcela ? 'Parcelamento' : '—',
             filtro: 'pendentes',
-            sugestao: '—',
+            sugestao: parcela ? sugestaoParcelamentoLinha(parcela) : '—',
             descricaoEditavel: false,
             categoriaEditavel: false,
             parcela,
@@ -1626,7 +1638,7 @@ function obterInfoOperacional(linha, index) {
             classe: 'parcelment',
             tipo: 'Parcelamento',
             filtro: 'parcelados',
-            sugestao: `${parcela.rotulo} detectado`,
+            sugestao: sugestaoParcelamentoLinha(parcela),
             descricaoEditavel: false,
             categoriaEditavel: false,
             parcela,
