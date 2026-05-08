@@ -2064,8 +2064,8 @@ function renderizarAcoesLinhaOperacional(item) {
     // Sem confronto: triagem simples — apenas Retirar disponível
     if (!confronto) {
         return `<div class="row-actions operational">
-            ${iconeBotaoAcao('success', 'check', '', null, true)}
-            ${iconeBotaoAcao('parcel', 'parcel', '', null, true)}
+            ${iconeBotaoAcao('success', 'check', 'Usar sugestão', null, true)}
+            ${iconeBotaoAcao('parcel', 'parcel', 'Criar parcelamento', null, true)}
             ${iconeBotaoAcao('danger', 'trash', 'Retirar', `alternarIgnorarLinha(${index})`)}
         </div>`;
     }
