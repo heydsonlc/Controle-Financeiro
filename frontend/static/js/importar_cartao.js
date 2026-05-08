@@ -1224,15 +1224,40 @@ function linhaPossivelRecorrencia(linha) {
     return Boolean(linha.is_recorrente || linha.recorrencia_id || linha.item_despesa_id);
 }
 
+function reconhecimentoLinha(linha) {
+    return linha.reconhecimento_match || null;
+}
+
+function linhaDuplicadaPorReconhecimento(linha) {
+    const reconhecimento = reconhecimentoLinha(linha);
+    return reconhecimento?.tipo === 'duplicado_atual' && Number(reconhecimento.score || 0) >= 80;
+}
+
+function linhaReconhecimentoPendente(linha) {
+    const reconhecimento = reconhecimentoLinha(linha);
+    return Boolean(
+        reconhecimento
+        && Number(reconhecimento.score || 0) >= 60
+        && !linha.tratar_como_novo
+        && !linha.sugestao_reconhecimento_aplicada
+        && !linha.ignorar
+    );
+}
+
 function linhaNovaClassificavel(linha) {
     return linhaImportavel(linha)
         && !linhaPossivelParcelamento(linha)
-        && !linhaPossivelRecorrencia(linha);
+        && !linhaPossivelRecorrencia(linha)
+        && !linhaReconhecimentoPendente(linha);
 }
 
 function motivoConfrontoLinha(linha, tipo, parcela) {
     if (tipo === 'duplicado') {
         return linha.motivo_duplicidade || linha.duplicidade || 'Mesmo cartao, competencia, descricao e valor ja identificados.';
+    }
+    if (tipo === 'reconhecimento') {
+        const reconhecimento = reconhecimentoLinha(linha);
+        return `Score ${reconhecimento?.score || 0}: ${(reconhecimento?.motivos || []).join(', ') || 'valor/cartao/palavra-chave compativeis'}.`;
     }
     if (tipo === 'parcelamento') {
         return `Padrao de parcela ${parcela?.rotulo || ''} detectado na descricao original.`;
@@ -1250,6 +1275,7 @@ function montarAnaliseConfronto() {
     const grupos = {
         novos: [],
         duplicados: [],
+        conhecidos: [],
         parcelamentos: [],
         recorrencias: [],
         erros: []
@@ -1274,13 +1300,31 @@ function montarAnaliseConfronto() {
             });
             return;
         }
+        if (linhaDuplicadaPorReconhecimento(linha)) {
+            grupos.duplicados.push({
+                ...itemBase,
+                reconhecimento: reconhecimentoLinha(linha),
+                motivo: motivoConfrontoLinha(linha, 'reconhecimento')
+            });
+            return;
+        }
 
         const parcela = detectarParcelamentoLinha(linha);
         if (parcela) {
             grupos.parcelamentos.push({
                 ...itemBase,
                 parcela,
+                reconhecimento: reconhecimentoLinha(linha),
                 motivo: motivoConfrontoLinha(linha, 'parcelamento', parcela)
+            });
+            return;
+        }
+
+        if (linhaReconhecimentoPendente(linha)) {
+            grupos.conhecidos.push({
+                ...itemBase,
+                reconhecimento: reconhecimentoLinha(linha),
+                motivo: motivoConfrontoLinha(linha, 'reconhecimento')
             });
             return;
         }
@@ -1304,7 +1348,7 @@ function montarAnaliseConfronto() {
     return {
         ...grupos,
         totalSelecionados: estado.linhasMapeadas.filter(linhaImportavel).length,
-        totalBloqueados: grupos.duplicados.length + grupos.parcelamentos.length + grupos.recorrencias.length + grupos.erros.length
+        totalBloqueados: grupos.duplicados.length + grupos.conhecidos.length + grupos.parcelamentos.length + grupos.recorrencias.length + grupos.erros.length
     };
 }
 
@@ -1618,6 +1662,7 @@ function renderizarConfrontoClassificacao() {
 
     const totalAnalisado = analise.novos.length
         + analise.duplicados.length
+        + analise.conhecidos.length
         + analise.parcelamentos.length
         + analise.recorrencias.length
         + analise.erros.length;
@@ -1633,6 +1678,7 @@ function renderizarConfrontoClassificacao() {
                 <div class="import-confront-metrics" aria-label="Resumo do confronto">
                     <span>Novos <strong>${analise.novos.length}</strong></span>
                     <span>Duplicados <strong>${analise.duplicados.length}</strong></span>
+                    <span>Conhecidos <strong>${analise.conhecidos.length}</strong></span>
                     <span>Parcelamentos <strong>${analise.parcelamentos.length}</strong></span>
                     <span>Recorrencias <strong>${analise.recorrencias.length}</strong></span>
                 </div>
@@ -1650,6 +1696,7 @@ function renderizarConfrontoClassificacao() {
             ` : ''}
             ${renderizarGrupoNovosConfronto(analise.novos)}
             ${renderizarGrupoAlertaConfronto('Possiveis duplicados / ja existentes', analise.duplicados, 'duplicate')}
+            ${renderizarGrupoConhecidosConfronto(analise.conhecidos)}
             ${renderizarGrupoParcelamentosConfronto(analise.parcelamentos)}
             ${renderizarGrupoAlertaConfronto('Possiveis recorrencias', analise.recorrencias, 'recurrence')}
             ${renderizarGrupoAlertaConfronto('Bloqueados por validacao', analise.erros, 'review')}
@@ -1712,6 +1759,76 @@ function renderizarLinhaNovoConfronto(linha, index) {
                     ${opcoesCategoriaCartaoSelect(linha.categoria_cartao_id)}
                 </select>
                 ${linha.categoria_cartao_origem ? `<span class="import-detected-note">${escapeHtml(origemCategoriaCartaoLabel(linha))}</span>` : ''}
+            </td>
+        </tr>
+    `;
+}
+
+function renderizarGrupoConhecidosConfronto(itens) {
+    if (!itens.length) return '';
+
+    return `
+        <section class="import-confront-group is-alert">
+            <div class="import-confront-group-title">
+                <strong>Possiveis conhecidos / assinaturas</strong>
+                <span>Revise antes de aplicar sugestao ou importar como novo.</span>
+            </div>
+            <div class="import-preview-table-wrap">
+                <table class="import-preview-table import-confront-table">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Descricao original</th>
+                            <th>Valor</th>
+                            <th>Sugestao</th>
+                            <th>Confianca</th>
+                            <th>Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itens.map(({ linha, index, reconhecimento, motivo }) => renderizarLinhaConhecidoConfronto(linha, index, reconhecimento, motivo)).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    `;
+}
+
+function renderizarLinhaConhecidoConfronto(linha, index, reconhecimento, motivo) {
+    const descricaoOriginal = descricaoOriginalLinha(linha);
+    const sugestao = reconhecimento?.descricao_sugerida || 'Despesa conhecida';
+    const keyword = [reconhecimento?.keyword_principal, reconhecimento?.keyword_secundaria]
+        .filter(Boolean)
+        .join(' / ');
+    return `
+        <tr>
+            <td>${escapeHtml(linha.data_compra || '-')}</td>
+            <td class="import-description-cell">
+                <span class="import-raw-description">${escapeHtml(descricaoOriginal || '-')}</span>
+                ${keyword ? `<span class="import-detected-note">Palavra-chave: ${escapeHtml(keyword)}</span>` : ''}
+            </td>
+            <td>${formatarMoeda(linha.valor)}</td>
+            <td class="import-description-cell">
+                <span class="import-raw-description">${escapeHtml(sugestao)}</span>
+                <span class="import-detected-note">${escapeHtml(motivo || '')}</span>
+            </td>
+            <td>
+                <span class="import-status-pill known">${escapeHtml((reconhecimento?.confianca || 'media').toUpperCase())} ${escapeHtml(reconhecimento?.score || '')}</span>
+            </td>
+            <td>
+                <div class="row-actions">
+                    <button class="row-action-button import-row-action success" type="button" onclick="usarSugestaoReconhecimento(${index})">
+                        ${iconSvg('check')}
+                        <span>Usar sugestao</span>
+                    </button>
+                    <button class="row-action-button import-row-action" type="button" onclick="tratarReconhecimentoComoNovo(${index})">
+                        <span>Tratar como novo</span>
+                    </button>
+                    <button class="row-action-button import-row-action danger" type="button" onclick="ignorarReconhecimento(${index})">
+                        ${iconSvg('trash')}
+                        <span>Ignorar</span>
+                    </button>
+                </div>
             </td>
         </tr>
     `;
@@ -1807,8 +1924,58 @@ function renderizarGrupoAlertaConfronto(titulo, itens, classe) {
 function statusConfrontoLabel(classe) {
     if (classe === 'duplicate') return 'Possivel duplicado';
     if (classe === 'parcelment') return 'Possivel parcelamento';
+    if (classe === 'known') return 'Possivel conhecido';
     if (classe === 'recurrence') return 'Possivel recorrencia';
     return 'Bloqueado';
+}
+
+function recalcularConfrontoAtual() {
+    estado.analiseConfronto = montarAnaliseConfronto();
+    renderizarEditorPrePersistencia();
+    renderizarConfrontoClassificacao();
+}
+
+function usarSugestaoReconhecimento(index) {
+    const linha = estado.linhasMapeadas[index];
+    const reconhecimento = reconhecimentoLinha(linha || {});
+    if (!linha || !reconhecimento) return;
+
+    if (reconhecimento.descricao_sugerida) {
+        linha.descricao_exibida = reconhecimento.descricao_sugerida;
+        linha.descricao = reconhecimento.descricao_sugerida;
+    }
+    if (reconhecimento.categoria_id) {
+        linha.categoria_id = toIntOrNull(reconhecimento.categoria_id);
+        linha.categoria_despesa_id = linha.categoria_id;
+        linha.categoria_origem = 'reconhecimento';
+        linha.categoria_sugerida_origem = 'reconhecimento';
+        linha.categoria_confianca = reconhecimento.confianca || 'media';
+        linha.confianca_categoria = linha.categoria_confianca;
+    }
+    if (reconhecimento.categoria_cartao_id) {
+        linha.categoria_cartao_id = toIntOrNull(reconhecimento.categoria_cartao_id);
+        linha.categoria_cartao_origem = 'reconhecimento';
+        linha.categoria_cartao_vinculada_ao_cartao = true;
+    }
+    linha.sugestao_reconhecimento_aplicada = true;
+    linha.tratar_como_novo = false;
+    linha.status = linha.categoria_id ? 'valido' : 'revisar';
+    recalcularConfrontoAtual();
+}
+
+function tratarReconhecimentoComoNovo(index) {
+    const linha = estado.linhasMapeadas[index];
+    if (!linha) return;
+    linha.tratar_como_novo = true;
+    linha.sugestao_reconhecimento_aplicada = false;
+    recalcularConfrontoAtual();
+}
+
+function ignorarReconhecimento(index) {
+    const linha = estado.linhasMapeadas[index];
+    if (!linha) return;
+    linha.ignorar = true;
+    recalcularConfrontoAtual();
 }
 
 function competenciaCompletaApi() {
@@ -2528,6 +2695,61 @@ function validarNovosClassificados() {
     return true;
 }
 
+function montarPayloadReconhecimento() {
+    const cartaoId = parseInt(document.getElementById('cartaoSelect').value, 10);
+    const competencia = competenciaCompletaApi();
+    const linhas = estado.linhasMapeadas
+        .map((linha, index) => ({ linha, index }))
+        .filter(({ linha }) => !linha.ignorar && !linhaTratadaParcelamento(linha) && !linhaBloqueadaTecnica(linha))
+        .map(({ linha, index }) => ({
+            indice: index,
+            data_compra: linha.data_compra,
+            descricao_original: descricaoOriginalLinha(linha),
+            descricao: linha.descricao || linha.descricao_exibida || descricaoOriginalLinha(linha),
+            descricao_exibida: linha.descricao_exibida || linha.descricao || descricaoOriginalLinha(linha),
+            valor: linha.valor,
+            parcela: linha.parcela || `${linha.numero_parcela || 1}/${linha.total_parcelas || 1}`,
+            numero_parcela: linha.numero_parcela || 1,
+            total_parcelas: linha.total_parcelas || 1,
+            categoria_id: linha.categoria_id || linha.categoria_despesa_id,
+            categoria_cartao_id: linha.categoria_cartao_id
+        }));
+
+    return { cartao_id: cartaoId, competencia, linhas };
+}
+
+async function aplicarReconhecimentoFlexivel() {
+    const payload = montarPayloadReconhecimento();
+    if (!payload.linhas.length) return;
+
+    estado.linhasMapeadas.forEach((linha) => {
+        linha.reconhecimento_match = null;
+        linha.tratar_como_novo = false;
+        linha.sugestao_reconhecimento_aplicada = false;
+    });
+
+    try {
+        const resposta = await fetch(`${API_BASE}/reconhecer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const dados = await resposta.json();
+        if (!resposta.ok || !dados.success) {
+            throw new Error(dados.message || 'Falha no reconhecimento flexivel');
+        }
+
+        (dados.reconhecimentos || []).forEach((reconhecimento) => {
+            const index = Number(reconhecimento.indice);
+            if (estado.linhasMapeadas[index]) {
+                estado.linhasMapeadas[index].reconhecimento_match = reconhecimento;
+            }
+        });
+    } catch (error) {
+        console.warn('Reconhecimento flexivel indisponivel:', error);
+    }
+}
+
 async function previsualizarImportacao() {
     if (!estado.linhasMapeadas.length) {
         alert('Valide perfil e mapeamento antes do confronto.');
@@ -2539,6 +2761,7 @@ async function previsualizarImportacao() {
         return;
     }
 
+    await aplicarReconhecimentoFlexivel();
     estado.analiseConfronto = montarAnaliseConfronto();
     estado.faseImportacao = 'confronto';
     estado.resumoPrevia = null;

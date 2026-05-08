@@ -27,7 +27,7 @@ import unicodedata
 from datetime import datetime, date
 from decimal import Decimal, InvalidOperation
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 try:
     from backend.models import db, ItemDespesa, LancamentoAgregado
@@ -48,6 +48,23 @@ class ImportacaoCartaoService:
     PERFIL_CAIXA = 'caixa_credito_debito'
     PERFIL_MANUAL = 'manual_generico'
     MAX_PARCELAS_IMPORTACAO = 60
+    TERMOS_GENERICOS_MATCH = {
+        'SAO', 'PAULO', 'BRASIL', 'COM', 'BILL', 'PAG', 'PAGAMENTO',
+        'COMPRA', 'CARTAO', 'CARTAO', 'BR', 'BRA', 'LTDA', 'SA'
+    }
+    FORNECEDORES_FORTES = [
+        ('DIGITAL OCEAN', 'DIGITAL OCEAN', ('DIGITALOCEAN', 'DIGITAL OCEAN')),
+        ('AMAZON', 'AMAZON MUSIC', ('AMAZONMUSIC', 'AMAZON MUSIC')),
+        ('AMAZON', 'AMAZON PRIME', ('AMAZONPRIME', 'AMAZON PRIME')),
+        ('APPLE', None, ('APPLECOMBILL', 'APPLE COM BILL', 'APPLE BILL', 'APPLE')),
+        ('NETFLIX', None, ('NETFLIX',)),
+        ('GOOGLE', None, ('GOOGLE',)),
+        ('MICROSOFT', None, ('MICROSOFT', 'MSFT')),
+        ('OPENAI', 'CHATGPT', ('CHATGPT', 'OPENAI')),
+        ('ALFA', 'ALFA SEGURAD', ('ALFASEGURAD', 'ALFA SEGURAD')),
+        ('BRASIL PARAL', None, ('BRASILPARAL', 'BRASIL PARAL')),
+        ('AMAZON', None, ('AMAZON',)),
+    ]
 
     @staticmethod
     def _normalizar_coluna(coluna):
@@ -398,6 +415,265 @@ class ImportacaoCartaoService:
         if detectado:
             return detectado['parcela_atual'], detectado['total_parcelas']
         return None
+
+    @staticmethod
+    def normalizar_texto_match(texto):
+        texto = str(texto or '').strip().upper()
+        texto = unicodedata.normalize('NFKD', texto)
+        texto = ''.join(char for char in texto if not unicodedata.combining(char))
+        texto = re.sub(r'[^A-Z0-9]+', ' ', texto)
+        texto = re.sub(r'\s+', ' ', texto).strip()
+        return texto
+
+    @staticmethod
+    def extrair_assinatura_flexivel(descricao):
+        normalizada = ImportacaoCartaoService.normalizar_texto_match(descricao)
+        compacta = normalizada.replace(' ', '')
+
+        keyword_principal = None
+        keyword_secundaria = None
+        for principal, secundaria, padroes in ImportacaoCartaoService.FORNECEDORES_FORTES:
+            if any(padrao.replace(' ', '') in compacta or padrao in normalizada for padrao in padroes):
+                keyword_principal = principal
+                keyword_secundaria = secundaria
+                break
+
+        tokens = [
+            token for token in normalizada.split()
+            if token not in ImportacaoCartaoService.TERMOS_GENERICOS_MATCH and len(token) > 1
+        ]
+
+        if not keyword_principal and tokens:
+            keyword_principal = tokens[0]
+            if len(tokens) > 1:
+                keyword_secundaria = f'{tokens[0]} {tokens[1]}'
+
+        return {
+            'descricao_normalizada': normalizada,
+            'tokens': tokens,
+            'keyword_principal': keyword_principal,
+            'keyword_secundaria': keyword_secundaria,
+            'keywords': [item for item in [keyword_principal, keyword_secundaria] if item]
+        }
+
+    @staticmethod
+    def _valores_proximos(valor_a, valor_b):
+        try:
+            a = Decimal(str(valor_a)).quantize(Decimal('0.01'))
+            b = Decimal(str(valor_b)).quantize(Decimal('0.01'))
+        except (InvalidOperation, TypeError, ValueError):
+            return False
+        return abs(a - b) <= Decimal('0.01')
+
+    @staticmethod
+    def _descricao_parecida(assinatura_a, assinatura_b):
+        tokens_a = set(assinatura_a.get('tokens') or [])
+        tokens_b = set(assinatura_b.get('tokens') or [])
+        if not tokens_a or not tokens_b:
+            return False
+        intersecao = tokens_a.intersection(tokens_b)
+        return len(intersecao) >= 1 and (len(intersecao) / max(len(tokens_a), len(tokens_b))) >= 0.34
+
+    @staticmethod
+    def _score_candidato_match(linha_match, candidato):
+        score = 0
+        motivos = []
+        assinatura_linha = linha_match['assinatura']
+        assinatura_candidato = candidato['assinatura']
+
+        if ImportacaoCartaoService._valores_proximos(linha_match['valor'], candidato['valor']):
+            score += 50
+            motivos.append('valor igual/proximo')
+
+        if int(linha_match['cartao_id']) == int(candidato.get('cartao_id') or 0):
+            score += 20
+            motivos.append('mesmo cartao')
+
+        keywords_linha = set(assinatura_linha.get('keywords') or [])
+        keywords_candidato = set(assinatura_candidato.get('keywords') or [])
+        if keywords_linha and keywords_linha.intersection(keywords_candidato):
+            score += 20
+            motivos.append('palavra-chave forte igual')
+
+        if ImportacaoCartaoService._descricao_parecida(assinatura_linha, assinatura_candidato):
+            score += 10
+            motivos.append('descricao normalizada parecida')
+
+        if (
+            linha_match.get('numero_parcela')
+            and candidato.get('numero_parcela')
+            and int(linha_match['numero_parcela']) == int(candidato['numero_parcela'])
+            and int(linha_match.get('total_parcelas') or 1) == int(candidato.get('total_parcelas') or 1)
+        ):
+            score += 20
+            motivos.append('mesma parcela/total')
+
+        if linha_match.get('competencia') and candidato.get('mes_fatura') == linha_match.get('competencia'):
+            score += 10
+            motivos.append('mesma competencia/fatura')
+
+        if linha_match.get('categoria_id') and candidato.get('categoria_id') == linha_match.get('categoria_id'):
+            score += 5
+            motivos.append('categoria igual')
+
+        desc_amigavel_linha = ImportacaoCartaoService.normalizar_texto_match(linha_match.get('descricao_exibida'))
+        desc_amigavel_candidato = ImportacaoCartaoService.normalizar_texto_match(candidato.get('descricao_exibida'))
+        if desc_amigavel_linha and desc_amigavel_linha == desc_amigavel_candidato:
+            score += 5
+            motivos.append('descricao amigavel igual')
+
+        return score, motivos
+
+    @staticmethod
+    def _montar_linha_match(linha, cartao_id, competencia):
+        descricao_original = (
+            linha.get('descricao_original')
+            or linha.get('descricao_cartao')
+            or linha.get('descricao')
+            or linha.get('descricao_exibida')
+            or ''
+        )
+        descricao_limpa, numero_parcela, total_parcelas = ImportacaoCartaoService.normalizar_descricao(descricao_original)
+        numero_manual = linha.get('numero_parcela')
+        total_manual = linha.get('total_parcelas')
+        if numero_manual and total_manual:
+            try:
+                numero_parcela = int(numero_manual)
+                total_parcelas = int(total_manual)
+            except (TypeError, ValueError):
+                pass
+
+        return {
+            'indice': linha.get('indice'),
+            'cartao_id': cartao_id,
+            'competencia': competencia,
+            'valor': ImportacaoCartaoService._parse_valor(linha.get('valor')),
+            'descricao_original': descricao_original,
+            'descricao_exibida': linha.get('descricao_exibida') or linha.get('descricao') or descricao_limpa,
+            'assinatura': ImportacaoCartaoService.extrair_assinatura_flexivel(descricao_original),
+            'numero_parcela': numero_parcela,
+            'total_parcelas': total_parcelas,
+            'categoria_id': linha.get('categoria_id') or linha.get('categoria_despesa_id'),
+        }
+
+    @staticmethod
+    def _candidato_lancamento_match(lancamento):
+        descricao_ref = (
+            lancamento.descricao_original
+            or lancamento.descricao_original_normalizada
+            or lancamento.descricao_exibida
+            or lancamento.descricao
+        )
+        return {
+            'origem': 'lancamento',
+            'id': lancamento.id,
+            'cartao_id': lancamento.cartao_id,
+            'valor': lancamento.valor,
+            'descricao_original': lancamento.descricao_original,
+            'descricao_exibida': lancamento.descricao_exibida or lancamento.descricao,
+            'assinatura': ImportacaoCartaoService.extrair_assinatura_flexivel(descricao_ref),
+            'numero_parcela': lancamento.numero_parcela,
+            'total_parcelas': lancamento.total_parcelas,
+            'mes_fatura': lancamento.mes_fatura,
+            'categoria_id': lancamento.categoria_id,
+            'categoria_cartao_id': lancamento.categoria_cartao_id,
+            'is_recorrente': lancamento.is_recorrente,
+            'item_despesa_id': lancamento.item_despesa_id,
+        }
+
+    @staticmethod
+    def _candidato_recorrencia_match(item):
+        valor = item.valor_pago or item.valor
+        return {
+            'origem': 'recorrencia',
+            'id': item.id,
+            'cartao_id': item.cartao_id,
+            'valor': valor,
+            'descricao_original': item.descricao or item.nome,
+            'descricao_exibida': item.nome,
+            'assinatura': ImportacaoCartaoService.extrair_assinatura_flexivel(f'{item.nome} {item.descricao or ""}'),
+            'numero_parcela': 1,
+            'total_parcelas': 1,
+            'mes_fatura': None,
+            'categoria_id': item.categoria_id,
+            'categoria_cartao_id': item.categoria_cartao_id,
+            'is_recorrente': True,
+            'item_despesa_id': item.id,
+        }
+
+    @staticmethod
+    def reconhecer_linhas_flexivel(linhas, cartao_id, competencia):
+        reconhecimentos = []
+        for idx, linha in enumerate(linhas, start=1):
+            try:
+                linha_match = ImportacaoCartaoService._montar_linha_match(linha, cartao_id, competencia)
+            except (InvalidOperation, ValueError, TypeError):
+                continue
+
+            valor = Decimal(str(linha_match['valor'])).quantize(Decimal('0.01'))
+            valor_min = valor - Decimal('0.01')
+            valor_max = valor + Decimal('0.01')
+
+            lancamentos = LancamentoAgregado.query.filter(
+                PerfilFinanceiroService.condicao_perfil(LancamentoAgregado),
+                LancamentoAgregado.valor >= valor_min,
+                LancamentoAgregado.valor <= valor_max,
+            ).order_by(LancamentoAgregado.id.desc()).limit(200).all()
+
+            recorrencias = ItemDespesa.query.filter(
+                PerfilFinanceiroService.condicao_perfil(ItemDespesa),
+                ItemDespesa.recorrente == True,  # noqa: E712
+                ItemDespesa.ativo == True,  # noqa: E712
+                or_(ItemDespesa.tipo.is_(None), ItemDespesa.tipo != 'Agregador'),
+            ).all()
+
+            candidatos = [ImportacaoCartaoService._candidato_lancamento_match(item) for item in lancamentos]
+            for item in recorrencias:
+                if item.valor is None and item.valor_pago is None:
+                    continue
+                if ImportacaoCartaoService._valores_proximos(valor, item.valor_pago or item.valor):
+                    candidatos.append(ImportacaoCartaoService._candidato_recorrencia_match(item))
+
+            melhor = None
+            for candidato in candidatos:
+                score, motivos = ImportacaoCartaoService._score_candidato_match(linha_match, candidato)
+                if score < 60:
+                    continue
+                tipo = 'historico'
+                if candidato.get('origem') == 'recorrencia' or candidato.get('is_recorrente'):
+                    tipo = 'recorrencia'
+                if candidato.get('mes_fatura') == competencia and int(candidato.get('cartao_id') or 0) == int(cartao_id) and score >= 80:
+                    tipo = 'duplicado_atual'
+                if candidato.get('total_parcelas', 1) and int(candidato.get('total_parcelas') or 1) > 1:
+                    tipo = 'parcelamento_existente' if tipo != 'duplicado_atual' else tipo
+
+                sugestao = {
+                    'indice': linha.get('indice', idx - 1),
+                    'tipo': tipo,
+                    'score': score,
+                    'confianca': 'alta' if score >= 80 else 'media',
+                    'motivos': motivos,
+                    'keyword_principal': linha_match['assinatura'].get('keyword_principal'),
+                    'keyword_secundaria': linha_match['assinatura'].get('keyword_secundaria'),
+                    'descricao_original': linha_match['descricao_original'],
+                    'descricao_sugerida': candidato.get('descricao_exibida'),
+                    'descricao_original_referencia': candidato.get('descricao_original'),
+                    'categoria_id': candidato.get('categoria_id'),
+                    'categoria_cartao_id': candidato.get('categoria_cartao_id'),
+                    'cartao_id_referencia': candidato.get('cartao_id'),
+                    'mes_fatura_referencia': candidato.get('mes_fatura').isoformat() if candidato.get('mes_fatura') else None,
+                    'numero_parcela_referencia': candidato.get('numero_parcela'),
+                    'total_parcelas_referencia': candidato.get('total_parcelas'),
+                    'origem': candidato.get('origem'),
+                    'referencia_id': candidato.get('id'),
+                }
+                if not melhor or sugestao['score'] > melhor['score']:
+                    melhor = sugestao
+
+            if melhor:
+                reconhecimentos.append(melhor)
+
+        return reconhecimentos
 
     @staticmethod
     def sugerir_categoria_por_descricao(descricao_bruta, categoria_fallback_id=None):

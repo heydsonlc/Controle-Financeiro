@@ -335,6 +335,33 @@ def criar_parcelamento_importado():
         return jsonify({'success': False, 'message': 'Falha ao criar parcelamento importado'}), 500
 
 
+@bp.route('/reconhecer', methods=['POST'])
+def reconhecer_lancamentos_importados():
+    """
+    Reconhece possiveis lancamentos conhecidos usando valor, cartao e palavra-chave.
+    Nao persiste dados.
+    """
+    try:
+        data = request.get_json(silent=True)
+        validado, erro = _validar_payload_importacao(data)
+        if erro:
+            mensagem, status = erro
+            return jsonify({'success': False, 'message': mensagem}), status
+
+        reconhecimentos = ImportacaoCartaoService.reconhecer_linhas_flexivel(
+            validado['linhas'],
+            validado['cartao_id'],
+            validado['competencia']
+        )
+
+        return jsonify({
+            'success': True,
+            'reconhecimentos': reconhecimentos
+        })
+    except Exception:
+        return jsonify({'success': False, 'message': 'Falha ao reconhecer lancamentos conhecidos'}), 500
+
+
 @bp.route('/categorias', methods=['GET'])
 def listar_categorias():
     """Lista categorias de despesas disponíveis"""

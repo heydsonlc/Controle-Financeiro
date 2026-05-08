@@ -146,3 +146,39 @@ def test_backend_cria_parcelamento_atual_e_futuro_sem_migration():
     assert "@bp.route('/parcelamento', methods=['POST'])" in route
     assert "linha['gerar_parcelas_futuras'] = True" in route
     assert "linha['gerar_apenas_atual_e_futuras'] = True" in route
+
+
+def test_reconhecimento_flexivel_prioriza_valor_cartao_e_keyword():
+    service = SERVICE_PATH.read_text(encoding='utf-8')
+    route = ROUTE_PATH.read_text(encoding='utf-8')
+
+    scoring = _trecho(service, 'def _score_candidato_match', 'def _montar_linha_match')
+    assert 'score += 50' in scoring
+    assert "motivos.append('valor igual/proximo')" in scoring
+    assert 'score += 20' in scoring
+    assert "motivos.append('mesmo cartao')" in scoring
+    assert "motivos.append('palavra-chave forte igual')" in scoring
+    assert 'score += 5' in scoring
+    assert "motivos.append('categoria igual')" in scoring
+    assert "motivos.append('descricao amigavel igual')" in scoring
+
+    assert "('APPLE', None, ('APPLECOMBILL'" in service
+    assert "('AMAZON', 'AMAZON MUSIC'" in service
+    assert "('AMAZON', 'AMAZON PRIME'" in service
+    assert "score < 60" in service
+    assert "tipo = 'duplicado_atual'" in service
+    assert "@bp.route('/reconhecer', methods=['POST'])" in route
+
+
+def test_frontend_exibe_possivel_conhecido_sem_aplicar_categoria_automaticamente():
+    js = JS_PATH.read_text(encoding='utf-8')
+
+    assert 'async function aplicarReconhecimentoFlexivel' in js
+    assert "fetch(`${API_BASE}/reconhecer`" in js
+    assert 'function renderizarGrupoConhecidosConfronto' in js
+    assert 'Possiveis conhecidos / assinaturas' in js
+    assert 'Usar sugestao' in js
+    assert 'Tratar como novo' in js
+    assert 'function usarSugestaoReconhecimento' in js
+    assert 'linha.sugestao_reconhecimento_aplicada = true' in js
+    assert 'function linhaReconhecimentoPendente' in js

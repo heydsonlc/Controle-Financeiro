@@ -595,6 +595,12 @@ body.app-shell-body .import-row-action {
     border-color: rgba(2, 132, 199, 0.22);
 }
 
+.import-status-pill.known {
+    color: #155e75;
+    background: #ecfeff;
+    border-color: rgba(8, 145, 178, 0.24);
+}
+
 .import-description-cell {
     max-width: 260px;
     white-space: normal;
