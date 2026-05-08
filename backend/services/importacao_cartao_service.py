@@ -409,6 +409,19 @@ class ImportacaoCartaoService:
         return Decimal(valor_limpo)
 
     @staticmethod
+    def _parse_data_compra(data_str):
+        if isinstance(data_str, date):
+            return data_str
+
+        formatos_data = ['%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y']
+        for formato in formatos_data:
+            try:
+                return datetime.strptime(str(data_str or '').strip(), formato).date()
+            except (ValueError, TypeError):
+                continue
+        raise ValueError(f'Data invalida: {data_str}')
+
+    @staticmethod
     def _parse_parcela_texto(parcela_str):
         if not parcela_str:
             return None
@@ -707,6 +720,7 @@ class ImportacaoCartaoService:
                     'total_parcelas_referencia': candidato.get('total_parcelas'),
                     'origem': candidato.get('origem'),
                     'referencia_id': candidato.get('id'),
+                    'item_despesa_id': candidato.get('item_despesa_id'),
                     '_decisao_alias': ImportacaoCartaoService._decisao_alias(candidato),
                 }
                 sugestoes.append(sugestao)
@@ -729,6 +743,139 @@ class ImportacaoCartaoService:
                 reconhecimentos.append(melhor)
 
         return reconhecimentos
+
+    @staticmethod
+    def vincular_linha_recorrencia(linha, cartao_id, competencia, item_despesa_id):
+        """
+        Cria a ocorrencia de cartao vinculada a uma recorrencia existente.
+        Nao altera a recorrencia matriz e nao cria despesa avulsa paralela.
+        """
+        if not linha:
+            raise ValueError('Linha da importacao ausente')
+
+        recorrencia = ItemDespesa.query.filter(
+            PerfilFinanceiroService.condicao_perfil(ItemDespesa),
+            ItemDespesa.id == item_despesa_id,
+            ItemDespesa.recorrente == True,  # noqa: E712
+            ItemDespesa.ativo == True,  # noqa: E712
+            or_(ItemDespesa.tipo.is_(None), ItemDespesa.tipo != 'Agregador'),
+        ).first()
+        if not recorrencia:
+            raise ValueError('Recorrencia nao encontrada ou inativa')
+
+        if recorrencia.cartao_id and int(recorrencia.cartao_id) != int(cartao_id):
+            raise ValueError('Recorrencia vinculada a outro cartao')
+
+        categoria_id = recorrencia.categoria_id
+        if not categoria_id:
+            raise ValueError('Recorrencia sem Categoria da Despesa')
+
+        resolucao_cartao = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(
+            cartao_id=cartao_id,
+            categoria_id=categoria_id,
+            categoria_cartao_id=recorrencia.categoria_cartao_id,
+        )
+        categoria_cartao_id = resolucao_cartao.get('categoria_cartao_id')
+
+        data_compra = ImportacaoCartaoService._parse_data_compra(linha.get('data_compra'))
+        valor = ImportacaoCartaoService._parse_valor(linha.get('valor'))
+        descricao_original = (
+            linha.get('descricao_original')
+            or linha.get('descricao_cartao')
+            or linha.get('descricao')
+            or linha.get('descricao_exibida')
+            or recorrencia.nome
+        )
+        descricao_normalizada, numero_parcela, total_parcelas = ImportacaoCartaoService.normalizar_descricao(descricao_original)
+        if linha.get('numero_parcela') and linha.get('total_parcelas'):
+            try:
+                numero_parcela = int(linha.get('numero_parcela'))
+                total_parcelas = int(linha.get('total_parcelas'))
+            except (TypeError, ValueError):
+                raise ValueError('Parametros de parcela invalidos')
+
+        existente_recorrencia = LancamentoAgregado.query.filter(
+            PerfilFinanceiroService.condicao_perfil(LancamentoAgregado),
+            LancamentoAgregado.cartao_id == cartao_id,
+            LancamentoAgregado.mes_fatura == competencia,
+            LancamentoAgregado.item_despesa_id == recorrencia.id,
+        ).first()
+        if existente_recorrencia:
+            return {
+                'criado': False,
+                'duplicado': True,
+                'lancamento': existente_recorrencia.to_dict(),
+                'recorrencia': recorrencia.to_dict(),
+                'message': 'Recorrencia ja possui lancamento nesta fatura',
+            }
+
+        lancamento_base = {
+            'cartao_id': cartao_id,
+            'categoria_id': categoria_id,
+            'categoria_cartao_id': categoria_cartao_id,
+            'descricao': descricao_normalizada,
+            'descricao_original': descricao_original,
+            'descricao_original_normalizada': descricao_normalizada,
+            'descricao_exibida': recorrencia.nome,
+            'valor': valor,
+            'data_compra': data_compra,
+            'mes_fatura': competencia,
+            'numero_parcela': numero_parcela,
+            'total_parcelas': total_parcelas,
+            'compra_id': str(uuid.uuid4()),
+            'is_importado': True,
+            'origem_importacao': 'recorrencia',
+            'is_recorrente': True,
+            'item_despesa_id': recorrencia.id,
+        }
+
+        if ImportacaoCartaoService._existe_duplicado_banco(lancamento_base):
+            return {
+                'criado': False,
+                'duplicado': True,
+                'lancamento': None,
+                'recorrencia': recorrencia.to_dict(),
+                'message': 'Lancamento equivalente ja existe na fatura',
+            }
+
+        novo_lancamento = LancamentoAgregado(
+            perfil_financeiro_id=PerfilFinanceiroService.obter_perfil_ativo_id(),
+            descricao=lancamento_base['descricao'],
+            descricao_original=lancamento_base['descricao_original'],
+            descricao_original_normalizada=lancamento_base['descricao_original_normalizada'],
+            descricao_exibida=lancamento_base['descricao_exibida'],
+            valor=lancamento_base['valor'],
+            data_compra=lancamento_base['data_compra'],
+            mes_fatura=lancamento_base['mes_fatura'],
+            numero_parcela=lancamento_base['numero_parcela'],
+            total_parcelas=lancamento_base['total_parcelas'],
+            cartao_id=lancamento_base['cartao_id'],
+            categoria_id=lancamento_base['categoria_id'],
+            item_agregado_id=None,
+            categoria_cartao_id=lancamento_base['categoria_cartao_id'],
+            compra_id=lancamento_base['compra_id'],
+            is_importado=True,
+            origem_importacao='recorrencia',
+            is_recorrente=True,
+            item_despesa_id=recorrencia.id,
+        )
+        db.session.add(novo_lancamento)
+        db.session.commit()
+
+        try:
+            from backend.services.cartao_service import CartaoService
+        except ImportError:
+            from services.cartao_service import CartaoService
+        CartaoService.recalcular_fatura(cartao_id, competencia)
+
+        return {
+            'criado': True,
+            'duplicado': False,
+            'lancamento': novo_lancamento.to_dict(),
+            'recorrencia': recorrencia.to_dict(),
+            'categoria_cartao_id': categoria_cartao_id,
+            'categoria_cartao_origem': resolucao_cartao.get('origem'),
+        }
 
     @staticmethod
     def sugerir_categoria_por_descricao(descricao_bruta, categoria_fallback_id=None):

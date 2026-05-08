@@ -354,6 +354,58 @@ def criar_parcelamento_importado():
         return jsonify({'success': False, 'message': 'Falha ao criar parcelamento importado'}), 500
 
 
+@bp.route('/recorrencia', methods=['POST'])
+def vincular_recorrencia_importada():
+    """
+    Vincula uma linha importada a uma recorrencia existente.
+    Cria a ocorrencia na fatura sem transformar a linha em despesa avulsa.
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        cartao_id = data.get('cartao_id')
+        competencia_str = data.get('competencia')
+        linha = data.get('linha') or {}
+        item_despesa_id = data.get('item_despesa_id') or linha.get('item_despesa_id') or linha.get('recorrencia_id')
+
+        if not cartao_id:
+            return jsonify({'success': False, 'message': 'cartao_id obrigatorio'}), 400
+        if not competencia_str:
+            return jsonify({'success': False, 'message': 'competencia obrigatoria'}), 400
+        if not isinstance(linha, dict) or not linha:
+            return jsonify({'success': False, 'message': 'Linha da importacao obrigatoria'}), 400
+        if not item_despesa_id:
+            return jsonify({'success': False, 'message': 'recorrencia obrigatoria'}), 400
+
+        cartao = PerfilFinanceiroService.aplicar_perfil_query(
+            ItemDespesa.query, ItemDespesa
+        ).filter(ItemDespesa.id == cartao_id).first()
+        if not cartao or cartao.tipo != 'Agregador':
+            return jsonify({'success': False, 'message': 'Cartao invalido'}), 400
+
+        try:
+            competencia = datetime.strptime(competencia_str, '%Y-%m-%d').date().replace(day=1)
+            item_despesa_id = int(item_despesa_id)
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'message': 'Parametros de recorrencia invalidos'}), 400
+
+        resultado = ImportacaoCartaoService.vincular_linha_recorrencia(
+            linha=linha,
+            cartao_id=cartao.id,
+            competencia=competencia,
+            item_despesa_id=item_despesa_id,
+        )
+        return jsonify({
+            'success': True,
+            **resultado,
+        })
+    except ValueError as exc:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(exc)}), 400
+    except Exception:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': 'Falha ao vincular recorrencia importada'}), 500
+
+
 @bp.route('/reconhecer', methods=['POST'])
 def reconhecer_lancamentos_importados():
     """

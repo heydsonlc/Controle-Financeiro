@@ -230,6 +230,7 @@ function iconSvg(nome) {
         check: '<path d="M5 12.5l4 4L19 7"/>',
         warning: '<path d="M12 8v5M12 17h.1"/><path d="M12 3 3.5 19h17L12 3Z"/>',
         parcel: '<rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><path d="M13 17h8M17 13v8"/>',
+        link: '<path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.2 1.2"/><path d="M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.2-1.2"/>',
         new: '<path d="M12 5v14M5 12h14"/>'
     };
 
@@ -1187,12 +1188,19 @@ function linhaTratadaParcelamento(linha) {
     return Boolean(linha.tratada_como_parcelamento || linha.status === 'parcelamento_criado');
 }
 
+function linhaRecorrenciaVinculada(linha) {
+    return Boolean(linha.recorrencia_vinculada || linha.status === 'recorrencia_vinculada');
+}
+
 function linhaBloqueadaTecnica(linha) {
     return linhaDuplicada(linha) || linhaComErro(linha) || linhaCredito(linha);
 }
 
 function linhaImportavel(linha) {
-    return !linha.ignorar && !linhaTratadaParcelamento(linha) && !linhaBloqueadaTecnica(linha);
+    return !linha.ignorar
+        && !linhaTratadaParcelamento(linha)
+        && !linhaRecorrenciaVinculada(linha)
+        && !linhaBloqueadaTecnica(linha);
 }
 
 function descricaoOriginalLinha(linha) {
@@ -1243,11 +1251,37 @@ function linhaPossivelParcelamento(linha) {
 }
 
 function linhaPossivelRecorrencia(linha) {
-    return Boolean(linha.is_recorrente || linha.recorrencia_id || linha.item_despesa_id);
+    return Boolean(
+        linha.is_recorrente
+        || linha.recorrencia_id
+        || linha.item_despesa_id
+        || reconhecimentoEhRecorrencia(reconhecimentoLinha(linha))
+    );
 }
 
 function reconhecimentoLinha(linha) {
     return linha.reconhecimento_match || null;
+}
+
+function reconhecimentoEhRecorrencia(reconhecimento) {
+    if (!reconhecimento) return false;
+    return reconhecimento.tipo_sugerido === 'recorrencia'
+        || reconhecimento.tipo === 'recorrencia'
+        || reconhecimento.origem === 'recorrencia'
+        || Boolean(reconhecimento.item_despesa_id && reconhecimento.origem_alias === 'recorrencia');
+}
+
+function idRecorrenciaReconhecimento(linha) {
+    const reconhecimento = reconhecimentoLinha(linha);
+    if (!reconhecimentoEhRecorrencia(reconhecimento)) {
+        return toIntOrNull(linha.recorrencia_id || linha.item_despesa_id);
+    }
+    return toIntOrNull(
+        reconhecimento.item_despesa_id
+        || reconhecimento.referencia_id
+        || linha.recorrencia_id
+        || linha.item_despesa_id
+    );
 }
 
 function linhaDuplicadaPorReconhecimento(linha) {
@@ -1262,8 +1296,13 @@ function linhaReconhecimentoPendente(linha) {
         && Number(reconhecimento.score || 0) >= 60
         && !linha.tratar_como_novo
         && !linha.sugestao_reconhecimento_aplicada
+        && !linhaRecorrenciaVinculada(linha)
         && !linha.ignorar
     );
+}
+
+function linhaReconhecimentoRecorrenciaPendente(linha) {
+    return linhaReconhecimentoPendente(linha) && reconhecimentoEhRecorrencia(reconhecimentoLinha(linha));
 }
 
 function linhaNovaClassificavel(linha) {
@@ -1285,6 +1324,10 @@ function motivoConfrontoLinha(linha, tipo, parcela) {
         return `Padrao de parcela ${parcela?.rotulo || ''} detectado na descricao original.`;
     }
     if (tipo === 'recorrencia') {
+        const reconhecimento = reconhecimentoLinha(linha);
+        if (reconhecimento) {
+            return `Score ${reconhecimento.score || 0}: ${(reconhecimento.motivos || []).join(', ') || 'valor/cartao/fornecedor compativeis com recorrencia'}.`;
+        }
         return 'Linha tem indicio de recorrencia nos dados disponiveis.';
     }
     if (tipo === 'erro') {
@@ -1306,6 +1349,7 @@ function montarAnaliseConfronto() {
     estado.linhasMapeadas.forEach((linha, index) => {
         const itemBase = { linha, index };
         if (linhaTratadaParcelamento(linha)) return;
+        if (linhaRecorrenciaVinculada(linha)) return;
         if (linha.ignorar && !linhaDuplicada(linha) && !linhaComErro(linha)) return;
 
         if (linhaComErro(linha) || linhaCredito(linha)) {
@@ -1338,6 +1382,15 @@ function montarAnaliseConfronto() {
                 parcela,
                 reconhecimento: reconhecimentoLinha(linha),
                 motivo: motivoConfrontoLinha(linha, 'parcelamento', parcela)
+            });
+            return;
+        }
+
+        if (linhaReconhecimentoRecorrenciaPendente(linha)) {
+            grupos.recorrencias.push({
+                ...itemBase,
+                reconhecimento: reconhecimentoLinha(linha),
+                motivo: motivoConfrontoLinha(linha, 'recorrencia')
             });
             return;
         }
@@ -1396,6 +1449,9 @@ function statusLinha(linha) {
     }
     if (linhaTratadaParcelamento(linha)) {
         return { texto: 'Parcelamento criado', classe: 'parcelment' };
+    }
+    if (linhaRecorrenciaVinculada(linha)) {
+        return { texto: 'Recorrencia vinculada', classe: 'recurrence' };
     }
     if (linhaCredito(linha)) {
         return { texto: 'Ignorado', classe: 'ignored' };
@@ -1523,6 +1579,7 @@ function linhaRetiradaEfetivacao(linha) {
     return Boolean(
         linha.ignorar
         || linhaTratadaParcelamento(linha)
+        || linhaRecorrenciaVinculada(linha)
         || linhaDuplicadaOperacional(linha)
         || linhaComErro(linha)
         || linhaCredito(linha)
@@ -1530,6 +1587,7 @@ function linhaRetiradaEfetivacao(linha) {
 }
 
 function motivoRetiradaCodigo(linha) {
+    if (linhaRecorrenciaVinculada(linha)) return 'recorrencia_vinculada';
     if (linhaTratadaParcelamento(linha)) return 'parcelamento_tratado';
     if (linhaDuplicadaPorReconhecimento(linha)) return 'ja_existe_fatura';
     if (linhaDuplicada(linha)) return 'duplicado_fatura';
@@ -1545,6 +1603,7 @@ function motivoRetiradaLinha(linha) {
         duplicado_fatura: 'Duplicado na fatura',
         ja_existe_fatura: 'Já existe na fatura',
         conhecida_alta_confianca: 'Conhecida com alta confiança',
+        recorrencia_vinculada: 'Recorrencia vinculada',
         parcelamento_tratado: 'Parcelamento tratado',
         credito_estorno: 'Crédito/estorno',
         erro_validacao: 'Erro de validação',
@@ -1563,6 +1622,11 @@ function observacaoRetiradaLinha(linha) {
             ? `${parcelaCriada.total_criados} parcela(s) gerada(s)`
             : 'Parcelamento criado';
         return `${resumo}${parcelaCriada.descricao ? ` · ${parcelaCriada.descricao}` : ''}`;
+    }
+    if (linhaRecorrenciaVinculada(linha)) {
+        const recorrencia = linha.recorrencia_vinculada_info || {};
+        const nome = recorrencia.nome || reconhecimento.descricao_sugerida || linha.descricao_exibida || 'recorrencia';
+        return `Vinculada a ${nome} · ${formatarValorLinha(linha)}`;
     }
     if (linhaDuplicadaPorReconhecimento(linha)) {
         const score = reconhecimento.score ? `Score ${reconhecimento.score}` : 'Alta confiança';
@@ -1603,6 +1667,7 @@ function linhaRestauravel(linha) {
     return Boolean(
         linha.ignorar
         && !linhaTratadaParcelamento(linha)
+        && !linhaRecorrenciaVinculada(linha)
         && !linhaDuplicadaOperacional(linha)
         && !linhaComErro(linha)
         && !linhaCredito(linha)
@@ -1639,6 +1704,23 @@ function obterInfoOperacional(linha, index) {
             tipo: 'Parcelamento',
             filtro: 'parcelados',
             sugestao: sugestaoParcelamentoLinha(parcela),
+            descricaoEditavel: false,
+            categoriaEditavel: false,
+            parcela,
+            reconhecimento
+        };
+    }
+
+    if (linhaReconhecimentoRecorrenciaPendente(linha)) {
+        const confiancaReconhecimento = reconhecimento?.confianca || 'media';
+        return {
+            linha,
+            index,
+            status: confiancaReconhecimento === 'alta' ? 'Recorrência' : 'Revisar',
+            classe: confiancaReconhecimento === 'alta' ? 'recurrence' : 'review',
+            tipo: 'Recorrência',
+            filtro: 'recorrencias',
+            sugestao: reconhecimento?.descricao_sugerida || 'Possível recorrência',
             descricaoEditavel: false,
             categoriaEditavel: false,
             parcela,
@@ -1728,6 +1810,7 @@ function passaFiltroRetirados(item, filtro = estado.filtroRetirados) {
     if (filtro === 'existente') return codigo === 'ja_existe_fatura';
     if (filtro === 'duplicado') return codigo === 'duplicado_fatura';
     if (filtro === 'parcelamento') return codigo === 'parcelamento_tratado';
+    if (filtro === 'recorrencia') return codigo === 'recorrencia_vinculada';
     if (filtro === 'bloqueado') return linhaComErro(item.linha) || linhaCredito(item.linha);
     if (filtro === 'credito') return linhaCredito(item.linha);
     if (filtro === 'erro') return linhaComErro(item.linha);
@@ -1797,6 +1880,7 @@ function renderizarFiltroAvancado(tipo) {
             ['existente', 'Já existe na fatura', contarFiltroRetirados('existente')],
             ['duplicado', 'Duplicado na fatura', contarFiltroRetirados('duplicado')],
             ['parcelamento', 'Parcelamento tratado', contarFiltroRetirados('parcelamento')],
+            ['recorrencia', 'Recorrencia vinculada', contarFiltroRetirados('recorrencia')],
             ['bloqueado', 'Bloqueado', contarFiltroRetirados('bloqueado')],
             ['credito', 'Crédito/estorno', contarFiltroRetirados('credito')],
             ['erro', 'Erro', contarFiltroRetirados('erro')]
@@ -2103,9 +2187,11 @@ function renderizarAcoesLinhaOperacional(item) {
 
     if (item.filtro === 'recorrencias') {
         const temSugestao = Boolean(item.reconhecimento);
+        const recorrenciaId = idRecorrenciaReconhecimento(linha);
         return `<div class="row-actions operational">
             ${iconeBotaoAcao('success', 'check', 'Usar sugestão', temSugestao ? `usarSugestaoReconhecimento(${index})` : null, !temSugestao)}
-            ${iconeBotaoAcao('parcel', 'parcel', 'Criar parcelamento', null, true)}
+            ${iconeBotaoAcao('success', 'link', 'Vincular recorrencia', recorrenciaId ? `vincularRecorrenciaImportada(${index})` : null, !recorrenciaId)}
+            ${iconeBotaoAcao('neutral', 'new', 'Tratar como novo', `tratarReconhecimentoComoNovo(${index})`)}
             ${iconeBotaoAcao('danger', 'trash', 'Retirar', `alternarIgnorarLinha(${index})`)}
         </div>`;
     }
@@ -2509,6 +2595,92 @@ function ignorarReconhecimento(index) {
     if (!linha) return;
     linha.ignorar = true;
     recalcularConfrontoAtual();
+}
+
+async function vincularRecorrenciaImportada(index) {
+    const linha = estado.linhasMapeadas[index];
+    if (!linha) return;
+    if (!validarConfiguracaoBasica()) return;
+
+    const reconhecimento = reconhecimentoLinha(linha) || {};
+    const recorrenciaId = idRecorrenciaReconhecimento(linha);
+    if (!recorrenciaId) {
+        alert('Nao foi possivel identificar a recorrencia sugerida para este lancamento.');
+        return;
+    }
+
+    const nomeRecorrencia = reconhecimento.descricao_sugerida || linha.descricao_exibida || linha.descricao || 'recorrencia sugerida';
+    const mensagem = [
+        'Este lancamento sera vinculado a recorrencia selecionada e nao sera criado como despesa avulsa.',
+        '',
+        `Recorrencia: ${nomeRecorrencia}`,
+        `Descricao original: ${descricaoOriginalLinha(linha) || '-'}`,
+        `Valor: ${formatarValorLinha(linha)}`,
+        `Data: ${linha.data_compra || '-'}`,
+        `Competencia: ${document.getElementById('competenciaInput')?.value || '-'}`
+    ].join('\n');
+
+    if (!confirm(mensagem)) return;
+
+    const payload = {
+        cartao_id: parseInt(document.getElementById('cartaoSelect').value, 10),
+        competencia: competenciaCompletaApi(),
+        item_despesa_id: recorrenciaId,
+        linha: {
+            data_compra: linha.data_compra,
+            descricao: linha.descricao || descricaoOriginalLinha(linha),
+            descricao_original: descricaoOriginalLinha(linha),
+            descricao_exibida: linha.descricao_exibida || linha.descricao || nomeRecorrencia,
+            valor: linha.valor,
+            parcela: linha.parcela || `${linha.numero_parcela || 1}/${linha.total_parcelas || 1}`,
+            numero_parcela: linha.numero_parcela || 1,
+            total_parcelas: linha.total_parcelas || 1,
+            item_despesa_id: recorrenciaId,
+            origem_importacao: linha.origem_importacao || estado.payloadUnificado?.origem || 'csv',
+            ignorar: false
+        }
+    };
+
+    try {
+        const resposta = await fetch(`${API_BASE}/recorrencia`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const resultado = await resposta.json();
+        if (!resposta.ok || !resultado.success) {
+            throw new Error(resultado.message || 'Falha ao vincular recorrencia.');
+        }
+
+        linha.recorrencia_vinculada = true;
+        linha.status = 'recorrencia_vinculada';
+        linha.ignorar = false;
+        linha.is_recorrente = true;
+        linha.item_despesa_id = recorrenciaId;
+        linha.categoria_id = resultado.recorrencia?.categoria_id || reconhecimento.categoria_id || linha.categoria_id;
+        linha.categoria_despesa_id = linha.categoria_id;
+        linha.categoria_cartao_id = resultado.categoria_cartao_id || reconhecimento.categoria_cartao_id || linha.categoria_cartao_id;
+        linha.recorrencia_vinculada_info = resultado.recorrencia || {
+            id: recorrenciaId,
+            nome: nomeRecorrencia
+        };
+        linha.lancamento_recorrente = resultado.lancamento || null;
+        linha.sugestao_reconhecimento_aplicada = true;
+        linha.tratar_como_novo = false;
+
+        recalcularConfrontoAtual();
+        document.getElementById('resultadoContainer').innerHTML = `
+            <div class="import-feedback success">
+                <strong>Recorrencia vinculada.</strong>
+                A linha original nao sera importada como despesa avulsa.
+                ${resultado.duplicado ? 'Lancamento equivalente ja existia na fatura.' : ''}
+            </div>
+        `;
+    } catch (error) {
+        document.getElementById('resultadoContainer').innerHTML = `
+            <div class="import-feedback error">${escapeHtml(error.message)}</div>
+        `;
+    }
 }
 
 function competenciaCompletaApi() {

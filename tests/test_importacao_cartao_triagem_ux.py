@@ -320,6 +320,50 @@ def test_alias_nao_cria_tabela_ou_migration():
     assert 'op.create_table' not in service
 
 
+def test_vinculo_recorrencia_importada_sem_despesa_avulsa():
+    js = JS_PATH.read_text(encoding='utf-8')
+    service = SERVICE_PATH.read_text(encoding='utf-8')
+    route = ROUTE_PATH.read_text(encoding='utf-8')
+
+    assert "@bp.route('/recorrencia', methods=['POST'])" in route
+    assert 'def vincular_recorrencia_importada' in route
+    assert 'ImportacaoCartaoService.vincular_linha_recorrencia' in route
+    assert 'def vincular_linha_recorrencia' in service
+    assert "ItemDespesa.recorrente == True" in service
+    assert 'item_despesa_id == recorrencia.id' in service
+    assert 'is_recorrente=True' in service
+    assert "origem_importacao='recorrencia'" in service
+    assert 'CategoriaCartaoService.resolver_categoria_cartao_para_lancamento' in service
+    assert 'CartaoService.recalcular_fatura(cartao_id, competencia)' in service
+
+    assert 'function vincularRecorrenciaImportada' in js
+    assert "fetch(`${API_BASE}/recorrencia`" in js
+    assert 'linha.recorrencia_vinculada = true' in js
+    assert "linha.status = 'recorrencia_vinculada'" in js
+    assert 'linha.item_despesa_id = recorrenciaId' in js
+    assert 'A linha original nao sera importada como despesa avulsa' in js
+    assert "if (linhaRecorrenciaVinculada(linha)) return 'recorrencia_vinculada'" in js
+    assert "recorrencia_vinculada: 'Recorrencia vinculada'" in js
+
+
+def test_recorrencia_aparece_com_acao_propria_e_nao_vai_para_payload_de_novos():
+    js = JS_PATH.read_text(encoding='utf-8')
+    analise = _trecho(js, 'function montarAnaliseConfronto', 'function linhasNovasConfirmaveis')
+    operacional = _trecho(js, 'function obterInfoOperacional', 'function linhasProcessamentoBase')
+    acoes = _trecho(js, "if (item.filtro === 'recorrencias')", '    // novos / default')
+
+    assert 'function reconhecimentoEhRecorrencia' in js
+    assert 'function linhaReconhecimentoRecorrenciaPendente' in js
+    assert 'linhaReconhecimentoRecorrenciaPendente(linha)' in analise
+    assert 'grupos.recorrencias.push' in analise
+    assert 'linhaRecorrenciaVinculada(linha)' in _trecho(js, 'function linhaImportavel', 'function descricaoOriginalLinha')
+    assert "filtro: 'recorrencias'" in operacional
+    assert "tipo: 'Recorrência'" in operacional
+    assert 'Vincular recorrencia' in acoes
+    assert 'vincularRecorrenciaImportada' in acoes
+    assert 'Tratar como novo' in acoes
+
+
 def test_modal_edicao_lancamento_cartao_carrega_categoria_despesa_e_oculta_categoria_cartao():
     js = CARTOES_JS_PATH.read_text(encoding='utf-8')
     html = CARTOES_TEMPLATE_PATH.read_text(encoding='utf-8')
