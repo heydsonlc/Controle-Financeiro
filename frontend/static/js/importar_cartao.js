@@ -589,43 +589,44 @@ function aplicarPayloadUnificado(data) {
     estado.paginaRetirados = 1;
     estado.linhasSelecionadas = new Set();
 
-    const origemLabel = (data?.origem || '').toUpperCase();
-    setFeedback(
-        'uploadResult',
-        `${origemLabel} analisado com sucesso. <strong>${estado.linhasMapeadas.length}</strong> linhas normalizadas.`,
-        'success'
-    );
+    limparFeedback('uploadResult');
+    document.getElementById('mapeamentoContainer').innerHTML = '';
 
     document.getElementById('btnStep3').disabled = true;
     document.getElementById('btnStep4').disabled = false;
     document.getElementById('btnImportar').disabled = true;
-    renderizarResumoAnalise(data);
+    renderizarResumoAnalise(data, estado.linhasMapeadas.length);
     renderizarMapeamento();
     renderizarEditorPrePersistencia();
     atualizarResumoPainel();
 }
 
-function renderizarResumoAnalise(data) {
+function renderizarResumoAnalise(data, linhasNormalizadas) {
     const container = document.getElementById('resumoConfiguracaoImportacao');
     if (!container || !data) return;
 
     const fatura = data.fatura || {};
     const validacoes = data.validacoes || {};
     const cartoes = (fatura.cartoes_detectados || []).join(', ') || '-';
-    const vencimento = fatura.vencimento || '-';
+    const origemLabel = (data.origem || '').toUpperCase();
+    const competencia = fatura.competencia || fatura.vencimento || '-';
     const totalFatura = fatura.valor_total !== null && fatura.valor_total !== undefined
-        ? formatarMoeda(fatura.valor_total)
-        : '-';
+        ? formatarMoeda(fatura.valor_total) : '-';
     const diferenca = Number(validacoes.diferenca || 0);
+    const cls = validacoes.revisar_totais ? 'warning' : 'success';
+
+    const itens = [
+        `${origemLabel} analisado com sucesso. <strong>${linhasNormalizadas || 0}</strong> linhas normalizadas`,
+        `Competência: <strong>${escapeHtml(competencia)}</strong>`,
+        `Total da fatura: <strong>${totalFatura}</strong>`,
+        `Cartões detectados: <strong>${escapeHtml(cartoes)}</strong>`,
+        `Total importável: <strong>${formatarMoeda(validacoes.total_importavel || 0)}</strong>`,
+        `Diferença: <strong>${formatarMoeda(diferenca)}</strong>`,
+    ];
 
     container.innerHTML = `
-        <div class="import-feedback ${validacoes.revisar_totais ? 'warning' : 'success'}">
-            <strong>Motor unificado:</strong> ${escapeHtml((data.origem || '').toUpperCase())}.
-            Vencimento: <strong>${escapeHtml(vencimento)}</strong>.
-            Total da fatura: <strong>${totalFatura}</strong>.
-            Cartões detectados: <strong>${escapeHtml(cartoes)}</strong>.
-            Total importável: <strong>${formatarMoeda(validacoes.total_importavel || 0)}</strong>.
-            Diferença: <strong>${formatarMoeda(diferenca)}</strong>.
+        <div class="import-feedback import-feedback--faixa ${cls}">
+            ${itens.join('<span class="import-faixa-sep" aria-hidden="true">|</span>')}
         </div>
     `;
 }
@@ -772,11 +773,7 @@ function renderizarMapeamento() {
     }
 
     if (estado.payloadUnificado && !estado.usaMapeamentoManual) {
-        container.innerHTML = `
-            <div class="import-feedback success">
-                Arquivo normalizado pelo motor unificado. Revise os lançamentos que seguem na importação e gere a prévia técnica.
-            </div>
-        `;
+        container.innerHTML = '';
         return;
     }
 

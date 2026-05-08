@@ -388,6 +388,33 @@
     background: #fff5f4;
 }
 
+.import-feedback--faixa {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0;
+    padding: 7px 14px;
+    font-size: 0.8rem;
+    line-height: 1.3;
+    margin-bottom: 0;
+}
+
+.import-feedback--faixa > *:not(.import-faixa-sep) {
+    padding: 0 10px;
+}
+
+.import-feedback--faixa > *:first-child {
+    padding-left: 0;
+}
+
+.import-faixa-sep {
+    color: #cbd5e1;
+    font-weight: 300;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+    user-select: none;
+}
+
 .import-validation-actions {
     display: flex;
     justify-content: flex-end;
