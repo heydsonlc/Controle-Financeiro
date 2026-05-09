@@ -42,6 +42,10 @@ function configurarEventosFormulario() {
             }
             atualizarResumoSimulacao();
         });
+        diaVencimento.addEventListener('change', () => {
+            dataPrimeira.value = ajustarDataPrimeiraPorDia(dataPrimeira.value, diaVencimento.value);
+            atualizarResumoSimulacao();
+        });
     }
 
     const observacoes = document.getElementById('fin-observacoes');
@@ -216,6 +220,7 @@ function abrirTelaNovoFinanciamento() {
     limparFormulario();
     setText('form-title', 'Novo financiamento');
     setText('form-breadcrumb-current', 'Novo financiamento');
+    setText('fin-actionbar-label', 'Novo financiamento');
     atualizarTituloGlobal('Novo financiamento');
     mostrarView('form');
     atualizarResumoSimulacao();
@@ -243,6 +248,8 @@ function mostrarView(view) {
     document.querySelectorAll('.fin-view').forEach((item) => item.classList.remove('is-active'));
     const alvo = document.getElementById(`fin-${view}-view`);
     if (alvo) alvo.classList.add('is-active');
+    const actionbar = document.getElementById('fin-form-actionbar');
+    if (actionbar) actionbar.hidden = (view !== 'form');
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -338,7 +345,11 @@ function coletarDadosFormulario(editando) {
     const produto = document.getElementById('fin-produto')?.value || 'Habitacional';
     const saldoInicial = parseMoeda(document.getElementById('fin-saldo-inicial')?.value);
     const seguro = parseMoeda(document.getElementById('fin-seguro')?.value);
-    const dataPrimeira = document.getElementById('fin-data-primeira')?.value;
+    const dataPrimeira = ajustarDataPrimeiraPorDia(
+        document.getElementById('fin-data-primeira')?.value,
+        document.getElementById('fin-dia-vencimento')?.value
+    );
+    if (dataPrimeira) setValue('fin-data-primeira', dataPrimeira);
     const nome = document.getElementById('fin-nome')?.value?.trim();
 
     if (!nome) throw new Error('Informe o nome do financiamento.');
@@ -358,7 +369,8 @@ function coletarDadosFormulario(editando) {
         seguro_tipo: 'fixo',
         valor_seguro_mensal: seguro,
         taxa_administracao_fixa: parseMoeda(document.getElementById('fin-taxa-adm')?.value),
-        ativo: document.getElementById('fin-status')?.value !== 'inativo'
+        ativo: document.getElementById('fin-status')?.value !== 'inativo',
+        regenerar_cronograma: document.getElementById('fin-gerar-cronograma')?.checked !== false
     };
 
     if (!dados.prazo_total_meses || dados.prazo_total_meses <= 0) throw new Error('Informe prazo em meses maior que zero.');
@@ -639,8 +651,11 @@ async function editarFinanciamento(id) {
         setValue('fin-indexador', financiamento.indexador_saldo || '');
         setValue('fin-data-primeira', normalizarISODate(financiamento.data_primeira_parcela));
         setValue('fin-dia-vencimento', normalizarISODate(financiamento.data_primeira_parcela)?.split('-')[2]?.replace(/^0/, '') || '');
+        const gerarCronograma = document.getElementById('fin-gerar-cronograma');
+        if (gerarCronograma) gerarCronograma.checked = true;
         setText('form-title', 'Editar financiamento');
         setText('form-breadcrumb-current', 'Editar financiamento');
+        setText('fin-actionbar-label', 'Editar financiamento');
         atualizarTituloGlobal('Editar financiamento');
         atualizarResumoSimulacao();
         mostrarView('form');
@@ -1018,6 +1033,19 @@ function normalizarISODate(valor) {
     if (!valor) return '';
     if (valor instanceof Date) return toISODate(valor);
     return String(valor).slice(0, 10);
+}
+
+function ajustarDataPrimeiraPorDia(dataISO, diaVencimento) {
+    const iso = normalizarISODate(dataISO);
+    if (!iso) return '';
+
+    const [ano, mes, diaAtual] = iso.split('-').map(Number);
+    const diaSolicitado = Number(diaVencimento || diaAtual);
+    if (!Number.isFinite(diaSolicitado) || diaSolicitado < 1) return iso;
+
+    const ultimoDiaMes = new Date(ano, mes, 0).getDate();
+    const diaAjustado = Math.min(diaSolicitado, ultimoDiaMes);
+    return `${ano}-${String(mes).padStart(2, '0')}-${String(diaAjustado).padStart(2, '0')}`;
 }
 
 function toISODate(data) {

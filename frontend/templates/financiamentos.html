@@ -6,6 +6,20 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/financiamentos.css') }}">
 {% endblock %}
 
+{% block action_bar %}
+<div class="module-actionbar fin-form-actionbar" id="fin-form-actionbar" hidden>
+    <div class="module-actionbar-inner">
+        <div class="module-actionbar-filters">
+            <span class="fin-actionbar-title" id="fin-actionbar-label">Novo financiamento</span>
+        </div>
+        <div class="module-actionbar-actions">
+            <button type="button" class="btn btn-secondary" onclick="cancelarFormulario()">Cancelar</button>
+            <button type="submit" form="form-financiamento" class="btn btn-primary">Salvar financiamento</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
 {% block content %}
 <div class="financiamentos-shell">
     <section id="fin-list-view" class="fin-view is-active" aria-label="Financiamentos">
@@ -103,13 +117,6 @@
     </section>
 
     <section id="fin-form-view" class="fin-view" aria-label="Novo financiamento">
-        <div class="fin-page-heading fin-heading-with-actions">
-            <div class="fin-heading-actions">
-                <button type="button" class="fin-secondary-btn" onclick="cancelarFormulario()">Cancelar</button>
-                <button type="submit" form="form-financiamento" class="fin-primary-btn">Salvar financiamento</button>
-            </div>
-        </div>
-
         <div class="fin-form-layout">
             <form id="form-financiamento" class="fin-form-card" onsubmit="salvarFinanciamento(event)">
                 <input type="hidden" id="fin-id">

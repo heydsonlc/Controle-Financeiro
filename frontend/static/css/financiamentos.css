@@ -146,16 +146,16 @@ body.app-shell-body .app-content {
     border-radius: 6px;
     background: var(--fin-surface);
     color: var(--fin-text);
-    font-size: 0.95rem;
-    min-height: 42px;
-    padding: 0 14px;
+    font-size: 0.86rem;
+    min-height: 34px;
+    padding: 0 10px;
     outline: none;
 }
 
 .fin-field textarea {
     resize: vertical;
-    min-height: 70px;
-    padding-top: 12px;
+    min-height: 56px;
+    padding-top: 8px;
 }
 
 .fin-select:focus,
@@ -582,8 +582,8 @@ body.app-shell-body .app-content {
 
 .fin-form-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 405px;
-    gap: 24px;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: 16px;
     align-items: start;
 }
 
@@ -592,7 +592,7 @@ body.app-shell-body .app-content {
 }
 
 .fin-form-section {
-    padding: 22px 24px;
+    padding: 14px 18px;
     border-bottom: 1px solid var(--fin-border-soft);
 }
 
@@ -603,20 +603,26 @@ body.app-shell-body .app-content {
 .fin-section-title {
     display: flex;
     align-items: center;
-    gap: 12px;
-    margin-bottom: 22px;
+    gap: 10px;
+    margin-bottom: 14px;
 }
 
 .fin-section-title > span {
-    width: 28px;
-    height: 28px;
+    width: 22px;
+    height: 22px;
     border-radius: 999px;
     background: var(--fin-blue-soft);
     color: var(--fin-blue);
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    font-size: 0.75rem;
     font-weight: 780;
+    flex-shrink: 0;
+}
+
+.fin-section-title h2 {
+    font-size: 0.9rem;
 }
 
 .fin-section-title small {
@@ -627,11 +633,11 @@ body.app-shell-body .app-content {
 .fin-form-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 18px 20px;
+    gap: 10px 14px;
 }
 
 .fin-main-grid {
-    grid-template-columns: minmax(280px, 1.8fr) minmax(180px, 1fr) minmax(220px, 1.05fr);
+    grid-template-columns: minmax(220px, 1.8fr) minmax(140px, 1fr) minmax(180px, 1.05fr);
 }
 
 .fin-main-grid .fin-field-wide {
@@ -645,9 +651,9 @@ body.app-shell-body .app-content {
 .fin-field {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 5px;
     color: var(--fin-text);
-    font-size: 0.88rem;
+    font-size: 0.82rem;
     font-weight: 650;
 }
 
@@ -673,7 +679,7 @@ body.app-shell-body .app-content {
 .fin-money-field > div,
 .fin-percent-input {
     display: grid;
-    grid-template-columns: 46px 1fr;
+    grid-template-columns: 38px 1fr;
     align-items: center;
     border: 1px solid var(--fin-border);
     border-radius: 6px;
@@ -683,11 +689,12 @@ body.app-shell-body .app-content {
 
 .fin-money-field > div > span,
 .fin-percent-input > span {
-    height: 42px;
+    height: 34px;
     display: flex;
     align-items: center;
     justify-content: center;
     color: var(--fin-text);
+    font-size: 0.8rem;
     background: var(--fin-surface-soft);
     border-right: 1px solid var(--fin-border);
 }
@@ -699,7 +706,7 @@ body.app-shell-body .app-content {
 }
 
 .fin-percent-input {
-    grid-template-columns: 1fr 46px;
+    grid-template-columns: 1fr 38px;
 }
 
 .fin-percent-input > span {
@@ -713,7 +720,8 @@ body.app-shell-body .app-content {
     border: 1px solid var(--fin-border);
     border-radius: 6px;
     overflow: hidden;
-    min-height: 42px;
+    min-height: 34px;
+    font-size: 0.82rem;
 }
 
 .fin-segmented button {
@@ -736,7 +744,7 @@ body.app-shell-body .app-content {
 }
 
 .fin-schedule-grid {
-    grid-template-columns: minmax(240px, 1.2fr) minmax(180px, 1fr) minmax(180px, 1fr);
+    grid-template-columns: minmax(200px, 1.2fr) minmax(150px, 1fr) minmax(150px, 1fr);
     align-items: end;
 }
 
@@ -793,7 +801,7 @@ body.app-shell-body .app-content {
 .fin-summary-card {
     position: sticky;
     top: 20px;
-    padding: 24px;
+    padding: 16px;
 }
 
 .fin-summary-heading,
@@ -801,8 +809,8 @@ body.app-shell-body .app-content {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 22px;
+    gap: 10px;
+    margin-bottom: 14px;
 }
 
 .fin-summary-heading > span,
@@ -810,36 +818,37 @@ body.app-shell-body .app-content {
     color: #047857;
     background: var(--fin-green-soft);
     border-radius: 999px;
-    padding: 4px 10px;
-    font-size: 0.76rem;
+    padding: 3px 8px;
+    font-size: 0.72rem;
     font-weight: 780;
 }
 
 .fin-estimate-alert {
     display: grid;
-    grid-template-columns: 24px 1fr;
-    gap: 10px;
-    padding: 16px;
+    grid-template-columns: 18px 1fr;
+    gap: 8px;
+    padding: 10px 12px;
     border-radius: 6px;
     color: #1d4ed8;
     background: #eaf3ff;
-    margin-bottom: 18px;
+    margin-bottom: 12px;
 }
 
 .fin-estimate-alert svg {
-    width: 22px;
-    height: 22px;
+    width: 16px;
+    height: 16px;
     fill: none;
     stroke: currentColor;
     stroke-width: 2;
     stroke-linecap: round;
     stroke-linejoin: round;
+    margin-top: 1px;
 }
 
 .fin-estimate-alert p {
     margin: 0;
-    font-size: 0.88rem;
-    line-height: 1.45;
+    font-size: 0.78rem;
+    line-height: 1.4;
 }
 
 .fin-summary-list {
@@ -850,20 +859,21 @@ body.app-shell-body .app-content {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
-    padding: 15px 0;
+    gap: 12px;
+    padding: 9px 0;
     border-bottom: 1px solid var(--fin-border-soft);
 }
 
 .fin-summary-list dt {
     color: var(--fin-muted);
-    font-size: 0.9rem;
+    font-size: 0.8rem;
 }
 
 .fin-summary-list dd {
     margin: 0;
     color: var(--fin-text);
     font-weight: 780;
+    font-size: 0.88rem;
 }
 
 .fin-full-link,
@@ -875,21 +885,22 @@ body.app-shell-body .app-content {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    min-height: 44px;
-    margin-top: 16px;
-    padding: 0 14px;
+    gap: 10px;
+    min-height: 36px;
+    margin-top: 12px;
+    padding: 0 12px;
     border: 1px solid var(--fin-border);
     border-radius: 6px;
     background: var(--fin-surface);
     color: var(--fin-text);
+    font-size: 0.84rem;
     font-weight: 720;
     cursor: pointer;
 }
 
 .fin-full-link svg {
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
     fill: none;
     stroke: currentColor;
     stroke-width: 2;
@@ -898,26 +909,34 @@ body.app-shell-body .app-content {
 }
 
 .fin-tips {
-    margin-top: 28px;
+    margin-top: 16px;
     border-radius: 6px;
-    padding: 18px;
+    padding: 12px 14px;
     background: #fff7dc;
     color: #334155;
 }
 
 .fin-tips h3 {
-    margin: 0 0 12px;
+    margin: 0 0 8px;
     color: var(--fin-text);
-    font-size: 1rem;
+    font-size: 0.84rem;
 }
 
 .fin-tips ul {
     margin: 0;
-    padding-left: 18px;
+    padding-left: 16px;
+    font-size: 0.8rem;
+    line-height: 1.45;
 }
 
 .fin-tips li + li {
-    margin-top: 10px;
+    margin-top: 6px;
+}
+
+.fin-actionbar-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #0f172a;
 }
 
 .fin-title-with-badges {
