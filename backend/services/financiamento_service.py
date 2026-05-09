@@ -370,6 +370,44 @@ class FinanciamentoService:
             )
 
     @staticmethod
+    def _remover_cronograma_sem_execucao(financiamento_id):
+        """
+        Remove parcelas e contas de um cronograma ainda sem execução financeira.
+
+        Conta e FinanciamentoParcela têm FKs nos dois sentidos. Por isso, antes
+        de apagar as contas antigas, é necessário soltar o ponteiro conta_id das
+        parcelas para evitar violação de chave estrangeira no PostgreSQL.
+        """
+        FinanciamentoService.validar_cronograma_regeneravel(financiamento_id)
+
+        ids_parcelas = [
+            parcela_id for (parcela_id,) in db.session.query(FinanciamentoParcela.id)
+            .filter(FinanciamentoParcela.financiamento_id == financiamento_id)
+            .all()
+        ]
+
+        if not ids_parcelas:
+            return
+
+        FinanciamentoParcela.query.filter(
+            FinanciamentoParcela.id.in_(ids_parcelas)
+        ).update(
+            {FinanciamentoParcela.conta_id: None},
+            synchronize_session=False
+        )
+        db.session.flush()
+
+        Conta.query.filter(
+            Conta.financiamento_parcela_id.in_(ids_parcelas)
+        ).delete(synchronize_session=False)
+        db.session.flush()
+
+        FinanciamentoParcela.query.filter(
+            FinanciamentoParcela.id.in_(ids_parcelas)
+        ).delete(synchronize_session=False)
+        db.session.flush()
+
+    @staticmethod
     def _converter_data_iso(valor, campo):
         if isinstance(valor, str):
             try:
@@ -688,6 +726,14 @@ class FinanciamentoService:
             parcelas_pendentes_ids = [p.id for p in parcelas_pendentes]
 
             if parcelas_pendentes_ids:
+                FinanciamentoParcela.query.filter(
+                    FinanciamentoParcela.id.in_(parcelas_pendentes_ids)
+                ).update(
+                    {FinanciamentoParcela.conta_id: None},
+                    synchronize_session=False
+                )
+                db.session.flush()
+
                 # Remover contas vinculadas a parcelas pendentes
                 Conta.query.filter(
                     Conta.financiamento_parcela_id.in_(parcelas_pendentes_ids)
@@ -738,16 +784,13 @@ class FinanciamentoService:
             )
 
         try:
-            # Excluir despesas vinculadas (1 parcela = 1 despesa)
+            FinanciamentoService._remover_cronograma_sem_execucao(financiamento_id)
+
+            # Excluir despesas vinculadas que tenham ficado sem parcela associada
             if financiamento.item_despesa_id:
                 Conta.query.filter(
                     Conta.item_despesa_id == financiamento.item_despesa_id
                 ).delete(synchronize_session=False)
-
-            # Excluir parcelas
-            FinanciamentoParcela.query.filter_by(
-                financiamento_id=financiamento_id
-            ).delete(synchronize_session=False)
 
             # Excluir financiamento
             db.session.delete(financiamento)
@@ -1006,15 +1049,7 @@ class FinanciamentoService:
             financiamento (Financiamento): Objeto do financiamento com todas configurações
         """
         if FinanciamentoParcela.query.filter_by(financiamento_id=financiamento.id).count() > 0:
-            FinanciamentoService.validar_cronograma_regeneravel(financiamento.id)
-
-        parcelas_existentes = FinanciamentoParcela.query.filter_by(financiamento_id=financiamento.id).all()
-        ids_antigos = [p.id for p in parcelas_existentes]
-        if ids_antigos:
-            Conta.query.filter(Conta.financiamento_parcela_id.in_(ids_antigos)).delete(synchronize_session=False)
-
-        # Deletar parcelas existentes
-        FinanciamentoParcela.query.filter_by(financiamento_id=financiamento.id).delete()
+            FinanciamentoService._remover_cronograma_sem_execucao(financiamento.id)
 
         sistema = financiamento.sistema_amortizacao
 

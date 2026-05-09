@@ -3,8 +3,9 @@ from pathlib import Path
 
 import pytest
 from flask import Flask, render_template
+from sqlalchemy import text
 
-from backend.models import db, Financiamento, FinanciamentoParcela
+from backend.models import db, Conta, Financiamento, FinanciamentoParcela
 from backend.routes.financiamentos import financiamentos_bp
 
 
@@ -42,6 +43,16 @@ def app_context():
 @pytest.fixture()
 def client(app_context):
     return app_context.test_client()
+
+
+@pytest.fixture()
+def sqlite_foreign_keys(app_context):
+    db.session.execute(text('PRAGMA foreign_keys=ON'))
+    db.session.commit()
+    yield
+    db.session.rollback()
+    db.session.execute(text('PRAGMA foreign_keys=OFF'))
+    db.session.commit()
 
 
 def _payload_financiamento(nome='Financiamento UX'):
@@ -141,8 +152,13 @@ def test_detalhe_retorna_cronograma_para_tela_operacional(client):
     assert primeira['valor_previsto_total'] > 0
 
 
-def test_edicao_estrutural_sem_parcela_paga_persiste_e_regenera_cronograma(client):
+def test_edicao_estrutural_sem_parcela_paga_persiste_e_regenera_cronograma(client, sqlite_foreign_keys):
     criado = _criar_financiamento(client)
+    parcela_antiga = FinanciamentoParcela.query.filter_by(financiamento_id=criado['id']).order_by(
+        FinanciamentoParcela.numero_parcela
+    ).first()
+    assert parcela_antiga.conta_id is not None
+    assert Conta.query.count() == 240
 
     payload = {
         'nome': 'Financiamento Corrigido',
@@ -182,6 +198,14 @@ def test_edicao_estrutural_sem_parcela_paga_persiste_e_regenera_cronograma(clien
     assert detalhe['total_parcelas'] == 36
     assert detalhe['parcelas'][0]['data_vencimento'] == '2024-06-05'
     assert detalhe['parcelas'][0]['status'] == 'pendente'
+
+    parcelas_regeneradas = FinanciamentoParcela.query.filter_by(financiamento_id=criado['id']).all()
+    ids_regenerados = [p.id for p in parcelas_regeneradas]
+    contas_regeneradas = Conta.query.all()
+    assert len(parcelas_regeneradas) == 36
+    assert all(p.conta_id is not None for p in parcelas_regeneradas)
+    assert len(contas_regeneradas) == 36
+    assert {c.financiamento_parcela_id for c in contas_regeneradas} == set(ids_regenerados)
 
 
 def test_registrar_pagamento_mantem_status_da_parcela(client):

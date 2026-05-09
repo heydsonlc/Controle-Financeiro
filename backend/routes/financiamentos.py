@@ -396,9 +396,10 @@ def atualizar_financiamento(id):
 
     except Exception as e:
         db.session.rollback()
+        logger.exception('Erro interno ao atualizar financiamento %s', id)
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': 'Erro interno ao atualizar financiamento. Verifique os logs do servidor.'
         }), 500
 
 
@@ -483,9 +484,10 @@ def regenerar_parcelas(id):
 
     except Exception as e:
         db.session.rollback()
+        logger.exception('Erro interno ao regenerar parcelas do financiamento %s', id)
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': 'Erro interno ao regenerar parcelas do financiamento. Verifique os logs do servidor.'
         }), 500
 
 
