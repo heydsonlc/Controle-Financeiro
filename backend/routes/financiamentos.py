@@ -321,16 +321,19 @@ def atualizar_financiamento(id):
 
     Body (JSON): Campos que deseja atualizar
         Campos aceitos:
-        - nome, produto
+        - nome, produto, ativo
+        - sistema_amortizacao, valor_financiado, prazo_total_meses
+        - taxa_juros_nominal_anual, indexador_saldo
+        - data_contrato, data_primeira_parcela
         - seguro_tipo: "fixo|percentual_saldo"
         - seguro_percentual: float (se seguro_tipo=percentual_saldo)
         - valor_seguro_mensal: float (se seguro_tipo=fixo)
         - taxa_administracao_fixa: float
         - item_despesa_id: int
 
-    Nota: Ao alterar seguro_tipo, seguro_percentual, valor_seguro_mensal ou
-          taxa_administracao_fixa, as parcelas futuras (status PENDENTE) serão
-          automaticamente recalculadas
+    Nota: Alterações estruturais só são permitidas quando não há parcelas
+          pagas ou vinculadas a pagamentos. Nesse caso, o cronograma é
+          regenerado com base nos novos dados.
 
     Returns:
         JSON com o financiamento atualizado
@@ -470,6 +473,13 @@ def regenerar_parcelas(id):
             'success': True,
             'message': 'Parcelas regeneradas com sucesso'
         }), 200
+
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 400
 
     except Exception as e:
         db.session.rollback()

@@ -141,6 +141,49 @@ def test_detalhe_retorna_cronograma_para_tela_operacional(client):
     assert primeira['valor_previsto_total'] > 0
 
 
+def test_edicao_estrutural_sem_parcela_paga_persiste_e_regenera_cronograma(client):
+    criado = _criar_financiamento(client)
+
+    payload = {
+        'nome': 'Financiamento Corrigido',
+        'produto': 'Habitacional',
+        'sistema_amortizacao': 'PRICE',
+        'valor_financiado': 250000.0,
+        'prazo_total_meses': 36,
+        'taxa_juros_nominal_anual': 8.25,
+        'indexador_saldo': 'IPCA',
+        'data_contrato': '2024-05-05',
+        'data_primeira_parcela': '2024-06-05',
+        'seguro_tipo': 'fixo',
+        'valor_seguro_mensal': 150.0,
+        'taxa_administracao_fixa': 10.0,
+        'ativo': True,
+        'regenerar_cronograma': True,
+    }
+
+    response = client.put(f'/api/financiamentos/{criado["id"]}', json=payload)
+    body = response.get_json()
+
+    assert response.status_code == 200
+    assert body['success'] is True
+
+    detalhe = client.get(f'/api/financiamentos/{criado["id"]}').get_json()['data']
+    assert detalhe['nome'] == 'Financiamento Corrigido'
+    assert detalhe['produto'] == 'Habitacional'
+    assert detalhe['sistema_amortizacao'] == 'PRICE'
+    assert detalhe['valor_financiado'] == 250000.0
+    assert detalhe['prazo_total_meses'] == 36
+    assert detalhe['taxa_juros_nominal_anual'] == 8.25
+    assert detalhe['indexador_saldo'] == 'IPCA'
+    assert detalhe['data_contrato'] == '2024-05-05'
+    assert detalhe['data_primeira_parcela'] == '2024-06-05'
+    assert detalhe['valor_seguro_mensal'] == 150.0
+    assert detalhe['taxa_administracao_fixa'] == 10.0
+    assert detalhe['total_parcelas'] == 36
+    assert detalhe['parcelas'][0]['data_vencimento'] == '2024-06-05'
+    assert detalhe['parcelas'][0]['status'] == 'pendente'
+
+
 def test_registrar_pagamento_mantem_status_da_parcela(client):
     criado = _criar_financiamento(client)
     parcela = FinanciamentoParcela.query.filter_by(financiamento_id=criado['id']).order_by(
@@ -160,6 +203,86 @@ def test_registrar_pagamento_mantem_status_da_parcela(client):
     assert body['success'] is True
     db.session.refresh(parcela)
     assert parcela.status == 'pago'
+
+
+def test_edicao_estrutural_com_parcela_paga_bloqueia_sem_alteracao_parcial(client):
+    criado = _criar_financiamento(client)
+    parcela = FinanciamentoParcela.query.filter_by(financiamento_id=criado['id']).order_by(
+        FinanciamentoParcela.numero_parcela
+    ).first()
+
+    pagamento = client.post(
+        f'/api/financiamentos/parcelas/{parcela.id}/pagar',
+        json={
+            'valor_pago': float(parcela.valor_previsto_total),
+            'data_pagamento': '2026-06-01',
+        },
+    )
+    assert pagamento.status_code == 200
+
+    response = client.put(
+        f'/api/financiamentos/{criado["id"]}',
+        json={
+            'nome': 'Tentativa bloqueada',
+            'produto': 'SFH',
+            'sistema_amortizacao': 'PRICE',
+            'valor_financiado': 250000.0,
+            'prazo_total_meses': 120,
+            'taxa_juros_nominal_anual': 7.5,
+            'indexador_saldo': 'IPCA',
+            'data_contrato': '2024-05-05',
+            'data_primeira_parcela': '2024-06-05',
+            'seguro_tipo': 'fixo',
+            'valor_seguro_mensal': 150.0,
+            'taxa_administracao_fixa': 10.0,
+            'ativo': True,
+            'regenerar_cronograma': True,
+        },
+    )
+    body = response.get_json()
+
+    assert response.status_code == 400
+    assert body['success'] is False
+    assert 'parcelas pagas ou vinculadas a pagamentos' in body['error']
+
+    detalhe = client.get(f'/api/financiamentos/{criado["id"]}').get_json()['data']
+    assert detalhe['nome'] == 'Financiamento UX'
+    assert detalhe['sistema_amortizacao'] == 'SAC'
+    assert detalhe['valor_financiado'] == 350000.0
+    assert detalhe['prazo_total_meses'] == 240
+    assert detalhe['data_contrato'] == '2026-05-01'
+    assert detalhe['data_primeira_parcela'] == '2026-06-01'
+    assert detalhe['total_parcelas'] == 240
+    assert detalhe['parcelas'][0]['status'] == 'pago'
+
+
+def test_regenerar_parcelas_bloqueia_quando_existe_parcela_paga(client):
+    criado = _criar_financiamento(client)
+    parcela = FinanciamentoParcela.query.filter_by(financiamento_id=criado['id']).order_by(
+        FinanciamentoParcela.numero_parcela
+    ).first()
+
+    pagamento = client.post(
+        f'/api/financiamentos/parcelas/{parcela.id}/pagar',
+        json={
+            'valor_pago': float(parcela.valor_previsto_total),
+            'data_pagamento': '2026-06-01',
+        },
+    )
+    assert pagamento.status_code == 200
+
+    response = client.post(f'/api/financiamentos/{criado["id"]}/regenerar-parcelas', json={})
+    body = response.get_json()
+
+    assert response.status_code == 400
+    assert body['success'] is False
+    assert 'parcelas pagas ou vinculadas a pagamentos' in body['error']
+
+    parcelas = FinanciamentoParcela.query.filter_by(financiamento_id=criado['id']).order_by(
+        FinanciamentoParcela.numero_parcela
+    ).all()
+    assert len(parcelas) == 240
+    assert parcelas[0].status == 'pago'
 
 
 def test_amortizacao_existente_retorna_estrutura_sem_alterar_formula(client):
@@ -201,3 +324,25 @@ def test_template_nao_depende_de_modal_antigo_para_cadastro(client):
     assert 'fin-form-view' in html
     assert 'modal-financiamento' not in html
     assert 'modal-detalhes' not in html
+
+
+def test_frontend_payload_de_financiamento_envia_campos_estruturais_e_flag_cronograma():
+    base_dir = Path(__file__).resolve().parents[1]
+    js = (base_dir / 'frontend' / 'static' / 'js' / 'financiamentos.js').read_text(encoding='utf-8')
+    trecho = js[js.index('function coletarDadosFormulario'):js.index('async function verDetalhes')]
+
+    for campo in [
+        'data_contrato',
+        'data_primeira_parcela',
+        'prazo_total_meses',
+        'taxa_juros_nominal_anual',
+        'valor_financiado',
+        'sistema_amortizacao',
+        'indexador_saldo',
+        'valor_seguro_mensal',
+        'taxa_administracao_fixa',
+        'regenerar_cronograma',
+    ]:
+        assert campo in trecho
+
+    assert 'ajustarDataPrimeiraPorDia' in trecho

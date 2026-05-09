@@ -33,6 +33,21 @@ class FinanciamentoService:
     Serviço para gerenciamento completo de financiamentos
     """
 
+    STATUS_PARCELA_EXECUTADA = {
+        'pago', 'paga',
+        'baixado', 'baixada',
+        'realizado', 'realizada',
+        'conciliado', 'conciliada',
+        'amortizado', 'amortizada',
+    }
+
+    STATUS_CONTA_EXECUTADA = {
+        'pago', 'paga',
+        'baixado', 'baixada',
+        'realizado', 'realizada',
+        'conciliado', 'conciliada',
+    }
+
     # ========================================================================
     # CRUD DE FINANCIAMENTOS
     # ========================================================================
@@ -293,18 +308,106 @@ class FinanciamentoService:
         Returns:
             bool: True se há histórico alterado, False caso contrário
         """
-        # 1) Verificar se há parcelas pagas
-        existe_pago = FinanciamentoParcela.query.filter_by(
-            financiamento_id=financiamento_id,
-            status='pago'
-        ).first() is not None
+        return FinanciamentoService.financiamento_possui_execucao_financeira(financiamento_id)
 
-        # 2) Verificar se há amortizações extraordinárias
-        existe_amortizacao = FinanciamentoAmortizacaoExtra.query.filter_by(
+    @staticmethod
+    def financiamento_possui_execucao_financeira(financiamento_id):
+        """
+        Verifica se existe qualquer evidência de execução financeira.
+
+        Quando retorna True, dados estruturais e regeneração completa do
+        cronograma devem ser bloqueados para preservar histórico.
+        """
+        parcela_executada = FinanciamentoParcela.query.filter(
+            FinanciamentoParcela.financiamento_id == financiamento_id,
+            func.lower(FinanciamentoParcela.status).in_(tuple(FinanciamentoService.STATUS_PARCELA_EXECUTADA))
+        ).first()
+        if parcela_executada:
+            return True
+
+        conta_executada = Conta.query.join(
+            FinanciamentoParcela,
+            Conta.financiamento_parcela_id == FinanciamentoParcela.id
+        ).filter(
+            FinanciamentoParcela.financiamento_id == financiamento_id,
+            db.or_(
+                func.lower(Conta.status_pagamento).in_(tuple(FinanciamentoService.STATUS_CONTA_EXECUTADA)),
+                Conta.data_pagamento.isnot(None)
+            )
+        ).first()
+        if conta_executada:
+            return True
+
+        amortizacao = FinanciamentoAmortizacaoExtra.query.filter_by(
             financiamento_id=financiamento_id
-        ).first() is not None
+        ).first()
+        if amortizacao:
+            return True
 
-        return existe_pago or existe_amortizacao
+        try:
+            from backend.models import MovimentoFinanceiro
+        except ImportError:
+            from models import MovimentoFinanceiro
+
+        movimento = db.session.query(MovimentoFinanceiro.id).join(
+            Conta,
+            MovimentoFinanceiro.conta_id == Conta.id
+        ).join(
+            FinanciamentoParcela,
+            Conta.financiamento_parcela_id == FinanciamentoParcela.id
+        ).filter(
+            FinanciamentoParcela.financiamento_id == financiamento_id
+        ).first()
+
+        return movimento is not None
+
+    @staticmethod
+    def validar_cronograma_regeneravel(financiamento_id):
+        if FinanciamentoService.financiamento_possui_execucao_financeira(financiamento_id):
+            raise ValueError(
+                'Não é possível alterar dados estruturais do financiamento porque já existem '
+                'parcelas pagas ou vinculadas a pagamentos.'
+            )
+
+    @staticmethod
+    def _converter_data_iso(valor, campo):
+        if isinstance(valor, str):
+            try:
+                return datetime.strptime(valor, '%Y-%m-%d').date()
+            except ValueError as exc:
+                raise ValueError(f'{campo} deve estar no formato YYYY-MM-DD') from exc
+        return valor
+
+    @staticmethod
+    def _valor_estrutural_alterado(atual, novo):
+        if isinstance(novo, Decimal):
+            return Decimal(str(atual or 0)) != novo
+        return atual != novo
+
+    @staticmethod
+    def _reconfigurar_vigencia_inicial_sem_execucao(financiamento):
+        """
+        Em reconfiguração sem histórico financeiro, recria uma vigência inicial
+        coerente com a nova primeira parcela para permitir regenerar o cronograma.
+        """
+        try:
+            from backend.models import FinanciamentoSeguroVigencia
+            from backend.services.seguro_vigencia_service import SeguroVigenciaService
+        except ImportError:
+            from models import FinanciamentoSeguroVigencia
+            from services.seguro_vigencia_service import SeguroVigenciaService
+
+        FinanciamentoSeguroVigencia.query.filter_by(
+            financiamento_id=financiamento.id
+        ).delete(synchronize_session=False)
+
+        SeguroVigenciaService.criar_vigencia(
+            financiamento_id=financiamento.id,
+            competencia_inicio=financiamento.data_primeira_parcela.replace(day=1),
+            valor_mensal=Decimal(str(financiamento.valor_seguro_mensal or 0)),
+            saldo_devedor_vigencia=financiamento.saldo_devedor_atual or financiamento.valor_financiado,
+            observacoes='Vigência inicial regenerada na edição do financiamento sem parcelas pagas.'
+        )
 
     @staticmethod
     def listar_financiamentos(ativo=None):
@@ -340,7 +443,82 @@ class FinanciamentoService:
         """
         financiamento = FinanciamentoService.obter_financiamento_no_perfil(financiamento_id)
 
-        # Atualizar campos permitidos
+        valores_estruturais = {}
+
+        if 'sistema_amortizacao' in dados:
+            sistema = dados['sistema_amortizacao']
+            if sistema not in ['SAC', 'PRICE', 'SIMPLES']:
+                raise ValueError('Sistema de amortização deve ser SAC, PRICE ou SIMPLES')
+            valores_estruturais['sistema_amortizacao'] = sistema
+
+        if 'valor_financiado' in dados:
+            valor_financiado = Decimal(str(dados['valor_financiado']))
+            if valor_financiado <= 0:
+                raise ValueError('Valor financiado deve ser maior que zero')
+            valores_estruturais['valor_financiado'] = valor_financiado
+
+        if 'prazo_total_meses' in dados:
+            prazo = int(dados['prazo_total_meses'])
+            if prazo <= 0:
+                raise ValueError('Prazo total deve ser maior que zero')
+            valores_estruturais['prazo_total_meses'] = prazo
+
+        if 'taxa_juros_nominal_anual' in dados:
+            taxa_anual = Decimal(str(dados['taxa_juros_nominal_anual']))
+            if taxa_anual < 0:
+                raise ValueError('Taxa de juros não pode ser negativa')
+            valores_estruturais['taxa_juros_nominal_anual'] = taxa_anual
+            valores_estruturais['taxa_juros_mensal'] = FinanciamentoService._calcular_taxa_mensal(taxa_anual)
+
+        if 'indexador_saldo' in dados:
+            valores_estruturais['indexador_saldo'] = dados.get('indexador_saldo') or None
+
+        if 'data_contrato' in dados:
+            valores_estruturais['data_contrato'] = FinanciamentoService._converter_data_iso(
+                dados['data_contrato'],
+                'data_contrato'
+            )
+
+        if 'data_primeira_parcela' in dados:
+            valores_estruturais['data_primeira_parcela'] = FinanciamentoService._converter_data_iso(
+                dados['data_primeira_parcela'],
+                'data_primeira_parcela'
+            )
+
+        if 'seguro_tipo' in dados:
+            if dados['seguro_tipo'] not in ['fixo', 'percentual_saldo']:
+                raise ValueError('seguro_tipo deve ser "fixo" ou "percentual_saldo"')
+            valores_estruturais['seguro_tipo'] = dados['seguro_tipo']
+
+        if 'seguro_percentual' in dados and dados['seguro_percentual'] is not None:
+            seguro_percentual = Decimal(str(dados['seguro_percentual']))
+            if seguro_percentual < 0:
+                raise ValueError('seguro_percentual não pode ser negativo')
+            valores_estruturais['seguro_percentual'] = seguro_percentual
+
+        if 'valor_seguro_mensal' in dados:
+            valor_seguro = Decimal(str(dados['valor_seguro_mensal']))
+            if valor_seguro < 0:
+                raise ValueError('valor_seguro_mensal não pode ser negativo')
+            valores_estruturais['valor_seguro_mensal'] = valor_seguro
+
+        if 'taxa_administracao_fixa' in dados:
+            taxa_adm = Decimal(str(dados['taxa_administracao_fixa']))
+            if taxa_adm < 0:
+                raise ValueError('taxa_administracao_fixa não pode ser negativa')
+            valores_estruturais['taxa_administracao_fixa'] = taxa_adm
+
+        campos_alterados = [
+            campo for campo, valor in valores_estruturais.items()
+            if campo != 'taxa_juros_mensal'
+            and FinanciamentoService._valor_estrutural_alterado(getattr(financiamento, campo), valor)
+        ]
+        houve_mudanca_estrutural = bool(campos_alterados)
+
+        if houve_mudanca_estrutural:
+            FinanciamentoService.validar_cronograma_regeneravel(financiamento.id)
+
+        # Atualizar campos não estruturais permitidos
         if 'nome' in dados:
             financiamento.nome = dados['nome']
         if 'produto' in dados:
@@ -350,17 +528,20 @@ class FinanciamentoService:
         if 'item_despesa_id' in dados:
             financiamento.item_despesa_id = dados['item_despesa_id']
 
-        # Atualizar configurações de seguro
-        if 'seguro_tipo' in dados:
-            financiamento.seguro_tipo = dados['seguro_tipo']
-        if 'seguro_percentual' in dados:
-            financiamento.seguro_percentual = Decimal(str(dados['seguro_percentual']))
-        if 'valor_seguro_mensal' in dados:
-            financiamento.valor_seguro_mensal = Decimal(str(dados['valor_seguro_mensal']))
+        for campo, valor in valores_estruturais.items():
+            setattr(financiamento, campo, valor)
 
-        # Atualizar taxa de administração
-        if 'taxa_administracao_fixa' in dados:
-            financiamento.taxa_administracao_fixa = Decimal(str(dados['taxa_administracao_fixa']))
+        if houve_mudanca_estrutural:
+            financiamento.prazo_remanescente_meses = financiamento.prazo_total_meses
+            financiamento.saldo_devedor_atual = financiamento.valor_financiado
+            financiamento.numero_parcela_base = 0
+            financiamento.data_base = financiamento.data_primeira_parcela
+            financiamento.regime_pos_amortizacao = None
+            financiamento.amortizacao_mensal_atual = None
+            if financiamento.sistema_amortizacao == 'SAC':
+                financiamento.amortizacao_mensal_atual = (
+                    financiamento.valor_financiado / Decimal(str(financiamento.prazo_total_meses))
+                )
 
         # Criar novas vigências de seguro (se fornecidas)
         # IMPORTANTE: Nunca editar vigências existentes, sempre criar novas
@@ -377,8 +558,9 @@ class FinanciamentoService:
 
                     # Limpar e normalizar a string de data
                     # Remover sufixos como "-01", "-1", etc que vêm do frontend
-                    if '-' in competencia_inicio_str:
-                        competencia_inicio_str = competencia_inicio_str.split('-')[0]
+                    if '-' in competencia_inicio_str and len(competencia_inicio_str) > 7:
+                        parts = competencia_inicio_str.split('-')
+                        competencia_inicio_str = f"{parts[0]}-{parts[1]}"
 
                     competencia_inicio = None
 
@@ -438,18 +620,24 @@ class FinanciamentoService:
         # ========================================================================
         # DECISÃO DE RECÁLCULO: Separar mudanças estruturais de encargos acessórios
         # ========================================================================
-        # Mudanças estruturais afetam saldo/amortização/juros → recálculo completo
-        campos_estruturais = ['taxa_administracao_fixa']  # Campos que afetam estrutura
-
-        # Mudanças de seguro são apenas encargo acessório → recálculo seguro-only
         houve_mudanca_seguro = 'vigencias_seguro' in dados and dados['vigencias_seguro']
-        houve_mudanca_estrutural = any(campo in dados for campo in campos_estruturais)
+        parcelas_existentes = FinanciamentoParcela.query.filter_by(
+            financiamento_id=financiamento.id
+        ).count()
+        regenerar_cronograma = dados.get('regenerar_cronograma', True)
+        deve_regenerar_cronograma = (
+            houve_mudanca_estrutural
+            and (regenerar_cronograma or parcelas_existentes > 0)
+        )
 
-        db.session.commit()
+        db.session.flush()
 
-        # Recalcular baseado no tipo de mudança
-        if houve_mudanca_seguro and not houve_mudanca_estrutural:
-            # ✅ NOVA VIGÊNCIA → Recálculo SEGURO-ONLY (NÃO toca em saldo/amortização)
+        if deve_regenerar_cronograma:
+            FinanciamentoService._reconfigurar_vigencia_inicial_sem_execucao(financiamento)
+            db.session.flush()
+            FinanciamentoService.gerar_parcelas(financiamento)
+        elif houve_mudanca_seguro:
+            # Nova vigência → recálculo seguro-only (não toca em saldo/amortização).
             primeira_vigencia = dados['vigencias_seguro'][0]
             competencia_inicio = primeira_vigencia['competencia_inicio']
 
@@ -465,28 +653,8 @@ class FinanciamentoService:
                 financiamento.id,
                 a_partir_de=competencia_inicio
             )
-        elif houve_mudanca_estrutural:
-            # ========================================================================
-            # TRAVA DE SOBERANIA: Bloquear recálculo estrutural se há histórico
-            # ========================================================================
-            # Recálculo estrutural (recalcular_parcelas_futuras) SOBRESCREVE:
-            # - Amortização (recalcula saldo / parcelas)
-            # - Juros (recalcula sobre novo saldo)
-            # - Saldo projetado
-            #
-            # Se já houve amortização extra OU parcela paga, o histórico é IMUTÁVEL.
-            # Permitir recálculo estrutural destruiria esses eventos.
-            force_recalculo = dados.get('force_recalculo', False)
-
-            if FinanciamentoService.financiamento_tem_historico_alterado(financiamento.id) and not force_recalculo:
-                raise ValueError(
-                    'RECALCULO_BLOQUEADO: Este financiamento possui histórico (parcelas pagas e/ou '
-                    'amortização extraordinária). Recalcular estruturalmente pode desfazer alterações. '
-                    'Para forçar, envie force_recalculo=true no payload.'
-                )
-
-            # ❗ MUDANÇA ESTRUTURAL → Recálculo completo (só se não bloqueado)
-            FinanciamentoService.recalcular_parcelas_futuras(financiamento.id)
+        else:
+            db.session.commit()
 
         return financiamento
 
@@ -544,24 +712,7 @@ class FinanciamentoService:
         Returns:
             bool: True se pode excluir, False caso contrário
         """
-        # Verificar se existe alguma parcela paga
-        parcelas_pagas = FinanciamentoParcela.query.filter_by(
-            financiamento_id=financiamento_id,
-            status='pago'
-        ).count()
-
-        if parcelas_pagas > 0:
-            return False
-
-        # Verificar se existe alguma amortização extraordinária
-        amortizacoes = FinanciamentoAmortizacaoExtra.query.filter_by(
-            financiamento_id=financiamento_id
-        ).count()
-
-        if amortizacoes > 0:
-            return False
-
-        return True
+        return not FinanciamentoService.financiamento_possui_execucao_financeira(financiamento_id)
 
     @staticmethod
     def excluir_financiamento(financiamento_id: int):
@@ -854,6 +1005,9 @@ class FinanciamentoService:
         Args:
             financiamento (Financiamento): Objeto do financiamento com todas configurações
         """
+        if FinanciamentoParcela.query.filter_by(financiamento_id=financiamento.id).count() > 0:
+            FinanciamentoService.validar_cronograma_regeneravel(financiamento.id)
+
         parcelas_existentes = FinanciamentoParcela.query.filter_by(financiamento_id=financiamento.id).all()
         ids_antigos = [p.id for p in parcelas_existentes]
         if ids_antigos:
