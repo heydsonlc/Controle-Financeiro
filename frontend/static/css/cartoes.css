@@ -1023,13 +1023,6 @@
     color: #0f172a;
 }
 
-.fatura-lancamento-desc small {
-    color: #94a3b8;
-    font-size: 11px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
 
 .fatura-lancamento-cell {
     font-size: 12px;

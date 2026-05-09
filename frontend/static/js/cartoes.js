@@ -571,7 +571,6 @@ function renderizarLancamentosFatura(cartao) {
                         <div class="fatura-lancamento-row ${lancamento.status_classificacao !== 'classificado' ? 'needs-review' : ''}">
                             <div class="fatura-lancamento-desc">
                                 <strong>${escapeHtml(lancamento.descricao)}</strong>
-                                <small>${escapeHtml(lancamento.origem || '-')}</small>
                             </div>
                             <span class="fatura-lancamento-cell">${escapeHtml(lancamento.data || '-')}</span>
                             <span class="fatura-lancamento-cell">${escapeHtml(lancamento.categoria_nome || '—')}</span>
