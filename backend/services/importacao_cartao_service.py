@@ -515,14 +515,20 @@ class ImportacaoCartaoService:
         motivos = []
         assinatura_linha = linha_match['assinatura']
         assinatura_candidato = candidato['assinatura']
+        try:
+            mesmo_cartao = int(linha_match['cartao_id']) == int(candidato.get('cartao_id') or 0)
+        except (TypeError, ValueError):
+            mesmo_cartao = False
+
+        if not mesmo_cartao:
+            return 0, ['cartao divergente']
 
         if ImportacaoCartaoService._valores_proximos(linha_match['valor'], candidato['valor']):
             score += 50
             motivos.append('valor igual/proximo')
 
-        if int(linha_match['cartao_id']) == int(candidato.get('cartao_id') or 0):
-            score += 20
-            motivos.append('mesmo cartao')
+        score += 20
+        motivos.append('mesmo cartao')
 
         keywords_linha = set(assinatura_linha.get('keywords') or [])
         keywords_candidato = set(assinatura_candidato.get('keywords') or [])
@@ -639,9 +645,14 @@ class ImportacaoCartaoService:
     @staticmethod
     def reconhecer_linhas_flexivel(linhas, cartao_id, competencia):
         reconhecimentos = []
+        try:
+            cartao_id_operacional = int(cartao_id)
+        except (TypeError, ValueError):
+            return reconhecimentos
+
         for idx, linha in enumerate(linhas, start=1):
             try:
-                linha_match = ImportacaoCartaoService._montar_linha_match(linha, cartao_id, competencia)
+                linha_match = ImportacaoCartaoService._montar_linha_match(linha, cartao_id_operacional, competencia)
             except (InvalidOperation, ValueError, TypeError):
                 continue
 
@@ -651,6 +662,7 @@ class ImportacaoCartaoService:
 
             lancamentos = LancamentoAgregado.query.filter(
                 PerfilFinanceiroService.condicao_perfil(LancamentoAgregado),
+                LancamentoAgregado.cartao_id == cartao_id_operacional,
                 LancamentoAgregado.valor >= valor_min,
                 LancamentoAgregado.valor <= valor_max,
             ).order_by(LancamentoAgregado.id.desc()).limit(200).all()
@@ -659,6 +671,7 @@ class ImportacaoCartaoService:
                 PerfilFinanceiroService.condicao_perfil(ItemDespesa),
                 ItemDespesa.recorrente == True,  # noqa: E712
                 ItemDespesa.ativo == True,  # noqa: E712
+                ItemDespesa.cartao_id == cartao_id_operacional,
                 or_(ItemDespesa.tipo.is_(None), ItemDespesa.tipo != 'Agregador'),
             ).all()
 
@@ -684,7 +697,7 @@ class ImportacaoCartaoService:
                     tipo = 'recorrencia'
                 if (
                     candidato.get('mes_fatura') == competencia
-                    and int(candidato.get('cartao_id') or 0) == int(cartao_id)
+                    and int(candidato.get('cartao_id') or 0) == cartao_id_operacional
                     and score >= 80
                     and fornecedor_compativel
                 ):

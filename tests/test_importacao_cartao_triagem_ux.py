@@ -312,6 +312,21 @@ def test_alias_historico_sem_migration_e_com_conflito_para_revisao():
     assert "tipo: reconhecimento?.tipo_sugerido === 'recorrencia'" in js
 
 
+def test_reconhecimento_operacional_exige_mesmo_cartao():
+    service = SERVICE_PATH.read_text(encoding='utf-8')
+    scoring = _trecho(service, 'def _score_candidato_match', 'def _montar_linha_match')
+    reconhecimento = _trecho(service, 'def reconhecer_linhas_flexivel', 'def vincular_linha_recorrencia')
+
+    assert 'cartao_id_operacional = int(cartao_id)' in reconhecimento
+    assert 'LancamentoAgregado.cartao_id == cartao_id_operacional' in reconhecimento
+    assert 'ItemDespesa.cartao_id == cartao_id_operacional' in reconhecimento
+    assert "return 0, ['cartao divergente']" in scoring
+    assert 'score += 20' in scoring
+    assert "motivos.append('mesmo cartao')" in scoring
+    assert "tipo = 'duplicado_atual'" in reconhecimento
+    assert "int(candidato.get('cartao_id') or 0) == cartao_id_operacional" in reconhecimento
+
+
 def test_alias_nao_cria_tabela_ou_migration():
     service = SERVICE_PATH.read_text(encoding='utf-8')
 
