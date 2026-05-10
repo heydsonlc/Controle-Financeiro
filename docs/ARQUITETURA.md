@@ -116,6 +116,7 @@ saldo_atual = saldo_inicial + sum(créditos) - sum(débitos)
 | Entidade | Papel |
 |----------|-------|
 | `FinanciamentoSeguroFaixaMip` | Faixas etárias e fatores MIP por financiamento |
+| `IndiceTRMensal` | TR mensal em fator decimal para cronogramas SAC corrigidos pela TR |
 
 ### Cálculo
 
@@ -123,13 +124,13 @@ Serviço `financiamento_service.py` implementa SAC, PRICE, SIMPLES e CAIXA SAC/T
 
 **Helper central de seguro**: único ponto de cálculo de seguro, usado por geração de cronograma, amortização extraordinária, ajuste de saldo e recálculo de parcelas. Garante consistência entre todos os fluxos.
 
-**Modo CAIXA SAC/TR (opt-in)**: TR aplicada ao saldo antes do cálculo de amortização e juros. TR ausente para a competência bloqueia a geração com erro explícito.
+**SAC com correção pela TR**: quando o financiamento usa SAC e indexador TR, o motor específico aplica taxa nominal/12, TR mensal no saldo e quota de amortização corrigida pela TR. TR ausente para a competência bloqueia a geração com erro explícito.
 
 ---
 
 ## Módulo 4: Indexadores Econômicos
 
-Tabela `indexador_mensal` com histórico de índices (TR, IPCA, IGP-M, CDI, SELIC).
+Tabela `indexador_mensal` com histórico geral de índices (TR, IPCA, IGP-M, CDI, SELIC) e tabela `indice_tr_mensal` com a TR mensal em fator decimal usada pelo motor SAC/TR.
 
 - 419 registros históricos de TR (1991–2025)
 - Interface: `/indexadores`, API: `/api/indexadores`

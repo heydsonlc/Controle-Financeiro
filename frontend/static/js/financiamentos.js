@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function configurarEventosFormulario() {
-    ['fin-valor', 'fin-entrada', 'fin-saldo-inicial', 'fin-prazo', 'fin-taxa', 'fin-seguro', 'fin-taxa-adm', 'fin-data-primeira', 'fin-seguro-fator-dfi', 'fin-seguro-data-nascimento', 'fin-seguro-mes-reajuste'].forEach((id) => {
+    ['fin-valor', 'fin-entrada', 'fin-saldo-inicial', 'fin-prazo', 'fin-taxa', 'fin-seguro', 'fin-taxa-adm', 'fin-indexador', 'fin-data-primeira', 'fin-seguro-fator-dfi', 'fin-seguro-dfi-base', 'fin-seguro-data-nascimento', 'fin-seguro-mes-reajuste'].forEach((id) => {
         const campo = document.getElementById(id);
         if (campo) {
             campo.addEventListener('input', () => {
@@ -39,7 +39,7 @@ function configurarEventosFormulario() {
                 }
                 atualizarResumoSimulacao();
             });
-            if (['fin-valor', 'fin-entrada', 'fin-saldo-inicial', 'fin-seguro', 'fin-taxa-adm'].includes(id)) {
+            if (['fin-valor', 'fin-entrada', 'fin-saldo-inicial', 'fin-seguro', 'fin-taxa-adm', 'fin-seguro-dfi-base'].includes(id)) {
                 campo.addEventListener('blur', () => formatarCampoMoeda(campo));
             }
         }
@@ -311,6 +311,7 @@ function limparFormulario() {
     setValue('fin-seguro', '');
     setValue('fin-seguro-modo', 'fixo');
     setValue('fin-seguro-fator-dfi', '0,0489');
+    setValue('fin-seguro-dfi-base', '');
     setValue('fin-seguro-data-nascimento', '');
     setValue('fin-seguro-mes-reajuste', '2');
     renderizarFaixasMip();
@@ -484,9 +485,13 @@ function coletarDadosFormulario(editando) {
     const sistemaVisualSelecionado = document.getElementById('fin-sistema')?.value || 'SAC';
     const produto = document.getElementById('fin-produto')?.value || 'Habitacional';
     const saldoInicial = parseMoeda(document.getElementById('fin-saldo-inicial')?.value);
+    const sistemaMotor = sistemaVisualSelecionado === 'SFH' ? 'SAC' : sistemaVisualSelecionado;
+    const indexadorSelecionado = document.getElementById('fin-indexador')?.value || null;
+    const modoCalculo = sistemaMotor === 'SAC' && indexadorSelecionado === 'TR' ? 'caixa_sac_tr' : 'padrao';
     const seguroModo = document.getElementById('fin-seguro-modo')?.value || 'fixo';
     const seguro = parseMoeda(document.getElementById('fin-seguro')?.value);
     const seguroFatorDfi = parseNumero(document.getElementById('fin-seguro-fator-dfi')?.value);
+    const seguroDfiBase = parseMoeda(document.getElementById('fin-seguro-dfi-base')?.value);
     const seguroDataNascimento = document.getElementById('fin-seguro-data-nascimento')?.value || null;
     const seguroMesReajuste = Number(document.getElementById('fin-seguro-mes-reajuste')?.value || 2);
     const dataPrimeira = ajustarDataPrimeiraPorDia(
@@ -507,17 +512,20 @@ function coletarDadosFormulario(editando) {
     const dados = {
         nome,
         produto: sistemaVisualSelecionado === 'SFH' ? 'SFH' : produto,
-        sistema_amortizacao: sistemaVisualSelecionado === 'SFH' ? 'SAC' : sistemaVisualSelecionado,
+        sistema_amortizacao: sistemaMotor,
+        modo_calculo_financiamento: modoCalculo,
+        modo_taxa_mensal: modoCalculo === 'caixa_sac_tr' ? 'nominal_dividida_12' : 'efetiva_equivalente',
         valor_financiado: saldoInicial,
         prazo_total_meses: Number(document.getElementById('fin-prazo')?.value || 0),
         taxa_juros_nominal_anual: parseNumero(document.getElementById('fin-taxa')?.value),
-        indexador_saldo: document.getElementById('fin-indexador')?.value || null,
+        indexador_saldo: indexadorSelecionado,
         data_contrato: document.getElementById('fin-data-contrato')?.value,
         data_primeira_parcela: dataPrimeira,
         seguro_tipo: 'fixo',
         valor_seguro_mensal: seguroModo === 'fixo' ? seguro : 0,
         seguro_modo: seguroModo,
         seguro_fator_dfi: seguroModo === 'estimado_dfi_mip' ? seguroFatorDfi : null,
+        seguro_dfi_base: seguroModo === 'estimado_dfi_mip' && seguroDfiBase > 0 ? seguroDfiBase : null,
         seguro_data_nascimento_titular: seguroModo === 'estimado_dfi_mip' ? seguroDataNascimento : null,
         seguro_mes_reajuste_idade: seguroModo === 'estimado_dfi_mip' ? seguroMesReajuste : 2,
         taxa_administracao_fixa: parseMoeda(document.getElementById('fin-taxa-adm')?.value),
@@ -811,6 +819,7 @@ async function editarFinanciamento(id) {
         setValue('fin-seguro-modo', financiamento.seguro_modo || 'fixo');
         setValue('fin-seguro', formatarMoedaSemSimbolo(financiamento.valor_seguro_mensal));
         setValue('fin-seguro-fator-dfi', financiamento.seguro_fator_dfi ? formatarFatorSeguro(financiamento.seguro_fator_dfi) : '0,0489');
+        setValue('fin-seguro-dfi-base', financiamento.seguro_dfi_base ? formatarMoedaSemSimbolo(financiamento.seguro_dfi_base) : '');
         setValue('fin-seguro-data-nascimento', normalizarISODate(financiamento.seguro_data_nascimento_titular));
         setValue('fin-seguro-mes-reajuste', financiamento.seguro_mes_reajuste_idade || 2);
         renderizarFaixasMip(Array.isArray(financiamento.faixas_mip) && financiamento.faixas_mip.length ? financiamento.faixas_mip : FAIXAS_MIP_PADRAO);
@@ -1317,9 +1326,14 @@ function formatarCampoMoeda(campo) {
     campo.value = valor ? formatarMoedaSemSimbolo(valor) : '';
 }
 
-function calcularTaxaMensal(taxaAnual) {
+function calcularTaxaMensal(taxaAnual, modoCalculo = null) {
     const taxa = Number(taxaAnual || 0) / 100;
     if (taxa <= 0) return 0;
+    if (!modoCalculo) {
+        const sistemaMotor = (document.getElementById('fin-sistema')?.value || 'SAC') === 'SFH' ? 'SAC' : document.getElementById('fin-sistema')?.value || 'SAC';
+        modoCalculo = sistemaMotor === 'SAC' && document.getElementById('fin-indexador')?.value === 'TR' ? 'caixa_sac_tr' : 'padrao';
+    }
+    if (modoCalculo === 'caixa_sac_tr') return taxa / 12;
     return Math.pow(1 + taxa, 1 / 12) - 1;
 }
 

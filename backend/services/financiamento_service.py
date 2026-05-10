@@ -18,13 +18,13 @@ import logging
 
 try:
     from backend.models import (db, Financiamento, FinanciamentoParcela,
-                                FinanciamentoAmortizacaoExtra, IndexadorMensal, Conta,
+                                FinanciamentoAmortizacaoExtra, IndexadorMensal, IndiceTRMensal, Conta,
                                 FinanciamentoSeguroFaixaMip, FinanciamentoAjusteSaldo,
                                 ItemDespesa)
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import (db, Financiamento, FinanciamentoParcela,
-                       FinanciamentoAmortizacaoExtra, IndexadorMensal, Conta,
+                       FinanciamentoAmortizacaoExtra, IndexadorMensal, IndiceTRMensal, Conta,
                        FinanciamentoSeguroFaixaMip, FinanciamentoAjusteSaldo,
                        ItemDespesa)
     from services.perfil_financeiro_service import PerfilFinanceiroService
@@ -57,6 +57,10 @@ class FinanciamentoService:
     SEGURO_MODO_FIXO = 'fixo'
     SEGURO_MODO_ESTIMADO_DFI_MIP = 'estimado_dfi_mip'
     SEGURO_FATOR_DFI_PADRAO = Decimal('0.0489')
+    MODO_CALCULO_PADRAO = 'padrao'
+    MODO_CALCULO_CAIXA_SAC_TR = 'caixa_sac_tr'
+    MODO_TAXA_EFETIVA_EQUIVALENTE = 'efetiva_equivalente'
+    MODO_TAXA_NOMINAL_DIVIDIDA_12 = 'nominal_dividida_12'
     FAIXAS_MIP_PADRAO = [
         {'idade_inicio': 0, 'idade_fim': 45, 'fator_mip': Decimal('0.03187')},
         {'idade_inicio': 46, 'idade_fim': 50, 'fator_mip': Decimal('0.04899')},
@@ -117,6 +121,40 @@ class FinanciamentoService:
     @staticmethod
     def _seguro_modo(financiamento):
         return getattr(financiamento, 'seguro_modo', None) or FinanciamentoService.SEGURO_MODO_FIXO
+
+    @staticmethod
+    def _modo_calculo(financiamento):
+        return getattr(financiamento, 'modo_calculo_financiamento', None) or FinanciamentoService.MODO_CALCULO_PADRAO
+
+    @staticmethod
+    def _modo_caixa_sac_tr(financiamento):
+        return FinanciamentoService._modo_calculo(financiamento) == FinanciamentoService.MODO_CALCULO_CAIXA_SAC_TR
+
+    @staticmethod
+    def _validar_modo_calculo(modo_calculo):
+        modo = modo_calculo or FinanciamentoService.MODO_CALCULO_PADRAO
+        if modo not in [
+            FinanciamentoService.MODO_CALCULO_PADRAO,
+            FinanciamentoService.MODO_CALCULO_CAIXA_SAC_TR,
+        ]:
+            raise ValueError('modo_calculo_financiamento deve ser "padrao" ou "caixa_sac_tr"')
+        return modo
+
+    @staticmethod
+    def _validar_modo_taxa(modo_taxa):
+        modo = modo_taxa or FinanciamentoService.MODO_TAXA_EFETIVA_EQUIVALENTE
+        if modo not in [
+            FinanciamentoService.MODO_TAXA_EFETIVA_EQUIVALENTE,
+            FinanciamentoService.MODO_TAXA_NOMINAL_DIVIDIDA_12,
+        ]:
+            raise ValueError('modo_taxa_mensal deve ser "efetiva_equivalente" ou "nominal_dividida_12"')
+        return modo
+
+    @staticmethod
+    def _modo_taxa_para_calculo(modo_calculo, modo_taxa=None):
+        if modo_calculo == FinanciamentoService.MODO_CALCULO_CAIXA_SAC_TR:
+            return FinanciamentoService.MODO_TAXA_NOMINAL_DIVIDIDA_12
+        return FinanciamentoService._validar_modo_taxa(modo_taxa)
 
     @staticmethod
     def _decimal(valor, campo, permitir_nulo=False):
@@ -244,6 +282,16 @@ class FinanciamentoService:
         )
 
     @staticmethod
+    def _base_dfi_seguro(financiamento, amortizacao_base):
+        if FinanciamentoService._modo_caixa_sac_tr(financiamento):
+            base = getattr(financiamento, 'seguro_dfi_base', None)
+            if base is not None:
+                return Decimal(str(base))
+            if financiamento.valor_financiado and financiamento.prazo_total_meses:
+                return Decimal(str(financiamento.valor_financiado)) / Decimal(str(financiamento.prazo_total_meses))
+        return Decimal(str(amortizacao_base or 0))
+
+    @staticmethod
     def calcular_seguro_habitacional(financiamento, data_vencimento, amortizacao_base, juros_contratuais):
         """
         Calcula o seguro habitacional com uma unica regra central.
@@ -266,7 +314,7 @@ class FinanciamentoService:
                     f'Nenhuma faixa MIP encontrada para idade {idade} na data {data_vencimento.strftime("%Y-%m-%d")}.'
                 )
 
-            dfi = Decimal(str(amortizacao_base or 0)) * Decimal(str(fator_dfi))
+            dfi = FinanciamentoService._base_dfi_seguro(financiamento, amortizacao_base) * Decimal(str(fator_dfi))
             mip = Decimal(str(juros_contratuais or 0)) * Decimal(str(faixa_mip.fator_mip))
             return (dfi + mip).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
@@ -313,6 +361,17 @@ class FinanciamentoService:
         if not dados.get('sistema_amortizacao') or dados['sistema_amortizacao'] not in ['SAC', 'PRICE', 'SIMPLES']:
             raise ValueError('Sistema de amortização deve ser SAC, PRICE ou SIMPLES')
 
+        modo_calculo = FinanciamentoService._validar_modo_calculo(
+            dados.get('modo_calculo_financiamento')
+        )
+        modo_taxa = FinanciamentoService._modo_taxa_para_calculo(
+            modo_calculo,
+            dados.get('modo_taxa_mensal')
+        )
+        if modo_calculo == FinanciamentoService.MODO_CALCULO_CAIXA_SAC_TR:
+            dados['sistema_amortizacao'] = 'SAC'
+            dados['indexador_saldo'] = 'TR'
+
         if not dados.get('valor_financiado') or float(dados['valor_financiado']) <= 0:
             raise ValueError('Valor financiado deve ser maior que zero')
 
@@ -324,7 +383,7 @@ class FinanciamentoService:
 
         # Converter taxas
         taxa_anual = Decimal(str(dados['taxa_juros_nominal_anual']))
-        taxa_mensal = FinanciamentoService._calcular_taxa_mensal(taxa_anual)
+        taxa_mensal = FinanciamentoService._calcular_taxa_mensal_por_modo(taxa_anual, modo_taxa)
 
         # Converter datas
         if isinstance(dados['data_contrato'], str):
@@ -336,6 +395,9 @@ class FinanciamentoService:
             data_primeira_parcela = datetime.strptime(dados['data_primeira_parcela'], '%Y-%m-%d').date()
         else:
             data_primeira_parcela = dados['data_primeira_parcela']
+
+        valor_financiado_decimal = Decimal(str(dados['valor_financiado']))
+        prazo_total_int = int(dados['prazo_total_meses'])
 
         seguro_modo = dados.get('seguro_modo') or FinanciamentoService.SEGURO_MODO_FIXO
         if seguro_modo not in [
@@ -373,6 +435,20 @@ class FinanciamentoService:
         if seguro_mes_reajuste_idade < 1 or seguro_mes_reajuste_idade > 12:
             raise ValueError('seguro_mes_reajuste_idade deve estar entre 1 e 12')
 
+        seguro_dfi_base = FinanciamentoService._decimal(
+            dados.get('seguro_dfi_base'),
+            'seguro_dfi_base',
+            permitir_nulo=True
+        )
+        if seguro_dfi_base is not None and seguro_dfi_base < 0:
+            raise ValueError('seguro_dfi_base nao pode ser negativo')
+        if (
+            modo_calculo == FinanciamentoService.MODO_CALCULO_CAIXA_SAC_TR
+            and seguro_dfi_base is None
+            and seguro_modo == FinanciamentoService.SEGURO_MODO_ESTIMADO_DFI_MIP
+        ):
+            seguro_dfi_base = valor_financiado_decimal / Decimal(str(prazo_total_int))
+
         # Se não foi fornecido item_despesa_id, criar automaticamente
         # Conforme CONTRATO: 1 parcela = 1 Conta = 1 linha em DESPESAS
         item_despesa_id = dados.get('item_despesa_id')
@@ -399,13 +475,15 @@ class FinanciamentoService:
             nome=dados['nome'],
             produto=dados.get('produto', ''),
             sistema_amortizacao=dados['sistema_amortizacao'],
-            valor_financiado=Decimal(str(dados['valor_financiado'])),
-            prazo_total_meses=int(dados['prazo_total_meses']),
-            prazo_remanescente_meses=int(dados['prazo_total_meses']),
+            valor_financiado=valor_financiado_decimal,
+            prazo_total_meses=prazo_total_int,
+            prazo_remanescente_meses=prazo_total_int,
             taxa_juros_nominal_anual=taxa_anual,
             taxa_juros_efetiva_anual=Decimal(str(dados.get('taxa_juros_efetiva_anual', 0))) if dados.get('taxa_juros_efetiva_anual') else None,
             taxa_juros_efetiva_relacionamento_anual=Decimal(str(dados.get('taxa_juros_efetiva_relacionamento_anual', 0))) if dados.get('taxa_juros_efetiva_relacionamento_anual') else None,
             taxa_juros_mensal=taxa_mensal,
+            modo_calculo_financiamento=modo_calculo,
+            modo_taxa_mensal=modo_taxa,
             indexador_saldo=dados.get('indexador_saldo'),
             data_contrato=data_contrato,
             data_primeira_parcela=data_primeira_parcela,
@@ -418,6 +496,7 @@ class FinanciamentoService:
             seguro_fator_dfi=seguro_fator_dfi,
             seguro_data_nascimento_titular=seguro_data_nascimento_titular,
             seguro_mes_reajuste_idade=seguro_mes_reajuste_idade,
+            seguro_dfi_base=seguro_dfi_base,
             # Taxa de administração
             taxa_administracao_fixa=Decimal(str(dados.get('taxa_administracao_fixa', 0))),
             ativo=True
@@ -562,6 +641,14 @@ class FinanciamentoService:
         # Fórmula: (1 + taxa_anual)^(1/12) - 1
         taxa_mensal = (Decimal('1') + taxa_anual) ** (Decimal('1') / Decimal('12')) - Decimal('1')
         return taxa_mensal
+
+    @staticmethod
+    def _calcular_taxa_mensal_por_modo(taxa_anual_percentual, modo_taxa):
+        modo = FinanciamentoService._validar_modo_taxa(modo_taxa)
+        taxa_anual = Decimal(str(taxa_anual_percentual)) / Decimal('100')
+        if modo == FinanciamentoService.MODO_TAXA_NOMINAL_DIVIDIDA_12:
+            return taxa_anual / Decimal('12')
+        return FinanciamentoService._calcular_taxa_mensal(Decimal(str(taxa_anual_percentual)))
 
     @staticmethod
     def financiamento_tem_historico_alterado(financiamento_id):
@@ -813,6 +900,26 @@ class FinanciamentoService:
                 raise ValueError('Sistema de amortização deve ser SAC, PRICE ou SIMPLES')
             valores_estruturais['sistema_amortizacao'] = sistema
 
+        if 'modo_calculo_financiamento' in dados:
+            modo_calculo = FinanciamentoService._validar_modo_calculo(
+                dados.get('modo_calculo_financiamento')
+            )
+            valores_estruturais['modo_calculo_financiamento'] = modo_calculo
+            if modo_calculo == FinanciamentoService.MODO_CALCULO_CAIXA_SAC_TR:
+                valores_estruturais['sistema_amortizacao'] = 'SAC'
+                valores_estruturais['indexador_saldo'] = 'TR'
+                valores_estruturais['modo_taxa_mensal'] = FinanciamentoService.MODO_TAXA_NOMINAL_DIVIDIDA_12
+
+        if 'modo_taxa_mensal' in dados:
+            modo_calculo_atual = valores_estruturais.get(
+                'modo_calculo_financiamento',
+                financiamento.modo_calculo_financiamento or FinanciamentoService.MODO_CALCULO_PADRAO
+            )
+            valores_estruturais['modo_taxa_mensal'] = FinanciamentoService._modo_taxa_para_calculo(
+                modo_calculo_atual,
+                dados.get('modo_taxa_mensal')
+            )
+
         if 'valor_financiado' in dados:
             valor_financiado = Decimal(str(dados['valor_financiado']))
             if valor_financiado <= 0:
@@ -830,7 +937,6 @@ class FinanciamentoService:
             if taxa_anual < 0:
                 raise ValueError('Taxa de juros não pode ser negativa')
             valores_estruturais['taxa_juros_nominal_anual'] = taxa_anual
-            valores_estruturais['taxa_juros_mensal'] = FinanciamentoService._calcular_taxa_mensal(taxa_anual)
 
         if 'indexador_saldo' in dados:
             valores_estruturais['indexador_saldo'] = dados.get('indexador_saldo') or None
@@ -899,11 +1005,44 @@ class FinanciamentoService:
                 raise ValueError('seguro_mes_reajuste_idade deve estar entre 1 e 12')
             valores_estruturais['seguro_mes_reajuste_idade'] = seguro_mes_reajuste_idade
 
+        if 'seguro_dfi_base' in dados:
+            seguro_dfi_base = FinanciamentoService._decimal(
+                dados.get('seguro_dfi_base'),
+                'seguro_dfi_base',
+                permitir_nulo=True
+            )
+            if seguro_dfi_base is not None and seguro_dfi_base < 0:
+                raise ValueError('seguro_dfi_base nao pode ser negativo')
+            valores_estruturais['seguro_dfi_base'] = seguro_dfi_base
+
         if 'taxa_administracao_fixa' in dados:
             taxa_adm = Decimal(str(dados['taxa_administracao_fixa']))
             if taxa_adm < 0:
                 raise ValueError('taxa_administracao_fixa não pode ser negativa')
             valores_estruturais['taxa_administracao_fixa'] = taxa_adm
+
+        modo_calculo_resultante = valores_estruturais.get(
+            'modo_calculo_financiamento',
+            financiamento.modo_calculo_financiamento or FinanciamentoService.MODO_CALCULO_PADRAO
+        )
+        modo_taxa_resultante = FinanciamentoService._modo_taxa_para_calculo(
+            modo_calculo_resultante,
+            valores_estruturais.get('modo_taxa_mensal', financiamento.modo_taxa_mensal)
+        )
+        if (
+            'taxa_juros_nominal_anual' in valores_estruturais
+            or 'modo_taxa_mensal' in valores_estruturais
+            or 'modo_calculo_financiamento' in valores_estruturais
+        ):
+            valores_estruturais['modo_taxa_mensal'] = modo_taxa_resultante
+            taxa_base = valores_estruturais.get(
+                'taxa_juros_nominal_anual',
+                financiamento.taxa_juros_nominal_anual
+            )
+            valores_estruturais['taxa_juros_mensal'] = FinanciamentoService._calcular_taxa_mensal_por_modo(
+                taxa_base,
+                modo_taxa_resultante
+            )
 
         faixas_mip = None
         if 'faixas_mip' in dados:
@@ -923,6 +1062,15 @@ class FinanciamentoService:
             )
             if not data_nascimento_resultante:
                 raise ValueError('seguro_data_nascimento_titular e obrigatoria no modo estimado DFI + MIP')
+
+            if (
+                modo_calculo_resultante == FinanciamentoService.MODO_CALCULO_CAIXA_SAC_TR
+                and 'seguro_dfi_base' not in valores_estruturais
+                and financiamento.seguro_dfi_base is None
+            ):
+                valor_base = valores_estruturais.get('valor_financiado', financiamento.valor_financiado)
+                prazo_base = valores_estruturais.get('prazo_total_meses', financiamento.prazo_total_meses)
+                valores_estruturais['seguro_dfi_base'] = Decimal(str(valor_base)) / Decimal(str(prazo_base))
 
         novo_item_despesa_id = None
         houve_mudanca_item_despesa = False
@@ -1269,6 +1417,23 @@ class FinanciamentoService:
         logger.info(f"[RECALC] Sistema: {sistema}")
         logger.info(f"[RECALC] Total de parcelas pendentes: {len(parcelas_pendentes)}")
 
+        if FinanciamentoService._modo_caixa_sac_tr(financiamento):
+            tr_primeira = FinanciamentoService._obter_tr_mensal_decimal(primeira_pendente.data_vencimento)
+            quota_base = (
+                Decimal(str(primeira_pendente.valor_amortizacao)) / (Decimal('1') + tr_primeira)
+                if primeira_pendente.valor_amortizacao
+                else saldo_devedor / Decimal(str(len(parcelas_pendentes)))
+            )
+            FinanciamentoService._atualizar_parcelas_caixa_sac_tr(
+                financiamento,
+                parcelas_pendentes,
+                saldo_devedor,
+                quota_base=quota_base
+            )
+            db.session.commit()
+            logger.info(f"[RECALC] ========== FIM RECALCULO CAIXA SAC/TR - {len(parcelas_pendentes)} parcelas atualizadas ==========")
+            return len(parcelas_pendentes)
+
         # Recalcular cada parcela pendente
         for idx, parcela in enumerate(parcelas_pendentes, 1):
             logger.info(f"[RECALC] --- Recalculando parcela #{parcela.numero_parcela} ({idx}/{len(parcelas_pendentes)}) ---")
@@ -1522,6 +1687,24 @@ class FinanciamentoService:
             db.session.commit()
             return ajuste, 0
 
+        if FinanciamentoService._modo_caixa_sac_tr(financiamento):
+            quota_base = saldo_real / Decimal(str(len(parcelas_alvo)))
+            FinanciamentoService._atualizar_parcelas_caixa_sac_tr(
+                financiamento,
+                parcelas_alvo,
+                saldo_real,
+                quota_base=quota_base
+            )
+            financiamento.saldo_devedor_atual = saldo_real
+            financiamento.data_base = data_referencia
+            financiamento.numero_parcela_base = numero_inicio - 1
+            financiamento.prazo_remanescente_meses = len(parcelas_alvo)
+            if parcelas_alvo:
+                financiamento.amortizacao_mensal_atual = parcelas_alvo[0].valor_amortizacao
+            ajuste.parcelas_recalculadas = len(parcelas_alvo)
+            db.session.commit()
+            return ajuste, len(parcelas_alvo)
+
         saldo_base = saldo_real
         taxa_mensal = financiamento.taxa_juros_mensal
         sistema = financiamento.sistema_amortizacao
@@ -1596,7 +1779,9 @@ class FinanciamentoService:
 
         sistema = financiamento.sistema_amortizacao
 
-        if sistema == 'SAC':
+        if FinanciamentoService._modo_caixa_sac_tr(financiamento):
+            FinanciamentoService._gerar_parcelas_caixa_sac_tr(financiamento)
+        elif sistema == 'SAC':
             FinanciamentoService._gerar_parcelas_sac(financiamento)
         elif sistema == 'PRICE':
             FinanciamentoService._gerar_parcelas_price(financiamento)
@@ -1664,6 +1849,131 @@ class FinanciamentoService:
 
         db.session.flush()
         parcela.conta_id = conta_existente.id
+
+    @staticmethod
+    def _atualizar_parcelas_caixa_sac_tr(financiamento, parcelas, saldo_base, quota_base=None):
+        saldo_devedor = Decimal(str(saldo_base or 0))
+        if not parcelas:
+            return Decimal('0')
+
+        taxa_mensal = FinanciamentoService._calcular_taxa_mensal_por_modo(
+            financiamento.taxa_juros_nominal_anual,
+            FinanciamentoService.MODO_TAXA_NOMINAL_DIVIDIDA_12
+        )
+        quota_amortizacao = (
+            Decimal(str(quota_base))
+            if quota_base is not None
+            else saldo_devedor / Decimal(str(len(parcelas)))
+        )
+
+        for parcela in parcelas:
+            if saldo_devedor <= Decimal('0.01'):
+                parcela.valor_amortizacao = Decimal('0')
+                parcela.valor_juros = Decimal('0')
+                parcela.valor_seguro = Decimal('0')
+                parcela.valor_taxa_adm = parcela.valor_taxa_adm or financiamento.taxa_administracao_fixa or Decimal('0')
+                parcela.valor_previsto_total = parcela.valor_taxa_adm
+                parcela.saldo_devedor_apos_pagamento = Decimal('0')
+                FinanciamentoService._criar_conta_da_parcela(financiamento, parcela)
+                continue
+
+            tr_mes = FinanciamentoService._obter_tr_mensal_decimal(parcela.data_vencimento)
+            quota_amortizacao = quota_amortizacao * (Decimal('1') + tr_mes)
+            saldo_corrigido = saldo_devedor * (Decimal('1') + tr_mes)
+            juros = saldo_corrigido * taxa_mensal
+            amortizacao = quota_amortizacao if quota_amortizacao <= saldo_corrigido else saldo_corrigido
+            valor_seguro = FinanciamentoService.calcular_seguro_habitacional(
+                financiamento,
+                parcela.data_vencimento,
+                amortizacao,
+                juros
+            )
+            valor_taxa_adm = parcela.valor_taxa_adm or financiamento.taxa_administracao_fixa or Decimal('0')
+            saldo_final = saldo_corrigido - amortizacao
+
+            parcela.valor_amortizacao = amortizacao
+            parcela.valor_juros = juros
+            parcela.valor_seguro = valor_seguro
+            parcela.valor_taxa_adm = valor_taxa_adm
+            parcela.valor_atualizacao_monetaria = saldo_corrigido - saldo_devedor
+            parcela.valor_previsto_total = amortizacao + juros + valor_seguro + valor_taxa_adm
+            parcela.saldo_devedor_apos_pagamento = saldo_final if saldo_final > Decimal('0.01') else Decimal('0')
+            FinanciamentoService._criar_conta_da_parcela(financiamento, parcela)
+            saldo_devedor = saldo_final
+
+        return saldo_devedor
+
+    @staticmethod
+    def _gerar_parcelas_caixa_sac_tr(financiamento):
+        valor_financiado = Decimal(str(financiamento.valor_financiado))
+        prazo = int(financiamento.prazo_total_meses)
+        taxa_mensal = FinanciamentoService._calcular_taxa_mensal_por_modo(
+            financiamento.taxa_juros_nominal_anual,
+            FinanciamentoService.MODO_TAXA_NOMINAL_DIVIDIDA_12
+        )
+        quota_amortizacao = valor_financiado / Decimal(str(prazo))
+        saldo_devedor = valor_financiado
+        data_vencimento = financiamento.data_primeira_parcela
+
+        amortizacoes = FinanciamentoAmortizacaoExtra.query.filter_by(
+            financiamento_id=financiamento.id
+        ).order_by(FinanciamentoAmortizacaoExtra.data).all()
+        amortizacoes_aplicadas = set()
+        parcelas_geradas = 0
+
+        for num_parcela in range(1, prazo + 1):
+            for amortizacao_extra in amortizacoes:
+                if (
+                    amortizacao_extra.id not in amortizacoes_aplicadas
+                    and amortizacao_extra.data < data_vencimento
+                    and parcelas_geradas > 0
+                ):
+                    saldo_devedor = max(saldo_devedor - Decimal(str(amortizacao_extra.valor)), Decimal('0'))
+                    parcelas_restantes = prazo - num_parcela + 1
+                    if amortizacao_extra.tipo == 'reduzir_parcela' and parcelas_restantes > 0:
+                        quota_amortizacao = saldo_devedor / Decimal(str(parcelas_restantes))
+                    amortizacoes_aplicadas.add(amortizacao_extra.id)
+
+            if saldo_devedor <= Decimal('0.01'):
+                break
+
+            tr_mes = FinanciamentoService._obter_tr_mensal_decimal(data_vencimento)
+            quota_amortizacao = quota_amortizacao * (Decimal('1') + tr_mes)
+            saldo_corrigido = saldo_devedor * (Decimal('1') + tr_mes)
+            juros = saldo_corrigido * taxa_mensal
+            amortizacao = quota_amortizacao if quota_amortizacao <= saldo_corrigido else saldo_corrigido
+            valor_seguro_parcela = FinanciamentoService.calcular_seguro_habitacional(
+                financiamento,
+                data_vencimento,
+                amortizacao,
+                juros
+            )
+            valor_taxa_adm = financiamento.taxa_administracao_fixa or Decimal('0')
+            valor_previsto_total = amortizacao + juros + valor_seguro_parcela + valor_taxa_adm
+            saldo_apos_pagamento = saldo_corrigido - amortizacao
+
+            parcela = FinanciamentoParcela(
+                perfil_financeiro_id=financiamento.perfil_financeiro_id,
+                financiamento_id=financiamento.id,
+                numero_parcela=num_parcela,
+                data_vencimento=data_vencimento,
+                valor_amortizacao=amortizacao,
+                valor_juros=juros,
+                valor_seguro=valor_seguro_parcela,
+                valor_taxa_adm=valor_taxa_adm,
+                valor_atualizacao_monetaria=saldo_corrigido - saldo_devedor,
+                valor_previsto_total=valor_previsto_total,
+                saldo_devedor_apos_pagamento=saldo_apos_pagamento if saldo_apos_pagamento > Decimal('0.01') else Decimal('0'),
+                status='pendente'
+            )
+
+            db.session.add(parcela)
+            db.session.flush()
+            FinanciamentoService._criar_conta_da_parcela(financiamento, parcela)
+
+            parcelas_geradas += 1
+            saldo_devedor = saldo_apos_pagamento
+            data_vencimento = data_vencimento + relativedelta(months=1)
 
     @staticmethod
     def _gerar_parcelas_sac(financiamento):
@@ -1944,6 +2254,21 @@ class FinanciamentoService:
 
         return indexador.valor if indexador else Decimal('0')
 
+    @staticmethod
+    def _competencia_tr(data_referencia):
+        return f'{data_referencia.year}-{data_referencia.month:02d}'
+
+    @staticmethod
+    def _obter_tr_mensal_decimal(data_referencia):
+        competencia = FinanciamentoService._competencia_tr(data_referencia)
+        indice = IndiceTRMensal.query.filter_by(competencia=competencia).first()
+        if not indice:
+            raise ValueError(
+                f'Nao ha TR cadastrada para a competencia {competencia}. '
+                f'Cadastre o indice para gerar o cronograma CAIXA SAC/TR.'
+            )
+        return Decimal(str(indice.valor_decimal))
+
     # ========================================================================
     # REGISTRO DE PAGAMENTOS
     # ========================================================================
@@ -2129,6 +2454,27 @@ class FinanciamentoService:
         # ========================================================================
         # O saldo JÁ foi atualizado no financiamento.saldo_devedor_atual
         novo_saldo = financiamento.saldo_devedor_atual
+
+        if FinanciamentoService._modo_caixa_sac_tr(financiamento):
+            if tipo == 'reduzir_parcela':
+                quota_base = Decimal(str(novo_saldo)) / Decimal(str(len(parcelas_pendentes)))
+            else:
+                primeira = parcelas_pendentes[0]
+                tr_primeira = FinanciamentoService._obter_tr_mensal_decimal(primeira.data_vencimento)
+                quota_base = (
+                    Decimal(str(primeira.valor_amortizacao)) / (Decimal('1') + tr_primeira)
+                    if primeira.valor_amortizacao
+                    else Decimal(str(novo_saldo)) / Decimal(str(len(parcelas_pendentes)))
+                )
+            FinanciamentoService._atualizar_parcelas_caixa_sac_tr(
+                financiamento,
+                parcelas_pendentes,
+                novo_saldo,
+                quota_base=quota_base
+            )
+            if parcelas_pendentes:
+                financiamento.amortizacao_mensal_atual = parcelas_pendentes[0].valor_amortizacao
+            return
 
         # Taxa de juros mensal
         taxa_anual = financiamento.taxa_juros_nominal_anual / Decimal('100')

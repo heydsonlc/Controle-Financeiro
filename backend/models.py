@@ -1603,6 +1603,8 @@ class Financiamento(db.Model):
     taxa_juros_efetiva_anual = db.Column(db.Numeric(8, 4))
     taxa_juros_efetiva_relacionamento_anual = db.Column(db.Numeric(8, 4))
     taxa_juros_mensal = db.Column(db.Numeric(8, 6), nullable=False)
+    modo_calculo_financiamento = db.Column(db.String(30), default='padrao')
+    modo_taxa_mensal = db.Column(db.String(30), default='efetiva_equivalente')
 
     # Indexador
     indexador_saldo = db.Column(db.String(20))  # TR, IPCA, etc
@@ -1622,6 +1624,7 @@ class Financiamento(db.Model):
     seguro_fator_dfi = db.Column(db.Numeric(10, 5), nullable=True)
     seguro_data_nascimento_titular = db.Column(db.Date, nullable=True)
     seguro_mes_reajuste_idade = db.Column(db.Integer, default=2)
+    seguro_dfi_base = db.Column(db.Numeric(12, 2), nullable=True)
 
     # Taxa de Administração
     taxa_administracao_fixa = db.Column(db.Numeric(10, 2), default=0)  # Valor fixo mensal
@@ -1742,6 +1745,8 @@ class Financiamento(db.Model):
             'taxa_juros_efetiva_anual': float(self.taxa_juros_efetiva_anual) if self.taxa_juros_efetiva_anual else None,
             'taxa_juros_efetiva_relacionamento_anual': float(self.taxa_juros_efetiva_relacionamento_anual) if self.taxa_juros_efetiva_relacionamento_anual else None,
             'taxa_juros_mensal': float(self.taxa_juros_mensal),
+            'modo_calculo_financiamento': self.modo_calculo_financiamento or 'padrao',
+            'modo_taxa_mensal': self.modo_taxa_mensal or 'efetiva_equivalente',
             'indexador_saldo': self.indexador_saldo,
             'data_contrato': self.data_contrato.strftime('%Y-%m-%d'),
             'data_primeira_parcela': self.data_primeira_parcela.strftime('%Y-%m-%d'),
@@ -1753,6 +1758,7 @@ class Financiamento(db.Model):
             'seguro_fator_dfi': float(self.seguro_fator_dfi) if self.seguro_fator_dfi is not None else None,
             'seguro_data_nascimento_titular': self.seguro_data_nascimento_titular.strftime('%Y-%m-%d') if self.seguro_data_nascimento_titular else None,
             'seguro_mes_reajuste_idade': self.seguro_mes_reajuste_idade,
+            'seguro_dfi_base': float(self.seguro_dfi_base) if self.seguro_dfi_base is not None else None,
             'faixas_mip': [faixa.to_dict() for faixa in self.seguro_faixas_mip.all()],
             'taxa_administracao_fixa': float(self.taxa_administracao_fixa) if self.taxa_administracao_fixa else 0,
             'ultimo_ajuste_saldo': ultimo_ajuste_saldo.to_dict() if ultimo_ajuste_saldo else None,
@@ -2092,6 +2098,45 @@ class IndexadorMensal(db.Model):
             'nome': self.nome,
             'data_referencia': self.data_referencia.strftime('%Y-%m-%d'),
             'valor': float(self.valor)
+        }
+
+
+class IndiceTRMensal(db.Model):
+    """
+    TR mensal em fator decimal para contratos CAIXA SAC/TR.
+
+    Exemplo: 0,16% deve ser salvo como 0.0016.
+    """
+    __tablename__ = 'indice_tr_mensal'
+
+    id = db.Column(db.Integer, primary_key=True)
+    ano = db.Column(db.Integer, nullable=False)
+    mes = db.Column(db.Integer, nullable=False)
+    competencia = db.Column(db.String(7), nullable=False)
+    valor_decimal = db.Column(db.Numeric(12, 8), nullable=False)
+    fonte = db.Column(db.String(50), default='BACEN')
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint('competencia', name='uq_indice_tr_mensal_competencia'),
+        db.UniqueConstraint('ano', 'mes', name='uq_indice_tr_mensal_ano_mes'),
+        db.Index('idx_indice_tr_mensal_competencia', 'competencia'),
+    )
+
+    def __repr__(self):
+        return f'<IndiceTRMensal {self.competencia} {self.valor_decimal}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'ano': self.ano,
+            'mes': self.mes,
+            'competencia': self.competencia,
+            'valor_decimal': float(self.valor_decimal),
+            'fonte': self.fonte,
+            'criado_em': self.criado_em.strftime('%Y-%m-%d %H:%M:%S') if self.criado_em else None,
+            'atualizado_em': self.atualizado_em.strftime('%Y-%m-%d %H:%M:%S') if self.atualizado_em else None,
         }
 
 
