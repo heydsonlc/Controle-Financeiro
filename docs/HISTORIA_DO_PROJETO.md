@@ -382,12 +382,61 @@ Sem migrations, sem alterações de models, sem impacto no dashboard. Smoke E2E 
 
 ---
 
+## Fase Financiamentos Avançados + UX Tabular (2026-05)
+
+Consolidação das regras de financiamento e padronização visual da listagem e formulário.
+
+### Financiamentos — Regras e Backend
+
+- Seguro habitacional estimado por DFI + MIP com faixas etárias configuráveis por competência
+- Ajuste de saldo devedor real: preserva histórico, recalcula apenas parcelas futuras, registra auditoria
+- Exclusão segura: bloqueada com execução financeira (parcela paga, conta efetivada, amortização, ajuste)
+- Proteção do vínculo `Financiamento → ItemDespesa → Conta`: troca bloqueada com execução; sincronização automática sem execução
+- Coluna taxa administrativa exibida no extrato anual (total previsto fecha completo)
+- Recálculo de seguro em amortizações usa helper central (único ponto de verdade)
+- Modo CAIXA SAC/TR: TR aplicada ao saldo; quota corrigida pela TR; taxa mensal = taxa_nominal/12; opt-in por financiamento
+- Testes de calibração CAIXA SAC/TR: erro de ~R$ 3,06 no saldo devedor após 24 meses + amortização
+
+### Financiamentos — UX
+
+- Lista de contratos: formato tabular com header compartilhado + uma linha por contrato
+- Botões de ação substituídos por ícones (28×28px): visualizar, amortizar, extrato, editar, quitar
+- Formulário compacto: inputs 34px, sidebar 340px, padding reduzido
+- Cancelar/Salvar movidos para `action_bar` padrão; label dinâmico ("Novo financiamento" / "Editar financiamento")
+
+### Cartões — UX
+
+- Tabela de lançamentos da fatura: formato tabular (header + uma linha por lançamento)
+- Colunas: Descrição | Data | Cat. Despesa | Cat. Cartão | Parcela | Valor | Ações
+- Botões de ação como ícones: editar, gerenciar parcelamento, excluir
+- Parcelamento sempre renderizado (desabilitado quando não aplicável)
+- Campo "origem" (pdf, manual) removido da exibição
+
+### Importação de Cartão — UX e Regras
+
+- Colunas centralizadas (exceto Descrição Original)
+- Botões de ação: 3 slots fixos na tabela operacional, 2 slots na tabela retirada
+- Botões desabilitados quando ação indisponível na etapa atual do fluxo
+- Reconhecimento de recorrência restrito ao mesmo cartão (candidatos de outro cartão não sugeridos)
+- Vínculo de lançamento a recorrência existente disponível na triagem
+
+### Documentação
+
+- Criados: `docs/MAPA_MODULOS.md`, `docs/REGRAS_FINANCEIRAS.md`, `docs/ROADMAP.md`
+- MAPA_MODULOS: tabela consolidada de todos os módulos com estado atual
+- REGRAS_FINANCEIRAS: regras globais de proteção + regras por módulo
+- ROADMAP: pendências por módulo, débitos técnicos, decisões técnicas registradas
+
+---
+
 ## Backlog — Próximas fases
 
-Para o roadmap técnico completo com prioridades atualizadas, ver `README_TECNICO.md` — seção "Roadmap Técnico — Pós-Auditoria".
+Para o roadmap técnico completo com prioridades atualizadas, ver `docs/ROADMAP.md` e `README_TECNICO.md`.
 
 Prioridades imediatas:
 - TEST-FIN-1: ampliar cobertura E2E em Despesas, Cartões e Financiamentos
+- CART-1: despesas fatura com parcelamento inline, categoria e edição no mesmo modal
+- VEIC-3A/3B: homologação visual e validação do motor de custo de mobilidade
 - DB-CLEAN-1: corrigir débitos SQLAlchemy 2.0
 - CARD-SEC-1: remover dados sensíveis de cartão em texto puro
 - SEG-1: autenticação global (bloqueante para qualquer deploy)

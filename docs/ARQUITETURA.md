@@ -43,7 +43,8 @@ migrations/
 | `ItemDespesa` | Template de gasto — tipo Simples ou Agregador (cartão) |
 | `ConfigAgregador` | Configuração de cartão (dia fechamento/vencimento) |
 | `Conta` | Fonte única de verdade para todas as despesas a pagar |
-| `ItemAgregado` | Categoria dentro de um cartão |
+| `CategoriaCartao` | Categoria global do cartão (substitui `ItemAgregado` legado) |
+| `ItemAgregado` | Categoria dentro de um cartão (legado — substituído por `CategoriaCartao`) |
 | `OrcamentoAgregado` | Teto mensal por categoria de cartão |
 | `LancamentoAgregado` | Gasto real no cartão (executado) |
 | `GrupoAgregador` | Consolidação entre múltiplos cartões |
@@ -110,8 +111,19 @@ saldo_atual = saldo_inicial + sum(créditos) - sum(débitos)
 | `FinanciamentoAmortizacaoExtra` | Amortizações extraordinárias |
 | `FinanciamentoSeguroVigencia` | Vigências de seguro habitacional |
 
+### Entidades adicionais
+
+| Entidade | Papel |
+|----------|-------|
+| `FinanciamentoSeguroFaixaMip` | Faixas etárias e fatores MIP por financiamento |
+
 ### Cálculo
-Serviço `financiamento_service.py` (~73KB) implementa SAC, PRICE e SIMPLES com suporte a correção por indexadores (TR, IPCA etc.) e amortização extraordinária com recalculo de parcelas.
+
+Serviço `financiamento_service.py` implementa SAC, PRICE, SIMPLES e CAIXA SAC/TR com suporte a correção por TR mensal, amortização extraordinária, ajuste de saldo devedor real e seguro habitacional por DFI+MIP.
+
+**Helper central de seguro**: único ponto de cálculo de seguro, usado por geração de cronograma, amortização extraordinária, ajuste de saldo e recálculo de parcelas. Garante consistência entre todos os fluxos.
+
+**Modo CAIXA SAC/TR (opt-in)**: TR aplicada ao saldo antes do cálculo de amortização e juros. TR ausente para a competência bloqueia a geração com erro explícito.
 
 ---
 
