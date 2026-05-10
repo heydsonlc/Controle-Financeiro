@@ -19,12 +19,14 @@ import logging
 try:
     from backend.models import (db, Financiamento, FinanciamentoParcela,
                                 FinanciamentoAmortizacaoExtra, IndexadorMensal, Conta,
-                                FinanciamentoSeguroFaixaMip, FinanciamentoAjusteSaldo)
+                                FinanciamentoSeguroFaixaMip, FinanciamentoAjusteSaldo,
+                                ItemDespesa)
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import (db, Financiamento, FinanciamentoParcela,
                        FinanciamentoAmortizacaoExtra, IndexadorMensal, Conta,
-                       FinanciamentoSeguroFaixaMip, FinanciamentoAjusteSaldo)
+                       FinanciamentoSeguroFaixaMip, FinanciamentoAjusteSaldo,
+                       ItemDespesa)
     from services.perfil_financeiro_service import PerfilFinanceiroService
 
 logger = logging.getLogger(__name__)
@@ -84,6 +86,33 @@ class FinanciamentoService:
         if not financiamento:
             raise ValueError('Financiamento não encontrado')
         return financiamento
+
+    @staticmethod
+    def _mensagem_item_execucao_financeira():
+        return (
+            'Nao e possivel alterar o item de despesa deste financiamento porque ja existem '
+            'parcelas pagas, ajustes, amortizacoes ou movimentacoes financeiras vinculadas.'
+        )
+
+    @staticmethod
+    def _obter_item_despesa_no_perfil(item_despesa_id):
+        if item_despesa_id in (None, ''):
+            raise ValueError('Item de despesa invalido ou nao pertence ao contexto financeiro atual.')
+
+        try:
+            item_id = int(item_despesa_id)
+        except (TypeError, ValueError) as exc:
+            raise ValueError('Item de despesa invalido ou nao pertence ao contexto financeiro atual.') from exc
+
+        item = PerfilFinanceiroService.aplicar_perfil_query(
+            ItemDespesa.query,
+            ItemDespesa
+        ).filter(ItemDespesa.id == item_id).first()
+
+        if not item:
+            raise ValueError('Item de despesa invalido ou nao pertence ao contexto financeiro atual.')
+
+        return item
 
     @staticmethod
     def _seguro_modo(financiamento):
@@ -347,8 +376,10 @@ class FinanciamentoService:
         # Se não foi fornecido item_despesa_id, criar automaticamente
         # Conforme CONTRATO: 1 parcela = 1 Conta = 1 linha em DESPESAS
         item_despesa_id = dados.get('item_despesa_id')
-        if not item_despesa_id:
-            from backend.models import ItemDespesa
+        item_despesa_criado_automaticamente = None
+        if item_despesa_id:
+            item_despesa_id = FinanciamentoService._obter_item_despesa_no_perfil(item_despesa_id).id
+        else:
             item_despesa = ItemDespesa(
                 perfil_financeiro_id=FinanciamentoService._perfil_id(),
                 nome=dados['nome'],
@@ -360,6 +391,7 @@ class FinanciamentoService:
             db.session.add(item_despesa)
             db.session.flush()
             item_despesa_id = item_despesa.id
+            item_despesa_criado_automaticamente = item_despesa
 
         # Criar financiamento
         financiamento = Financiamento(
@@ -393,6 +425,14 @@ class FinanciamentoService:
 
         db.session.add(financiamento)
         db.session.flush()  # Para obter o ID
+
+        if item_despesa_criado_automaticamente:
+            # FIN-ITEM-DESPESA: origem melhora rastreabilidade, mas o cadastro
+            # mestre segue preservado na exclusao ate existir regra de propriedade.
+            item_despesa_criado_automaticamente.origem_tipo = 'FINANCIAMENTO'
+            item_despesa_criado_automaticamente.origem_id = financiamento.id
+            item_despesa_criado_automaticamente.origem_contexto = 'cronograma'
+            db.session.flush()
 
         # ========================================================================
         # Inicializar ESTADO SOBERANO
@@ -646,6 +686,49 @@ class FinanciamentoService:
         db.session.flush()
 
     @staticmethod
+    def _sincronizar_item_despesa_contas_pendentes(financiamento):
+        """
+        Mantem contas pendentes alinhadas ao item atual do financiamento.
+
+        Contas executadas nunca sao alteradas aqui; se houver divergencia em
+        conta executada, a operacao e bloqueada para preservar historico.
+        """
+        if not financiamento.item_despesa_id:
+            return 0
+
+        contas = Conta.query.join(
+            FinanciamentoParcela,
+            Conta.financiamento_parcela_id == FinanciamentoParcela.id
+        ).filter(
+            FinanciamentoParcela.financiamento_id == financiamento.id
+        ).all()
+
+        contas_alteradas = 0
+        for conta in contas:
+            status_conta = (conta.status_pagamento or '').lower()
+            parcela = conta.financiamento_parcela
+            status_parcela = (parcela.status or '').lower() if parcela else ''
+            conta_executada = (
+                status_conta in FinanciamentoService.STATUS_CONTA_EXECUTADA
+                or conta.data_pagamento is not None
+                or status_parcela in FinanciamentoService.STATUS_PARCELA_EXECUTADA
+            )
+
+            if conta_executada:
+                if conta.item_despesa_id != financiamento.item_despesa_id:
+                    raise ValueError(FinanciamentoService._mensagem_item_execucao_financeira())
+                continue
+
+            if conta.item_despesa_id != financiamento.item_despesa_id:
+                conta.item_despesa_id = financiamento.item_despesa_id
+                contas_alteradas += 1
+
+        if contas_alteradas:
+            db.session.flush()
+
+        return contas_alteradas
+
+    @staticmethod
     def _converter_data_iso(valor, campo):
         if isinstance(valor, str):
             try:
@@ -841,6 +924,18 @@ class FinanciamentoService:
             if not data_nascimento_resultante:
                 raise ValueError('seguro_data_nascimento_titular e obrigatoria no modo estimado DFI + MIP')
 
+        novo_item_despesa_id = None
+        houve_mudanca_item_despesa = False
+        if 'item_despesa_id' in dados:
+            novo_item = FinanciamentoService._obter_item_despesa_no_perfil(dados.get('item_despesa_id'))
+            novo_item_despesa_id = novo_item.id
+            houve_mudanca_item_despesa = financiamento.item_despesa_id != novo_item_despesa_id
+            if (
+                houve_mudanca_item_despesa
+                and FinanciamentoService.financiamento_possui_execucao_financeira(financiamento.id)
+            ):
+                raise ValueError(FinanciamentoService._mensagem_item_execucao_financeira())
+
         campos_alterados = [
             campo for campo, valor in valores_estruturais.items()
             if campo != 'taxa_juros_mensal'
@@ -859,8 +954,8 @@ class FinanciamentoService:
             financiamento.produto = dados['produto']
         if 'ativo' in dados:
             financiamento.ativo = dados['ativo']
-        if 'item_despesa_id' in dados:
-            financiamento.item_despesa_id = dados['item_despesa_id']
+        if novo_item_despesa_id is not None:
+            financiamento.item_despesa_id = novo_item_despesa_id
 
         for campo, valor in valores_estruturais.items():
             setattr(financiamento, campo, valor)
@@ -970,6 +1065,9 @@ class FinanciamentoService:
         )
 
         db.session.flush()
+
+        if houve_mudanca_item_despesa and not deve_regenerar_cronograma:
+            FinanciamentoService._sincronizar_item_despesa_contas_pendentes(financiamento)
 
         if deve_regenerar_cronograma:
             FinanciamentoService._reconfigurar_vigencia_inicial_sem_execucao(financiamento)
@@ -1523,6 +1621,17 @@ class FinanciamentoService:
         mes_referencia = parcela.data_vencimento.replace(day=1)
 
         if conta_existente:
+            status_conta = (conta_existente.status_pagamento or '').lower()
+            status_parcela = (parcela.status or '').lower()
+            conta_executada = (
+                status_conta in FinanciamentoService.STATUS_CONTA_EXECUTADA
+                or conta_existente.data_pagamento is not None
+                or status_parcela in FinanciamentoService.STATUS_PARCELA_EXECUTADA
+            )
+            if conta_executada and conta_existente.item_despesa_id != financiamento.item_despesa_id:
+                raise ValueError(FinanciamentoService._mensagem_item_execucao_financeira())
+            if not conta_executada:
+                conta_existente.item_despesa_id = financiamento.item_despesa_id
             conta_existente.valor = parcela.valor_previsto_total
             conta_existente.data_vencimento = parcela.data_vencimento
             conta_existente.mes_referencia = mes_referencia

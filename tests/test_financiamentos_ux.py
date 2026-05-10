@@ -15,6 +15,7 @@ from backend.models import (
     FinanciamentoParcela,
     FinanciamentoSeguroFaixaMip,
     FinanciamentoSeguroVigencia,
+    ItemDespesa,
 )
 from backend.routes.financiamentos import financiamentos_bp
 
@@ -127,6 +128,19 @@ def _criar_financiamento(client, nome='Financiamento UX'):
     body = response.get_json()
     assert body['success'] is True
     return body['data']
+
+
+def _criar_item_despesa(nome='Item financiamento'):
+    item = ItemDespesa(
+        nome=nome,
+        tipo='Financiamento',
+        ativo=True,
+        valor=0,
+        recorrente=False,
+    )
+    db.session.add(item)
+    db.session.commit()
+    return item
 
 
 def _seguro_esperado(amortizacao, juros, fator_mip):
@@ -582,6 +596,7 @@ def test_regenerar_parcelas_bloqueia_quando_existe_parcela_paga(client):
 
 def test_excluir_financiamento_sem_execucao_remove_dependencias_pendentes(client):
     criado = _criar_financiamento(client)
+    item_despesa_id = criado['item_despesa_id']
     parcelas = FinanciamentoParcela.query.filter_by(financiamento_id=criado['id']).all()
     parcela_ids = [parcela.id for parcela in parcelas]
     conta_ids = [
@@ -603,6 +618,7 @@ def test_excluir_financiamento_sem_execucao_remove_dependencias_pendentes(client
     assert FinanciamentoParcela.query.filter_by(financiamento_id=criado['id']).count() == 0
     assert FinanciamentoSeguroVigencia.query.filter_by(financiamento_id=criado['id']).count() == 0
     assert Conta.query.filter(Conta.id.in_(conta_ids)).count() == 0
+    assert db.session.get(ItemDespesa, item_despesa_id) is not None
 
 
 def test_excluir_financiamento_estimado_remove_faixas_mip(client):
@@ -618,6 +634,194 @@ def test_excluir_financiamento_estimado_remove_faixas_mip(client):
     assert body['success'] is True
     assert db.session.get(Financiamento, criado['id']) is None
     assert FinanciamentoSeguroFaixaMip.query.filter_by(financiamento_id=criado['id']).count() == 0
+
+
+def test_excluir_financiamento_preserva_item_despesa_compartilhado_com_conta_avulsa(client):
+    item = _criar_item_despesa('Item compartilhado')
+    payload = _payload_financiamento('Financiamento Item Compartilhado')
+    payload['item_despesa_id'] = item.id
+    response = client.post('/api/financiamentos', json=payload)
+    assert response.status_code == 201
+    criado = response.get_json()['data']
+
+    conta_avulsa = Conta(
+        item_despesa_id=item.id,
+        mes_referencia=date(2026, 6, 1),
+        descricao='Despesa avulsa compartilhada',
+        valor=Decimal('150.00'),
+        data_vencimento=date(2026, 6, 10),
+        status_pagamento='Pendente',
+    )
+    db.session.add(conta_avulsa)
+    db.session.commit()
+
+    parcelas = FinanciamentoParcela.query.filter_by(financiamento_id=criado['id']).all()
+    parcela_ids = [parcela.id for parcela in parcelas]
+    contas_financiamento = Conta.query.filter(Conta.financiamento_parcela_id.in_(parcela_ids)).all()
+    assert contas_financiamento
+
+    response = client.delete(f'/api/financiamentos/{criado["id"]}')
+    body = response.get_json()
+
+    assert response.status_code == 200
+    assert body['success'] is True
+    assert db.session.get(ItemDespesa, item.id) is not None
+    assert db.session.get(Conta, conta_avulsa.id) is not None
+    assert Conta.query.filter(Conta.financiamento_parcela_id.in_(parcela_ids)).count() == 0
+
+
+def test_editar_financiamento_item_despesa_sem_execucao_sincroniza_contas_pendentes(client):
+    item_a = _criar_item_despesa('Item A')
+    item_b = _criar_item_despesa('Item B')
+    payload = _payload_financiamento('Financiamento Troca Item')
+    payload['item_despesa_id'] = item_a.id
+    response = client.post('/api/financiamentos', json=payload)
+    assert response.status_code == 201
+    criado = response.get_json()['data']
+
+    parcelas = FinanciamentoParcela.query.filter_by(financiamento_id=criado['id']).all()
+    parcela_ids = [parcela.id for parcela in parcelas]
+    assert Conta.query.filter(
+        Conta.financiamento_parcela_id.in_(parcela_ids),
+        Conta.item_despesa_id == item_a.id,
+    ).count() == len(parcelas)
+
+    response = client.put(
+        f'/api/financiamentos/{criado["id"]}',
+        json={'item_despesa_id': item_b.id},
+    )
+    body = response.get_json()
+
+    assert response.status_code == 200
+    assert body['success'] is True
+    assert db.session.get(Financiamento, criado['id']).item_despesa_id == item_b.id
+    assert Conta.query.filter(
+        Conta.financiamento_parcela_id.in_(parcela_ids),
+        Conta.item_despesa_id == item_b.id,
+    ).count() == len(parcelas)
+
+
+def test_editar_financiamento_item_despesa_bloqueia_com_parcela_paga(client):
+    item_a = _criar_item_despesa('Item pago A')
+    item_b = _criar_item_despesa('Item pago B')
+    payload = _payload_financiamento('Financiamento Item Pago')
+    payload['item_despesa_id'] = item_a.id
+    response = client.post('/api/financiamentos', json=payload)
+    assert response.status_code == 201
+    criado = response.get_json()['data']
+    primeira = _parcela_financiamento(criado['id'], 1)
+
+    pagamento = client.post(
+        f'/api/financiamentos/parcelas/{primeira.id}/pagar',
+        json={
+            'valor_pago': float(primeira.valor_previsto_total),
+            'data_pagamento': '2026-06-01',
+        },
+    )
+    assert pagamento.status_code == 200
+
+    response = client.put(
+        f'/api/financiamentos/{criado["id"]}',
+        json={'item_despesa_id': item_b.id},
+    )
+    body = response.get_json()
+
+    assert response.status_code == 400
+    assert body['success'] is False
+    assert 'item de despesa' in body['error']
+    assert db.session.get(Financiamento, criado['id']).item_despesa_id == item_a.id
+    conta_paga = Conta.query.filter_by(financiamento_parcela_id=primeira.id).first()
+    assert conta_paga.item_despesa_id == item_a.id
+
+
+def test_editar_financiamento_item_despesa_bloqueia_com_amortizacao(client):
+    item_a = _criar_item_despesa('Item amortizacao A')
+    item_b = _criar_item_despesa('Item amortizacao B')
+    payload = _payload_financiamento('Financiamento Item Amortizacao')
+    payload['item_despesa_id'] = item_a.id
+    response = client.post('/api/financiamentos', json=payload)
+    assert response.status_code == 201
+    criado = response.get_json()['data']
+
+    amortizacao = client.post(
+        f'/api/financiamentos/{criado["id"]}/amortizacao-extra',
+        json={
+            'data': '2026-07-01',
+            'valor': 1000.0,
+            'tipo': 'reduzir_parcela',
+            'observacoes': 'Bloqueio troca item',
+        },
+    )
+    assert amortizacao.status_code == 201
+
+    response = client.put(
+        f'/api/financiamentos/{criado["id"]}',
+        json={'item_despesa_id': item_b.id},
+    )
+    body = response.get_json()
+
+    assert response.status_code == 400
+    assert body['success'] is False
+    assert 'item de despesa' in body['error']
+    assert db.session.get(Financiamento, criado['id']).item_despesa_id == item_a.id
+
+
+def test_editar_financiamento_item_despesa_bloqueia_com_ajuste_saldo(client):
+    item_a = _criar_item_despesa('Item ajuste A')
+    item_b = _criar_item_despesa('Item ajuste B')
+    payload = _payload_financiamento('Financiamento Item Ajuste')
+    payload['item_despesa_id'] = item_a.id
+    response = client.post('/api/financiamentos', json=payload)
+    assert response.status_code == 201
+    criado = response.get_json()['data']
+    referencia = _parcela_financiamento(criado['id'], 3)
+
+    ajuste = client.post(
+        f'/api/financiamentos/{criado["id"]}/ajustar-saldo',
+        json={
+            'parcela_referencia_id': referencia.id,
+            'numero_parcela': referencia.numero_parcela,
+            'data_referencia': referencia.data_vencimento.isoformat(),
+            'saldo_devedor_real': 300000.0,
+            'tipo_ajuste': 'ajuste_saldo_real',
+            'observacao': 'Bloqueio troca item',
+            'recalcular_parcelas_futuras': True,
+        },
+    )
+    assert ajuste.status_code == 200
+
+    response = client.put(
+        f'/api/financiamentos/{criado["id"]}',
+        json={'item_despesa_id': item_b.id},
+    )
+    body = response.get_json()
+
+    assert response.status_code == 400
+    assert body['success'] is False
+    assert 'item de despesa' in body['error']
+    assert db.session.get(Financiamento, criado['id']).item_despesa_id == item_a.id
+
+
+def test_financiamento_item_despesa_invalido_retorna_erro_claro(client):
+    payload = _payload_financiamento('Financiamento Item Invalido')
+    payload['item_despesa_id'] = 999999
+    response = client.post('/api/financiamentos', json=payload)
+    body = response.get_json()
+
+    assert response.status_code == 400
+    assert body['success'] is False
+    assert 'Item de despesa invalido' in body['error']
+
+    criado = _criar_financiamento(client, 'Financiamento Edita Item Invalido')
+    response = client.put(
+        f'/api/financiamentos/{criado["id"]}',
+        json={'item_despesa_id': 999999},
+    )
+    body = response.get_json()
+
+    assert response.status_code == 400
+    assert body['success'] is False
+    assert 'Item de despesa invalido' in body['error']
 
 
 def test_excluir_financiamento_bloqueia_parcela_paga(client):

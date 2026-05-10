@@ -1203,7 +1203,8 @@ async function tentarExcluirFinanciamento(id = null) {
 
     const confirmar = window.confirm(
         'Deseja realmente excluir este financiamento?\n\n' +
-        'Esta acao removera o financiamento, o cronograma gerado e registros pendentes vinculados. Esta acao nao podera ser desfeita.'
+        'Esta acao removera o financiamento, o cronograma gerado e contas pendentes vinculadas. ' +
+        'O item/categoria de despesa sera preservado. Esta acao nao podera ser desfeita.'
     );
     if (!confirmar) return;
 
