@@ -1157,13 +1157,14 @@ async function carregarDemonstrativo() {
         }
 
         container.innerHTML = `
-            <div class="fin-demo-row header"><span>Mês</span><span>Amortização</span><span>Juros</span><span>Seguro</span><span>Total previsto</span></div>
+            <div class="fin-demo-row fin-demo-row-extrato header"><span>Mês</span><span>Amortização</span><span>Juros</span><span>Seguro</span><span>Taxa adm</span><span>Total previsto</span></div>
             ${linhas.map((linha) => `
-                <div class="fin-demo-row">
+                <div class="fin-demo-row fin-demo-row-extrato">
                     <span>${nomeMes(linha.mes)}</span>
                     <span>${formatarMoedaDisplay(linha.amortizacao)}</span>
                     <span>${formatarMoedaDisplay(linha.juros)}</span>
                     <span>${formatarMoedaDisplay(linha.seguro)}</span>
+                    <span>${formatarMoedaDisplay(linha.taxa_adm)}</span>
                     <span><strong>${formatarMoedaDisplay(linha.total_previsto)}</strong></span>
                 </div>
             `).join('')}

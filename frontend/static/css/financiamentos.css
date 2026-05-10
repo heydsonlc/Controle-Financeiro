@@ -1421,6 +1421,10 @@ body.app-shell-body .app-content {
     border-bottom: 1px solid var(--fin-border-soft);
 }
 
+.fin-demo-row-extrato {
+    grid-template-columns: 0.9fr repeat(5, minmax(100px, 0.35fr));
+}
+
 .fin-demo-row:last-child {
     border-bottom: 0;
 }

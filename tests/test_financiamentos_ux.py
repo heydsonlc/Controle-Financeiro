@@ -1119,6 +1119,37 @@ def test_demonstrativo_anual_alimenta_extrato(client):
     assert body['data']['resumo_mensal']
 
 
+def test_demonstrativo_anual_extrato_inclui_taxa_administrativa_na_composicao(client):
+    payload = _payload_financiamento('Financiamento Extrato Taxa Adm')
+    payload['taxa_administracao_fixa'] = 25.0
+    response = client.post('/api/financiamentos', json=payload)
+    assert response.status_code == 201
+    criado = response.get_json()['data']
+
+    response = client.get(f'/api/financiamentos/{criado["id"]}/demonstrativo-anual?ano=2026')
+    body = response.get_json()
+
+    assert response.status_code == 200
+    assert body['success'] is True
+    junho = body['data']['resumo_mensal']['6']
+    assert junho['taxa_adm'] == 25.0
+    assert junho['total_previsto'] == pytest.approx(
+        junho['amortizacao'] + junho['juros'] + junho['seguro'] + junho['taxa_adm']
+    )
+
+
+def test_frontend_extrato_exibe_coluna_taxa_administrativa():
+    base_dir = Path(__file__).resolve().parents[1]
+    js = (base_dir / 'frontend' / 'static' / 'js' / 'financiamentos.js').read_text(encoding='utf-8')
+    inicio = js.index('async function carregarDemonstrativo')
+    fim = js.index('function abrirSeguroHabitacional', inicio)
+    trecho = js[inicio:fim]
+
+    assert 'Taxa adm' in trecho
+    assert 'linha.taxa_adm' in trecho
+    assert 'fin-demo-row-extrato' in trecho
+
+
 def test_template_nao_depende_de_modal_antigo_para_cadastro(client):
     response = client.get('/financiamentos')
     html = response.get_data(as_text=True)
