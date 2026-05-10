@@ -1921,6 +1921,20 @@ class FinanciamentoService:
 
         valor = Decimal(str(dados_amortizacao['valor']))
         tipo = dados_amortizacao['tipo']
+        if valor <= 0:
+            raise ValueError('Valor da amortizacao deve ser maior que zero')
+
+        parcelas_afetadas = FinanciamentoParcela.query.filter(
+            FinanciamentoParcela.financiamento_id == financiamento.id,
+            FinanciamentoParcela.data_vencimento >= data_amort
+        ).order_by(FinanciamentoParcela.numero_parcela).all()
+
+        for parcela in parcelas_afetadas:
+            if FinanciamentoService._parcela_tem_execucao_financeira(parcela):
+                raise ValueError(
+                    'Existem parcelas futuras vinculadas a contas ja efetivadas. '
+                    'A amortizacao nao pode ser aplicada automaticamente.'
+                )
 
         # Criar registro
         amortizacao = FinanciamentoAmortizacaoExtra(
@@ -1971,10 +1985,6 @@ class FinanciamentoService:
         FinanciamentoService._recalcular_apos_amortizacao(financiamento, data_amort, valor, tipo)
 
         db.session.commit()
-
-        # Sincronizar despesas com os novos valores das parcelas
-        if financiamento.item_despesa_id:
-            FinanciamentoService.sincronizar_contas(financiamento_id)
 
         return amortizacao
 
@@ -2072,6 +2082,7 @@ class FinanciamentoService:
             parcela.valor_previsto_total = amortizacao + juros + valor_seguro + valor_taxa_adm
             parcela.saldo_devedor_antes_pagamento = saldo_devedor
             parcela.saldo_devedor_apos_pagamento = saldo_devedor - amortizacao
+            FinanciamentoService._criar_conta_da_parcela(financiamento, parcela)
 
             # Atualizar saldo para próxima iteração
             saldo_devedor = saldo_devedor - amortizacao
@@ -2129,6 +2140,7 @@ class FinanciamentoService:
             parcela.valor_previsto_total = amortizacao + juros + valor_seguro + valor_taxa_adm
             parcela.saldo_devedor_antes_pagamento = saldo_devedor
             parcela.saldo_devedor_apos_pagamento = saldo_devedor - amortizacao
+            FinanciamentoService._criar_conta_da_parcela(financiamento, parcela)
 
             parcelas_para_manter.append(parcela)
 
@@ -2141,6 +2153,21 @@ class FinanciamentoService:
 
         # Deletar parcelas excedentes
         parcelas_para_deletar = [p for p in parcelas_pendentes if p not in parcelas_para_manter]
+        ids_para_deletar = [p.id for p in parcelas_para_deletar if p.id]
+        if ids_para_deletar:
+            FinanciamentoParcela.query.filter(
+                FinanciamentoParcela.id.in_(ids_para_deletar)
+            ).update(
+                {FinanciamentoParcela.conta_id: None},
+                synchronize_session=False
+            )
+            db.session.flush()
+
+            Conta.query.filter(
+                Conta.financiamento_parcela_id.in_(ids_para_deletar)
+            ).delete(synchronize_session=False)
+            db.session.flush()
+
         for parcela in parcelas_para_deletar:
             db.session.delete(parcela)
 

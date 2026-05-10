@@ -598,6 +598,178 @@ def test_amortizacao_existente_retorna_estrutura_sem_alterar_formula(client):
     assert body['data']['tipo'] == 'reduzir_prazo'
 
 
+def test_amortizacao_com_seguro_fixo_preserva_seguro_e_recalcula_futuras(client):
+    criado = _criar_financiamento(client)
+    anterior = _parcela_financiamento(criado['id'], 4)
+    juros_original = float(anterior.valor_juros)
+    total_original = float(anterior.valor_previsto_total)
+
+    response = client.post(
+        f'/api/financiamentos/{criado["id"]}/amortizacao-extra',
+        json={
+            'data': '2026-07-01',
+            'valor': 10000.0,
+            'tipo': 'reduzir_parcela',
+            'observacoes': 'Amortizacao teste seguro fixo',
+        },
+    )
+    body = response.get_json()
+
+    assert response.status_code == 201
+    assert body['success'] is True
+
+    atualizada = _parcela_financiamento(criado['id'], 4)
+    assert float(atualizada.valor_seguro) == 200.0
+    assert float(atualizada.valor_juros) < juros_original
+    assert float(atualizada.valor_previsto_total) < total_original
+
+    conta = Conta.query.filter_by(financiamento_parcela_id=atualizada.id).first()
+    assert conta is not None
+    assert float(conta.valor) == float(atualizada.valor_previsto_total)
+
+
+def test_amortizacao_com_seguro_estimado_recalcula_seguro_por_saldo_e_juros(client):
+    response = client.post('/api/financiamentos', json=_payload_financiamento_estimado())
+    criado = response.get_json()['data']
+    referencia = _parcela_financiamento(criado['id'], 6)
+    saldo_original = float(referencia.saldo_devedor_apos_pagamento)
+    juros_original = float(referencia.valor_juros)
+    seguro_original = float(referencia.valor_seguro)
+    total_original = float(referencia.valor_previsto_total)
+
+    response = client.post(
+        f'/api/financiamentos/{criado["id"]}/amortizacao-extra',
+        json={
+            'data': '2030-03-01',
+            'valor': 15000.0,
+            'tipo': 'reduzir_parcela',
+            'observacoes': 'Amortizacao teste seguro estimado',
+        },
+    )
+    body = response.get_json()
+
+    assert response.status_code == 201
+    assert body['success'] is True
+
+    atualizada = _parcela_financiamento(criado['id'], 6)
+    assert float(atualizada.saldo_devedor_apos_pagamento) < saldo_original
+    assert float(atualizada.valor_juros) < juros_original
+    assert float(atualizada.valor_seguro) < seguro_original
+    assert float(atualizada.valor_previsto_total) < total_original
+    assert float(atualizada.valor_seguro) == _seguro_esperado(
+        atualizada.valor_amortizacao,
+        atualizada.valor_juros,
+        Decimal('0.08593'),
+    )
+
+
+def test_amortizacao_estimado_respeita_mudanca_de_faixa_em_fevereiro(client):
+    response = client.post('/api/financiamentos', json=_payload_financiamento_estimado('Financiamento Faixa'))
+    criado = response.get_json()['data']
+
+    response = client.post(
+        f'/api/financiamentos/{criado["id"]}/amortizacao-extra',
+        json={
+            'data': '2030-01-01',
+            'valor': 5000.0,
+            'tipo': 'reduzir_parcela',
+            'observacoes': 'Amortizacao antes da troca de faixa',
+        },
+    )
+    body = response.get_json()
+
+    assert response.status_code == 201
+    assert body['success'] is True
+
+    janeiro = _parcela_financiamento(criado['id'], 1)
+    fevereiro = _parcela_financiamento(criado['id'], 2)
+
+    assert float(janeiro.valor_seguro) == _seguro_esperado(
+        janeiro.valor_amortizacao,
+        janeiro.valor_juros,
+        Decimal('0.04899'),
+    )
+    assert float(fevereiro.valor_seguro) == _seguro_esperado(
+        fevereiro.valor_amortizacao,
+        fevereiro.valor_juros,
+        Decimal('0.08593'),
+    )
+    assert float(fevereiro.valor_seguro) > float(janeiro.valor_seguro)
+
+
+def test_amortizacao_preserva_parcela_paga_anterior_ao_marco(client):
+    criado = _criar_financiamento(client)
+    parcela_paga = _parcela_financiamento(criado['id'], 1)
+    valor_original = float(parcela_paga.valor_previsto_total)
+    seguro_original = float(parcela_paga.valor_seguro)
+
+    pagamento = client.post(
+        f'/api/financiamentos/parcelas/{parcela_paga.id}/pagar',
+        json={
+            'valor_pago': valor_original,
+            'data_pagamento': '2026-06-01',
+        },
+    )
+    assert pagamento.status_code == 200
+
+    futura = _parcela_financiamento(criado['id'], 4)
+    juros_original_futura = float(futura.valor_juros)
+
+    response = client.post(
+        f'/api/financiamentos/{criado["id"]}/amortizacao-extra',
+        json={
+            'data': '2026-08-01',
+            'valor': 10000.0,
+            'tipo': 'reduzir_parcela',
+            'observacoes': 'Amortizacao com historico pago',
+        },
+    )
+    body = response.get_json()
+
+    assert response.status_code == 201
+    assert body['success'] is True
+
+    parcela_paga = _parcela_financiamento(criado['id'], 1)
+    futura = _parcela_financiamento(criado['id'], 4)
+    assert parcela_paga.status == 'pago'
+    assert float(parcela_paga.valor_previsto_total) == valor_original
+    assert float(parcela_paga.valor_seguro) == seguro_original
+    assert float(futura.valor_juros) < juros_original_futura
+
+
+def test_amortizacao_bloqueia_conta_futura_efetivada(client):
+    criado = _criar_financiamento(client)
+    parcela = _parcela_financiamento(criado['id'], 4)
+    conta = Conta.query.filter_by(financiamento_parcela_id=parcela.id).first()
+    assert conta is not None
+
+    conta.status_pagamento = 'Pago'
+    conta.data_pagamento = date(2026, 9, 1)
+    db.session.commit()
+
+    juros_original = float(parcela.valor_juros)
+    response = client.post(
+        f'/api/financiamentos/{criado["id"]}/amortizacao-extra',
+        json={
+            'data': '2026-07-01',
+            'valor': 10000.0,
+            'tipo': 'reduzir_parcela',
+            'observacoes': 'Deve bloquear conta paga',
+        },
+    )
+    body = response.get_json()
+
+    assert response.status_code == 400
+    assert body['success'] is False
+    assert 'contas ja efetivadas' in body['error']
+
+    parcela = _parcela_financiamento(criado['id'], 4)
+    conta = Conta.query.filter_by(financiamento_parcela_id=parcela.id).first()
+    assert float(parcela.valor_juros) == juros_original
+    assert conta.status_pagamento == 'Pago'
+    assert conta.data_pagamento == date(2026, 9, 1)
+
+
 def test_demonstrativo_anual_alimenta_extrato(client):
     criado = _criar_financiamento(client)
 
