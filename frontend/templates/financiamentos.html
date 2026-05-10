@@ -511,6 +511,7 @@
 
                 <section class="fin-side-card fin-quick-actions">
                     <button type="button" onclick="abrirModalAmortizacao()">Amortizar</button>
+                    <button type="button" onclick="abrirModalAjusteSaldo()">Ajustar saldo</button>
                     <button type="button" onclick="abrirDemonstrativo()">Gerar extrato</button>
                     <button type="button" onclick="editarFinanciamentoAtual()">Alterar dados</button>
                     <button type="button" onclick="selecionarAba('extrato')">Histórico</button>
@@ -518,6 +519,65 @@
             </aside>
         </div>
     </section>
+</div>
+
+<div id="modal-ajuste-saldo" class="fin-modal" aria-hidden="true">
+    <div class="fin-modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-ajuste-saldo-title">
+        <div class="fin-modal-header">
+            <h2 id="modal-ajuste-saldo-title">Ajustar saldo devedor real</h2>
+            <button type="button" onclick="fecharModal('modal-ajuste-saldo')" aria-label="Fechar">×</button>
+        </div>
+        <form id="form-ajuste-saldo" onsubmit="salvarAjusteSaldo(event)">
+            <input type="hidden" id="ajuste-financiamento-id">
+            <div class="fin-modal-info">
+                Parcelas pagas não serão alteradas. O sistema recalculará apenas parcelas futuras pendentes a partir do saldo real informado.
+            </div>
+            <label class="fin-field">
+                <span>Parcela de referência</span>
+                <select id="ajuste-parcela-id" required onchange="atualizarInfoAjusteSaldo()"></select>
+            </label>
+            <label class="fin-field">
+                <span>Data de referência</span>
+                <input id="ajuste-data" type="date" required>
+            </label>
+            <label class="fin-field fin-money-field">
+                <span>Saldo projetado pelo sistema</span>
+                <div><span>R$</span><input id="ajuste-saldo-projetado" type="text" readonly></div>
+            </label>
+            <label class="fin-field fin-money-field">
+                <span>Saldo real informado pelo banco</span>
+                <div><span>R$</span><input id="ajuste-saldo-real" type="text" required inputmode="decimal"></div>
+            </label>
+            <label class="fin-field fin-money-field">
+                <span>Diferença</span>
+                <div><span>R$</span><input id="ajuste-diferenca" type="text" readonly></div>
+            </label>
+            <label class="fin-field">
+                <span>Tipo de ajuste</span>
+                <select id="ajuste-tipo">
+                    <option value="ajuste_saldo_real">Ajuste de saldo real</option>
+                    <option value="amortizacao_externa">Amortização externa</option>
+                    <option value="correcao_saldo_banco">Correção por saldo do banco</option>
+                    <option value="outro">Outro</option>
+                </select>
+            </label>
+            <label class="fin-field">
+                <span>Observação</span>
+                <textarea id="ajuste-observacao" rows="3"></textarea>
+            </label>
+            <label class="fin-switch-field">
+                <input id="ajuste-recalcular" type="checkbox" checked>
+                <span></span>
+                <strong>Recalcular parcelas futuras</strong>
+                <small>Atualiza apenas parcelas pendentes a partir da referência.</small>
+            </label>
+            <div id="ajuste-info" class="fin-modal-info"></div>
+            <div class="fin-modal-actions">
+                <button type="button" class="fin-secondary-btn" onclick="fecharModal('modal-ajuste-saldo')">Cancelar</button>
+                <button type="submit" class="fin-primary-btn">Salvar ajuste</button>
+            </div>
+        </form>
+    </div>
 </div>
 
 <div id="modal-pagar" class="fin-modal" aria-hidden="true">

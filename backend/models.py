@@ -1655,6 +1655,10 @@ class Financiamento(db.Model):
     amortizacoes_extra = db.relationship('FinanciamentoAmortizacaoExtra',
                                         back_populates='financiamento',
                                         lazy='dynamic', cascade='all, delete-orphan')
+    ajustes_saldo = db.relationship('FinanciamentoAjusteSaldo',
+                                    back_populates='financiamento',
+                                    lazy='dynamic', cascade='all, delete-orphan',
+                                    order_by='FinanciamentoAjusteSaldo.criado_em.desc()')
     seguros_vigencia = db.relationship('FinanciamentoSeguroVigencia',
                                       back_populates='financiamento',
                                       lazy='dynamic', cascade='all, delete-orphan',
@@ -1720,6 +1724,10 @@ class Financiamento(db.Model):
             else:
                 saldo_devedor_atual = float(self.valor_financiado)
 
+        ultimo_ajuste_saldo = FinanciamentoAjusteSaldo.query.filter_by(
+            financiamento_id=self.id
+        ).order_by(FinanciamentoAjusteSaldo.criado_em.desc()).first()
+
         return {
             'id': self.id,
             'perfil_financeiro_id': self.perfil_financeiro_id,
@@ -1747,6 +1755,7 @@ class Financiamento(db.Model):
             'seguro_mes_reajuste_idade': self.seguro_mes_reajuste_idade,
             'faixas_mip': [faixa.to_dict() for faixa in self.seguro_faixas_mip.all()],
             'taxa_administracao_fixa': float(self.taxa_administracao_fixa) if self.taxa_administracao_fixa else 0,
+            'ultimo_ajuste_saldo': ultimo_ajuste_saldo.to_dict() if ultimo_ajuste_saldo else None,
             'ativo': self.ativo
         }
 
@@ -1880,6 +1889,58 @@ class FinanciamentoAmortizacaoExtra(db.Model):
             'valor': float(self.valor),
             'tipo': self.tipo,
             'observacoes': self.observacoes
+        }
+
+
+class FinanciamentoAjusteSaldo(db.Model):
+    """
+    Registro auditavel de ajuste de saldo devedor real.
+    """
+    __tablename__ = 'financiamento_ajuste_saldo'
+
+    id = db.Column(db.Integer, primary_key=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
+    financiamento_id = db.Column(db.Integer, db.ForeignKey('financiamento.id'), nullable=False)
+    parcela_referencia_id = db.Column(db.Integer, db.ForeignKey('financiamento_parcela.id'), nullable=True)
+    numero_parcela = db.Column(db.Integer, nullable=False)
+    data_referencia = db.Column(db.Date, nullable=False)
+    saldo_devedor_anterior = db.Column(db.Numeric(12, 2), nullable=False)
+    saldo_devedor_real = db.Column(db.Numeric(12, 2), nullable=False)
+    diferenca = db.Column(db.Numeric(12, 2), nullable=False)
+    tipo_ajuste = db.Column(db.String(40), default='ajuste_saldo_real')
+    observacao = db.Column(db.Text)
+    parcelas_recalculadas = db.Column(db.Integer, default=0)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    financiamento = db.relationship('Financiamento', back_populates='ajustes_saldo')
+    parcela_referencia = db.relationship('FinanciamentoParcela', foreign_keys=[parcela_referencia_id])
+
+    __table_args__ = (
+        db.Index('idx_ajuste_saldo_financ', 'financiamento_id'),
+        db.Index('idx_ajuste_saldo_parcela_ref', 'parcela_referencia_id'),
+        db.Index('idx_ajuste_saldo_perfil_data', 'perfil_financeiro_id', 'data_referencia'),
+    )
+
+    def __repr__(self):
+        return f'<AjusteSaldo {self.financiamento_id} parcela {self.numero_parcela} R${self.saldo_devedor_real}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
+            'financiamento_id': self.financiamento_id,
+            'parcela_referencia_id': self.parcela_referencia_id,
+            'numero_parcela': self.numero_parcela,
+            'data_referencia': self.data_referencia.strftime('%Y-%m-%d'),
+            'saldo_devedor_anterior': float(self.saldo_devedor_anterior),
+            'saldo_devedor_real': float(self.saldo_devedor_real),
+            'diferenca': float(self.diferenca),
+            'tipo_ajuste': self.tipo_ajuste,
+            'observacao': self.observacao,
+            'parcelas_recalculadas': self.parcelas_recalculadas,
+            'criado_em': self.criado_em.strftime('%Y-%m-%d %H:%M:%S') if self.criado_em else None,
+            'atualizado_em': self.atualizado_em.strftime('%Y-%m-%d %H:%M:%S') if self.atualizado_em else None,
         }
 
 

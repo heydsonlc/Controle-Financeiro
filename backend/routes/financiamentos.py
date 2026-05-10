@@ -648,6 +648,60 @@ def registrar_amortizacao_extra(id):
         }), 500
 
 
+@financiamentos_bp.route('/<int:id>/ajustar-saldo', methods=['POST'])
+def ajustar_saldo_devedor(id):
+    """
+    Ajusta saldo devedor real e recalcula parcelas futuras pendentes.
+    """
+    try:
+        data = request.get_json()
+
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'Dados nÃ£o fornecidos'
+            }), 400
+
+        if not data.get('parcela_referencia_id') and not data.get('numero_parcela'):
+            return jsonify({
+                'success': False,
+                'error': 'Informe parcela_referencia_id ou numero_parcela'
+            }), 400
+
+        if data.get('saldo_devedor_real') is None:
+            return jsonify({
+                'success': False,
+                'error': 'saldo_devedor_real Ã© obrigatÃ³rio'
+            }), 400
+
+        ajuste, parcelas_recalculadas = FinanciamentoService.ajustar_saldo_devedor_real(id, data)
+
+        return jsonify({
+            'success': True,
+            'message': 'Saldo devedor ajustado e parcelas futuras recalculadas.',
+            'ajuste_id': ajuste.id,
+            'parcelas_recalculadas': parcelas_recalculadas,
+            'data': ajuste.to_dict()
+        }), 200
+
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': str(e),
+            'error': str(e)
+        }), 400
+
+    except Exception as e:
+        db.session.rollback()
+        logger.exception('Erro interno ao ajustar saldo do financiamento %s', id)
+        return jsonify({
+            'success': False,
+            'message': 'Erro interno ao ajustar saldo devedor. Verifique os logs do servidor.',
+            'error': 'Erro interno ao ajustar saldo devedor. Verifique os logs do servidor.'
+        }), 500
+
+
 @financiamentos_bp.route('/<int:id>/vigencias-seguro', methods=['POST'])
 def adicionar_vigencia_seguro(id):
     """

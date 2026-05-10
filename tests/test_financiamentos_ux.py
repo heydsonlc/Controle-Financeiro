@@ -6,7 +6,14 @@ import pytest
 from flask import Flask, render_template
 from sqlalchemy import text
 
-from backend.models import db, Conta, Financiamento, FinanciamentoParcela, FinanciamentoSeguroFaixaMip
+from backend.models import (
+    db,
+    Conta,
+    Financiamento,
+    FinanciamentoAjusteSaldo,
+    FinanciamentoParcela,
+    FinanciamentoSeguroFaixaMip,
+)
 from backend.routes.financiamentos import financiamentos_bp
 
 
@@ -123,6 +130,13 @@ def _criar_financiamento(client, nome='Financiamento UX'):
 def _seguro_esperado(amortizacao, juros, fator_mip):
     valor = (Decimal(str(amortizacao)) * Decimal('0.0489')) + (Decimal(str(juros)) * Decimal(str(fator_mip)))
     return float(valor.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+
+
+def _parcela_financiamento(financiamento_id, numero):
+    return FinanciamentoParcela.query.filter_by(
+        financiamento_id=financiamento_id,
+        numero_parcela=numero,
+    ).first()
 
 
 def test_rota_principal_renderiza_layout_ux(client):
@@ -319,6 +333,150 @@ def test_edicao_estrutural_sem_parcela_paga_persiste_e_regenera_cronograma(clien
     assert {c.financiamento_parcela_id for c in contas_regeneradas} == set(ids_regenerados)
 
 
+def test_ajuste_saldo_menor_registra_e_recalcula_futuras(client):
+    criado = _criar_financiamento(client)
+    referencia = _parcela_financiamento(criado['id'], 10)
+    anterior = _parcela_financiamento(criado['id'], 9)
+    juros_original = float(referencia.valor_juros)
+    amortizacao_anterior = float(anterior.valor_amortizacao)
+    saldo_real = float(anterior.saldo_devedor_apos_pagamento) - 10000.0
+
+    response = client.post(
+        f'/api/financiamentos/{criado["id"]}/ajustar-saldo',
+        json={
+            'parcela_referencia_id': referencia.id,
+            'numero_parcela': referencia.numero_parcela,
+            'data_referencia': referencia.data_vencimento.isoformat(),
+            'saldo_devedor_real': saldo_real,
+            'tipo_ajuste': 'ajuste_saldo_real',
+            'observacao': 'Saldo real informado pelo banco',
+            'recalcular_parcelas_futuras': True,
+        },
+    )
+    body = response.get_json()
+
+    assert response.status_code == 200
+    assert body['success'] is True
+    assert body['parcelas_recalculadas'] == 231
+    assert FinanciamentoAjusteSaldo.query.filter_by(financiamento_id=criado['id']).count() == 1
+
+    db.session.refresh(anterior)
+    db.session.refresh(referencia)
+    assert float(anterior.valor_amortizacao) == amortizacao_anterior
+    assert float(referencia.valor_juros) < juros_original
+    assert float(referencia.valor_seguro) == 200.0
+    assert Conta.query.filter_by(financiamento_parcela_id=referencia.id).first().valor == referencia.valor_previsto_total
+
+
+def test_ajuste_saldo_maior_aumenta_juros_futuros(client):
+    criado = _criar_financiamento(client)
+    referencia = _parcela_financiamento(criado['id'], 20)
+    anterior = _parcela_financiamento(criado['id'], 19)
+    juros_original = float(referencia.valor_juros)
+    saldo_real = float(anterior.saldo_devedor_apos_pagamento) + 15000.0
+
+    response = client.post(
+        f'/api/financiamentos/{criado["id"]}/ajustar-saldo',
+        json={
+            'parcela_referencia_id': referencia.id,
+            'saldo_devedor_real': saldo_real,
+            'recalcular_parcelas_futuras': True,
+        },
+    )
+
+    assert response.status_code == 200
+    db.session.refresh(referencia)
+    assert float(referencia.valor_juros) > juros_original
+
+
+def test_ajuste_com_referencia_paga_preserva_parcela_paga_e_recalcula_proxima(client):
+    criado = _criar_financiamento(client)
+    parcela_paga = _parcela_financiamento(criado['id'], 1)
+    parcela_futura = _parcela_financiamento(criado['id'], 2)
+
+    pagamento = client.post(
+        f'/api/financiamentos/parcelas/{parcela_paga.id}/pagar',
+        json={
+            'valor_pago': float(parcela_paga.valor_previsto_total),
+            'data_pagamento': parcela_paga.data_vencimento.isoformat(),
+        },
+    )
+    assert pagamento.status_code == 200
+
+    valor_pago_original = float(parcela_paga.valor_pago)
+    juros_futuro_original = float(parcela_futura.valor_juros)
+    saldo_real = float(parcela_paga.saldo_devedor_apos_pagamento) - 8000.0
+
+    response = client.post(
+        f'/api/financiamentos/{criado["id"]}/ajustar-saldo',
+        json={
+            'parcela_referencia_id': parcela_paga.id,
+            'saldo_devedor_real': saldo_real,
+            'recalcular_parcelas_futuras': True,
+        },
+    )
+
+    assert response.status_code == 200
+    db.session.refresh(parcela_paga)
+    db.session.refresh(parcela_futura)
+    assert parcela_paga.status == 'pago'
+    assert float(parcela_paga.valor_pago) == valor_pago_original
+    assert float(parcela_futura.valor_juros) < juros_futuro_original
+
+
+def test_ajuste_bloqueia_conta_futura_efetivada(client):
+    criado = _criar_financiamento(client)
+    referencia = _parcela_financiamento(criado['id'], 5)
+    parcela_futura = _parcela_financiamento(criado['id'], 7)
+    conta_futura = Conta.query.filter_by(financiamento_parcela_id=parcela_futura.id).first()
+    conta_futura.status_pagamento = 'Pago'
+    conta_futura.data_pagamento = parcela_futura.data_vencimento
+    db.session.commit()
+
+    response = client.post(
+        f'/api/financiamentos/{criado["id"]}/ajustar-saldo',
+        json={
+            'parcela_referencia_id': referencia.id,
+            'saldo_devedor_real': float(referencia.saldo_devedor_apos_pagamento),
+            'recalcular_parcelas_futuras': True,
+        },
+    )
+    body = response.get_json()
+
+    assert response.status_code == 400
+    assert body['success'] is False
+    assert 'contas ja efetivadas' in body['error']
+    assert FinanciamentoAjusteSaldo.query.filter_by(financiamento_id=criado['id']).count() == 0
+
+
+def test_ajuste_saldo_recalcula_seguro_estimado_pelo_helper(client):
+    criado = client.post('/api/financiamentos', json=_payload_financiamento_estimado()).get_json()['data']
+    referencia = _parcela_financiamento(criado['id'], 3)
+    anterior = _parcela_financiamento(criado['id'], 2)
+    juros_original = float(referencia.valor_juros)
+    seguro_original = float(referencia.valor_seguro)
+    saldo_real = float(anterior.saldo_devedor_apos_pagamento) - 10000.0
+
+    response = client.post(
+        f'/api/financiamentos/{criado["id"]}/ajustar-saldo',
+        json={
+            'parcela_referencia_id': referencia.id,
+            'saldo_devedor_real': saldo_real,
+            'recalcular_parcelas_futuras': True,
+        },
+    )
+
+    assert response.status_code == 200
+    db.session.refresh(referencia)
+    assert float(referencia.valor_juros) < juros_original
+    assert float(referencia.valor_seguro) < seguro_original
+    assert float(referencia.valor_seguro) == _seguro_esperado(
+        referencia.valor_amortizacao,
+        referencia.valor_juros,
+        0.08593
+    )
+
+
 def test_registrar_pagamento_mantem_status_da_parcela(client):
     criado = _criar_financiamento(client)
     parcela = FinanciamentoParcela.query.filter_by(financiamento_id=criado['id']).order_by(
@@ -486,3 +644,22 @@ def test_frontend_payload_de_financiamento_envia_campos_estruturais_e_flag_crono
         assert campo in trecho
 
     assert 'ajustarDataPrimeiraPorDia' in trecho
+
+
+def test_frontend_payload_de_ajuste_saldo_envia_campos_obrigatorios():
+    base_dir = Path(__file__).resolve().parents[1]
+    js = (base_dir / 'frontend' / 'static' / 'js' / 'financiamentos.js').read_text(encoding='utf-8')
+    trecho = js[js.index('async function salvarAjusteSaldo'):js.index('function simularAmortizacaoDetalhe')]
+
+    for campo in [
+        'parcela_referencia_id',
+        'numero_parcela',
+        'data_referencia',
+        'saldo_devedor_real',
+        'tipo_ajuste',
+        'observacao',
+        'recalcular_parcelas_futuras',
+    ]:
+        assert campo in trecho
+
+    assert '/ajustar-saldo' in trecho

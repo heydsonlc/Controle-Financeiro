@@ -58,6 +58,15 @@ function configurarEventosFormulario() {
         faixasMip.addEventListener('input', atualizarResumoSimulacao);
     }
 
+    const ajusteSaldoReal = document.getElementById('ajuste-saldo-real');
+    if (ajusteSaldoReal) {
+        ajusteSaldoReal.addEventListener('input', atualizarDiferencaAjusteSaldo);
+        ajusteSaldoReal.addEventListener('blur', () => {
+            formatarCampoMoeda(ajusteSaldoReal);
+            atualizarDiferencaAjusteSaldo();
+        });
+    }
+
     const dataPrimeira = document.getElementById('fin-data-primeira');
     const diaVencimento = document.getElementById('fin-dia-vencimento');
     if (dataPrimeira && diaVencimento) {
@@ -683,6 +692,7 @@ function renderizarAbaResumo(financiamento) {
     const seguroResumo = financiamento.seguro_modo === 'estimado_dfi_mip'
         ? `Estimado (${proxima ? formatarMoedaDisplay(proxima.valor_seguro) : 'sem parcela'})`
         : formatarMoedaDisplay(financiamento.valor_seguro_mensal);
+    const ultimoAjuste = financiamento.ultimo_ajuste_saldo;
     return `
         <div class="fin-info-grid">
             <div class="fin-info-item"><span>Sistema</span><strong>${escapeHtml(sistemaVisual(financiamento))}</strong></div>
@@ -691,6 +701,7 @@ function renderizarAbaResumo(financiamento) {
             <div class="fin-info-item"><span>Taxa anual</span><strong>${formatarPercentualDisplay(financiamento.taxa_juros_nominal_anual)}</strong></div>
             <div class="fin-info-item"><span>Seguro mensal</span><strong>${seguroResumo}</strong></div>
             <div class="fin-info-item"><span>Próxima parcela</span><strong>${proxima ? formatarMoedaDisplay(proxima.valor_previsto_total) : 'Sem parcela pendente'}</strong></div>
+            <div class="fin-info-item"><span>Último ajuste de saldo</span><strong>${ultimoAjuste ? `${formatarMoedaDisplay(ultimoAjuste.saldo_devedor_real)} em ${formatarDataBR(ultimoAjuste.data_referencia)}` : 'Nenhum ajuste'}</strong></div>
         </div>
     `;
 }
@@ -930,6 +941,122 @@ async function salvarAmortizacao(event) {
         } else {
             await carregarFinanciamentos();
         }
+    } catch (error) {
+        mostrarToast(error.message, 'erro');
+    }
+}
+
+function abrirModalAjusteSaldo(id = null) {
+    const financiamentoId = id || estadoFinanciamentos.atual?.id;
+    const financiamento = estadoFinanciamentos.atual;
+    if (!financiamentoId || !financiamento) {
+        mostrarToast('Selecione um financiamento para ajustar o saldo.');
+        return;
+    }
+
+    const parcelas = Array.isArray(financiamento.parcelas) ? financiamento.parcelas : [];
+    if (!parcelas.length) {
+        mostrarToast('Este financiamento não possui cronograma para ajuste.', 'erro');
+        return;
+    }
+
+    const select = document.getElementById('ajuste-parcela-id');
+    if (select) {
+        select.innerHTML = parcelas.map((parcela) => `
+            <option value="${parcela.id}">
+                Parcela ${parcela.numero_parcela} - ${formatarDataBR(parcela.data_vencimento)} - ${String(parcela.status).toUpperCase()}
+            </option>
+        `).join('');
+        const primeiraPendente = parcelas.find((parcela) => String(parcela.status).toLowerCase() !== 'pago');
+        select.value = String((primeiraPendente || parcelas[0]).id);
+    }
+
+    setValue('ajuste-financiamento-id', financiamentoId);
+    setValue('ajuste-tipo', 'ajuste_saldo_real');
+    setValue('ajuste-observacao', '');
+    const recalcular = document.getElementById('ajuste-recalcular');
+    if (recalcular) recalcular.checked = true;
+    atualizarInfoAjusteSaldo();
+    abrirModal('modal-ajuste-saldo');
+}
+
+function obterParcelaAjusteSelecionada() {
+    const financiamento = estadoFinanciamentos.atual;
+    const parcelaId = Number(document.getElementById('ajuste-parcela-id')?.value || 0);
+    return (financiamento?.parcelas || []).find((parcela) => Number(parcela.id) === parcelaId);
+}
+
+function calcularSaldoProjetadoReferencia(parcela) {
+    const financiamento = estadoFinanciamentos.atual;
+    if (!financiamento || !parcela) return 0;
+
+    if (String(parcela.status).toLowerCase() === 'pago') {
+        return Number(parcela.saldo_devedor_apos_pagamento || 0);
+    }
+
+    const anterior = (financiamento.parcelas || []).find((item) => Number(item.numero_parcela) === Number(parcela.numero_parcela) - 1);
+    return anterior ? Number(anterior.saldo_devedor_apos_pagamento || 0) : Number(financiamento.valor_financiado || 0);
+}
+
+function atualizarInfoAjusteSaldo() {
+    const parcela = obterParcelaAjusteSelecionada();
+    if (!parcela) return;
+
+    const saldoProjetado = calcularSaldoProjetadoReferencia(parcela);
+    setValue('ajuste-data', normalizarISODate(parcela.data_vencimento));
+    setValue('ajuste-saldo-projetado', formatarMoedaSemSimbolo(saldoProjetado));
+    setValue('ajuste-saldo-real', formatarMoedaSemSimbolo(saldoProjetado));
+
+    const info = document.getElementById('ajuste-info');
+    const status = String(parcela.status || '').toLowerCase();
+    if (info) {
+        info.innerHTML = status === 'pago'
+            ? 'A parcela de referência está paga. O sistema preservará essa parcela e recalculará a partir da próxima pendente.'
+            : 'A parcela de referência está pendente. O sistema recalculará essa parcela e as futuras.';
+    }
+    atualizarDiferencaAjusteSaldo();
+}
+
+function atualizarDiferencaAjusteSaldo() {
+    const saldoProjetado = parseMoeda(document.getElementById('ajuste-saldo-projetado')?.value);
+    const saldoReal = parseMoeda(document.getElementById('ajuste-saldo-real')?.value);
+    setValue('ajuste-diferenca', formatarMoedaSemSimbolo(saldoReal - saldoProjetado));
+}
+
+async function salvarAjusteSaldo(event) {
+    event.preventDefault();
+
+    try {
+        const financiamentoId = document.getElementById('ajuste-financiamento-id')?.value;
+        const parcela = obterParcelaAjusteSelecionada();
+        if (!financiamentoId || !parcela) throw new Error('Informe a parcela de referência.');
+
+        const payload = {
+            parcela_referencia_id: parcela.id,
+            numero_parcela: parcela.numero_parcela,
+            data_referencia: document.getElementById('ajuste-data')?.value,
+            saldo_devedor_real: parseMoeda(document.getElementById('ajuste-saldo-real')?.value),
+            tipo_ajuste: document.getElementById('ajuste-tipo')?.value || 'ajuste_saldo_real',
+            observacao: document.getElementById('ajuste-observacao')?.value || null,
+            recalcular_parcelas_futuras: document.getElementById('ajuste-recalcular')?.checked !== false
+        };
+
+        if (payload.saldo_devedor_real <= 0) throw new Error('Informe saldo devedor real maior que zero.');
+
+        const response = await fetch(`${API_BASE}/${financiamentoId}/ajustar-saldo`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const resultado = await response.json();
+
+        if (!resultado.success) {
+            throw new Error(resultado.error || resultado.message || 'Erro ao ajustar saldo devedor');
+        }
+
+        fecharModal('modal-ajuste-saldo');
+        mostrarToast(`Saldo ajustado. ${resultado.parcelas_recalculadas || 0} parcelas recalculadas.`);
+        await verDetalhes(financiamentoId);
     } catch (error) {
         mostrarToast(error.message, 'erro');
     }

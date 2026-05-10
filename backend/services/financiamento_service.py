@@ -19,12 +19,12 @@ import logging
 try:
     from backend.models import (db, Financiamento, FinanciamentoParcela,
                                 FinanciamentoAmortizacaoExtra, IndexadorMensal, Conta,
-                                FinanciamentoSeguroFaixaMip)
+                                FinanciamentoSeguroFaixaMip, FinanciamentoAjusteSaldo)
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import (db, Financiamento, FinanciamentoParcela,
                        FinanciamentoAmortizacaoExtra, IndexadorMensal, Conta,
-                       FinanciamentoSeguroFaixaMip)
+                       FinanciamentoSeguroFaixaMip, FinanciamentoAjusteSaldo)
     from services.perfil_financeiro_service import PerfilFinanceiroService
 
 logger = logging.getLogger(__name__)
@@ -1302,6 +1302,178 @@ class FinanciamentoService:
         db.session.commit()
         logger.info(f"[SEGURO-ONLY] ========== FIM RECÁLCULO SEGURO - {len(parcelas_pendentes)} parcelas atualizadas ==========")
         return len(parcelas_pendentes)
+
+    @staticmethod
+    def _parcela_tem_execucao_financeira(parcela):
+        status = str(parcela.status or '').lower()
+        if status in FinanciamentoService.STATUS_PARCELA_EXECUTADA:
+            return True
+
+        conta = Conta.query.filter_by(financiamento_parcela_id=parcela.id).first()
+        if not conta:
+            return False
+
+        status_conta = str(conta.status_pagamento or '').lower()
+        return (
+            status_conta in FinanciamentoService.STATUS_CONTA_EXECUTADA
+            or conta.data_pagamento is not None
+        )
+
+    @staticmethod
+    def _saldo_projetado_antes_parcela(financiamento, numero_parcela):
+        if numero_parcela <= 1:
+            return financiamento.valor_financiado
+
+        parcela_anterior = FinanciamentoParcela.query.filter_by(
+            financiamento_id=financiamento.id,
+            numero_parcela=numero_parcela - 1
+        ).first()
+
+        if parcela_anterior and parcela_anterior.saldo_devedor_apos_pagamento is not None:
+            return parcela_anterior.saldo_devedor_apos_pagamento
+        return financiamento.valor_financiado
+
+    @staticmethod
+    def _obter_parcela_referencia_ajuste(financiamento_id, dados):
+        parcela = None
+        if dados.get('parcela_referencia_id'):
+            parcela = FinanciamentoParcela.query.filter_by(
+                id=int(dados['parcela_referencia_id']),
+                financiamento_id=financiamento_id
+            ).first()
+        elif dados.get('numero_parcela'):
+            parcela = FinanciamentoParcela.query.filter_by(
+                financiamento_id=financiamento_id,
+                numero_parcela=int(dados['numero_parcela'])
+            ).first()
+
+        if not parcela:
+            raise ValueError('Parcela de referencia nao encontrada para este financiamento')
+        return parcela
+
+    @staticmethod
+    def ajustar_saldo_devedor_real(financiamento_id, dados):
+        """
+        Registra saldo devedor real e recalcula apenas parcelas futuras pendentes.
+        """
+        financiamento = FinanciamentoService.obter_financiamento_no_perfil(financiamento_id)
+        parcela_referencia = FinanciamentoService._obter_parcela_referencia_ajuste(financiamento.id, dados)
+
+        saldo_real = FinanciamentoService._decimal(dados.get('saldo_devedor_real'), 'saldo_devedor_real')
+        if saldo_real <= 0:
+            raise ValueError('saldo_devedor_real deve ser maior que zero')
+
+        data_referencia = (
+            FinanciamentoService._converter_data_iso(dados.get('data_referencia'), 'data_referencia')
+            if dados.get('data_referencia')
+            else parcela_referencia.data_vencimento
+        )
+
+        if FinanciamentoService._parcela_tem_execucao_financeira(parcela_referencia):
+            numero_inicio = parcela_referencia.numero_parcela + 1
+            saldo_anterior = parcela_referencia.saldo_devedor_apos_pagamento or saldo_real
+        else:
+            numero_inicio = parcela_referencia.numero_parcela
+            saldo_anterior = FinanciamentoService._saldo_projetado_antes_parcela(
+                financiamento,
+                parcela_referencia.numero_parcela
+            )
+
+        parcelas_alvo = FinanciamentoParcela.query.filter(
+            FinanciamentoParcela.financiamento_id == financiamento.id,
+            FinanciamentoParcela.numero_parcela >= numero_inicio,
+            FinanciamentoParcela.status == 'pendente'
+        ).order_by(FinanciamentoParcela.numero_parcela).all()
+
+        if not parcelas_alvo:
+            raise ValueError('Nao ha parcelas futuras pendentes para recalcular a partir da referencia informada')
+
+        parcelas_na_faixa = FinanciamentoParcela.query.filter(
+            FinanciamentoParcela.financiamento_id == financiamento.id,
+            FinanciamentoParcela.numero_parcela >= numero_inicio
+        ).all()
+        for parcela in parcelas_na_faixa:
+            if FinanciamentoService._parcela_tem_execucao_financeira(parcela):
+                raise ValueError(
+                    'Existem parcelas futuras vinculadas a contas ja efetivadas. '
+                    'O ajuste de saldo nao pode ser aplicado automaticamente.'
+                )
+
+        ajuste = FinanciamentoAjusteSaldo(
+            perfil_financeiro_id=financiamento.perfil_financeiro_id,
+            financiamento_id=financiamento.id,
+            parcela_referencia_id=parcela_referencia.id,
+            numero_parcela=parcela_referencia.numero_parcela,
+            data_referencia=data_referencia,
+            saldo_devedor_anterior=saldo_anterior,
+            saldo_devedor_real=saldo_real,
+            diferenca=saldo_real - Decimal(str(saldo_anterior or 0)),
+            tipo_ajuste=dados.get('tipo_ajuste') or 'ajuste_saldo_real',
+            observacao=dados.get('observacao') or dados.get('observacoes'),
+            parcelas_recalculadas=0,
+        )
+        db.session.add(ajuste)
+        db.session.flush()
+
+        if dados.get('recalcular_parcelas_futuras', True) is False:
+            financiamento.saldo_devedor_atual = saldo_real
+            financiamento.data_base = data_referencia
+            financiamento.numero_parcela_base = numero_inicio - 1
+            db.session.commit()
+            return ajuste, 0
+
+        saldo_base = saldo_real
+        taxa_mensal = financiamento.taxa_juros_mensal
+        sistema = financiamento.sistema_amortizacao
+
+        for indice, parcela in enumerate(parcelas_alvo):
+            parcelas_restantes = len(parcelas_alvo) - indice
+            juros = saldo_base * taxa_mensal
+
+            if sistema == 'PRICE':
+                if taxa_mensal > 0:
+                    fator = (Decimal('1') + taxa_mensal) ** Decimal(str(parcelas_restantes))
+                    prestacao = saldo_base * taxa_mensal * fator / (fator - Decimal('1'))
+                else:
+                    prestacao = saldo_base / Decimal(str(parcelas_restantes))
+                amortizacao = prestacao - juros
+            else:
+                amortizacao = saldo_base / Decimal(str(parcelas_restantes))
+                prestacao = amortizacao + juros
+
+            if amortizacao > saldo_base:
+                amortizacao = saldo_base
+                prestacao = amortizacao + juros
+
+            valor_seguro = FinanciamentoService.calcular_seguro_habitacional(
+                financiamento,
+                parcela.data_vencimento,
+                amortizacao,
+                juros
+            )
+            valor_taxa_adm = parcela.valor_taxa_adm or financiamento.taxa_administracao_fixa or Decimal('0')
+            saldo_final = saldo_base - amortizacao
+
+            parcela.valor_amortizacao = amortizacao
+            parcela.valor_juros = juros
+            parcela.valor_seguro = valor_seguro
+            parcela.valor_taxa_adm = valor_taxa_adm
+            parcela.valor_previsto_total = prestacao + valor_seguro + valor_taxa_adm
+            parcela.saldo_devedor_apos_pagamento = saldo_final if saldo_final > Decimal('0.01') else Decimal('0')
+
+            FinanciamentoService._criar_conta_da_parcela(financiamento, parcela)
+            saldo_base = saldo_final
+
+        financiamento.saldo_devedor_atual = saldo_real
+        financiamento.data_base = data_referencia
+        financiamento.numero_parcela_base = numero_inicio - 1
+        financiamento.prazo_remanescente_meses = len(parcelas_alvo)
+        if parcelas_alvo:
+            financiamento.amortizacao_mensal_atual = parcelas_alvo[0].valor_amortizacao
+        ajuste.parcelas_recalculadas = len(parcelas_alvo)
+
+        db.session.commit()
+        return ajuste, len(parcelas_alvo)
 
     # ========================================================================
     # GERAÇÃO DE PARCELAS
