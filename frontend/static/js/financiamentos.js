@@ -185,7 +185,20 @@ function renderizarFinanciamentos(financiamentos) {
         return;
     }
 
-    container.innerHTML = financiamentos.map((financiamento, index) => {
+    const header = `
+        <div class="fin-contracts-header">
+            <span>Contrato</span>
+            <span>Sistema</span>
+            <span>Valor financiado</span>
+            <span>Saldo devedor</span>
+            <span>Parcelas</span>
+            <span>Taxa anual</span>
+            <span>Progresso</span>
+            <span>Ações</span>
+        </div>
+    `;
+
+    const rows = financiamentos.map((financiamento, index) => {
         const totalParcelas = Number(financiamento.total_parcelas || financiamento.prazo_total_meses || 0);
         const pagas = Number(financiamento.parcelas_pagas || 0);
         const progresso = totalParcelas > 0 ? Math.min((pagas / totalParcelas) * 100, 100) : 0;
@@ -194,46 +207,45 @@ function renderizarFinanciamentos(financiamentos) {
         const iconClass = index % 2 === 0 ? '' : 'green';
 
         return `
-            <article class="fin-contract-row">
-                <span class="fin-contract-icon ${iconClass}" aria-hidden="true">${iconeCasa()}</span>
-                <div class="fin-contract-main">
-                    <h3>${escapeHtml(financiamento.nome || 'Financiamento')}</h3>
-                    <span class="fin-soft-badge">${escapeHtml(sistema)}</span>
-                    <p>${escapeHtml(subtitulo)}</p>
-                </div>
-                <div class="fin-contract-metrics">
-                    <div class="fin-contract-metric">
-                        <span>Valor financiado</span>
-                        <strong>${formatarMoedaDisplay(financiamento.valor_financiado)}</strong>
-                    </div>
-                    <div class="fin-contract-metric">
-                        <span>Saldo devedor atual</span>
-                        <strong>${formatarMoedaDisplay(financiamento.saldo_devedor_atual)}</strong>
-                    </div>
-                    <div class="fin-contract-metric">
-                        <span>Parcelas</span>
-                        <strong>${pagas} / ${totalParcelas}</strong>
-                    </div>
-                    <div class="fin-contract-metric">
-                        <span>Taxa anual</span>
-                        <strong>${formatarPercentualDisplay(financiamento.taxa_juros_nominal_anual)}</strong>
-                    </div>
-                    <div class="fin-progress-wrap">
-                        <div class="fin-progress-track"><div class="fin-progress-fill" style="width: ${progresso.toFixed(2)}%"></div></div>
-                        <small>${progresso.toFixed(2).replace('.', ',')}% das parcelas pagas</small>
+            <div class="fin-contract-row">
+                <div class="fin-contract-title">
+                    <span class="fin-contract-icon ${iconClass}" aria-hidden="true">${iconeCasa()}</span>
+                    <div>
+                        <strong>${escapeHtml(financiamento.nome || 'Financiamento')}</strong>
+                        <small>${escapeHtml(subtitulo)}</small>
                     </div>
                 </div>
-                <div class="fin-contract-actions">
-                    <button type="button" class="fin-action-btn" onclick="verDetalhes(${financiamento.id})">Visualizar</button>
-                    <button type="button" class="fin-action-btn green" onclick="abrirModalAmortizacao(${financiamento.id})">Amortizar</button>
-                    <button type="button" class="fin-action-btn blue" onclick="abrirExtratoFinanciamento(${financiamento.id})">Extrato</button>
-                    <button type="button" class="fin-action-btn" onclick="editarFinanciamento(${financiamento.id})">Editar</button>
-                    <button type="button" class="fin-action-btn red" onclick="abrirQuitacao(${financiamento.id})">Quitar</button>
+                <span class="fin-contract-cell"><span class="fin-soft-badge">${escapeHtml(sistema)}</span></span>
+                <span class="fin-contract-cell">${formatarMoedaDisplay(financiamento.valor_financiado)}</span>
+                <span class="fin-contract-cell">${formatarMoedaDisplay(financiamento.saldo_devedor_atual)}</span>
+                <span class="fin-contract-cell">${pagas} / ${totalParcelas}</span>
+                <span class="fin-contract-cell">${formatarPercentualDisplay(financiamento.taxa_juros_nominal_anual)}</span>
+                <div class="fin-contract-cell fin-progress-cell">
+                    <div class="fin-progress-track"><div class="fin-progress-fill" style="width:${progresso.toFixed(2)}%"></div></div>
+                    <small>${progresso.toFixed(2).replace('.', ',')}%</small>
                 </div>
-                <button type="button" class="fin-row-menu" onclick="verDetalhes(${financiamento.id})" aria-label="Mais ações">⋮</button>
-            </article>
+                <div class="fin-contract-cell fin-contract-actions">
+                    <button type="button" class="fin-icon-btn" onclick="verDetalhes(${financiamento.id})" title="Visualizar">
+                        <svg viewBox="0 0 24 24"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg>
+                    </button>
+                    <button type="button" class="fin-icon-btn green" onclick="abrirModalAmortizacao(${financiamento.id})" title="Amortizar">
+                        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+                    </button>
+                    <button type="button" class="fin-icon-btn blue" onclick="abrirExtratoFinanciamento(${financiamento.id})" title="Extrato">
+                        <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 12h6M9 16h4"/></svg>
+                    </button>
+                    <button type="button" class="fin-icon-btn" onclick="editarFinanciamento(${financiamento.id})" title="Editar">
+                        <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                    <button type="button" class="fin-icon-btn red" onclick="abrirQuitacao(${financiamento.id})" title="Quitar">
+                        <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                </div>
+            </div>
         `;
     }).join('');
+
+    container.innerHTML = header + rows;
 }
 
 function atualizarResumo(financiamentos) {

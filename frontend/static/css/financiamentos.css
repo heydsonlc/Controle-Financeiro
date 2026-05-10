@@ -380,26 +380,72 @@ body.app-shell-body .app-content {
 }
 
 .fin-contract-list {
-    min-height: 160px;
+    min-height: 80px;
+    overflow-x: auto;
+}
+
+/* Header + rows no padrão tabular compartilhado */
+.fin-contracts-header,
+.fin-contract-row {
+    display: grid;
+    grid-template-columns: minmax(200px, 1.8fr) 80px 130px 130px 90px 90px minmax(90px, 1fr) 160px;
+    align-items: center;
+    gap: 10px;
+    padding: 0 18px;
+}
+
+.fin-contracts-header {
+    background: #f8fafc;
+    border-bottom: 1px solid #e5e7eb;
+    color: #475569;
+    font-size: 0.7rem;
+    font-weight: 900;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    min-height: 36px;
+}
+
+.fin-contracts-header span:not(:first-child) {
+    text-align: center;
 }
 
 .fin-contract-row {
-    display: grid;
-    grid-template-columns: 74px minmax(190px, 1fr) minmax(520px, 1.75fr) minmax(340px, 0.95fr) 24px;
-    align-items: center;
-    gap: 16px;
-    min-height: 178px;
-    padding: 22px 18px;
     border-bottom: 1px solid var(--fin-border-soft);
+    min-height: 52px;
+    color: var(--fin-text);
 }
 
 .fin-contract-row:last-child {
     border-bottom: 0;
 }
 
+.fin-contract-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.fin-contract-title strong {
+    display: block;
+    font-size: 0.86rem;
+    font-weight: 720;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.fin-contract-title small {
+    display: block;
+    color: var(--fin-muted);
+    font-size: 0.74rem;
+    margin-top: 1px;
+}
+
 .fin-contract-icon {
-    width: 64px;
-    height: 64px;
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
     border-radius: 999px;
     display: inline-flex;
     align-items: center;
@@ -414,8 +460,8 @@ body.app-shell-body .app-content {
 }
 
 .fin-contract-icon svg {
-    width: 34px;
-    height: 34px;
+    width: 18px;
+    height: 18px;
     fill: none;
     stroke: currentColor;
     stroke-width: 2;
@@ -423,47 +469,35 @@ body.app-shell-body .app-content {
     stroke-linejoin: round;
 }
 
-.fin-contract-main h3 {
-    margin: 0 0 8px;
-    color: var(--fin-text);
-    font-size: 1.05rem;
-    font-weight: 780;
-}
-
-.fin-contract-main p {
-    margin: 10px 0 0;
-    color: var(--fin-muted);
-    font-size: 0.9rem;
-}
-
-.fin-contract-metrics {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(120px, 1fr));
-    gap: 14px;
-}
-
-.fin-contract-metric span {
-    display: block;
-    color: var(--fin-muted);
+.fin-contract-cell {
     font-size: 0.82rem;
-    margin-bottom: 6px;
-}
-
-.fin-contract-metric strong {
     color: var(--fin-text);
-    font-size: 1.02rem;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.fin-progress-wrap {
-    grid-column: 1 / -1;
+.fin-progress-cell {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.fin-progress-cell small {
+    color: var(--fin-muted);
+    font-size: 0.72rem;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .fin-progress-track {
-    height: 6px;
+    flex: 1;
+    height: 5px;
     border-radius: 999px;
     background: #e2e8f0;
     overflow: hidden;
-    margin-top: 10px;
+    min-width: 40px;
 }
 
 .fin-progress-fill {
@@ -473,57 +507,78 @@ body.app-shell-body .app-content {
     background: var(--fin-green);
 }
 
-.fin-progress-wrap small {
-    display: block;
-    margin-top: 9px;
-    color: var(--fin-muted);
-    font-size: 0.84rem;
-}
-
 .fin-contract-actions {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-    border-left: 1px solid var(--fin-border);
-    padding-left: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    flex-shrink: 0;
 }
 
-.fin-action-btn {
-    min-height: 46px;
-    border: 1px solid var(--fin-border);
-    border-radius: 6px;
-    background: var(--fin-surface);
-    color: var(--fin-text);
-    font-weight: 740;
+/* Ícone-btn padrão financiamentos */
+.fin-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: 1px solid #d8dee9;
+    border-radius: 7px;
+    background: #ffffff;
+    color: #334155;
     cursor: pointer;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+    flex-shrink: 0;
 }
 
-.fin-action-btn.green {
+.fin-icon-btn svg {
+    width: 13px;
+    height: 13px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    pointer-events: none;
+}
+
+.fin-icon-btn:hover {
+    background: #f1f5f9;
+    border-color: #94a3b8;
+}
+
+.fin-icon-btn.green {
     color: #047857;
-    border-color: #bbf7d0;
+    border-color: rgba(5, 150, 105, 0.3);
     background: #f0fdf4;
 }
 
-.fin-action-btn.blue {
+.fin-icon-btn.green:hover {
+    background: #dcfce7;
+}
+
+.fin-icon-btn.blue {
     color: var(--fin-blue);
-    border-color: #bfdbfe;
+    border-color: rgba(37, 99, 235, 0.3);
     background: #eff6ff;
 }
 
-.fin-action-btn.red {
+.fin-icon-btn.blue:hover {
+    background: #dbeafe;
+}
+
+.fin-icon-btn.red {
     color: var(--fin-red);
-    border-color: #fecaca;
+    border-color: rgba(220, 38, 38, 0.3);
     background: #fff7f7;
 }
 
+.fin-icon-btn.red:hover {
+    background: #fee2e2;
+}
+
 .fin-row-menu {
-    align-self: start;
-    border: 0;
-    background: transparent;
-    font-size: 1.35rem;
-    line-height: 1;
-    cursor: pointer;
-    color: var(--fin-text);
+    display: none;
 }
 
 .fin-panel-footer {
