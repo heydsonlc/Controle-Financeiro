@@ -41,6 +41,7 @@ class FinanciamentoService:
         'realizado', 'realizada',
         'conciliado', 'conciliada',
         'amortizado', 'amortizada',
+        'efetivado', 'efetivada',
     }
 
     STATUS_CONTA_EXECUTADA = {
@@ -48,6 +49,7 @@ class FinanciamentoService:
         'baixado', 'baixada',
         'realizado', 'realizada',
         'conciliado', 'conciliada',
+        'efetivado', 'efetivada',
     }
 
     SEGURO_MODO_FIXO = 'fixo'
@@ -574,6 +576,12 @@ class FinanciamentoService:
         if amortizacao:
             return True
 
+        ajuste_saldo = FinanciamentoAjusteSaldo.query.filter_by(
+            financiamento_id=financiamento_id
+        ).first()
+        if ajuste_saldo:
+            return True
+
         try:
             from backend.models import MovimentoFinanceiro
         except ImportError:
@@ -1072,18 +1080,12 @@ class FinanciamentoService:
 
         if not FinanciamentoService.pode_excluir_financiamento(financiamento_id):
             raise ValueError(
-                "Financiamento possui histórico financeiro e não pode ser excluído. "
-                "Utilize a opção de inativar."
+                "Nao e possivel excluir este financiamento porque ja existem parcelas pagas, "
+                "ajustes, amortizacoes ou movimentacoes financeiras vinculadas."
             )
 
         try:
             FinanciamentoService._remover_cronograma_sem_execucao(financiamento_id)
-
-            # Excluir despesas vinculadas que tenham ficado sem parcela associada
-            if financiamento.item_despesa_id:
-                Conta.query.filter(
-                    Conta.item_despesa_id == financiamento.item_despesa_id
-                ).delete(synchronize_session=False)
 
             # Excluir financiamento
             db.session.delete(financiamento)

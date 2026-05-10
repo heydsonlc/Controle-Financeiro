@@ -1244,6 +1244,12 @@ body.app-shell-body .app-content {
     cursor: pointer;
 }
 
+.fin-quick-actions button.fin-quick-danger {
+    color: var(--fin-red);
+    border-color: #fecaca;
+    background: #fff7f7;
+}
+
 .fin-tab-empty,
 .fin-info-grid {
     padding: 24px;

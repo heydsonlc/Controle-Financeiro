@@ -1182,16 +1182,28 @@ function registrarPendenciaQuitacao() {
     mostrarToast('Geração real de boleto de quitação depende de integração bancária.');
 }
 
-async function tentarExcluirFinanciamento(id) {
-    const confirmar = window.confirm('Deseja excluir este financiamento? Esta ação só é permitida se não houver histórico.');
+async function tentarExcluirFinanciamento(id = null) {
+    const financiamentoId = id || estadoFinanciamentos.atual?.id;
+    if (!financiamentoId) {
+        mostrarToast('Selecione um financiamento para excluir.', 'erro');
+        return;
+    }
+
+    const confirmar = window.confirm(
+        'Deseja realmente excluir este financiamento?\n\n' +
+        'Esta acao removera o financiamento, o cronograma gerado e registros pendentes vinculados. Esta acao nao podera ser desfeita.'
+    );
     if (!confirmar) return;
 
     try {
-        const response = await fetch(`${API_BASE}/${id}`, { method: 'DELETE' });
+        const response = await fetch(`${API_BASE}/${financiamentoId}`, { method: 'DELETE' });
         const resultado = await response.json();
         if (!resultado.success) throw new Error(resultado.error || resultado.message || 'Erro ao excluir financiamento');
-        mostrarToast('Financiamento excluído com sucesso.');
-        carregarFinanciamentos();
+        mostrarToast(resultado.message || 'Financiamento excluido com sucesso.');
+        estadoFinanciamentos.atual = null;
+        estadoFinanciamentos.abaAtual = 'parcelas';
+        mostrarView('list');
+        await carregarFinanciamentos();
     } catch (error) {
         mostrarToast(error.message, 'erro');
     }

@@ -11,8 +11,10 @@ from backend.models import (
     Conta,
     Financiamento,
     FinanciamentoAjusteSaldo,
+    FinanciamentoAmortizacaoExtra,
     FinanciamentoParcela,
     FinanciamentoSeguroFaixaMip,
+    FinanciamentoSeguroVigencia,
 )
 from backend.routes.financiamentos import financiamentos_bp
 
@@ -578,6 +580,137 @@ def test_regenerar_parcelas_bloqueia_quando_existe_parcela_paga(client):
     assert parcelas[0].status == 'pago'
 
 
+def test_excluir_financiamento_sem_execucao_remove_dependencias_pendentes(client):
+    criado = _criar_financiamento(client)
+    parcelas = FinanciamentoParcela.query.filter_by(financiamento_id=criado['id']).all()
+    parcela_ids = [parcela.id for parcela in parcelas]
+    conta_ids = [
+        conta.id for conta in Conta.query.filter(
+            Conta.financiamento_parcela_id.in_(parcela_ids)
+        ).all()
+    ]
+
+    assert parcelas
+    assert conta_ids
+    assert FinanciamentoSeguroVigencia.query.filter_by(financiamento_id=criado['id']).count() == 1
+
+    response = client.delete(f'/api/financiamentos/{criado["id"]}')
+    body = response.get_json()
+
+    assert response.status_code == 200
+    assert body['success'] is True
+    assert db.session.get(Financiamento, criado['id']) is None
+    assert FinanciamentoParcela.query.filter_by(financiamento_id=criado['id']).count() == 0
+    assert FinanciamentoSeguroVigencia.query.filter_by(financiamento_id=criado['id']).count() == 0
+    assert Conta.query.filter(Conta.id.in_(conta_ids)).count() == 0
+
+
+def test_excluir_financiamento_estimado_remove_faixas_mip(client):
+    response = client.post('/api/financiamentos', json=_payload_financiamento_estimado('Financiamento Excluir Estimado'))
+    criado = response.get_json()['data']
+
+    assert FinanciamentoSeguroFaixaMip.query.filter_by(financiamento_id=criado['id']).count() == 8
+
+    response = client.delete(f'/api/financiamentos/{criado["id"]}')
+    body = response.get_json()
+
+    assert response.status_code == 200
+    assert body['success'] is True
+    assert db.session.get(Financiamento, criado['id']) is None
+    assert FinanciamentoSeguroFaixaMip.query.filter_by(financiamento_id=criado['id']).count() == 0
+
+
+def test_excluir_financiamento_bloqueia_parcela_paga(client):
+    criado = _criar_financiamento(client)
+    primeira = _parcela_financiamento(criado['id'], 1)
+
+    pagamento = client.post(
+        f'/api/financiamentos/parcelas/{primeira.id}/pagar',
+        json={
+            'valor_pago': float(primeira.valor_previsto_total),
+            'data_pagamento': '2026-06-01',
+        },
+    )
+    assert pagamento.status_code == 200
+
+    response = client.delete(f'/api/financiamentos/{criado["id"]}')
+    body = response.get_json()
+
+    assert response.status_code == 400
+    assert body['success'] is False
+    assert 'parcelas pagas' in body['message']
+    assert db.session.get(Financiamento, criado['id']) is not None
+    assert _parcela_financiamento(criado['id'], 1).status == 'pago'
+
+
+def test_excluir_financiamento_bloqueia_conta_paga_vinculada(client):
+    criado = _criar_financiamento(client)
+    parcela = _parcela_financiamento(criado['id'], 2)
+    conta = Conta.query.filter_by(financiamento_parcela_id=parcela.id).first()
+    assert conta is not None
+
+    conta.status_pagamento = 'Pago'
+    conta.data_pagamento = date(2026, 7, 1)
+    db.session.commit()
+
+    response = client.delete(f'/api/financiamentos/{criado["id"]}')
+    body = response.get_json()
+
+    assert response.status_code == 400
+    assert body['success'] is False
+    assert 'movimentacoes financeiras vinculadas' in body['message']
+    assert db.session.get(Financiamento, criado['id']) is not None
+    assert db.session.get(Conta, conta.id) is not None
+
+
+def test_excluir_financiamento_bloqueia_amortizacao_registrada(client):
+    criado = _criar_financiamento(client)
+    amortizacao = client.post(
+        f'/api/financiamentos/{criado["id"]}/amortizacao-extra',
+        json={
+            'data': '2026-07-01',
+            'valor': 1000.0,
+            'tipo': 'reduzir_parcela',
+            'observacoes': 'Bloqueio exclusao',
+        },
+    )
+    assert amortizacao.status_code == 201
+
+    response = client.delete(f'/api/financiamentos/{criado["id"]}')
+    body = response.get_json()
+
+    assert response.status_code == 400
+    assert body['success'] is False
+    assert db.session.get(Financiamento, criado['id']) is not None
+    assert FinanciamentoAmortizacaoExtra.query.filter_by(financiamento_id=criado['id']).count() == 1
+
+
+def test_excluir_financiamento_bloqueia_ajuste_saldo_registrado(client):
+    criado = _criar_financiamento(client)
+    referencia = _parcela_financiamento(criado['id'], 3)
+    ajuste = client.post(
+        f'/api/financiamentos/{criado["id"]}/ajustar-saldo',
+        json={
+            'parcela_referencia_id': referencia.id,
+            'numero_parcela': referencia.numero_parcela,
+            'data_referencia': referencia.data_vencimento.isoformat(),
+            'saldo_devedor_real': 300000.0,
+            'tipo_ajuste': 'ajuste_saldo_real',
+            'observacao': 'Bloqueio exclusao',
+            'recalcular_parcelas_futuras': True,
+        },
+    )
+    assert ajuste.status_code == 200
+
+    response = client.delete(f'/api/financiamentos/{criado["id"]}')
+    body = response.get_json()
+
+    assert response.status_code == 400
+    assert body['success'] is False
+    assert db.session.get(Financiamento, criado['id']) is not None
+    assert FinanciamentoAjusteSaldo.query.filter_by(financiamento_id=criado['id']).count() == 1
+
+
 def test_amortizacao_existente_retorna_estrutura_sem_alterar_formula(client):
     criado = _criar_financiamento(client)
 
@@ -789,6 +922,23 @@ def test_template_nao_depende_de_modal_antigo_para_cadastro(client):
     assert 'fin-form-view' in html
     assert 'modal-financiamento' not in html
     assert 'modal-detalhes' not in html
+
+
+def test_frontend_exclusao_financiamento_tem_botao_e_delete(client):
+    response = client.get('/financiamentos')
+    html = response.get_data(as_text=True)
+    base_dir = Path(__file__).resolve().parents[1]
+    js = (base_dir / 'frontend' / 'static' / 'js' / 'financiamentos.js').read_text(encoding='utf-8')
+    inicio = js.index('async function tentarExcluirFinanciamento')
+    fim = js.index('function abrirModal', inicio)
+    trecho = js[inicio:fim]
+
+    assert 'Excluir financiamento' in html
+    assert 'tentarExcluirFinanciamento()' in html
+    assert "method: 'DELETE'" in trecho
+    assert 'mostrarView' in trecho
+    assert 'carregarFinanciamentos' in trecho
+    assert 'mostrarToast(error.message' in trecho
 
 
 def test_frontend_payload_de_financiamento_envia_campos_estruturais_e_flag_cronograma():

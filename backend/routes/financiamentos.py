@@ -445,13 +445,14 @@ def deletar_financiamento(id):
 
         return jsonify({
             'success': True,
-            'message': 'Financiamento excluído com sucesso'
+            'message': 'Financiamento excluido com sucesso.'
         }), 200
 
     except ValueError as e:
         return jsonify({
             'success': False,
-            'message': str(e)
+            'message': str(e),
+            'error': str(e)
         }), 400
 
     except Exception as e:
