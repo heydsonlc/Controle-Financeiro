@@ -209,7 +209,14 @@
                         <h2>Encargos</h2>
                     </div>
                     <div class="fin-form-grid">
-                        <label class="fin-field fin-money-field">
+                        <label class="fin-field">
+                            <span>Modo de cálculo do seguro</span>
+                            <select id="fin-seguro-modo">
+                                <option value="fixo">Fixo/manual</option>
+                                <option value="estimado_dfi_mip">Estimado DFI + MIP</option>
+                            </select>
+                        </label>
+                        <label class="fin-field fin-money-field" id="fin-seguro-fixo-campos">
                             <span>Seguro habitacional (mensal) <em>*</em></span>
                             <div><span>R$</span><input id="fin-seguro" type="text" required placeholder="0,00" inputmode="decimal"></div>
                         </label>
@@ -232,6 +239,28 @@
                             <textarea id="fin-observacoes" rows="3" maxlength="500" placeholder="Informações adicionais sobre o financiamento (opcional)"></textarea>
                             <small><span id="fin-observacoes-count">0</span>/500</small>
                         </label>
+                        <div class="fin-field-full fin-seguro-estimado" id="fin-seguro-estimado-campos" hidden>
+                            <p class="fin-inline-note">O seguro estimado aproxima o comportamento do contrato real usando DFI fixo e MIP variável por idade. Os valores podem divergir do banco por arredondamentos, TR e regras internas da seguradora.</p>
+                            <div class="fin-form-grid fin-form-grid-three">
+                                <label class="fin-field">
+                                    <span>Fator DFI <em>*</em></span>
+                                    <input id="fin-seguro-fator-dfi" type="text" placeholder="0,0489" inputmode="decimal">
+                                </label>
+                                <label class="fin-field">
+                                    <span>Data de nascimento do titular <em>*</em></span>
+                                    <input id="fin-seguro-data-nascimento" type="date">
+                                </label>
+                                <label class="fin-field">
+                                    <span>Mês de reajuste por idade</span>
+                                    <select id="fin-seguro-mes-reajuste">
+                                        {% for mes in range(1, 13) %}
+                                        <option value="{{ mes }}" {% if mes == 2 %}selected{% endif %}>{{ mes }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </label>
+                            </div>
+                            <div class="fin-faixas-mip" id="fin-faixas-mip"></div>
+                        </div>
                     </div>
                 </section>
 

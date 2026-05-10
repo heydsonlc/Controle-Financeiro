@@ -8,16 +8,29 @@ const estadoFinanciamentos = {
     modoTabela: false
 };
 
+const FAIXAS_MIP_PADRAO = [
+    { idade_inicio: 0, idade_fim: 45, fator_mip: 0.03187 },
+    { idade_inicio: 46, idade_fim: 50, fator_mip: 0.04899 },
+    { idade_inicio: 51, idade_fim: 55, fator_mip: 0.08593 },
+    { idade_inicio: 56, idade_fim: 60, fator_mip: 0.16077 },
+    { idade_inicio: 61, idade_fim: 65, fator_mip: 0.31887 },
+    { idade_inicio: 66, idade_fim: 70, fator_mip: 0.34932 },
+    { idade_inicio: 71, idade_fim: 75, fator_mip: 0.49795 },
+    { idade_inicio: 76, idade_fim: 80, fator_mip: 0.57099 }
+];
+
 document.addEventListener('DOMContentLoaded', () => {
     atualizarTituloGlobal('Financiamentos');
+    renderizarFaixasMip();
     configurarEventosFormulario();
     configurarEventosSimulacao();
     preencherDatasPadrao();
+    atualizarCamposSeguro();
     carregarFinanciamentos();
 });
 
 function configurarEventosFormulario() {
-    ['fin-valor', 'fin-entrada', 'fin-saldo-inicial', 'fin-prazo', 'fin-taxa', 'fin-seguro', 'fin-taxa-adm', 'fin-data-primeira'].forEach((id) => {
+    ['fin-valor', 'fin-entrada', 'fin-saldo-inicial', 'fin-prazo', 'fin-taxa', 'fin-seguro', 'fin-taxa-adm', 'fin-data-primeira', 'fin-seguro-fator-dfi', 'fin-seguro-data-nascimento', 'fin-seguro-mes-reajuste'].forEach((id) => {
         const campo = document.getElementById(id);
         if (campo) {
             campo.addEventListener('input', () => {
@@ -31,6 +44,19 @@ function configurarEventosFormulario() {
             }
         }
     });
+
+    const seguroModo = document.getElementById('fin-seguro-modo');
+    if (seguroModo) {
+        seguroModo.addEventListener('change', () => {
+            atualizarCamposSeguro();
+            atualizarResumoSimulacao();
+        });
+    }
+
+    const faixasMip = document.getElementById('fin-faixas-mip');
+    if (faixasMip) {
+        faixasMip.addEventListener('input', atualizarResumoSimulacao);
+    }
 
     const dataPrimeira = document.getElementById('fin-data-primeira');
     const diaVencimento = document.getElementById('fin-dia-vencimento');
@@ -262,8 +288,59 @@ function limparFormulario() {
     setValue('fin-entrada', '');
     setValue('fin-saldo-inicial', '');
     setValue('fin-seguro', '');
+    setValue('fin-seguro-modo', 'fixo');
+    setValue('fin-seguro-fator-dfi', '0,0489');
+    setValue('fin-seguro-data-nascimento', '');
+    setValue('fin-seguro-mes-reajuste', '2');
+    renderizarFaixasMip();
+    atualizarCamposSeguro();
     setValue('fin-taxa-adm', '');
     setText('fin-observacoes-count', '0');
+}
+
+function atualizarCamposSeguro() {
+    const modo = document.getElementById('fin-seguro-modo')?.value || 'fixo';
+    const camposFixos = document.getElementById('fin-seguro-fixo-campos');
+    const camposEstimados = document.getElementById('fin-seguro-estimado-campos');
+    const campoSeguroFixo = document.getElementById('fin-seguro');
+    const campoFatorDfi = document.getElementById('fin-seguro-fator-dfi');
+    const campoNascimento = document.getElementById('fin-seguro-data-nascimento');
+
+    if (camposFixos) camposFixos.hidden = modo === 'estimado_dfi_mip';
+    if (camposEstimados) camposEstimados.hidden = modo !== 'estimado_dfi_mip';
+    if (campoSeguroFixo) campoSeguroFixo.required = modo !== 'estimado_dfi_mip';
+    if (campoFatorDfi) campoFatorDfi.required = modo === 'estimado_dfi_mip';
+    if (campoNascimento) campoNascimento.required = modo === 'estimado_dfi_mip';
+}
+
+function renderizarFaixasMip(faixas = FAIXAS_MIP_PADRAO) {
+    const container = document.getElementById('fin-faixas-mip');
+    if (!container) return;
+
+    container.innerHTML = faixas.map((faixa, index) => `
+        <div class="fin-faixa-mip-row" data-index="${index}">
+            <label class="fin-field">
+                <span>Idade inicial</span>
+                <input class="fin-faixa-idade-inicio" type="number" min="0" value="${Number(faixa.idade_inicio ?? 0)}">
+            </label>
+            <label class="fin-field">
+                <span>Idade final</span>
+                <input class="fin-faixa-idade-fim" type="number" min="0" value="${Number(faixa.idade_fim ?? 0)}">
+            </label>
+            <label class="fin-field">
+                <span>Fator MIP</span>
+                <input class="fin-faixa-fator-mip" type="text" inputmode="decimal" value="${formatarFatorSeguro(faixa.fator_mip)}">
+            </label>
+        </div>
+    `).join('');
+}
+
+function coletarFaixasMip() {
+    return Array.from(document.querySelectorAll('.fin-faixa-mip-row')).map((linha) => ({
+        idade_inicio: Number(linha.querySelector('.fin-faixa-idade-inicio')?.value || 0),
+        idade_fim: Number(linha.querySelector('.fin-faixa-idade-fim')?.value || 0),
+        fator_mip: parseNumero(linha.querySelector('.fin-faixa-fator-mip')?.value)
+    })).filter((faixa) => faixa.idade_fim >= faixa.idade_inicio && faixa.fator_mip >= 0);
 }
 
 function selecionarSistema(sistema) {
@@ -289,7 +366,6 @@ function atualizarResumoSimulacao() {
     const saldo = parseMoeda(document.getElementById('fin-saldo-inicial')?.value);
     const prazo = Number(document.getElementById('fin-prazo')?.value || 0);
     const taxaAnual = parseNumero(document.getElementById('fin-taxa')?.value);
-    const seguro = parseMoeda(document.getElementById('fin-seguro')?.value);
     const taxaAdm = parseMoeda(document.getElementById('fin-taxa-adm')?.value);
     const sistema = document.getElementById('fin-sistema')?.value || 'SAC';
     const dataPrimeira = document.getElementById('fin-data-primeira')?.value;
@@ -298,14 +374,22 @@ function atualizarResumoSimulacao() {
     let parcela = 0;
 
     if (saldo > 0 && prazo > 0) {
+        let amortizacao = 0;
+        let juros = saldo * taxaMensal;
+        let prestacao = 0;
+
         if (sistema === 'PRICE') {
-            parcela = taxaMensal > 0
+            prestacao = taxaMensal > 0
                 ? saldo * (taxaMensal * Math.pow(1 + taxaMensal, prazo)) / (Math.pow(1 + taxaMensal, prazo) - 1)
                 : saldo / prazo;
+            amortizacao = prestacao - juros;
         } else {
-            parcela = (saldo / prazo) + (saldo * taxaMensal);
+            amortizacao = saldo / prazo;
+            prestacao = amortizacao + juros;
         }
-        parcela += seguro + taxaAdm;
+
+        const seguro = calcularSeguroPreview(amortizacao, juros, dataPrimeira);
+        parcela = prestacao + seguro + taxaAdm;
     }
 
     setText('sim-parcela', formatarMoedaDisplay(parcela));
@@ -313,6 +397,41 @@ function atualizarResumoSimulacao() {
     setText('sim-primeira', dataPrimeira ? formatarDataBR(dataPrimeira) : '--');
     setText('sim-sistema', sistema);
     setText('sim-prazo', `${prazo || 0} meses`);
+}
+
+function calcularSeguroPreview(amortizacao, juros, dataPrimeira) {
+    const modo = document.getElementById('fin-seguro-modo')?.value || 'fixo';
+    if (modo !== 'estimado_dfi_mip') {
+        return parseMoeda(document.getElementById('fin-seguro')?.value);
+    }
+
+    const fatorDfi = parseNumero(document.getElementById('fin-seguro-fator-dfi')?.value);
+    const fatorMip = obterFatorMipPreview(dataPrimeira);
+    if (!fatorDfi || !fatorMip) return 0;
+    return arredondar2((Number(amortizacao || 0) * fatorDfi) + (Number(juros || 0) * fatorMip));
+}
+
+function obterFatorMipPreview(dataPrimeira) {
+    const nascimento = document.getElementById('fin-seguro-data-nascimento')?.value;
+    if (!nascimento || !dataPrimeira) return 0;
+
+    const idade = calcularIdadeSeguroPreview(nascimento, dataPrimeira);
+    const faixa = coletarFaixasMip().find((item) => idade >= item.idade_inicio && idade <= item.idade_fim);
+    return faixa ? Number(faixa.fator_mip || 0) : 0;
+}
+
+function calcularIdadeSeguroPreview(dataNascimentoISO, dataVencimentoISO) {
+    const nascimento = normalizarISODate(dataNascimentoISO);
+    const vencimento = normalizarISODate(dataVencimentoISO);
+    if (!nascimento || !vencimento) return 0;
+
+    const [anoNascimento] = nascimento.split('-').map(Number);
+    const [anoVencimento] = vencimento.split('-').map(Number);
+    const mesReajuste = Number(document.getElementById('fin-seguro-mes-reajuste')?.value || 2);
+    const dataReajuste = `${anoVencimento}-${String(mesReajuste).padStart(2, '0')}-01`;
+    let idade = anoVencimento - anoNascimento;
+    if (vencimento < dataReajuste) idade -= 1;
+    return Math.max(idade, 0);
 }
 
 async function salvarFinanciamento(event) {
@@ -344,7 +463,11 @@ function coletarDadosFormulario(editando) {
     const sistemaVisualSelecionado = document.getElementById('fin-sistema')?.value || 'SAC';
     const produto = document.getElementById('fin-produto')?.value || 'Habitacional';
     const saldoInicial = parseMoeda(document.getElementById('fin-saldo-inicial')?.value);
+    const seguroModo = document.getElementById('fin-seguro-modo')?.value || 'fixo';
     const seguro = parseMoeda(document.getElementById('fin-seguro')?.value);
+    const seguroFatorDfi = parseNumero(document.getElementById('fin-seguro-fator-dfi')?.value);
+    const seguroDataNascimento = document.getElementById('fin-seguro-data-nascimento')?.value || null;
+    const seguroMesReajuste = Number(document.getElementById('fin-seguro-mes-reajuste')?.value || 2);
     const dataPrimeira = ajustarDataPrimeiraPorDia(
         document.getElementById('fin-data-primeira')?.value,
         document.getElementById('fin-dia-vencimento')?.value
@@ -354,7 +477,11 @@ function coletarDadosFormulario(editando) {
 
     if (!nome) throw new Error('Informe o nome do financiamento.');
     if (saldoInicial <= 0) throw new Error('Informe um saldo inicial maior que zero.');
-    if (!editando && seguro <= 0) throw new Error('Informe seguro habitacional mensal maior que zero.');
+    if (seguroModo === 'fixo' && !editando && seguro <= 0) throw new Error('Informe seguro habitacional mensal maior que zero.');
+    if (seguroModo === 'estimado_dfi_mip') {
+        if (seguroFatorDfi <= 0) throw new Error('Informe o fator DFI do seguro estimado.');
+        if (!seguroDataNascimento) throw new Error('Informe a data de nascimento do titular.');
+    }
 
     const dados = {
         nome,
@@ -367,18 +494,27 @@ function coletarDadosFormulario(editando) {
         data_contrato: document.getElementById('fin-data-contrato')?.value,
         data_primeira_parcela: dataPrimeira,
         seguro_tipo: 'fixo',
-        valor_seguro_mensal: seguro,
+        valor_seguro_mensal: seguroModo === 'fixo' ? seguro : 0,
+        seguro_modo: seguroModo,
+        seguro_fator_dfi: seguroModo === 'estimado_dfi_mip' ? seguroFatorDfi : null,
+        seguro_data_nascimento_titular: seguroModo === 'estimado_dfi_mip' ? seguroDataNascimento : null,
+        seguro_mes_reajuste_idade: seguroModo === 'estimado_dfi_mip' ? seguroMesReajuste : 2,
         taxa_administracao_fixa: parseMoeda(document.getElementById('fin-taxa-adm')?.value),
         ativo: document.getElementById('fin-status')?.value !== 'inativo',
         regenerar_cronograma: document.getElementById('fin-gerar-cronograma')?.checked !== false
     };
+
+    if (seguroModo === 'estimado_dfi_mip') {
+        dados.faixas_mip = coletarFaixasMip();
+        if (!dados.faixas_mip.length) throw new Error('Informe pelo menos uma faixa MIP.');
+    }
 
     if (!dados.prazo_total_meses || dados.prazo_total_meses <= 0) throw new Error('Informe prazo em meses maior que zero.');
     if (dados.taxa_juros_nominal_anual < 0) throw new Error('A taxa de juros não pode ser negativa.');
     if (!dados.data_contrato) throw new Error('Informe a data de contratação.');
     if (!dados.data_primeira_parcela) throw new Error('Informe a data da 1ª parcela.');
 
-    if (!editando) {
+    if (!editando && seguroModo === 'fixo') {
         dados.vigencias_seguro = [{
             competencia_inicio: dataPrimeira,
             valor_mensal: seguro,
@@ -544,13 +680,16 @@ function selecionarAbaDetalheOuAvisar(aba) {
 function renderizarAbaResumo(financiamento) {
     const parcelas = financiamento.parcelas || [];
     const proxima = parcelas.find((parcela) => String(parcela.status).toLowerCase() !== 'pago');
+    const seguroResumo = financiamento.seguro_modo === 'estimado_dfi_mip'
+        ? `Estimado (${proxima ? formatarMoedaDisplay(proxima.valor_seguro) : 'sem parcela'})`
+        : formatarMoedaDisplay(financiamento.valor_seguro_mensal);
     return `
         <div class="fin-info-grid">
             <div class="fin-info-item"><span>Sistema</span><strong>${escapeHtml(sistemaVisual(financiamento))}</strong></div>
             <div class="fin-info-item"><span>Produto</span><strong>${escapeHtml(tipoVisual(financiamento))}</strong></div>
             <div class="fin-info-item"><span>Prazo total</span><strong>${financiamento.prazo_total_meses || 0} meses</strong></div>
             <div class="fin-info-item"><span>Taxa anual</span><strong>${formatarPercentualDisplay(financiamento.taxa_juros_nominal_anual)}</strong></div>
-            <div class="fin-info-item"><span>Seguro mensal</span><strong>${formatarMoedaDisplay(financiamento.valor_seguro_mensal)}</strong></div>
+            <div class="fin-info-item"><span>Seguro mensal</span><strong>${seguroResumo}</strong></div>
             <div class="fin-info-item"><span>Próxima parcela</span><strong>${proxima ? formatarMoedaDisplay(proxima.valor_previsto_total) : 'Sem parcela pendente'}</strong></div>
         </div>
     `;
@@ -646,7 +785,13 @@ async function editarFinanciamento(id) {
         setValue('fin-prazo', financiamento.prazo_total_meses || '');
         setValue('fin-taxa', formatarNumeroBR(financiamento.taxa_juros_nominal_anual));
         setValue('fin-data-contrato', normalizarISODate(financiamento.data_contrato));
+        setValue('fin-seguro-modo', financiamento.seguro_modo || 'fixo');
         setValue('fin-seguro', formatarMoedaSemSimbolo(financiamento.valor_seguro_mensal));
+        setValue('fin-seguro-fator-dfi', financiamento.seguro_fator_dfi ? formatarFatorSeguro(financiamento.seguro_fator_dfi) : '0,0489');
+        setValue('fin-seguro-data-nascimento', normalizarISODate(financiamento.seguro_data_nascimento_titular));
+        setValue('fin-seguro-mes-reajuste', financiamento.seguro_mes_reajuste_idade || 2);
+        renderizarFaixasMip(Array.isArray(financiamento.faixas_mip) && financiamento.faixas_mip.length ? financiamento.faixas_mip : FAIXAS_MIP_PADRAO);
+        atualizarCamposSeguro();
         setValue('fin-taxa-adm', formatarMoedaSemSimbolo(financiamento.taxa_administracao_fixa));
         setValue('fin-indexador', financiamento.indexador_saldo || '');
         setValue('fin-data-primeira', normalizarISODate(financiamento.data_primeira_parcela));
@@ -981,6 +1126,11 @@ function formatarNumeroBR(valor) {
     return numero.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function formatarFatorSeguro(valor) {
+    const numero = Number(valor || 0);
+    return numero.toLocaleString('pt-BR', { minimumFractionDigits: 5, maximumFractionDigits: 5 });
+}
+
 function formatarPercentualDisplay(valor) {
     const numero = Number(valor || 0);
     return `${numero.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
@@ -1002,6 +1152,10 @@ function parseNumero(valor) {
     if (!valor) return 0;
     const numero = Number(String(valor).replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.'));
     return Number.isFinite(numero) ? numero : 0;
+}
+
+function arredondar2(valor) {
+    return Math.round((Number(valor || 0) + Number.EPSILON) * 100) / 100;
 }
 
 function formatarCampoMoeda(campo) {

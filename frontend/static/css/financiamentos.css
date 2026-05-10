@@ -648,6 +648,10 @@ body.app-shell-body .app-content {
     grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.fin-form-grid-three {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .fin-field {
     display: flex;
     flex-direction: column;
@@ -674,6 +678,37 @@ body.app-shell-body .app-content {
 
 .fin-field-full {
     grid-column: 1 / -1;
+}
+
+.fin-inline-note {
+    margin: 0 0 10px;
+    color: var(--fin-muted);
+    font-size: 0.8rem;
+    line-height: 1.45;
+}
+
+.fin-seguro-estimado {
+    padding: 10px;
+    border: 1px solid var(--fin-border);
+    border-radius: 6px;
+    background: var(--fin-surface-soft);
+}
+
+.fin-faixas-mip {
+    display: grid;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.fin-faixa-mip-row {
+    display: grid;
+    grid-template-columns: minmax(90px, 1fr) minmax(90px, 1fr) minmax(120px, 1.3fr);
+    gap: 8px;
+    align-items: end;
+}
+
+.fin-faixa-mip-row input {
+    min-width: 0;
 }
 
 .fin-money-field > div,
@@ -1411,9 +1446,14 @@ body.app-shell-body .app-content {
     .fin-kpi-grid,
     .fin-detail-kpis,
     .fin-form-grid,
+    .fin-form-grid-three,
     .fin-form-grid-four,
     .fin-schedule-grid,
     .fin-info-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .fin-faixa-mip-row {
         grid-template-columns: 1fr;
     }
 

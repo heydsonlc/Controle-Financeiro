@@ -249,10 +249,23 @@ def criar_financiamento():
 
         logger.debug('Payload recebido em criar_financiamento. Chaves: %s', list(data.keys()))
 
-        # Validar vigências de seguro (obrigatório pelo menos 1)
+        seguro_modo = data.get('seguro_modo') or 'fixo'
+        if seguro_modo not in ['fixo', 'estimado_dfi_mip']:
+            return jsonify({
+                'success': False,
+                'error': 'seguro_modo deve ser "fixo" ou "estimado_dfi_mip"'
+            }), 400
+
+        if seguro_modo == 'estimado_dfi_mip' and not data.get('seguro_data_nascimento_titular'):
+            return jsonify({
+                'success': False,
+                'error': 'seguro_data_nascimento_titular é obrigatória no modo estimado DFI + MIP'
+            }), 400
+
+        # Validar vigências de seguro no modo fixo/manual (obrigatório pelo menos 1)
         vigencias_seguro = data.get('vigencias_seguro', [])
 
-        if not vigencias_seguro or len(vigencias_seguro) == 0:
+        if seguro_modo == 'fixo' and (not vigencias_seguro or len(vigencias_seguro) == 0):
             return jsonify({
                 'success': False,
                 'error': 'É obrigatório informar pelo menos uma vigência de seguro'
@@ -291,17 +304,11 @@ def criar_financiamento():
         }), 201
 
     except ValueError as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 400
-
-    except ValueError as e:
         db.session.rollback()
         return jsonify({
             'success': False,
             'error': str(e)
-        }), 404
+        }), 400
 
     except Exception as e:
         db.session.rollback()
@@ -347,6 +354,19 @@ def atualizar_financiamento(id):
                 'error': 'Dados não fornecidos'
             }), 400
 
+        if 'seguro_modo' in data:
+            seguro_modo = data.get('seguro_modo') or 'fixo'
+            if seguro_modo not in ['fixo', 'estimado_dfi_mip']:
+                return jsonify({
+                    'success': False,
+                    'error': 'seguro_modo deve ser "fixo" ou "estimado_dfi_mip"'
+                }), 400
+            if seguro_modo == 'estimado_dfi_mip' and not data.get('seguro_data_nascimento_titular'):
+                return jsonify({
+                    'success': False,
+                    'error': 'seguro_data_nascimento_titular é obrigatória no modo estimado DFI + MIP'
+                }), 400
+
         # Validar tipo de seguro se fornecido
         if 'seguro_tipo' in data:
             seguro_tipo = data['seguro_tipo']
@@ -389,6 +409,7 @@ def atualizar_financiamento(id):
         }), 200
 
     except ValueError as e:
+        db.session.rollback()
         return jsonify({
             'success': False,
             'error': str(e)

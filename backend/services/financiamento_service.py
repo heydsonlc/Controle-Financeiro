@@ -12,17 +12,19 @@ Este serviço implementa:
 from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import func, extract, and_
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 import math
 import logging
 
 try:
     from backend.models import (db, Financiamento, FinanciamentoParcela,
-                                FinanciamentoAmortizacaoExtra, IndexadorMensal, Conta)
+                                FinanciamentoAmortizacaoExtra, IndexadorMensal, Conta,
+                                FinanciamentoSeguroFaixaMip)
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import (db, Financiamento, FinanciamentoParcela,
-                       FinanciamentoAmortizacaoExtra, IndexadorMensal, Conta)
+                       FinanciamentoAmortizacaoExtra, IndexadorMensal, Conta,
+                       FinanciamentoSeguroFaixaMip)
     from services.perfil_financeiro_service import PerfilFinanceiroService
 
 logger = logging.getLogger(__name__)
@@ -48,6 +50,20 @@ class FinanciamentoService:
         'conciliado', 'conciliada',
     }
 
+    SEGURO_MODO_FIXO = 'fixo'
+    SEGURO_MODO_ESTIMADO_DFI_MIP = 'estimado_dfi_mip'
+    SEGURO_FATOR_DFI_PADRAO = Decimal('0.0489')
+    FAIXAS_MIP_PADRAO = [
+        {'idade_inicio': 0, 'idade_fim': 45, 'fator_mip': Decimal('0.03187')},
+        {'idade_inicio': 46, 'idade_fim': 50, 'fator_mip': Decimal('0.04899')},
+        {'idade_inicio': 51, 'idade_fim': 55, 'fator_mip': Decimal('0.08593')},
+        {'idade_inicio': 56, 'idade_fim': 60, 'fator_mip': Decimal('0.16077')},
+        {'idade_inicio': 61, 'idade_fim': 65, 'fator_mip': Decimal('0.31887')},
+        {'idade_inicio': 66, 'idade_fim': 70, 'fator_mip': Decimal('0.34932')},
+        {'idade_inicio': 71, 'idade_fim': 75, 'fator_mip': Decimal('0.49795')},
+        {'idade_inicio': 76, 'idade_fim': 80, 'fator_mip': Decimal('0.57099')},
+    ]
+
     # ========================================================================
     # CRUD DE FINANCIAMENTOS
     # ========================================================================
@@ -66,6 +82,173 @@ class FinanciamentoService:
         if not financiamento:
             raise ValueError('Financiamento não encontrado')
         return financiamento
+
+    @staticmethod
+    def _seguro_modo(financiamento):
+        return getattr(financiamento, 'seguro_modo', None) or FinanciamentoService.SEGURO_MODO_FIXO
+
+    @staticmethod
+    def _decimal(valor, campo, permitir_nulo=False):
+        if valor is None or valor == '':
+            if permitir_nulo:
+                return None
+            raise ValueError(f'{campo} é obrigatório')
+        try:
+            return Decimal(str(valor).replace(',', '.'))
+        except Exception as exc:
+            raise ValueError(f'{campo} deve ser numérico') from exc
+
+    @staticmethod
+    def _inteiro(valor, campo, permitir_nulo=False):
+        if valor is None or valor == '':
+            if permitir_nulo:
+                return None
+            raise ValueError(f'{campo} é obrigatório')
+        try:
+            return int(valor)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f'{campo} deve ser inteiro') from exc
+
+    @staticmethod
+    def _calcular_idade_seguro(data_nascimento, data_vencimento, mes_reajuste_idade=None):
+        if not data_nascimento:
+            raise ValueError('Data de nascimento do titular é obrigatória para seguro estimado')
+
+        mes_reajuste = int(mes_reajuste_idade or data_nascimento.month)
+        if mes_reajuste < 1 or mes_reajuste > 12:
+            raise ValueError('seguro_mes_reajuste_idade deve estar entre 1 e 12')
+
+        dia_reajuste = 1 if mes_reajuste_idade else data_nascimento.day
+        try:
+            data_reajuste = date(data_vencimento.year, mes_reajuste, dia_reajuste)
+        except ValueError:
+            data_reajuste = date(data_vencimento.year, mes_reajuste, 1)
+
+        idade = data_vencimento.year - data_nascimento.year
+        if data_vencimento < data_reajuste:
+            idade -= 1
+        return max(idade, 0)
+
+    @staticmethod
+    def _obter_faixa_mip(financiamento, idade, data_vencimento):
+        return FinanciamentoSeguroFaixaMip.query.filter(
+            FinanciamentoSeguroFaixaMip.financiamento_id == financiamento.id,
+            FinanciamentoSeguroFaixaMip.ativo == True,
+            FinanciamentoSeguroFaixaMip.idade_inicio <= idade,
+            FinanciamentoSeguroFaixaMip.idade_fim >= idade,
+            db.or_(
+                FinanciamentoSeguroFaixaMip.vigencia_inicio == None,
+                FinanciamentoSeguroFaixaMip.vigencia_inicio <= data_vencimento
+            ),
+            db.or_(
+                FinanciamentoSeguroFaixaMip.vigencia_fim == None,
+                FinanciamentoSeguroFaixaMip.vigencia_fim >= data_vencimento
+            )
+        ).order_by(
+            FinanciamentoSeguroFaixaMip.vigencia_inicio.desc(),
+            FinanciamentoSeguroFaixaMip.idade_inicio
+        ).first()
+
+    @staticmethod
+    def _normalizar_faixas_mip(faixas):
+        if faixas is None:
+            return []
+        if not isinstance(faixas, list):
+            raise ValueError('faixas_mip deve ser uma lista')
+
+        normalizadas = []
+        for indice, faixa in enumerate(faixas, 1):
+            idade_inicio = FinanciamentoService._inteiro(faixa.get('idade_inicio'), f'faixas_mip[{indice}].idade_inicio')
+            idade_fim = FinanciamentoService._inteiro(faixa.get('idade_fim'), f'faixas_mip[{indice}].idade_fim')
+            fator_mip = FinanciamentoService._decimal(faixa.get('fator_mip'), f'faixas_mip[{indice}].fator_mip')
+
+            if idade_inicio < 0 or idade_fim < idade_inicio:
+                raise ValueError(f'Faixa MIP {indice} possui intervalo de idade inválido')
+            if fator_mip < 0:
+                raise ValueError(f'Faixa MIP {indice} possui fator_mip negativo')
+
+            normalizadas.append({
+                'idade_inicio': idade_inicio,
+                'idade_fim': idade_fim,
+                'fator_mip': fator_mip,
+                'vigencia_inicio': FinanciamentoService._converter_data_iso(
+                    faixa.get('vigencia_inicio'),
+                    f'faixas_mip[{indice}].vigencia_inicio'
+                ) if faixa.get('vigencia_inicio') else None,
+                'vigencia_fim': FinanciamentoService._converter_data_iso(
+                    faixa.get('vigencia_fim'),
+                    f'faixas_mip[{indice}].vigencia_fim'
+                ) if faixa.get('vigencia_fim') else None,
+                'ativo': faixa.get('ativo', True) is not False,
+            })
+
+        return normalizadas
+
+    @staticmethod
+    def _substituir_faixas_mip(financiamento, faixas):
+        FinanciamentoSeguroFaixaMip.query.filter_by(
+            financiamento_id=financiamento.id
+        ).delete(synchronize_session=False)
+
+        for faixa in faixas:
+            db.session.add(FinanciamentoSeguroFaixaMip(
+                perfil_financeiro_id=financiamento.perfil_financeiro_id,
+                financiamento_id=financiamento.id,
+                idade_inicio=faixa['idade_inicio'],
+                idade_fim=faixa['idade_fim'],
+                fator_mip=faixa['fator_mip'],
+                vigencia_inicio=faixa.get('vigencia_inicio'),
+                vigencia_fim=faixa.get('vigencia_fim'),
+                ativo=faixa.get('ativo', True),
+            ))
+        db.session.flush()
+
+    @staticmethod
+    def _garantir_faixas_mip_padrao(financiamento):
+        if FinanciamentoSeguroFaixaMip.query.filter_by(financiamento_id=financiamento.id).count() > 0:
+            return
+        FinanciamentoService._substituir_faixas_mip(
+            financiamento,
+            [dict(faixa) for faixa in FinanciamentoService.FAIXAS_MIP_PADRAO]
+        )
+
+    @staticmethod
+    def calcular_seguro_habitacional(financiamento, data_vencimento, amortizacao_base, juros_contratuais):
+        """
+        Calcula o seguro habitacional com uma unica regra central.
+        """
+        modo = FinanciamentoService._seguro_modo(financiamento)
+
+        if modo == FinanciamentoService.SEGURO_MODO_ESTIMADO_DFI_MIP:
+            fator_dfi = financiamento.seguro_fator_dfi
+            if fator_dfi is None:
+                raise ValueError('seguro_fator_dfi é obrigatório no modo estimado DFI + MIP')
+
+            idade = FinanciamentoService._calcular_idade_seguro(
+                financiamento.seguro_data_nascimento_titular,
+                data_vencimento,
+                financiamento.seguro_mes_reajuste_idade
+            )
+            faixa_mip = FinanciamentoService._obter_faixa_mip(financiamento, idade, data_vencimento)
+            if not faixa_mip:
+                raise ValueError(
+                    f'Nenhuma faixa MIP encontrada para idade {idade} na data {data_vencimento.strftime("%Y-%m-%d")}.'
+                )
+
+            dfi = Decimal(str(amortizacao_base or 0)) * Decimal(str(fator_dfi))
+            mip = Decimal(str(juros_contratuais or 0)) * Decimal(str(faixa_mip.fator_mip))
+            return (dfi + mip).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+        if modo != FinanciamentoService.SEGURO_MODO_FIXO:
+            raise ValueError('seguro_modo deve ser "fixo" ou "estimado_dfi_mip"')
+
+        vigencia_seguro = financiamento.obter_seguro_por_data(data_vencimento)
+        if not vigencia_seguro:
+            raise ValueError(
+                f"Seguro não configurado para a data {data_vencimento.strftime('%d/%m/%Y')}. "
+                f"Cadastre uma vigência de seguro antes de gerar as parcelas."
+            )
+        return vigencia_seguro.valor_mensal
 
     @staticmethod
     def criar_financiamento(dados):
@@ -123,6 +306,42 @@ class FinanciamentoService:
         else:
             data_primeira_parcela = dados['data_primeira_parcela']
 
+        seguro_modo = dados.get('seguro_modo') or FinanciamentoService.SEGURO_MODO_FIXO
+        if seguro_modo not in [
+            FinanciamentoService.SEGURO_MODO_FIXO,
+            FinanciamentoService.SEGURO_MODO_ESTIMADO_DFI_MIP
+        ]:
+            raise ValueError('seguro_modo deve ser "fixo" ou "estimado_dfi_mip"')
+
+        seguro_fator_dfi = FinanciamentoService._decimal(
+            dados.get('seguro_fator_dfi') if dados.get('seguro_fator_dfi') is not None else (
+                FinanciamentoService.SEGURO_FATOR_DFI_PADRAO
+                if seguro_modo == FinanciamentoService.SEGURO_MODO_ESTIMADO_DFI_MIP
+                else None
+            ),
+            'seguro_fator_dfi',
+            permitir_nulo=(seguro_modo == FinanciamentoService.SEGURO_MODO_FIXO)
+        )
+        if seguro_fator_dfi is not None and seguro_fator_dfi < 0:
+            raise ValueError('seguro_fator_dfi não pode ser negativo')
+
+        seguro_data_nascimento_titular = None
+        if dados.get('seguro_data_nascimento_titular'):
+            seguro_data_nascimento_titular = FinanciamentoService._converter_data_iso(
+                dados['seguro_data_nascimento_titular'],
+                'seguro_data_nascimento_titular'
+            )
+        elif seguro_modo == FinanciamentoService.SEGURO_MODO_ESTIMADO_DFI_MIP:
+            raise ValueError('seguro_data_nascimento_titular é obrigatória no modo estimado DFI + MIP')
+
+        seguro_mes_reajuste_idade = FinanciamentoService._inteiro(
+            dados.get('seguro_mes_reajuste_idade', 2),
+            'seguro_mes_reajuste_idade',
+            permitir_nulo=True
+        ) or 2
+        if seguro_mes_reajuste_idade < 1 or seguro_mes_reajuste_idade > 12:
+            raise ValueError('seguro_mes_reajuste_idade deve estar entre 1 e 12')
+
         # Se não foi fornecido item_despesa_id, criar automaticamente
         # Conforme CONTRATO: 1 parcela = 1 Conta = 1 linha em DESPESAS
         item_despesa_id = dados.get('item_despesa_id')
@@ -161,6 +380,10 @@ class FinanciamentoService:
             seguro_tipo=dados.get('seguro_tipo', 'fixo'),
             seguro_percentual=Decimal(str(dados.get('seguro_percentual', 0.0006))),
             valor_seguro_mensal=Decimal(str(dados.get('valor_seguro_mensal', 0))),
+            seguro_modo=seguro_modo,
+            seguro_fator_dfi=seguro_fator_dfi,
+            seguro_data_nascimento_titular=seguro_data_nascimento_titular,
+            seguro_mes_reajuste_idade=seguro_mes_reajuste_idade,
             # Taxa de administração
             taxa_administracao_fixa=Decimal(str(dados.get('taxa_administracao_fixa', 0))),
             ativo=True
@@ -268,6 +491,13 @@ class FinanciamentoService:
             # CRÍTICO: Flush para persistir vigências ANTES de gerar parcelas
             # Isso garante que obter_seguro_por_data() encontre as vigências
             db.session.flush()
+
+        if seguro_modo == FinanciamentoService.SEGURO_MODO_ESTIMADO_DFI_MIP:
+            faixas_mip = FinanciamentoService._normalizar_faixas_mip(dados.get('faixas_mip'))
+            if faixas_mip:
+                FinanciamentoService._substituir_faixas_mip(financiamento, faixas_mip)
+            else:
+                FinanciamentoService._garantir_faixas_mip_padrao(financiamento)
 
         # Gerar parcelas (agora usa configurações do próprio financiamento + vigências criadas)
         FinanciamentoService.gerar_parcelas(financiamento)
@@ -428,6 +658,9 @@ class FinanciamentoService:
         Em reconfiguração sem histórico financeiro, recria uma vigência inicial
         coerente com a nova primeira parcela para permitir regenerar o cronograma.
         """
+        if FinanciamentoService._seguro_modo(financiamento) == FinanciamentoService.SEGURO_MODO_ESTIMADO_DFI_MIP:
+            return
+
         try:
             from backend.models import FinanciamentoSeguroVigencia
             from backend.services.seguro_vigencia_service import SeguroVigenciaService
@@ -540,18 +773,73 @@ class FinanciamentoService:
                 raise ValueError('valor_seguro_mensal não pode ser negativo')
             valores_estruturais['valor_seguro_mensal'] = valor_seguro
 
+        if 'seguro_modo' in dados:
+            seguro_modo = dados.get('seguro_modo') or FinanciamentoService.SEGURO_MODO_FIXO
+            if seguro_modo not in [
+                FinanciamentoService.SEGURO_MODO_FIXO,
+                FinanciamentoService.SEGURO_MODO_ESTIMADO_DFI_MIP
+            ]:
+                raise ValueError('seguro_modo deve ser "fixo" ou "estimado_dfi_mip"')
+            valores_estruturais['seguro_modo'] = seguro_modo
+
+        if 'seguro_fator_dfi' in dados:
+            seguro_fator_dfi = FinanciamentoService._decimal(
+                dados.get('seguro_fator_dfi'),
+                'seguro_fator_dfi',
+                permitir_nulo=True
+            )
+            if seguro_fator_dfi is not None and seguro_fator_dfi < 0:
+                raise ValueError('seguro_fator_dfi nao pode ser negativo')
+            valores_estruturais['seguro_fator_dfi'] = seguro_fator_dfi
+
+        if 'seguro_data_nascimento_titular' in dados:
+            valores_estruturais['seguro_data_nascimento_titular'] = FinanciamentoService._converter_data_iso(
+                dados.get('seguro_data_nascimento_titular'),
+                'seguro_data_nascimento_titular'
+            ) if dados.get('seguro_data_nascimento_titular') else None
+
+        if 'seguro_mes_reajuste_idade' in dados:
+            seguro_mes_reajuste_idade = FinanciamentoService._inteiro(
+                dados.get('seguro_mes_reajuste_idade'),
+                'seguro_mes_reajuste_idade',
+                permitir_nulo=True
+            ) or 2
+            if seguro_mes_reajuste_idade < 1 or seguro_mes_reajuste_idade > 12:
+                raise ValueError('seguro_mes_reajuste_idade deve estar entre 1 e 12')
+            valores_estruturais['seguro_mes_reajuste_idade'] = seguro_mes_reajuste_idade
+
         if 'taxa_administracao_fixa' in dados:
             taxa_adm = Decimal(str(dados['taxa_administracao_fixa']))
             if taxa_adm < 0:
                 raise ValueError('taxa_administracao_fixa não pode ser negativa')
             valores_estruturais['taxa_administracao_fixa'] = taxa_adm
 
+        faixas_mip = None
+        if 'faixas_mip' in dados:
+            faixas_mip = FinanciamentoService._normalizar_faixas_mip(dados.get('faixas_mip'))
+
+        modo_resultante = valores_estruturais.get(
+            'seguro_modo',
+            financiamento.seguro_modo or FinanciamentoService.SEGURO_MODO_FIXO
+        )
+        if modo_resultante == FinanciamentoService.SEGURO_MODO_ESTIMADO_DFI_MIP:
+            if 'seguro_fator_dfi' not in valores_estruturais and financiamento.seguro_fator_dfi is None:
+                valores_estruturais['seguro_fator_dfi'] = FinanciamentoService.SEGURO_FATOR_DFI_PADRAO
+
+            data_nascimento_resultante = valores_estruturais.get(
+                'seguro_data_nascimento_titular',
+                financiamento.seguro_data_nascimento_titular
+            )
+            if not data_nascimento_resultante:
+                raise ValueError('seguro_data_nascimento_titular e obrigatoria no modo estimado DFI + MIP')
+
         campos_alterados = [
             campo for campo, valor in valores_estruturais.items()
             if campo != 'taxa_juros_mensal'
             and FinanciamentoService._valor_estrutural_alterado(getattr(financiamento, campo), valor)
         ]
-        houve_mudanca_estrutural = bool(campos_alterados)
+        houve_mudanca_faixas = faixas_mip is not None
+        houve_mudanca_estrutural = bool(campos_alterados) or houve_mudanca_faixas
 
         if houve_mudanca_estrutural:
             FinanciamentoService.validar_cronograma_regeneravel(financiamento.id)
@@ -568,6 +856,11 @@ class FinanciamentoService:
 
         for campo, valor in valores_estruturais.items():
             setattr(financiamento, campo, valor)
+
+        if faixas_mip is not None:
+            FinanciamentoService._substituir_faixas_mip(financiamento, faixas_mip)
+        elif FinanciamentoService._seguro_modo(financiamento) == FinanciamentoService.SEGURO_MODO_ESTIMADO_DFI_MIP:
+            FinanciamentoService._garantir_faixas_mip_padrao(financiamento)
 
         if houve_mudanca_estrutural:
             financiamento.prazo_remanescente_meses = financiamento.prazo_total_meses
@@ -813,7 +1106,6 @@ class FinanciamentoService:
         Returns:
             int: Número de parcelas recalculadas
         """
-        from backend.services.seguro_vigencia_service import SeguroVigenciaService
         import logging
         logger = logging.getLogger(__name__)
 
@@ -903,25 +1195,13 @@ class FinanciamentoService:
                 # Juros simples fixos
                 juros = financiamento.valor_financiado * taxa_mensal
 
-            # ========================================================================
-            # 🔥 CORREÇÃO CRÍTICA: Buscar seguro por VIGÊNCIA baseada na DATA da parcela
-            # NÃO usar modelo antigo (seguro_tipo, valor_seguro_mensal)
-            # ========================================================================
-            logger.info(f"[RECALC] Buscando vigência para data: {parcela.data_vencimento}")
-            vigencia = SeguroVigenciaService.obter_vigencia_por_data(
-                financiamento_id=financiamento.id,
-                data_referencia=parcela.data_vencimento
+            valor_seguro = FinanciamentoService.calcular_seguro_habitacional(
+                financiamento,
+                parcela.data_vencimento,
+                amortizacao,
+                juros
             )
-
-            if not vigencia:
-                logger.error(f"[RECALC] ERRO: Nenhuma vigência encontrada para {parcela.data_vencimento}")
-                raise ValueError(
-                    f'Nenhuma vigência de seguro encontrada para a data {parcela.data_vencimento.strftime("%Y-%m-%d")}. '
-                    f'Cadastre uma vigência válida antes de gerar/recalcular parcelas.'
-                )
-
-            valor_seguro = vigencia.valor_mensal
-            logger.info(f"[RECALC] Vigência encontrada: inicio={vigencia.competencia_inicio}, valor=R$ {valor_seguro}")
+            logger.info(f"[RECALC] Seguro calculado para {parcela.data_vencimento}: R$ {valor_seguro}")
 
             # Taxa administrativa (valor fixo)
             valor_taxa_adm = financiamento.taxa_administracao_fixa
@@ -929,7 +1209,7 @@ class FinanciamentoService:
             # Atualizar parcela
             parcela.valor_amortizacao = amortizacao
             parcela.valor_juros = juros
-            parcela.valor_seguro = valor_seguro  # ✅ AGORA USA VIGÊNCIA CORRETA
+            parcela.valor_seguro = valor_seguro
             parcela.valor_taxa_adm = valor_taxa_adm
             parcela.valor_previsto_total = amortizacao + juros + valor_seguro + valor_taxa_adm
             parcela.saldo_devedor_apos_pagamento = saldo_devedor - amortizacao  # ✅ REENCADEAMENTO CORRETO
@@ -967,7 +1247,6 @@ class FinanciamentoService:
         Raises:
             ValueError: Se faltar vigência para alguma data (fail-fast)
         """
-        from backend.services.seguro_vigencia_service import SeguroVigenciaService
         import logging
         logger = logging.getLogger(__name__)
 
@@ -998,22 +1277,14 @@ class FinanciamentoService:
 
         # Atualizar SOMENTE o componente seguro
         for parcela in parcelas_pendentes:
-            # Buscar vigência por data da parcela
-            vigencia = SeguroVigenciaService.obter_vigencia_por_data(
-                financiamento_id=financiamento.id,
-                data_referencia=parcela.data_vencimento
-            )
-
-            if not vigencia:
-                logger.error(f"[SEGURO-ONLY] ERRO: Nenhuma vigência para {parcela.data_vencimento}")
-                raise ValueError(
-                    f'Nenhuma vigência de seguro encontrada para a data {parcela.data_vencimento.strftime("%Y-%m-%d")}. '
-                    f'Cadastre uma vigência válida antes de recalcular.'
-                )
-
             # ❗ CRÍTICO: NÃO mexe em amortização, juros ou saldo
             # Apenas atualiza seguro e total
-            parcela.valor_seguro = vigencia.valor_mensal
+            parcela.valor_seguro = FinanciamentoService.calcular_seguro_habitacional(
+                financiamento,
+                parcela.data_vencimento,
+                parcela.valor_amortizacao,
+                parcela.valor_juros
+            )
             parcela.valor_previsto_total = (
                 parcela.valor_amortizacao +
                 parcela.valor_juros +
@@ -1041,9 +1312,9 @@ class FinanciamentoService:
         """
         Gera tabela de amortização completa usando configurações do próprio financiamento
 
-        Calcula seguro de duas formas:
-        - Tipo 'fixo': valor_seguro_mensal constante
-        - Tipo 'percentual_saldo': saldo_devedor * seguro_percentual
+        Calcula seguro por helper central:
+        - Modo 'fixo': vigencia manual por data
+        - Modo 'estimado_dfi_mip': DFI + MIP por faixa etaria
 
         Args:
             financiamento (Financiamento): Objeto do financiamento com todas configurações
@@ -1199,16 +1470,12 @@ class FinanciamentoService:
             if amortizacao > saldo_corrigido:
                 amortizacao = saldo_corrigido
 
-            # Buscar seguro por vigência
-            vigencia_seguro = financiamento.obter_seguro_por_data(data_vencimento)
-
-            if not vigencia_seguro:
-                raise ValueError(
-                    f"Seguro não configurado para a data {data_vencimento.strftime('%d/%m/%Y')}. "
-                    f"Cadastre uma vigência de seguro antes de gerar as parcelas."
-                )
-
-            valor_seguro_parcela = vigencia_seguro.valor_mensal
+            valor_seguro_parcela = FinanciamentoService.calcular_seguro_habitacional(
+                financiamento,
+                data_vencimento,
+                amortizacao,
+                juros
+            )
 
             # Taxa administrativa (valor fixo mensal)
             valor_taxa_adm = financiamento.taxa_administracao_fixa
@@ -1276,16 +1543,12 @@ class FinanciamentoService:
             # Amortização = PMT - Juros
             amortizacao = pmt - juros
 
-            # Buscar seguro por vigência
-            vigencia_seguro = financiamento.obter_seguro_por_data(data_vencimento)
-
-            if not vigencia_seguro:
-                raise ValueError(
-                    f"Seguro não configurado para a data {data_vencimento.strftime('%d/%m/%Y')}. "
-                    f"Cadastre uma vigência de seguro antes de gerar as parcelas."
-                )
-
-            valor_seguro_parcela = vigencia_seguro.valor_mensal
+            valor_seguro_parcela = FinanciamentoService.calcular_seguro_habitacional(
+                financiamento,
+                data_vencimento,
+                amortizacao,
+                juros
+            )
 
             # Taxa administrativa (valor fixo mensal)
             valor_taxa_adm = financiamento.taxa_administracao_fixa
@@ -1342,16 +1605,12 @@ class FinanciamentoService:
         data_vencimento = financiamento.data_primeira_parcela
 
         for num_parcela in range(1, prazo + 1):
-            # Buscar seguro por vigência
-            vigencia_seguro = financiamento.obter_seguro_por_data(data_vencimento)
-
-            if not vigencia_seguro:
-                raise ValueError(
-                    f"Seguro não configurado para a data {data_vencimento.strftime('%d/%m/%Y')}. "
-                    f"Cadastre uma vigência de seguro antes de gerar as parcelas."
-                )
-
-            valor_seguro_parcela = vigencia_seguro.valor_mensal
+            valor_seguro_parcela = FinanciamentoService.calcular_seguro_habitacional(
+                financiamento,
+                data_vencimento,
+                amortizacao,
+                juros_mensais
+            )
 
             # Taxa administrativa (valor fixo mensal)
             valor_taxa_adm = financiamento.taxa_administracao_fixa
@@ -1623,24 +1882,12 @@ class FinanciamentoService:
                 num_parcelas_restantes = len([p for p in parcelas_pendentes if p.numero_parcela >= parcela.numero_parcela])
                 amortizacao = saldo_devedor / Decimal(str(num_parcelas_restantes))
 
-            # ========================================================================
-            # 🔥 CORREÇÃO CRÍTICA: Buscar seguro por VIGÊNCIA baseada na DATA da parcela
-            # NÃO usar modelo antigo (seguro_tipo, valor_seguro_mensal)
-            # ========================================================================
-            from backend.services.seguro_vigencia_service import SeguroVigenciaService
-
-            vigencia = SeguroVigenciaService.obter_vigencia_por_data(
-                financiamento_id=financiamento.id,
-                data_referencia=parcela.data_vencimento
+            valor_seguro = FinanciamentoService.calcular_seguro_habitacional(
+                financiamento,
+                parcela.data_vencimento,
+                amortizacao,
+                juros
             )
-
-            if not vigencia:
-                raise ValueError(
-                    f'Nenhuma vigência de seguro encontrada para a data {parcela.data_vencimento.strftime("%Y-%m-%d")}. '
-                    f'Cadastre uma vigência válida antes de recalcular após amortização.'
-                )
-
-            valor_seguro = vigencia.valor_mensal
 
             # Taxa administrativa (mantida)
             valor_taxa_adm = parcela.valor_taxa_adm or Decimal('0')
@@ -1692,24 +1939,12 @@ class FinanciamentoService:
                 amortizacao = saldo_devedor
                 juros = saldo_devedor * taxa_mensal
 
-            # ========================================================================
-            # 🔥 CORREÇÃO CRÍTICA: Buscar seguro por VIGÊNCIA baseada na DATA da parcela
-            # NÃO usar modelo antigo (seguro_tipo, valor_seguro_mensal)
-            # ========================================================================
-            from backend.services.seguro_vigencia_service import SeguroVigenciaService
-
-            vigencia = SeguroVigenciaService.obter_vigencia_por_data(
-                financiamento_id=financiamento.id,
-                data_referencia=parcela.data_vencimento
+            valor_seguro = FinanciamentoService.calcular_seguro_habitacional(
+                financiamento,
+                parcela.data_vencimento,
+                amortizacao,
+                juros
             )
-
-            if not vigencia:
-                raise ValueError(
-                    f'Nenhuma vigência de seguro encontrada para a data {parcela.data_vencimento.strftime("%Y-%m-%d")}. '
-                    f'Cadastre uma vigência válida antes de recalcular após amortização.'
-                )
-
-            valor_seguro = vigencia.valor_mensal
 
             # Taxa administrativa (mantida)
             valor_taxa_adm = parcela.valor_taxa_adm or Decimal('0')

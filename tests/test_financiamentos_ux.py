@@ -1,11 +1,12 @@
 from datetime import date
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 
 import pytest
 from flask import Flask, render_template
 from sqlalchemy import text
 
-from backend.models import db, Conta, Financiamento, FinanciamentoParcela
+from backend.models import db, Conta, Financiamento, FinanciamentoParcela, FinanciamentoSeguroFaixaMip
 from backend.routes.financiamentos import financiamentos_bp
 
 
@@ -79,12 +80,49 @@ def _payload_financiamento(nome='Financiamento UX'):
     }
 
 
+def _faixas_mip_padrao():
+    return [
+        {'idade_inicio': 0, 'idade_fim': 45, 'fator_mip': 0.03187},
+        {'idade_inicio': 46, 'idade_fim': 50, 'fator_mip': 0.04899},
+        {'idade_inicio': 51, 'idade_fim': 55, 'fator_mip': 0.08593},
+        {'idade_inicio': 56, 'idade_fim': 60, 'fator_mip': 0.16077},
+        {'idade_inicio': 61, 'idade_fim': 65, 'fator_mip': 0.31887},
+        {'idade_inicio': 66, 'idade_fim': 70, 'fator_mip': 0.34932},
+        {'idade_inicio': 71, 'idade_fim': 75, 'fator_mip': 0.49795},
+        {'idade_inicio': 76, 'idade_fim': 80, 'fator_mip': 0.57099},
+    ]
+
+
+def _payload_financiamento_estimado(nome='Financiamento Seguro Estimado'):
+    payload = _payload_financiamento(nome)
+    payload.update({
+        'valor_financiado': 120000.0,
+        'prazo_total_meses': 24,
+        'taxa_juros_nominal_anual': 12.0,
+        'data_contrato': '2029-12-01',
+        'data_primeira_parcela': '2030-01-21',
+        'valor_seguro_mensal': 0.0,
+        'seguro_modo': 'estimado_dfi_mip',
+        'seguro_fator_dfi': 0.0489,
+        'seguro_data_nascimento_titular': '1979-02-01',
+        'seguro_mes_reajuste_idade': 2,
+        'faixas_mip': _faixas_mip_padrao(),
+    })
+    payload.pop('vigencias_seguro', None)
+    return payload
+
+
 def _criar_financiamento(client, nome='Financiamento UX'):
     response = client.post('/api/financiamentos', json=_payload_financiamento(nome))
     assert response.status_code == 201
     body = response.get_json()
     assert body['success'] is True
     return body['data']
+
+
+def _seguro_esperado(amortizacao, juros, fator_mip):
+    valor = (Decimal(str(amortizacao)) * Decimal('0.0489')) + (Decimal(str(juros)) * Decimal(str(fator_mip)))
+    return float(valor.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
 
 
 def test_rota_principal_renderiza_layout_ux(client):
@@ -119,6 +157,8 @@ def test_cadastro_aceita_payload_minimo_e_gera_cronograma(client):
     parcelas = FinanciamentoParcela.query.filter_by(financiamento_id=financiamento.id).all()
     assert financiamento.sistema_amortizacao == 'SAC'
     assert len(parcelas) == 240
+    assert financiamento.seguro_modo == 'fixo'
+    assert float(parcelas[0].valor_seguro) == 200.0
 
 
 def test_cards_resumo_usam_total_financiado_e_saldo_devedor(client):
@@ -150,6 +190,77 @@ def test_detalhe_retorna_cronograma_para_tela_operacional(client):
     assert primeira['numero_parcela'] == 1
     assert primeira['status'] == 'pendente'
     assert primeira['valor_previsto_total'] > 0
+
+
+def test_seguro_estimado_dfi_mip_calcula_e_muda_por_faixa_etaria(client):
+    response = client.post('/api/financiamentos', json=_payload_financiamento_estimado())
+    body = response.get_json()
+
+    assert response.status_code == 201
+    assert body['success'] is True
+    assert body['data']['seguro_modo'] == 'estimado_dfi_mip'
+
+    detalhe = client.get(f'/api/financiamentos/{body["data"]["id"]}').get_json()['data']
+    parcelas = detalhe['parcelas']
+    janeiro = parcelas[0]
+    fevereiro = parcelas[1]
+    marco = parcelas[2]
+
+    assert janeiro['data_vencimento'] == '2030-01-21'
+    assert fevereiro['data_vencimento'] == '2030-02-21'
+    assert janeiro['valor_seguro'] == _seguro_esperado(
+        janeiro['valor_amortizacao'],
+        janeiro['valor_juros'],
+        0.04899
+    )
+    assert fevereiro['valor_seguro'] == _seguro_esperado(
+        fevereiro['valor_amortizacao'],
+        fevereiro['valor_juros'],
+        0.08593
+    )
+    assert fevereiro['valor_juros'] < janeiro['valor_juros']
+    assert fevereiro['valor_seguro'] > janeiro['valor_seguro']
+    assert marco['valor_seguro'] < fevereiro['valor_seguro']
+
+    idades_inicio = {
+        faixa.idade_inicio
+        for faixa in FinanciamentoSeguroFaixaMip.query.filter_by(
+            financiamento_id=body['data']['id']
+        ).all()
+    }
+    assert idades_inicio == {0, 46, 51, 56, 61, 66, 71, 76}
+
+
+def test_edicao_regenera_cronograma_com_seguro_estimado(client):
+    criado = client.post('/api/financiamentos', json=_payload_financiamento_estimado()).get_json()['data']
+    parcela_original = FinanciamentoParcela.query.filter_by(
+        financiamento_id=criado['id']
+    ).order_by(FinanciamentoParcela.numero_parcela).first()
+    seguro_original = float(parcela_original.valor_seguro)
+
+    payload = _payload_financiamento_estimado('Financiamento Seguro Recalculado')
+    payload.update({
+        'valor_financiado': 180000.0,
+        'prazo_total_meses': 36,
+        'regenerar_cronograma': True,
+    })
+
+    response = client.put(f'/api/financiamentos/{criado["id"]}', json=payload)
+    body = response.get_json()
+
+    assert response.status_code == 200
+    assert body['success'] is True
+
+    detalhe = client.get(f'/api/financiamentos/{criado["id"]}').get_json()['data']
+    primeira = detalhe['parcelas'][0]
+    assert detalhe['valor_financiado'] == 180000.0
+    assert detalhe['total_parcelas'] == 36
+    assert primeira['valor_seguro'] != seguro_original
+    assert primeira['valor_seguro'] == _seguro_esperado(
+        primeira['valor_amortizacao'],
+        primeira['valor_juros'],
+        0.04899
+    )
 
 
 def test_edicao_estrutural_sem_parcela_paga_persiste_e_regenera_cronograma(client, sqlite_foreign_keys):
@@ -364,6 +475,11 @@ def test_frontend_payload_de_financiamento_envia_campos_estruturais_e_flag_crono
         'sistema_amortizacao',
         'indexador_saldo',
         'valor_seguro_mensal',
+        'seguro_modo',
+        'seguro_fator_dfi',
+        'seguro_data_nascimento_titular',
+        'seguro_mes_reajuste_idade',
+        'faixas_mip',
         'taxa_administracao_fixa',
         'regenerar_cronograma',
     ]:

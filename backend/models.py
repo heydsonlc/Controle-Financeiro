@@ -1618,6 +1618,10 @@ class Financiamento(db.Model):
     seguro_tipo = db.Column(db.String(20), default='fixo')  # 'fixo' ou 'percentual_saldo'
     seguro_percentual = db.Column(db.Numeric(8, 6), default=0.0006)  # 0,06% em decimal
     valor_seguro_mensal = db.Column(db.Numeric(10, 2), default=0)  # Para tipo 'fixo'
+    seguro_modo = db.Column(db.String(30), default='fixo')  # fixo ou estimado_dfi_mip
+    seguro_fator_dfi = db.Column(db.Numeric(10, 5), nullable=True)
+    seguro_data_nascimento_titular = db.Column(db.Date, nullable=True)
+    seguro_mes_reajuste_idade = db.Column(db.Integer, default=2)
 
     # Taxa de Administração
     taxa_administracao_fixa = db.Column(db.Numeric(10, 2), default=0)  # Valor fixo mensal
@@ -1655,6 +1659,10 @@ class Financiamento(db.Model):
                                       back_populates='financiamento',
                                       lazy='dynamic', cascade='all, delete-orphan',
                                       order_by='FinanciamentoSeguroVigencia.competencia_inicio')
+    seguro_faixas_mip = db.relationship('FinanciamentoSeguroFaixaMip',
+                                        back_populates='financiamento',
+                                        lazy='dynamic', cascade='all, delete-orphan',
+                                        order_by='FinanciamentoSeguroFaixaMip.idade_inicio')
 
     def __repr__(self):
         return f'<Financiamento {self.nome} - {self.sistema_amortizacao}>'
@@ -1733,6 +1741,11 @@ class Financiamento(db.Model):
             'seguro_tipo': self.seguro_tipo,
             'seguro_percentual': float(self.seguro_percentual) if self.seguro_percentual else 0.0006,
             'valor_seguro_mensal': float(self.valor_seguro_mensal) if self.valor_seguro_mensal else 0,
+            'seguro_modo': self.seguro_modo or 'fixo',
+            'seguro_fator_dfi': float(self.seguro_fator_dfi) if self.seguro_fator_dfi is not None else None,
+            'seguro_data_nascimento_titular': self.seguro_data_nascimento_titular.strftime('%Y-%m-%d') if self.seguro_data_nascimento_titular else None,
+            'seguro_mes_reajuste_idade': self.seguro_mes_reajuste_idade,
+            'faixas_mip': [faixa.to_dict() for faixa in self.seguro_faixas_mip.all()],
             'taxa_administracao_fixa': float(self.taxa_administracao_fixa) if self.taxa_administracao_fixa else 0,
             'ativo': self.ativo
         }
@@ -1942,6 +1955,51 @@ class FinanciamentoSeguroVigencia(db.Model):
             'observacoes': self.observacoes,
             'vigencia_ativa': self.vigencia_ativa,
             'data_encerramento': self.data_encerramento.strftime('%Y-%m-%d') if self.data_encerramento else None
+        }
+
+
+class FinanciamentoSeguroFaixaMip(db.Model):
+    """
+    Faixa configuravel de fator MIP para seguro habitacional estimado.
+    """
+    __tablename__ = 'financiamento_seguro_faixa_mip'
+
+    id = db.Column(db.Integer, primary_key=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
+    financiamento_id = db.Column(db.Integer, db.ForeignKey('financiamento.id'), nullable=False)
+    idade_inicio = db.Column(db.Integer, nullable=False)
+    idade_fim = db.Column(db.Integer, nullable=False)
+    fator_mip = db.Column(db.Numeric(10, 5), nullable=False)
+    vigencia_inicio = db.Column(db.Date, nullable=True)
+    vigencia_fim = db.Column(db.Date, nullable=True)
+    ativo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    financiamento = db.relationship('Financiamento', back_populates='seguro_faixas_mip')
+
+    __table_args__ = (
+        db.Index('idx_seguro_mip_financ', 'financiamento_id'),
+        db.Index('idx_seguro_mip_idade', 'idade_inicio', 'idade_fim'),
+        db.Index('idx_seguro_mip_perfil_ativo', 'perfil_financeiro_id', 'ativo'),
+    )
+
+    def __repr__(self):
+        return f'<SeguroFaixaMip {self.idade_inicio}-{self.idade_fim}: {self.fator_mip}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
+            'financiamento_id': self.financiamento_id,
+            'idade_inicio': self.idade_inicio,
+            'idade_fim': self.idade_fim,
+            'fator_mip': float(self.fator_mip),
+            'vigencia_inicio': self.vigencia_inicio.strftime('%Y-%m-%d') if self.vigencia_inicio else None,
+            'vigencia_fim': self.vigencia_fim.strftime('%Y-%m-%d') if self.vigencia_fim else None,
+            'ativo': self.ativo,
+            'criado_em': self.criado_em.strftime('%Y-%m-%d %H:%M:%S') if self.criado_em else None,
+            'atualizado_em': self.atualizado_em.strftime('%Y-%m-%d %H:%M:%S') if self.atualizado_em else None,
         }
 
 
