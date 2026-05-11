@@ -480,3 +480,48 @@ def test_motor_real_caixa_sac_tr_falha_quando_falta_tr(client):
     response = client.post('/api/financiamentos', json=_payload_motor_caixa_tr(prazo=20))
     assert response.status_code == 400
     assert 'Nao ha TR cadastrada para a competencia 2025-08' in response.get_json()['error']
+
+
+# ── FIN-QUIT-1: Simulação de quitação SAC+TR ─────────────────────────────────
+
+def test_simular_quitacao_sac_tr_aplica_tr_do_mes(client):
+    """Quitação SAC+TR deve usar TR da competência da data e aplicar sobre saldo base."""
+    _popular_tr_no_banco(completar_futuro=True)
+    response = client.post('/api/financiamentos', json=_payload_motor_caixa_tr(prazo=20))
+    assert response.status_code == 201, response.get_json()
+    fin_id = response.get_json()['data']['id']
+
+    # data_quitacao em 2025-05 — TR conhecida: 0.0017
+    resp = client.post(f'/api/financiamentos/{fin_id}/simular-quitacao', json={
+        'data_quitacao': '2025-05-05',
+    })
+    assert resp.status_code == 200, resp.get_json()
+    d = resp.get_json()['data']
+
+    assert d['modo_calculo'] == 'SAC+TR'
+    assert d['competencia_tr'] == '2025-05'
+    assert d['tr_aplicada'] is not None
+
+    # saldo_devedor_estimado = saldo_base * (1 + tr_aplicada)
+    tr = Decimal(str(d['tr_aplicada']))
+    saldo_base = Decimal(str(d['saldo_devedor_base']))
+    saldo_esperado = float(saldo_base * (Decimal('1') + tr))
+    assert abs(d['saldo_devedor_estimado'] - saldo_esperado) < 0.02
+
+
+def test_simular_quitacao_sac_tr_sem_tr_retorna_400(client):
+    """Quitação SAC+TR deve falhar com 400 quando a TR da competência está ausente."""
+    # Popular TR, exceto 2026-08 (competência da data de quitação)
+    _popular_tr_no_banco(completar_futuro=False)
+
+    response = client.post('/api/financiamentos', json=_payload_motor_caixa_tr(prazo=20))
+    assert response.status_code == 201, response.get_json()
+    fin_id = response.get_json()['data']['id']
+
+    resp = client.post(f'/api/financiamentos/{fin_id}/simular-quitacao', json={
+        'data_quitacao': '2026-08-01',
+    })
+    assert resp.status_code == 400
+    body = resp.get_json()
+    assert body['success'] is False
+    assert 'TR' in body['error'] or 'tr' in body['error'].lower()

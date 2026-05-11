@@ -904,6 +904,72 @@ def evolucao_saldo(id):
 # 5. INDEXADORES (TR, IPCA, etc)
 # ============================================================================
 
+@financiamentos_bp.route('/<int:id>/simular-quitacao', methods=['POST'])
+def simular_quitacao(id):
+    """
+    Simula a quitação antecipada de um financiamento.
+
+    Somente simulação: não altera banco, não baixa parcelas, não gera boleto.
+
+    Body (JSON):
+        {
+            "data_quitacao": "YYYY-MM-DD" (obrigatório),
+            "desconto_banco_percentual": float (opcional, 0-100, padrão 0)
+        }
+
+    Returns:
+        JSON com saldo estimado, componentes e avisos
+    """
+    try:
+        data = request.get_json()
+
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'Dados não fornecidos'
+            }), 400
+
+        data_quitacao = data.get('data_quitacao')
+        if not data_quitacao:
+            return jsonify({
+                'success': False,
+                'error': 'data_quitacao é obrigatória'
+            }), 400
+
+        desconto = data.get('desconto_banco_percentual', 0)
+        try:
+            desconto = float(desconto)
+        except (TypeError, ValueError):
+            return jsonify({
+                'success': False,
+                'error': 'desconto_banco_percentual deve ser um número'
+            }), 400
+
+        resultado = FinanciamentoService.simular_quitacao(
+            financiamento_id=id,
+            data_quitacao=data_quitacao,
+            desconto_banco_percentual=desconto,
+        )
+
+        return jsonify({
+            'success': True,
+            'data': resultado
+        }), 200
+
+    except ValueError as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 400
+
+    except Exception as e:
+        logger.exception('Erro ao simular quitacao do financiamento %s', id)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @financiamentos_bp.route('/indexadores', methods=['GET'])
 def listar_indexadores():
     """

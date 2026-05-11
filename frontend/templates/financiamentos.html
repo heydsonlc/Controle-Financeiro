@@ -499,6 +499,35 @@
                     <button type="button" onclick="selecionarAba('extrato')">Histórico</button>
                     <button type="button" class="fin-quick-danger" onclick="tentarExcluirFinanciamento()">Excluir financiamento</button>
                 </section>
+
+                <section class="fin-side-card" id="card-simular-quitacao">
+                    <div class="fin-side-heading">
+                        <h2>Simular quitação</h2>
+                        <span>Estimativa</span>
+                    </div>
+                    <label class="fin-field">
+                        <span>Data de quitação</span>
+                        <input id="quit-data" type="date">
+                    </label>
+                    <label class="fin-field">
+                        <span>Desconto estimado do banco (%)</span>
+                        <input id="quit-desconto" type="text" placeholder="0,00" inputmode="decimal">
+                    </label>
+                    <div class="fin-result-box" id="quit-resultado" hidden>
+                        <h3>Resultado estimado</h3>
+                        <dl>
+                            <div><dt>Saldo devedor base</dt><dd id="quit-saldo-base">-</dd></div>
+                            <div><dt>Valor estimado de quitação</dt><dd id="quit-valor" class="fin-result-highlight">-</dd></div>
+                            <div><dt>Juros futuros evitados</dt><dd id="quit-juros">-</dd></div>
+                            <div><dt>Seguro/taxas futuros evitados</dt><dd id="quit-seguros">-</dd></div>
+                            <div><dt>Economia estimada</dt><dd id="quit-economia">-</dd></div>
+                            <div><dt>Parcelas eliminadas</dt><dd id="quit-parcelas">-</dd></div>
+                        </dl>
+                    </div>
+                    <div id="quit-avisos" class="fin-result-warnings" hidden></div>
+                    <button type="button" class="fin-primary-btn fin-full-btn" id="btn-simular-quitacao" onclick="simularQuitacao()">Simular quitação</button>
+                    <p class="fin-result-disclaimer">Simulação estimada. Não gera boleto. Não altera o financiamento.</p>
+                </section>
             </aside>
         </div>
     </section>

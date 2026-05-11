@@ -1324,3 +1324,155 @@ def test_frontend_payload_de_ajuste_saldo_envia_campos_obrigatorios():
         assert campo in trecho
 
     assert '/ajustar-saldo' in trecho
+
+
+# ── FIN-QUIT-1: Simulação de quitação ────────────────────────────────────────
+
+def test_simular_quitacao_retorna_estrutura_esperada(client):
+    """Simulação básica: retorna campos obrigatórios sem alterar o banco."""
+    fin = _criar_financiamento(client)
+    fin_id = fin['id']
+
+    # Garante que exista pelo menos uma parcela pendente
+    parcela = FinanciamentoParcela.query.filter_by(financiamento_id=fin_id).first()
+    assert parcela is not None
+
+    data_quit = '2028-01-01'
+    resp = client.post(f'/api/financiamentos/{fin_id}/simular-quitacao', json={
+        'data_quitacao': data_quit,
+    })
+    assert resp.status_code == 200, resp.get_json()
+    body = resp.get_json()
+    assert body['success'] is True
+
+    d = body['data']
+    for campo in [
+        'financiamento_id',
+        'financiamento_nome',
+        'data_quitacao',
+        'saldo_devedor_base',
+        'saldo_devedor_estimado',
+        'parcelas_restantes_total',
+        'parcelas_futuras_consideradas',
+        'juros_futuros_estimados',
+        'seguros_futuros_estimados',
+        'taxas_futuras_estimadas',
+        'desconto_estimado',
+        'economia_estimada',
+        'valor_quitacao_estimado',
+        'modo_calculo',
+        'observacoes',
+    ]:
+        assert campo in d, f'Campo ausente: {campo}'
+
+    assert isinstance(d['observacoes'], list)
+    assert len(d['observacoes']) >= 1
+
+
+def test_simular_quitacao_nao_altera_saldo_devedor(client):
+    """Simulação não deve modificar o saldo_devedor_atual do financiamento."""
+    fin = _criar_financiamento(client)
+    fin_id = fin['id']
+    saldo_antes = Financiamento.query.get(fin_id).saldo_devedor_atual
+
+    client.post(f'/api/financiamentos/{fin_id}/simular-quitacao', json={
+        'data_quitacao': '2030-01-01',
+    })
+
+    saldo_depois = Financiamento.query.get(fin_id).saldo_devedor_atual
+    assert saldo_antes == saldo_depois
+
+
+def test_simular_quitacao_nao_altera_status_parcelas(client):
+    """Simulação não deve mudar o status de nenhuma parcela."""
+    fin = _criar_financiamento(client)
+    fin_id = fin['id']
+    statuses_antes = {
+        p.id: p.status
+        for p in FinanciamentoParcela.query.filter_by(financiamento_id=fin_id).all()
+    }
+
+    client.post(f'/api/financiamentos/{fin_id}/simular-quitacao', json={
+        'data_quitacao': '2030-01-01',
+    })
+
+    for p in FinanciamentoParcela.query.filter_by(financiamento_id=fin_id).all():
+        assert p.status == statuses_antes[p.id], f'Status da parcela {p.id} foi alterado'
+
+
+def test_simular_quitacao_usa_saldo_devedor_como_base(client):
+    """Valor estimado deve ser baseado no saldo_devedor_atual, não na soma de parcelas."""
+    fin = _criar_financiamento(client)
+    fin_id = fin['id']
+    financiamento = Financiamento.query.get(fin_id)
+    saldo = financiamento.saldo_devedor_atual
+
+    resp = client.post(f'/api/financiamentos/{fin_id}/simular-quitacao', json={
+        'data_quitacao': '2030-01-01',
+    })
+    assert resp.status_code == 200
+    d = resp.get_json()['data']
+
+    # saldo_devedor_base deve ser igual ao saldo_devedor_atual do financiamento
+    assert abs(d['saldo_devedor_base'] - float(saldo)) < 0.01
+
+    # valor_quitacao_estimado <= saldo_devedor_estimado (desconto só reduz, não aumenta)
+    assert d['valor_quitacao_estimado'] <= d['saldo_devedor_estimado'] + 0.01
+
+
+def test_simular_quitacao_com_desconto_reduz_valor(client):
+    """Desconto hipotético deve reduzir o valor estimado."""
+    fin = _criar_financiamento(client)
+    fin_id = fin['id']
+
+    resp_sem = client.post(f'/api/financiamentos/{fin_id}/simular-quitacao', json={
+        'data_quitacao': '2030-01-01',
+    })
+    resp_com = client.post(f'/api/financiamentos/{fin_id}/simular-quitacao', json={
+        'data_quitacao': '2030-01-01',
+        'desconto_banco_percentual': 20.0,
+    })
+    assert resp_sem.status_code == 200
+    assert resp_com.status_code == 200
+
+    sem = resp_sem.get_json()['data']
+    com = resp_com.get_json()['data']
+
+    # Com desconto, valor_quitacao_estimado deve ser <= sem desconto
+    assert com['valor_quitacao_estimado'] <= sem['valor_quitacao_estimado']
+    # desconto_estimado deve ser maior que zero quando há juros futuros e % > 0
+    if sem['juros_futuros_estimados'] > 0:
+        assert com['desconto_estimado'] > 0
+
+
+def test_simular_quitacao_sem_data_retorna_400(client):
+    """data_quitacao é obrigatória."""
+    fin = _criar_financiamento(client)
+    resp = client.post(f'/api/financiamentos/{fin["id"]}/simular-quitacao', json={})
+    assert resp.status_code == 400
+
+
+def test_simular_quitacao_financiamento_inexistente_retorna_erro(client):
+    resp = client.post('/api/financiamentos/99999/simular-quitacao', json={
+        'data_quitacao': '2030-01-01',
+    })
+    assert resp.status_code in (400, 404)
+    assert resp.get_json()['success'] is False
+
+
+def test_frontend_simular_quitacao_envia_payload_correto():
+    """JS deve enviar data_quitacao e desconto_banco_percentual para a rota correta."""
+    base_dir = Path(__file__).resolve().parents[1]
+    js = (base_dir / 'frontend' / 'static' / 'js' / 'financiamentos.js').read_text(encoding='utf-8')
+
+    assert 'async function simularQuitacao' in js
+    trecho = js[js.index('async function simularQuitacao'):]
+    # Delimita pelo próximo 'async function' ou 'function'
+    import re
+    m = re.search(r'\n(?:async )?function ', trecho[1:])
+    if m:
+        trecho = trecho[:m.start() + 1]
+
+    assert 'simular-quitacao' in trecho
+    assert 'data_quitacao' in trecho
+    assert 'desconto_banco_percentual' in trecho

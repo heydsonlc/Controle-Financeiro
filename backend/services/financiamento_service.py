@@ -2867,3 +2867,166 @@ class FinanciamentoService:
             })
 
         return evolucao
+
+    # ========================================================================
+    # SIMULAÇÃO DE QUITAÇÃO (FIN-QUIT-1)
+    # ========================================================================
+
+    @staticmethod
+    def simular_quitacao(financiamento_id, data_quitacao, desconto_banco_percentual=0):
+        """
+        Simula a quitação antecipada de um financiamento.
+
+        IMPORTANTE: Esta função é somente de simulação.
+        - Não altera saldo_devedor_atual
+        - Não modifica parcelas
+        - Não registra pagamentos
+        - Não gera boleto
+
+        O valor estimado de quitação usa como base o saldo_devedor_atual (estado
+        soberano). As parcelas futuras servem para estimar componentes separados
+        (juros, seguro, taxa_adm evitados) e a economia total.
+
+        Args:
+            financiamento_id (int): ID do financiamento
+            data_quitacao (str ou date): Data desejada para quitação
+            desconto_banco_percentual (float): Desconto hipotético sobre juros futuros (0-100)
+
+        Returns:
+            dict: Resultado da simulação com saldo estimado e componentes
+
+        Raises:
+            ValueError: Para dados inválidos ou TR ausente em SAC/TR
+        """
+        financiamento = FinanciamentoService.obter_financiamento_no_perfil(financiamento_id)
+
+        # Converter data
+        if isinstance(data_quitacao, str):
+            try:
+                data_quit = datetime.strptime(data_quitacao, '%Y-%m-%d').date()
+            except ValueError:
+                raise ValueError('data_quitacao deve estar no formato YYYY-MM-DD')
+        else:
+            data_quit = data_quitacao
+
+        desconto_pct = Decimal(str(desconto_banco_percentual or 0))
+        if desconto_pct < 0 or desconto_pct > 100:
+            raise ValueError('desconto_banco_percentual deve estar entre 0 e 100')
+
+        # ── Saldo base ────────────────────────────────────────────────────────
+        # Usar estado soberano; fallback para primeira parcela pendente
+        if financiamento.saldo_devedor_atual is not None:
+            saldo_base = Decimal(str(financiamento.saldo_devedor_atual))
+        else:
+            primeira_pendente = FinanciamentoParcela.query.filter(
+                FinanciamentoParcela.financiamento_id == financiamento_id,
+                FinanciamentoParcela.status.notin_(FinanciamentoService.STATUS_PARCELA_EXECUTADA)
+            ).order_by(FinanciamentoParcela.numero_parcela).first()
+            if primeira_pendente and primeira_pendente.saldo_devedor_antes_pagamento:
+                saldo_base = Decimal(str(primeira_pendente.saldo_devedor_antes_pagamento))
+            else:
+                saldo_base = Decimal(str(financiamento.valor_financiado))
+
+        if saldo_base <= 0:
+            raise ValueError('O financiamento não possui saldo devedor em aberto.')
+
+        # ── Parcelas pendentes ─────────────────────────────────────────────────
+        parcelas_pendentes = FinanciamentoParcela.query.filter(
+            FinanciamentoParcela.financiamento_id == financiamento_id,
+            FinanciamentoParcela.status.notin_(FinanciamentoService.STATUS_PARCELA_EXECUTADA)
+        ).order_by(FinanciamentoParcela.data_vencimento).all()
+
+        parcelas_total_restantes = len(parcelas_pendentes)
+
+        # ── Verificar parcelas vencidas ────────────────────────────────────────
+        hoje = date.today()
+        parcelas_vencidas = [p for p in parcelas_pendentes if p.data_vencimento < hoje]
+
+        # ── Identificar parcelas até a data de quitação ────────────────────────
+        parcelas_ate_quit = [p for p in parcelas_pendentes if p.data_vencimento <= data_quit]
+        parcelas_futuras = [p for p in parcelas_pendentes if p.data_vencimento > data_quit]
+
+        # ── Acumular componentes das parcelas futuras (economia estimada) ──────
+        juros_futuros = Decimal('0')
+        seguros_futuros = Decimal('0')
+        taxas_futuras = Decimal('0')
+
+        # Para SAC/TR: verificar TR da competência da data de quitação
+        usa_sac_tr = FinanciamentoService._financiamento_usa_sac_tr(financiamento)
+        competencia_quit = FinanciamentoService._competencia_tr(data_quit)
+        tr_aplicada = None
+
+        if usa_sac_tr:
+            try:
+                tr_aplicada = FinanciamentoService._obter_tr_mensal_decimal(data_quit)
+            except ValueError as e:
+                raise ValueError(str(e))
+
+        # Somamos juros/seguro/taxa das parcelas que serão eliminadas (futuras à data)
+        for p in parcelas_futuras:
+            juros_futuros += Decimal(str(p.valor_juros or 0))
+            seguros_futuros += Decimal(str(p.valor_seguro or 0))
+            taxas_futuras += Decimal(str(p.valor_taxa_adm or 0))
+
+        # ── Saldo estimado de quitação ─────────────────────────────────────────
+        # Para SAC/TR: aplicar TR do mês de quitação sobre saldo base
+        if usa_sac_tr and tr_aplicada is not None:
+            saldo_estimado = saldo_base * (Decimal('1') + tr_aplicada)
+        else:
+            saldo_estimado = saldo_base
+
+        # ── Desconto hipotético sobre juros futuros evitados ──────────────────
+        desconto_estimado = juros_futuros * (desconto_pct / Decimal('100'))
+
+        # ── Economia total estimada ────────────────────────────────────────────
+        economia_total = juros_futuros + seguros_futuros + taxas_futuras + desconto_estimado
+
+        # ── Valor estimado de quitação ─────────────────────────────────────────
+        # Saldo projetado na data, menos eventual desconto
+        valor_quitacao_estimado = saldo_estimado - desconto_estimado
+
+        # ── Avisos ─────────────────────────────────────────────────────────────
+        observacoes = [
+            'Esta é uma simulação estimada. O valor oficial de quitação deve ser confirmado com o banco.',
+            'Juros pro rata diário não incluído nesta simulação.',
+        ]
+
+        if desconto_pct > 0:
+            observacoes.append(
+                'O desconto informado é apenas uma hipótese para simulação. '
+                'O percentual real depende da política do banco.'
+            )
+
+        if parcelas_vencidas:
+            observacoes.append(
+                f'Há {len(parcelas_vencidas)} parcela(s) vencida(s) em aberto. '
+                'O valor oficial pode incluir encargos não considerados nesta simulação.'
+            )
+
+        if usa_sac_tr and tr_aplicada is not None:
+            observacoes.append(
+                f'TR da competência {competencia_quit} aplicada: '
+                f'{float(tr_aplicada * 100):.4f}%.'
+            )
+
+        modo_calculo = 'SAC+TR' if usa_sac_tr else financiamento.sistema_amortizacao
+
+        return {
+            'financiamento_id': financiamento_id,
+            'financiamento_nome': financiamento.nome,
+            'data_quitacao': data_quit.strftime('%Y-%m-%d'),
+            'saldo_devedor_base': float(saldo_base),
+            'saldo_devedor_estimado': float(saldo_estimado),
+            'parcelas_restantes_total': parcelas_total_restantes,
+            'parcelas_futuras_consideradas': len(parcelas_futuras),
+            'juros_futuros_estimados': float(juros_futuros),
+            'seguros_futuros_estimados': float(seguros_futuros),
+            'taxas_futuras_estimadas': float(taxas_futuras),
+            'desconto_estimado': float(desconto_estimado),
+            'economia_estimada': float(economia_total),
+            'valor_quitacao_estimado': float(valor_quitacao_estimado),
+            'modo_calculo': modo_calculo,
+            'competencia_tr': competencia_quit if usa_sac_tr else None,
+            'tr_aplicada': float(tr_aplicada) if tr_aplicada is not None else None,
+            'observacoes': observacoes,
+        }

@@ -125,6 +125,13 @@ function preencherDatasPadrao() {
     if (pagarData) pagarData.value = hojeIso;
     if (amortData) amortData.value = hojeIso;
 
+    // Data padrão da simulação de quitação: 3 meses à frente
+    const quitData = document.getElementById('quit-data');
+    if (quitData && !quitData.value) {
+        const tresMeses = new Date(hoje.getFullYear(), hoje.getMonth() + 3, 1);
+        quitData.value = toISODate(tresMeses);
+    }
+
     const diaVencimento = document.getElementById('fin-dia-vencimento');
     if (diaVencimento && dataPrimeira?.value) {
         diaVencimento.value = String(Number(dataPrimeira.value.split('-')[2]));
@@ -1075,6 +1082,68 @@ function simularAmortizacaoDetalhe() {
     setText('sim-amort-prazo', reducaoPrazo ? `- ${reducaoPrazo} meses` : 'Sem redução estimada');
     setText('sim-amort-data', novaQuitacao);
     setText('sim-amort-economia', formatarMoedaDisplay(economia));
+}
+
+async function simularQuitacao() {
+    const financiamento = estadoFinanciamentos.atual;
+    if (!financiamento?.id) {
+        mostrarToast('Selecione um financiamento para simular a quitação.');
+        return;
+    }
+
+    const dataQuitacao = document.getElementById('quit-data')?.value;
+    if (!dataQuitacao) {
+        mostrarToast('Informe a data de quitação.', 'erro');
+        return;
+    }
+
+    const descontoRaw = document.getElementById('quit-desconto')?.value;
+    const desconto = descontoRaw ? parseMoeda(descontoRaw) : 0;
+
+    const btn = document.getElementById('btn-simular-quitacao');
+    if (btn) { btn.disabled = true; btn.textContent = 'Calculando...'; }
+
+    try {
+        const response = await fetch(`${API_BASE}/${financiamento.id}/simular-quitacao`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                data_quitacao: dataQuitacao,
+                desconto_banco_percentual: desconto,
+            }),
+        });
+
+        const resultado = await response.json();
+
+        if (!resultado.success) {
+            throw new Error(resultado.error || 'Erro ao simular quitação');
+        }
+
+        const sim = resultado.data;
+
+        setText('quit-saldo-base', formatarMoedaDisplay(sim.saldo_devedor_base));
+        setText('quit-valor', formatarMoedaDisplay(sim.valor_quitacao_estimado));
+        setText('quit-juros', formatarMoedaDisplay(sim.juros_futuros_estimados));
+        setText('quit-seguros', formatarMoedaDisplay(sim.seguros_futuros_estimados + sim.taxas_futuras_estimadas));
+        setText('quit-economia', formatarMoedaDisplay(sim.economia_estimada));
+        setText('quit-parcelas', `${sim.parcelas_futuras_consideradas} parcela(s)`);
+
+        const resultadoBox = document.getElementById('quit-resultado');
+        if (resultadoBox) resultadoBox.hidden = false;
+
+        const avisosBox = document.getElementById('quit-avisos');
+        if (avisosBox && sim.observacoes?.length) {
+            avisosBox.innerHTML = sim.observacoes
+                .map((obs) => `<p>${escapeHtml(obs)}</p>`)
+                .join('');
+            avisosBox.hidden = false;
+        }
+
+    } catch (error) {
+        mostrarToast(error.message, 'erro');
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Simular quitação'; }
+    }
 }
 
 async function abrirDemonstrativo() {
