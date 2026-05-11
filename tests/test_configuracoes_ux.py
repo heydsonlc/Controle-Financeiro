@@ -81,3 +81,4 @@ def test_topbar_configuracoes_usa_acoes_reais_sem_placeholders(client):
     assert 'perfil-financeiro-switcher' in html
     assert 'contexto_financeiro.js' in html
     assert 'configuracoes.js' in html
+    assert 'static/js/app' not in html

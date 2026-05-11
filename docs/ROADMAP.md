@@ -93,7 +93,6 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 | HELP-SUPORTE-1 | Canal real de suporte/chamado | Baixa |
 | DASH-FILTROS-1 | Filtros reais no Dashboard | Baixa |
 | IR-ZIP-SAIDAS-1 | ZIP de documentos de saídas para contador | Baixa |
-| APPJS-CLEAN-1 | Remover código legado/órfão de `app.js` | Baixa |
 
 ### Módulos Futuros
 
