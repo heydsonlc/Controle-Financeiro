@@ -42,24 +42,9 @@ def listar_vigencias(financiamento_id):
         # Listar vigências
         vigencias = SeguroVigenciaService.listar_vigencias(financiamento_id)
 
-        # Formatar resposta
-        resultado = []
-        for v in vigencias:
-            resultado.append({
-                'id': v.id,
-                'competencia_inicio': v.competencia_inicio.strftime('%Y-%m-%d'),
-                'competencia_fim': v.data_encerramento.strftime('%Y-%m-%d') if v.data_encerramento else None,
-                'valor_mensal': float(v.valor_mensal),
-                'saldo_devedor_vigencia': float(v.saldo_devedor_vigencia) if v.saldo_devedor_vigencia else None,
-                'taxa_percentual': float(v.taxa_percentual) if v.taxa_percentual else None,
-                'vigencia_ativa': v.vigencia_ativa,
-                'observacoes': v.observacoes,
-                'criado_em': v.criado_em.strftime('%Y-%m-%d %H:%M:%S')
-            })
-
         return jsonify({
             'success': True,
-            'data': resultado
+            'data': [vigencia.to_dict() for vigencia in vigencias]
         })
 
     except Exception as e:
@@ -105,8 +90,8 @@ def criar_vigencia(financiamento_id):
                 'error': 'Dados não fornecidos'
             }), 400
 
-        # Validar campos obrigatórios
-        campos_obrigatorios = ['competencia_inicio', 'valor_mensal', 'saldo_devedor_vigencia']
+        # Validar campos obrigatorios. saldo_devedor_vigencia e legado/opcional.
+        campos_obrigatorios = ['competencia_inicio', 'valor_mensal']
         for campo in campos_obrigatorios:
             if campo not in data:
                 return jsonify({

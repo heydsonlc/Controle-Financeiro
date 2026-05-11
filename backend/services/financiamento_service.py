@@ -123,6 +123,36 @@ class FinanciamentoService:
         return getattr(financiamento, 'seguro_modo', None) or FinanciamentoService.SEGURO_MODO_FIXO
 
     @staticmethod
+    def _validar_seguro_modo(seguro_modo):
+        modo = seguro_modo or FinanciamentoService.SEGURO_MODO_FIXO
+        if modo not in [
+            FinanciamentoService.SEGURO_MODO_FIXO,
+            FinanciamentoService.SEGURO_MODO_ESTIMADO_DFI_MIP
+        ]:
+            raise ValueError('seguro_modo deve ser "fixo" ou "estimado_dfi_mip"')
+        return modo
+
+    @staticmethod
+    def _normalizar_seguro_tipo_legado(seguro_tipo):
+        tipo = seguro_tipo or 'fixo'
+        if tipo not in ['fixo', 'percentual_saldo']:
+            raise ValueError('seguro_tipo deve ser "fixo" ou "percentual_saldo"')
+        return tipo
+
+    @staticmethod
+    def _seguro_modo_do_payload(dados):
+        if dados.get('seguro_modo'):
+            return FinanciamentoService._validar_seguro_modo(dados.get('seguro_modo'))
+
+        if 'seguro_tipo' in dados:
+            FinanciamentoService._normalizar_seguro_tipo_legado(dados.get('seguro_tipo'))
+            # Campo legado: percentual_saldo nao e mais motor oficial; a compatibilidade
+            # cai para o seguro fixo/manual por vigencia.
+            return FinanciamentoService.SEGURO_MODO_FIXO
+
+        return FinanciamentoService.SEGURO_MODO_FIXO
+
+    @staticmethod
     def _modo_calculo(financiamento):
         return getattr(financiamento, 'modo_calculo_financiamento', None) or FinanciamentoService.MODO_CALCULO_PADRAO
 
@@ -432,12 +462,10 @@ class FinanciamentoService:
         valor_financiado_decimal = Decimal(str(dados['valor_financiado']))
         prazo_total_int = int(dados['prazo_total_meses'])
 
-        seguro_modo = dados.get('seguro_modo') or FinanciamentoService.SEGURO_MODO_FIXO
-        if seguro_modo not in [
-            FinanciamentoService.SEGURO_MODO_FIXO,
-            FinanciamentoService.SEGURO_MODO_ESTIMADO_DFI_MIP
-        ]:
-            raise ValueError('seguro_modo deve ser "fixo" ou "estimado_dfi_mip"')
+        seguro_modo = FinanciamentoService._seguro_modo_do_payload(dados)
+        seguro_tipo_legado = FinanciamentoService._normalizar_seguro_tipo_legado(
+            dados.get('seguro_tipo')
+        )
 
         seguro_fator_dfi = FinanciamentoService._decimal(
             dados.get('seguro_fator_dfi') if dados.get('seguro_fator_dfi') is not None else (
@@ -522,7 +550,7 @@ class FinanciamentoService:
             data_primeira_parcela=data_primeira_parcela,
             item_despesa_id=item_despesa_id,
             # Configuração de seguro
-            seguro_tipo=dados.get('seguro_tipo', 'fixo'),
+            seguro_tipo=seguro_tipo_legado,
             seguro_percentual=Decimal(str(dados.get('seguro_percentual', 0.0006))),
             valor_seguro_mensal=Decimal(str(dados.get('valor_seguro_mensal', 0))),
             seguro_modo=seguro_modo,
@@ -982,9 +1010,11 @@ class FinanciamentoService:
             )
 
         if 'seguro_tipo' in dados:
-            if dados['seguro_tipo'] not in ['fixo', 'percentual_saldo']:
-                raise ValueError('seguro_tipo deve ser "fixo" ou "percentual_saldo"')
-            valores_estruturais['seguro_tipo'] = dados['seguro_tipo']
+            valores_estruturais['seguro_tipo'] = FinanciamentoService._normalizar_seguro_tipo_legado(
+                dados.get('seguro_tipo')
+            )
+            if 'seguro_modo' not in dados:
+                valores_estruturais['seguro_modo'] = FinanciamentoService._seguro_modo_do_payload(dados)
 
         if 'seguro_percentual' in dados and dados['seguro_percentual'] is not None:
             seguro_percentual = Decimal(str(dados['seguro_percentual']))
@@ -999,13 +1029,9 @@ class FinanciamentoService:
             valores_estruturais['valor_seguro_mensal'] = valor_seguro
 
         if 'seguro_modo' in dados:
-            seguro_modo = dados.get('seguro_modo') or FinanciamentoService.SEGURO_MODO_FIXO
-            if seguro_modo not in [
-                FinanciamentoService.SEGURO_MODO_FIXO,
-                FinanciamentoService.SEGURO_MODO_ESTIMADO_DFI_MIP
-            ]:
-                raise ValueError('seguro_modo deve ser "fixo" ou "estimado_dfi_mip"')
-            valores_estruturais['seguro_modo'] = seguro_modo
+            valores_estruturais['seguro_modo'] = FinanciamentoService._validar_seguro_modo(
+                dados.get('seguro_modo')
+            )
 
         if 'seguro_fator_dfi' in dados:
             seguro_fator_dfi = FinanciamentoService._decimal(

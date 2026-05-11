@@ -514,7 +514,6 @@ function coletarDadosFormulario(editando) {
         indexador_saldo: indexadorSelecionado,
         data_contrato: document.getElementById('fin-data-contrato')?.value,
         data_primeira_parcela: dataPrimeira,
-        seguro_tipo: 'fixo',
         valor_seguro_mensal: seguroModo === 'fixo' ? seguro : 0,
         seguro_modo: seguroModo,
         seguro_fator_dfi: seguroModo === 'estimado_dfi_mip' ? seguroFatorDfi : null,

@@ -228,9 +228,9 @@ def criar_financiamento():
             "indexador_saldo": "TR|IPCA|..." (opcional),
             "data_contrato": "YYYY-MM-DD" (obrigatório),
             "data_primeira_parcela": "YYYY-MM-DD" (obrigatório),
-            "seguro_tipo": "fixo|percentual_saldo" (opcional, padrão: fixo),
-            "seguro_percentual": float (obrigatório se seguro_tipo=percentual_saldo),
-            "valor_seguro_mensal": float (obrigatório se seguro_tipo=fixo),
+            "seguro_modo": "fixo|estimado_dfi_mip" (opcional, padrão: fixo),
+            "valor_seguro_mensal": float (usado no modo fixo/manual),
+            "seguro_tipo": campo legado opcional, mantido por compatibilidade,
             "taxa_administracao_fixa": float (opcional, padrão: 0),
             "item_despesa_id": int (opcional)
         }
@@ -332,9 +332,9 @@ def atualizar_financiamento(id):
         - sistema_amortizacao, valor_financiado, prazo_total_meses
         - taxa_juros_nominal_anual, indexador_saldo
         - data_contrato, data_primeira_parcela
-        - seguro_tipo: "fixo|percentual_saldo"
-        - seguro_percentual: float (se seguro_tipo=percentual_saldo)
-        - valor_seguro_mensal: float (se seguro_tipo=fixo)
+        - seguro_modo: "fixo|estimado_dfi_mip" (campo oficial)
+        - valor_seguro_mensal: float (modo fixo/manual)
+        - seguro_tipo, seguro_percentual: campos legados aceitos por compatibilidade
         - taxa_administracao_fixa: float
         - item_despesa_id: int
 
@@ -367,7 +367,7 @@ def atualizar_financiamento(id):
                     'error': 'seguro_data_nascimento_titular é obrigatória no modo estimado DFI + MIP'
                 }), 400
 
-        # Validar tipo de seguro se fornecido
+        # Campo legado: aceito por compatibilidade, mas seguro_modo e a regra oficial.
         if 'seguro_tipo' in data:
             seguro_tipo = data['seguro_tipo']
 
@@ -376,29 +376,6 @@ def atualizar_financiamento(id):
                     'success': False,
                     'error': 'seguro_tipo deve ser "fixo" ou "percentual_saldo"'
                 }), 400
-
-            # Validar campos de seguro baseado no tipo
-            if seguro_tipo == 'percentual_saldo':
-                if 'seguro_percentual' not in data or data['seguro_percentual'] is None:
-                    return jsonify({
-                        'success': False,
-                        'error': 'seguro_percentual é obrigatório quando seguro_tipo é "percentual_saldo"'
-                    }), 400
-
-                # Validar range do percentual (0.01% a 1%)
-                percentual = float(data['seguro_percentual'])
-                if percentual < 0.0001 or percentual > 0.01:
-                    return jsonify({
-                        'success': False,
-                        'error': 'seguro_percentual deve estar entre 0.0001 (0.01%) e 0.01 (1%)'
-                    }), 400
-
-            elif seguro_tipo == 'fixo':
-                if 'valor_seguro_mensal' not in data or data['valor_seguro_mensal'] is None:
-                    return jsonify({
-                        'success': False,
-                        'error': 'valor_seguro_mensal é obrigatório quando seguro_tipo é "fixo"'
-                    }), 400
 
         financiamento = FinanciamentoService.atualizar_financiamento(id, data)
 
