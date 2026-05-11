@@ -114,7 +114,6 @@ def criar_vigencia(financiamento_id):
         # Validar valor
         try:
             valor_mensal = Decimal(str(data['valor_mensal']))
-            saldo_devedor_vigencia = Decimal(str(data['saldo_devedor_vigencia']))
         except (ValueError, TypeError):
             return jsonify({
                 'success': False,
@@ -127,11 +126,20 @@ def criar_vigencia(financiamento_id):
                 'error': 'Valor mensal deve ser maior que zero'
             }), 400
 
-        if saldo_devedor_vigencia <= 0:
-            return jsonify({
-                'success': False,
-                'error': 'Saldo devedor deve ser maior que zero'
-            }), 400
+        if data.get('saldo_devedor_vigencia') is not None:
+            try:
+                saldo_legado = Decimal(str(data['saldo_devedor_vigencia']))
+            except (ValueError, TypeError):
+                return jsonify({
+                    'success': False,
+                    'error': 'Valores numéricos inválidos'
+                }), 400
+
+            if saldo_legado <= 0:
+                return jsonify({
+                    'success': False,
+                    'error': 'Saldo devedor deve ser maior que zero'
+                }), 400
 
         # Normalizar competencia_inicio para primeiro dia do mês
         competencia_inicio = competencia_inicio.replace(day=1)
@@ -177,7 +185,9 @@ def criar_vigencia(financiamento_id):
             vigencia_existente.data_encerramento = competencia_inicio - timedelta(days=1)
             db.session.flush()
 
-        # Criar vigência
+        saldo_devedor_vigencia = financiamento.saldo_devedor_atual or financiamento.valor_financiado
+
+        # Criar vigência pelo servico central. taxa_percentual permanece legacy/None.
         nova_vigencia = SeguroVigenciaService.criar_vigencia(
             financiamento_id=financiamento_id,
             competencia_inicio=competencia_inicio,
@@ -203,13 +213,7 @@ def criar_vigencia(financiamento_id):
         return jsonify({
             'success': True,
             'message': 'Vigência criada com sucesso',
-            'data': {
-                'id': nova_vigencia.id,
-                'competencia_inicio': nova_vigencia.competencia_inicio.strftime('%Y-%m-%d'),
-                'valor_mensal': float(nova_vigencia.valor_mensal),
-                'taxa_percentual': float(nova_vigencia.taxa_percentual) if nova_vigencia.taxa_percentual else None,
-                'vigencia_ativa': nova_vigencia.vigencia_ativa
-            }
+            'data': nova_vigencia.to_dict()
         }), 201
 
     except Exception as e:

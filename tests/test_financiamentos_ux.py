@@ -18,6 +18,7 @@ from backend.models import (
     ItemDespesa,
 )
 from backend.routes.financiamentos import financiamentos_bp
+from backend.routes.financiamento_seguro import bp as financiamento_seguro_bp
 
 
 @pytest.fixture()
@@ -35,6 +36,7 @@ def app_context():
     )
     db.init_app(app)
     app.register_blueprint(financiamentos_bp, url_prefix='/api/financiamentos')
+    app.register_blueprint(financiamento_seguro_bp)
 
     @app.route('/financiamentos')
     def financiamentos_page():
@@ -77,7 +79,6 @@ def _payload_financiamento(nome='Financiamento UX'):
         'indexador_saldo': None,
         'data_contrato': '2026-05-01',
         'data_primeira_parcela': '2026-06-01',
-        'seguro_tipo': 'fixo',
         'valor_seguro_mensal': 200.0,
         'taxa_administracao_fixa': 0.0,
         'vigencias_seguro': [
@@ -259,6 +260,77 @@ def test_seguro_estimado_dfi_mip_calcula_e_muda_por_faixa_etaria(client):
         ).all()
     }
     assert idades_inicio == {0, 46, 51, 56, 61, 66, 71, 76}
+
+
+def test_seguro_modo_tem_prioridade_sobre_seguro_tipo_legado(client):
+    payload = _payload_financiamento_estimado('Seguro Modo Oficial')
+    payload['seguro_tipo'] = 'fixo'
+    payload['seguro_percentual'] = 0.0006
+
+    response = client.post('/api/financiamentos', json=payload)
+    body = response.get_json()
+
+    assert response.status_code == 201
+    assert body['success'] is True
+    assert body['data']['seguro_modo'] == 'estimado_dfi_mip'
+    assert body['data']['seguro_tipo'] == 'fixo'
+
+    parcela = FinanciamentoParcela.query.filter_by(
+        financiamento_id=body['data']['id']
+    ).order_by(FinanciamentoParcela.numero_parcela).first()
+    assert float(parcela.valor_seguro) == _seguro_esperado(
+        parcela.valor_amortizacao,
+        parcela.valor_juros,
+        0.04899,
+    )
+
+
+def test_seguro_tipo_legado_sem_seguro_modo_cai_para_fixo_manual(client):
+    payload = _payload_financiamento('Seguro Legado Percentual')
+    payload['seguro_tipo'] = 'percentual_saldo'
+    payload['seguro_percentual'] = 0.0006
+
+    response = client.post('/api/financiamentos', json=payload)
+    body = response.get_json()
+
+    assert response.status_code == 201
+    assert body['success'] is True
+    assert body['data']['seguro_modo'] == 'fixo'
+    assert body['data']['seguro_tipo'] == 'percentual_saldo'
+
+    parcela = FinanciamentoParcela.query.filter_by(
+        financiamento_id=body['data']['id']
+    ).order_by(FinanciamentoParcela.numero_parcela).first()
+    assert float(parcela.valor_seguro) == 200.0
+
+
+def test_rota_legada_seguros_usa_vigencia_manual_sem_taxa_percentual(client):
+    criado = _criar_financiamento(client, 'Rota Legada Seguros')
+
+    response = client.post(
+        f'/api/financiamentos/{criado["id"]}/seguros',
+        json={
+            'competencia_inicio': '2027-01-01',
+            'valor_mensal': 250.0,
+            'saldo_devedor_vigencia': 1.0,
+            'observacoes': 'Rota legada preservada',
+        },
+    )
+    body = response.get_json()
+
+    assert response.status_code == 201
+    assert body['success'] is True
+    assert body['data']['valor_mensal'] == 250.0
+    assert body['data']['taxa_percentual'] is None
+    assert body['data']['saldo_devedor_vigencia'] == criado['saldo_devedor_atual']
+
+    response = client.get(f'/api/financiamentos/{criado["id"]}/seguros')
+    body = response.get_json()
+
+    assert response.status_code == 200
+    assert body['success'] is True
+    assert len(body['data']) == 2
+    assert {vigencia['valor_mensal'] for vigencia in body['data']} == {200.0, 250.0}
 
 
 def test_edicao_regenera_cronograma_com_seguro_estimado(client):
@@ -1231,6 +1303,7 @@ def test_frontend_payload_de_financiamento_envia_campos_estruturais_e_flag_crono
     assert 'modo_calculo_financiamento:' not in trecho
     assert 'modo_taxa_mensal:' not in trecho
     assert 'caixa_sac_tr' not in trecho
+    assert 'seguro_tipo:' not in trecho
     assert 'ajustarDataPrimeiraPorDia' in trecho
 
 
