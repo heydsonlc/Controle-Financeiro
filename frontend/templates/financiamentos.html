@@ -97,10 +97,6 @@
                     <h2>Contratos de financiamento</h2>
                     <span id="contratos-count" class="fin-count-badge">0</span>
                 </div>
-                <button type="button" class="fin-secondary-btn" onclick="alternarModoTabela()">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4V5Zm0 5h16M9 5v14"/></svg>
-                    Ver em tabela
-                </button>
             </div>
             <div id="financiamentos-lista" class="fin-contract-list">
                 <div class="fin-loading-state">Carregando financiamentos...</div>
@@ -410,8 +406,6 @@
                     <button type="button" data-tab="parcelas" class="active" onclick="selecionarAba('parcelas')">Parcelas</button>
                     <button type="button" data-tab="extrato" onclick="selecionarAba('extrato')">Extrato</button>
                     <button type="button" data-tab="amortizacao" onclick="selecionarAba('amortizacao')">Amortização</button>
-                    <button type="button" data-tab="quitacao" onclick="selecionarAba('quitacao')">Quitação</button>
-                    <button type="button" data-tab="documentos" onclick="selecionarAba('documentos')">Documentos</button>
                     <button type="button" data-tab="dados" onclick="selecionarAba('dados')">Dados do contrato</button>
                 </nav>
 
@@ -423,7 +417,6 @@
                                 Exportar
                                 <span aria-hidden="true">⌄</span>
                             </button>
-                            <button type="button" class="fin-secondary-btn" onclick="focarFiltroParcelas()">Filtros</button>
                         </div>
                     </div>
                     <div id="detalhe-tab-content">
@@ -496,22 +489,6 @@
                         </dl>
                     </div>
                     <button type="button" class="fin-primary-btn fin-full-btn" onclick="simularAmortizacaoDetalhe()">Simular agora</button>
-                </section>
-
-                <section class="fin-side-card">
-                    <div class="fin-side-heading">
-                        <h2>Simular quitação</h2>
-                    </div>
-                    <div class="fin-payoff-box">
-                        <span>Valor para quitação</span>
-                        <strong id="sim-quitacao-valor">R$ 0,00</strong>
-                        <small id="sim-quitacao-data">Data base: --</small>
-                    </div>
-                    <button type="button" class="fin-full-link" onclick="selecionarAba('quitacao')">
-                        Ver detalhes
-                        <span aria-hidden="true">⌄</span>
-                    </button>
-                    <button type="button" class="fin-secondary-btn fin-full-btn" onclick="registrarPendenciaQuitacao()">Gerar boleto de quitação</button>
                 </section>
 
                 <section class="fin-side-card fin-quick-actions">

@@ -1142,7 +1142,7 @@ def test_frontend_extrato_exibe_coluna_taxa_administrativa():
     base_dir = Path(__file__).resolve().parents[1]
     js = (base_dir / 'frontend' / 'static' / 'js' / 'financiamentos.js').read_text(encoding='utf-8')
     inicio = js.index('async function carregarDemonstrativo')
-    fim = js.index('function abrirSeguroHabitacional', inicio)
+    fim = js.index('function abrirMenuMaisAcoes', inicio)
     trecho = js[inicio:fim]
 
     assert 'Taxa adm' in trecho
@@ -1157,6 +1157,33 @@ def test_template_nao_depende_de_modal_antigo_para_cadastro(client):
     assert 'fin-form-view' in html
     assert 'modal-financiamento' not in html
     assert 'modal-detalhes' not in html
+
+
+def test_frontend_oculta_acoes_incompletas_de_financiamento(client):
+    base_dir = Path(__file__).resolve().parents[1]
+    template = (base_dir / 'frontend' / 'templates' / 'financiamentos.html').read_text(encoding='utf-8')
+    js = (base_dir / 'frontend' / 'static' / 'js' / 'financiamentos.js').read_text(encoding='utf-8')
+
+    for texto in [
+        'Quitação',
+        'Documentos',
+        'Gerar boleto de quitação',
+        'Ver em tabela',
+        'Filtros',
+    ]:
+        assert texto not in template
+
+    for residuo in [
+        'Gerenciar seguro habitacional',
+        'abrirSeguroHabitacional',
+        'registrarPendenciaQuitacao',
+        'alternarModoTabela',
+        'focarFiltroParcelas',
+        'abrirQuitacao',
+        'renderizarAbaQuitacao',
+        'renderizarAbaDocumentos',
+    ]:
+        assert residuo not in js
 
 
 def test_frontend_exclusao_financiamento_tem_botao_e_delete(client):

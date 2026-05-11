@@ -4,8 +4,7 @@ const estadoFinanciamentos = {
     lista: [],
     filtrados: [],
     atual: null,
-    abaAtual: 'parcelas',
-    modoTabela: false
+    abaAtual: 'parcelas'
 };
 
 const FAIXAS_MIP_PADRAO = [
@@ -236,9 +235,6 @@ function renderizarFinanciamentos(financiamentos) {
                     </button>
                     <button type="button" class="fin-icon-btn" onclick="editarFinanciamento(${financiamento.id})" title="Editar">
                         <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                    </button>
-                    <button type="button" class="fin-icon-btn red" onclick="abrirQuitacao(${financiamento.id})" title="Quitar">
-                        <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
                     </button>
                 </div>
             </div>
@@ -595,9 +591,6 @@ function renderizarDetalhes(financiamento) {
     setText('detalhe-parcelas-sub', `${percentual.toFixed(2).replace('.', ',')}% do total de parcelas`);
     setText('detalhe-proxima-data', proxima ? formatarDataBR(proxima.data_vencimento) : '--');
     setText('detalhe-proxima-valor', proxima ? formatarMoedaDisplay(proxima.valor_previsto_total) : 'R$ 0,00');
-    setText('sim-quitacao-valor', formatarMoedaDisplay(financiamento.saldo_devedor_atual));
-    setText('sim-quitacao-data', `Data base: ${financiamento.data_base ? formatarDataBR(financiamento.data_base) : formatarDataBR(toISODate(new Date()))}`);
-
     renderizarTabelaParcelas(parcelas);
     selecionarAba('parcelas');
     simularAmortizacaoDetalhe();
@@ -678,8 +671,6 @@ function selecionarAba(aba) {
         resumo: renderizarAbaResumo(financiamento),
         extrato: renderizarAbaExtrato(financiamento),
         amortizacao: renderizarAbaAmortizacao(financiamento),
-        quitacao: renderizarAbaQuitacao(financiamento),
-        documentos: renderizarAbaDocumentos(),
         dados: renderizarAbaDados(financiamento)
     };
 
@@ -687,8 +678,6 @@ function selecionarAba(aba) {
         resumo: 'Resumo operacional',
         extrato: 'Extrato e histórico',
         amortizacao: 'Amortização',
-        quitacao: 'Quitação',
-        documentos: 'Documentos',
         dados: 'Dados do contrato'
     };
 
@@ -764,23 +753,6 @@ function renderizarAbaAmortizacao(financiamento) {
     `;
 }
 
-function renderizarAbaQuitacao(financiamento) {
-    return `
-        <div class="fin-info-grid">
-            <div class="fin-info-item"><span>Valor para quitação</span><strong>${formatarMoedaDisplay(financiamento.saldo_devedor_atual)}</strong></div>
-            <div class="fin-info-item"><span>Data base</span><strong>${financiamento.data_base ? formatarDataBR(financiamento.data_base) : formatarDataBR(toISODate(new Date()))}</strong></div>
-            <div class="fin-info-item"><span>Status</span><strong>Simulação operacional</strong></div>
-        </div>
-        <div class="fin-tab-empty">
-            <p>A emissão real de boleto de quitação depende de integração bancária. O valor exibido usa o saldo devedor atual do contrato.</p>
-        </div>
-    `;
-}
-
-function renderizarAbaDocumentos() {
-    return '<div class="fin-tab-empty"><h3>Nenhum documento anexado.</h3><p>Contratos, boletos e comprovantes poderão ser organizados aqui em evolução futura.</p></div>';
-}
-
 function renderizarAbaDados(financiamento) {
     return `
         <div class="fin-info-grid">
@@ -790,9 +762,6 @@ function renderizarAbaDados(financiamento) {
             <div class="fin-info-item"><span>Data do contrato</span><strong>${formatarDataBR(financiamento.data_contrato)}</strong></div>
             <div class="fin-info-item"><span>1ª parcela</span><strong>${formatarDataBR(financiamento.data_primeira_parcela)}</strong></div>
             <div class="fin-info-item"><span>Indexador</span><strong>${escapeHtml(financiamento.indexador_saldo || 'Não informado')}</strong></div>
-        </div>
-        <div class="fin-tab-empty">
-            <button type="button" class="fin-secondary-btn" onclick="abrirSeguroHabitacional()">Gerenciar seguro habitacional</button>
         </div>
     `;
 }
@@ -844,11 +813,6 @@ async function editarFinanciamento(id) {
 function editarFinanciamentoAtual() {
     if (!estadoFinanciamentos.atual) return;
     editarFinanciamento(estadoFinanciamentos.atual.id);
-}
-
-async function abrirQuitacao(id) {
-    await verDetalhes(id);
-    selecionarAba('quitacao');
 }
 
 async function abrirExtratoFinanciamento(id) {
@@ -1183,25 +1147,8 @@ async function carregarDemonstrativo() {
     }
 }
 
-function abrirSeguroHabitacional() {
-    window.location.href = '/financiamentos/seguro';
-}
-
-function alternarModoTabela() {
-    estadoFinanciamentos.modoTabela = !estadoFinanciamentos.modoTabela;
-    mostrarToast(estadoFinanciamentos.modoTabela ? 'Visualização em tabela será detalhada em evolução futura.' : 'Visualização em cards restaurada.');
-}
-
 function abrirMenuMaisAcoes() {
     mostrarToast('Use as ações rápidas no painel lateral.');
-}
-
-function focarFiltroParcelas() {
-    mostrarToast('Filtros de parcelas serão detalhados em evolução futura.');
-}
-
-function registrarPendenciaQuitacao() {
-    mostrarToast('Geração real de boleto de quitação depende de integração bancária.');
 }
 
 async function tentarExcluirFinanciamento(id = null) {

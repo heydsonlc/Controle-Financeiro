@@ -250,13 +250,4 @@ class SeguroVigenciaService:
             and_(*filtros)
         ).first()
 
-        # DEBUG: Log para diagnóstico
-        resultado = parcela_paga is not None
-        print(f"[DEBUG] vigencia_tem_pagamento:")
-        print(f"  Financiamento: {financiamento_id}")
-        print(f"  Período vigência: {data_inicio} até {data_fim or 'None (ativa)'}")
-        print(f"  Parcela paga encontrada no período: {resultado}")
-        if parcela_paga:
-            print(f"  Parcela bloqueadora: #{parcela_paga.numero_parcela}, venc: {parcela_paga.data_vencimento}")
-
-        return resultado
+        return parcela_paga is not None
