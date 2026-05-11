@@ -14,13 +14,13 @@
                 <span>Gerencie seus perfis financeiros e personalize o sistema de acordo com suas necessidades.</span>
             </div>
             <div class="module-actionbar-actions config-actionbar-actions">
-                <button type="button" class="action-icon-button" data-config-placeholder="Importar configurações">
+                <button type="button" class="action-icon-button" id="config-import-settings">
                     <span class="action-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" focusable="false"><path d="M12 5v10M8 9l4-4 4 4M5 19h14"/></svg>
                     </span>
                     <span class="action-button-label">Importar configurações</span>
                 </button>
-                <button type="button" class="action-icon-button" data-config-placeholder="Exportar configurações">
+                <button type="button" class="action-icon-button" id="config-export-settings">
                     <span class="action-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" focusable="false"><path d="M12 19V9M8 15l4 4 4-4M5 5h14"/></svg>
                     </span>
@@ -101,10 +101,6 @@
                         <h2>Perfis Financeiros</h2>
                         <p>Crie e gerencie perfis financeiros independentes. Altere o contexto a qualquer momento pelo seletor no topo.</p>
                     </div>
-                    <button type="button" class="config-secondary-action" id="config-profile-manage" data-config-placeholder="Gerenciar perfis">
-                        <span aria-hidden="true">☷</span>
-                        Gerenciar perfis
-                    </button>
                 </header>
 
                 <div class="config-alert" id="config-profile-alert" hidden></div>
@@ -182,7 +178,6 @@
 
                     <div class="config-form-actions">
                         <button type="button" class="config-secondary-action" id="config-profile-new">Novo perfil</button>
-                        <button type="button" class="config-secondary-action" id="config-profile-duplicate" data-config-placeholder="Duplicar perfil">Duplicar perfil</button>
                         <span class="config-form-spacer"></span>
                         <button type="button" class="config-secondary-action" id="config-profile-use">Usar este perfil</button>
                         <button type="button" class="config-secondary-action" id="config-profile-cancel">Cancelar alterações</button>
@@ -542,17 +537,6 @@
                     </article>
                 </div>
                 <input type="file" id="backup-import-file" accept="application/json,.json" hidden>
-                <header class="config-panel-header">
-                    <div>
-                        <h2>Backup</h2>
-                        <p>Preparação visual para importação/exportação de configurações e orientação de backup.</p>
-                    </div>
-                </header>
-                <div class="config-placeholder-grid">
-                    <article class="config-placeholder-card"><strong>Exportar configurações</strong><span>Em breve</span></article>
-                    <article class="config-placeholder-card"><strong>Importar configurações</strong><span>Em breve</span></article>
-                    <article class="config-placeholder-card"><strong>Backup do PostgreSQL</strong><span>Planejado como rotina operacional.</span></article>
-                </div>
             </section>
 
             <section class="config-panel" id="config-section-ia-automacao" data-config-section="ia-automacao">

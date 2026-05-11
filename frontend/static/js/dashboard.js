@@ -37,11 +37,9 @@ function preencherIcones() {
 
 function bindDashboardEvents() {
     const atualizar = document.getElementById('dashboard-atualizar');
-    const filtros = document.getElementById('dashboard-filtros');
     const periodo = document.getElementById('dashboard-periodo');
 
     atualizar?.addEventListener('click', () => carregarDashboardOperacional());
-    filtros?.addEventListener('click', () => periodo?.focus());
     periodo?.addEventListener('change', () => carregarDashboardOperacional());
 }
 

@@ -99,7 +99,8 @@ def test_rota_principal_renderiza_layout_ux(client):
     assert 'module-actionbar' in html
     assert 'receitas-busca' in html
     assert 'Previsto aberto' in html
-    assert 'Receitas e pendências' in html
+    assert 'Receitas do mês' in html
+    assert 'Receitas atrasadas' in html
     assert 'Fontes de receita' in html
     assert 'Recebimentos pendentes' in html
     assert 'Nova Fonte de Receita' in html

@@ -364,10 +364,6 @@
                 abrirVideo('Vídeos rápidos');
                 return;
             }
-            if (event.target.closest('[data-help-placeholder]')) {
-                abrirVideo(event.target.closest('[data-help-placeholder]').dataset.helpPlaceholder);
-                return;
-            }
             const scroll = event.target.closest('[data-help-scroll]');
             if (scroll) {
                 document.getElementById(scroll.dataset.helpScroll)?.scrollIntoView({ behavior: 'smooth', block: 'start' });

@@ -988,22 +988,8 @@
             button.addEventListener('click', () => trocarSecao(button.dataset.configSectionTarget));
         });
 
-        document.querySelectorAll('[data-config-placeholder]').forEach((button) => {
-            const texto = String(button.dataset.configPlaceholder || '');
-            if (texto.includes('Exportar')) {
-                button.removeAttribute('data-config-placeholder');
-                button.addEventListener('click', exportarConfiguracoes);
-            }
-            if (texto.includes('Importar')) {
-                button.removeAttribute('data-config-placeholder');
-                button.addEventListener('click', abrirImportacaoConfiguracoes);
-            }
-        });
-
-        document.querySelectorAll('[data-config-placeholder]').forEach((button) => {
-            button.addEventListener('click', () => mostrarMensagem(`${button.dataset.configPlaceholder} será disponibilizado em etapa futura.`, 'info'));
-        });
-
+        $('config-export-settings')?.addEventListener('click', exportarConfiguracoes);
+        $('config-import-settings')?.addEventListener('click', abrirImportacaoConfiguracoes);
         $('backup-export-config')?.addEventListener('click', exportarConfiguracoes);
         $('backup-import-config')?.addEventListener('click', abrirImportacaoConfiguracoes);
         $('backup-import-file')?.addEventListener('change', importarConfiguracoes);
@@ -1047,7 +1033,6 @@
         });
         $('config-profile-save')?.addEventListener('click', salvarPerfil);
         $('config-profile-use')?.addEventListener('click', () => definirPerfilAtivo(state.selecionado));
-        $('config-profile-manage')?.addEventListener('click', () => mostrarMensagem('Use os cards e o formulário para gerenciar perfis nesta central.', 'info'));
         $('config-profile-tipo')?.addEventListener('change', atualizarChecksConceituais);
         $('config-profile-ativo')?.addEventListener('change', atualizarChecksConceituais);
         $('config-preferences-save')?.addEventListener('click', () => salvarPreferencias('gerais'));

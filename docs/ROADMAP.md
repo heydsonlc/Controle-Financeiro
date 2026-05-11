@@ -80,6 +80,21 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 | TEST-FIN-1 | Ampliar cobertura E2E em Despesas, Cartões e Financiamentos | Alta |
 | TEST-CONV-1 | Converter scripts legados `teste_*.py` para pytest seguro | Baixa |
 
+### Interface / UX Global
+
+| ID | Descrição | Prioridade |
+|----|-----------|-----------|
+| REC-AGENDA-1 | Agenda completa de recorrências | Baixa |
+| REC-EXPORT-1 | Exportação de recorrências | Baixa |
+| CONTAS-EXPORT-1 | Exportação de contas bancárias | Baixa |
+| RECEITAS-EXPORT-1 | Exportação de receitas | Baixa |
+| CONFIG-PERFIS-2 | Gestão avançada de perfis financeiros | Média |
+| PREF-CLEAN-1 | Aposentar ou consolidar tela antiga de Preferências | Média |
+| HELP-SUPORTE-1 | Canal real de suporte/chamado | Baixa |
+| DASH-FILTROS-1 | Filtros reais no Dashboard | Baixa |
+| IR-ZIP-SAIDAS-1 | ZIP de documentos de saídas para contador | Baixa |
+| APPJS-CLEAN-1 | Remover código legado/órfão de `app.js` | Baixa |
+
 ### Módulos Futuros
 
 | ID | Descrição | Prioridade |

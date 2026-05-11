@@ -72,11 +72,12 @@ def test_preferencias_redireciona_para_secao_da_central(client):
     assert response.headers['Location'].endswith('/configuracoes#preferencias-gerais')
 
 
-def test_botoes_placeholders_e_topbar_continuam_presentes(client):
+def test_topbar_configuracoes_usa_acoes_reais_sem_placeholders(client):
     html = client.get('/configuracoes').get_data(as_text=True)
 
-    assert 'data-config-placeholder="Importar configurações"' in html
-    assert 'data-config-placeholder="Exportar configurações"' in html
+    assert 'data-config-placeholder' not in html
+    assert 'id="config-import-settings"' in html
+    assert 'id="config-export-settings"' in html
     assert 'perfil-financeiro-switcher' in html
     assert 'contexto_financeiro.js' in html
     assert 'configuracoes.js' in html
