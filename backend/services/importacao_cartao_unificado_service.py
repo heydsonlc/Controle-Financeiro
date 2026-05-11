@@ -65,8 +65,11 @@ class ImportacaoCartaoUnificadoService:
             origem=formato_detectado,
             cartao_id=cartao.id,
         )
+        # Fase 1: triagem — sugestão de categoria_id sem resolver categoria_cartao
         linhas = ImportacaoCartaoUnificadoService.aplicar_sugestoes_categoria(linhas, cartao)
         linhas = ImportacaoCartaoUnificadoService.validar_linhas(linhas, cartao, competencia_base)
+        # Fase 2: resolução de categoria_cartao — separada da triagem
+        linhas = ImportacaoCartaoUnificadoService.resolver_categoria_cartao_linhas(linhas, cartao)
         linhas = ImportacaoCartaoUnificadoService.enriquecer_classificacao(linhas, cartao, competencia_base)
         validacoes = ImportacaoCartaoUnificadoService.calcular_validacoes(
             linhas,
@@ -326,36 +329,53 @@ class ImportacaoCartaoUnificadoService:
                         linha['palavras_chave_encontradas'] = []
                         linha['categorias_candidatas'] = []
 
-            if linha.get('categoria_id') or linha.get('categoria_cartao_id'):
-                resolucao_cartao = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(
-                    cartao_id=cartao.id,
-                    categoria_id=linha.get('categoria_id'),
-                    categoria_cartao_id=linha.get('categoria_cartao_id'),
-                )
-                categoria_cartao_id = resolucao_cartao.get('categoria_cartao_id')
-                if categoria_cartao_id:
-                    linha['categoria_cartao_id'] = int(categoria_cartao_id)
-                    linha['categoria_cartao_origem'] = resolucao_cartao.get('origem')
-                    linha['categoria_cartao_vinculada_ao_cartao'] = bool(resolucao_cartao.get('vinculada_ao_cartao'))
-                    linha['categoria_cartao_sugerida_id'] = int(categoria_cartao_id)
-                    linha['categoria_cartao_sugerida_origem'] = resolucao_cartao.get('origem')
-                    if resolucao_cartao.get('vinculada_ao_cartao') is False:
-                        linha.setdefault('mensagens', []).append(
-                            'Esta Categoria do Cartao ainda nao esta vinculada ao cartao selecionado.'
-                        )
-                elif resolucao_cartao.get('origem') == 'categoria_cartao_nao_vinculada':
+        return linhas
+
+    @staticmethod
+    def resolver_categoria_cartao_linhas(linhas, cartao):
+        """
+        Resolve categoria_cartao_id para cada linha a partir de categoria_id.
+
+        Chamado separadamente da triagem — somente antes da classificação final
+        ou na persistência. Não deve ser chamado na etapa de triagem pura.
+        """
+        for linha in linhas:
+            if linha.get('tipo_movimento') == 'credito':
+                continue
+            if linha.get('ignorar') or linha.get('status') in ('ignorado', 'duplicado'):
+                continue
+            if not (linha.get('categoria_id') or linha.get('categoria_cartao_id')):
+                continue
+
+            resolucao_cartao = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(
+                cartao_id=cartao.id,
+                categoria_id=linha.get('categoria_id'),
+                categoria_cartao_id=linha.get('categoria_cartao_id'),
+            )
+            categoria_cartao_id = resolucao_cartao.get('categoria_cartao_id')
+            if categoria_cartao_id:
+                linha['categoria_cartao_id'] = int(categoria_cartao_id)
+                linha['categoria_cartao_origem'] = resolucao_cartao.get('origem')
+                linha['categoria_cartao_vinculada_ao_cartao'] = bool(resolucao_cartao.get('vinculada_ao_cartao'))
+                linha['categoria_cartao_sugerida_id'] = int(categoria_cartao_id)
+                linha['categoria_cartao_sugerida_origem'] = resolucao_cartao.get('origem')
+                if resolucao_cartao.get('vinculada_ao_cartao') is False:
                     linha.setdefault('mensagens', []).append(
                         'Esta Categoria do Cartao ainda nao esta vinculada ao cartao selecionado.'
                     )
-                    linha['categoria_cartao_origem'] = 'nao_vinculada_ao_cartao'
-                    linha['categoria_cartao_vinculada_ao_cartao'] = False
-                    if resolucao_cartao.get('categoria_cartao_resolvida_id'):
-                        linha['categoria_cartao_resolvida_id'] = resolucao_cartao.get('categoria_cartao_resolvida_id')
-                        linha['categoria_cartao_resolvida_nome'] = resolucao_cartao.get('categoria_cartao_nome')
-                else:
-                    linha.setdefault('mensagens', []).append(MSG_CATEGORIA_DESPESA_SEM_CATEGORIA_CARTAO)
-                    linha['categoria_cartao_origem'] = 'nao_configurada'
-                    linha['categoria_cartao_vinculada_ao_cartao'] = False
+            elif resolucao_cartao.get('origem') == 'categoria_cartao_nao_vinculada':
+                linha.setdefault('mensagens', []).append(
+                    'Esta Categoria do Cartao ainda nao esta vinculada ao cartao selecionado.'
+                )
+                linha['categoria_cartao_origem'] = 'nao_vinculada_ao_cartao'
+                linha['categoria_cartao_vinculada_ao_cartao'] = False
+                if resolucao_cartao.get('categoria_cartao_resolvida_id'):
+                    linha['categoria_cartao_resolvida_id'] = resolucao_cartao.get('categoria_cartao_resolvida_id')
+                    linha['categoria_cartao_resolvida_nome'] = resolucao_cartao.get('categoria_cartao_nome')
+            else:
+                linha.setdefault('mensagens', []).append(MSG_CATEGORIA_DESPESA_SEM_CATEGORIA_CARTAO)
+                linha['categoria_cartao_origem'] = 'nao_configurada'
+                linha['categoria_cartao_vinculada_ao_cartao'] = False
         return linhas
 
     @staticmethod
@@ -390,9 +410,6 @@ class ImportacaoCartaoUnificadoService:
                 except (TypeError, ValueError):
                     linha['categoria_cartao_id'] = None
                     mensagens.append('Categoria do cartao global invalida.')
-
-            if not linha.get('categoria_cartao_id'):
-                mensagens.append(MSG_CATEGORIA_DESPESA_SEM_CATEGORIA_CARTAO)
 
             if not linha.get('categoria_id') and linha['status'] == 'valido':
                 linha['status'] = 'revisar'

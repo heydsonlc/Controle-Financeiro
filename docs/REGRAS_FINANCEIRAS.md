@@ -109,9 +109,16 @@ Esta regra não tem exceções.
 - Garantida por `compra_id` (UUID v4) + `numero_parcela`
 - Reimportação do mesmo arquivo não duplica lançamentos
 
-**Fluxo**:
-- Triagem primeiro (decidir se lançamento vira despesa)
-- Classificação depois (Categoria da Despesa + Categoria do Cartão obrigatória)
+**Fluxo** (IMPORT-TRIAGEM-1):
+1. **Triagem** — decidir se cada lançamento vira despesa, ignorar ou revisar. Categoria do Cartão NÃO é resolvida nesta fase.
+2. **Confronto** — reconhecimento fuzzy com recorrências, histórico e parcelamentos existentes. Mesmo cartão obrigatório para sugestão operacional.
+3. **Classificação** — confirmar Categoria da Despesa. Somente após isso a Categoria do Cartão é resolvida pelo mapeamento existente.
+4. **Persistência** — criação do lançamento. Ausência de Categoria do Cartão gera aviso, não bloqueia.
+
+**Categoria do Cartão**:
+- É agrupamento opcional da fatura. Não deve bloquear triagem nem importação.
+- Ausência gera aviso padronizado: `MSG_CATEGORIA_DESPESA_SEM_CATEGORIA_CARTAO`
+- Resolvida automaticamente via mapeamento `Categoria da Despesa → Categoria do Cartão`
 
 ---
 

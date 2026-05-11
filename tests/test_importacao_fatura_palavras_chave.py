@@ -98,6 +98,7 @@ def _pipeline(cartao, linhas):
     normalizadas = ImportacaoCartaoUnificadoService.normalizar_linhas(linhas, 'csv', cartao.id)
     ImportacaoCartaoUnificadoService.aplicar_sugestoes_categoria(normalizadas, cartao)
     ImportacaoCartaoUnificadoService.validar_linhas(normalizadas, cartao, competencia)
+    ImportacaoCartaoUnificadoService.resolver_categoria_cartao_linhas(normalizadas, cartao)
     ImportacaoCartaoUnificadoService.enriquecer_classificacao(normalizadas, cartao, competencia)
     return normalizadas
 
