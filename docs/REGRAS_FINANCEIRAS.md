@@ -179,6 +179,14 @@ Nenhum componente pode ser omitido do extrato ou da visualização.
 - Ajuste de saldo devedor continua sendo ação separada e explícita.
 - Leitura automática/OCR de demonstrativos não faz parte da regra atual.
 
+### Conferência de quitação
+
+- A conferência de quitação registra o valor oficial informado pelo banco e compara com o valor simulado pelo app.
+- A diferença é calculada como `valor_oficial_banco - valor_simulado_app`.
+- Documento de proposta, boleto ou demonstrativo pode ser vinculado opcionalmente.
+- A conferência de quitação não marca financiamento como quitado, não baixa parcelas, não cria conta de pagamento, não cancela parcelas futuras e não altera saldo.
+- Quitação operacional é MVP separado.
+
 ### Exclusão
 
 Bloqueada quando existir qualquer dos seguintes:
@@ -193,6 +201,17 @@ Bloqueada quando existir qualquer dos seguintes:
 - `ItemDespesa` nunca é excluído automaticamente (é cadastro mestre)
 - Troca de `item_despesa_id` bloqueada com execução financeira
 - Sem execução: contas pendentes sincronizadas automaticamente após troca
+
+---
+
+## Regras de Baixa / Pagamento de Despesas (CORE-BAIXA-1)
+
+- **Conta bancária é obrigatória** para registrar o pagamento de qualquer despesa que impacte saldo.
+- **Despesa paga não pode ser baixada novamente.** Tentativa retorna HTTP 409.
+- **A baixa é transacional.** Status pago, movimento financeiro e atualização de saldo ocorrem juntos — ou nada é persistido.
+- **Sincronização com financiamento** ocorre dentro da mesma transação antes do commit.
+- `MovimentoFinanceiro` criado na baixa sempre tem `conta_bancaria_id` preenchido e `origem='DESPESA'`.
+- O hook de financiamento foi movido para antes do `commit` — se falhar, a baixa é revertida.
 
 ---
 

@@ -1099,30 +1099,47 @@ def deletar_despesa_OLD(id):
 @despesas_bp.route('/<int:id>/pagar', methods=['POST'])
 def marcar_como_pago(id):
     """
-    Marca uma conta como paga
+    Marca uma conta como paga.
 
-    IMPORTANTE: Se for fatura de cartÃ£o, usa CartaoService para
-    substituir planejado por executado
+    IMPORTANTE: Se for fatura de cartão, usa CartaoService para
+    substituir planejado por executado.
     """
     try:
-        # Buscar na tabela Conta (nÃ£o ItemDespesa)
+        from backend.models import ContaBancaria
+        from backend.services.conta_bancaria_service import ContaBancariaService
+    except ImportError:
+        from models import ContaBancaria
+        from services.conta_bancaria_service import ContaBancariaService
+
+    try:
         conta = _query_contas().filter(Conta.id == id).first()
         if not conta:
-            return jsonify({
-                'success': False,
-                'error': 'Despesa nÃ£o encontrada'
-            }), 404
+            return jsonify({'success': False, 'error': 'Despesa não encontrada'}), 404
+
+        # Bloquear baixa duplicada — despesa já paga não pode ser baixada novamente
+        if conta.status_pagamento == 'Pago':
+            return jsonify({'success': False, 'error': 'Esta despesa já foi paga e não pode ser baixada novamente'}), 409
 
         dados = request.get_json() or {}
 
-        # Conta bancÃ¡ria Ã© obrigatÃ³ria quando o dinheiro se move
+        # Conta bancária é obrigatória para registrar o movimento
         conta_bancaria_id = dados.get('conta_bancaria_id') or getattr(conta, 'conta_bancaria_id', None)
         if not conta_bancaria_id:
-            return jsonify({'success': False, 'error': 'Selecione uma conta bancÃ¡ria para executar o pagamento'}), 400
+            return jsonify({'success': False, 'error': 'Selecione uma conta bancária para executar o pagamento'}), 400
         try:
             conta_bancaria_id = int(conta_bancaria_id)
         except (TypeError, ValueError):
-            return jsonify({'success': False, 'error': 'Conta bancÃ¡ria invÃ¡lida'}), 400
+            return jsonify({'success': False, 'error': 'Conta bancária inválida'}), 400
+
+        # Validar conta bancária antes de alterar qualquer estado
+        conta_bancaria = ContaBancaria.query.filter(
+            ContaBancaria.id == conta_bancaria_id,
+            PerfilFinanceiroService.condicao_perfil(ContaBancaria),
+        ).first()
+        if not conta_bancaria:
+            return jsonify({'success': False, 'error': 'Conta bancária não encontrada'}), 404
+        if conta_bancaria.status != 'ATIVO':
+            return jsonify({'success': False, 'error': 'Conta bancária está inativa'}), 400
 
         # Determinar data de pagamento
         data_pagamento = datetime.now().date()
@@ -1136,7 +1153,7 @@ def marcar_como_pago(id):
         # Determinar valor pago
         valor_pago = dados.get('valor_pago')
 
-        # SE FOR FATURA DE CARTÃƒO: usar CartaoService
+        # SE FOR FATURA DE CARTÃO: usar CartaoService
         if conta.is_fatura_cartao:
             conta = CartaoService.pagar_fatura(
                 fatura_id=id,
@@ -1144,12 +1161,11 @@ def marcar_como_pago(id):
                 valor_pago=valor_pago,
                 conta_bancaria_id=conta_bancaria_id
             )
-
             db.session.commit()
 
             return jsonify({
                 'success': True,
-                'message': 'Fatura de cartÃ£o paga com sucesso',
+                'message': 'Fatura de cartão paga com sucesso',
                 'data': {
                     'id': conta.id,
                     'valor_planejado': float(conta.valor_planejado),
@@ -1161,65 +1177,38 @@ def marcar_como_pago(id):
                 }
             }), 200
 
-        # SE NÃƒO FOR FATURA: lÃ³gica tradicional
+        # SE NÃO FOR FATURA: atualizar despesa e criar movimento atomicamente
+        if valor_pago is not None:
+            conta.valor = float(valor_pago)
+
         conta.status_pagamento = 'Pago'
         conta.data_pagamento = data_pagamento
         conta.conta_bancaria_id = conta_bancaria_id
 
-        # Se um valor pago foi fornecido, atualizar o valor da conta
-        if valor_pago is not None:
-            conta.valor = float(valor_pago)
+        # Criar movimento usando o service (inclui flush+recalcular_saldo internamente)
+        ContaBancariaService.criar_movimento(
+            conta_bancaria_id,
+            tipo='DEBITO',
+            valor=Decimal(str(conta.valor)),
+            descricao=f'Pagamento despesa - {conta.descricao}',
+            data_movimento=data_pagamento,
+            origem='DESPESA',
+            conta_id=conta.id,
+        )
 
-        # Se conta bancÃ¡ria informada: gerar movimento (dÃ©bito) e recalcular saldo
-        # conta_bancaria_id jÃ¡ validado acima
-        if conta_bancaria_id:
+        # Sincronizar parcela de financiamento dentro da mesma transação
+        if conta.financiamento_parcela_id:
             try:
-                from backend.models import ContaBancaria, MovimentoFinanceiro
-                from backend.services.conta_bancaria_service import ContaBancariaService
+                from backend.services.financiamento_service import FinanciamentoService
             except ImportError:
-                from models import ContaBancaria, MovimentoFinanceiro
-                from services.conta_bancaria_service import ContaBancariaService
-
-            conta_bancaria = ContaBancaria.query.filter_by(
-                id=conta_bancaria_id,
-                perfil_financeiro_id=_perfil_id(),
-            ).first()
-            if not conta_bancaria:
-                return jsonify({'success': False, 'error': 'Conta bancÃ¡ria nÃ£o encontrada'}), 404
-            if conta_bancaria.status != 'ATIVO':
-                return jsonify({'success': False, 'error': 'Conta bancÃ¡ria estÃ¡ inativa'}), 400
-
-            movimento = MovimentoFinanceiro(
-                perfil_financeiro_id=_perfil_id(),
-                conta_bancaria_id=conta_bancaria_id,
-                tipo='DEBITO',
-                valor=Decimal(str(conta.valor)),
-                descricao=f'Pagamento despesa - {conta.descricao}',
-                data_movimento=data_pagamento,
-                conta_id=conta.id,
-                origem='DESPESA',
-                ajustavel=False
-            )
-            db.session.add(movimento)
-            ContaBancariaService.recalcular_saldo_conta(conta_bancaria_id)
-
-        db.session.commit()
-
-        # ========================================================================
-        # HOOK: Sincronizar pagamento com Financiamento (se aplicÃ¡vel)
-        # ========================================================================
-        # Se esta conta estÃ¡ vinculada a uma parcela de financiamento E foi marcada como paga,
-        # chamar o motor do financiamento para sincronizar estado
-        if conta.financiamento_parcela_id and conta.status_pagamento == 'Pago':
-            from backend.services.financiamento_service import FinanciamentoService
-
-            # Registrar pagamento no motor do financiamento
-            # Isso atualiza: parcela.status, parcela.valor_pago, saldo soberano, etc.
+                from services.financiamento_service import FinanciamentoService
             FinanciamentoService.registrar_pagamento_parcela(
                 parcela_id=conta.financiamento_parcela_id,
                 valor_pago=conta.valor,
-                data_pagamento=conta.data_pagamento or conta.data_vencimento
+                data_pagamento=conta.data_pagamento or conta.data_vencimento,
             )
+
+        db.session.commit()
 
         return jsonify({
             'success': True,
