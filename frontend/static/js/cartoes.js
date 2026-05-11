@@ -317,7 +317,7 @@ function renderizarListaCartoes() {
         const emissor = obterInstituicaoCartao(cartao);
         return `
             <button class="cartao-list-item ${selecionado ? 'selected' : ''}" type="button" data-cartao-id="${cartao.id}">
-                <span class="cartao-brand">${renderizarMarcaCartao(cartao)}</span>
+                <span class="cartao-brand">${renderizarMarcaCartao(cartao, 'sm')}</span>
                 <span class="cartao-list-main">
                     <strong>${escapeHtml(cartao.nome)}</strong>
                     <small>${escapeHtml(emissor || 'Emissor nao informado')} &bull; **** ${escapeHtml(final)}</small>
