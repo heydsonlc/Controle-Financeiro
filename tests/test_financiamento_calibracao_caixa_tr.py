@@ -6,7 +6,8 @@ from dateutil.relativedelta import relativedelta
 import pytest
 from flask import Flask
 
-from backend.models import db, FinanciamentoParcela, IndiceTRMensal
+from backend.models import db, Conta, ContaBancaria, FinanciamentoParcela, IndiceTRMensal
+from backend.routes.despesas import despesas_bp
 from backend.routes.financiamentos import financiamentos_bp
 
 
@@ -177,6 +178,7 @@ def app_context():
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
     )
     db.init_app(app)
+    app.register_blueprint(despesas_bp)
     app.register_blueprint(financiamentos_bp, url_prefix='/api/financiamentos')
 
     with app.app_context():
@@ -211,6 +213,24 @@ def _popular_tr_no_banco(skip_competencia=None, completar_futuro=True):
             fonte='BACEN',
         ))
     db.session.commit()
+
+
+def _conta_bancaria_teste():
+    conta = ContaBancaria.query.filter_by(nome='_teste_caixa_tr').first()
+    if conta:
+        return conta
+
+    conta = ContaBancaria(
+        nome='_teste_caixa_tr',
+        instituicao='Banco Teste',
+        tipo='Conta Corrente',
+        saldo_inicial=Decimal('999999.00'),
+        saldo_atual=Decimal('999999.00'),
+        status='ATIVO',
+    )
+    db.session.add(conta)
+    db.session.commit()
+    return conta
 
 
 def _payload_motor_caixa_tr(prazo=PRAZO_MESES, incluir_modo_tecnico=False):
@@ -250,6 +270,7 @@ def _payload_motor_caixa_tr(prazo=PRAZO_MESES, incluir_modo_tecnico=False):
 
 def _criar_motor_caixa_tr_com_amortizacao(client):
     _popular_tr_no_banco(completar_futuro=True)
+    conta_bancaria = _conta_bancaria_teste()
     response = client.post('/api/financiamentos', json=_payload_motor_caixa_tr())
     assert response.status_code == 201, response.get_json()
     financiamento_id = response.get_json()['data']['id']
@@ -260,11 +281,16 @@ def _criar_motor_caixa_tr_com_amortizacao(client):
     ).order_by(FinanciamentoParcela.numero_parcela).all()
 
     for parcela in parcelas_pre_amortizacao:
+        conta_vinculada = Conta.query.filter_by(financiamento_parcela_id=parcela.id).first()
+        assert conta_vinculada is not None
+
+        # Parcelas com despesa vinculada devem seguir o fluxo operacional de Despesas.
         response = client.post(
-            f'/api/financiamentos/parcelas/{parcela.id}/pagar',
+            f'/api/despesas/{conta_vinculada.id}/pagar',
             json={
                 'valor_pago': float(parcela.valor_previsto_total),
                 'data_pagamento': parcela.data_vencimento.strftime('%Y-%m-%d'),
+                'conta_bancaria_id': conta_bancaria.id,
             },
         )
         assert response.status_code == 200, response.get_json()
