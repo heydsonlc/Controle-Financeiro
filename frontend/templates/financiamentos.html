@@ -605,12 +605,18 @@
             <input type="hidden" id="pagar-parcela-id">
             <div id="pagar-info" class="fin-modal-info"></div>
             <label class="fin-field">
+                <span>Conta bancária <span style="color:var(--color-danger)">*</span></span>
+                <select id="pagar-conta-bancaria" required>
+                    <option value="">Selecione a conta...</option>
+                </select>
+            </label>
+            <label class="fin-field">
                 <span>Data do pagamento</span>
                 <input id="pagar-data" type="date" required>
             </label>
             <label class="fin-field fin-money-field">
-                <span>Valor pago</span>
-                <div><span>R$</span><input id="pagar-valor" type="text" required inputmode="decimal"></div>
+                <span>Valor previsto</span>
+                <div><span>R$</span><input id="pagar-valor" type="text" readonly inputmode="decimal" style="background:var(--color-bg-muted,#f5f5f5)"></div>
             </label>
             <div class="fin-modal-actions">
                 <button type="button" class="fin-secondary-btn" onclick="fecharModal('modal-pagar')">Cancelar</button>

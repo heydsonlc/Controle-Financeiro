@@ -2358,14 +2358,16 @@ class FinanciamentoService:
     # ========================================================================
 
     @staticmethod
-    def registrar_pagamento_parcela(parcela_id, valor_pago, data_pagamento):
+    def registrar_pagamento_parcela(parcela_id, valor_pago, data_pagamento, commit=True):
         """
-        Registra pagamento de uma parcela
+        Registra pagamento de uma parcela.
 
         Args:
             parcela_id (int): ID da parcela
             valor_pago (float): Valor efetivamente pago
             data_pagamento (str ou date): Data do pagamento
+            commit (bool): Se True (padrao), comita a transacao internamente.
+                           Passar False quando o caller controla a transacao.
 
         Returns:
             FinanciamentoParcela: Parcela atualizada
@@ -2374,40 +2376,32 @@ class FinanciamentoService:
             FinanciamentoParcela.query, FinanciamentoParcela
         ).filter(FinanciamentoParcela.id == parcela_id).first()
         if not parcela:
-            raise ValueError('Parcela não encontrada')
+            raise ValueError('Parcela nao encontrada')
 
-        # Converter data se necessário
+        if parcela.status == 'pago':
+            raise ValueError('Esta parcela ja foi paga')
+
         if isinstance(data_pagamento, str):
             data_pagamento = datetime.strptime(data_pagamento, '%Y-%m-%d').date()
 
-        # Atualizar valores
         parcela.valor_pago = Decimal(str(valor_pago))
-        # Nota: FinanciamentoParcela não tem campo data_pagamento
-        # A data de pagamento é armazenada na Conta vinculada
         parcela.dif_apurada = parcela.valor_previsto_total - parcela.valor_pago
         parcela.status = 'pago'
 
-        # ========================================================================
-        # ATUALIZAR SALDO SOBERANO (usar saldo calculado da parcela)
-        # ========================================================================
         financiamento = FinanciamentoService.obter_financiamento_no_perfil(parcela.financiamento_id)
         if financiamento:
-            # Usar saldo_devedor_apos_pagamento da parcela (já considera TR, amortização, etc.)
-            # Este campo foi calculado corretamente pelo sistema SAC durante geração/recálculo
             financiamento.saldo_devedor_atual = parcela.saldo_devedor_apos_pagamento
 
-        # Sincronizar conta vinculada diretamente
         conta_relacionada = Conta.query.filter_by(financiamento_parcela_id=parcela.id).first()
         if conta_relacionada:
             conta_relacionada.status_pagamento = 'Pago'
             conta_relacionada.data_pagamento = data_pagamento
             conta_relacionada.valor = parcela.valor_pago or parcela.valor_previsto_total
 
-        db.session.commit()
-
-        # Sincronizar com a Conta correspondente
-        if financiamento and financiamento.item_despesa_id:
-            FinanciamentoService.sincronizar_contas(parcela.financiamento_id)
+        if commit:
+            db.session.commit()
+            if financiamento and financiamento.item_despesa_id:
+                FinanciamentoService.sincronizar_contas(parcela.financiamento_id)
 
         return parcela
 

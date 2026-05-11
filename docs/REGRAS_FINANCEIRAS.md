@@ -233,6 +233,15 @@ Bloqueada quando existir qualquer dos seguintes:
 - **Despesa com movimento vinculado não pode ser excluída** diretamente. Remoção exige estorno controlado (CORE-ESTORNO-1 — pendência futura).
 - Correções de pagamento exigirão fluxo próprio de estorno/ajuste (CORE-ESTORNO-1, não implementado).
 
+**Pagamento de parcelas de financiamento (CORE-SALDO-1C)**:
+- `POST /financiamentos/parcelas/<id>/pagar` requer `conta_bancaria_id` e `data_pagamento` (HTTP 400 sem eles).
+- Cria `MovimentoFinanceiro` com `tipo='DEBITO'`, `origem='FINANCIAMENTO'`, `financiamento_parcela_id` preenchido.
+- Saldo da conta bancária é debitado e recalculado automaticamente.
+- **Parcela já paga retorna HTTP 409** — bloqueio de duplicata.
+- **Parcela com despesa vinculada pendente retorna HTTP 409** — o pagamento deve ocorrer pelo fluxo de Despesas.
+- Transação atômica: se criação do `MovimentoFinanceiro` falhar, o status da parcela é revertido.
+- `MovimentoFinanceiro.financiamento_parcela_id` rastreia qual parcela originou o movimento (coluna adicionada em `9b8a09ecc52f`).
+
 ---
 
 ## Regras de Contas Bancárias

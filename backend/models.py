@@ -2444,9 +2444,10 @@ class MovimentoFinanceiro(db.Model):
     conta_id = db.Column(db.Integer, db.ForeignKey('conta.id'))  # Conta (despesa) paga (Conta)
     receita_realizada_id = db.Column(db.Integer, db.ForeignKey('receita_realizada.id'))
     transferencia_id = db.Column(db.String(36))  # UUID para parear débito/crédito
+    financiamento_parcela_id = db.Column(db.Integer, db.ForeignKey('financiamento_parcela.id'), nullable=True)
 
     # Metadados de rastreio
-    origem = db.Column(db.String(20), default='MANUAL')  # MANUAL, RECEITA, DESPESA, FATURA, TRANSFERENCIA, AJUSTE
+    origem = db.Column(db.String(20), default='MANUAL')  # MANUAL, RECEITA, DESPESA, FATURA, TRANSFERENCIA, AJUSTE, FINANCIAMENTO
     ajustavel = db.Column(db.Boolean, default=False)  # true apenas para AJUSTE
 
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
@@ -2456,6 +2457,7 @@ class MovimentoFinanceiro(db.Model):
     fatura = db.relationship('Conta', foreign_keys=[fatura_id])
     conta = db.relationship('Conta', foreign_keys=[conta_id])
     receita_realizada = db.relationship('ReceitaRealizada', foreign_keys=[receita_realizada_id])
+    financiamento_parcela = db.relationship('FinanciamentoParcela', foreign_keys=[financiamento_parcela_id])
 
     # Índices
     __table_args__ = (
@@ -2481,6 +2483,7 @@ class MovimentoFinanceiro(db.Model):
             'conta_id': self.conta_id,
             'receita_realizada_id': self.receita_realizada_id,
             'transferencia_id': self.transferencia_id,
+            'financiamento_parcela_id': self.financiamento_parcela_id,
             'origem': self.origem,
             'ajustavel': bool(self.ajustavel),
             'criado_em': self.criado_em.strftime('%Y-%m-%d %H:%M:%S') if self.criado_em else None

@@ -75,6 +75,7 @@ class ContaBancariaService:
         conta_id: Optional[int] = None,
         receita_realizada_id: Optional[int] = None,
         transferencia_id: Optional[str] = None,
+        financiamento_parcela_id: Optional[int] = None,
     ) -> MovimentoFinanceiro:
         if tipo not in {'CREDITO', 'DEBITO'}:
             raise ValueError('Tipo de movimento inválido (use CREDITO ou DEBITO)')
@@ -96,6 +97,7 @@ class ContaBancariaService:
             conta_id=conta_id,
             receita_realizada_id=receita_realizada_id,
             transferencia_id=transferencia_id,
+            financiamento_parcela_id=financiamento_parcela_id,
         )
         db.session.add(movimento)
         db.session.flush()

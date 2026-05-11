@@ -725,46 +725,101 @@ def regenerar_parcelas(id):
 @financiamentos_bp.route('/parcelas/<int:parcela_id>/pagar', methods=['POST'])
 def pagar_parcela(parcela_id):
     """
-    Registra o pagamento de uma parcela específica
-
-    Args:
-        parcela_id: ID da parcela
+    Registra pagamento de parcela de financiamento com MovimentoFinanceiro bancario.
 
     Body (JSON):
         {
-            "valor_pago": float (obrigatório),
-            "data_pagamento": "YYYY-MM-DD" (obrigatório)
+            "conta_bancaria_id": int (obrigatorio),
+            "data_pagamento": "YYYY-MM-DD" (obrigatorio)
         }
-
-    Returns:
-        JSON com a parcela atualizada
     """
     try:
-        data = request.get_json()
+        from backend.models import Conta, ContaBancaria, FinanciamentoParcela
+        from backend.services.conta_bancaria_service import ContaBancariaService
+        from backend.services.perfil_financeiro_service import PerfilFinanceiroService
+    except ImportError:
+        from models import Conta, ContaBancaria, FinanciamentoParcela
+        from services.conta_bancaria_service import ContaBancariaService
+        from services.perfil_financeiro_service import PerfilFinanceiroService
 
-        if not data:
+    try:
+        data = request.get_json() or {}
+
+        conta_bancaria_id = data.get('conta_bancaria_id')
+        if not conta_bancaria_id:
             return jsonify({
                 'success': False,
-                'error': 'Dados não fornecidos'
+                'error': 'Informe a conta bancaria para registrar o pagamento da parcela.',
             }), 400
+        try:
+            conta_bancaria_id = int(conta_bancaria_id)
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'error': 'conta_bancaria_id invalido'}), 400
 
-        if 'valor_pago' not in data:
+        data_pagamento_str = data.get('data_pagamento')
+        if not data_pagamento_str:
+            return jsonify({'success': False, 'error': 'data_pagamento e obrigatorio'}), 400
+        try:
+            from datetime import datetime as _dt
+            data_pagamento = _dt.strptime(data_pagamento_str, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'success': False, 'error': 'Formato de data_pagamento invalido. Use YYYY-MM-DD'}), 400
+
+        # Buscar e validar parcela
+        parcela = PerfilFinanceiroService.aplicar_perfil_query(
+            FinanciamentoParcela.query, FinanciamentoParcela
+        ).filter(FinanciamentoParcela.id == parcela_id).first()
+        if not parcela:
+            return jsonify({'success': False, 'error': 'Parcela nao encontrada'}), 404
+        if parcela.status == 'pago':
+            return jsonify({'success': False, 'error': 'Esta parcela ja foi paga.'}), 409
+
+        # Se ha despesa vinculada pendente, orientar pelo fluxo de despesas (CORE-SALDO-1C)
+        conta_vinculada = Conta.query.filter_by(financiamento_parcela_id=parcela.id).first()
+        if conta_vinculada and conta_vinculada.status_pagamento != 'Pago':
             return jsonify({
                 'success': False,
-                'error': 'valor_pago é obrigatório'
-            }), 400
+                'error': 'Esta parcela possui despesa vinculada pendente. Use o fluxo de Despesas para registrar o pagamento.',
+            }), 409
 
-        if 'data_pagamento' not in data:
-            return jsonify({
-                'success': False,
-                'error': 'data_pagamento é obrigatório'
-            }), 400
+        # Validar conta bancaria
+        conta_bancaria = ContaBancaria.query.filter(
+            ContaBancaria.id == conta_bancaria_id,
+            PerfilFinanceiroService.condicao_perfil(ContaBancaria),
+        ).first()
+        if not conta_bancaria:
+            return jsonify({'success': False, 'error': 'Conta bancaria nao encontrada'}), 404
+        if conta_bancaria.status != 'ATIVO':
+            return jsonify({'success': False, 'error': 'Conta bancaria esta inativa'}), 400
 
-        parcela = FinanciamentoService.registrar_pagamento_parcela(
+        # Registrar parcela (commit=False - transacao controlada aqui)
+        FinanciamentoService.registrar_pagamento_parcela(
             parcela_id,
-            data['valor_pago'],
-            data['data_pagamento']
+            parcela.valor_previsto_total,
+            data_pagamento,
+            commit=False,
         )
+
+        # Criar movimento bancario de debito (CORE-SALDO-1C)
+        financiamento = FinanciamentoService.obter_financiamento_no_perfil(parcela.financiamento_id)
+        nome_fin = getattr(financiamento, 'descricao', None) or f'Financiamento #{parcela.financiamento_id}'
+        ContaBancariaService.criar_movimento(
+            conta_bancaria_id,
+            tipo='DEBITO',
+            valor=parcela.valor_previsto_total,
+            descricao=f'Pagamento parcela {parcela.numero_parcela} - {nome_fin}',
+            data_movimento=data_pagamento,
+            origem='FINANCIAMENTO',
+            financiamento_parcela_id=parcela.id,
+        )
+
+        db.session.commit()
+
+        try:
+            if financiamento and financiamento.item_despesa_id:
+                FinanciamentoService.sincronizar_contas(parcela.financiamento_id)
+        except Exception:
+            pass
 
         return jsonify({
             'success': True,
@@ -773,17 +828,14 @@ def pagar_parcela(parcela_id):
         }), 200
 
     except ValueError as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 400
-
-    except Exception as e:
         db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        msg = str(e)
+        code = 409 if 'ja foi paga' in msg else 400
+        return jsonify({'success': False, 'error': msg}), code
+
+    except Exception:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': 'Erro interno ao registrar pagamento'}), 500
 
 
 # ============================================================================

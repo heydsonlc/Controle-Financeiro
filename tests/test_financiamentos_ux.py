@@ -156,6 +156,48 @@ def _parcela_financiamento(financiamento_id, numero):
     ).first()
 
 
+def _conta_bancaria_teste():
+    from backend.models import ContaBancaria
+    cb = ContaBancaria.query.filter_by(nome='_teste_pagar').first()
+    if not cb:
+        cb = ContaBancaria(
+            nome='_teste_pagar',
+            instituicao='Banco Teste',
+            tipo='Conta Corrente',
+            saldo_inicial=Decimal('999999.00'),
+            saldo_atual=Decimal('999999.00'),
+            status='ATIVO',
+        )
+        db.session.add(cb)
+        db.session.commit()
+    return cb
+
+
+def _pagar_via_rota(client, parcela_id, data_pagamento='2026-06-01'):
+    """Paga uma parcela via rota, criando conta bancária de teste.
+
+    Se há despesa vinculada pendente, paga via service para evitar 409
+    (a rota exige fluxo de Despesas nesse caso — CORE-SALDO-1C).
+    """
+    from backend.models import Conta
+    from backend.services.financiamento_service import FinanciamentoService
+    from datetime import datetime as _dt
+    parcela = FinanciamentoParcela.query.filter_by(id=parcela_id).first()
+    conta_vinculada = Conta.query.filter_by(financiamento_parcela_id=parcela_id).first()
+    if conta_vinculada and conta_vinculada.status_pagamento != 'Pago':
+        # Marcar despesa como paga para liberar o fluxo da parcela
+        conta_vinculada.status_pagamento = 'Pago'
+        from datetime import date as _date
+        conta_vinculada.data_pagamento = _date.fromisoformat(data_pagamento) if isinstance(data_pagamento, str) else data_pagamento
+        db.session.commit()
+
+    cb = _conta_bancaria_teste()
+    return client.post(
+        f'/api/financiamentos/parcelas/{parcela_id}/pagar',
+        json={'conta_bancaria_id': cb.id, 'data_pagamento': data_pagamento},
+    )
+
+
 def test_rota_principal_renderiza_layout_ux(client):
     response = client.get('/financiamentos')
 
@@ -482,13 +524,7 @@ def test_ajuste_com_referencia_paga_preserva_parcela_paga_e_recalcula_proxima(cl
     parcela_paga = _parcela_financiamento(criado['id'], 1)
     parcela_futura = _parcela_financiamento(criado['id'], 2)
 
-    pagamento = client.post(
-        f'/api/financiamentos/parcelas/{parcela_paga.id}/pagar',
-        json={
-            'valor_pago': float(parcela_paga.valor_previsto_total),
-            'data_pagamento': parcela_paga.data_vencimento.isoformat(),
-        },
-    )
+    pagamento = _pagar_via_rota(client, parcela_paga.id, parcela_paga.data_vencimento.isoformat())
     assert pagamento.status_code == 200
 
     valor_pago_original = float(parcela_paga.valor_pago)
@@ -571,13 +607,7 @@ def test_registrar_pagamento_mantem_status_da_parcela(client):
         FinanciamentoParcela.numero_parcela
     ).first()
 
-    response = client.post(
-        f'/api/financiamentos/parcelas/{parcela.id}/pagar',
-        json={
-            'valor_pago': float(parcela.valor_previsto_total),
-            'data_pagamento': '2026-06-01',
-        },
-    )
+    response = _pagar_via_rota(client, parcela.id)
     body = response.get_json()
 
     assert response.status_code == 200
@@ -592,13 +622,7 @@ def test_edicao_estrutural_com_parcela_paga_bloqueia_sem_alteracao_parcial(clien
         FinanciamentoParcela.numero_parcela
     ).first()
 
-    pagamento = client.post(
-        f'/api/financiamentos/parcelas/{parcela.id}/pagar',
-        json={
-            'valor_pago': float(parcela.valor_previsto_total),
-            'data_pagamento': '2026-06-01',
-        },
-    )
+    pagamento = _pagar_via_rota(client, parcela.id)
     assert pagamento.status_code == 200
 
     response = client.put(
@@ -643,13 +667,7 @@ def test_regenerar_parcelas_bloqueia_quando_existe_parcela_paga(client):
         FinanciamentoParcela.numero_parcela
     ).first()
 
-    pagamento = client.post(
-        f'/api/financiamentos/parcelas/{parcela.id}/pagar',
-        json={
-            'valor_pago': float(parcela.valor_previsto_total),
-            'data_pagamento': '2026-06-01',
-        },
-    )
+    pagamento = _pagar_via_rota(client, parcela.id)
     assert pagamento.status_code == 200
 
     response = client.post(f'/api/financiamentos/{criado["id"]}/regenerar-parcelas', json={})
@@ -783,13 +801,7 @@ def test_editar_financiamento_item_despesa_bloqueia_com_parcela_paga(client):
     criado = response.get_json()['data']
     primeira = _parcela_financiamento(criado['id'], 1)
 
-    pagamento = client.post(
-        f'/api/financiamentos/parcelas/{primeira.id}/pagar',
-        json={
-            'valor_pago': float(primeira.valor_previsto_total),
-            'data_pagamento': '2026-06-01',
-        },
-    )
+    pagamento = _pagar_via_rota(client, primeira.id)
     assert pagamento.status_code == 200
 
     response = client.put(
@@ -900,13 +912,7 @@ def test_excluir_financiamento_bloqueia_parcela_paga(client):
     criado = _criar_financiamento(client)
     primeira = _parcela_financiamento(criado['id'], 1)
 
-    pagamento = client.post(
-        f'/api/financiamentos/parcelas/{primeira.id}/pagar',
-        json={
-            'valor_pago': float(primeira.valor_previsto_total),
-            'data_pagamento': '2026-06-01',
-        },
-    )
+    pagamento = _pagar_via_rota(client, primeira.id)
     assert pagamento.status_code == 200
 
     response = client.delete(f'/api/financiamentos/{criado["id"]}')
@@ -1112,13 +1118,7 @@ def test_amortizacao_preserva_parcela_paga_anterior_ao_marco(client):
     valor_original = float(parcela_paga.valor_previsto_total)
     seguro_original = float(parcela_paga.valor_seguro)
 
-    pagamento = client.post(
-        f'/api/financiamentos/parcelas/{parcela_paga.id}/pagar',
-        json={
-            'valor_pago': valor_original,
-            'data_pagamento': '2026-06-01',
-        },
-    )
+    pagamento = _pagar_via_rota(client, parcela_paga.id)
     assert pagamento.status_code == 200
 
     futura = _parcela_financiamento(criado['id'], 4)

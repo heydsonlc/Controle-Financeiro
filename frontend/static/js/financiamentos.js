@@ -1361,7 +1361,7 @@ function abrirModalPagamentoProxima() {
     abrirModalPagamento(proxima.id);
 }
 
-function abrirModalPagamento(parcelaId) {
+async function abrirModalPagamento(parcelaId) {
     const financiamento = estadoFinanciamentos.atual;
     const parcela = financiamento?.parcelas?.find((item) => Number(item.id) === Number(parcelaId));
     if (!parcela) {
@@ -1376,6 +1376,21 @@ function abrirModalPagamento(parcelaId) {
     if (info) {
         info.innerHTML = `<strong>Parcela ${parcela.numero_parcela}</strong><br>Vencimento: ${formatarDataBR(parcela.data_vencimento)}<br>Total previsto: ${formatarMoedaDisplay(parcela.valor_previsto_total)}`;
     }
+
+    const select = document.getElementById('pagar-conta-bancaria');
+    if (select) {
+        select.innerHTML = '<option value="">Carregando...</option>';
+        try {
+            const resp = await fetch('/api/contas?status=ATIVO');
+            const data = await resp.json();
+            const contas = data.data || data.contas || [];
+            select.innerHTML = '<option value="">Selecione a conta</option>' +
+                contas.map((c) => `<option value="${c.id}">${c.nome} — ${formatarMoedaDisplay(c.saldo_atual)}</option>`).join('');
+        } catch {
+            select.innerHTML = '<option value="">Erro ao carregar contas</option>';
+        }
+    }
+
     abrirModal('modal-pagar');
 }
 
@@ -1384,9 +1399,14 @@ async function salvarPagamento(event) {
 
     try {
         const parcelaId = document.getElementById('pagar-parcela-id')?.value;
+        const contaBancariaId = document.getElementById('pagar-conta-bancaria')?.value;
+        if (!contaBancariaId) {
+            mostrarToast('Selecione a conta bancária para registrar o pagamento.', 'erro');
+            return;
+        }
         const payload = {
+            conta_bancaria_id: Number(contaBancariaId),
             data_pagamento: document.getElementById('pagar-data')?.value,
-            valor_pago: parseMoeda(document.getElementById('pagar-valor')?.value)
         };
         const response = await fetch(`${API_BASE}/parcelas/${parcelaId}/pagar`, {
             method: 'POST',
