@@ -5,6 +5,10 @@
 // Configuração base da API
 const API_BASE_URL = '/api';
 
+function formatarMoeda(valor) {
+    return Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 /**
  * Faz requisições para a API
  */
@@ -67,16 +71,16 @@ async function carregarResumoMes() {
 
             // Atualizar cards de resumo
             document.getElementById('receitas-mes').textContent =
-                `R$ ${data.receitas_mes.toFixed(2).replace('.', ',')}`;
+                `R$ ${formatarMoeda(data.receitas_mes)}`;
 
             document.getElementById('despesas-mes').textContent =
-                `R$ ${data.despesas_mes.toFixed(2).replace('.', ',')}`;
+                `R$ ${formatarMoeda(data.despesas_mes)}`;
 
             document.getElementById('saldo-liquido').textContent =
-                `R$ ${data.saldo_liquido.toFixed(2).replace('.', ',')}`;
+                `R$ ${formatarMoeda(data.saldo_liquido)}`;
 
             document.getElementById('saldo-contas').textContent =
-                `R$ ${data.saldo_contas_bancarias.toFixed(2).replace('.', ',')}`;
+                `R$ ${formatarMoeda(data.saldo_contas_bancarias)}`;
         }
     } catch (error) {
         console.error('Erro ao carregar resumo do mês:', error);

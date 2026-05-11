@@ -553,7 +553,7 @@ function renderizarAgrupadorSemanal(agrupador, index) {
                 ${renderizarCelulaTexto('despesa-cell-vencimento', '')}
                 ${renderizarCelulaTexto('despesa-cell-categoria', categoriaNome)}
                 <div class="despesa-cell despesa-cell-valor despesa-valor-principal">
-                    R$ ${totais.valor_total.toFixed(2).replace('.', ',')}
+                    R$ ${formatarValorBR(totais.valor_total)}
                 </div>
                 <div class="despesa-cell despesa-cell-acoes row-actions despesa-actions">
                     <button class="row-action-button success" onclick="pagarTodasOcorrencias(${index})" title="${todasPagas ? 'Todas ocorrencias ja pagas' : 'Pagar todas as ocorrencias pendentes'}" aria-label="${todasPagas ? 'Todas ocorrencias ja pagas' : 'Pagar todas as ocorrencias pendentes'}" ${todasPagas ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''}>
@@ -603,7 +603,7 @@ function renderizarAgrupadorSemanal(agrupador, index) {
                 </div>
 
                 <div class="despesa-cell despesa-cell-valor despesa-valor-principal">
-                    R$ ${totais.valor_total.toFixed(2).replace('.', ',')}
+                    R$ ${formatarValorBR(totais.valor_total)}
                 </div>
 
                 <div class="despesa-cell despesa-cell-acoes row-actions despesa-actions">
@@ -660,7 +660,7 @@ function renderizarOcorrenciaIndividual(despesa) {
                 ${renderizarCelulaTexto('despesa-cell-vencimento', vencimento)}
                 ${renderizarCelulaTexto('despesa-cell-categoria', categoriaNome)}
                 <div class="despesa-cell despesa-cell-valor despesa-valor-principal">
-                    R$ ${parseFloat(despesa.valor).toFixed(2).replace('.', ',')}
+                    R$ ${formatarValorBR(parseFloat(despesa.valor))}
                 </div>
                 <div class="despesa-cell despesa-cell-acoes row-actions despesa-actions">
                     <button class="row-action-button success" onclick="marcarComoPago(${despesa.id})" title="${pagoFlag ? 'Ja pago' : 'Marcar como pago'}" aria-label="${pagoFlag ? 'Ja pago' : 'Marcar como pago'}" ${pagoFlag ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''}>
@@ -702,7 +702,7 @@ function renderizarOcorrenciaIndividual(despesa) {
                 </div>
 
                 <div class="despesa-cell despesa-cell-valor despesa-valor-principal">
-                    R$ ${parseFloat(despesa.valor).toFixed(2).replace('.', ',')}
+                    R$ ${formatarValorBR(parseFloat(despesa.valor))}
                 </div>
 
                 <div class="despesa-cell despesa-cell-acoes row-actions despesa-actions">
@@ -728,7 +728,7 @@ function renderizarOcorrenciaIndividual(despesa) {
                     ${despesa.descricao ? `<span style="color: rgba(255, 255, 255, 0.6); font-size: 0.9em;">${despesa.descricao}</span>` : ''}
                 </div>
                 <div style="display: flex; align-items: center; gap: 12px;">
-                    <span style="font-weight: 600; color: white;">R$ ${parseFloat(despesa.valor).toFixed(2).replace('.', ',')}</span>
+                    <span style="font-weight: 600; color: white;">R$ ${formatarValorBR(parseFloat(despesa.valor))}</span>
                     <button class="row-action-button success" onclick="marcarComoPago(${despesa.id})" title="${pagoFlag ? 'Já pago' : 'Marcar como pago'}" aria-label="${pagoFlag ? 'Já pago' : 'Marcar como pago'}" ${pagoFlag ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''}>
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="20 6 9 17 4 12"></polyline>
@@ -779,7 +779,7 @@ async function pagarTodasOcorrencias(index) {
 
     const confirmar = confirm(
         `Pagar ${ocorrenciasPendentes.length} ocorrência(s) de "${nomeAgrupador}" (${competencia})?\n\n` +
-        `Valor total: R$ ${totalPendente.toFixed(2).replace('.', ',')}`
+        `Valor total: R$ ${formatarValorBR(totalPendente)}`
     );
 
     if (!confirmar) return;
@@ -984,7 +984,7 @@ function renderizarDespesas(despesasParaRenderizar) {
                         ${categoriaHtml || textoLinhaUnica(categoriaNome)}
                     </div>
                     <div class="despesa-cell despesa-cell-valor despesa-valor-principal">
-                        R$ ${valorDespesa.toFixed(2).replace('.', ',')}
+                        R$ ${formatarValorBR(valorDespesa)}
                     </div>
                     <div class="despesa-cell despesa-cell-acoes">
                         ${acoesHTML || '<span class="despesa-muted">&mdash;</span>'}
@@ -1032,7 +1032,7 @@ function renderizarDespesas(despesasParaRenderizar) {
                     </div>
 
                     <div class="despesa-cell despesa-cell-valor despesa-valor-principal">
-                        R$ ${valorDespesa.toFixed(2).replace('.', ',')}
+                        R$ ${formatarValorBR(valorDespesa)}
                     </div>
 
                     <div class="despesa-cell despesa-cell-acoes">
@@ -1076,7 +1076,7 @@ function renderizarDespesas(despesasParaRenderizar) {
                     </div>
 
                     <div class="despesa-valor-principal">
-                        R$ ${valorDespesa.toFixed(2).replace('.', ',')}
+                        R$ ${formatarValorBR(valorDespesa)}
                     </div>
 
                     ${acoesHTML}
@@ -1160,9 +1160,9 @@ function atualizarResumo(despesasParaResumir) {
         })
         .reduce((sum, d) => sum + obterValorDespesa(d), 0);
 
-    document.getElementById('total-geral').textContent = `R$ ${total.toFixed(2).replace('.', ',')}`;
-    document.getElementById('total-pendentes').textContent = `R$ ${totalPendentes.toFixed(2).replace('.', ',')}`;
-    document.getElementById('total-pagas').textContent = `R$ ${totalPagas.toFixed(2).replace('.', ',')}`;
+    document.getElementById('total-geral').textContent = `R$ ${formatarValorBR(total)}`;
+    document.getElementById('total-pendentes').textContent = `R$ ${formatarValorBR(totalPendentes)}`;
+    document.getElementById('total-pagas').textContent = `R$ ${formatarValorBR(totalPagas)}`;
 }
 
 /**
@@ -1204,9 +1204,9 @@ function renderizarSidebar(sidebar) {
     const elCart = document.getElementById('total-cartoes');
     const elCartSub = document.getElementById('summary-cartoes-sub');
 
-    if (elV7d) elV7d.textContent = `R$ ${(sidebar.vencendo_7d_valor || 0).toFixed(2).replace('.', ',')}`;
+    if (elV7d) elV7d.textContent = `R$ ${(sidebar.vencendo_7d_valor || formatarValorBR(0))}`;
     if (elV7dSub) elV7dSub.textContent = `${sidebar.vencendo_7d_count || 0} despesa(s)`;
-    if (elCart) elCart.textContent = `R$ ${(sidebar.cartoes_valor || 0).toFixed(2).replace('.', ',')}`;
+    if (elCart) elCart.textContent = `R$ ${(sidebar.cartoes_valor || formatarValorBR(0))}`;
     if (elCartSub) elCartSub.textContent = `${sidebar.cartoes_count || 0} fatura(s)`;
 
     // Subtitulos dos 3 primeiros cards
@@ -1279,7 +1279,7 @@ function renderizarSidebar(sidebar) {
                 return `<div class="categoria-bar-item">
                     <div class="categoria-bar-row">
                         <span class="categoria-bar-name" title="${cat.nome}">${cat.nome}</span>
-                        <span class="categoria-bar-value">R$ ${cat.valor.toFixed(2).replace('.', ',')}</span>
+                        <span class="categoria-bar-value">R$ ${formatarValorBR(cat.valor)}</span>
                     </div>
                     <div class="categoria-bar-track">
                         <div class="categoria-bar-fill" style="width:${pct}%;background:${cor};"></div>
@@ -1316,7 +1316,7 @@ function renderizarSidebar(sidebar) {
                         <div class="pv-nome" title="${pv.nome}">${pv.nome}</div>
                         <div class="pv-categoria">${pv.categoria || pv.status_pagamento || ''}</div>
                     </div>
-                    <div class="pv-valor">R$ ${parseFloat(pv.valor).toFixed(2).replace('.', ',')}</div>
+                    <div class="pv-valor">R$ ${formatarValorBR(parseFloat(pv.valor))}</div>
                 </div>`;
             });
             pvList.innerHTML = itens.join('');
@@ -1775,23 +1775,23 @@ function marcarComoPago(id) {
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
                         <div style="background: #ffffff; padding: 12px; border-radius: 8px; border: 1px solid rgba(0, 0, 0, 0.06);">
                             <div style="font-size: 0.75em; color: #6e6e73; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">💰 Planejado (Orçamento)</div>
-                            <div style="font-size: 1.2em; font-weight: 600; color: #1d1d1f;">R$ ${valorPlanejado.toFixed(2).replace('.', ',')}</div>
+                            <div style="font-size: 1.2em; font-weight: 600; color: #1d1d1f;">R$ ${formatarValorBR(valorPlanejado)}</div>
                         </div>
                         <div style="background: #ffffff; padding: 12px; border-radius: 8px; border: 1px solid rgba(0, 0, 0, 0.06);">
                             <div style="font-size: 0.75em; color: #6e6e73; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">💳 Executado (Gasto Real)</div>
-                            <div style="font-size: 1.2em; font-weight: 600; color: ${estouro ? '#ff3b30' : '#34c759'};">R$ ${valorExecutado.toFixed(2).replace('.', ',')}</div>
+                            <div style="font-size: 1.2em; font-weight: 600; color: ${estouro ? '#ff3b30' : '#34c759'};">R$ ${formatarValorBR(valorExecutado)}</div>
                         </div>
                     </div>
 
                     ${estouro ? `
                         <div style="background: rgba(255, 59, 48, 0.1); padding: 10px; border-radius: 6px; margin-bottom: 12px; border: 1px solid rgba(255, 59, 48, 0.2);">
-                            <span style="color: #ff3b30; font-size: 0.85em; font-weight: 500;">⚠️ Orçamento ultrapassado em R$ ${(valorExecutado - valorPlanejado).toFixed(2).replace('.', ',')}</span>
+                            <span style="color: #ff3b30; font-size: 0.85em; font-weight: 500;">⚠️ Orçamento ultrapassado em R$ ${(valorExecutado - formatarValorBR(valorPlanejado))}</span>
                         </div>
                     ` : ''}
 
                     <div style="background: rgba(0, 122, 255, 0.08); padding: 10px; border-radius: 6px; font-size: 0.85em; color: #1d1d1f; line-height: 1.5;">
                         <strong>O que acontece ao pagar:</strong><br>
-                        O valor da fatura mudará de <strong>Planejado</strong> (R$ ${valorPlanejado.toFixed(2).replace('.', ',')}) para <strong>Executado</strong> (R$ ${valorExecutado.toFixed(2).replace('.', ',')})
+                        O valor da fatura mudará de <strong>Planejado</strong> (R$ ${formatarValorBR(valorPlanejado)}) para <strong>Executado</strong> (R$ ${formatarValorBR(valorExecutado)})
                     </div>
                 </div>
             `;
@@ -1807,7 +1807,7 @@ function marcarComoPago(id) {
         const valorPagoInput = document.getElementById('pagar-valor-pago');
 
         if (valorPrevistoInput) valorPrevistoInput.value = valorExecutado;
-        if (valorPrevistoDisplay) valorPrevistoDisplay.textContent = `R$ ${valorExecutado.toFixed(2).replace('.', ',')}`;
+        if (valorPrevistoDisplay) valorPrevistoDisplay.textContent = `R$ ${formatarValorBR(valorExecutado)}`;
         if (valorPagoInput) valorPagoInput.value = valorExecutado;
 
         // Trocar texto para "Valor Executado"
@@ -1815,7 +1815,7 @@ function marcarComoPago(id) {
         if (labelTotal) {
             const spanElement = labelTotal.closest('label')?.querySelector('span');
             if (spanElement) {
-                spanElement.innerHTML = `Valor Executado (Gasto Real): <strong>R$ ${valorExecutado.toFixed(2).replace('.', ',')}</strong>`;
+                spanElement.innerHTML = `Valor Executado (Gasto Real): <strong>R$ ${formatarValorBR(valorExecutado)}</strong>`;
             }
         }
     } else {
@@ -1826,7 +1826,7 @@ function marcarComoPago(id) {
         }
 
         // Despesa normal
-        const valorFormatado = `R$ ${parseFloat(despesa.valor).toFixed(2).replace('.', ',')}`;
+        const valorFormatado = `R$ ${formatarValorBR(parseFloat(despesa.valor))}`;
         const valorPrevistoInput = document.getElementById('pagar-valor-previsto');
         const valorPrevistoDisplay = document.getElementById('pagar-valor-previsto-display');
         const valorPagoInput = document.getElementById('pagar-valor-pago');
@@ -2596,11 +2596,11 @@ function renderizarFaturaCompleta(blocos, totais, competencia) {
                 <div class="fatura-totais">
                     <div class="total-item destaque">
                         <span class="total-label">Total da Fatura (Previsto):</span>
-                        <span class="total-valor">R$ ${totais.totalFatura.toFixed(2).replace('.', ',')}</span>
+                        <span class="total-valor">R$ ${formatarValorBR(totais.totalFatura)}</span>
                     </div>
                     <div class="total-item">
                         <span class="total-label">Total Executado:</span>
-                        <span class="total-valor">R$ ${totais.totalExecutado.toFixed(2).replace('.', ',')}</span>
+                        <span class="total-valor">R$ ${formatarValorBR(totais.totalExecutado)}</span>
                     </div>
                 </div>
             </div>
@@ -2855,7 +2855,7 @@ async function consolidarFatura(cartaoId, competencia) {
         }
 
         // Sucesso
-        alert(`Fatura consolidada com sucesso!\n\nValor consolidado: R$ ${data.fatura.valor_consolidado.toFixed(2).replace('.', ',')}\nStatus: ${data.fatura.status_fatura}`);
+        alert(`Fatura consolidada com sucesso!\n\nValor consolidado: R$ ${formatarValorBR(data.fatura.valor_consolidado)}\nStatus: ${data.fatura.status_fatura}`);
 
         // Recarregar lista de despesas
         carregarDespesas();
@@ -2922,7 +2922,7 @@ function renderizarListaDocumentosDespesa(lista) {
     if (!lista.length) { el.innerHTML = '<p class="doc-atalho-vazio">Nenhum documento encontrado.</p>'; return; }
     el.innerHTML = lista.map(d => {
         const nome = d.prestador_nome || d.arquivo_nome || `Documento #${d.id}`;
-        const valor = d.valor != null ? `R$ ${d.valor.toFixed(2).replace('.', ',')}` : '—';
+        const valor = d.valor != null ? `R$ ${formatarValorBR(d.valor)}` : '—';
         const data = d.data_documento ? d.data_documento.slice(0, 10) : '—';
         const vinc = d.vinculos_count ? `<span class="doc-atalho-tag-vinculado">vinculado</span>` : '';
         return `<button type="button" class="doc-atalho-item" onclick="selecionarDocumentoDespesa(${d.id})">

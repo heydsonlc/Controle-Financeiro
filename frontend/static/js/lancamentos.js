@@ -1383,7 +1383,7 @@ function renderizarListaDocumentos(lista) {
     if (!lista.length) { el.innerHTML = '<p class="doc-atalho-vazio">Nenhum documento encontrado.</p>'; return; }
     el.innerHTML = lista.map(d => {
         const nome = d.prestador_nome || d.arquivo_nome || `Documento #${d.id}`;
-        const valor = d.valor != null ? `R$ ${d.valor.toFixed(2).replace('.', ',')}` : '—';
+        const valor = d.valor != null ? `R$ ${formatarMoeda(d.valor)}` : '—';
         const data = d.data_documento ? d.data_documento.slice(0, 10) : '—';
         const vinc = d.vinculos_count ? `<span class="doc-atalho-tag-vinculado">vinculado</span>` : '';
         return `<button type="button" class="doc-atalho-item" onclick="selecionarDocumentoAtalho(${d.id})">
