@@ -807,30 +807,21 @@ def atualizar_despesa(id):
         if 'observacoes' in dados:
             conta.observacoes = dados['observacoes']
 
-        if 'data_pagamento' in dados:
-            if dados['data_pagamento']:
-                try:
-                    conta.data_pagamento = datetime.strptime(dados['data_pagamento'], '%Y-%m-%d').date()
-                    # Se definir data de pagamento, marcar como pago
-                    if conta.status_pagamento != 'Pago':
-                        conta.status_pagamento = 'Pago'
-                except ValueError:
-                    logger.warning('Data de pagamento invalida na atualizacao da despesa id=%s', id)
-                    return jsonify({'success': False, 'error': 'Formato de data_pagamento invalido. Use YYYY-MM-DD'}), 400
-            else:
-                conta.data_pagamento = None
-                conta.status_pagamento = 'Pendente'
-
-        # Atualizar status de pagamento se fornecido explicitamente
-        if 'pago' in dados:
-            if dados['pago']:
-                conta.status_pagamento = 'Pago'
-                # Se nÃ£o tem data de pagamento, usar data de vencimento
-                if not conta.data_pagamento:
-                    conta.data_pagamento = conta.data_vencimento
-            else:
-                conta.status_pagamento = 'Pendente'
-                conta.data_pagamento = None
+        # Bloquear tentativa de pagamento via PUT (CORE-SALDO-1B)
+        campos_pagamento = {'pago', 'status_pagamento', 'data_pagamento', 'valor_pago'}
+        tentativa_pagamento = campos_pagamento & set(dados.keys())
+        if tentativa_pagamento:
+            valores_perigosos = {
+                'pago': dados.get('pago') is True,
+                'status_pagamento': dados.get('status_pagamento') == 'Pago',
+                'data_pagamento': bool(dados.get('data_pagamento')),
+                'valor_pago': bool(dados.get('valor_pago')),
+            }
+            if any(valores_perigosos[k] for k in tentativa_pagamento if k in valores_perigosos):
+                return jsonify({
+                    'success': False,
+                    'error': 'Use a acao de baixa/pagamento para marcar a despesa como paga. Edicao comum nao pode registrar pagamentos.',
+                }), 400
 
         db.session.commit()
 
@@ -1004,24 +995,36 @@ def atualizar_despesa_OLD(id):
 
 @despesas_bp.route('/<int:id>', methods=['DELETE'])
 def deletar_despesa(id):
-    """Deleta uma conta especÃ­fica"""
+    """Deleta uma conta especifica (CORE-SALDO-1A: bloqueada se paga ou com movimento)"""
     try:
-        # Buscar na tabela Conta (nÃ£o ItemDespesa)
+        from backend.models import MovimentoFinanceiro
+    except ImportError:
+        from models import MovimentoFinanceiro
+
+    try:
         conta = _query_contas().filter(Conta.id == id).first()
         if not conta:
+            return jsonify({'success': False, 'error': 'Despesa nao encontrada'}), 404
+
+        # Bloquear exclusao de despesa paga (CORE-SALDO-1A)
+        if conta.status_pagamento == 'Pago':
             return jsonify({
                 'success': False,
-                'error': 'Despesa nÃ£o encontrada'
-            }), 404
+                'error': 'Esta despesa ja foi paga e nao pode ser excluida. Para corrigir, sera necessario estorno ou ajuste financeiro controlado.',
+            }), 409
 
-        # Deletar a conta
+        # Bloquear se existe movimento financeiro vinculado
+        tem_movimento = MovimentoFinanceiro.query.filter_by(conta_id=conta.id).first()
+        if tem_movimento:
+            return jsonify({
+                'success': False,
+                'error': 'Esta despesa possui movimento financeiro vinculado e nao pode ser excluida diretamente.',
+            }), 409
+
         db.session.delete(conta)
         db.session.commit()
 
-        return jsonify({
-            'success': True,
-            'message': 'Despesa deletada com sucesso'
-        })
+        return jsonify({'success': True, 'message': 'Despesa deletada com sucesso'})
 
     except Exception:
         db.session.rollback()

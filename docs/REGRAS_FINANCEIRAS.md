@@ -2,7 +2,7 @@
 
 Regras globais e por módulo que governam o comportamento do Controle Financeiro.
 
-Última atualização: 2026-05-10
+Última atualização: 2026-05-11
 
 ---
 
@@ -156,14 +156,16 @@ Nenhum componente pode ser omitido do extrato ou da visualização.
 - Faixa etária determinada por competência configurável
 - Todos os cálculos usam o helper central de seguro (único ponto de verdade)
 
-### Modo CAIXA SAC/TR
+### Modo SAC + TR
 
-- Opt-in por financiamento (não global)
+- Ativado quando `sistema_amortizacao = SAC` e `indexador_saldo = TR`
+- `modo_calculo_financiamento` permanece apenas como compatibilidade transitória
 - Taxa mensal = taxa_nominal_anual / 12
 - TR mensal aplicada ao saldo: `saldo_corrigido = saldo × (1 + TR_mensal)`
 - Quota de amortização = `saldo_corrigido / parcelas_restantes`
 - Juros = `saldo_corrigido × taxa_mensal`
 - TR ausente para a competência bloqueia a geração (erro explícito)
+- TR oficial vem de `indice_tr_mensal`; `IndexadorMensal` não alimenta este motor
 - Seguro calculado pelo helper central após correção
 
 ### Ajuste de saldo devedor real
@@ -225,6 +227,12 @@ Bloqueada quando existir qualquer dos seguintes:
 - `MovimentoFinanceiro` criado na baixa sempre tem `conta_bancaria_id` preenchido e `origem='DESPESA'`.
 - O hook de financiamento foi movido para antes do `commit` — se falhar, a baixa é revertida.
 
+**Proteção de saldo contra edição e exclusão (CORE-SALDO-1A/1B)**:
+- **Pagamento só pelo fluxo oficial** (`POST /despesas/<id>/pagar`). `PUT /despesas/<id>` com `pago`, `status_pagamento`, `data_pagamento` ou `valor_pago` retorna HTTP 400. Edição comum nunca cria `MovimentoFinanceiro`.
+- **Despesa paga não pode ser excluída.** `DELETE /despesas/<id>` retorna HTTP 409 se `status_pagamento == 'Pago'`.
+- **Despesa com movimento vinculado não pode ser excluída** diretamente. Remoção exige estorno controlado (CORE-ESTORNO-1 — pendência futura).
+- Correções de pagamento exigirão fluxo próprio de estorno/ajuste (CORE-ESTORNO-1, não implementado).
+
 ---
 
 ## Regras de Contas Bancárias
@@ -253,7 +261,10 @@ Bloqueada quando existir qualquer dos seguintes:
 - Efetivação atômica: guard `status == 'PREVISTA'` + rollback em caso de falha
 - Meio cartão → `LancamentoAgregado` via `CartaoService.adicionar_lancamento()`
 - Demais meios → `ItemDespesa(tipo='Simples')` + `Conta`
-- Categoria padrão Mobilidade criada automaticamente se não existir
+- Mobilidade é módulo/origem do lançamento, não Categoria da Despesa genérica
+- Despesas geradas por Mobilidade usam categorias sistêmicas granulares por natureza do gasto
+- Categorias sistêmicas são buscadas por `codigo_sistema`, não por nome ou ID fixo
+- Categoria do Cartão continua fora do escopo da classificação sistêmica de Mobilidade
 
 ---
 
