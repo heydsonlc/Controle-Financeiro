@@ -55,6 +55,22 @@ Documentos podem ser usados como base de conferência manual CAIXA. O usuário r
 
 A conferência fica na tabela `financiamento_conferencia_caixa` e calcula diferenças como `real - simulado`.
 
+## Conferência de quitação
+
+A conferência de quitação reaproveita `financiamento_conferencia_caixa` com `tipo_conferencia = quitacao`.
+
+Ela registra:
+
+- valor oficial informado pelo banco;
+- valor simulado pelo app;
+- diferença em reais e percentual;
+- data da proposta;
+- validade da proposta, quando informada;
+- documento vinculado, quando houver;
+- observação.
+
+A validade da proposta fica registrada na observação neste MVP. A conferência não quita o financiamento, não baixa parcelas, não cria conta de pagamento, não cancela parcelas futuras e não altera saldo.
+
 ## Segurança
 
 O upload valida extensão, MIME, assinatura básica, tamanho e nome de arquivo. O nome original nunca é usado como caminho físico.
@@ -72,3 +88,4 @@ Se a conferência indicar diferença relevante entre banco e sistema, o ajuste d
 - `FIN-DOC-CAIXA-2`: importação manual em lote de linhas de demonstrativos.
 - `FIN-DOC-CAIXA-3`: leitura automática/OCR de demonstrativos CAIXA.
 - `FIN-DOC-FIN-4`: storage externo e política avançada de backup.
+- `FIN-QUIT-OPER-1`: quitação operacional do financiamento.

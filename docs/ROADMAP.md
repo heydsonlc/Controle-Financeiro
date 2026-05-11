@@ -33,6 +33,8 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 | FIN-DOC-CAIXA-1 | Conferência manual CAIXA real x simulado em documentos do financiamento | Concluído |
 | FIN-DOC-CAIXA-2 | Importação manual em lote de linhas de demonstrativos CAIXA | Baixa |
 | FIN-DOC-CAIXA-3 | Leitura automática/OCR de demonstrativos CAIXA | Baixa |
+| FIN-QUIT-CHECK-1 | Conferência do valor oficial de quitação informado pelo banco | Concluído |
+| FIN-QUIT-OPER-1 | Quitação operacional do financiamento | Baixa |
 | FIN-QUIT-1 | Simulação de quitação antecipada com cálculo de desconto | Baixa |
 | FIN-CAIXA-IMPORT-1 | Importação de demonstrativos CAIXA para comparação real × simulado | Baixa |
 

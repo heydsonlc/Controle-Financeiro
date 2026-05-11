@@ -1852,7 +1852,7 @@ class FinanciamentoDocumento(db.Model):
         return f'<FinanciamentoDocumento {self.financiamento_id} {self.tipo_documento} {self.nome_original}>'
 
     def to_dict(self):
-        return {
+        dados = {
             'id': self.id,
             'perfil_financeiro_id': self.perfil_financeiro_id,
             'financiamento_id': self.financiamento_id,
@@ -1875,6 +1875,7 @@ class FinanciamentoDocumento(db.Model):
             'criado_em': self.criado_em.strftime('%Y-%m-%d %H:%M:%S') if self.criado_em else None,
             'atualizado_em': self.atualizado_em.strftime('%Y-%m-%d %H:%M:%S') if self.atualizado_em else None,
         }
+        return dados
 
 
 class FinanciamentoConferenciaCaixa(db.Model):
@@ -1953,7 +1954,7 @@ class FinanciamentoConferenciaCaixa(db.Model):
         return float(valor) if valor is not None else None
 
     def to_dict(self):
-        return {
+        dados = {
             'id': self.id,
             'perfil_financeiro_id': self.perfil_financeiro_id,
             'financiamento_id': self.financiamento_id,
@@ -1990,6 +1991,17 @@ class FinanciamentoConferenciaCaixa(db.Model):
             'atualizado_em': self.atualizado_em.strftime('%Y-%m-%d %H:%M:%S') if self.atualizado_em else None,
             'documento': self.documento.to_dict() if self.documento else None,
         }
+        if self.diferenca_total is not None and self.valor_simulado_total:
+            dados['percentual_diferenca_total'] = float(
+                (self.diferenca_total / self.valor_simulado_total) * 100
+            )
+        else:
+            dados['percentual_diferenca_total'] = None
+        if self.tipo_conferencia == 'quitacao':
+            dados['valor_oficial_banco'] = self._float(self.valor_real_total)
+            dados['valor_simulado_app'] = self._float(self.valor_simulado_total)
+            dados['percentual_diferenca'] = dados['percentual_diferenca_total']
+        return dados
 
 
 class FinanciamentoParcela(db.Model):

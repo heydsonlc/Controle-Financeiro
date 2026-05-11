@@ -1489,9 +1489,17 @@ def test_simular_quitacao_financiamento_inexistente_retorna_erro(client):
 def test_frontend_simular_quitacao_envia_payload_correto():
     """JS deve enviar data_quitacao e desconto_banco_percentual para a rota correta."""
     base_dir = Path(__file__).resolve().parents[1]
+    html = (base_dir / 'frontend' / 'templates' / 'financiamentos.html').read_text(encoding='utf-8')
     js = (base_dir / 'frontend' / 'static' / 'js' / 'financiamentos.js').read_text(encoding='utf-8')
 
     assert 'async function simularQuitacao' in js
+    assert 'Registrar valor oficial do banco' in html
+    assert 'modal-conferencia-quitacao' in html
+    assert 'Esta conferência não quita o financiamento' in html
+    assert 'function salvarConferenciaQuitacao' in js
+    assert 'valor_oficial_banco' in js
+    assert 'valor_simulado_app' in js
+    assert 'Quitar financiamento' not in html
     trecho = js[js.index('async function simularQuitacao'):]
     # Delimita pelo próximo 'async function' ou 'function'
     import re

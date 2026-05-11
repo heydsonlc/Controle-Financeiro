@@ -6,6 +6,7 @@ import pytest
 from flask import Flask, render_template
 
 from backend.models import (
+    Conta,
     db,
     Financiamento,
     FinanciamentoConferenciaCaixa,
@@ -238,3 +239,122 @@ def test_endpoint_valores_simulados_retorna_parcela_por_competencia(client):
     assert data['data']['encontrado'] is True
     assert data['data']['parcela_id'] == parcela.id
     assert data['data']['total'] == 3002.82
+
+
+def test_registra_conferencia_de_quitacao_com_simulacao_e_percentual(client):
+    financiamento = _criar_financiamento()
+    financiamento.indexador_saldo = ''
+    _criar_parcela(financiamento, competencia='2028-01', numero=42)
+    documento = _criar_documento(financiamento, tipo='quitacao')
+    db.session.commit()
+
+    sim = client.post(
+        f'/api/financiamentos/{financiamento.id}/simular-quitacao',
+        json={'data_quitacao': '2028-01-10'},
+    ).get_json()['data']
+    valor_simulado = Decimal(str(sim['valor_quitacao_estimado'])).quantize(Decimal('0.01'))
+    valor_oficial = valor_simulado + Decimal('149.40')
+
+    response = client.post(
+        f'/api/financiamentos/{financiamento.id}/conferencias-caixa',
+        json={
+            'tipo_conferencia': 'quitacao',
+            'documento_id': documento.id,
+            'data_referencia': '2028-01-10',
+            'data_validade': '2028-01-15',
+            'valor_oficial_banco': str(valor_oficial),
+            'observacao': 'Proposta de quitação emitida pelo banco.',
+        },
+    )
+
+    data = response.get_json()
+    assert response.status_code == 201
+    assert data['conferencia']['tipo_conferencia'] == 'quitacao'
+    assert data['conferencia']['documento_id'] == documento.id
+    assert data['conferencia']['valor_oficial_banco'] == float(valor_oficial)
+    assert data['conferencia']['valor_simulado_app'] == float(valor_simulado)
+    assert data['conferencia']['diferenca_total'] == 149.4
+    assert data['conferencia']['percentual_diferenca'] > 0
+    assert 'Validade da proposta: 2028-01-15' in data['conferencia']['observacao']
+
+
+def test_conferencia_de_quitacao_nao_altera_estado_financeiro(client):
+    financiamento = _criar_financiamento()
+    financiamento.indexador_saldo = ''
+    parcela = _criar_parcela(financiamento, competencia='2028-01', numero=42)
+    saldo_original = financiamento.saldo_devedor_atual
+    status_original = parcela.status
+    contas_antes = Conta.query.count()
+    db.session.commit()
+
+    response = client.post(
+        f'/api/financiamentos/{financiamento.id}/conferencias-caixa',
+        json={
+            'tipo_conferencia': 'quitacao',
+            'data_referencia': '2028-01-10',
+            'valor_oficial_banco': '270950,25',
+            'valor_simulado_app': '270800,85',
+        },
+    )
+
+    db.session.refresh(financiamento)
+    db.session.refresh(parcela)
+    assert response.status_code == 201
+    assert financiamento.saldo_devedor_atual == saldo_original
+    assert financiamento.ativo is True
+    assert parcela.status == status_original
+    assert Conta.query.count() == contas_antes
+
+
+def test_conferencia_de_quitacao_bloqueia_documento_de_outro_financiamento(client):
+    financiamento_a = _criar_financiamento('Contrato A')
+    financiamento_b = _criar_financiamento('Contrato B')
+    documento_b = _criar_documento(financiamento_b, tipo='quitacao')
+
+    response = client.post(
+        f'/api/financiamentos/{financiamento_a.id}/conferencias-caixa',
+        json={
+            'tipo_conferencia': 'quitacao',
+            'documento_id': documento_b.id,
+            'data_referencia': '2028-01-10',
+            'valor_oficial_banco': '270950,25',
+            'valor_simulado_app': '270800,85',
+        },
+    )
+
+    assert response.status_code == 404
+    assert 'Documento nao encontrado' in response.get_json()['error']
+
+
+@pytest.mark.parametrize(
+    'payload, erro',
+    [
+        (
+            {'data_referencia': '2028-01-10', 'valor_oficial_banco': '0', 'valor_simulado_app': '270800,85'},
+            'valor_oficial_banco deve ser maior que zero',
+        ),
+        (
+            {'data_referencia': '2028/01/10', 'valor_oficial_banco': '270950,25', 'valor_simulado_app': '270800,85'},
+            'data_referencia deve estar no formato YYYY-MM-DD',
+        ),
+        (
+            {
+                'data_referencia': '2028-01-10',
+                'data_validade': '2028-01-09',
+                'valor_oficial_banco': '270950,25',
+                'valor_simulado_app': '270800,85',
+            },
+            'data_validade deve ser maior ou igual a data_referencia',
+        ),
+    ],
+)
+def test_conferencia_de_quitacao_validacoes(client, payload, erro):
+    financiamento = _criar_financiamento()
+
+    response = client.post(
+        f'/api/financiamentos/{financiamento.id}/conferencias-caixa',
+        json={'tipo_conferencia': 'quitacao', **payload},
+    )
+
+    assert response.status_code == 400
+    assert erro in response.get_json()['error']

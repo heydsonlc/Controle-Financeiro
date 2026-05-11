@@ -12,6 +12,7 @@ try:
         FinanciamentoDocumento,
         FinanciamentoParcela,
     )
+    from backend.services.financiamento_service import FinanciamentoService
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import (
@@ -21,6 +22,7 @@ except ImportError:
         FinanciamentoDocumento,
         FinanciamentoParcela,
     )
+    from services.financiamento_service import FinanciamentoService
     from services.perfil_financeiro_service import PerfilFinanceiroService
 
 
@@ -69,14 +71,23 @@ class FinanciamentoConferenciaService:
                 dados_validados['documento_id'],
             )
 
-        parcela = FinanciamentoConferenciaService._obter_parcela_simulada(
-            financiamento.id,
-            dados_validados.get('parcela_id'),
-            dados_validados.get('competencia'),
-            dados_validados.get('data_referencia'),
-        )
+        if dados_validados['tipo_conferencia'] == 'quitacao':
+            dados_validados = FinanciamentoConferenciaService._preparar_conferencia_quitacao(
+                financiamento,
+                dados or {},
+                dados_validados,
+            )
+            parcela = None
+            simulados = FinanciamentoConferenciaService._valores_simulados_quitacao(dados_validados)
+        else:
+            parcela = FinanciamentoConferenciaService._obter_parcela_simulada(
+                financiamento.id,
+                dados_validados.get('parcela_id'),
+                dados_validados.get('competencia'),
+                dados_validados.get('data_referencia'),
+            )
+            simulados = FinanciamentoConferenciaService._valores_simulados_da_parcela(parcela)
 
-        simulados = FinanciamentoConferenciaService._valores_simulados_da_parcela(parcela)
         conferencia = FinanciamentoConferenciaCaixa(
             perfil_financeiro_id=PerfilFinanceiroService.obter_perfil_ativo_id(),
             financiamento_id=financiamento.id,
@@ -195,6 +206,54 @@ class FinanciamentoConferenciaService:
         }
 
     @staticmethod
+    def _preparar_conferencia_quitacao(financiamento, dados_originais, dados_validados):
+        data_referencia = dados_validados.get('data_referencia')
+        if not data_referencia:
+            raise ValueError('data_referencia e obrigatoria para conferencia de quitacao')
+
+        data_validade = FinanciamentoConferenciaService._validar_data(
+            dados_originais.get('data_validade'),
+            'data_validade',
+        )
+        if data_validade and data_validade < data_referencia:
+            raise ValueError('data_validade deve ser maior ou igual a data_referencia')
+
+        valor_oficial = FinanciamentoConferenciaService._decimal_opcional(
+            dados_originais.get('valor_oficial_banco', dados_validados.get('valor_real_total')),
+            'valor_oficial_banco',
+        )
+        if valor_oficial is None or valor_oficial <= 0:
+            raise ValueError('valor_oficial_banco deve ser maior que zero')
+
+        valor_simulado = FinanciamentoConferenciaService._decimal_opcional(
+            dados_originais.get('valor_simulado_app'),
+            'valor_simulado_app',
+        )
+        if valor_simulado is None:
+            simulado = FinanciamentoService.simular_quitacao(
+                financiamento.id,
+                data_quitacao=data_referencia,
+            )
+            valor_simulado = FinanciamentoConferenciaService._decimal_banco(
+                simulado.get('valor_quitacao_estimado')
+            )
+        if valor_simulado is None or valor_simulado <= 0:
+            raise ValueError('valor_simulado_app deve ser maior que zero')
+
+        observacao = dados_validados.get('observacao')
+        if data_validade:
+            texto_validade = f'Validade da proposta: {data_validade.strftime("%Y-%m-%d")}.'
+            observacao = f'{observacao}\n{texto_validade}' if observacao else texto_validade
+
+        dados_validados.update({
+            'competencia': dados_validados.get('competencia') or data_referencia.strftime('%Y-%m'),
+            'valor_real_total': valor_oficial,
+            'valor_simulado_total': valor_simulado,
+            'observacao': observacao,
+        })
+        return dados_validados
+
+    @staticmethod
     def _validar_competencia(valor):
         texto = str(valor or '').strip()
         if not texto:
@@ -308,6 +367,17 @@ class FinanciamentoConferenciaService:
             'valor_simulado_taxa_adm': FinanciamentoConferenciaService._decimal_banco(parcela.valor_taxa_adm),
             'valor_simulado_total': FinanciamentoConferenciaService._decimal_banco(parcela.valor_previsto_total),
             'saldo_devedor_simulado': FinanciamentoConferenciaService._decimal_banco(parcela.saldo_devedor_apos_pagamento),
+        }
+
+    @staticmethod
+    def _valores_simulados_quitacao(dados_validados):
+        return {
+            'valor_simulado_amortizacao': None,
+            'valor_simulado_juros': None,
+            'valor_simulado_seguro': None,
+            'valor_simulado_taxa_adm': None,
+            'valor_simulado_total': dados_validados.get('valor_simulado_total'),
+            'saldo_devedor_simulado': None,
         }
 
     @staticmethod

@@ -6,7 +6,8 @@ const estadoFinanciamentos = {
     atual: null,
     abaAtual: 'parcelas',
     documentos: [],
-    conferenciasCaixa: []
+    conferenciasCaixa: [],
+    ultimaSimulacaoQuitacao: null
 };
 
 const FAIXAS_MIP_PADRAO = [
@@ -123,6 +124,11 @@ function configurarEventosDocumentos() {
         if (event.target?.id === 'form-conferencia-caixa') {
             event.preventDefault();
             salvarConferenciaCaixa(event);
+            return;
+        }
+        if (event.target?.id === 'form-conferencia-quitacao') {
+            event.preventDefault();
+            salvarConferenciaQuitacao(event);
         }
     });
 
@@ -134,13 +140,20 @@ function configurarEventosDocumentos() {
         }
         if (['conf-competencia', 'conf-data-referencia', 'conf-tipo'].includes(event.target?.id)) {
             atualizarPreviewConferenciaCaixa();
+            return;
+        }
+        if (event.target?.id === 'quit-conf-documento') {
+            atualizarPreviewConferenciaQuitacao();
         }
     });
 
     document.addEventListener('input', (event) => {
-        if (!String(event.target?.id || '').startsWith('conf-')) return;
-        if (event.target.matches('input, textarea, select')) {
+        const id = String(event.target?.id || '');
+        if (id.startsWith('conf-') && event.target.matches('input, textarea, select')) {
             atualizarPreviewConferenciaCaixa();
+        }
+        if (id.startsWith('quit-conf-') && event.target.matches('input, textarea, select')) {
+            atualizarPreviewConferenciaQuitacao();
         }
     });
 }
@@ -1050,9 +1063,9 @@ function renderizarListaConferenciasCaixa(conferencias) {
                         <th>Tipo</th>
                         <th>Referência</th>
                         <th>Documento</th>
-                        <th>Total real</th>
-                        <th>Total simulado</th>
-                        <th>Diferença total</th>
+                        <th>Valor real/oficial</th>
+                        <th>Valor simulado</th>
+                        <th>Diferença</th>
                         <th>Saldo real</th>
                         <th>Saldo simulado</th>
                         <th>Ações</th>
@@ -1066,7 +1079,10 @@ function renderizarListaConferenciasCaixa(conferencias) {
                             <td>${escapeHtml(conf.documento?.nome_original || '-')}</td>
                             <td>${formatarMoedaOuTraco(conf.valor_real_total)}</td>
                             <td>${formatarMoedaOuTraco(conf.valor_simulado_total)}</td>
-                            <td>${formatarMoedaOuTraco(conf.diferenca_total)}</td>
+                            <td>
+                                ${formatarMoedaOuTraco(conf.diferenca_total)}
+                                ${conf.percentual_diferenca_total !== null && conf.percentual_diferenca_total !== undefined ? `<small>${formatarPercentual(conf.percentual_diferenca_total)}</small>` : ''}
+                            </td>
                             <td>${formatarMoedaOuTraco(conf.saldo_devedor_real)}</td>
                             <td>${formatarMoedaOuTraco(conf.saldo_devedor_simulado)}</td>
                             <td>
@@ -1632,6 +1648,7 @@ async function simularQuitacao() {
         }
 
         const sim = resultado.data;
+        estadoFinanciamentos.ultimaSimulacaoQuitacao = sim;
 
         setText('quit-saldo-base', formatarMoedaDisplay(sim.saldo_devedor_base));
         setText('quit-valor', formatarMoedaDisplay(sim.valor_quitacao_estimado));
@@ -1642,6 +1659,8 @@ async function simularQuitacao() {
 
         const resultadoBox = document.getElementById('quit-resultado');
         if (resultadoBox) resultadoBox.hidden = false;
+        const btnRegistrarOficial = document.getElementById('btn-registrar-quitacao-oficial');
+        if (btnRegistrarOficial) btnRegistrarOficial.hidden = false;
 
         const avisosBox = document.getElementById('quit-avisos');
         if (avisosBox && sim.observacoes?.length) {
@@ -1656,6 +1675,123 @@ async function simularQuitacao() {
     } finally {
         if (btn) { btn.disabled = false; btn.textContent = 'Simular quitação'; }
     }
+}
+
+async function abrirModalConferenciaQuitacao() {
+    const financiamento = estadoFinanciamentos.atual;
+    if (!financiamento?.id) {
+        mostrarToast('Selecione um financiamento para registrar a conferência de quitação.', 'erro');
+        return;
+    }
+
+    const simulacao = estadoFinanciamentos.ultimaSimulacaoQuitacao;
+    setValue('quit-conf-data-referencia', simulacao?.data_quitacao || document.getElementById('quit-data')?.value || toISODate(new Date()));
+    setValue('quit-conf-data-validade', '');
+    setValue('quit-conf-valor-oficial', '');
+    setValue('quit-conf-valor-simulado', simulacao ? formatarMoedaSemSimbolo(simulacao.valor_quitacao_estimado) : '');
+    setValue('quit-conf-observacao', '');
+    await carregarDocumentosParaConferenciaQuitacao();
+    atualizarPreviewConferenciaQuitacao();
+    abrirModal('modal-conferencia-quitacao');
+}
+
+async function carregarDocumentosParaConferenciaQuitacao() {
+    const financiamento = estadoFinanciamentos.atual;
+    const select = document.getElementById('quit-conf-documento');
+    if (!financiamento || !select) return;
+
+    if (!estadoFinanciamentos.documentos.length) {
+        try {
+            const response = await fetch(`${API_BASE}/${financiamento.id}/documentos`);
+            const resultado = await response.json();
+            if (resultado.success) {
+                estadoFinanciamentos.documentos = Array.isArray(resultado.documentos) ? resultado.documentos : [];
+            }
+        } catch (_) {
+            // Documento é opcional nesta conferência.
+        }
+    }
+
+    const documentos = estadoFinanciamentos.documentos || [];
+    const opcoes = documentos
+        .filter((doc) => ['quitacao', 'boleto', 'demonstrativo_evolucao', 'outros'].includes(doc.tipo_documento))
+        .map((doc) => `<option value="${Number(doc.id)}">${escapeHtml(doc.nome_original || doc.rotulo_tipo || 'Documento')}</option>`)
+        .join('');
+    select.innerHTML = `<option value="">Sem documento</option>${opcoes}`;
+}
+
+async function salvarConferenciaQuitacao(event) {
+    event?.preventDefault?.();
+    const financiamento = estadoFinanciamentos.atual;
+    if (!financiamento?.id) return;
+
+    const valorOficial = valorMoedaPayload('quit-conf-valor-oficial');
+    const valorSimulado = valorMoedaPayload('quit-conf-valor-simulado');
+    if (!valorOficial || valorOficial <= 0) {
+        mostrarToast('Informe o valor oficial do banco.', 'erro');
+        return;
+    }
+    if (!valorSimulado || valorSimulado <= 0) {
+        mostrarToast('Informe o valor simulado pelo app.', 'erro');
+        return;
+    }
+
+    const documentoId = document.getElementById('quit-conf-documento')?.value || null;
+    const payload = removerCamposVazios({
+        tipo_conferencia: 'quitacao',
+        documento_id: documentoId ? Number(documentoId) : null,
+        data_referencia: document.getElementById('quit-conf-data-referencia')?.value || null,
+        data_validade: document.getElementById('quit-conf-data-validade')?.value || null,
+        valor_oficial_banco: valorOficial,
+        valor_simulado_app: valorSimulado,
+        observacao: document.getElementById('quit-conf-observacao')?.value || null
+    });
+
+    try {
+        const response = await fetch(`${API_BASE}/${financiamento.id}/conferencias-caixa`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const resultado = await response.json();
+        if (!resultado.success) {
+            throw new Error(resultado.error || 'Erro ao registrar conferência de quitação');
+        }
+        fecharModal('modal-conferencia-quitacao');
+        mostrarToast('Conferência de quitação registrada com sucesso.');
+        await carregarDocumentosFinanciamento();
+    } catch (error) {
+        mostrarToast(error.message, 'erro');
+    }
+}
+
+function atualizarPreviewConferenciaQuitacao() {
+    const resultado = document.getElementById('quit-conf-resultado');
+    if (!resultado) return;
+
+    const valorOficial = valorMoedaPayload('quit-conf-valor-oficial');
+    const valorSimulado = valorMoedaPayload('quit-conf-valor-simulado');
+    if (!valorOficial || !valorSimulado) {
+        resultado.innerHTML = '<div class="fin-modal-info">Informe valor oficial e valor simulado para calcular a diferença.</div>';
+        return;
+    }
+
+    const diferenca = valorOficial - valorSimulado;
+    const percentual = valorSimulado > 0 ? (diferenca / valorSimulado) * 100 : null;
+    resultado.innerHTML = `
+        <h3>Resultado da conferência</h3>
+        <div class="fin-table-wrap">
+            <table class="fin-schedule-table fin-conf-preview-table">
+                <thead><tr><th>Campo</th><th>Valor</th></tr></thead>
+                <tbody>
+                    <tr><td>Valor simulado</td><td>${formatarMoedaDisplay(valorSimulado)}</td></tr>
+                    <tr><td>Valor oficial</td><td>${formatarMoedaDisplay(valorOficial)}</td></tr>
+                    <tr><td>Diferença em R$</td><td>${formatarMoedaDisplay(diferenca)}</td></tr>
+                    <tr><td>Diferença em %</td><td>${percentual === null ? '-' : formatarPercentual(percentual)}</td></tr>
+                </tbody>
+            </table>
+        </div>
+    `;
 }
 
 async function abrirDemonstrativo() {
@@ -1805,6 +1941,11 @@ function formatarMoedaDisplay(valor) {
 function formatarMoedaOuTraco(valor) {
     if (valor === null || valor === undefined || valor === '') return '-';
     return formatarMoedaDisplay(valor);
+}
+
+function formatarPercentual(valor) {
+    const numero = Number(valor || 0);
+    return `${numero.toFixed(2).replace('.', ',')}%`;
 }
 
 function formatarMoedaSemSimbolo(valor) {

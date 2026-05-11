@@ -18,6 +18,7 @@
         </div>
     </div>
 </div>
+
 {% endblock %}
 
 {% block content %}
@@ -527,6 +528,7 @@
                     </div>
                     <div id="quit-avisos" class="fin-result-warnings" hidden></div>
                     <button type="button" class="fin-primary-btn fin-full-btn" id="btn-simular-quitacao" onclick="simularQuitacao()">Simular quitação</button>
+                    <button type="button" class="fin-secondary-btn fin-full-btn" id="btn-registrar-quitacao-oficial" onclick="abrirModalConferenciaQuitacao()" hidden>Registrar valor oficial do banco</button>
                     <p class="fin-result-disclaimer">Simulação estimada. Não gera boleto. Não altera o financiamento.</p>
                 </section>
             </aside>
@@ -750,6 +752,53 @@
             <div id="conf-preview" class="fin-conf-preview"></div>
             <div class="fin-modal-actions">
                 <button type="button" class="fin-secondary-btn" onclick="fecharModal('modal-conferencia-caixa')">Cancelar</button>
+                <button type="submit" class="fin-primary-btn">Salvar conferência</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="modal-conferencia-quitacao" class="fin-modal" aria-hidden="true">
+    <div class="fin-modal-box fin-modal-wide" role="dialog" aria-modal="true" aria-labelledby="modal-conferencia-quitacao-title">
+        <div class="fin-modal-header">
+            <h2 id="modal-conferencia-quitacao-title">Registrar valor oficial do banco</h2>
+            <button type="button" onclick="fecharModal('modal-conferencia-quitacao')" aria-label="Fechar">×</button>
+        </div>
+        <form id="form-conferencia-quitacao">
+            <div class="fin-modal-info">
+                Esta conferência não quita o financiamento. Ela apenas registra e compara o valor oficial informado pelo banco com a simulação do sistema.
+            </div>
+            <div class="fin-form-grid fin-form-grid-three">
+                <label class="fin-field">
+                    <span>Data da proposta</span>
+                    <input id="quit-conf-data-referencia" type="date" required>
+                </label>
+                <label class="fin-field">
+                    <span>Validade da proposta</span>
+                    <input id="quit-conf-data-validade" type="date">
+                </label>
+                <label class="fin-field">
+                    <span>Documento vinculado</span>
+                    <select id="quit-conf-documento">
+                        <option value="">Sem documento</option>
+                    </select>
+                </label>
+                <label class="fin-field fin-money-field">
+                    <span>Valor oficial informado pelo banco</span>
+                    <div><span>R$</span><input id="quit-conf-valor-oficial" type="text" required inputmode="decimal"></div>
+                </label>
+                <label class="fin-field fin-money-field">
+                    <span>Valor simulado pelo app</span>
+                    <div><span>R$</span><input id="quit-conf-valor-simulado" type="text" required inputmode="decimal"></div>
+                </label>
+                <label class="fin-field fin-field-full">
+                    <span>Observação</span>
+                    <textarea id="quit-conf-observacao" rows="3" placeholder="Ex: proposta de quitação emitida pelo banco."></textarea>
+                </label>
+            </div>
+            <div id="quit-conf-resultado" class="fin-conf-preview"></div>
+            <div class="fin-modal-actions">
+                <button type="button" class="fin-secondary-btn" onclick="fecharModal('modal-conferencia-quitacao')">Cancelar</button>
                 <button type="submit" class="fin-primary-btn">Salvar conferência</button>
             </div>
         </form>
