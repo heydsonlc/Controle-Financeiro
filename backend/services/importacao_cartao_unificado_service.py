@@ -68,7 +68,11 @@ class ImportacaoCartaoUnificadoService:
         # Fase 1: triagem — sugestão de categoria_id sem resolver categoria_cartao
         linhas = ImportacaoCartaoUnificadoService.aplicar_sugestoes_categoria(linhas, cartao)
         linhas = ImportacaoCartaoUnificadoService.validar_linhas(linhas, cartao, competencia_base)
-        # Fase 2: resolução de categoria_cartao — separada da triagem
+        # Fase 2: confronto/reconhecimento — integrado como etapa padrão
+        linhas = ImportacaoCartaoUnificadoService.executar_confronto_linhas(
+            linhas, cartao.id, competencia_base
+        )
+        # Fase 3: resolução de categoria_cartao — separada da triagem
         linhas = ImportacaoCartaoUnificadoService.resolver_categoria_cartao_linhas(linhas, cartao)
         linhas = ImportacaoCartaoUnificadoService.enriquecer_classificacao(linhas, cartao, competencia_base)
         validacoes = ImportacaoCartaoUnificadoService.calcular_validacoes(
@@ -86,6 +90,7 @@ class ImportacaoCartaoUnificadoService:
             'validacoes': validacoes,
             'requer_mapeamento': False,
             'perfil_detectado': resultado_parser.get('perfil_detectado'),
+            'confronto_executado': True,
         }
 
     @staticmethod
@@ -376,6 +381,62 @@ class ImportacaoCartaoUnificadoService:
                 linha.setdefault('mensagens', []).append(MSG_CATEGORIA_DESPESA_SEM_CATEGORIA_CARTAO)
                 linha['categoria_cartao_origem'] = 'nao_configurada'
                 linha['categoria_cartao_vinculada_ao_cartao'] = False
+        return linhas
+
+    @staticmethod
+    def executar_confronto_linhas(linhas, cartao_id, competencia_base):
+        """
+        Fase 2 do pipeline: executa reconhecimento flexível em lote e enriquece
+        cada linha com campos reconhecimento_*.  Linhas ignoradas/duplicadas são
+        puladas.  Linhas sem match recebem reconhecimento_status='sem_match'.
+        """
+        linhas_ativas = []
+        indices_originais = []
+        for i, linha in enumerate(linhas):
+            if linha.get('ignorar') or linha.get('status') in ('ignorado', 'duplicado'):
+                continue
+            linha['indice'] = i
+            linhas_ativas.append(linha)
+            indices_originais.append(i)
+
+        if not linhas_ativas:
+            return linhas
+
+        try:
+            reconhecimentos = ImportacaoCartaoService.reconhecer_linhas_flexivel(
+                linhas_ativas, cartao_id, competencia_base
+            )
+        except Exception:
+            reconhecimentos = []
+
+        por_indice = {r['indice']: r for r in reconhecimentos if r.get('indice') is not None}
+
+        for i in indices_originais:
+            linha = linhas[i]
+            match = por_indice.get(i)
+            if match:
+                linha['reconhecimento_status'] = match.get('confianca') or 'media'
+                linha['reconhecimento_score'] = match.get('score')
+                linha['reconhecimento_tipo'] = match.get('tipo')
+                linha['reconhecimento_motivo'] = ', '.join(match.get('motivos') or [])
+                linha['reconhecimento_candidato_id'] = match.get('referencia_id')
+                linha['reconhecimento_candidato_descricao'] = match.get('descricao_sugerida')
+                linha['reconhecimento_candidato_categoria_id'] = match.get('categoria_id')
+                linha['reconhecimento_candidato_valor'] = match.get('valor_referencia')
+                linha['reconhecimento_acao_recomendada'] = match.get('tipo_sugerido') or 'despesa_avulsa'
+                linha['reconhecimento_match'] = match
+            else:
+                linha['reconhecimento_status'] = 'sem_match'
+                linha['reconhecimento_score'] = None
+                linha['reconhecimento_tipo'] = None
+                linha['reconhecimento_motivo'] = None
+                linha['reconhecimento_candidato_id'] = None
+                linha['reconhecimento_candidato_descricao'] = None
+                linha['reconhecimento_candidato_categoria_id'] = None
+                linha['reconhecimento_candidato_valor'] = None
+                linha['reconhecimento_acao_recomendada'] = 'despesa_avulsa'
+                linha['reconhecimento_match'] = None
+
         return linhas
 
     @staticmethod

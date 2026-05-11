@@ -568,7 +568,14 @@ function converterLinhaIntermediaria(linha) {
         total_parcelas: totalParcelas,
         parcelado: Number(totalParcelas) > 1,
         gerar_parcelas_futuras: !!linha.gerar_parcelas_futuras,
-        ignorar: !!linha.ignorar || ['ignorado', 'duplicado'].includes(linha.status)
+        ignorar: !!linha.ignorar || ['ignorado', 'duplicado'].includes(linha.status),
+        reconhecimento_match: linha.reconhecimento_match || null,
+        reconhecimento_status: linha.reconhecimento_status || null,
+        reconhecimento_score: linha.reconhecimento_score ?? null,
+        reconhecimento_tipo: linha.reconhecimento_tipo || null,
+        reconhecimento_acao_recomendada: linha.reconhecimento_acao_recomendada || null,
+        tratar_como_novo: !!linha.tratar_como_novo,
+        sugestao_reconhecimento_aplicada: !!linha.sugestao_reconhecimento_aplicada
     };
 }
 
@@ -598,6 +605,11 @@ function aplicarPayloadUnificado(data) {
     document.getElementById('btnStep3').disabled = true;
     document.getElementById('btnStep4').disabled = false;
     document.getElementById('btnImportar').disabled = true;
+
+    if (data?.confronto_executado) {
+        estado.analiseConfronto = montarAnaliseConfronto();
+    }
+
     renderizarResumoAnalise(data, estado.linhasMapeadas.length);
     renderizarMapeamento();
     renderizarEditorPrePersistencia();
@@ -3617,6 +3629,15 @@ async function finalizarImportacao() {
     if (!validarNovosClassificados()) {
         atualizarResumoPainel();
         return;
+    }
+
+    if (!estado.analiseConfronto) {
+        if (estado.payloadUnificado?.confronto_executado) {
+            estado.analiseConfronto = montarAnaliseConfronto();
+        } else {
+            await aplicarReconhecimentoFlexivel();
+            estado.analiseConfronto = montarAnaliseConfronto();
+        }
     }
 
     try {

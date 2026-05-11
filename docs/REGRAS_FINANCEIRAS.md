@@ -109,9 +109,9 @@ Esta regra não tem exceções.
 - Garantida por `compra_id` (UUID v4) + `numero_parcela`
 - Reimportação do mesmo arquivo não duplica lançamentos
 
-**Fluxo** (IMPORT-TRIAGEM-1):
+**Fluxo** (IMPORT-TRIAGEM-1 + IMPORT-TRIAGEM-2):
 1. **Triagem** — decidir se cada lançamento vira despesa, ignorar ou revisar. Categoria do Cartão NÃO é resolvida nesta fase.
-2. **Confronto** — reconhecimento fuzzy com recorrências, histórico e parcelamentos existentes. Mesmo cartão obrigatório para sugestão operacional.
+2. **Confronto** — reconhecimento fuzzy executado automaticamente pelo backend no `/analisar`. Resultado entregue inline em cada linha (`reconhecimento_status`, `reconhecimento_score`, `reconhecimento_tipo`, `reconhecimento_match`). Chamada separada ao `/reconhecer` não é mais necessária no fluxo unificado.
 3. **Classificação** — confirmar Categoria da Despesa. Somente após isso a Categoria do Cartão é resolvida pelo mapeamento existente.
 4. **Persistência** — criação do lançamento. Ausência de Categoria do Cartão gera aviso, não bloqueia.
 
