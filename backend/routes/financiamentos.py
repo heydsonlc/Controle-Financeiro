@@ -8,16 +8,18 @@ Endpoints organizados em 4 grupos:
 4. Relatórios e Demonstrativos
 5. Indexadores (TR, IPCA)
 """
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, send_file
 from datetime import datetime
 import logging
 
 try:
     from backend.models import db, Financiamento, FinanciamentoParcela, IndexadorMensal, FinanciamentoSeguroVigencia, FinanciamentoAmortizacaoExtra
     from backend.services.financiamento_service import FinanciamentoService
+    from backend.services.financiamento_documento_service import FinanciamentoDocumentoService
 except ImportError:
     from models import db, Financiamento, FinanciamentoParcela, IndexadorMensal, FinanciamentoSeguroVigencia, FinanciamentoAmortizacaoExtra
     from services.financiamento_service import FinanciamentoService
+    from services.financiamento_documento_service import FinanciamentoDocumentoService
 
 # Criar blueprint
 financiamentos_bp = Blueprint('financiamentos', __name__)
@@ -440,6 +442,110 @@ def deletar_financiamento(id):
         }), 500
 
 
+def _status_erro_documento(erro):
+    texto = str(erro).lower()
+    if 'nao encontrado' in texto or 'não encontrado' in texto:
+        return 404
+    return 400
+
+
+@financiamentos_bp.route('/<int:id>/documentos', methods=['GET'])
+def listar_documentos_financiamento(id):
+    try:
+        documentos = FinanciamentoDocumentoService.listar_documentos(id)
+        return jsonify({
+            'success': True,
+            'documentos': [documento.to_dict() for documento in documentos],
+            'total': len(documentos),
+        }), 200
+    except ValueError as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+        }), _status_erro_documento(e)
+    except Exception as e:
+        logger.exception('Erro ao listar documentos do financiamento %s', id)
+        return jsonify({
+            'success': False,
+            'error': str(e),
+        }), 500
+
+
+@financiamentos_bp.route('/<int:id>/documentos', methods=['POST'])
+def enviar_documento_financiamento(id):
+    try:
+        documento = FinanciamentoDocumentoService.salvar_documento(
+            id,
+            request.files.get('arquivo'),
+            request.form,
+        )
+        return jsonify({
+            'success': True,
+            'message': 'Documento enviado com sucesso.',
+            'documento': documento.to_dict(),
+        }), 201
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e),
+        }), _status_erro_documento(e)
+    except Exception as e:
+        db.session.rollback()
+        logger.exception('Erro ao salvar documento do financiamento %s', id)
+        return jsonify({
+            'success': False,
+            'error': str(e),
+        }), 500
+
+
+@financiamentos_bp.route('/<int:id>/documentos/<int:doc_id>/download', methods=['GET'])
+def baixar_documento_financiamento(id, doc_id):
+    try:
+        documento, caminho = FinanciamentoDocumentoService.obter_documento_para_download(id, doc_id)
+        return send_file(
+            caminho,
+            mimetype=documento.mime_type,
+            as_attachment=True,
+            download_name=documento.nome_original,
+        )
+    except ValueError as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+        }), _status_erro_documento(e)
+    except Exception as e:
+        logger.exception('Erro ao baixar documento %s do financiamento %s', doc_id, id)
+        return jsonify({
+            'success': False,
+            'error': str(e),
+        }), 500
+
+
+@financiamentos_bp.route('/<int:id>/documentos/<int:doc_id>', methods=['DELETE'])
+def excluir_documento_financiamento(id, doc_id):
+    try:
+        resultado = FinanciamentoDocumentoService.excluir_documento(id, doc_id)
+        return jsonify({
+            'success': True,
+            'message': 'Documento excluido com sucesso.',
+            **resultado,
+        }), 200
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e),
+        }), _status_erro_documento(e)
+    except Exception as e:
+        db.session.rollback()
+        logger.exception('Erro ao excluir documento %s do financiamento %s', doc_id, id)
+        return jsonify({
+            'success': False,
+            'error': str(e),
+        }), 500
+
+
 @financiamentos_bp.route('/<int:id>/regenerar-parcelas', methods=['POST'])
 def regenerar_parcelas(id):
     """
@@ -637,7 +743,7 @@ def ajustar_saldo_devedor(id):
         if not data:
             return jsonify({
                 'success': False,
-                'error': 'Dados nÃ£o fornecidos'
+                'error': 'Dados não fornecidos'
             }), 400
 
         if not data.get('parcela_referencia_id') and not data.get('numero_parcela'):
@@ -649,7 +755,7 @@ def ajustar_saldo_devedor(id):
         if data.get('saldo_devedor_real') is None:
             return jsonify({
                 'success': False,
-                'error': 'saldo_devedor_real Ã© obrigatÃ³rio'
+                'error': 'saldo_devedor_real é obrigatório'
             }), 400
 
         ajuste, parcelas_recalculadas = FinanciamentoService.ajustar_saldo_devedor_real(id, data)

@@ -1682,6 +1682,10 @@ class Financiamento(db.Model):
                                         back_populates='financiamento',
                                         lazy='dynamic', cascade='all, delete-orphan',
                                         order_by='FinanciamentoSeguroFaixaMip.idade_inicio')
+    documentos = db.relationship('FinanciamentoDocumento',
+                                 back_populates='financiamento',
+                                 lazy='dynamic', cascade='all, delete-orphan',
+                                 order_by='FinanciamentoDocumento.criado_em.desc()')
 
     def __repr__(self):
         return f'<Financiamento {self.nome} - {self.sistema_amortizacao}>'
@@ -1775,6 +1779,80 @@ class Financiamento(db.Model):
             'taxa_administracao_fixa': float(self.taxa_administracao_fixa) if self.taxa_administracao_fixa else 0,
             'ultimo_ajuste_saldo': ultimo_ajuste_saldo.to_dict() if ultimo_ajuste_saldo else None,
             'ativo': self.ativo
+        }
+
+
+class FinanciamentoDocumento(db.Model):
+    """
+    Metadados de documentos vinculados a um contrato de financiamento.
+
+    O arquivo fisico fica no filesystem local; o banco guarda somente
+    metadados, caminho relativo e hash.
+    """
+    __tablename__ = 'financiamento_documento'
+
+    ROTULOS_TIPO = {
+        'contrato': 'Contrato',
+        'demonstrativo_valores_cobrados': 'Demonstrativo de valores cobrados',
+        'demonstrativo_evolucao': 'Demonstrativo de evolução do contrato',
+        'boleto': 'Boleto',
+        'comprovante_pagamento': 'Comprovante de pagamento',
+        'comprovante_amortizacao': 'Comprovante de amortização',
+        'seguro_habitacional': 'Seguro habitacional',
+        'extrato_anual': 'Extrato anual',
+        'quitacao': 'Quitação',
+        'outros': 'Outros',
+    }
+
+    id = db.Column(db.Integer, primary_key=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
+    financiamento_id = db.Column(db.Integer, db.ForeignKey('financiamento.id'), nullable=False)
+    tipo_documento = db.Column(db.String(80), nullable=False)
+    competencia = db.Column(db.String(7), nullable=True)
+    ano_base = db.Column(db.Integer, nullable=True)
+    data_documento = db.Column(db.Date, nullable=True)
+    nome_original = db.Column(db.String(255), nullable=False)
+    nome_armazenado = db.Column(db.String(120), nullable=False)
+    mime_type = db.Column(db.String(120), nullable=True)
+    tamanho_bytes = db.Column(db.Integer, nullable=False)
+    hash_arquivo = db.Column(db.String(64), nullable=False)
+    caminho_relativo = db.Column(db.String(500), nullable=False)
+    observacao = db.Column(db.Text, nullable=True)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    financiamento = db.relationship('Financiamento', back_populates='documentos')
+
+    __table_args__ = (
+        db.Index('idx_fin_doc_financiamento', 'financiamento_id'),
+        db.Index('idx_fin_doc_perfil_financiamento', 'perfil_financeiro_id', 'financiamento_id'),
+        db.Index('idx_fin_doc_tipo', 'tipo_documento'),
+        db.Index('idx_fin_doc_competencia', 'competencia'),
+        db.Index('idx_fin_doc_hash', 'hash_arquivo'),
+    )
+
+    def __repr__(self):
+        return f'<FinanciamentoDocumento {self.financiamento_id} {self.tipo_documento} {self.nome_original}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
+            'financiamento_id': self.financiamento_id,
+            'tipo_documento': self.tipo_documento,
+            'rotulo_tipo': self.ROTULOS_TIPO.get(self.tipo_documento, self.tipo_documento),
+            'competencia': self.competencia,
+            'ano_base': self.ano_base,
+            'data_documento': self.data_documento.strftime('%Y-%m-%d') if self.data_documento else None,
+            'nome_original': self.nome_original,
+            'nome_armazenado': self.nome_armazenado,
+            'mime_type': self.mime_type,
+            'tamanho_bytes': self.tamanho_bytes,
+            'hash_arquivo': self.hash_arquivo,
+            'caminho_relativo': self.caminho_relativo,
+            'observacao': self.observacao,
+            'criado_em': self.criado_em.strftime('%Y-%m-%d %H:%M:%S') if self.criado_em else None,
+            'atualizado_em': self.atualizado_em.strftime('%Y-%m-%d %H:%M:%S') if self.atualizado_em else None,
         }
 
 

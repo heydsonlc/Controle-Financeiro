@@ -1334,6 +1334,109 @@ body.app-shell-body .app-content {
     color: var(--fin-text);
 }
 
+.fin-doc-layout {
+    display: grid;
+    gap: 18px;
+    padding: 20px;
+}
+
+.fin-doc-form,
+.fin-doc-list-card {
+    border: 1px solid var(--fin-border-soft);
+    border-radius: 6px;
+    background: var(--fin-surface);
+}
+
+.fin-doc-form {
+    padding: 18px;
+}
+
+.fin-doc-form-header,
+.fin-doc-list-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.fin-doc-form-header h3,
+.fin-doc-list-header h3 {
+    margin: 0;
+    color: var(--fin-text);
+    font-size: 1rem;
+}
+
+.fin-doc-form-header p {
+    margin: 6px 0 0;
+    max-width: 680px;
+    color: var(--fin-muted);
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+
+.fin-doc-list-header {
+    padding: 18px 18px 0;
+}
+
+.fin-doc-list-header span {
+    color: var(--fin-muted);
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.fin-doc-form-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin-top: 16px;
+}
+
+.fin-doc-form-actions span {
+    color: var(--fin-muted);
+    font-size: 0.8rem;
+}
+
+.fin-doc-list {
+    min-height: 140px;
+}
+
+.fin-doc-table {
+    min-width: 860px;
+}
+
+.fin-doc-table td strong,
+.fin-doc-table td small {
+    display: block;
+}
+
+.fin-doc-table td small {
+    margin-top: 4px;
+    color: var(--fin-muted);
+    font-size: 0.76rem;
+}
+
+.fin-table-action-btn {
+    min-height: 30px;
+    border: 1px solid var(--fin-border);
+    border-radius: 6px;
+    background: var(--fin-surface);
+    color: var(--fin-blue);
+    font-weight: 750;
+    cursor: pointer;
+}
+
+.fin-table-action-btn + .fin-table-action-btn {
+    margin-left: 6px;
+}
+
+.fin-table-action-btn.danger {
+    color: var(--fin-red);
+    border-color: #fecaca;
+    background: #fff7f7;
+}
+
 .fin-modal {
     position: fixed;
     inset: 0;

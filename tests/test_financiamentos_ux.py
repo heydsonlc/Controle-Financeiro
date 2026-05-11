@@ -1238,7 +1238,6 @@ def test_frontend_oculta_acoes_incompletas_de_financiamento(client):
 
     for texto in [
         'Quitação',
-        'Documentos',
         'Gerar boleto de quitação',
         'Ver em tabela',
         'Filtros',
@@ -1253,9 +1252,27 @@ def test_frontend_oculta_acoes_incompletas_de_financiamento(client):
         'focarFiltroParcelas',
         'abrirQuitacao',
         'renderizarAbaQuitacao',
-        'renderizarAbaDocumentos',
     ]:
         assert residuo not in js
+
+
+def test_frontend_documentos_financiamento_tem_fluxo_real(client):
+    response = client.get('/financiamentos')
+    html = response.get_data(as_text=True)
+    base_dir = Path(__file__).resolve().parents[1]
+    js = (base_dir / 'frontend' / 'static' / 'js' / 'financiamentos.js').read_text(encoding='utf-8')
+
+    assert 'data-tab="documentos"' in html
+    assert 'Documentos' in html
+    assert 'function renderizarAbaDocumentos' in js
+    assert 'id="form-fin-doc"' in js
+    assert 'name="arquivo"' in js
+    assert 'Enviar documento' in js
+    assert 'function carregarDocumentosFinanciamento' in js
+    assert 'function baixarDocumentoFinanciamento' in js
+    assert 'function excluirDocumentoFinanciamento' in js
+    assert '${API_BASE}/${financiamento.id}/documentos' in js
+    assert 'FormData(form)' in js
 
 
 def test_frontend_exclusao_financiamento_tem_botao_e_delete(client):

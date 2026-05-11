@@ -1408,12 +1408,19 @@ class FinanciamentoService:
             )
 
         try:
+            try:
+                from backend.services.financiamento_documento_service import FinanciamentoDocumentoService
+            except ImportError:
+                from services.financiamento_documento_service import FinanciamentoDocumentoService
+
+            caminhos_documentos = FinanciamentoDocumentoService.caminhos_documentos_financiamento(financiamento)
             FinanciamentoService._remover_cronograma_sem_execucao(financiamento_id)
 
             # Excluir financiamento
             db.session.delete(financiamento)
 
             db.session.commit()
+            FinanciamentoDocumentoService.remover_arquivos_por_caminhos(caminhos_documentos)
 
         except Exception:
             db.session.rollback()
@@ -1448,7 +1455,7 @@ class FinanciamentoService:
             return 0  # Nenhuma parcela para recalcular
 
         # ========================================================================
-        # 🔥 CORREÇÃO CRÍTICA: Determinar saldo devedor inicial correto
+        # CORREÇÃO CRÍTICA: Determinar saldo devedor inicial correto
         #
         # PROBLEMA: Se houver amortização extraordinária APÓS última parcela paga,
         # o saldo da última paga NÃO reflete essa amortização.
@@ -1619,7 +1626,7 @@ class FinanciamentoService:
 
         # Atualizar SOMENTE o componente seguro
         for parcela in parcelas_pendentes:
-            # ❗ CRÍTICO: NÃO mexe em amortização, juros ou saldo
+            # CRÍTICO: NÃO mexe em amortização, juros ou saldo
             # Apenas atualiza seguro e total
             parcela.valor_seguro = FinanciamentoService.calcular_seguro_habitacional(
                 financiamento,

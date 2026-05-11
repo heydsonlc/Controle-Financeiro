@@ -4,7 +4,8 @@ const estadoFinanciamentos = {
     lista: [],
     filtrados: [],
     atual: null,
-    abaAtual: 'parcelas'
+    abaAtual: 'parcelas',
+    documentos: []
 };
 
 const FAIXAS_MIP_PADRAO = [
@@ -23,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderizarFaixasMip();
     configurarEventosFormulario();
     configurarEventosSimulacao();
+    configurarEventosDocumentos();
     preencherDatasPadrao();
     atualizarCamposSeguro();
     carregarFinanciamentos();
@@ -107,6 +109,20 @@ function configurarEventosSimulacao() {
             radio.closest('.fin-strategy')?.classList.add('active');
             simularAmortizacaoDetalhe();
         });
+    });
+}
+
+function configurarEventosDocumentos() {
+    document.addEventListener('submit', (event) => {
+        if (event.target?.id !== 'form-fin-doc') return;
+        event.preventDefault();
+        enviarDocumentoFinanciamento();
+    });
+
+    document.addEventListener('change', (event) => {
+        if (event.target?.id !== 'fin-doc-file') return;
+        const nome = event.target.files?.[0]?.name || 'Nenhum arquivo selecionado';
+        setText('fin-doc-file-name', nome);
     });
 }
 
@@ -674,6 +690,7 @@ function selecionarAba(aba) {
         resumo: renderizarAbaResumo(financiamento),
         extrato: renderizarAbaExtrato(financiamento),
         amortizacao: renderizarAbaAmortizacao(financiamento),
+        documentos: renderizarAbaDocumentos(financiamento),
         dados: renderizarAbaDados(financiamento)
     };
 
@@ -681,12 +698,16 @@ function selecionarAba(aba) {
         resumo: 'Resumo operacional',
         extrato: 'Extrato e histórico',
         amortizacao: 'Amortização',
+        documentos: 'Documentos',
         dados: 'Dados do contrato'
     };
 
     title.textContent = titulos[aba] || 'Detalhe';
     content.innerHTML = htmlPorAba[aba] || renderizarAbaResumo(financiamento);
     if (footer) footer.textContent = `${titulos[aba] || 'Detalhe'} do financiamento`;
+    if (aba === 'documentos') {
+        carregarDocumentosFinanciamento();
+    }
 }
 
 function selecionarAbaDetalheOuAvisar(aba) {
@@ -754,6 +775,208 @@ function renderizarAbaAmortizacao(financiamento) {
             <button type="button" class="fin-primary-btn" onclick="abrirModalAmortizacao()">Registrar amortização</button>
         </div>
     `;
+}
+
+function renderizarAbaDocumentos(financiamento) {
+    return `
+        <div class="fin-doc-layout">
+            <form id="form-fin-doc" class="fin-doc-form" enctype="multipart/form-data">
+                <div class="fin-doc-form-header">
+                    <h3>Enviar documento</h3>
+                    <p>Guarde contratos, demonstrativos, boletos, comprovantes e documentos de amortização do financiamento.</p>
+                </div>
+                <div class="fin-form-grid fin-form-grid-three">
+                    <label class="fin-field">
+                        <span>Tipo do documento</span>
+                        <select name="tipo_documento" id="fin-doc-tipo" required>
+                            <option value="contrato">Contrato</option>
+                            <option value="demonstrativo_valores_cobrados">Demonstrativo de valores cobrados</option>
+                            <option value="demonstrativo_evolucao">Demonstrativo de evolução do contrato</option>
+                            <option value="boleto">Boleto</option>
+                            <option value="comprovante_pagamento">Comprovante de pagamento</option>
+                            <option value="comprovante_amortizacao">Comprovante de amortização</option>
+                            <option value="seguro_habitacional">Seguro habitacional</option>
+                            <option value="extrato_anual">Extrato anual</option>
+                            <option value="quitacao">Quitação</option>
+                            <option value="outros">Outros</option>
+                        </select>
+                    </label>
+                    <label class="fin-field">
+                        <span>Competência</span>
+                        <input name="competencia" id="fin-doc-competencia" type="month">
+                    </label>
+                    <label class="fin-field">
+                        <span>Ano-base</span>
+                        <input name="ano_base" id="fin-doc-ano-base" type="number" min="1900" max="2200" placeholder="2026">
+                    </label>
+                    <label class="fin-field">
+                        <span>Data do documento</span>
+                        <input name="data_documento" id="fin-doc-data" type="date">
+                    </label>
+                    <label class="fin-field fin-field-wide">
+                        <span>Arquivo</span>
+                        <input name="arquivo" id="fin-doc-file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.csv,.xlsx,.docx" required>
+                        <small id="fin-doc-file-name">Nenhum arquivo selecionado</small>
+                    </label>
+                    <label class="fin-field fin-field-full">
+                        <span>Observação</span>
+                        <textarea name="observacao" id="fin-doc-observacao" rows="2" placeholder="Ex: demonstrativo emitido em maio/2026"></textarea>
+                    </label>
+                </div>
+                <div class="fin-doc-form-actions">
+                    <span>PDF, imagens, CSV, XLSX e DOCX até 10 MB.</span>
+                    <button type="submit" class="fin-primary-btn">Enviar documento</button>
+                </div>
+            </form>
+            <div class="fin-doc-list-card">
+                <div class="fin-doc-list-header">
+                    <h3>Documentos do contrato</h3>
+                    <span id="fin-doc-count">Carregando...</span>
+                </div>
+                <div id="fin-doc-list" class="fin-doc-list" data-financiamento-id="${Number(financiamento.id)}">
+                    <div class="fin-loading-state">Carregando documentos...</div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+async function carregarDocumentosFinanciamento() {
+    const financiamento = estadoFinanciamentos.atual;
+    const lista = document.getElementById('fin-doc-list');
+    if (!financiamento || !lista) return;
+
+    lista.innerHTML = '<div class="fin-loading-state">Carregando documentos...</div>';
+    try {
+        const response = await fetch(`${API_BASE}/${financiamento.id}/documentos`);
+        const resultado = await response.json();
+        if (!resultado.success) {
+            throw new Error(resultado.error || 'Erro ao carregar documentos');
+        }
+        estadoFinanciamentos.documentos = Array.isArray(resultado.documentos) ? resultado.documentos : [];
+        renderizarListaDocumentos(estadoFinanciamentos.documentos);
+    } catch (error) {
+        lista.innerHTML = `<div class="fin-tab-empty"><h3>Não foi possível carregar os documentos.</h3><p>${escapeHtml(error.message)}</p></div>`;
+    }
+}
+
+function renderizarListaDocumentos(documentos) {
+    const lista = document.getElementById('fin-doc-list');
+    const contador = document.getElementById('fin-doc-count');
+    const footer = document.getElementById('detalhe-parcelas-footer');
+    if (!lista) return;
+
+    if (contador) contador.textContent = `${documentos.length} documento${documentos.length === 1 ? '' : 's'}`;
+    if (footer) footer.textContent = `${documentos.length} documento${documentos.length === 1 ? '' : 's'} armazenado${documentos.length === 1 ? '' : 's'}`;
+
+    if (!documentos.length) {
+        lista.innerHTML = `
+            <div class="fin-tab-empty">
+                <h3>Nenhum documento cadastrado.</h3>
+                <p>Envie contratos, demonstrativos, boletos ou comprovantes para manter o histórico do financiamento.</p>
+            </div>
+        `;
+        return;
+    }
+
+    lista.innerHTML = `
+        <div class="fin-table-wrap">
+            <table class="fin-schedule-table fin-doc-table">
+                <thead>
+                    <tr>
+                        <th>Tipo</th>
+                        <th>Arquivo</th>
+                        <th>Competência</th>
+                        <th>Data</th>
+                        <th>Tamanho</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${documentos.map((doc) => `
+                        <tr>
+                            <td>${escapeHtml(doc.rotulo_tipo || doc.tipo_documento || '-')}</td>
+                            <td>
+                                <strong>${escapeHtml(doc.nome_original || '-')}</strong>
+                                ${doc.observacao ? `<small>${escapeHtml(doc.observacao)}</small>` : ''}
+                            </td>
+                            <td>${escapeHtml(doc.competencia || (doc.ano_base ? String(doc.ano_base) : '-'))}</td>
+                            <td>${doc.data_documento ? formatarDataBR(doc.data_documento) : '-'}</td>
+                            <td>${formatarTamanhoBytes(doc.tamanho_bytes)}</td>
+                            <td>
+                                <button type="button" class="fin-table-action-btn" onclick="baixarDocumentoFinanciamento(${Number(doc.id)})">Baixar</button>
+                                <button type="button" class="fin-table-action-btn danger" onclick="excluirDocumentoFinanciamento(${Number(doc.id)})">Excluir</button>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+async function enviarDocumentoFinanciamento() {
+    const financiamento = estadoFinanciamentos.atual;
+    const form = document.getElementById('form-fin-doc');
+    if (!financiamento || !form) return;
+
+    const arquivo = document.getElementById('fin-doc-file')?.files?.[0];
+    if (!arquivo) {
+        mostrarToast('Selecione um arquivo para enviar.', 'erro');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/${financiamento.id}/documentos`, {
+            method: 'POST',
+            body: new FormData(form)
+        });
+        const resultado = await response.json();
+        if (!resultado.success) {
+            throw new Error(resultado.error || 'Erro ao enviar documento');
+        }
+        form.reset();
+        setText('fin-doc-file-name', 'Nenhum arquivo selecionado');
+        mostrarToast('Documento enviado com sucesso.');
+        await carregarDocumentosFinanciamento();
+    } catch (error) {
+        mostrarToast(error.message, 'erro');
+    }
+}
+
+function baixarDocumentoFinanciamento(documentoId) {
+    const financiamento = estadoFinanciamentos.atual;
+    if (!financiamento) return;
+    window.location.href = `${API_BASE}/${financiamento.id}/documentos/${documentoId}/download`;
+}
+
+async function excluirDocumentoFinanciamento(documentoId) {
+    const financiamento = estadoFinanciamentos.atual;
+    if (!financiamento) return;
+
+    const confirmado = window.confirm('Excluir este documento do financiamento?');
+    if (!confirmado) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/${financiamento.id}/documentos/${documentoId}`, {
+            method: 'DELETE'
+        });
+        const resultado = await response.json();
+        if (!resultado.success) {
+            throw new Error(resultado.error || 'Erro ao excluir documento');
+        }
+        mostrarToast(resultado.aviso || 'Documento excluído com sucesso.');
+        await carregarDocumentosFinanciamento();
+    } catch (error) {
+        mostrarToast(error.message, 'erro');
+    }
+}
+
+function formatarTamanhoBytes(valor) {
+    const bytes = Number(valor || 0);
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1).replace('.', ',')} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`;
 }
 
 function renderizarAbaDados(financiamento) {
