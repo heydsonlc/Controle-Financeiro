@@ -610,8 +610,9 @@
                             <input type="number" id="regra-custo" min="0.01" step="0.01" required placeholder="Ex: 350">
                         </div>
                         <div class="form-group">
-                            <label for="regra-categoria">Categoria</label>
-                            <select id="regra-categoria" required></select>
+                            <label>Categoria de Despesa</label>
+                            <input type="hidden" id="regra-categoria">
+                            <small class="hint">Definida automaticamente conforme o tipo: Revisão, Pneus ou Manutenção Veicular.</small>
                         </div>
                     </div>
                     <div class="form-actions">
@@ -709,10 +710,9 @@
                     </select>
                 </div>
                 <div class="form-group span-2">
-                    <label for="assinatura-categoria-id">Categoria de Despesa</label>
-                    <select id="assinatura-categoria-id">
-                        <option value="">— Padrão (Mobilidade) —</option>
-                    </select>
+                    <label>Categoria de Despesa</label>
+                    <input type="hidden" id="assinatura-categoria-id">
+                    <small class="hint">Assinaturas de carro são classificadas automaticamente como Assinatura Veicular.</small>
                 </div>
             </div>
             <div class="form-actions">
@@ -759,10 +759,9 @@
                 </div>
             </div>
             <div class="form-group">
-                <label for="ativar-mob-categoria-id">Categoria de Despesa</label>
-                <select id="ativar-mob-categoria-id" class="form-control" onchange="carregarCategoriaCartaoParaMobilidade()">
-                    <option value="">— Padrão (Mobilidade) —</option>
-                </select>
+                <label>Categoria de Despesa</label>
+                <input type="hidden" id="ativar-mob-categoria-id">
+                <small class="hint">O sistema classifica automaticamente pela natureza do gasto, como Combustível, Transporte por Aplicativo ou Assinatura Veicular.</small>
             </div>
             <div class="form-group">
                 <label for="ativar-mob-data-inicio">Data de início</label>

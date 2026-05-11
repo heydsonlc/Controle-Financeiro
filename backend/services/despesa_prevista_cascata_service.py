@@ -17,12 +17,12 @@ try:
         VeiculoCicloManutencao,
     )
     from backend.services.veiculo_uso_service import calcular_resumo_uso
-    from backend.services.categoria_default import get_categoria_padrao_veiculos
+    from backend.services.categoria_default import categoria_sistemica_mobilidade_id_para_tipo_evento
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import db, DespesaPrevista, Veiculo, VeiculoRegraManutencaoKm, VeiculoCicloManutencao
     from services.veiculo_uso_service import calcular_resumo_uso
-    from services.categoria_default import get_categoria_padrao_veiculos
+    from services.categoria_default import categoria_sistemica_mobilidade_id_para_tipo_evento
     from services.perfil_financeiro_service import PerfilFinanceiroService
 
 
@@ -187,7 +187,7 @@ def ajustar_ciclo_um_passo(despesa_adiada: DespesaPrevista, janela_meses: int = 
         perfil_financeiro_id=veiculo.perfil_financeiro_id or PerfilFinanceiroService.obter_perfil_ativo_id(),
         origem_tipo='VEICULO',
         origem_id=veiculo.id,
-        categoria_id=get_categoria_padrao_veiculos(),
+        categoria_id=categoria_sistemica_mobilidade_id_para_tipo_evento(tipo_evento),
         data_prevista=data_prox,
         data_original_prevista=data_prox,
         data_atual_prevista=data_prox,

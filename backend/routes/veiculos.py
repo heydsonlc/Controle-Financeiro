@@ -26,6 +26,7 @@ try:
     from backend.services.veiculo_uso_service import calcular_resumo_uso
     from backend.services.veiculo_manutencao_km_service import listar_estimativas, gerar_despesa_prevista_por_regra
     from backend.services.veiculo_financiamento_service import upsert_financiamento, obter_financiamento, remover_financiamento
+    from backend.services.categoria_default import categoria_sistemica_mobilidade_id_para_tipo_evento
     from backend.services.mobilidade_service import (
         previsualizar_ativacao_modalidade,
         ativar_modalidade,
@@ -46,6 +47,7 @@ except ImportError:
     from services.veiculo_uso_service import calcular_resumo_uso
     from services.veiculo_manutencao_km_service import listar_estimativas, gerar_despesa_prevista_por_regra
     from services.veiculo_financiamento_service import upsert_financiamento, obter_financiamento, remover_financiamento
+    from services.categoria_default import categoria_sistemica_mobilidade_id_para_tipo_evento
     from services.mobilidade_service import (
         previsualizar_ativacao_modalidade,
         ativar_modalidade,
@@ -422,7 +424,7 @@ def criar_regra_km(veiculo_id):
         intervalo_km = _to_int(data.get('intervalo_km'))
         meses_intervalo = _to_int(data.get('meses_intervalo'))
         custo_estimado = _parse_decimal(data.get('custo_estimado'))
-        categoria_id = _to_int(data.get('categoria_id'))
+        categoria_id = categoria_sistemica_mobilidade_id_para_tipo_evento(tipo_evento)
         ativo = data.get('ativo', True)
 
         if not tipo_evento:
@@ -433,9 +435,6 @@ def criar_regra_km(veiculo_id):
             return jsonify({'success': False, 'error': 'meses_intervalo deve ser > 0 (quando informado)'}), 400
         if custo_estimado is None or custo_estimado <= 0:
             return jsonify({'success': False, 'error': 'custo_estimado deve ser > 0'}), 400
-        if not categoria_id:
-            return jsonify({'success': False, 'error': 'categoria_id é obrigatório'}), 400
-
         regra = VeiculoRegraManutencaoKm(
             perfil_financeiro_id=_perfil_id(),
             veiculo_id=veiculo_id,

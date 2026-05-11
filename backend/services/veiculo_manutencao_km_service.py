@@ -10,10 +10,12 @@ from dateutil.relativedelta import relativedelta
 
 try:
     from backend.models import db, Veiculo, VeiculoRegraManutencaoKm, DespesaPrevista
+    from backend.services.categoria_default import categoria_sistemica_mobilidade_id_para_tipo_evento
     from backend.services.veiculo_uso_service import calcular_resumo_uso
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import db, Veiculo, VeiculoRegraManutencaoKm, DespesaPrevista
+    from services.categoria_default import categoria_sistemica_mobilidade_id_para_tipo_evento
     from services.veiculo_uso_service import calcular_resumo_uso
     from services.perfil_financeiro_service import PerfilFinanceiroService
 
@@ -279,7 +281,7 @@ def gerar_despesa_prevista_por_regra(veiculo_id: int, regra_id: int, janela_mese
         perfil_financeiro_id=v.perfil_financeiro_id or PerfilFinanceiroService.obter_perfil_ativo_id(),
         origem_tipo='VEICULO',
         origem_id=veiculo_id,
-        categoria_id=regra.categoria_id,
+        categoria_id=categoria_sistemica_mobilidade_id_para_tipo_evento(regra.tipo_evento),
         data_prevista=data_calc,
         data_original_prevista=data_calc,
         data_atual_prevista=data_calc,

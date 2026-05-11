@@ -8,11 +8,11 @@ from dateutil.relativedelta import relativedelta
 
 try:
     from backend.models import db, Veiculo, VeiculoFinanciamento, Categoria, DespesaPrevista, IndexadorMensal
-    from backend.services.categoria_default import get_categoria_padrao_veiculos
+    from backend.services.categoria_default import MOB_USO_VEICULO, obter_categoria_sistemica_id
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import db, Veiculo, VeiculoFinanciamento, Categoria, DespesaPrevista, IndexadorMensal
-    from services.categoria_default import get_categoria_padrao_veiculos
+    from services.categoria_default import MOB_USO_VEICULO, obter_categoria_sistemica_id
     from services.perfil_financeiro_service import PerfilFinanceiroService
 
 
@@ -45,7 +45,7 @@ def _to_int(value) -> int | None:
 
 
 def _categoria_padrao_financiamento_id() -> int | None:
-    return get_categoria_padrao_veiculos()
+    return obter_categoria_sistemica_id(MOB_USO_VEICULO)
 
 
 def _obter_indexador_percentual(nome: str | None, data_ref: date) -> Decimal:

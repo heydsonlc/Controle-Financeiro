@@ -143,6 +143,14 @@ def _obter_categoria_no_perfil(categoria_id):
     return Categoria.query.filter(Categoria.id == categoria_id).first()
 
 
+def _categoria_sistemica_bloqueia_edicao(categoria):
+    return bool(getattr(categoria, 'sistemica', False) or getattr(categoria, 'bloquear_edicao', False))
+
+
+def _categoria_sistemica_bloqueia_exclusao(categoria):
+    return bool(getattr(categoria, 'sistemica', False) or getattr(categoria, 'bloquear_exclusao', False))
+
+
 @categorias_bp.route('', methods=['GET'])
 def listar_categorias():
     """
@@ -312,6 +320,12 @@ def atualizar_categoria(id):
             return jsonify({
                 'success': False,
                 'error': 'Dados não fornecidos'
+            }), 400
+
+        if _categoria_sistemica_bloqueia_edicao(categoria):
+            return jsonify({
+                'success': False,
+                'error': 'Esta categoria é sistêmica e não pode ser editada.'
             }), 400
 
         # Atualizar campos fornecidos
@@ -577,6 +591,12 @@ def deletar_categoria(id):
                 'success': False,
                 'error': 'Categoria não encontrada'
             }), 404
+
+        if _categoria_sistemica_bloqueia_exclusao(categoria):
+            return jsonify({
+                'success': False,
+                'error': 'Esta categoria é sistêmica e não pode ser excluída.'
+            }), 400
 
         # Verificar se há itens de despesa vinculados
         if categoria.itens_despesa.count() > 0:

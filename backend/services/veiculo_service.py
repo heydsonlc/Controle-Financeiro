@@ -8,11 +8,23 @@ from dateutil.relativedelta import relativedelta
 
 try:
     from backend.models import db, Veiculo, Categoria, DespesaPrevista
-    from backend.services.categoria_default import get_categoria_padrao_veiculos
+    from backend.services.categoria_default import (
+        MOB_COMBUSTIVEL,
+        MOB_SEGURO_VEICULAR,
+        MOB_TRIBUTOS_VEICULARES,
+        categoria_sistemica_mobilidade_id_para_tipo_evento,
+        obter_categoria_sistemica_id,
+    )
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import db, Veiculo, Categoria, DespesaPrevista
-    from services.categoria_default import get_categoria_padrao_veiculos
+    from services.categoria_default import (
+        MOB_COMBUSTIVEL,
+        MOB_SEGURO_VEICULAR,
+        MOB_TRIBUTOS_VEICULARES,
+        categoria_sistemica_mobilidade_id_para_tipo_evento,
+        obter_categoria_sistemica_id,
+    )
     from services.perfil_financeiro_service import PerfilFinanceiroService
 
 
@@ -103,11 +115,10 @@ def aplicar_defaults_categorias_veiculo(veiculo: Veiculo) -> None:
     Nunca cria categorias novas.
     """
     # Ajuste final: o módulo de veículos usa categoria padrão única ("Transporte").
-    categoria_id = get_categoria_padrao_veiculos()
-    veiculo.categoria_combustivel_id = categoria_id
-    veiculo.ipva_categoria_id = categoria_id
-    veiculo.seguro_categoria_id = categoria_id
-    veiculo.licenciamento_categoria_id = categoria_id
+    veiculo.categoria_combustivel_id = obter_categoria_sistemica_id(MOB_COMBUSTIVEL)
+    veiculo.ipva_categoria_id = obter_categoria_sistemica_id(MOB_TRIBUTOS_VEICULARES)
+    veiculo.seguro_categoria_id = obter_categoria_sistemica_id(MOB_SEGURO_VEICULAR)
+    veiculo.licenciamento_categoria_id = obter_categoria_sistemica_id(MOB_TRIBUTOS_VEICULARES)
 
 
 def gerar_projecoes_mvp(veiculo: Veiculo, meses_futuros: int = 12) -> list[DespesaPrevista]:
@@ -156,11 +167,10 @@ def gerar_projecoes_mvp(veiculo: Veiculo, meses_futuros: int = 12) -> list[Despe
 
     criadas: list[DespesaPrevista] = []
 
-    categoria_padrao_id = get_categoria_padrao_veiculos()
-
     # Combustível mensal
     valor_mensal = _to_decimal(getattr(veiculo, 'combustivel_valor_mensal', None))
     if valor_mensal and valor_mensal > 0:
+        categoria_combustivel_id = categoria_sistemica_mobilidade_id_para_tipo_evento('COMBUSTIVEL')
         data_ref = inicio_mes
         while data_ref < fim_exclusivo:
             if ('COMBUSTIVEL', data_ref) in bloqueadas:
@@ -170,7 +180,7 @@ def gerar_projecoes_mvp(veiculo: Veiculo, meses_futuros: int = 12) -> list[Despe
                 perfil_financeiro_id=veiculo.perfil_financeiro_id or PerfilFinanceiroService.obter_perfil_ativo_id(),
                 origem_tipo='VEICULO',
                 origem_id=veiculo.id,
-                categoria_id=categoria_padrao_id,
+                categoria_id=categoria_combustivel_id,
                 data_prevista=data_ref,
                 data_original_prevista=data_ref,
                 data_atual_prevista=data_ref,
@@ -211,7 +221,7 @@ def gerar_projecoes_mvp(veiculo: Veiculo, meses_futuros: int = 12) -> list[Despe
                 perfil_financeiro_id=veiculo.perfil_financeiro_id or PerfilFinanceiroService.obter_perfil_ativo_id(),
                 origem_tipo='VEICULO',
                 origem_id=veiculo.id,
-                categoria_id=categoria_padrao_id,
+                categoria_id=categoria_sistemica_mobilidade_id_para_tipo_evento(tipo_evento),
                 data_prevista=d,
                 data_original_prevista=d,
                 data_atual_prevista=d,

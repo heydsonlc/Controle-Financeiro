@@ -18,13 +18,23 @@ from decimal import Decimal
 try:
     from backend.models import db, DespesaPrevista, ItemDespesa, MobilidadeAssinatura, MobilidadeCenarioAtivo, Veiculo
     from backend.services.categoria_cartao_service import CategoriaCartaoService
-    from backend.services.categoria_default import get_categoria_padrao_veiculos
+    from backend.services.categoria_default import (
+        MOB_APP,
+        MOB_ASSINATURA,
+        MOB_COMBUSTIVEL,
+        obter_categoria_sistemica_id,
+    )
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
     from backend.services.transporte_app_service import obter_config_transporte_app, parse_config as parse_transporte_config
 except ImportError:
     from models import db, DespesaPrevista, ItemDespesa, MobilidadeAssinatura, MobilidadeCenarioAtivo, Veiculo
     from services.categoria_cartao_service import CategoriaCartaoService
-    from services.categoria_default import get_categoria_padrao_veiculos
+    from services.categoria_default import (
+        MOB_APP,
+        MOB_ASSINATURA,
+        MOB_COMBUSTIVEL,
+        obter_categoria_sistemica_id,
+    )
     from services.perfil_financeiro_service import PerfilFinanceiroService
     from services.transporte_app_service import obter_config_transporte_app, parse_config as parse_transporte_config
 
@@ -180,16 +190,7 @@ def criar_recorrencia_combustivel(
     if not valor or valor <= 0:
         raise ValueError('Veiculo nao tem valor de combustivel mensal configurado')
 
-    cat_id = categoria_id or veiculo.categoria_combustivel_id
-    if not cat_id:
-        try:
-            cat_id = get_categoria_padrao_veiculos()
-        except ValueError:
-            avisos.append('Granularidade de Categoria de Despesa pendente: combustivel deveria ter categoria propria, mas modulo usa categoria padrao.')
-            cat_id = None
-
-    if cat_id is None:
-        raise ValueError('Nao foi possivel determinar categoria para a recorrencia de combustivel')
+    cat_id = obter_categoria_sistemica_id(MOB_COMBUSTIVEL)
 
     cc_id_resolvido, aviso_cc = resolver_categoria_cartao_para_mobilidade(
         categoria_id=cat_id,
@@ -256,11 +257,7 @@ def criar_recorrencia_transporte_app(
     if not valor_mensal or valor_mensal <= 0:
         raise ValueError('valor_mensal deve ser > 0 para recorrencia de transporte por app')
 
-    if not categoria_id:
-        try:
-            categoria_id = get_categoria_padrao_veiculos()
-        except ValueError:
-            avisos.append('Categoria padrao de veiculos nao encontrada — recorrencia sem categoria.')
+    categoria_id = obter_categoria_sistemica_id(MOB_APP)
 
     cc_id_resolvido, aviso_cc = resolver_categoria_cartao_para_mobilidade(
         categoria_id=categoria_id,
@@ -324,12 +321,7 @@ def criar_recorrencia_assinatura(
     if not valor or valor <= 0:
         raise ValueError('MobilidadeAssinatura sem valor_mensal configurado')
 
-    cat_id = assinatura.categoria_id
-    if not cat_id:
-        try:
-            cat_id = get_categoria_padrao_veiculos()
-        except ValueError:
-            avisos.append('Categoria padrao de veiculos nao encontrada — recorrencia sem categoria.')
+    cat_id = obter_categoria_sistemica_id(MOB_ASSINATURA)
 
     cc_id_resolvido, aviso_cc = resolver_categoria_cartao_para_mobilidade(
         categoria_id=cat_id,
@@ -445,7 +437,7 @@ def previsualizar_ativacao_modalidade(payload: dict) -> dict:
     origem_id = _to_int(payload.get('origem_id'))
     meio = (payload.get('meio_pagamento') or '').lower()
     cartao_id = _to_int(payload.get('cartao_id'))
-    categoria_id = _to_int(payload.get('categoria_id'))
+    categoria_id = None
     categoria_cartao_id_manual = None
     data_inicio = _parse_date(payload.get('data_inicio'))
 
@@ -463,7 +455,7 @@ def previsualizar_ativacao_modalidade(payload: dict) -> dict:
             raise ValueError('Veiculo nao encontrado')
 
         valor_comb = _to_decimal(v.combustivel_valor_mensal) or Decimal('0')
-        cat_id = categoria_id or v.categoria_combustivel_id
+        cat_id = obter_categoria_sistemica_id(MOB_COMBUSTIVEL)
 
         cc_id_resolvido, aviso_cc = resolver_categoria_cartao_para_mobilidade(
             categoria_id=cat_id,
@@ -515,8 +507,9 @@ def previsualizar_ativacao_modalidade(payload: dict) -> dict:
             valor_mensal = Decimal(str(caminho.get('valor_mensal') or 0))
             nome_origem = caminho.get('nome') or f'Caminho {origem_id}'
 
+        cat_id = obter_categoria_sistemica_id(MOB_APP)
         cc_id_resolvido, aviso_cc = resolver_categoria_cartao_para_mobilidade(
-            categoria_id=categoria_id,
+            categoria_id=cat_id,
             cartao_id=cartao_id,
             categoria_cartao_id_manual=categoria_cartao_id_manual,
         )
@@ -528,7 +521,7 @@ def previsualizar_ativacao_modalidade(payload: dict) -> dict:
                 'nome': f'Transporte por app - {nome_origem}',
                 'valor': float(valor_mensal),
                 'tipo_recorrencia': 'mensal',
-                'categoria_id': categoria_id,
+                'categoria_id': cat_id,
                 'categoria_cartao_id': cc_id_resolvido,
                 'meio_pagamento': meio or None,
                 'cartao_id': cartao_id,
@@ -557,7 +550,7 @@ def previsualizar_ativacao_modalidade(payload: dict) -> dict:
         if assinatura.status != 'ATIVO':
             avisos.append('Assinatura esta INATIVA.')
 
-        cat_id = categoria_id or assinatura.categoria_id
+        cat_id = obter_categoria_sistemica_id(MOB_ASSINATURA)
         cc_id_resolvido, aviso_cc = resolver_categoria_cartao_para_mobilidade(
             categoria_id=cat_id,
             cartao_id=cartao_id,
@@ -607,7 +600,7 @@ def ativar_modalidade(payload: dict) -> dict:
     origem_id = _to_int(payload.get('origem_id'))
     meio = (payload.get('meio_pagamento') or '').lower() or None
     cartao_id = _to_int(payload.get('cartao_id'))
-    categoria_id = _to_int(payload.get('categoria_id'))
+    categoria_id = None
     categoria_cartao_id_manual = None
     data_inicio = _parse_date(payload.get('data_inicio')) or date.today().replace(day=1)
     criar_recorrencia = payload.get('criar_recorrencia', True)
@@ -624,7 +617,7 @@ def ativar_modalidade(payload: dict) -> dict:
     anterior = inativar_modalidade_atual()
 
     # 2. Criar recorrência
-    cat_id = categoria_id
+    cat_id = None
     cc_id_resolvido = None
 
     if tipo == 'VEICULO':
@@ -634,7 +627,7 @@ def ativar_modalidade(payload: dict) -> dict:
         if not v:
             raise ValueError('Veiculo nao encontrado')
 
-        cat_id = categoria_id or v.categoria_combustivel_id
+        cat_id = obter_categoria_sistemica_id(MOB_COMBUSTIVEL)
         cc_id_resolvido, aviso_cc = resolver_categoria_cartao_para_mobilidade(
             categoria_id=cat_id,
             cartao_id=cartao_id,
@@ -675,6 +668,7 @@ def ativar_modalidade(payload: dict) -> dict:
             valor_app = _to_decimal(caminho.get('valor_mensal') or 0) or Decimal('0')
             nome_app = caminho.get('nome') or f'Caminho {origem_id}'
 
+        cat_id = obter_categoria_sistemica_id(MOB_APP)
         cc_id_resolvido, aviso_cc = resolver_categoria_cartao_para_mobilidade(
             categoria_id=cat_id,
             cartao_id=cartao_id,
@@ -711,7 +705,7 @@ def ativar_modalidade(payload: dict) -> dict:
         if not assinatura:
             raise ValueError('MobilidadeAssinatura nao encontrada')
 
-        cat_id = categoria_id or assinatura.categoria_id
+        cat_id = obter_categoria_sistemica_id(MOB_ASSINATURA)
         cc_id_resolvido, aviso_cc = resolver_categoria_cartao_para_mobilidade(
             categoria_id=cat_id,
             cartao_id=cartao_id,
@@ -804,7 +798,7 @@ def criar_assinatura(payload: dict) -> MobilidadeAssinatura:
         perfil_financeiro_id=_perfil_id(),
         nome=nome,
         valor_mensal=valor,
-        categoria_id=_to_int(payload.get('categoria_id')),
+        categoria_id=obter_categoria_sistemica_id(MOB_ASSINATURA),
         status='ATIVO',
         metadata_json=payload.get('metadata_json'),
     )
@@ -825,7 +819,7 @@ def atualizar_assinatura(assinatura_id: int, payload: dict) -> MobilidadeAssinat
         if v and v > 0:
             ass.valor_mensal = v
     if 'categoria_id' in payload:
-        ass.categoria_id = _to_int(payload['categoria_id'])
+        ass.categoria_id = obter_categoria_sistemica_id(MOB_ASSINATURA)
     if 'status' in payload and payload['status'] in ('ATIVO', 'INATIVO'):
         ass.status = payload['status']
     if 'metadata_json' in payload:

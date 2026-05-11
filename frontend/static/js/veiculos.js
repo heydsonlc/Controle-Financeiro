@@ -438,8 +438,7 @@ function fecharModalApp() {
 function preencherCategoriasAssinatura() {
     const sel = document.getElementById('assinatura-categoria-id');
     if (!sel) return;
-    sel.innerHTML = '<option value="">— Padrão (Mobilidade) —</option>' +
-        (categorias || []).map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
+    sel.value = '';
 }
 
 function abrirModalAssinaturaNovo() {
@@ -483,7 +482,6 @@ async function salvarAssinatura(event) {
         nome: document.getElementById('assinatura-nome')?.value,
         valor_mensal: document.getElementById('assinatura-valor-mensal')?.value,
         status: document.getElementById('assinatura-status')?.value || 'ATIVO',
-        categoria_id: document.getElementById('assinatura-categoria-id')?.value || null,
     };
 
     try {
@@ -2735,12 +2733,12 @@ async function abrirModalAtivacaoMobilidade(tipo, origemId) {
 
     // Popular categorias de despesa
     const selCat = document.getElementById('ativar-mob-categoria-id');
-    if (selCat && selCat.options.length <= 1) {
+    if (selCat && selCat.tagName === 'SELECT' && selCat.options.length <= 1) {
         try {
             const r = await fetch(API_CATEGORIAS);
             const d = await r.json();
             const cats = d.success ? (d.data || []) : [];
-            selCat.innerHTML = '<option value="">— Padrão (Mobilidade) —</option>' +
+            selCat.innerHTML = '<option value="">— Automática pelo tipo do gasto —</option>' +
                 cats.map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
         } catch (e) { /* mantém opções existentes */ }
     }

@@ -32,6 +32,7 @@ from backend.services.mobilidade_service import (
     previsualizar_ativacao_modalidade,
     resolver_categoria_cartao_para_mobilidade,
 )
+from backend.services.categoria_default import MOB_COMBUSTIVEL, obter_categoria_sistemica_id
 from backend.routes.veiculos import veiculos_bp
 
 
@@ -220,18 +221,18 @@ def test_criar_recorrencia_combustivel_pix(app_context):
 
 def test_criar_recorrencia_combustivel_cartao_com_cat_cartao(app_context):
     with app_context.app_context():
-        cat = _categoria_mobilidade()
+        cat_id = obter_categoria_sistemica_id(MOB_COMBUSTIVEL)
         cc = _categoria_cartao_mob()
         cartao = _cartao()
-        _vincular_cat_cartao(cat.id, cc.id, cartao.id)
-        v = _veiculo_com_combustivel(cat.id, 650.0)
+        _vincular_cat_cartao(cat_id, cc.id, cartao.id)
+        v = _veiculo_com_combustivel(cat_id, 650.0)
         db.session.commit()
 
         rec, avisos = criar_recorrencia_combustivel(
             veiculo=v,
             meio_pagamento='cartao',
             cartao_id=cartao.id,
-            categoria_id=cat.id,
+            categoria_id=cat_id,
             categoria_cartao_id=None,
         )
         db.session.commit()
@@ -424,11 +425,11 @@ def test_ativar_veiculo_via_cartao_grava_cartao_id(app_context):
 
 def test_ativar_via_cartao_com_cat_cartao_configurada(app_context):
     with app_context.app_context():
-        cat = _categoria_mobilidade()
+        cat_id = obter_categoria_sistemica_id(MOB_COMBUSTIVEL)
         cc = _categoria_cartao_mob()
         cartao = _cartao()
-        _vincular_cat_cartao(cat.id, cc.id, cartao.id)
-        v = _veiculo_com_combustivel(cat.id, 780.0)
+        _vincular_cat_cartao(cat_id, cc.id, cartao.id)
+        v = _veiculo_com_combustivel(cat_id, 780.0)
         db.session.commit()
 
         resultado = ativar_modalidade({
@@ -436,7 +437,7 @@ def test_ativar_via_cartao_com_cat_cartao_configurada(app_context):
             'origem_id': v.id,
             'meio_pagamento': 'cartao',
             'cartao_id': cartao.id,
-            'categoria_id': cat.id,
+            'categoria_id': cat_id,
         })
         db.session.commit()
 

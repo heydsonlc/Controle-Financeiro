@@ -81,6 +81,11 @@ class Categoria(db.Model):
     logo_original_nome = db.Column(db.String(255), nullable=True)
     logo_criado_em = db.Column(db.DateTime, nullable=True)
     ativo = db.Column(db.Boolean, default=True)
+    sistemica = db.Column(db.Boolean, nullable=False, default=False)
+    codigo_sistema = db.Column(db.String(80), nullable=True)
+    modulo_origem = db.Column(db.String(50), nullable=True)
+    bloquear_edicao = db.Column(db.Boolean, nullable=False, default=False)
+    bloquear_exclusao = db.Column(db.Boolean, nullable=False, default=False)
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relacionamentos
@@ -89,7 +94,9 @@ class Categoria(db.Model):
 
     __table_args__ = (
         db.UniqueConstraint('nome', name='ux_categoria_nome_global'),
+        db.UniqueConstraint('codigo_sistema', name='ux_categoria_codigo_sistema'),
         db.Index('ix_categoria_perfil_ativo', 'perfil_financeiro_id', 'ativo'),
+        db.Index('ix_categoria_sistemica_modulo', 'sistemica', 'modulo_origem'),
     )
 
     def __repr__(self):
@@ -116,6 +123,11 @@ class Categoria(db.Model):
             'logo_criado_em': self.logo_criado_em.isoformat() if self.logo_criado_em else None,
             'logo_url': self.logo_url,
             'ativo': self.ativo,
+            'sistemica': bool(self.sistemica),
+            'codigo_sistema': self.codigo_sistema,
+            'modulo_origem': self.modulo_origem,
+            'bloquear_edicao': bool(self.bloquear_edicao),
+            'bloquear_exclusao': bool(self.bloquear_exclusao),
             'criado_em': self.criado_em.isoformat() if self.criado_em else None
         }
 

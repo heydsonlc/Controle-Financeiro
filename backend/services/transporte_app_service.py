@@ -10,11 +10,11 @@ from sqlalchemy import func
 
 try:
     from backend.models import db, DespesaPrevista
-    from backend.services.categoria_default import get_categoria_padrao_veiculos
+    from backend.services.categoria_default import MOB_APP, obter_categoria_sistemica_id
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import db, DespesaPrevista
-    from services.categoria_default import get_categoria_padrao_veiculos
+    from services.categoria_default import MOB_APP, obter_categoria_sistemica_id
     from services.perfil_financeiro_service import PerfilFinanceiroService
 
 
@@ -193,7 +193,7 @@ def gerar_projecoes_transporte_app(origem_id: int, config: TransporteAppConfig, 
         if desp.status == 'PREVISTA' and _get_tipo_evento(desp) == TIPO_EVENTO_TRANSPORTE_APP:
             db.session.delete(desp)
 
-    categoria_id = get_categoria_padrao_veiculos()
+    categoria_id = obter_categoria_sistemica_id(MOB_APP)
     criadas: list[DespesaPrevista] = []
 
     data_ref = inicio_mes
