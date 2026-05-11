@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 import json
 import logging
+import uuid
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import func, or_
 
@@ -1424,19 +1425,32 @@ def gerar_lancamentos_cartao_recorrente(item_despesa_id, meses_futuros=12, mes_r
     lancamentos_criados = []
     
     def criar_lancamento(data_compra):
-        """Cria LancamentoAgregado se ainda nÃ£o existe para esta competÃªncia"""
+        """Cria LancamentoAgregado se ainda nao existe para esta competencia."""
         mes_fatura = data_compra.replace(day=1)
-        
-        # Verificar se jÃ¡ existe lanÃ§amento deste item_despesa para este mÃªs (idempotÃªncia)
+
+        # compra_id deterministico: garante idempotencia em chamadas repetidas.
+        # Namespace fixo exclusivo para recorrencias (nao colide com UUID v4 de importacao).
+        _NS = uuid.UUID('7f3a1b2c-4d5e-6f7a-8b9c-0d1e2f3a4b5c')
+        compra_id_recorrente = str(uuid.uuid5(_NS, f'{item_despesa_id}-{mes_fatura.isoformat()}'))
+
+        # Deduplicacao primaria por compra_id
         existente = _query_lancamentos().filter_by(
-            item_despesa_id=item_despesa_id,
-            mes_fatura=mes_fatura,
-            is_recorrente=True
+            compra_id=compra_id_recorrente,
         ).first()
-        
+
+        # Fallback: lancamentos recorrentes criados antes desta versao (sem compra_id)
+        if not existente:
+            existente = _query_lancamentos().filter_by(
+                item_despesa_id=item_despesa_id,
+                mes_fatura=mes_fatura,
+                is_recorrente=True,
+            ).first()
+            if existente and not existente.compra_id:
+                existente.compra_id = compra_id_recorrente
+
         if existente:
-            return  # JÃ¡ existe, nÃ£o cria duplicado
-        
+            return  # Ja existe, nao duplicar
+
         resolucao_cartao = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(
             cartao_id=item.cartao_id,
             categoria_id=item.categoria_id,
@@ -1448,7 +1462,7 @@ def gerar_lancamentos_cartao_recorrente(item_despesa_id, meses_futuros=12, mes_r
             cartao_id=item.cartao_id,
             item_agregado_id=None,
             categoria_cartao_id=resolucao_cartao.get('categoria_cartao_id'),
-            categoria_id=item.categoria_id,  # Categoria analÃ­tica obrigatÃ³ria
+            categoria_id=item.categoria_id,
             descricao=item.nome,
             valor=item.valor,
             data_compra=data_compra,
@@ -1456,8 +1470,9 @@ def gerar_lancamentos_cartao_recorrente(item_despesa_id, meses_futuros=12, mes_r
             numero_parcela=1,
             total_parcelas=1,
             observacoes=item.descricao or '',
-            is_recorrente=True,  # Marca como recorrente para aparecer em "Despesas Fixas"
-            item_despesa_id=item_despesa_id  # ReferÃªncia Ã  despesa recorrente
+            is_recorrente=True,
+            item_despesa_id=item_despesa_id,
+            compra_id=compra_id_recorrente,
         )
         db.session.add(novo)
         lancamentos_criados.append(novo)

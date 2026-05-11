@@ -76,6 +76,18 @@ Esta regra não tem exceções.
 - Fatura paga → valor = soma dos `LancamentoAgregado` (executado)
 - Fatura pendente → valor = soma dos `OrcamentoAgregado` por Categoria do Cartão (previsto)
 
+**Pagamento de fatura (CORE-FATURA-1)**:
+- `valor_executado` é **sempre recalculado** a partir dos `LancamentoAgregado` imediatamente antes do pagamento — nunca usa cache.
+- Fatura já paga bloqueia segunda baixa (`ValueError`); rota HTTP retorna 409.
+- Movimento bancário criado via `ContaBancariaService.criar_movimento()` com `origem='FATURA'`.
+- `db.session.commit()` controlado pelo chamador (rota), não pelo service.
+
+**Idempotência de lançamentos recorrentes (CORE-CARTAO-1)**:
+- Lançamentos recorrentes de cartão usam `compra_id` UUID5 determinístico: `uuid5(NS, f'{item_despesa_id}-{mes_fatura.isoformat()}')`.
+- Namespace fixo (`7f3a1b2c-...`) exclusivo para recorrências — não colide com UUID v4 da importação.
+- Deduplicação primária por `compra_id`; fallback para registros legados (sem `compra_id`) que preenchem o campo retroativamente.
+- Garantia: 1 recorrência = 1 lançamento por mês, independente de quantas vezes `gerar_lancamentos_cartao_recorrente()` é chamado.
+
 **Categoria do Cartão × Categoria da Despesa**:
 - **Categoria do Cartão** (`CategoriaCartao`): organiza internamente a fatura do cartão
 - **Categoria da Despesa** (`Categoria`): organiza o orçamento geral e o fluxo de despesas

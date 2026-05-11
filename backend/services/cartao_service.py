@@ -688,91 +688,74 @@ class CartaoService:
     @staticmethod
     def pagar_fatura(fatura_id, data_pagamento, valor_pago=None, conta_bancaria_id=None):
         """
-        Registra pagamento da fatura e substitui planejado por executado
+        Registra pagamento da fatura recalculando o valor executado imediatamente antes.
 
-        Args:
-            fatura_id (int): ID da fatura (Conta)
-            data_pagamento (date ou str): Data do pagamento
-            valor_pago (Decimal, opcional): Valor pago (se None, usa executado)
-            conta_bancaria_id (int, opcional): ID da conta para debitar
-
-        Returns:
-            Conta: Fatura atualizada
+        Regras:
+        - Recalcula valor_executado a partir dos lancamentos (nunca usa cache).
+        - Bloqueia se a fatura ja estiver paga (ValueError).
+        - Usa ContaBancariaService.criar_movimento() para atomicidade.
         """
-        from backend.models import ContaBancaria, MovimentoFinanceiro
+        try:
+            from backend.services.conta_bancaria_service import ContaBancariaService
+        except ImportError:
+            from services.conta_bancaria_service import ContaBancariaService
 
         fatura = Conta.query.filter(
             Conta.id == fatura_id,
             PerfilFinanceiroService.condicao_perfil(Conta),
         ).first()
         if not fatura:
-            raise ValueError('Fatura nÃ£o encontrada')
-
+            raise ValueError('Fatura nao encontrada')
         if not fatura.is_fatura_cartao:
-            raise ValueError('Esta conta nÃ£o Ã© uma fatura de cartÃ£o')
+            raise ValueError('Esta conta nao e uma fatura de cartao')
 
-        # Validar se jÃ¡ estÃ¡ paga
+        # Bloquear pagamento duplicado
         if fatura.status_pagamento == 'Pago':
-            raise ValueError('Fatura jÃ¡ foi paga anteriormente')
+            raise ValueError('Esta fatura ja foi paga e nao pode ser paga novamente')
 
-        # Converter data se necessÃ¡rio
         if isinstance(data_pagamento, str):
             data_pagamento = datetime.strptime(data_pagamento, '%Y-%m-%d').date()
 
-        # Calcular valor executado final
-        # Se a fatura jÃ¡ tem valor_executado, usa ele (evita recalcular desnecessariamente)
-        # SenÃ£o, calcula a partir dos lanÃ§amentos
-        if fatura.valor_executado and fatura.valor_executado > 0:
-            valor_executado_final = fatura.valor_executado
-        else:
-            valor_executado_final = CartaoService.calcular_executado(
-                fatura.item_despesa_id,
-                fatura.cartao_competencia
-            )
+        # Recalcular valor executado a partir dos lancamentos (nunca usar cache)
+        valor_executado_recalculado = CartaoService.calcular_executado(
+            fatura.item_despesa_id,
+            fatura.cartao_competencia,
+        )
 
-        # Definir valor final do pagamento
-        valor_final_pagamento = valor_pago if valor_pago else valor_executado_final
+        # Valor final do pagamento: valor_pago se informado, senao o executado recalculado
+        valor_final_pagamento = Decimal(str(valor_pago)) if valor_pago else valor_executado_recalculado
 
-        # SE conta bancÃ¡ria informada: debitar saldo
+        # Validar e debitar conta bancaria
+        conta_bancaria_id = int(conta_bancaria_id) if conta_bancaria_id else None
         if conta_bancaria_id:
-            conta = ContaBancaria.query.filter(
+            from backend.models import ContaBancaria
+            conta_bancaria = ContaBancaria.query.filter(
                 ContaBancaria.id == conta_bancaria_id,
                 PerfilFinanceiroService.condicao_perfil(ContaBancaria),
             ).first()
-            if not conta:
-                raise ValueError('Conta bancÃ¡ria nÃ£o encontrada')
+            if not conta_bancaria:
+                raise ValueError('Conta bancaria nao encontrada')
+            if conta_bancaria.status != 'ATIVO':
+                raise ValueError('Conta bancaria esta inativa')
 
-            if conta.status != 'ATIVO':
-                raise ValueError('Conta bancÃ¡ria estÃ¡ inativa')
-
-            # Criar movimento financeiro (dÃ©bito)
-            movimento = MovimentoFinanceiro(
-                perfil_financeiro_id=fatura.perfil_financeiro_id or PerfilFinanceiroService.obter_perfil_ativo_id(),
-                conta_bancaria_id=conta_bancaria_id,
+            ContaBancariaService.criar_movimento(
+                conta_bancaria_id,
                 tipo='DEBITO',
                 valor=valor_final_pagamento,
-                descricao=f'Pagamento fatura cartÃ£o - {fatura.descricao}',
+                descricao=f'Pagamento fatura cartao - {fatura.descricao}',
                 data_movimento=data_pagamento,
+                origem='FATURA',
                 fatura_id=fatura_id,
                 conta_id=fatura_id,
-                origem='FATURA',
-                ajustavel=False
             )
-            db.session.add(movimento)
-            try:
-                from backend.services.conta_bancaria_service import ContaBancariaService
-            except ImportError:
-                from services.conta_bancaria_service import ContaBancariaService
-            ContaBancariaService.recalcular_saldo_conta(conta_bancaria_id)
             fatura.conta_bancaria_id = conta_bancaria_id
 
-        # Atualizar fatura
-        fatura.valor_executado = valor_executado_final
-        fatura.valor = valor_final_pagamento  # Substitui planejado por executado
+        # Atualizar fatura com valores finais
+        fatura.valor_executado = valor_executado_recalculado
+        fatura.valor = valor_final_pagamento
         fatura.data_pagamento = data_pagamento
         fatura.status_pagamento = 'Pago'
 
-        db.session.commit()
         return fatura
 
     # ========================================================================
