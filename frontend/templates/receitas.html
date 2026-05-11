@@ -52,10 +52,6 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v6h-6"/></svg>
             Atualizar
         </button>
-        <button type="button" class="receitas-secondary-btn" onclick="mostrarFiltrosAvancados()">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M7 12h10M10 17h4"/></svg>
-            Filtros
-        </button>
         <button type="button" id="btn-nova-receita" class="receitas-primary-btn" onclick="abrirModalFonte()">
             <span aria-hidden="true">+</span>
             Nova receita
@@ -106,20 +102,12 @@
     </section>
 
     <div class="receitas-workspace">
-        <section class="receitas-panel receitas-main-panel" aria-label="Receitas e pendências">
+        <div class="receitas-main-col">
+        <section class="receitas-panel receitas-main-panel" aria-label="Receitas do mês">
             <div class="receitas-panel-header">
                 <div>
-                    <h2>Receitas e pendências</h2>
-                    <p>Previsto, realizado e pendente por competência.</p>
-                </div>
-                <div class="receitas-panel-actions">
-                    <button type="button" class="receitas-secondary-btn" onclick="exportarReceitas()">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
-                        Exportar
-                    </button>
-                    <button type="button" class="receitas-icon-btn" onclick="mostrarMenuReceitas()" aria-label="Mais ações">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5h.01M12 12h.01M12 19h.01"/></svg>
-                    </button>
+                    <h2>Receitas do mês</h2>
+                    <p>Previsto, realizado e pendente na competência selecionada.</p>
                 </div>
             </div>
             <div class="receitas-table-head" aria-hidden="true">
@@ -136,11 +124,31 @@
             <div id="mes-lista" class="receitas-lista">
                 <div class="receitas-loading">Carregando receitas e pendências...</div>
             </div>
-            <footer class="receitas-panel-footer">
-                <span id="receitas-total-encontradas">0 receitas encontradas</span>
-                <span>Os valores exibidos seguem as regras atuais de previsão e realização.</span>
-            </footer>
+            <footer class="receitas-panel-footer" id="receitas-total-encontradas"></footer>
         </section>
+
+        <section class="receitas-panel receitas-main-panel receitas-atrasadas-panel" id="section-atrasadas" aria-label="Receitas atrasadas" hidden>
+            <div class="receitas-panel-header receitas-panel-header--atrasadas">
+                <div>
+                    <h2>Receitas atrasadas</h2>
+                    <p>Previstas em meses anteriores e ainda não recebidas.</p>
+                </div>
+            </div>
+            <div class="receitas-table-head" aria-hidden="true">
+                <span>Fonte de Receita</span>
+                <span>Competência</span>
+                <span>Tipo</span>
+                <span>Status</span>
+                <span>Conta Bancária</span>
+                <span>Valor Previsto</span>
+                <span>Valor Realizado</span>
+                <span>Diferença</span>
+                <span>Ações</span>
+            </div>
+            <div id="atrasadas-lista" class="receitas-lista"></div>
+            <footer class="receitas-panel-footer" id="atrasadas-total-encontradas"></footer>
+        </section>
+        </div>
 
         <aside class="receitas-side">
             <section class="receitas-panel receitas-side-panel" aria-label="Fontes de receita">
@@ -167,6 +175,7 @@
         </aside>
     </div>
 </div>
+
 
 <div id="modal-fonte" class="receitas-modal" aria-hidden="true">
     <div class="receitas-modal-box receitas-source-modal" role="dialog" aria-modal="true" aria-labelledby="modal-fonte-titulo">

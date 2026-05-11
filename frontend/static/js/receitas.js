@@ -13,9 +13,11 @@ const TIPOS_RECEITA = {
 
 const CORES_DONUT = ['#2563eb', '#22c55e', '#7c3aed', '#14b8a6', '#f97316', '#ef4444'];
 
+const RECEITAS_POR_PAGINA = 4;
+
 let estado = {
     anoAtual: new Date().getFullYear(),
-    mesAtual: '',
+    mesAtual: String(new Date().getMonth() + 1).padStart(2, '0'),
     tipoFiltro: '',
     busca: '',
     fontes: [],
@@ -24,6 +26,9 @@ let estado = {
     realizadas: [],
     receitasMes: [],
     receitasFiltradas: [],
+    receitasAtrasadas: [],
+    paginaMes: 1,
+    paginaAtrasadas: 1,
     fonteAtual: null,
 };
 
@@ -53,6 +58,13 @@ function inicializarAno() {
     }
 
     estado.anoAtual = anoAtual;
+
+    const selectMes = document.getElementById('filtro-mes');
+    if (selectMes) {
+        const mesAtual = String(new Date().getMonth() + 1).padStart(2, '0');
+        selectMes.value = mesAtual;
+        estado.mesAtual = mesAtual;
+    }
 }
 
 function registrarEventosReceitas() {
@@ -135,6 +147,11 @@ async function atualizarDados() {
 function renderizarCarregando() {
     const lista = document.getElementById('mes-lista');
     if (lista) lista.innerHTML = '<div class="receitas-loading">Carregando receitas e pendências...</div>';
+
+    const atrasadas = document.getElementById('atrasadas-lista');
+    if (atrasadas) atrasadas.innerHTML = '';
+    const secAtrasadas = document.getElementById('section-atrasadas');
+    if (secAtrasadas) secAtrasadas.hidden = true;
 
     const fontes = document.getElementById('fontes-resumo');
     if (fontes) fontes.innerHTML = '<div class="receitas-loading small">Carregando fontes...</div>';
@@ -359,24 +376,84 @@ function montarLinhaRealizadaPontual(receita, fonte, anoMes) {
 function aplicarFiltrosLocais() {
     const termo = normalizarTexto(estado.busca);
     const tipoFiltro = estado.tipoFiltro;
+    const anoMes = getAnoMesSelecionado();
 
-    estado.receitasFiltradas = (estado.receitasMes || []).filter((receita) => {
-        const tipoOk = !tipoFiltro || receita.tipo === tipoFiltro;
-        const texto = normalizarTexto([
-            receita.nome,
-            receita.descricao,
-            formatarTipo(receita.tipo),
-            receita.conta?.nome,
-            receita.conta?.instituicao,
-        ].filter(Boolean).join(' '));
+    estado.receitasFiltradas = (estado.receitasMes || [])
+        .filter((receita) => receita.competencia === anoMes)
+        .filter((receita) => {
+            const tipoOk = !tipoFiltro || receita.tipo === tipoFiltro;
+            const texto = normalizarTexto([
+                receita.nome,
+                receita.descricao,
+                formatarTipo(receita.tipo),
+                receita.conta?.nome,
+                receita.conta?.instituicao,
+            ].filter(Boolean).join(' '));
+            return tipoOk && (!termo || texto.includes(termo));
+        });
 
-        return tipoOk && (!termo || texto.includes(termo));
-    });
+    estado.receitasAtrasadas = (estado.receitasMes || [])
+        .filter((receita) => receita.competencia < anoMes && receita.status !== 'REALIZADA');
+
+    estado.paginaMes = 1;
+    estado.paginaAtrasadas = 1;
 
     renderizarReceitasMes();
+    renderizarReceitasAtrasadas();
     renderizarKpis();
     renderizarFontesResumo();
     renderizarProximosRecebimentos();
+}
+
+function htmlLinhaReceita(receita, atrasada = false) {
+    const tipoInfo = getTipoInfo(receita.tipo);
+    const contaTexto = receita.conta
+        ? `<strong>${escapeHtml(receita.conta.nome)}</strong><small>${escapeHtml(formatarAgenciaConta(receita.conta))}</small>`
+        : '<strong>Sem conta padrão</strong><small>Defina na fonte ou ao realizar</small>';
+    const classeRow = atrasada ? 'receita-row receita-row--atrasada' : 'receita-row';
+    const classeMeta = atrasada ? 'receita-meta receita-meta--atrasada' : 'receita-meta';
+
+    return `
+        <article class="${classeRow}" data-receita="${escapeHtml(receita.uid)}">
+            <div class="receita-source">
+                <strong>${escapeHtml(receita.nome)}</strong>
+                <small>${escapeHtml(receita.descricao || 'Fonte de receita')}</small>
+            </div>
+            <div class="${classeMeta}">
+                <strong>${escapeHtml(formatarCompetencia(receita.competencia))}</strong>
+                <small>${escapeHtml(nomeMes(receita.competencia))}</small>
+            </div>
+            <div>
+                <span class="receita-type-badge" style="--tipo-color:${tipoInfo.color};--tipo-bg:${tipoInfo.bg}">
+                    ${escapeHtml(tipoInfo.label)}
+                </span>
+            </div>
+            <div>
+                <span class="receita-status-badge ${statusClasse(receita.status)}">${escapeHtml(formatarStatus(receita.status))}</span>
+            </div>
+            <div class="receita-account">${contaTexto}</div>
+            <div class="receita-value">${formatarMoeda(receita.valor_previsto)}</div>
+            <div class="receita-value green">${formatarMoeda(receita.valor_realizado)}</div>
+            <div class="receita-value ${receita.diferenca < 0 ? 'red' : 'green'}">${formatarMoeda(receita.diferenca)}</div>
+            <div class="receita-actions">
+                <button type="button" class="receitas-action-btn" onclick="visualizarReceita('${escapeAttribute(receita.uid)}')" title="Visualizar" aria-label="Visualizar">${iconReceitas('eye')}</button>
+                <button type="button" class="receitas-action-btn" onclick="editarReceitaLinha('${escapeAttribute(receita.uid)}')" title="Editar" aria-label="Editar">${iconReceitas('edit')}</button>
+                <button type="button" class="receitas-action-btn success" onclick="realizarReceitaLinha('${escapeAttribute(receita.uid)}')" title="Confirmar/realizar" aria-label="Confirmar/realizar" ${receita.status === 'REALIZADA' ? 'disabled' : ''}>${iconReceitas('check')}</button>
+                <button type="button" class="receitas-action-btn danger" onclick="cancelarReceitaLinha('${escapeAttribute(receita.uid)}')" title="Cancelar/ignorar" aria-label="Cancelar/ignorar">${iconReceitas('x')}</button>
+            </div>
+        </article>
+    `;
+}
+
+function htmlPaginacao(pagina, total, fnMudar) {
+    const totalPaginas = Math.ceil(total / RECEITAS_POR_PAGINA);
+    if (totalPaginas <= 1) return '';
+
+    const botoes = [];
+    for (let p = 1; p <= totalPaginas; p++) {
+        botoes.push(`<button type="button" class="receitas-pag-btn${p === pagina ? ' active' : ''}" onclick="${fnMudar}(${p})" aria-label="Página ${p}">${p}</button>`);
+    }
+    return `<div class="receitas-paginacao">${botoes.join('')}</div>`;
 }
 
 function renderizarReceitasMes() {
@@ -385,9 +462,13 @@ function renderizarReceitasMes() {
     if (!container) return;
 
     const receitas = estado.receitasFiltradas || [];
+    const pagina = estado.paginaMes;
+    const inicio = (pagina - 1) * RECEITAS_POR_PAGINA;
+    const pagina_itens = receitas.slice(inicio, inicio + RECEITAS_POR_PAGINA);
 
     if (footer) {
-        footer.textContent = `${receitas.length} ${receitas.length === 1 ? 'receita encontrada' : 'receitas encontradas'}`;
+        const paginacaoHtml = htmlPaginacao(pagina, receitas.length, 'irParaPaginaMes');
+        footer.innerHTML = `<span>${receitas.length} ${receitas.length === 1 ? 'receita encontrada' : 'receitas encontradas'}</span>${paginacaoHtml}<span>Os valores exibidos seguem as regras atuais de previsão e realização.</span>`;
     }
 
     if (!receitas.length) {
@@ -400,44 +481,50 @@ function renderizarReceitasMes() {
         return;
     }
 
-    container.innerHTML = receitas.map((receita) => {
-        const tipoInfo = getTipoInfo(receita.tipo);
-        const contaTexto = receita.conta
-            ? `<strong>${escapeHtml(receita.conta.nome)}</strong><small>${escapeHtml(formatarAgenciaConta(receita.conta))}</small>`
-            : '<strong>Sem conta padrão</strong><small>Defina na fonte ou ao realizar</small>';
+    container.innerHTML = pagina_itens.map((r) => htmlLinhaReceita(r, false)).join('');
+}
 
-        return `
-            <article class="receita-row" data-receita="${escapeHtml(receita.uid)}">
-                <div class="receita-source">
-                    <strong>${escapeHtml(receita.nome)}</strong>
-                    <small>${escapeHtml(receita.descricao || 'Fonte de receita')}</small>
-                </div>
-                <div class="receita-meta">
-                    <strong>${escapeHtml(formatarCompetencia(receita.competencia))}</strong>
-                    <small>${escapeHtml(nomeMes(receita.competencia))}</small>
-                </div>
-                <div>
-                    <span class="receita-type-badge" style="--tipo-color:${tipoInfo.color};--tipo-bg:${tipoInfo.bg}">
-                        ${escapeHtml(tipoInfo.label)}
-                    </span>
-                </div>
-                <div>
-                    <span class="receita-status-badge ${statusClasse(receita.status)}">${escapeHtml(formatarStatus(receita.status))}</span>
-                </div>
-                <div class="receita-account">${contaTexto}</div>
-                <div class="receita-value">${formatarMoeda(receita.valor_previsto)}</div>
-                <div class="receita-value green">${formatarMoeda(receita.valor_realizado)}</div>
-                <div class="receita-value ${receita.diferenca < 0 ? 'red' : 'green'}">${formatarMoeda(receita.diferenca)}</div>
-                <div class="receita-actions">
-                    <button type="button" class="receitas-action-btn" onclick="visualizarReceita('${escapeAttribute(receita.uid)}')" title="Visualizar" aria-label="Visualizar">${iconReceitas('eye')}</button>
-                    <button type="button" class="receitas-action-btn" onclick="editarReceitaLinha('${escapeAttribute(receita.uid)}')" title="Editar" aria-label="Editar">${iconReceitas('edit')}</button>
-                    <button type="button" class="receitas-action-btn success" onclick="realizarReceitaLinha('${escapeAttribute(receita.uid)}')" title="Confirmar/realizar" aria-label="Confirmar/realizar" ${receita.status === 'REALIZADA' ? 'disabled' : ''}>${iconReceitas('check')}</button>
-                    <button type="button" class="receitas-action-btn danger" onclick="cancelarReceitaLinha('${escapeAttribute(receita.uid)}')" title="Cancelar/ignorar" aria-label="Cancelar/ignorar">${iconReceitas('x')}</button>
-                    <button type="button" class="receitas-action-btn" onclick="mostrarToast('Mais ações serão detalhadas em evolução futura.', 'info')" title="Mais ações" aria-label="Mais ações">${iconReceitas('more')}</button>
-                </div>
-            </article>
+function irParaPaginaMes(pagina) {
+    estado.paginaMes = pagina;
+    renderizarReceitasMes();
+}
+
+function renderizarReceitasAtrasadas() {
+    const section = document.getElementById('section-atrasadas');
+    const container = document.getElementById('atrasadas-lista');
+    const footer = document.getElementById('atrasadas-total-encontradas');
+    if (!section || !container) return;
+
+    section.hidden = false;
+
+    const receitas = estado.receitasAtrasadas || [];
+    const pagina = estado.paginaAtrasadas;
+    const inicio = (pagina - 1) * RECEITAS_POR_PAGINA;
+    const pagina_itens = receitas.slice(inicio, inicio + RECEITAS_POR_PAGINA);
+
+    if (footer) {
+        const paginacaoHtml = receitas.length
+            ? htmlPaginacao(pagina, receitas.length, 'irParaPaginaAtrasadas')
+            : '';
+        footer.innerHTML = `<span>${receitas.length} ${receitas.length === 1 ? 'receita atrasada' : 'receitas atrasadas'}</span>${paginacaoHtml}`;
+    }
+
+    if (!receitas.length) {
+        container.innerHTML = `
+            <div class="receitas-empty-state">
+                <h3>Nenhuma receita em atraso.</h3>
+                <p>Todas as receitas de meses anteriores foram recebidas.</p>
+            </div>
         `;
-    }).join('');
+        return;
+    }
+
+    container.innerHTML = pagina_itens.map((r) => htmlLinhaReceita(r, true)).join('');
+}
+
+function irParaPaginaAtrasadas(pagina) {
+    estado.paginaAtrasadas = pagina;
+    renderizarReceitasAtrasadas();
 }
 
 function renderizarKpis() {
@@ -1049,18 +1136,6 @@ function atualizarSelectsContasBancarias() {
 
         if (atual) select.value = atual;
     });
-}
-
-function mostrarFiltrosAvancados() {
-    mostrarToast('Use Ano, Mês, Tipo e Busca para refinar a visão.', 'info');
-}
-
-function exportarReceitas() {
-    mostrarToast('Exportação avançada ficará para uma próxima evolução.', 'info');
-}
-
-function mostrarMenuReceitas() {
-    mostrarToast('Mais ações ficarão agrupadas aqui em evolução futura.', 'info');
 }
 
 function mostrarProximosRecebimentos() {
