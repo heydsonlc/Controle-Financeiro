@@ -133,7 +133,6 @@ Rotas mínimas a validar inicialmente:
 - `/patrimonio`
 - `/categorias`
 - `/veiculos`
-- `/preferencias`
 - `/importar-cartao`
 
 Fluxos futuros a validar com Playwright:

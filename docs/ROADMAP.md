@@ -89,7 +89,6 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 | CONTAS-EXPORT-1 | Exportação de contas bancárias | Baixa |
 | RECEITAS-EXPORT-1 | Exportação de receitas | Baixa |
 | CONFIG-PERFIS-2 | Gestão avançada de perfis financeiros | Média |
-| PREF-CLEAN-1 | Aposentar ou consolidar tela antiga de Preferências | Média |
 | HELP-SUPORTE-1 | Canal real de suporte/chamado | Baixa |
 | DASH-FILTROS-1 | Filtros reais no Dashboard | Baixa |
 | IR-ZIP-SAIDAS-1 | ZIP de documentos de saídas para contador | Baixa |

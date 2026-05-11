@@ -10,7 +10,6 @@ const smokeRoutes = [
   { path: '/patrimonio', label: 'Patrimonio' },
   { path: '/categorias', label: 'Categorias' },
   { path: '/veiculos', label: 'Veiculos' },
-  { path: '/preferencias', label: 'Preferencias' },
   { path: '/ajuda', label: 'Ajuda e Manual' },
   { path: '/importar-cartao', label: 'Importar Cartao' }
 ];

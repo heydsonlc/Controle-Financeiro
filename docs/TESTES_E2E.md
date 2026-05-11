@@ -114,7 +114,6 @@ O script funcional usa `--workers=1` para reduzir consumo de memória e evitar O
 - `/patrimonio`
 - `/categorias`
 - `/veiculos`
-- `/preferencias`
 - `/importar-cartao`
 
 Cada rota valida:
