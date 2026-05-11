@@ -26,6 +26,9 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 | FIN-TR-2 | Modo CAIXA SAC/TR: diagnóstico e validação final contra extrato real | Alta |
 | FIN-INDICES-1 | Tela de manutenção/importação de TR por competência | Média |
 | FIN-SEGURO-UI-2 | Central de configuração do seguro habitacional (vigências, faixas, fatores) | Média |
+| FIN-CLEAN-2 | Consolidar SAC+TR como derivação de SAC + TR, sem modo técnico visível | Média |
+| FIN-CLEAN-3 | Consolidar seguro fixo/estimado, nomenclaturas e rotas legadas | Média |
+| FIN-PARCELAS-UI-1 | Tabela avançada e filtros do cronograma de parcelas | Baixa |
 | FIN-DOC-FIN-1 | Documentos/anexos vinculados ao financiamento (contratos, extratos) | Baixa |
 | FIN-QUIT-1 | Simulação de quitação antecipada com cálculo de desconto | Baixa |
 | FIN-CAIXA-IMPORT-1 | Importação de demonstrativos CAIXA para comparação real × simulado | Baixa |

@@ -400,7 +400,8 @@ Consolidação das regras de financiamento e padronização visual da listagem e
 ### Financiamentos — UX
 
 - Lista de contratos: formato tabular com header compartilhado + uma linha por contrato
-- Botões de ação substituídos por ícones (28×28px): visualizar, amortizar, extrato, editar, quitar
+- Botões de ação substituídos por ícones (28×28px): visualizar, amortizar, extrato, editar
+- Ações incompletas de Financiamentos ocultadas até MVP próprio: quitação, documentos/anexos, tabela avançada, filtros e central legada de seguro
 - Formulário compacto: inputs 34px, sidebar 340px, padding reduzido
 - Cancelar/Salvar movidos para `action_bar` padrão; label dinâmico ("Novo financiamento" / "Editar financiamento")
 
