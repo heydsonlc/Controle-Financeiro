@@ -483,7 +483,6 @@ function coletarDadosFormulario(editando) {
     const saldoInicial = parseMoeda(document.getElementById('fin-saldo-inicial')?.value);
     const sistemaMotor = sistemaVisualSelecionado === 'SFH' ? 'SAC' : sistemaVisualSelecionado;
     const indexadorSelecionado = document.getElementById('fin-indexador')?.value || null;
-    const modoCalculo = sistemaMotor === 'SAC' && indexadorSelecionado === 'TR' ? 'caixa_sac_tr' : 'padrao';
     const seguroModo = document.getElementById('fin-seguro-modo')?.value || 'fixo';
     const seguro = parseMoeda(document.getElementById('fin-seguro')?.value);
     const seguroFatorDfi = parseNumero(document.getElementById('fin-seguro-fator-dfi')?.value);
@@ -509,8 +508,6 @@ function coletarDadosFormulario(editando) {
         nome,
         produto: sistemaVisualSelecionado === 'SFH' ? 'SFH' : produto,
         sistema_amortizacao: sistemaMotor,
-        modo_calculo_financiamento: modoCalculo,
-        modo_taxa_mensal: modoCalculo === 'caixa_sac_tr' ? 'nominal_dividida_12' : 'efetiva_equivalente',
         valor_financiado: saldoInicial,
         prazo_total_meses: Number(document.getElementById('fin-prazo')?.value || 0),
         taxa_juros_nominal_anual: parseNumero(document.getElementById('fin-taxa')?.value),
@@ -1276,11 +1273,11 @@ function formatarCampoMoeda(campo) {
 function calcularTaxaMensal(taxaAnual, modoCalculo = null) {
     const taxa = Number(taxaAnual || 0) / 100;
     if (taxa <= 0) return 0;
-    if (!modoCalculo) {
-        const sistemaMotor = (document.getElementById('fin-sistema')?.value || 'SAC') === 'SFH' ? 'SAC' : document.getElementById('fin-sistema')?.value || 'SAC';
-        modoCalculo = sistemaMotor === 'SAC' && document.getElementById('fin-indexador')?.value === 'TR' ? 'caixa_sac_tr' : 'padrao';
-    }
-    if (modoCalculo === 'caixa_sac_tr') return taxa / 12;
+    const sistemaSelecionado = document.getElementById('fin-sistema')?.value || 'SAC';
+    const sistemaMotor = sistemaSelecionado === 'SFH' ? 'SAC' : sistemaSelecionado;
+    const usaSacTr = modoCalculo === 'nominal_dividida_12'
+        || (sistemaMotor === 'SAC' && document.getElementById('fin-indexador')?.value === 'TR');
+    if (usaSacTr) return taxa / 12;
     return Math.pow(1 + taxa, 1 / 12) - 1;
 }
 

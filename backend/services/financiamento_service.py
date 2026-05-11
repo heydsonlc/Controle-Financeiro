@@ -127,8 +127,34 @@ class FinanciamentoService:
         return getattr(financiamento, 'modo_calculo_financiamento', None) or FinanciamentoService.MODO_CALCULO_PADRAO
 
     @staticmethod
+    def _normalizar_codigo(valor):
+        return str(valor or '').strip().upper()
+
+    @staticmethod
+    def _campos_indicam_sac_tr(sistema_amortizacao, indexador_saldo):
+        return (
+            FinanciamentoService._normalizar_codigo(sistema_amortizacao) == 'SAC'
+            and FinanciamentoService._normalizar_codigo(indexador_saldo) == 'TR'
+        )
+
+    @staticmethod
+    def _config_usa_sac_tr(sistema_amortizacao, indexador_saldo, modo_calculo=None):
+        if FinanciamentoService._campos_indicam_sac_tr(sistema_amortizacao, indexador_saldo):
+            return True
+        # Compatibilidade transitoria para financiamentos criados durante o MVP FIN-TR-2.
+        return modo_calculo == FinanciamentoService.MODO_CALCULO_CAIXA_SAC_TR
+
+    @staticmethod
+    def _financiamento_usa_sac_tr(financiamento):
+        return FinanciamentoService._config_usa_sac_tr(
+            financiamento.sistema_amortizacao,
+            financiamento.indexador_saldo,
+            FinanciamentoService._modo_calculo(financiamento),
+        )
+
+    @staticmethod
     def _modo_caixa_sac_tr(financiamento):
-        return FinanciamentoService._modo_calculo(financiamento) == FinanciamentoService.MODO_CALCULO_CAIXA_SAC_TR
+        return FinanciamentoService._financiamento_usa_sac_tr(financiamento)
 
     @staticmethod
     def _validar_modo_calculo(modo_calculo):
@@ -151,8 +177,8 @@ class FinanciamentoService:
         return modo
 
     @staticmethod
-    def _modo_taxa_para_calculo(modo_calculo, modo_taxa=None):
-        if modo_calculo == FinanciamentoService.MODO_CALCULO_CAIXA_SAC_TR:
+    def _modo_taxa_para_config(sistema_amortizacao, indexador_saldo, modo_calculo=None, modo_taxa=None):
+        if FinanciamentoService._config_usa_sac_tr(sistema_amortizacao, indexador_saldo, modo_calculo):
             return FinanciamentoService.MODO_TAXA_NOMINAL_DIVIDIDA_12
         return FinanciamentoService._validar_modo_taxa(modo_taxa)
 
@@ -364,13 +390,20 @@ class FinanciamentoService:
         modo_calculo = FinanciamentoService._validar_modo_calculo(
             dados.get('modo_calculo_financiamento')
         )
-        modo_taxa = FinanciamentoService._modo_taxa_para_calculo(
-            modo_calculo,
-            dados.get('modo_taxa_mensal')
-        )
         if modo_calculo == FinanciamentoService.MODO_CALCULO_CAIXA_SAC_TR:
             dados['sistema_amortizacao'] = 'SAC'
             dados['indexador_saldo'] = 'TR'
+        usa_sac_tr = FinanciamentoService._config_usa_sac_tr(
+            dados.get('sistema_amortizacao'),
+            dados.get('indexador_saldo'),
+            modo_calculo,
+        )
+        modo_taxa = FinanciamentoService._modo_taxa_para_config(
+            dados.get('sistema_amortizacao'),
+            dados.get('indexador_saldo'),
+            modo_calculo,
+            dados.get('modo_taxa_mensal')
+        )
 
         if not dados.get('valor_financiado') or float(dados['valor_financiado']) <= 0:
             raise ValueError('Valor financiado deve ser maior que zero')
@@ -443,7 +476,7 @@ class FinanciamentoService:
         if seguro_dfi_base is not None and seguro_dfi_base < 0:
             raise ValueError('seguro_dfi_base nao pode ser negativo')
         if (
-            modo_calculo == FinanciamentoService.MODO_CALCULO_CAIXA_SAC_TR
+            usa_sac_tr
             and seguro_dfi_base is None
             and seguro_modo == FinanciamentoService.SEGURO_MODO_ESTIMADO_DFI_MIP
         ):
@@ -911,12 +944,7 @@ class FinanciamentoService:
                 valores_estruturais['modo_taxa_mensal'] = FinanciamentoService.MODO_TAXA_NOMINAL_DIVIDIDA_12
 
         if 'modo_taxa_mensal' in dados:
-            modo_calculo_atual = valores_estruturais.get(
-                'modo_calculo_financiamento',
-                financiamento.modo_calculo_financiamento or FinanciamentoService.MODO_CALCULO_PADRAO
-            )
-            valores_estruturais['modo_taxa_mensal'] = FinanciamentoService._modo_taxa_para_calculo(
-                modo_calculo_atual,
+            valores_estruturais['modo_taxa_mensal'] = FinanciamentoService._validar_modo_taxa(
                 dados.get('modo_taxa_mensal')
             )
 
@@ -1021,11 +1049,32 @@ class FinanciamentoService:
                 raise ValueError('taxa_administracao_fixa não pode ser negativa')
             valores_estruturais['taxa_administracao_fixa'] = taxa_adm
 
+        if (
+            ('sistema_amortizacao' in valores_estruturais or 'indexador_saldo' in valores_estruturais)
+            and 'modo_calculo_financiamento' not in valores_estruturais
+        ):
+            valores_estruturais['modo_calculo_financiamento'] = FinanciamentoService.MODO_CALCULO_PADRAO
+
+        sistema_resultante = valores_estruturais.get(
+            'sistema_amortizacao',
+            financiamento.sistema_amortizacao
+        )
+        indexador_resultante = valores_estruturais.get(
+            'indexador_saldo',
+            financiamento.indexador_saldo
+        )
         modo_calculo_resultante = valores_estruturais.get(
             'modo_calculo_financiamento',
             financiamento.modo_calculo_financiamento or FinanciamentoService.MODO_CALCULO_PADRAO
         )
-        modo_taxa_resultante = FinanciamentoService._modo_taxa_para_calculo(
+        usa_sac_tr_resultante = FinanciamentoService._config_usa_sac_tr(
+            sistema_resultante,
+            indexador_resultante,
+            modo_calculo_resultante,
+        )
+        modo_taxa_resultante = FinanciamentoService._modo_taxa_para_config(
+            sistema_resultante,
+            indexador_resultante,
             modo_calculo_resultante,
             valores_estruturais.get('modo_taxa_mensal', financiamento.modo_taxa_mensal)
         )
@@ -1033,6 +1082,8 @@ class FinanciamentoService:
             'taxa_juros_nominal_anual' in valores_estruturais
             or 'modo_taxa_mensal' in valores_estruturais
             or 'modo_calculo_financiamento' in valores_estruturais
+            or 'sistema_amortizacao' in valores_estruturais
+            or 'indexador_saldo' in valores_estruturais
         ):
             valores_estruturais['modo_taxa_mensal'] = modo_taxa_resultante
             taxa_base = valores_estruturais.get(
@@ -1064,7 +1115,7 @@ class FinanciamentoService:
                 raise ValueError('seguro_data_nascimento_titular e obrigatoria no modo estimado DFI + MIP')
 
             if (
-                modo_calculo_resultante == FinanciamentoService.MODO_CALCULO_CAIXA_SAC_TR
+                usa_sac_tr_resultante
                 and 'seguro_dfi_base' not in valores_estruturais
                 and financiamento.seguro_dfi_base is None
             ):

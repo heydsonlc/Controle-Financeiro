@@ -74,7 +74,7 @@ def _payload_financiamento(nome='Financiamento UX'):
         'valor_financiado': 350000.0,
         'prazo_total_meses': 240,
         'taxa_juros_nominal_anual': 9.5,
-        'indexador_saldo': 'TR',
+        'indexador_saldo': None,
         'data_contrato': '2026-05-01',
         'data_primeira_parcela': '2026-06-01',
         'seguro_tipo': 'fixo',
@@ -1215,8 +1215,6 @@ def test_frontend_payload_de_financiamento_envia_campos_estruturais_e_flag_crono
         'taxa_juros_nominal_anual',
         'valor_financiado',
         'sistema_amortizacao',
-        'modo_calculo_financiamento',
-        'modo_taxa_mensal',
         'indexador_saldo',
         'valor_seguro_mensal',
         'seguro_modo',
@@ -1230,6 +1228,9 @@ def test_frontend_payload_de_financiamento_envia_campos_estruturais_e_flag_crono
     ]:
         assert campo in trecho
 
+    assert 'modo_calculo_financiamento:' not in trecho
+    assert 'modo_taxa_mensal:' not in trecho
+    assert 'caixa_sac_tr' not in trecho
     assert 'ajustarDataPrimeiraPorDia' in trecho
 
 

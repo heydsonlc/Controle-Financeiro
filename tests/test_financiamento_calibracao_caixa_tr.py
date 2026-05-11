@@ -213,13 +213,11 @@ def _popular_tr_no_banco(skip_competencia=None, completar_futuro=True):
     db.session.commit()
 
 
-def _payload_motor_caixa_tr(prazo=PRAZO_MESES):
-    return {
+def _payload_motor_caixa_tr(prazo=PRAZO_MESES, incluir_modo_tecnico=False):
+    payload = {
         'nome': 'Financiamento CAIXA calibracao TR',
         'produto': 'SFH',
         'sistema_amortizacao': 'SAC',
-        'modo_calculo_financiamento': 'caixa_sac_tr',
-        'modo_taxa_mensal': 'nominal_dividida_12',
         'valor_financiado': float(VALOR_FINANCIADO),
         'prazo_total_meses': prazo,
         'taxa_juros_nominal_anual': 9.38,
@@ -244,6 +242,10 @@ def _payload_motor_caixa_tr(prazo=PRAZO_MESES):
             {'idade_inicio': 76, 'idade_fim': 80, 'fator_mip': 0.57099},
         ],
     }
+    if incluir_modo_tecnico:
+        payload['modo_calculo_financiamento'] = 'caixa_sac_tr'
+        payload['modo_taxa_mensal'] = 'nominal_dividida_12'
+    return payload
 
 
 def _criar_motor_caixa_tr_com_amortizacao(client):
@@ -382,6 +384,64 @@ def test_modelo_indice_tr_mensal_registra_competencias_obrigatorias(app_context)
     assert 'uq_indice_tr_mensal_competencia' in {
         constraint.name for constraint in IndiceTRMensal.__table__.constraints
     }
+
+
+def test_motor_real_sac_tr_derivado_por_sistema_e_indexador(client):
+    _popular_tr_no_banco(completar_futuro=True)
+
+    payload = _payload_motor_caixa_tr(prazo=20)
+    assert 'modo_calculo_financiamento' not in payload
+    assert 'modo_taxa_mensal' not in payload
+
+    response = client.post('/api/financiamentos', json=payload)
+    assert response.status_code == 201, response.get_json()
+    financiamento_id = response.get_json()['data']['id']
+
+    primeira = FinanciamentoParcela.query.filter_by(
+        financiamento_id=financiamento_id,
+        numero_parcela=1,
+    ).one()
+
+    saldo_corrigido = VALOR_FINANCIADO * (Decimal('1') + TR_MENSAL['2024-05'])
+    juros_nominal_12 = saldo_corrigido * (Decimal('0.0938') / Decimal('12'))
+    assert _erro(_moeda(primeira.valor_juros), _moeda(juros_nominal_12)) <= Decimal('0.05')
+    assert response.get_json()['data']['modo_calculo_financiamento'] == 'padrao'
+    assert response.get_json()['data']['modo_taxa_mensal'] == 'nominal_dividida_12'
+
+
+def test_motor_real_mantem_compatibilidade_com_modo_tecnico_caixa_sac_tr(client):
+    _popular_tr_no_banco(completar_futuro=True)
+
+    response = client.post('/api/financiamentos', json=_payload_motor_caixa_tr(prazo=20, incluir_modo_tecnico=True))
+    assert response.status_code == 201, response.get_json()
+
+    primeira = FinanciamentoParcela.query.filter_by(
+        financiamento_id=response.get_json()['data']['id'],
+        numero_parcela=1,
+    ).one()
+
+    saldo_corrigido = VALOR_FINANCIADO * (Decimal('1') + TR_MENSAL['2024-05'])
+    juros_nominal_12 = saldo_corrigido * (Decimal('0.0938') / Decimal('12'))
+    assert _erro(_moeda(primeira.valor_juros), _moeda(juros_nominal_12)) <= Decimal('0.05')
+
+
+def test_motor_real_sac_sem_tr_preserva_modo_padrao_sem_exigir_indice(client):
+    payload = _payload_motor_caixa_tr(prazo=20)
+    payload['indexador_saldo'] = None
+
+    response = client.post('/api/financiamentos', json=payload)
+    assert response.status_code == 201, response.get_json()
+    financiamento_id = response.get_json()['data']['id']
+
+    primeira = FinanciamentoParcela.query.filter_by(
+        financiamento_id=financiamento_id,
+        numero_parcela=1,
+    ).one()
+
+    taxa_efetiva_equivalente = (Decimal('1') + Decimal('0.0938')) ** (Decimal('1') / Decimal('12')) - Decimal('1')
+    juros_padrao = VALOR_FINANCIADO * taxa_efetiva_equivalente
+    assert _erro(_moeda(primeira.valor_juros), _moeda(juros_padrao)) <= Decimal('0.05')
+    assert response.get_json()['data']['modo_taxa_mensal'] == 'efetiva_equivalente'
 
 
 def test_motor_real_caixa_sac_tr_aproxima_janeiro_a_julho_2025(client):
