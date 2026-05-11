@@ -1204,9 +1204,9 @@ function renderizarSidebar(sidebar) {
     const elCart = document.getElementById('total-cartoes');
     const elCartSub = document.getElementById('summary-cartoes-sub');
 
-    if (elV7d) elV7d.textContent = `R$ ${(sidebar.vencendo_7d_valor || formatarValorBR(0))}`;
+    if (elV7d) elV7d.textContent = `R$ ${formatarValorBR(sidebar.vencendo_7d_valor || 0)}`;
     if (elV7dSub) elV7dSub.textContent = `${sidebar.vencendo_7d_count || 0} despesa(s)`;
-    if (elCart) elCart.textContent = `R$ ${(sidebar.cartoes_valor || formatarValorBR(0))}`;
+    if (elCart) elCart.textContent = `R$ ${formatarValorBR(sidebar.cartoes_valor || 0)}`;
     if (elCartSub) elCartSub.textContent = `${sidebar.cartoes_count || 0} fatura(s)`;
 
     // Subtitulos dos 3 primeiros cards
