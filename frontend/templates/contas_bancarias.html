@@ -21,10 +21,6 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.3-4.3M10.8 18a7.2 7.2 0 1 1 0-14.4 7.2 7.2 0 0 1 0 14.4Z"/></svg>
             <input id="contas-busca" type="search" placeholder="Buscar contas, instituição, agência ou número">
         </label>
-        <button type="button" class="contas-secondary-btn" onclick="mostrarFiltrosAvancados()">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M7 12h10M10 17h4"/></svg>
-            Filtros
-        </button>
         <button type="button" id="btn-nova-conta" class="contas-primary-btn" onclick="abrirModalNovaConta()">
             <span aria-hidden="true">+</span>
             Nova conta
@@ -79,18 +75,6 @@
                 <h2>Contas bancárias</h2>
                 <p>Visualize e gerencie suas contas</p>
             </div>
-            <div class="contas-panel-actions">
-                <button type="button" class="contas-secondary-btn" onclick="exportarContas()">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
-                    Exportar
-                </button>
-                <button type="button" class="contas-icon-toggle active" aria-label="Ver em cards">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 0h7v7h-7v-7Z"/></svg>
-                </button>
-                <button type="button" class="contas-icon-toggle" aria-label="Ver em lista">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14"/></svg>
-                </button>
-            </div>
         </div>
 
         <div class="contas-table-head" aria-hidden="true">
@@ -111,6 +95,7 @@
                 <span>Editar</span>
                 <span>Transferir</span>
                 <span>Extrato</span>
+                <span>Ajustar saldo</span>
                 <span>Inativar</span>
             </div>
             <span id="contas-total-encontradas">0 contas encontradas</span>

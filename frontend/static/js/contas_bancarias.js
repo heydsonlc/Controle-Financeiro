@@ -173,6 +173,7 @@ function criarLinhaConta(conta, maiorSaldoAbsoluto) {
                 <button type="button" class="contas-action-btn" onclick="editarConta(${conta.id})" title="Editar" aria-label="Editar">${contasIcon('edit')}</button>
                 <button type="button" class="contas-action-btn" onclick="abrirTransferencia(${conta.id})" title="Transferir" aria-label="Transferir" ${statusInativo ? 'disabled' : ''}>${contasIcon('transfer')}</button>
                 <button type="button" class="contas-action-btn" onclick="abrirExtrato(${conta.id})" title="Extrato" aria-label="Extrato" ${statusInativo ? 'disabled' : ''}>${contasIcon('file')}</button>
+                <button type="button" class="contas-action-btn" onclick="abrirAjusteSaldoDireto(${conta.id})" title="Ajustar saldo" aria-label="Ajustar saldo" ${statusInativo ? 'disabled' : ''}>${contasIcon('adjust')}</button>
                 ${statusInativo
                     ? `<button type="button" class="contas-action-btn" onclick="ativarConta(${conta.id})" title="Ativar" aria-label="Ativar">${contasIcon('restore')}</button>`
                     : `<button type="button" class="contas-action-btn danger" onclick="abrirModalInativar(${conta.id})" title="Inativar" aria-label="Inativar">${contasIcon('ban')}</button>`}
@@ -456,6 +457,25 @@ function criarMovimentoHTML(movimento) {
     `;
 }
 
+function abrirAjusteSaldoDireto(contaId) {
+    const conta = (estadoContas.contas || []).find((c) => c.id === contaId);
+    if (!conta) return;
+    estadoContas.contaExtratoId = contaId;
+
+    setValue('ajuste-conta-id', contaId);
+    setValue('ajuste-movimento-id', '');
+    setText('ajuste-titulo', 'Ajustar Saldo');
+    document.getElementById('ajuste-modo-saldo-final')?.removeAttribute('hidden');
+    document.getElementById('ajuste-modo-editar')?.setAttribute('hidden', 'hidden');
+    setValue('ajuste-saldo-atual', formatarMoedaDisplay(conta.saldo_atual || 0));
+    setValue('ajuste-novo-saldo', '');
+    setValue('ajuste-valor', '');
+    setValue('ajuste-tipo', 'CREDITO');
+    setValue('ajuste-data', new Date().toISOString().slice(0, 10));
+    setValue('ajuste-descricao', '');
+    abrirModal('modal-ajuste');
+}
+
 function abrirModalAjusteSaldo() {
     if (!estadoContas.contaExtratoId) {
         mostrarToast('Abra o extrato de uma conta para ajustar o saldo.', 'erro');
@@ -596,14 +616,6 @@ function fecharModal(modalId) {
     modal.setAttribute('aria-hidden', 'true');
 }
 
-function mostrarFiltrosAvancados() {
-    mostrarToast('Filtros avançados ficam para evolução futura. Use status e busca nesta versão.');
-}
-
-function exportarContas() {
-    mostrarToast('Exportação de contas fica para evolução futura.');
-}
-
 function contasIcon(name) {
     const icons = {
         bank: '<path d="m3 10 9-6 9 6"/><path d="M5 10h14M6 10v8M10 10v8M14 10v8M18 10v8M4 18h16M3 21h18"/>',
@@ -614,7 +626,8 @@ function contasIcon(name) {
         file: '<path d="M7 4h7l4 4v12H7V4Z"/><path d="M14 4v4h4"/><path d="M9 13h6M9 17h6"/>',
         ban: '<path d="M6 6l12 12"/><path d="M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/>',
         restore: '<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 5v6h-6"/>',
-        trash: '<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/>'
+        trash: '<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/>',
+        adjust: '<path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="3"/>'
     };
     return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${icons[name] || icons.bank}</svg>`;
 }
