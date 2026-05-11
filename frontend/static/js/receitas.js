@@ -600,7 +600,7 @@ function realizarReceitaLinha(uid) {
     const receita = buscarReceitaLinha(uid);
     if (!receita || receita.status === 'REALIZADA') return;
 
-    if (receita.item_receita_id) {
+    if (receita.item_receita_id || receita.realizada_id) {
         consolidarReceitaMes(receita.item_receita_id, Math.max(receita.valor_previsto - receita.valor_realizado, 0), uid);
     }
 }
@@ -916,24 +916,27 @@ async function confirmarConsolidacaoComConta(event) {
     const fonte = buscarFonte(itemReceitaId);
     const hoje = new Date().toISOString().slice(0, 10);
 
-    if (!itemReceitaId || !contaId || !valorPrevisto) {
+    if ((!itemReceitaId && !realizadaId) || !contaId || !valorPrevisto) {
         mostrarToast('Selecione a conta bancária para consolidar.', 'error');
         return;
     }
 
     try {
+        const payload = {
+            item_receita_id: itemReceitaId || undefined,
+            data_recebimento: hoje,
+            valor_recebido: valorPrevisto,
+            competencia,
+            conta_bancaria_id: parseInt(contaId, 10),
+            descricao: linha?.nome || fonte?.nome || 'Receita',
+        };
+        if (!realizadaId) {
+            payload.observacoes = 'Consolidado pelo gerenciamento de receitas';
+        }
         const response = await fetch(realizadaId ? `${API_RECEITAS}/realizadas/${realizadaId}` : `${API_RECEITAS}/realizadas`, {
             method: realizadaId ? 'PUT' : 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                item_receita_id: itemReceitaId,
-                data_recebimento: hoje,
-                valor_recebido: valorPrevisto,
-                competencia,
-                conta_bancaria_id: parseInt(contaId, 10),
-                descricao: linha?.nome || fonte?.nome || 'Receita',
-                observacoes: 'Consolidado pelo gerenciamento de receitas',
-            }),
+            body: JSON.stringify(payload),
         });
 
         const result = await response.json();

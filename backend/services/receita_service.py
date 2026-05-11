@@ -410,9 +410,6 @@ class ReceitaService:
         if not receita:
             return None
 
-        if not dados_receita.get('item_receita_id'):
-            raise ValueError('item_receita_id é obrigatório')
-
         if not dados_receita.get('data_recebimento'):
             raise ValueError('data_recebimento é obrigatório')
 
@@ -431,12 +428,15 @@ class ReceitaService:
         else:
             competencia = data_recebimento.replace(day=1)
 
-        orcamento = ReceitaService._query_orcamentos().filter_by(
-            item_receita_id=dados_receita['item_receita_id'],
-            mes_referencia=competencia
-        ).first()
+        item_receita_id = dados_receita.get('item_receita_id') or receita.item_receita_id
+        orcamento = None
+        if item_receita_id:
+            orcamento = ReceitaService._query_orcamentos().filter_by(
+                item_receita_id=item_receita_id,
+                mes_referencia=competencia
+            ).first()
 
-        receita.item_receita_id = dados_receita['item_receita_id']
+        receita.item_receita_id = item_receita_id
         receita.data_recebimento = data_recebimento
         receita.valor_recebido = dados_receita['valor_recebido']
         receita.mes_referencia = competencia
@@ -444,7 +444,9 @@ class ReceitaService:
         receita.conta_bancaria_id = dados_receita.get('conta_bancaria_id')
         receita.descricao = dados_receita.get('descricao', '')
         receita.orcamento_id = orcamento.id if orcamento else None
-        receita.observacoes = dados_receita.get('observacoes', '')
+        # Preservar observacoes existentes se o payload não trouxer valor explícito
+        if 'observacoes' in dados_receita and dados_receita['observacoes'] is not None:
+            receita.observacoes = dados_receita['observacoes']
 
         db.session.commit()
         return receita
