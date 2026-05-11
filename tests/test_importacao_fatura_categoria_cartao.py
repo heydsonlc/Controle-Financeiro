@@ -14,6 +14,7 @@ from backend.models import (
 )
 from backend.routes.importacao_cartao import bp as importacao_cartao_bp
 from backend.services.categoria_cartao_service import CategoriaCartaoService
+from backend.services.importacao_cartao_messages import MSG_CATEGORIA_DESPESA_SEM_CATEGORIA_CARTAO
 from backend.services.importacao_cartao_service import ImportacaoCartaoService
 
 
@@ -301,6 +302,4 @@ def test_previsualizar_retorna_status_de_pendencias_e_avisos(app_context):
     assert data['pendencias']['categoria_despesa'] == 0
     assert data['pendencias']['categoria_cartao'] == 1
     assert data['pendencias']['avisos'] == 1
-    assert data['avisos_linhas'][0]['avisos'] == [
-        'Categoria do Cartao ainda nao configurada para esta Categoria de Despesa.'
-    ]
+    assert data['avisos_linhas'][0]['avisos'] == [MSG_CATEGORIA_DESPESA_SEM_CATEGORIA_CARTAO]

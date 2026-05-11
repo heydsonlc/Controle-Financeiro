@@ -10,6 +10,7 @@ try:
     from backend.models import Categoria, CategoriaCartao, ItemDespesa, LancamentoAgregado
     from backend.services.categoria_cartao_service import CategoriaCartaoService
     from backend.services.categoria_palavra_chave_service import CategoriaPalavraChaveService
+    from backend.services.importacao_cartao_messages import MSG_CATEGORIA_DESPESA_SEM_CATEGORIA_CARTAO
     from backend.services.importacao_cartao_service import ImportacaoCartaoService
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
     from backend.services.parsers import (
@@ -21,6 +22,7 @@ except ImportError:
     from models import Categoria, CategoriaCartao, ItemDespesa, LancamentoAgregado
     from services.categoria_cartao_service import CategoriaCartaoService
     from services.categoria_palavra_chave_service import CategoriaPalavraChaveService
+    from services.importacao_cartao_messages import MSG_CATEGORIA_DESPESA_SEM_CATEGORIA_CARTAO
     from services.importacao_cartao_service import ImportacaoCartaoService
     from services.perfil_financeiro_service import PerfilFinanceiroService
     from services.parsers import (
@@ -351,9 +353,7 @@ class ImportacaoCartaoUnificadoService:
                         linha['categoria_cartao_resolvida_id'] = resolucao_cartao.get('categoria_cartao_resolvida_id')
                         linha['categoria_cartao_resolvida_nome'] = resolucao_cartao.get('categoria_cartao_nome')
                 else:
-                    linha.setdefault('mensagens', []).append(
-                        'Categoria do Cartao ainda nao configurada para esta Categoria de Despesa.'
-                    )
+                    linha.setdefault('mensagens', []).append(MSG_CATEGORIA_DESPESA_SEM_CATEGORIA_CARTAO)
                     linha['categoria_cartao_origem'] = 'nao_configurada'
                     linha['categoria_cartao_vinculada_ao_cartao'] = False
         return linhas
@@ -392,7 +392,7 @@ class ImportacaoCartaoUnificadoService:
                     mensagens.append('Categoria do cartao global invalida.')
 
             if not linha.get('categoria_cartao_id'):
-                mensagens.append('Categoria do Cartao ainda nao configurada para esta Categoria de Despesa.')
+                mensagens.append(MSG_CATEGORIA_DESPESA_SEM_CATEGORIA_CARTAO)
 
             if not linha.get('categoria_id') and linha['status'] == 'valido':
                 linha['status'] = 'revisar'

@@ -13,6 +13,7 @@ from datetime import datetime
 from backend.services.importacao_cartao_service import ImportacaoCartaoService
 from backend.services.importacao_cartao_unificado_service import ImportacaoCartaoUnificadoService
 from backend.services.categoria_cartao_service import CategoriaCartaoService
+from backend.services.importacao_cartao_messages import MSG_CATEGORIA_DESPESA_SEM_CATEGORIA_CARTAO
 from backend.services.categoria_palavra_chave_service import CategoriaPalavraChaveService
 from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 from backend.models import db, ItemDespesa, Categoria
@@ -166,9 +167,7 @@ def _validar_payload_importacao(data):
                         'Esta categoria da despesa ainda nao esta vinculada ao cartao selecionado.'
                     )
                 else:
-                    linha.setdefault('avisos', []).append(
-                        'Esta categoria da despesa nao possui mapeamento para o cartao. Ajuste em Categorias antes de importar.'
-                    )
+                    linha.setdefault('avisos', []).append(MSG_CATEGORIA_DESPESA_SEM_CATEGORIA_CARTAO)
 
     try:
         competencia = datetime.strptime(competencia_str, '%Y-%m-%d').date().replace(day=1)
