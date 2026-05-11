@@ -2342,7 +2342,7 @@ class FinanciamentoService:
         if not indice:
             raise ValueError(
                 f'Nao ha TR cadastrada para a competencia {competencia}. '
-                f'Cadastre o indice para gerar o cronograma CAIXA SAC/TR.'
+                f'Cadastre o indice em Indexadores > TR para financiamentos SAC/TR.'
             )
         return Decimal(str(indice.valor_decimal))
 

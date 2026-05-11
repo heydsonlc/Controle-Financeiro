@@ -149,6 +149,51 @@
             gap: 15px;
             align-items: end;
         }
+
+        .tr-section {
+            margin-bottom: 30px;
+            border: 1px solid #dbe4f0;
+            border-radius: 6px;
+            padding: 18px;
+            background: #f8fbff;
+        }
+
+        .tr-section p {
+            margin-top: 0;
+            color: #475569;
+        }
+
+        .tr-grid {
+            display: grid;
+            grid-template-columns: 160px 160px 160px auto;
+            gap: 10px;
+            align-items: end;
+            margin: 16px 0;
+        }
+
+        .tr-import-grid {
+            display: grid;
+            grid-template-columns: minmax(280px, 1fr) 180px auto;
+            gap: 10px;
+            align-items: end;
+            margin-top: 16px;
+        }
+
+        .tr-import-grid textarea {
+            min-height: 96px;
+            resize: vertical;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: Consolas, monospace;
+        }
+
+        .tr-tools {
+            display: flex;
+            gap: 10px;
+            align-items: end;
+            margin: 16px 0;
+        }
     </style>
 </head>
 <body>
@@ -160,6 +205,87 @@
 
         <!-- Alertas -->
         <div id="alertContainer"></div>
+
+        <section class="tr-section" aria-labelledby="tituloTrFinanciamentos">
+            <h2 id="tituloTrFinanciamentos">TR para financiamentos SAC/TR</h2>
+            <p>
+                Esta TR é usada pelo motor de financiamentos SAC + TR. Informe o valor em percentual mensal:
+                0,16 representa 0,16% e será salvo internamente como 0.0016.
+            </p>
+
+            <form id="formTrOficial" onsubmit="salvarTrOficial(event)">
+                <div class="tr-grid">
+                    <div class="form-group">
+                        <label for="trCompetencia">Competência</label>
+                        <input type="month" id="trCompetencia" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="trValorPercentual">TR (%)</label>
+                        <input type="text" id="trValorPercentual" required placeholder="Ex: 0,16">
+                    </div>
+                    <div class="form-group">
+                        <label for="trFonte">Fonte</label>
+                        <input type="text" id="trFonte" value="BACEN">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Salvar TR</button>
+                </div>
+            </form>
+
+            <div class="tr-tools">
+                <div class="form-group">
+                    <label for="trFiltroAno">Filtrar TR por ano</label>
+                    <input type="number" id="trFiltroAno" min="1990" max="2050">
+                </div>
+                <button type="button" class="btn btn-secondary" onclick="carregarTrOficial()">Carregar TR</button>
+                <button type="button" class="btn btn-secondary" onclick="verificarTrFaltante()">Verificar faltantes</button>
+            </div>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Competência</th>
+                            <th>TR (%)</th>
+                            <th>Valor decimal</th>
+                            <th>Fonte</th>
+                            <th>Usada</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaTrOficial">
+                        <tr><td colspan="6" style="text-align: center;">Carregando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="tr-import-grid">
+                <div class="form-group">
+                    <label for="trImportTexto">Importar TR por texto/CSV</label>
+                    <textarea id="trImportTexto" placeholder="2026-06;0,15&#10;2026-07;0,16&#10;2026-08;0,17"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="trImportFonte">Fonte</label>
+                    <input type="text" id="trImportFonte" value="BACEN">
+                    <label style="margin-top: 10px;">
+                        <input type="checkbox" id="trImportSobrescrever">
+                        Sobrescrever existentes
+                    </label>
+                </div>
+                <button type="button" class="btn btn-primary" onclick="importarTrOficial()">Importar</button>
+            </div>
+
+            <div class="tr-tools">
+                <div class="form-group">
+                    <label for="trFaltanteInicio">Início</label>
+                    <input type="month" id="trFaltanteInicio">
+                </div>
+                <div class="form-group">
+                    <label for="trFaltanteFim">Fim</label>
+                    <input type="month" id="trFaltanteFim">
+                </div>
+                <span id="trFaltantesResultado"></span>
+            </div>
+        </section>
 
         <!-- Formulário de cadastro -->
         <div class="card">
@@ -359,5 +485,6 @@
             carregarIndexadores();
         }
     </script>
+    <script src="{{ url_for('static', filename='js/indexadores.js') }}"></script>
 </body>
 </html>
