@@ -407,7 +407,7 @@ def obter_resumo_uso(veiculo_id):
 def listar_regras_km(veiculo_id):
     try:
         if not _buscar_veiculo_perfil(veiculo_id):
-            return jsonify({'success': False, 'error': 'VeÃ­culo nÃ£o encontrado'}), 404
+            return jsonify({'success': False, 'error': 'Veículo não encontrado'}), 404
         regras = PerfilFinanceiroService.aplicar_perfil_query(
             VeiculoRegraManutencaoKm.query, VeiculoRegraManutencaoKm
         ).filter_by(veiculo_id=veiculo_id).order_by(VeiculoRegraManutencaoKm.id.asc()).all()

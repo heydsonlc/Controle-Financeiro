@@ -160,7 +160,7 @@ async function renderCaminhosGrid() {
         container.innerHTML = `
             <div class="empty-state">
                 <h3>Nenhum caminho cadastrado</h3>
-                <p class="small-note">Crie um veÃ­culo ou um caminho de app para comparar cenÃ¡rios.</p>
+                <p class="small-note">Crie um veículo ou um caminho de app para comparar cenários.</p>
             </div>
         `;
         atualizarResumoMobilidadeAtiva();
@@ -297,7 +297,7 @@ async function carregarCaminhosApp() {
         caminhosApps = itens;
 
         const ids = new Set(itens.map(c => Number(c.id)).filter(Number.isFinite));
-        // limpar ativos que nÃ£o existem mais
+        // limpar ativos que não existem mais
         Array.from(mobilidadeAtiva.TRANSPORTE_APP || []).forEach((id) => {
             if (!ids.has(Number(id))) mobilidadeAtiva.TRANSPORTE_APP.delete(Number(id));
         });
