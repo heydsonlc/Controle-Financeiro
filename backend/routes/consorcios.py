@@ -10,11 +10,25 @@ from sqlalchemy import or_
 
 try:
     from backend.models import db, ContratoConsorcio, ItemDespesa, Categoria, Conta
-    from backend.services.consorcio_receita_service import gerar_ou_atualizar_receita_contemplacao, perfil_id_consorcio
+    from backend.services.consorcio_receita_service import (
+        gerar_ou_atualizar_receita_contemplacao,
+        perfil_id_consorcio,
+        receitas_por_marcador,
+        marcador_consorcio,
+        _receita_tem_movimento,
+        _remover_marcador,
+    )
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import db, ContratoConsorcio, ItemDespesa, Categoria, Conta
-    from services.consorcio_receita_service import gerar_ou_atualizar_receita_contemplacao, perfil_id_consorcio
+    from services.consorcio_receita_service import (
+        gerar_ou_atualizar_receita_contemplacao,
+        perfil_id_consorcio,
+        receitas_por_marcador,
+        marcador_consorcio,
+        _receita_tem_movimento,
+        _remover_marcador,
+    )
     from services.perfil_financeiro_service import PerfilFinanceiroService
 
 consorcios_bp = Blueprint('consorcios', __name__, url_prefix='/api/consorcios')
@@ -633,6 +647,16 @@ def deletar_consorcio(id):
                 Conta.item_despesa_id.in_(parcela_ids),
                 Conta.status_pagamento != 'Pago',
             ).delete(synchronize_session=False)
+
+        # Remover receitas de contemplação geradas por este consórcio
+        receitas = receitas_por_marcador(consorcio.id)
+        marcador = marcador_consorcio(consorcio.id)
+        for receita in receitas:
+            if _receita_tem_movimento(receita):
+                # Receita já efetivada: preservar histórico, apenas desvincular
+                receita.observacoes = _remover_marcador(receita.observacoes, marcador)
+            else:
+                db.session.delete(receita)
 
         db.session.commit()
 
