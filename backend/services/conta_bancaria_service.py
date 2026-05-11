@@ -161,6 +161,55 @@ class ContaBancariaService:
         }
 
     @staticmethod
+    def conferir_saldo(conta_id: int) -> dict:
+        conta = ContaBancaria.query.filter(
+            ContaBancaria.id == conta_id,
+            PerfilFinanceiroService.condicao_perfil(ContaBancaria),
+        ).first()
+        if not conta:
+            return None
+
+        total_creditos = db.session.query(
+            func.coalesce(func.sum(MovimentoFinanceiro.valor), 0)
+        ).filter(
+            MovimentoFinanceiro.conta_bancaria_id == conta_id,
+            MovimentoFinanceiro.tipo == 'CREDITO',
+            PerfilFinanceiroService.condicao_perfil(MovimentoFinanceiro),
+        ).scalar()
+
+        total_debitos = db.session.query(
+            func.coalesce(func.sum(MovimentoFinanceiro.valor), 0)
+        ).filter(
+            MovimentoFinanceiro.conta_bancaria_id == conta_id,
+            MovimentoFinanceiro.tipo == 'DEBITO',
+            PerfilFinanceiroService.condicao_perfil(MovimentoFinanceiro),
+        ).scalar()
+
+        quantidade = db.session.query(func.count(MovimentoFinanceiro.id)).filter(
+            MovimentoFinanceiro.conta_bancaria_id == conta_id,
+            PerfilFinanceiroService.condicao_perfil(MovimentoFinanceiro),
+        ).scalar()
+
+        saldo_inicial = Decimal(str(conta.saldo_inicial or 0))
+        creditos = Decimal(str(total_creditos or 0))
+        debitos = Decimal(str(total_debitos or 0))
+        saldo_calculado = saldo_inicial + creditos - debitos
+        saldo_atual = Decimal(str(conta.saldo_atual or 0))
+        divergencia = saldo_atual - saldo_calculado
+
+        return {
+            'conta_id': conta_id,
+            'saldo_inicial': float(saldo_inicial),
+            'total_creditos': float(creditos),
+            'total_debitos': float(debitos),
+            'saldo_calculado': float(saldo_calculado),
+            'saldo_atual': float(saldo_atual),
+            'divergencia': float(divergencia),
+            'quantidade_movimentos': int(quantidade or 0),
+            'consistente': abs(divergencia) <= Decimal('0.01'),
+        }
+
+    @staticmethod
     def parse_data(value) -> date:
         if not value:
             return datetime.utcnow().date()

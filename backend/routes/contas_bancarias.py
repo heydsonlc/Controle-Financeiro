@@ -618,3 +618,20 @@ def transferir():
     except Exception:
         db.session.rollback()
         return _unexpected_error()
+
+
+@contas_bancarias_bp.route('/<int:id>/conferir-saldo', methods=['GET'])
+def conferir_saldo(id):
+    """
+    Conferência read-only de saldo bancário (CORE-SALDO-1D).
+
+    Compara saldo_atual persistido com saldo recalculado a partir dos movimentos.
+    Não altera saldo, não cria movimentos.
+    """
+    try:
+        resultado = ContaBancariaService.conferir_saldo(id)
+        if resultado is None:
+            return _json_error('Conta bancária não encontrada.', 404)
+        return jsonify({'success': True, 'data': resultado}), 200
+    except Exception:
+        return _unexpected_error()

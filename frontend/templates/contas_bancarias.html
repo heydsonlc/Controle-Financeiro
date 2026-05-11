@@ -394,6 +394,19 @@
         </form>
     </div>
 </div>
+<div id="modal-conferencia-saldo" class="contas-modal" aria-hidden="true">
+    <div class="contas-modal-box" role="dialog" aria-modal="true" aria-labelledby="conferencia-titulo">
+        <div class="contas-modal-header">
+            <h2 id="conferencia-titulo">Conferência de Saldo</h2>
+            <button type="button" onclick="fecharModal('modal-conferencia-saldo')" aria-label="Fechar">×</button>
+        </div>
+        <div class="contas-modal-body" id="conferencia-corpo">
+        </div>
+        <div class="contas-modal-footer">
+            <button type="button" class="contas-secondary-btn" onclick="fecharModal('modal-conferencia-saldo')">Fechar</button>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}

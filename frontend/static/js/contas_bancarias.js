@@ -174,6 +174,7 @@ function criarLinhaConta(conta, maiorSaldoAbsoluto) {
                 <button type="button" class="contas-action-btn" onclick="abrirTransferencia(${conta.id})" title="Transferir" aria-label="Transferir" ${statusInativo ? 'disabled' : ''}>${contasIcon('transfer')}</button>
                 <button type="button" class="contas-action-btn" onclick="abrirExtrato(${conta.id})" title="Extrato" aria-label="Extrato" ${statusInativo ? 'disabled' : ''}>${contasIcon('file')}</button>
                 <button type="button" class="contas-action-btn" onclick="abrirAjusteSaldoDireto(${conta.id})" title="Ajustar saldo" aria-label="Ajustar saldo" ${statusInativo ? 'disabled' : ''}>${contasIcon('adjust')}</button>
+                <button type="button" class="contas-action-btn" onclick="conferirSaldo(${conta.id})" title="Conferir saldo" aria-label="Conferir saldo">${contasIcon('check')}</button>
                 ${statusInativo
                     ? `<button type="button" class="contas-action-btn" onclick="ativarConta(${conta.id})" title="Ativar" aria-label="Ativar">${contasIcon('restore')}</button>`
                     : `<button type="button" class="contas-action-btn danger" onclick="abrirModalInativar(${conta.id})" title="Inativar" aria-label="Inativar">${contasIcon('ban')}</button>`}
@@ -457,6 +458,42 @@ function criarMovimentoHTML(movimento) {
     `;
 }
 
+async function conferirSaldo(contaId) {
+    const modal = document.getElementById('modal-conferencia-saldo');
+    if (!modal) {
+        mostrarToast('Modal de conferência não encontrado.', 'erro');
+        return;
+    }
+    const corpo = document.getElementById('conferencia-corpo');
+    if (corpo) corpo.innerHTML = '<p class="contas-loading">Verificando saldo...</p>';
+    abrirModal('modal-conferencia-saldo');
+
+    try {
+        const resp = await fetch(`/api/contas/${contaId}/conferir-saldo`);
+        const json = await resp.json();
+        if (!json.success) throw new Error(json.error || 'Erro ao conferir saldo');
+        const d = json.data;
+        const consistente = d.consistente;
+        const statusCls = consistente ? 'conferencia-ok' : 'conferencia-erro';
+        const statusTxt = consistente ? 'Consistente' : 'Divergente';
+        if (corpo) corpo.innerHTML = `
+            <table class="conferencia-tabela">
+                <tr><th>Saldo inicial</th><td>${formatarMoedaDisplay(d.saldo_inicial)}</td></tr>
+                <tr><th>Créditos</th><td>${formatarMoedaDisplay(d.total_creditos)}</td></tr>
+                <tr><th>Débitos</th><td>${formatarMoedaDisplay(d.total_debitos)}</td></tr>
+                <tr><th>Saldo calculado</th><td>${formatarMoedaDisplay(d.saldo_calculado)}</td></tr>
+                <tr><th>Saldo registrado</th><td>${formatarMoedaDisplay(d.saldo_atual)}</td></tr>
+                <tr><th>Divergência</th><td>${formatarMoedaDisplay(d.divergencia)}</td></tr>
+                <tr><th>Movimentos</th><td>${d.quantidade_movimentos}</td></tr>
+            </table>
+            <p class="conferencia-status ${statusCls}">Status: ${statusTxt}</p>
+            ${!consistente ? '<p class="conferencia-aviso">Este diagnóstico não altera o saldo. Use ajuste de saldo apenas após conferir o extrato.</p>' : ''}
+        `;
+    } catch (err) {
+        if (corpo) corpo.innerHTML = `<p class="contas-error">${err.message}</p>`;
+    }
+}
+
 function abrirAjusteSaldoDireto(contaId) {
     const conta = (estadoContas.contas || []).find((c) => c.id === contaId);
     if (!conta) return;
@@ -627,7 +664,8 @@ function contasIcon(name) {
         ban: '<path d="M6 6l12 12"/><path d="M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/>',
         restore: '<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 5v6h-6"/>',
         trash: '<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/>',
-        adjust: '<path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="3"/>'
+        adjust: '<path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="3"/>',
+        check: '<path d="M9 12l2 2 4-4"/><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>'
     };
     return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${icons[name] || icons.bank}</svg>`;
 }

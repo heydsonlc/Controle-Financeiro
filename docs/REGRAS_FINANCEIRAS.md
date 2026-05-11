@@ -252,6 +252,13 @@ Bloqueada quando existir qualquer dos seguintes:
 4. Extrato é a fonte de verdade do saldo
 5. Transferência entre contas gera 2 movimentos atômicos (débito na origem, crédito no destino)
 
+**Conferência read-only de saldo (CORE-SALDO-1D)**:
+- `GET /api/contas/<id>/conferir-saldo` — compara `saldo_atual` persistido com `saldo_inicial + Σcréditos − Σdébitos`.
+- **Read-only**: não altera `saldo_atual`, não cria movimentos, não corrige divergências automaticamente.
+- `divergencia = saldo_atual − saldo_calculado`; `consistente = abs(divergencia) <= 0.01`.
+- Divergência é informativa: correção operacional requer ajuste de saldo explícito pelo usuário (CORE-SALDO-2 — pendência futura).
+- Pendência futura: **CORE-SALDO-2 — Ajuste assistido de divergência de saldo bancário**.
+
 ---
 
 ## Regras de Recorrências

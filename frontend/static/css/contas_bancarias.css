@@ -1157,3 +1157,12 @@ body.app-shell-body .app-content {
         grid-template-columns: 1fr;
     }
 }
+
+/* Conferência de saldo (CORE-SALDO-1D) */
+.conferencia-tabela { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+.conferencia-tabela th, .conferencia-tabela td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--contas-border, #e5e7eb); }
+.conferencia-tabela th { font-weight: 600; color: var(--contas-text-muted, #6b7280); width: 55%; }
+.conferencia-status { font-weight: 700; font-size: 1rem; margin: 0.5rem 0; }
+.conferencia-ok { color: #16a34a; }
+.conferencia-erro { color: #dc2626; }
+.conferencia-aviso { font-size: 0.85rem; color: var(--contas-text-muted, #6b7280); margin-top: 0.5rem; border-top: 1px solid var(--contas-border, #e5e7eb); padding-top: 0.5rem; }
