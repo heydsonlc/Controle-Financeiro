@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from flask import Flask, render_template
 
-from backend.models import db, Financiamento, FinanciamentoDocumento
+from backend.models import db, Financiamento, FinanciamentoDocumento, FinanciamentoParcela
 from backend.routes.financiamentos import financiamentos_bp
 from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 
@@ -134,6 +134,39 @@ def test_upload_imagem_valida(client):
     assert response.status_code == 201
     assert documento.mime_type == 'image/png'
     assert documento.nome_armazenado.endswith('.png')
+
+
+def test_upload_permite_vincular_documento_a_parcela(client):
+    financiamento = _criar_financiamento()
+    parcela = FinanciamentoParcela(
+        perfil_financeiro_id=financiamento.perfil_financeiro_id,
+        financiamento_id=financiamento.id,
+        numero_parcela=1,
+        data_vencimento=date(2026, 6, 1),
+        valor_amortizacao=Decimal('1000.00'),
+        valor_juros=Decimal('1200.00'),
+        valor_seguro=Decimal('180.00'),
+        valor_taxa_adm=Decimal('25.00'),
+        valor_previsto_total=Decimal('2405.00'),
+        saldo_devedor_apos_pagamento=Decimal('249000.00'),
+    )
+    db.session.add(parcela)
+    db.session.commit()
+
+    response = client.post(
+        f'/api/financiamentos/{financiamento.id}/documentos',
+        data={
+            'tipo_documento': 'comprovante_pagamento',
+            'parcela_id': str(parcela.id),
+            'arquivo': (io.BytesIO(_pdf_bytes()), 'comprovante.pdf', 'application/pdf'),
+        },
+        content_type='multipart/form-data',
+    )
+
+    data = response.get_json()
+    assert response.status_code == 201
+    assert data['documento']['parcela_id'] == parcela.id
+    assert FinanciamentoDocumento.query.one().parcela_id == parcela.id
 
 
 @pytest.mark.parametrize(

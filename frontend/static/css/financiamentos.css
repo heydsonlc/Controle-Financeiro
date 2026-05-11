@@ -1406,6 +1406,21 @@ body.app-shell-body .app-content {
     min-width: 860px;
 }
 
+.fin-conf-table,
+.fin-conf-preview-table {
+    min-width: 920px;
+}
+
+.fin-conf-preview {
+    margin-top: 16px;
+}
+
+.fin-conf-preview h3 {
+    margin: 0 0 10px;
+    color: var(--fin-text);
+    font-size: 0.95rem;
+}
+
 .fin-doc-table td strong,
 .fin-doc-table td small {
     display: block;

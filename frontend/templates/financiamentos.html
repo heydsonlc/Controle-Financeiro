@@ -669,6 +669,92 @@
         <div id="demonstrativo-conteudo" class="fin-demo-content"></div>
     </div>
 </div>
+
+<div id="modal-conferencia-caixa" class="fin-modal" aria-hidden="true">
+    <div class="fin-modal-box fin-modal-wide" role="dialog" aria-modal="true" aria-labelledby="modal-conferencia-caixa-title">
+        <div class="fin-modal-header">
+            <h2 id="modal-conferencia-caixa-title">Conferir documento CAIXA</h2>
+            <button type="button" onclick="fecharModal('modal-conferencia-caixa')" aria-label="Fechar">×</button>
+        </div>
+        <form id="form-conferencia-caixa">
+            <input type="hidden" id="conf-documento-id">
+            <div class="fin-modal-info">
+                A conferência não altera o cronograma. Para corrigir o saldo projetado, use Ajustar saldo devedor.
+            </div>
+            <div id="conf-documento-info" class="fin-modal-info"></div>
+            <div class="fin-form-grid fin-form-grid-three">
+                <label class="fin-field">
+                    <span>Tipo de conferência</span>
+                    <select id="conf-tipo" required>
+                        <option value="parcela">Parcela</option>
+                        <option value="demonstrativo_anual">Demonstrativo anual</option>
+                        <option value="evolucao_saldo">Evolução do saldo</option>
+                        <option value="amortizacao">Amortização</option>
+                        <option value="quitacao">Quitação</option>
+                        <option value="outros">Outros</option>
+                    </select>
+                </label>
+                <label class="fin-field">
+                    <span>Competência</span>
+                    <input id="conf-competencia" type="month">
+                </label>
+                <label class="fin-field">
+                    <span>Ano-base</span>
+                    <input id="conf-ano-base" type="number" min="1900" max="2200" placeholder="2026">
+                </label>
+                <label class="fin-field">
+                    <span>Data de referência</span>
+                    <input id="conf-data-referencia" type="date">
+                </label>
+                <label class="fin-field fin-money-field">
+                    <span>Amortização real</span>
+                    <div><span>R$</span><input id="conf-amortizacao-real" type="text" inputmode="decimal"></div>
+                </label>
+                <label class="fin-field fin-money-field">
+                    <span>Juros real</span>
+                    <div><span>R$</span><input id="conf-juros-real" type="text" inputmode="decimal"></div>
+                </label>
+                <label class="fin-field fin-money-field">
+                    <span>Seguro real</span>
+                    <div><span>R$</span><input id="conf-seguro-real" type="text" inputmode="decimal"></div>
+                </label>
+                <label class="fin-field fin-money-field">
+                    <span>Taxa adm real</span>
+                    <div><span>R$</span><input id="conf-taxa-adm-real" type="text" inputmode="decimal"></div>
+                </label>
+                <label class="fin-field fin-money-field">
+                    <span>Total real</span>
+                    <div><span>R$</span><input id="conf-total-real" type="text" inputmode="decimal"></div>
+                </label>
+                <label class="fin-field fin-money-field">
+                    <span>Saldo devedor real</span>
+                    <div><span>R$</span><input id="conf-saldo-real" type="text" inputmode="decimal"></div>
+                </label>
+                <label class="fin-field fin-money-field">
+                    <span>Juros/correção real</span>
+                    <div><span>R$</span><input id="conf-juros-correcao-real" type="text" inputmode="decimal"></div>
+                </label>
+                <label class="fin-field fin-money-field">
+                    <span>Amortização do mês real</span>
+                    <div><span>R$</span><input id="conf-amortizacao-mes-real" type="text" inputmode="decimal"></div>
+                </label>
+                <label class="fin-field">
+                    <span>Prazo remanescente real</span>
+                    <input id="conf-prazo-remanescente-real" type="number" min="0">
+                </label>
+                <label class="fin-field fin-field-full">
+                    <span>Observação</span>
+                    <textarea id="conf-observacao" rows="3"></textarea>
+                </label>
+            </div>
+            <div id="conf-preview" class="fin-conf-preview"></div>
+            <div class="fin-modal-actions">
+                <button type="button" class="fin-secondary-btn" onclick="fecharModal('modal-conferencia-caixa')">Cancelar</button>
+                <button type="submit" class="fin-primary-btn">Salvar conferência</button>
+            </div>
+        </form>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}

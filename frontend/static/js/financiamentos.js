@@ -5,7 +5,8 @@ const estadoFinanciamentos = {
     filtrados: [],
     atual: null,
     abaAtual: 'parcelas',
-    documentos: []
+    documentos: [],
+    conferenciasCaixa: []
 };
 
 const FAIXAS_MIP_PADRAO = [
@@ -114,15 +115,33 @@ function configurarEventosSimulacao() {
 
 function configurarEventosDocumentos() {
     document.addEventListener('submit', (event) => {
-        if (event.target?.id !== 'form-fin-doc') return;
-        event.preventDefault();
-        enviarDocumentoFinanciamento();
+        if (event.target?.id === 'form-fin-doc') {
+            event.preventDefault();
+            enviarDocumentoFinanciamento();
+            return;
+        }
+        if (event.target?.id === 'form-conferencia-caixa') {
+            event.preventDefault();
+            salvarConferenciaCaixa(event);
+        }
     });
 
     document.addEventListener('change', (event) => {
-        if (event.target?.id !== 'fin-doc-file') return;
-        const nome = event.target.files?.[0]?.name || 'Nenhum arquivo selecionado';
-        setText('fin-doc-file-name', nome);
+        if (event.target?.id === 'fin-doc-file') {
+            const nome = event.target.files?.[0]?.name || 'Nenhum arquivo selecionado';
+            setText('fin-doc-file-name', nome);
+            return;
+        }
+        if (['conf-competencia', 'conf-data-referencia', 'conf-tipo'].includes(event.target?.id)) {
+            atualizarPreviewConferenciaCaixa();
+        }
+    });
+
+    document.addEventListener('input', (event) => {
+        if (!String(event.target?.id || '').startsWith('conf-')) return;
+        if (event.target.matches('input, textarea, select')) {
+            atualizarPreviewConferenciaCaixa();
+        }
     });
 }
 
@@ -837,6 +856,18 @@ function renderizarAbaDocumentos(financiamento) {
                     <div class="fin-loading-state">Carregando documentos...</div>
                 </div>
             </div>
+            <div class="fin-doc-list-card">
+                <div class="fin-doc-list-header">
+                    <h3>Conferências CAIXA</h3>
+                    <span id="fin-conf-count">Carregando...</span>
+                </div>
+                <div class="fin-modal-info">
+                    A conferência compara valores reais digitados com o cronograma simulado e não altera o financiamento.
+                </div>
+                <div id="fin-conf-list" class="fin-doc-list" data-financiamento-id="${Number(financiamento.id)}">
+                    <div class="fin-loading-state">Carregando conferências...</div>
+                </div>
+            </div>
         </div>
     `;
 }
@@ -855,6 +886,7 @@ async function carregarDocumentosFinanciamento() {
         }
         estadoFinanciamentos.documentos = Array.isArray(resultado.documentos) ? resultado.documentos : [];
         renderizarListaDocumentos(estadoFinanciamentos.documentos);
+        await carregarConferenciasCaixa();
     } catch (error) {
         lista.innerHTML = `<div class="fin-tab-empty"><h3>Não foi possível carregar os documentos.</h3><p>${escapeHtml(error.message)}</p></div>`;
     }
@@ -889,6 +921,7 @@ function renderizarListaDocumentos(documentos) {
                         <th>Competência</th>
                         <th>Data</th>
                         <th>Tamanho</th>
+                        <th>Conferências</th>
                         <th>Ações</th>
                     </tr>
                 </thead>
@@ -903,8 +936,10 @@ function renderizarListaDocumentos(documentos) {
                             <td>${escapeHtml(doc.competencia || (doc.ano_base ? String(doc.ano_base) : '-'))}</td>
                             <td>${doc.data_documento ? formatarDataBR(doc.data_documento) : '-'}</td>
                             <td>${formatarTamanhoBytes(doc.tamanho_bytes)}</td>
+                            <td>${Number(doc.conferencias_count || 0)}</td>
                             <td>
                                 <button type="button" class="fin-table-action-btn" onclick="baixarDocumentoFinanciamento(${Number(doc.id)})">Baixar</button>
+                                <button type="button" class="fin-table-action-btn" onclick="abrirModalConferenciaCaixa(${Number(doc.id)})">Conferir valores</button>
                                 <button type="button" class="fin-table-action-btn danger" onclick="excluirDocumentoFinanciamento(${Number(doc.id)})">Excluir</button>
                             </td>
                         </tr>
@@ -966,6 +1001,260 @@ async function excluirDocumentoFinanciamento(documentoId) {
             throw new Error(resultado.error || 'Erro ao excluir documento');
         }
         mostrarToast(resultado.aviso || 'Documento excluído com sucesso.');
+        await carregarDocumentosFinanciamento();
+    } catch (error) {
+        mostrarToast(error.message, 'erro');
+    }
+}
+
+async function carregarConferenciasCaixa() {
+    const financiamento = estadoFinanciamentos.atual;
+    const lista = document.getElementById('fin-conf-list');
+    if (!financiamento || !lista) return;
+
+    lista.innerHTML = '<div class="fin-loading-state">Carregando conferências...</div>';
+    try {
+        const response = await fetch(`${API_BASE}/${financiamento.id}/conferencias-caixa`);
+        const resultado = await response.json();
+        if (!resultado.success) {
+            throw new Error(resultado.error || 'Erro ao carregar conferências');
+        }
+        estadoFinanciamentos.conferenciasCaixa = Array.isArray(resultado.conferencias) ? resultado.conferencias : [];
+        renderizarListaConferenciasCaixa(estadoFinanciamentos.conferenciasCaixa);
+    } catch (error) {
+        lista.innerHTML = `<div class="fin-tab-empty"><h3>Não foi possível carregar as conferências.</h3><p>${escapeHtml(error.message)}</p></div>`;
+    }
+}
+
+function renderizarListaConferenciasCaixa(conferencias) {
+    const lista = document.getElementById('fin-conf-list');
+    const contador = document.getElementById('fin-conf-count');
+    if (!lista) return;
+    if (contador) contador.textContent = `${conferencias.length} conferência${conferencias.length === 1 ? '' : 's'}`;
+
+    if (!conferencias.length) {
+        lista.innerHTML = `
+            <div class="fin-tab-empty">
+                <h3>Nenhuma conferência cadastrada.</h3>
+                <p>Use Conferir valores em um documento para registrar a comparação manual entre CAIXA e sistema.</p>
+            </div>
+        `;
+        return;
+    }
+
+    lista.innerHTML = `
+        <div class="fin-table-wrap">
+            <table class="fin-schedule-table fin-conf-table">
+                <thead>
+                    <tr>
+                        <th>Tipo</th>
+                        <th>Referência</th>
+                        <th>Documento</th>
+                        <th>Total real</th>
+                        <th>Total simulado</th>
+                        <th>Diferença total</th>
+                        <th>Saldo real</th>
+                        <th>Saldo simulado</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${conferencias.map((conf) => `
+                        <tr>
+                            <td>${escapeHtml(conf.rotulo_tipo || conf.tipo_conferencia || '-')}</td>
+                            <td>${escapeHtml(conf.competencia || conf.data_referencia || (conf.ano_base ? String(conf.ano_base) : '-'))}</td>
+                            <td>${escapeHtml(conf.documento?.nome_original || '-')}</td>
+                            <td>${formatarMoedaOuTraco(conf.valor_real_total)}</td>
+                            <td>${formatarMoedaOuTraco(conf.valor_simulado_total)}</td>
+                            <td>${formatarMoedaOuTraco(conf.diferenca_total)}</td>
+                            <td>${formatarMoedaOuTraco(conf.saldo_devedor_real)}</td>
+                            <td>${formatarMoedaOuTraco(conf.saldo_devedor_simulado)}</td>
+                            <td>
+                                <button type="button" class="fin-table-action-btn danger" onclick="excluirConferenciaCaixa(${Number(conf.id)})">Excluir</button>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+function abrirModalConferenciaCaixa(documentoId = null) {
+    const financiamento = estadoFinanciamentos.atual;
+    if (!financiamento) return;
+
+    const documento = documentoId ? obterDocumentoFinanciamento(documentoId) : null;
+    const form = document.getElementById('form-conferencia-caixa');
+    if (form) form.reset();
+
+    setValue('conf-documento-id', documento ? documento.id : '');
+    setValue('conf-tipo', inferirTipoConferencia(documento));
+    setValue('conf-competencia', documento?.competencia || '');
+    setValue('conf-ano-base', documento?.ano_base || '');
+    setValue('conf-data-referencia', documento?.data_documento || '');
+    setText(
+        'conf-documento-info',
+        documento
+            ? `Documento: ${documento.nome_original || '-'}`
+            : 'Conferência sem documento associado.'
+    );
+    renderizarPreviewConferencia(null);
+    abrirModal('modal-conferencia-caixa');
+    atualizarPreviewConferenciaCaixa();
+}
+
+function obterDocumentoFinanciamento(documentoId) {
+    return (estadoFinanciamentos.documentos || []).find((doc) => Number(doc.id) === Number(documentoId));
+}
+
+function inferirTipoConferencia(documento) {
+    const tipo = documento?.tipo_documento || '';
+    if (tipo === 'demonstrativo_evolucao') return 'evolucao_saldo';
+    if (tipo === 'demonstrativo_valores_cobrados') return 'parcela';
+    if (tipo === 'comprovante_amortizacao') return 'amortizacao';
+    if (tipo === 'extrato_anual') return 'demonstrativo_anual';
+    if (tipo === 'quitacao') return 'quitacao';
+    return 'parcela';
+}
+
+async function salvarConferenciaCaixa(event) {
+    event?.preventDefault?.();
+    const financiamento = estadoFinanciamentos.atual;
+    if (!financiamento) return;
+
+    const payload = montarPayloadConferenciaCaixa();
+    try {
+        const response = await fetch(`${API_BASE}/${financiamento.id}/conferencias-caixa`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const resultado = await response.json();
+        if (!resultado.success) {
+            throw new Error(resultado.error || 'Erro ao salvar conferência');
+        }
+        fecharModal('modal-conferencia-caixa');
+        mostrarToast('Conferência CAIXA registrada com sucesso.');
+        await carregarDocumentosFinanciamento();
+    } catch (error) {
+        mostrarToast(error.message, 'erro');
+    }
+}
+
+function montarPayloadConferenciaCaixa() {
+    const documentoId = document.getElementById('conf-documento-id')?.value || null;
+    return removerCamposVazios({
+        documento_id: documentoId ? Number(documentoId) : null,
+        tipo_conferencia: document.getElementById('conf-tipo')?.value || 'parcela',
+        competencia: document.getElementById('conf-competencia')?.value || null,
+        ano_base: document.getElementById('conf-ano-base')?.value || null,
+        data_referencia: document.getElementById('conf-data-referencia')?.value || null,
+        valor_real_amortizacao: valorMoedaPayload('conf-amortizacao-real'),
+        valor_real_juros: valorMoedaPayload('conf-juros-real'),
+        valor_real_seguro: valorMoedaPayload('conf-seguro-real'),
+        valor_real_taxa_adm: valorMoedaPayload('conf-taxa-adm-real'),
+        valor_real_total: valorMoedaPayload('conf-total-real'),
+        saldo_devedor_real: valorMoedaPayload('conf-saldo-real'),
+        juros_correcao_mes_real: valorMoedaPayload('conf-juros-correcao-real'),
+        amortizacao_mes_real: valorMoedaPayload('conf-amortizacao-mes-real'),
+        prazo_remanescente_real: document.getElementById('conf-prazo-remanescente-real')?.value || null,
+        observacao: document.getElementById('conf-observacao')?.value || null
+    });
+}
+
+function removerCamposVazios(payload) {
+    return Object.fromEntries(Object.entries(payload).filter(([, valor]) => valor !== null && valor !== ''));
+}
+
+function valorMoedaPayload(id) {
+    const raw = document.getElementById(id)?.value;
+    if (!raw || !String(raw).trim()) return null;
+    return parseMoeda(raw);
+}
+
+let timerPreviewConferencia = null;
+function atualizarPreviewConferenciaCaixa() {
+    clearTimeout(timerPreviewConferencia);
+    timerPreviewConferencia = setTimeout(carregarPreviewConferenciaCaixa, 200);
+}
+
+async function carregarPreviewConferenciaCaixa() {
+    const financiamento = estadoFinanciamentos.atual;
+    const preview = document.getElementById('conf-preview');
+    if (!financiamento || !preview) return;
+
+    const competencia = document.getElementById('conf-competencia')?.value;
+    const dataReferencia = document.getElementById('conf-data-referencia')?.value;
+    if (!competencia && !dataReferencia) {
+        renderizarPreviewConferencia(null);
+        return;
+    }
+
+    try {
+        const params = new URLSearchParams();
+        if (competencia) params.set('competencia', competencia);
+        if (dataReferencia) params.set('data_referencia', dataReferencia);
+        const response = await fetch(`${API_BASE}/${financiamento.id}/valores-simulados?${params.toString()}`);
+        const resultado = await response.json();
+        if (!resultado.success) throw new Error(resultado.error || 'Erro ao buscar valores simulados');
+        renderizarPreviewConferencia(resultado.data || null);
+    } catch (error) {
+        preview.innerHTML = `<div class="fin-modal-info">${escapeHtml(error.message)}</div>`;
+    }
+}
+
+function renderizarPreviewConferencia(simulado) {
+    const preview = document.getElementById('conf-preview');
+    if (!preview) return;
+    if (!simulado?.encontrado) {
+        preview.innerHTML = '<div class="fin-modal-info">Informe uma competência ou data de referência para buscar valores simulados do cronograma.</div>';
+        return;
+    }
+
+    const linhas = [
+        ['Amortização', valorMoedaPayload('conf-amortizacao-real'), simulado.amortizacao],
+        ['Juros', valorMoedaPayload('conf-juros-real'), simulado.juros],
+        ['Seguro', valorMoedaPayload('conf-seguro-real'), simulado.seguro],
+        ['Taxa adm', valorMoedaPayload('conf-taxa-adm-real'), simulado.taxa_adm],
+        ['Total', valorMoedaPayload('conf-total-real'), simulado.total],
+        ['Saldo devedor', valorMoedaPayload('conf-saldo-real'), simulado.saldo_devedor]
+    ];
+
+    preview.innerHTML = `
+        <h3>Comparação prévia</h3>
+        <div class="fin-table-wrap">
+            <table class="fin-schedule-table fin-conf-preview-table">
+                <thead><tr><th>Campo</th><th>Real</th><th>Simulado</th><th>Diferença</th></tr></thead>
+                <tbody>
+                    ${linhas.map(([label, real, previsto]) => `
+                        <tr>
+                            <td>${label}</td>
+                            <td>${formatarMoedaOuTraco(real)}</td>
+                            <td>${formatarMoedaOuTraco(previsto)}</td>
+                            <td>${real === null || real === undefined ? '-' : formatarMoedaOuTraco(Number(real) - Number(previsto || 0))}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+async function excluirConferenciaCaixa(conferenciaId) {
+    const financiamento = estadoFinanciamentos.atual;
+    if (!financiamento) return;
+    if (!window.confirm('Excluir esta conferência CAIXA?')) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/${financiamento.id}/conferencias-caixa/${conferenciaId}`, {
+            method: 'DELETE'
+        });
+        const resultado = await response.json();
+        if (!resultado.success) {
+            throw new Error(resultado.error || 'Erro ao excluir conferência');
+        }
+        mostrarToast('Conferência excluída com sucesso.');
         await carregarDocumentosFinanciamento();
     } catch (error) {
         mostrarToast(error.message, 'erro');
@@ -1511,6 +1800,11 @@ function tipoVisual(financiamento) {
 function formatarMoedaDisplay(valor) {
     const numero = Number(valor || 0);
     return numero.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function formatarMoedaOuTraco(valor) {
+    if (valor === null || valor === undefined || valor === '') return '-';
+    return formatarMoedaDisplay(valor);
 }
 
 function formatarMoedaSemSimbolo(valor) {

@@ -29,6 +29,32 @@ A pasta `data/uploads/financiamentos` deve fazer parte do backup operacional. El
 - quitacao
 - outros
 
+## Vínculos opcionais
+
+Um documento pode ficar vinculado somente ao financiamento ou também a um evento específico:
+
+- `parcela_id`
+- `amortizacao_id`
+- `ajuste_saldo_id`
+- `competencia`
+- `ano_base`
+- `data_documento`
+
+Esses vínculos são metadados documentais e não alteram parcelas, amortizações ou ajustes.
+
+## Conferência CAIXA
+
+Documentos podem ser usados como base de conferência manual CAIXA. O usuário registra valores reais do demonstrativo e o sistema busca, quando possível, a parcela correspondente no cronograma para comparar:
+
+- amortização
+- juros
+- seguro
+- taxa administrativa
+- total
+- saldo devedor
+
+A conferência fica na tabela `financiamento_conferencia_caixa` e calcula diferenças como `real - simulado`.
+
 ## Segurança
 
 O upload valida extensão, MIME, assinatura básica, tamanho e nome de arquivo. O nome original nunca é usado como caminho físico.
@@ -37,10 +63,12 @@ Download e exclusão validam que o documento pertence ao financiamento solicitad
 
 ## Regra financeira
 
-Upload, download e exclusão de documentos não alteram saldo, parcelas, pagamentos, amortizações, seguros nem status do financiamento.
+Upload, download, exclusão e conferência de documentos não alteram saldo, parcelas, pagamentos, amortizações, seguros nem status do financiamento.
+
+Se a conferência indicar diferença relevante entre banco e sistema, o ajuste do saldo devedor continua sendo uma ação separada e explícita.
 
 ## Pendências futuras
 
-- `FIN-DOC-FIN-2`: vínculo opcional com parcela, amortização ou ajuste de saldo.
-- `FIN-DOC-FIN-3`: leitura automática de demonstrativos CAIXA.
+- `FIN-DOC-CAIXA-2`: importação manual em lote de linhas de demonstrativos.
+- `FIN-DOC-CAIXA-3`: leitura automática/OCR de demonstrativos CAIXA.
 - `FIN-DOC-FIN-4`: storage externo e política avançada de backup.

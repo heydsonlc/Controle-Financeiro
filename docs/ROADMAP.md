@@ -29,7 +29,10 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 | FIN-CLEAN-2 | Consolidar SAC+TR como derivação de SAC + TR, sem modo técnico visível | Média |
 | FIN-CLEAN-3 | Consolidar seguro fixo/estimado, nomenclaturas e rotas legadas | Média |
 | FIN-PARCELAS-UI-1 | Tabela avançada e filtros do cronograma de parcelas | Baixa |
-| FIN-DOC-FIN-1 | Documentos/anexos vinculados ao financiamento (contratos, extratos) | Baixa |
+| FIN-DOC-FIN-1 | Documentos/anexos vinculados ao financiamento (contratos, extratos) | Concluído |
+| FIN-DOC-CAIXA-1 | Conferência manual CAIXA real x simulado em documentos do financiamento | Concluído |
+| FIN-DOC-CAIXA-2 | Importação manual em lote de linhas de demonstrativos CAIXA | Baixa |
+| FIN-DOC-CAIXA-3 | Leitura automática/OCR de demonstrativos CAIXA | Baixa |
 | FIN-QUIT-1 | Simulação de quitação antecipada com cálculo de desconto | Baixa |
 | FIN-CAIXA-IMPORT-1 | Importação de demonstrativos CAIXA para comparação real × simulado | Baixa |
 

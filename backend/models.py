@@ -1686,6 +1686,10 @@ class Financiamento(db.Model):
                                  back_populates='financiamento',
                                  lazy='dynamic', cascade='all, delete-orphan',
                                  order_by='FinanciamentoDocumento.criado_em.desc()')
+    conferencias_caixa = db.relationship('FinanciamentoConferenciaCaixa',
+                                         back_populates='financiamento',
+                                         lazy='dynamic', cascade='all, delete-orphan',
+                                         order_by='FinanciamentoConferenciaCaixa.criado_em.desc()')
 
     def __repr__(self):
         return f'<Financiamento {self.nome} - {self.sistema_amortizacao}>'
@@ -1811,6 +1815,9 @@ class FinanciamentoDocumento(db.Model):
     competencia = db.Column(db.String(7), nullable=True)
     ano_base = db.Column(db.Integer, nullable=True)
     data_documento = db.Column(db.Date, nullable=True)
+    parcela_id = db.Column(db.Integer, db.ForeignKey('financiamento_parcela.id'), nullable=True)
+    amortizacao_id = db.Column(db.Integer, db.ForeignKey('financiamento_amortizacao_extra.id'), nullable=True)
+    ajuste_saldo_id = db.Column(db.Integer, db.ForeignKey('financiamento_ajuste_saldo.id'), nullable=True)
     nome_original = db.Column(db.String(255), nullable=False)
     nome_armazenado = db.Column(db.String(120), nullable=False)
     mime_type = db.Column(db.String(120), nullable=True)
@@ -1822,6 +1829,13 @@ class FinanciamentoDocumento(db.Model):
     atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     financiamento = db.relationship('Financiamento', back_populates='documentos')
+    parcela = db.relationship('FinanciamentoParcela', foreign_keys=[parcela_id])
+    amortizacao = db.relationship('FinanciamentoAmortizacaoExtra', foreign_keys=[amortizacao_id])
+    ajuste_saldo = db.relationship('FinanciamentoAjusteSaldo', foreign_keys=[ajuste_saldo_id])
+    conferencias_caixa = db.relationship('FinanciamentoConferenciaCaixa',
+                                         back_populates='documento',
+                                         lazy='dynamic',
+                                         cascade='all, delete-orphan')
 
     __table_args__ = (
         db.Index('idx_fin_doc_financiamento', 'financiamento_id'),
@@ -1829,6 +1843,9 @@ class FinanciamentoDocumento(db.Model):
         db.Index('idx_fin_doc_tipo', 'tipo_documento'),
         db.Index('idx_fin_doc_competencia', 'competencia'),
         db.Index('idx_fin_doc_hash', 'hash_arquivo'),
+        db.Index('idx_fin_doc_parcela', 'parcela_id'),
+        db.Index('idx_fin_doc_amortizacao', 'amortizacao_id'),
+        db.Index('idx_fin_doc_ajuste_saldo', 'ajuste_saldo_id'),
     )
 
     def __repr__(self):
@@ -1844,6 +1861,9 @@ class FinanciamentoDocumento(db.Model):
             'competencia': self.competencia,
             'ano_base': self.ano_base,
             'data_documento': self.data_documento.strftime('%Y-%m-%d') if self.data_documento else None,
+            'parcela_id': self.parcela_id,
+            'amortizacao_id': self.amortizacao_id,
+            'ajuste_saldo_id': self.ajuste_saldo_id,
             'nome_original': self.nome_original,
             'nome_armazenado': self.nome_armazenado,
             'mime_type': self.mime_type,
@@ -1851,8 +1871,124 @@ class FinanciamentoDocumento(db.Model):
             'hash_arquivo': self.hash_arquivo,
             'caminho_relativo': self.caminho_relativo,
             'observacao': self.observacao,
+            'conferencias_count': self.conferencias_caixa.count() if self.id else 0,
             'criado_em': self.criado_em.strftime('%Y-%m-%d %H:%M:%S') if self.criado_em else None,
             'atualizado_em': self.atualizado_em.strftime('%Y-%m-%d %H:%M:%S') if self.atualizado_em else None,
+        }
+
+
+class FinanciamentoConferenciaCaixa(db.Model):
+    """
+    Conferencia manual entre demonstrativos CAIXA e cronograma simulado.
+
+    Registro de auditoria: nao altera parcelas, saldo, pagamentos ou calculos.
+    """
+    __tablename__ = 'financiamento_conferencia_caixa'
+
+    TIPOS_CONFERENCIA = {
+        'parcela': 'Parcela',
+        'demonstrativo_anual': 'Demonstrativo anual',
+        'evolucao_saldo': 'Evolução do saldo',
+        'amortizacao': 'Amortização',
+        'quitacao': 'Quitação',
+        'outros': 'Outros',
+    }
+
+    id = db.Column(db.Integer, primary_key=True)
+    perfil_financeiro_id = db.Column(db.Integer, db.ForeignKey('perfil_financeiro.id'), nullable=True, index=True)
+    financiamento_id = db.Column(db.Integer, db.ForeignKey('financiamento.id'), nullable=False)
+    documento_id = db.Column(db.Integer, db.ForeignKey('financiamento_documento.id'), nullable=True)
+    tipo_conferencia = db.Column(db.String(40), nullable=False)
+    competencia = db.Column(db.String(7), nullable=True)
+    ano_base = db.Column(db.Integer, nullable=True)
+    data_referencia = db.Column(db.Date, nullable=True)
+    parcela_id = db.Column(db.Integer, db.ForeignKey('financiamento_parcela.id'), nullable=True)
+
+    valor_real_amortizacao = db.Column(db.Numeric(12, 2), nullable=True)
+    valor_real_juros = db.Column(db.Numeric(12, 2), nullable=True)
+    valor_real_seguro = db.Column(db.Numeric(12, 2), nullable=True)
+    valor_real_taxa_adm = db.Column(db.Numeric(12, 2), nullable=True)
+    valor_real_total = db.Column(db.Numeric(12, 2), nullable=True)
+    saldo_devedor_real = db.Column(db.Numeric(12, 2), nullable=True)
+    juros_correcao_mes_real = db.Column(db.Numeric(12, 2), nullable=True)
+    amortizacao_mes_real = db.Column(db.Numeric(12, 2), nullable=True)
+    prazo_remanescente_real = db.Column(db.Integer, nullable=True)
+
+    valor_simulado_amortizacao = db.Column(db.Numeric(12, 2), nullable=True)
+    valor_simulado_juros = db.Column(db.Numeric(12, 2), nullable=True)
+    valor_simulado_seguro = db.Column(db.Numeric(12, 2), nullable=True)
+    valor_simulado_taxa_adm = db.Column(db.Numeric(12, 2), nullable=True)
+    valor_simulado_total = db.Column(db.Numeric(12, 2), nullable=True)
+    saldo_devedor_simulado = db.Column(db.Numeric(12, 2), nullable=True)
+
+    diferenca_amortizacao = db.Column(db.Numeric(12, 2), nullable=True)
+    diferenca_juros = db.Column(db.Numeric(12, 2), nullable=True)
+    diferenca_seguro = db.Column(db.Numeric(12, 2), nullable=True)
+    diferenca_taxa_adm = db.Column(db.Numeric(12, 2), nullable=True)
+    diferenca_total = db.Column(db.Numeric(12, 2), nullable=True)
+    diferenca_saldo = db.Column(db.Numeric(12, 2), nullable=True)
+
+    observacao = db.Column(db.Text, nullable=True)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    financiamento = db.relationship('Financiamento', back_populates='conferencias_caixa')
+    documento = db.relationship('FinanciamentoDocumento', back_populates='conferencias_caixa')
+    parcela = db.relationship('FinanciamentoParcela', foreign_keys=[parcela_id])
+
+    __table_args__ = (
+        db.Index('idx_fin_conf_financiamento', 'financiamento_id'),
+        db.Index('idx_fin_conf_documento', 'documento_id'),
+        db.Index('idx_fin_conf_perfil_financiamento', 'perfil_financeiro_id', 'financiamento_id'),
+        db.Index('idx_fin_conf_competencia', 'competencia'),
+        db.Index('idx_fin_conf_tipo', 'tipo_conferencia'),
+        db.Index('idx_fin_conf_parcela', 'parcela_id'),
+    )
+
+    def __repr__(self):
+        return f'<ConferenciaCaixa {self.financiamento_id} {self.tipo_conferencia} {self.competencia}>'
+
+    @staticmethod
+    def _float(valor):
+        return float(valor) if valor is not None else None
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'perfil_financeiro_id': self.perfil_financeiro_id,
+            'financiamento_id': self.financiamento_id,
+            'documento_id': self.documento_id,
+            'tipo_conferencia': self.tipo_conferencia,
+            'rotulo_tipo': self.TIPOS_CONFERENCIA.get(self.tipo_conferencia, self.tipo_conferencia),
+            'competencia': self.competencia,
+            'ano_base': self.ano_base,
+            'data_referencia': self.data_referencia.strftime('%Y-%m-%d') if self.data_referencia else None,
+            'parcela_id': self.parcela_id,
+            'valor_real_amortizacao': self._float(self.valor_real_amortizacao),
+            'valor_real_juros': self._float(self.valor_real_juros),
+            'valor_real_seguro': self._float(self.valor_real_seguro),
+            'valor_real_taxa_adm': self._float(self.valor_real_taxa_adm),
+            'valor_real_total': self._float(self.valor_real_total),
+            'saldo_devedor_real': self._float(self.saldo_devedor_real),
+            'juros_correcao_mes_real': self._float(self.juros_correcao_mes_real),
+            'amortizacao_mes_real': self._float(self.amortizacao_mes_real),
+            'prazo_remanescente_real': self.prazo_remanescente_real,
+            'valor_simulado_amortizacao': self._float(self.valor_simulado_amortizacao),
+            'valor_simulado_juros': self._float(self.valor_simulado_juros),
+            'valor_simulado_seguro': self._float(self.valor_simulado_seguro),
+            'valor_simulado_taxa_adm': self._float(self.valor_simulado_taxa_adm),
+            'valor_simulado_total': self._float(self.valor_simulado_total),
+            'saldo_devedor_simulado': self._float(self.saldo_devedor_simulado),
+            'diferenca_amortizacao': self._float(self.diferenca_amortizacao),
+            'diferenca_juros': self._float(self.diferenca_juros),
+            'diferenca_seguro': self._float(self.diferenca_seguro),
+            'diferenca_taxa_adm': self._float(self.diferenca_taxa_adm),
+            'diferenca_total': self._float(self.diferenca_total),
+            'diferenca_saldo': self._float(self.diferenca_saldo),
+            'observacao': self.observacao,
+            'criado_em': self.criado_em.strftime('%Y-%m-%d %H:%M:%S') if self.criado_em else None,
+            'atualizado_em': self.atualizado_em.strftime('%Y-%m-%d %H:%M:%S') if self.atualizado_em else None,
+            'documento': self.documento.to_dict() if self.documento else None,
         }
 
 

@@ -162,6 +162,16 @@ Nenhum componente pode ser omitido do extrato ou da visualização.
 - Comportamento padrão: reduz valor da prestação, mantém prazo
 - Opção de reduzir prazo mantendo prestação: pendência futura (FIN-AMORT-OPCAO-1)
 
+### Documentos e conferência CAIXA
+
+- Documentos do financiamento usam metadados no banco e arquivo físico em `data/uploads/financiamentos`.
+- Documentos podem ser vinculados opcionalmente a parcela, amortização, ajuste de saldo, competência, ano-base ou data.
+- Conferências CAIXA registram valores reais digitados pelo usuário e comparam com valores simulados do cronograma.
+- Diferenças são calculadas como `valor_real - valor_simulado`.
+- Upload, exclusão e conferência documental não alteram saldo, parcelas, pagamentos, amortizações, seguro ou cronograma.
+- Ajuste de saldo devedor continua sendo ação separada e explícita.
+- Leitura automática/OCR de demonstrativos não faz parte da regra atual.
+
 ### Exclusão
 
 Bloqueada quando existir qualquer dos seguintes:

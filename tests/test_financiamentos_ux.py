@@ -1237,12 +1237,13 @@ def test_frontend_oculta_acoes_incompletas_de_financiamento(client):
     js = (base_dir / 'frontend' / 'static' / 'js' / 'financiamentos.js').read_text(encoding='utf-8')
 
     for texto in [
-        'Quitação',
         'Gerar boleto de quitação',
         'Ver em tabela',
         'Filtros',
     ]:
         assert texto not in template
+
+    assert 'data-tab="quitacao"' not in template
 
     for residuo in [
         'Gerenciar seguro habitacional',
@@ -1271,8 +1272,16 @@ def test_frontend_documentos_financiamento_tem_fluxo_real(client):
     assert 'function carregarDocumentosFinanciamento' in js
     assert 'function baixarDocumentoFinanciamento' in js
     assert 'function excluirDocumentoFinanciamento' in js
+    assert 'Conferir valores' in js
+    assert 'modal-conferencia-caixa' in html
+    assert 'A conferência não altera o cronograma' in html
+    assert 'function salvarConferenciaCaixa' in js
+    assert 'function carregarConferenciasCaixa' in js
+    assert '/conferencias-caixa' in js
     assert '${API_BASE}/${financiamento.id}/documentos' in js
     assert 'FormData(form)' in js
+    assert 'OCR' not in html
+    assert 'leitura automática' not in html.lower()
 
 
 def test_frontend_exclusao_financiamento_tem_botao_e_delete(client):

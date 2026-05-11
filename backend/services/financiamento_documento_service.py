@@ -8,10 +8,24 @@ from flask import current_app
 from werkzeug.utils import secure_filename
 
 try:
-    from backend.models import db, Financiamento, FinanciamentoDocumento
+    from backend.models import (
+        db,
+        Financiamento,
+        FinanciamentoAjusteSaldo,
+        FinanciamentoAmortizacaoExtra,
+        FinanciamentoDocumento,
+        FinanciamentoParcela,
+    )
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
-    from models import db, Financiamento, FinanciamentoDocumento
+    from models import (
+        db,
+        Financiamento,
+        FinanciamentoAjusteSaldo,
+        FinanciamentoAmortizacaoExtra,
+        FinanciamentoDocumento,
+        FinanciamentoParcela,
+    )
     from services.perfil_financeiro_service import PerfilFinanceiroService
 
 
@@ -53,6 +67,7 @@ class FinanciamentoDocumentoService:
     def salvar_documento(financiamento_id, arquivo, dados):
         financiamento = FinanciamentoDocumentoService._obter_financiamento(financiamento_id)
         metadados = FinanciamentoDocumentoService._validar_metadados(dados or {})
+        FinanciamentoDocumentoService._validar_vinculos_documento(financiamento.id, metadados)
         conteudo, extensao, mime_type, nome_original = FinanciamentoDocumentoService._validar_arquivo(arquivo)
 
         nome_armazenado = f'{uuid4().hex}.{extensao}'
@@ -72,6 +87,9 @@ class FinanciamentoDocumentoService:
             competencia=metadados['competencia'],
             ano_base=metadados['ano_base'],
             data_documento=metadados['data_documento'],
+            parcela_id=metadados['parcela_id'],
+            amortizacao_id=metadados['amortizacao_id'],
+            ajuste_saldo_id=metadados['ajuste_saldo_id'],
             nome_original=nome_original,
             nome_armazenado=nome_armazenado,
             mime_type=mime_type,
@@ -205,13 +223,58 @@ class FinanciamentoDocumentoService:
         if observacao and len(observacao) > 2000:
             raise ValueError('Observacao deve ter no maximo 2000 caracteres')
 
+        parcela_id = FinanciamentoDocumentoService._inteiro_opcional(dados.get('parcela_id'), 'parcela_id')
+        amortizacao_id = FinanciamentoDocumentoService._inteiro_opcional(dados.get('amortizacao_id'), 'amortizacao_id')
+        ajuste_saldo_id = FinanciamentoDocumentoService._inteiro_opcional(dados.get('ajuste_saldo_id'), 'ajuste_saldo_id')
+
         return {
             'tipo_documento': tipo,
             'competencia': competencia,
             'ano_base': ano_base,
             'data_documento': data_documento,
+            'parcela_id': parcela_id,
+            'amortizacao_id': amortizacao_id,
+            'ajuste_saldo_id': ajuste_saldo_id,
             'observacao': observacao,
         }
+
+    @staticmethod
+    def _inteiro_opcional(valor, campo):
+        if valor is None:
+            return None
+        texto = str(valor).strip()
+        if not texto:
+            return None
+        try:
+            numero = int(texto)
+        except ValueError as exc:
+            raise ValueError(f'{campo} deve ser numerico') from exc
+        if numero <= 0:
+            raise ValueError(f'{campo} deve ser positivo')
+        return numero
+
+    @staticmethod
+    def _validar_vinculos_documento(financiamento_id, metadados):
+        parcela_id = metadados.get('parcela_id')
+        if parcela_id and not FinanciamentoParcela.query.filter_by(
+            id=parcela_id,
+            financiamento_id=financiamento_id,
+        ).first():
+            raise ValueError('Parcela vinculada nao encontrada para este financiamento')
+
+        amortizacao_id = metadados.get('amortizacao_id')
+        if amortizacao_id and not FinanciamentoAmortizacaoExtra.query.filter_by(
+            id=amortizacao_id,
+            financiamento_id=financiamento_id,
+        ).first():
+            raise ValueError('Amortizacao vinculada nao encontrada para este financiamento')
+
+        ajuste_saldo_id = metadados.get('ajuste_saldo_id')
+        if ajuste_saldo_id and not FinanciamentoAjusteSaldo.query.filter_by(
+            id=ajuste_saldo_id,
+            financiamento_id=financiamento_id,
+        ).first():
+            raise ValueError('Ajuste de saldo vinculado nao encontrado para este financiamento')
 
     @staticmethod
     def _validar_arquivo(arquivo):

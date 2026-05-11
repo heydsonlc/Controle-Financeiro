@@ -15,10 +15,12 @@ import logging
 try:
     from backend.models import db, Financiamento, FinanciamentoParcela, IndexadorMensal, FinanciamentoSeguroVigencia, FinanciamentoAmortizacaoExtra
     from backend.services.financiamento_service import FinanciamentoService
+    from backend.services.financiamento_conferencia_service import FinanciamentoConferenciaService
     from backend.services.financiamento_documento_service import FinanciamentoDocumentoService
 except ImportError:
     from models import db, Financiamento, FinanciamentoParcela, IndexadorMensal, FinanciamentoSeguroVigencia, FinanciamentoAmortizacaoExtra
     from services.financiamento_service import FinanciamentoService
+    from services.financiamento_conferencia_service import FinanciamentoConferenciaService
     from services.financiamento_documento_service import FinanciamentoDocumentoService
 
 # Criar blueprint
@@ -540,6 +542,126 @@ def excluir_documento_financiamento(id, doc_id):
     except Exception as e:
         db.session.rollback()
         logger.exception('Erro ao excluir documento %s do financiamento %s', doc_id, id)
+        return jsonify({
+            'success': False,
+            'error': str(e),
+        }), 500
+
+
+@financiamentos_bp.route('/<int:id>/conferencias-caixa', methods=['GET'])
+def listar_conferencias_caixa_financiamento(id):
+    try:
+        conferencias = FinanciamentoConferenciaService.listar_conferencias(id)
+        return jsonify({
+            'success': True,
+            'conferencias': [conferencia.to_dict() for conferencia in conferencias],
+            'total': len(conferencias),
+        }), 200
+    except ValueError as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+        }), _status_erro_documento(e)
+    except Exception as e:
+        logger.exception('Erro ao listar conferencias CAIXA do financiamento %s', id)
+        return jsonify({
+            'success': False,
+            'error': str(e),
+        }), 500
+
+
+@financiamentos_bp.route('/<int:id>/conferencias-caixa', methods=['POST'])
+def registrar_conferencia_caixa_financiamento(id):
+    try:
+        conferencia = FinanciamentoConferenciaService.registrar_conferencia(
+            id,
+            request.get_json(silent=True) or {},
+        )
+        return jsonify({
+            'success': True,
+            'message': 'Conferencia CAIXA registrada com sucesso.',
+            'conferencia': conferencia.to_dict(),
+        }), 201
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e),
+        }), _status_erro_documento(e)
+    except Exception as e:
+        db.session.rollback()
+        logger.exception('Erro ao registrar conferencia CAIXA do financiamento %s', id)
+        return jsonify({
+            'success': False,
+            'error': str(e),
+        }), 500
+
+
+@financiamentos_bp.route('/<int:id>/documentos/<int:doc_id>/conferencias', methods=['GET'])
+def listar_conferencias_caixa_documento(id, doc_id):
+    try:
+        conferencias = FinanciamentoConferenciaService.listar_conferencias_documento(id, doc_id)
+        return jsonify({
+            'success': True,
+            'conferencias': [conferencia.to_dict() for conferencia in conferencias],
+            'total': len(conferencias),
+        }), 200
+    except ValueError as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+        }), _status_erro_documento(e)
+    except Exception as e:
+        logger.exception('Erro ao listar conferencias do documento %s/%s', id, doc_id)
+        return jsonify({
+            'success': False,
+            'error': str(e),
+        }), 500
+
+
+@financiamentos_bp.route('/<int:id>/conferencias-caixa/<int:conferencia_id>', methods=['DELETE'])
+def excluir_conferencia_caixa_financiamento(id, conferencia_id):
+    try:
+        FinanciamentoConferenciaService.excluir_conferencia(id, conferencia_id)
+        return jsonify({
+            'success': True,
+            'message': 'Conferencia CAIXA excluida com sucesso.',
+        }), 200
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e),
+        }), _status_erro_documento(e)
+    except Exception as e:
+        db.session.rollback()
+        logger.exception('Erro ao excluir conferencia CAIXA %s do financiamento %s', conferencia_id, id)
+        return jsonify({
+            'success': False,
+            'error': str(e),
+        }), 500
+
+
+@financiamentos_bp.route('/<int:id>/valores-simulados', methods=['GET'])
+def obter_valores_simulados_financiamento(id):
+    try:
+        dados = FinanciamentoConferenciaService.obter_valores_simulados(
+            id,
+            competencia=request.args.get('competencia'),
+            parcela_id=request.args.get('parcela_id'),
+            data_referencia=request.args.get('data_referencia'),
+        )
+        return jsonify({
+            'success': True,
+            'data': dados,
+        }), 200
+    except ValueError as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+        }), _status_erro_documento(e)
+    except Exception as e:
+        logger.exception('Erro ao obter valores simulados do financiamento %s', id)
         return jsonify({
             'success': False,
             'error': str(e),
