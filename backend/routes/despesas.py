@@ -14,11 +14,13 @@ try:
     from backend.services.cartao_service import CartaoService
     from backend.services.categoria_cartao_service import CategoriaCartaoService
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
+    from backend.routes.dashboard import _calcular_receitas_mes
 except ImportError:
     from models import db, ItemDespesa, Categoria, LancamentoAgregado, CartaoCategoriaLimite, Conta
     from services.cartao_service import CartaoService
     from services.categoria_cartao_service import CategoriaCartaoService
     from services.perfil_financeiro_service import PerfilFinanceiroService
+    from routes.dashboard import _calcular_receitas_mes
 
 despesas_bp = Blueprint('despesas', __name__, url_prefix='/api/despesas')
 logger = logging.getLogger(__name__)
@@ -459,11 +461,16 @@ def listar_despesas():
         hoje = datetime.now().date()
         sete_dias = hoje + timedelta(days=7)
 
-        total_mes = sum(float(d.get('valor', 0)) for d in resultado)
-        total_pendentes = sum(float(d.get('valor', 0)) for d in resultado if not d.get('pago'))
-        total_pagas = sum(float(d.get('valor', 0)) for d in resultado if d.get('pago'))
+        # Filtrar apenas o mes de referencia para o sidebar (resultado contem todos os meses)
+        mes_ref_dt = datetime.strptime(f"{mes_arg}-01", "%Y-%m-%d").date() if mes_arg else hoje.replace(day=1)
+        mes_ref_str = mes_ref_dt.strftime('%Y-%m')
+        resultado_mes = [d for d in resultado if d.get('mes_competencia', '') == mes_ref_str]
 
-        # Vencendo em 7 dias (pendentes com vencimento entre hoje e hoje+7)
+        total_mes = sum(float(d.get('valor', 0)) for d in resultado_mes)
+        total_pendentes = sum(float(d.get('valor', 0)) for d in resultado_mes if not d.get('pago'))
+        total_pagas = sum(float(d.get('valor', 0)) for d in resultado_mes if d.get('pago'))
+
+        # Vencendo em 7 dias (pendentes com vencimento entre hoje e hoje+7, todos os meses)
         vencendo_7d = [
             d for d in resultado
             if not d.get('pago')
@@ -473,19 +480,21 @@ def listar_despesas():
         vencendo_7d_count = len(vencendo_7d)
         vencendo_7d_valor = sum(float(d.get('valor', 0)) for d in vencendo_7d)
 
-        # Recorrentes
-        recorrentes = [d for d in resultado if d.get('recorrente') and not d.get('is_fatura_cartao')]
+        # Recorrentes do mes de referencia
+        recorrentes = [d for d in resultado_mes if d.get('recorrente') and not d.get('is_fatura_cartao')]
         recorrentes_count = len(recorrentes)
         recorrentes_valor = sum(float(d.get('valor', 0)) for d in recorrentes)
 
-        # Cartoes / faturas
-        cartoes_faturas = [d for d in resultado if d.get('is_fatura_cartao')]
+        # Cartoes / faturas do mes de referencia
+        cartoes_faturas = [d for d in resultado_mes if d.get('is_fatura_cartao')]
         cartoes_count = len(cartoes_faturas)
         cartoes_valor = sum(float(d.get('valor', 0)) for d in cartoes_faturas)
 
-        # Composicao por categoria (para grafico)
+        # Composicao por categoria do mes de referencia — faturas de cartao ficam fora
         composicao_categoria = {}
-        for d in resultado:
+        for d in resultado_mes:
+            if d.get('is_fatura_cartao'):
+                continue
             cat = d.get('categoria')
             if cat:
                 nome_cat = cat.get('nome', 'Sem categoria')
@@ -503,9 +512,13 @@ def listar_despesas():
             reverse=True
         )
 
-        # Proximos vencimentos (pendentes, mais proximos primeiro, limite 5)
+        # Proximos vencimentos (pendentes nao-cartao com vencimento a partir de hoje, limite 5)
         proximos = sorted(
-            [d for d in resultado if not d.get('pago') and d.get('data_vencimento')],
+            [d for d in resultado
+             if not d.get('pago')
+             and d.get('data_vencimento')
+             and d['data_vencimento'] >= hoje.isoformat()
+             and not d.get('is_fatura_cartao')],
             key=lambda x: x['data_vencimento']
         )[:5]
         proximos_vencimentos = [
@@ -516,9 +529,12 @@ def listar_despesas():
                 'data_vencimento': d['data_vencimento'],
                 'status_pagamento': d.get('status_pagamento', 'Pendente'),
                 'categoria': d.get('categoria', {}).get('nome', '') if d.get('categoria') else '',
+                'tipo': d.get('tipo', ''),
             }
             for d in proximos
         ]
+
+        receitas_mes_val = float(_calcular_receitas_mes(mes_ref_dt.month, mes_ref_dt.year))
 
         sidebar = {
             'total_mes': total_mes,
@@ -532,6 +548,8 @@ def listar_despesas():
             'cartoes_valor': cartoes_valor,
             'composicao_categoria': composicao_lista,
             'proximos_vencimentos': proximos_vencimentos,
+            'receitas_mes': receitas_mes_val,
+            'saldo_mes': receitas_mes_val - total_mes,
         }
 
         return jsonify({

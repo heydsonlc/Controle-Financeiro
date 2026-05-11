@@ -1190,6 +1190,8 @@ const SIDEBAR_COLORS = [
     '#007aff', '#34c759', '#ff9500', '#af52de', '#32ade6',
     '#ff3b30', '#ff6b35', '#5856d6', '#64d2ff', '#30b0c7',
 ];
+// Cores padrão do model que devem usar a paleta acima em vez da cor cadastrada
+const CORES_CINZA_PADRAO = new Set(['#6e6e73', '#6c757d', '#868e96']);
 
 /**
  * Renderiza o painel lateral com dados de composicao mensal
@@ -1208,6 +1210,14 @@ function renderizarSidebar(sidebar) {
     if (elV7dSub) elV7dSub.textContent = `${sidebar.vencendo_7d_count || 0} despesa(s)`;
     if (elCart) elCart.textContent = `R$ ${formatarValorBR(sidebar.cartoes_valor || 0)}`;
     if (elCartSub) elCartSub.textContent = `${sidebar.cartoes_count || 0} fatura(s)`;
+
+    // Card de saldo do mes (receitas - despesas previstas)
+    const elSaldo = document.getElementById('saldo-mes');
+    if (elSaldo) {
+        const saldo = sidebar.saldo_mes ?? 0;
+        elSaldo.textContent = `R$ ${formatarValorBR(Math.abs(saldo))}`;
+        elSaldo.style.color = saldo >= 0 ? '#34c759' : '#ff3b30';
+    }
 
     // Subtitulos dos 3 primeiros cards
     const elTotalSub = document.getElementById('summary-total-sub');
@@ -1239,7 +1249,7 @@ function renderizarSidebar(sidebar) {
         const topN = composicao.slice(0, SIDEBAR_COLORS.length);
         topN.forEach((cat, i) => {
             const pct = totalMes > 0 ? (cat.valor / totalMes) * 100 : 0;
-            const cor = cat.cor && cat.cor !== '#6e6e73' ? cat.cor : SIDEBAR_COLORS[i % SIDEBAR_COLORS.length];
+            const cor = cat.cor && !CORES_CINZA_PADRAO.has(cat.cor.toLowerCase()) ? cat.cor : SIDEBAR_COLORS[i % SIDEBAR_COLORS.length];
             stops.push(`${cor} ${cumulativo.toFixed(1)}% ${(cumulativo + pct).toFixed(1)}%`);
             cumulativo += pct;
         });
@@ -1252,7 +1262,7 @@ function renderizarSidebar(sidebar) {
         if (donutLegend) {
             const legendItems = topN.slice(0, 4).map((cat, i) => {
                 const pct = totalMes > 0 ? Math.round((cat.valor / totalMes) * 100) : 0;
-                const cor = cat.cor && cat.cor !== '#6e6e73' ? cat.cor : SIDEBAR_COLORS[i % SIDEBAR_COLORS.length];
+                const cor = cat.cor && !CORES_CINZA_PADRAO.has(cat.cor.toLowerCase()) ? cat.cor : SIDEBAR_COLORS[i % SIDEBAR_COLORS.length];
                 return `<div class="donut-legend-item">
                     <span class="donut-legend-dot" style="background:${cor};"></span>
                     <span class="donut-legend-name" title="${cat.nome}">${cat.nome}</span>
@@ -1275,7 +1285,7 @@ function renderizarSidebar(sidebar) {
             const maxVal = composicao[0] ? composicao[0].valor : 1;
             const itens = composicao.slice(0, 8).map((cat, i) => {
                 const pct = maxVal > 0 ? Math.round((cat.valor / maxVal) * 100) : 0;
-                const cor = cat.cor && cat.cor !== '#6e6e73' ? cat.cor : SIDEBAR_COLORS[i % SIDEBAR_COLORS.length];
+                const cor = cat.cor && !CORES_CINZA_PADRAO.has(cat.cor.toLowerCase()) ? cat.cor : SIDEBAR_COLORS[i % SIDEBAR_COLORS.length];
                 return `<div class="categoria-bar-item">
                     <div class="categoria-bar-row">
                         <span class="categoria-bar-name" title="${cat.nome}">${cat.nome}</span>
@@ -1314,7 +1324,7 @@ function renderizarSidebar(sidebar) {
                     </div>
                     <div class="pv-info">
                         <div class="pv-nome" title="${pv.nome}">${pv.nome}</div>
-                        <div class="pv-categoria">${pv.categoria || pv.status_pagamento || ''}</div>
+                        <div class="pv-categoria">${pv.tipo || pv.categoria || pv.status_pagamento || ''}</div>
                     </div>
                     <div class="pv-valor">R$ ${formatarValorBR(parseFloat(pv.valor))}</div>
                 </div>`;

@@ -1896,11 +1896,11 @@ body.mobile-view .despesa-valor-principal {
     background: #0051d5;
 }
 
-/* Summary cards - 5 cards em linha única, mesma largura da lista */
+/* Summary cards - 6 cards em linha única, mesma largura da lista */
 .despesas-summary-cards {
     grid-column: 1;
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     gap: 12px;
     margin-bottom: 0;
 }
