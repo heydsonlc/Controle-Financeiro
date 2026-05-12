@@ -230,8 +230,21 @@ Bloqueada quando existir qualquer dos seguintes:
 **Proteção de saldo contra edição e exclusão (CORE-SALDO-1A/1B)**:
 - **Pagamento só pelo fluxo oficial** (`POST /despesas/<id>/pagar`). `PUT /despesas/<id>` com `pago`, `status_pagamento`, `data_pagamento` ou `valor_pago` retorna HTTP 400. Edição comum nunca cria `MovimentoFinanceiro`.
 - **Despesa paga não pode ser excluída.** `DELETE /despesas/<id>` retorna HTTP 409 se `status_pagamento == 'Pago'`.
-- **Despesa com movimento vinculado não pode ser excluída** diretamente. Remoção exige estorno controlado (CORE-ESTORNO-1 — pendência futura).
-- Correções de pagamento exigirão fluxo próprio de estorno/ajuste (CORE-ESTORNO-1, não implementado).
+- **Despesa com movimento vinculado não pode ser excluída** diretamente. Remoção exige estorno controlado via `POST /despesas/<id>/estornar-pagamento`.
+
+**Estorno de pagamento de despesa (CORE-ESTORNO-1)**:
+- `POST /despesas/<id>/estornar-pagamento` — payload: `{ data_estorno, motivo }`.
+- **Movimento original preservado.** O débito original não é apagado.
+- **Movimento compensatório criado** com `tipo='CREDITO'`, `origem='ESTORNO_DESPESA'`, `conta_id` vinculado à despesa.
+- **Despesa reaberta como Pendente** — `status_pagamento='Pendente'`, `data_pagamento=NULL`, `valor_pago=NULL`.
+- **Motivo é obrigatório** (HTTP 400 sem ele). Registrado em `Conta.observacoes`.
+- **Saldo bancário recalculado** automaticamente após criação do movimento compensatório.
+- **Estorno duplicado bloqueado** — se já existe `MovimentoFinanceiro` com `origem='ESTORNO_DESPESA'` vinculado à despesa, retorna HTTP 409.
+- **Estorno de despesa pendente bloqueado** — HTTP 409.
+- **Movimento original ausente** — HTTP 422 com mensagem descritiva.
+- Operação transacional: se falhar, nenhuma alteração persiste.
+- Pendências futuras: **CORE-ESTORNO-2** (receita), **CORE-ESTORNO-3** (fatura de cartão), **CORE-ESTORNO-4** (parcela de financiamento).
+- Dívida técnica: campo `movimento_original_id` em `MovimentoFinanceiro` para rastreabilidade explícita.
 
 **Pagamento de parcelas de financiamento (CORE-SALDO-1C)**:
 - `POST /financiamentos/parcelas/<id>/pagar` requer `conta_bancaria_id` e `data_pagamento` (HTTP 400 sem eles).

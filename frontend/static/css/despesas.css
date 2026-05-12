@@ -2493,3 +2493,48 @@ body.mobile-view .despesa-valor-principal {
     color: #b91c1c;
     font-size: .85rem;
 }
+
+/* CORE-ESTORNO-1 */
+.estorno-aviso {
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-left: 3px solid #f97316;
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin-bottom: 16px;
+    font-size: .875rem;
+    color: #9a3412;
+    line-height: 1.5;
+}
+
+.estorno-nome {
+    font-weight: 600;
+    color: #111827;
+    margin: 0;
+}
+
+.btn-danger,
+.btn.btn-danger {
+    background: #dc2626;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 18px;
+    font-size: .9rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.btn-danger:hover,
+.btn.btn-danger:hover {
+    background: #b91c1c;
+}
+
+.row-action-button.danger {
+    color: #dc2626;
+}
+
+.row-action-button.danger:hover {
+    background: #fef2f2;
+    color: #b91c1c;
+}

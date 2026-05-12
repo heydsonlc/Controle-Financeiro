@@ -965,6 +965,13 @@ function renderizarDespesas(despesasParaRenderizar) {
                         <polyline points="20 6 9 17 4 12"></polyline>
                     </svg>
                 </button>
+                ${despesa.pago ? `
+                <button class="row-action-button danger" onclick="abrirModalEstorno(${despesa.id})" title="Estornar pagamento" aria-label="Estornar pagamento">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="1 4 1 10 7 10"></polyline>
+                        <path d="M3.51 15a9 9 0 1 0 .49-4.99"></path>
+                    </svg>
+                </button>` : ''}
             </div>
         `);
 
@@ -1971,6 +1978,75 @@ function fecharModalPagar() {
         selectConta.disabled = false;
         selectConta.required = true;
         selectConta.value = '';
+    }
+}
+
+// ============================================================================
+// ESTORNO DE PAGAMENTO (CORE-ESTORNO-1)
+// ============================================================================
+
+/**
+ * Abre modal de estorno para despesa paga
+ */
+function abrirModalEstorno(id) {
+    const despesa = despesas.find(d => d.id === id);
+    if (!despesa) {
+        alert('Despesa não encontrada');
+        return;
+    }
+    document.getElementById('estorno-despesa-id').value = id;
+    document.getElementById('estorno-nome-despesa').textContent = despesa.nome || despesa.descricao || String(id);
+    document.getElementById('estorno-data').value = new Date().toISOString().split('T')[0];
+    document.getElementById('estorno-motivo').value = '';
+    const modal = document.getElementById('modal-estorno');
+    if (modal) {
+        modal.style.display = 'block';
+        modal.removeAttribute('aria-hidden');
+    }
+}
+
+/**
+ * Fecha modal de estorno e reseta estado
+ */
+function fecharModalEstorno() {
+    const modal = document.getElementById('modal-estorno');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.setAttribute('aria-hidden', 'true');
+    }
+    document.getElementById('form-estorno').reset();
+}
+
+/**
+ * Envia estorno ao backend
+ */
+async function confirmarEstorno(event) {
+    event.preventDefault();
+    const id = document.getElementById('estorno-despesa-id').value;
+    const dataEstorno = document.getElementById('estorno-data').value;
+    const motivo = document.getElementById('estorno-motivo').value.trim();
+
+    if (!motivo) {
+        alert('Informe o motivo do estorno.');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/${id}/estornar-pagamento`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data_estorno: dataEstorno, motivo }),
+        });
+        const data = await response.json();
+        if (!data.success) {
+            alert('Erro ao estornar: ' + data.error);
+            return;
+        }
+        fecharModalEstorno();
+        carregarDespesas();
+    } catch (error) {
+        console.error('Erro ao estornar pagamento:', error);
+        alert('Erro ao estornar pagamento. Tente novamente.');
     }
 }
 

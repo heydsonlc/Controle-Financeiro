@@ -1231,6 +1231,120 @@ def marcar_como_pago(id):
         return _internal_error('despesas')
 
 
+@despesas_bp.route('/<int:id>/estornar-pagamento', methods=['POST'])
+def estornar_pagamento(id):
+    """CORE-ESTORNO-1: estorno de pagamento de despesa com movimento compensatorio.
+
+    Nao apaga o movimento original. Cria movimento de credito compensatorio
+    (origem=ESTORNO_DESPESA) e reabre a despesa como Pendente.
+    """
+    try:
+        from backend.models import ContaBancaria, MovimentoFinanceiro
+        from backend.services.conta_bancaria_service import ContaBancariaService
+    except ImportError:
+        from models import ContaBancaria, MovimentoFinanceiro
+        from services.conta_bancaria_service import ContaBancariaService
+
+    try:
+        conta = _query_contas().filter(Conta.id == id).first()
+        if not conta:
+            return jsonify({'success': False, 'error': 'Despesa nao encontrada'}), 404
+
+        if conta.status_pagamento != 'Pago':
+            return jsonify({
+                'success': False,
+                'error': 'Apenas despesas pagas podem ser estornadas.',
+            }), 409
+
+        # Bloquear estorno duplicado
+        estorno_existente = MovimentoFinanceiro.query.filter_by(
+            conta_id=conta.id,
+            origem='ESTORNO_DESPESA',
+        ).first()
+        if estorno_existente:
+            return jsonify({
+                'success': False,
+                'error': 'Esta despesa ja possui um estorno registrado e nao pode ser estornada novamente.',
+            }), 409
+
+        # Localizar movimento original de debito vinculado a esta despesa
+        movimento_original = MovimentoFinanceiro.query.filter_by(
+            conta_id=conta.id,
+            tipo='DEBITO',
+        ).order_by(MovimentoFinanceiro.id.desc()).first()
+        if not movimento_original:
+            return jsonify({
+                'success': False,
+                'error': 'Nao foi possivel estornar porque o movimento financeiro original nao foi encontrado.',
+            }), 422
+
+        if not movimento_original.conta_bancaria_id:
+            return jsonify({
+                'success': False,
+                'error': 'Movimento original nao possui conta bancaria vinculada.',
+            }), 422
+
+        valor_original = Decimal(str(movimento_original.valor or 0))
+        if valor_original <= 0:
+            return jsonify({
+                'success': False,
+                'error': 'Valor do movimento original invalido para estorno.',
+            }), 422
+
+        dados = request.get_json() or {}
+        motivo = (dados.get('motivo') or '').strip()
+        if not motivo:
+            return jsonify({'success': False, 'error': 'Motivo do estorno e obrigatorio.'}), 400
+
+        data_estorno_str = (dados.get('data_estorno') or '').strip()
+        if not data_estorno_str:
+            return jsonify({'success': False, 'error': 'Data do estorno e obrigatoria.'}), 400
+        try:
+            data_estorno = datetime.strptime(data_estorno_str, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'success': False, 'error': 'Formato de data_estorno invalido. Use YYYY-MM-DD.'}), 400
+
+        conta_bancaria_id = movimento_original.conta_bancaria_id
+
+        # Transacao atomica
+        descricao_estorno = f'Estorno de pagamento da despesa: {conta.descricao or str(conta.id)}'
+        observacao_estorno = f'[ESTORNO] {data_estorno_str} — {motivo}'
+
+        movimento_estorno = ContaBancariaService.criar_movimento(
+            conta_bancaria_id,
+            tipo='CREDITO',
+            valor=valor_original,
+            descricao=descricao_estorno,
+            data_movimento=data_estorno,
+            origem='ESTORNO_DESPESA',
+            conta_id=conta.id,
+        )
+
+        conta.status_pagamento = 'Pendente'
+        conta.data_pagamento = None
+        if conta.observacoes:
+            conta.observacoes = f'{conta.observacoes}\n{observacao_estorno}'
+        else:
+            conta.observacoes = observacao_estorno
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': 'Pagamento estornado com sucesso.',
+            'data': {
+                'despesa_id': conta.id,
+                'movimento_estorno_id': movimento_estorno.id,
+                'status_pagamento': conta.status_pagamento,
+                'valor_estornado': float(valor_original),
+            },
+        }), 200
+
+    except Exception:
+        db.session.rollback()
+        return _internal_error('despesas')
+
+
 # ============================================================================
 # FUNÃ‡Ã•ES AUXILIARES PARA DESPESAS RECORRENTES
 # ============================================================================
