@@ -30,3 +30,7 @@
 | [uso-local/ocr-local.md](uso-local/ocr-local.md) | Configuração do OCR local |
 | [uso-real/base-real-1a-reset.md](uso-real/base-real-1a-reset.md) | Procedimento de reset seguro do banco |
 | [uso-real/base-real-1b-seed-categorias.md](uso-real/base-real-1b-seed-categorias.md) | Seed de categorias iniciais |
+| [uso-real/categorias-sistemicas-mobilidade.md](uso-real/categorias-sistemicas-mobilidade.md) | Categorias sistêmicas granulares usadas pelo módulo Mobilidade |
+| [uso-real/financiamento-sac-tr.md](uso-real/financiamento-sac-tr.md) | Regra SAC+TR, TR oficial e manutenção de índices do financiamento |
+| [uso-real/seguro-habitacional-financiamento.md](uso-real/seguro-habitacional-financiamento.md) | Regra oficial de seguro habitacional fixo e estimado DFI+MIP |
+| [uso-real/documentos-financiamento.md](uso-real/documentos-financiamento.md) | Documentos do financiamento, conferência CAIXA e conferência de quitação |

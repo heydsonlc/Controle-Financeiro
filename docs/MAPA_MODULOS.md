@@ -2,7 +2,7 @@
 
 Visão consolidada de todos os módulos do Controle Financeiro, com estado atual, função principal e observações relevantes.
 
-Última atualização: 2026-05-10
+Última atualização: 2026-05-11
 
 ---
 
@@ -17,15 +17,15 @@ Visão consolidada de todos os módulos do Controle Financeiro, com estado atual
 | Importação de Cartão | Funcional / Em evolução | Triagem e conversão de lançamentos CSV/XLSX/PDF | Descrição original preservada; reconhecimento restrito ao mesmo cartão |
 | Recorrências | Funcional / Em evolução | Despesas recorrentes e recorrentes com prazo | Tela própria `/recorrencias`; débito automático vinculável |
 | Consórcios | Funcional | Contemplação e receitas pendentes | Tipo especial de recorrência; integrado com Receitas |
-| Financiamentos | Em evolução avançada | Cronograma, seguro, saldo, amortização | SAC/PRICE/SIMPLES/CAIXA SAC com TR; exclusão segura; ajuste de saldo real |
-| Veículos / Mobilidade | Funcional / Em evolução | Comparação de custos de transporte e efetivação de despesas | 3 cenários: veículo próprio, assinatura, app; categoria padrão Mobilidade |
+| Financiamentos | Em evolução avançada | Cronograma, seguro, saldo, amortização, documentos e conferências | SAC/PRICE/SIMPLES/SAC+TR; TR oficial; documentos; conferência CAIXA e conferência de quitação |
+| Veículos / Mobilidade | Funcional / Em evolução | Comparação de custos de transporte e efetivação de despesas | 3 cenários: veículo próprio, assinatura, app; categorias sistêmicas granulares |
 | Contas Bancárias | Funcional | Saldo operacional e movimentações | Saldo derivado de MovimentoFinanceiro; nunca editado diretamente |
 | Patrimônio | Funcional | Alocação de patrimônio em caixinhas | Separado de Contas Bancárias; caixinhas com metas e transferências |
 | Lançamentos | Funcional | Entrada unificada de lançamentos | Cartão, direto, crédito; painel único com histórico |
 | Categorias | Funcional | Agrupamento de despesas com ícone e cor | Global por usuário; seletor visual de ícones; upload de logo |
 | Documentos / Fiscal | Funcional (parcial) | Central documental empresarial | Cupom fiscal, pacote para contador, alertas de validade; IR futuro |
 | Configurações | Parcial / Enxuta | Preferências e parâmetros globais | Módulos operacionais removidos; acesso via sidebar |
-| Indexadores | Funcional | TR, IPCA, IGP-M, CDI, SELIC por competência | 419+ registros TR históricos (1991–2025); obrigatório para CAIXA SAC/TR |
+| Indexadores | Funcional | TR oficial para financiamentos e indexadores econômicos por competência | `indice_tr_mensal` alimenta SAC+TR; `IndexadorMensal` permanece separado |
 | Perfis Financeiros | Futuro | Contextos alternáveis pessoal/empresa | Diagnóstico CTX-FIN-1 planejado |
 | Imposto de Renda | Futuro | Documentos fiscais IRPF por contexto | Evolução após módulo Documentos/Fiscal |
 
@@ -198,7 +198,7 @@ Controla contratos de financiamento com cronograma completo de parcelas.
 | PRICE | Parcela constante, composição variável |
 | SIMPLES | Parcela fixa simples |
 | SFH | Sistema Financeiro de Habitação (SAC com regras CEF) |
-| CAIXA SAC/TR | SAC com correção monetária por TR mensal (opt-in) |
+| SAC + TR | SAC com correção monetária por TR mensal, derivado de `sistema_amortizacao=SAC` + `indexador_saldo=TR` |
 
 ### Composição do total previsto
 
@@ -224,7 +224,7 @@ MIP = juros_contratuais × fator_MIP[faixa_etária]
 - Faixa etária configurável por competência
 - Helper central de seguro usado por geração, amortização, ajuste de saldo e recálculo
 
-### Modo CAIXA SAC/TR (opt-in)
+### Modo SAC + TR
 
 - Taxa mensal = taxa nominal anual / 12
 - TR mensal aplicada ao saldo devedor
@@ -232,7 +232,8 @@ MIP = juros_contratuais × fator_MIP[faixa_etária]
 - Juros sobre saldo corrigido pela TR
 - Seguro calculado pelo helper central
 - TR ausente bloqueia geração (não silenciosa)
-- Modo opt-in por financiamento, não global
+- Ativado pela combinação `sistema_amortizacao=SAC` + `indexador_saldo=TR`
+- Campo técnico `modo_calculo_financiamento` permanece apenas como compatibilidade transitória
 
 **Calibração de referência** (sem dados pessoais):
 - Sistema SAC, prazo 420 meses, início mai/2024
@@ -283,10 +284,19 @@ Preserva: `ItemDespesa` (cadastro mestre compartilhável).
 - Exibe todas as colunas: amortização, juros, seguro, taxa adm, total previsto
 - Total previsto fecha visualmente (não esconde componentes)
 
+### Documentos e conferências
+
+- Documentos do financiamento usam metadados no banco e arquivos em `data/uploads/financiamentos`
+- Documentos podem ser vinculados a parcela, amortização, ajuste de saldo, competência, ano-base ou data
+- Conferência CAIXA compara valores reais digitados com valores simulados do cronograma
+- Conferência de quitação registra valor oficial do banco contra valor simulado pelo app
+- Conferências são auditoria: não baixam parcelas, não alteram saldo e não mudam cronograma
+
 ### UX da lista
 
 - Formato tabular: header compartilhado + uma linha por contrato
-- Ícones de ação: visualizar, amortizar, extrato, editar, quitar
+- Ícones de ação: visualizar, amortizar, extrato, editar
+- Simulação e conferência de quitação ficam no detalhe do financiamento, sem quitação operacional automática
 - Barra de ações do formulário (action_bar) com Cancelar e Salvar
 - Formulário compacto (inputs 34px, sidebar 340px)
 
@@ -309,7 +319,21 @@ Três blocos:
 - Demais meios → cria `ItemDespesa(tipo='Simples')` + `Conta`
 - Guard de idempotência: `status == 'PREVISTA'` + transação atômica
 
-**Categoria padrão**: Mobilidade (criada automaticamente se não existir).
+**Categorias de despesa**: sistêmicas e granulares por natureza do gasto.
+
+Mapeamento atual:
+- Combustível
+- Seguro Veicular
+- Tributos Veiculares
+- Revisão
+- Manutenção Veicular
+- Pneus
+- Uso do Veículo
+- Transporte por Aplicativo
+- Assinatura Veicular
+- Lavagem Veicular
+
+Mobilidade é módulo/origem do lançamento, não Categoria da Despesa genérica.
 
 **Pendências**:
 - Homologação visual dos mockups
@@ -357,8 +381,10 @@ Funcionalidades implementadas:
 
 - 419+ registros históricos de TR (1991–2025)
 - IPCA, IGP-M, CDI, SELIC
-- Obrigatório para modo CAIXA SAC/TR em Financiamentos
-- Tela de manutenção e importação: pendência FIN-INDICES-1
+- Obrigatório para financiamentos SAC+TR
+- Seção específica para TR de financiamentos SAC+TR
+- Cadastro manual, edição controlada, importação por texto/CSV e validação de competência
+- Edição de TR já usada por parcelas de financiamento SAC+TR é bloqueada neste MVP
 
 ---
 

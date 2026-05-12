@@ -430,6 +430,40 @@ Consolidação das regras de financiamento e padronização visual da listagem e
 
 ---
 
+## Consolidação financeira e documental — 2026-05-11
+
+Atualização consolidada dos MVPs concluídos após a fase de limpeza visual e saneamento técnico.
+
+### Financiamentos
+
+- `FIN-TR-2`: motor SAC corrigido pela TR implementado e calibrado.
+- `FIN-CLEAN-2`: SAC/TR passou a ser derivado de `sistema_amortizacao=SAC` + `indexador_saldo=TR`; o modo técnico explícito ficou apenas como compatibilidade transitória.
+- `FIN-CLEAN-3`: `seguro_modo` consolidado como campo oficial do seguro habitacional; seguro fixo por vigência e estimado DFI+MIP preservados.
+- `FIN-INDICES-1`: manutenção/importação da TR oficial em `indice_tr_mensal` implementada em `/indexadores`.
+- `FIN-QUIT-1`: simulação estimada de quitação implementada sem alterar saldo ou parcelas.
+- `FIN-DOC-FIN-1`: documentos do financiamento implementados com metadados no banco e arquivos no filesystem local.
+- `FIN-DOC-CAIXA-1`: conferência manual CAIXA real x simulado implementada, sem OCR e sem alteração automática do financiamento.
+- `FIN-QUIT-CHECK-1`: conferência do valor oficial de quitação implementada como auditoria; não baixa parcelas, não cria conta e não quita o contrato.
+
+### Mobilidade e categorias
+
+- `CAT-SIST-1`: Mobilidade deixou de depender da categoria genérica "Mobilidade" e passou a usar categorias sistêmicas granulares por natureza do gasto.
+- `VEIC-ENCODING-1`: textos do módulo Veículos/Mobilidade corrigidos para UTF-8.
+
+### Interface e limpeza
+
+- `UI-CLEAN-1`: ações mockadas/no-op removidas da interface principal.
+- `APPJS-CLEAN-1`: código legado órfão de `frontend/static/js/app.js` removido.
+- `PREF-CLEAN-1`: Preferências consolidadas em Configurações.
+
+### Cartões e importação
+
+- `CAT-CLEAN-1`: mensagem de ausência de mapeamento entre Categoria da Despesa e Categoria do Cartão padronizada.
+- `IMPORT-TRIAGEM-1/2`: triagem, confronto e classificação da importação de cartão consolidados no pipeline.
+- `CORE-CARTAO-FATURA-1`: baixa de fatura com idempotência e pagamento seguro.
+
+---
+
 ## Backlog — Próximas fases
 
 Para o roadmap técnico completo com prioridades atualizadas, ver `docs/ROADMAP.md` e `README_TECNICO.md`.

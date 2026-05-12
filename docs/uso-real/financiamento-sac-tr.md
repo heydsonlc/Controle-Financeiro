@@ -31,6 +31,20 @@ Regras atuais:
 - alteração de TR já usada por parcelas de financiamento SAC/TR é bloqueada;
 - alteração de TR não recalcula cronogramas automaticamente.
 
+## Manutenção
+
+A tela `/indexadores` possui uma seção específica para **TR para financiamentos SAC/TR**.
+
+Essa seção permite:
+
+- listar TR por ano;
+- cadastrar competência manualmente;
+- editar TR quando ainda não estiver usada em cronogramas;
+- importar várias competências por texto/CSV simples;
+- validar duplicidade, formato de competência e valor percentual.
+
+O motor de financiamento continua bloqueando geração ou simulação quando faltar TR obrigatória.
+
 ## Compatibilidade transitória
 
 O campo `modo_calculo_financiamento` permanece no banco por compatibilidade, mas não deve ser enviado pela UI como regra de negócio.

@@ -110,6 +110,8 @@ saldo_atual = saldo_inicial + sum(créditos) - sum(débitos)
 | `FinanciamentoParcela` | Parcelas geradas (SAC, PRICE ou SIMPLES) |
 | `FinanciamentoAmortizacaoExtra` | Amortizações extraordinárias |
 | `FinanciamentoSeguroVigencia` | Vigências de seguro habitacional |
+| `FinanciamentoDocumento` | Metadados de documentos vinculados ao financiamento |
+| `FinanciamentoConferenciaCaixa` | Conferências manuais real x simulado, incluindo quitação |
 
 ### Entidades adicionais
 
@@ -126,6 +128,8 @@ Serviço `financiamento_service.py` implementa SAC, PRICE, SIMPLES e CAIXA SAC/T
 
 **SAC com correção pela TR**: quando o financiamento usa SAC e indexador TR, o motor específico aplica taxa nominal/12, TR mensal no saldo e quota de amortização corrigida pela TR. TR ausente para a competência bloqueia a geração com erro explícito.
 
+**Documentos e conferências**: documentos ficam em filesystem local com metadados no banco. Conferências CAIXA e conferências de quitação registram comparação real x simulado como auditoria e não alteram saldo, parcelas, pagamentos ou cronograma.
+
 ---
 
 ## Módulo 4: Indexadores Econômicos
@@ -134,7 +138,8 @@ Tabela `indexador_mensal` com histórico geral de índices (TR, IPCA, IGP-M, CDI
 
 - 419 registros históricos de TR (1991–2025)
 - Interface: `/indexadores`, API: `/api/indexadores`
-- Integrado ao cálculo de parcelas de financiamento
+- Seção específica de TR oficial para financiamentos SAC/TR
+- Integrado ao cálculo de parcelas e simulação de quitação de financiamento
 
 ---
 
