@@ -271,6 +271,41 @@ def test_template_contem_campos_essenciais_modal(client):
     assert 'Salvar' in html
 
 
+# ---------------------------------------------------------------------------
+# CORE-ESTORNO-UI-1: modal de estorno de recebimento
+# ---------------------------------------------------------------------------
+
+def test_template_contem_modal_estorno_receita(client):
+    html = client.get('/receitas').get_data(as_text=True)
+
+    assert 'modal-estornar-receita' in html
+    assert 'estornar-receita-id' in html
+    assert 'estornar-receita-nome' in html
+    assert 'estornar-receita-valor' in html
+    assert 'estornar-receita-data' in html
+    assert 'estornar-receita-motivo' in html
+    assert 'confirmarEstornoReceita' in html
+    assert 'não apaga' in html
+    assert 'débito compensatório' in html
+
+
+def test_js_expoe_funcoes_de_estorno_receita():
+    base_dir = Path(__file__).resolve().parents[1]
+    js = (base_dir / 'frontend' / 'static' / 'js' / 'receitas.js').read_text(encoding='utf-8')
+
+    assert 'function abrirModalEstornoReceita' in js
+    assert 'function confirmarEstornoReceita' in js
+    assert '/realizadas/${id}/estornar' in js
+
+
+def test_js_botao_estorno_so_aparece_para_receita_realizada_com_id():
+    base_dir = Path(__file__).resolve().parents[1]
+    js = (base_dir / 'frontend' / 'static' / 'js' / 'receitas.js').read_text(encoding='utf-8')
+
+    assert "receita.status === 'REALIZADA' && receita.realizada_id" in js
+    assert 'abrirModalEstornoReceita' in js
+
+
 def test_tipo_invalido_continua_rejeitado(client):
     response = client.post('/api/receitas/itens', json={
         'nome': 'Fonte inválida',

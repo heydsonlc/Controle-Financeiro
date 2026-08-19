@@ -477,6 +477,46 @@
         </form>
     </div>
 </div>
+
+<!-- Modal: Estornar Recebimento (CORE-ESTORNO-2) -->
+<div id="modal-estornar-receita" class="receitas-modal" aria-hidden="true">
+    <div class="receitas-modal-box" role="dialog" aria-modal="true" aria-labelledby="estornar-receita-titulo">
+        <div class="receitas-modal-header">
+            <div>
+                <h2 id="estornar-receita-titulo">Estornar recebimento</h2>
+            </div>
+            <button type="button" onclick="fecharModal('modal-estornar-receita')" aria-label="Fechar">×</button>
+        </div>
+        <form id="form-estornar-receita" onsubmit="confirmarEstornoReceita(event)">
+            <input type="hidden" id="estornar-receita-id">
+            <div class="receitas-aviso">
+                O estorno <strong>não apaga</strong> o recebimento original. O sistema criará um débito compensatório e preservará o histórico financeiro.
+            </div>
+            <div class="receitas-form-grid one">
+                <label class="receitas-field">
+                    <span>Receita</span>
+                    <p id="estornar-receita-nome" class="receitas-aviso-nome"></p>
+                </label>
+                <label class="receitas-field">
+                    <span>Valor recebido</span>
+                    <p id="estornar-receita-valor" class="receitas-aviso-nome"></p>
+                </label>
+                <label class="receitas-field">
+                    <span>Data do estorno <em>*</em></span>
+                    <input type="date" id="estornar-receita-data" required>
+                </label>
+                <label class="receitas-field full">
+                    <span>Motivo do estorno <em>*</em></span>
+                    <textarea id="estornar-receita-motivo" rows="3" placeholder="Ex: Recebimento lançado por engano" required></textarea>
+                </label>
+            </div>
+            <div class="receitas-modal-footer">
+                <button type="button" class="receitas-secondary-btn" onclick="fecharModal('modal-estornar-receita')">Cancelar</button>
+                <button type="submit" class="receitas-danger-btn">Estornar</button>
+            </div>
+        </form>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}

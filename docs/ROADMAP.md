@@ -2,7 +2,7 @@
 
 Pendências conhecidas, MVPs planejados e débitos técnicos.
 
-Última atualização: 2026-08-19
+Última atualização: 2026-08-19 (CORE-ESTORNO-UI-1)
 
 ---
 
@@ -38,7 +38,7 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 | FIN-QUIT-OPER-1 | Quitação operacional do financiamento | Baixa |
 | FIN-QUIT-1 | Simulação de quitação antecipada com cálculo de desconto | Concluído |
 | FIN-CAIXA-IMPORT-1 | Importação de demonstrativos CAIXA para comparação real × simulado | Baixa |
-| CORE-ESTORNO-4 | Estorno de pagamento direto de parcela de financiamento | Concluído |
+| CORE-ESTORNO-4 | Estorno de pagamento direto de parcela de financiamento (backend + UI) | Concluído |
 
 ### Importação de Cartão
 
@@ -55,14 +55,14 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 |----|-----------|-----------|
 | CORE-RECEITA-1 | Fluxo protegido de recebimento: conta bancária obrigatória, movimento transacional, PUT/DELETE bloqueados após recebimento | Concluído |
 | DATA-HYGIENE-RECEITA-1 | Saneamento de receitas históricas sem conta/movimento (`scripts/data_hygiene_receitas_historicas.py`) — dry-run auditado; 1 receita real pendente de decisão manual (id=20) | Concluído (com pendência manual) |
-| CORE-ESTORNO-2 | Estorno de receita realizada com movimento compensatório | Concluído |
+| CORE-ESTORNO-2 | Estorno de receita realizada com movimento compensatório (backend + UI) | Concluído |
 
 ### Cartões
 
 | ID | Descrição | Prioridade |
 |----|-----------|-----------|
 | CORE-CARTAO-FATURA-1 | Idempotência e pagamento seguro de fatura de cartão | Concluído |
-| CORE-ESTORNO-3 | Estorno de pagamento de fatura de cartão (reaproveita rota de estorno de despesas) | Concluído |
+| CORE-ESTORNO-3 | Estorno de pagamento de fatura de cartão (reaproveita rota e modal de estorno de despesas; backend + UI) | Concluído |
 | CART-1 | Despesas fatura: parcelamento inline com descrição, categoria e edição no mesmo modal | Alta |
 | CART-2 | Relatório de gastos por Categoria do Cartão com histórico | Média |
 

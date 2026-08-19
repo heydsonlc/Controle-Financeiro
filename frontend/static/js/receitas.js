@@ -439,6 +439,8 @@ function htmlLinhaReceita(receita, atrasada = false) {
                 <button type="button" class="receitas-action-btn" onclick="visualizarReceita('${escapeAttribute(receita.uid)}')" title="Visualizar" aria-label="Visualizar">${iconReceitas('eye')}</button>
                 <button type="button" class="receitas-action-btn" onclick="editarReceitaLinha('${escapeAttribute(receita.uid)}')" title="Editar" aria-label="Editar">${iconReceitas('edit')}</button>
                 <button type="button" class="receitas-action-btn success" onclick="realizarReceitaLinha('${escapeAttribute(receita.uid)}')" title="Confirmar/realizar" aria-label="Confirmar/realizar" ${receita.status === 'REALIZADA' ? 'disabled' : ''}>${iconReceitas('check')}</button>
+                ${receita.status === 'REALIZADA' && receita.realizada_id ? `
+                <button type="button" class="receitas-action-btn danger" onclick="abrirModalEstornoReceita('${escapeAttribute(receita.uid)}')" title="Estornar recebimento" aria-label="Estornar recebimento">${iconReceitas('undo')}</button>` : ''}
                 <button type="button" class="receitas-action-btn danger" onclick="cancelarReceitaLinha('${escapeAttribute(receita.uid)}')" title="Cancelar/ignorar" aria-label="Cancelar/ignorar">${iconReceitas('x')}</button>
             </div>
         </article>
@@ -975,6 +977,69 @@ async function deletarRealizada(id) {
     }
 }
 
+// ============================================================================
+// ESTORNO DE RECEBIMENTO (CORE-ESTORNO-2)
+// ============================================================================
+
+function abrirModalEstornoReceita(uid) {
+    const receita = buscarReceitaLinha(uid);
+    if (!receita || !receita.realizada_id) {
+        mostrarToast('Receita realizada não encontrada.', 'error');
+        return;
+    }
+
+    setValue('estornar-receita-id', receita.realizada_id);
+    setText('estornar-receita-nome', receita.nome || 'Receita');
+    setText('estornar-receita-valor', formatarMoeda(receita.valor_realizado));
+    setValue('estornar-receita-data', new Date().toISOString().split('T')[0]);
+    setValue('estornar-receita-motivo', '');
+
+    abrirModal('modal-estornar-receita');
+}
+
+async function confirmarEstornoReceita(event) {
+    event.preventDefault();
+
+    const id = document.getElementById('estornar-receita-id')?.value;
+    const dataEstorno = document.getElementById('estornar-receita-data')?.value;
+    const motivo = document.getElementById('estornar-receita-motivo')?.value.trim();
+
+    if (!dataEstorno) {
+        mostrarToast('Informe a data do estorno.', 'error');
+        return;
+    }
+    if (!motivo) {
+        mostrarToast('Informe o motivo do estorno.', 'error');
+        return;
+    }
+
+    const btnSubmit = document.querySelector('#form-estornar-receita button[type="submit"]');
+    if (btnSubmit) btnSubmit.disabled = true;
+
+    try {
+        const response = await fetch(`${API_RECEITAS}/realizadas/${id}/estornar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data_estorno: dataEstorno, motivo }),
+        });
+        const result = await response.json();
+
+        if (!result.success) {
+            mostrarToast(result.error || 'Erro ao estornar recebimento.', 'error');
+            return;
+        }
+
+        fecharModal('modal-estornar-receita');
+        mostrarToast(result.message || 'Recebimento estornado com sucesso.', 'success');
+        await atualizarDados();
+    } catch (error) {
+        console.error('Erro ao estornar recebimento:', error);
+        mostrarToast('Erro ao estornar recebimento.', 'error');
+    } finally {
+        if (btnSubmit) btnSubmit.disabled = false;
+    }
+}
+
 function consolidarReceitaMes(itemReceitaId, valorPrevisto, uid = null) {
     const fonte = buscarFonte(Number(itemReceitaId));
     const linha = uid ? buscarReceitaLinha(uid) : null;
@@ -1396,6 +1461,7 @@ function iconReceitas(name) {
         edit: '<path d="M5 19h4L19 9a2.1 2.1 0 0 0-3-3L6 16l-1 3Z"/><path d="M14 6l4 4"/>',
         check: '<path d="M5 12.5l4 4L19 7"/>',
         x: '<path d="M6 6l12 12M18 6 6 18"/>',
+        undo: '<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.99"/>',
         more: '<circle cx="12" cy="5" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="12" cy="19" r="1.3"/>',
     };
 

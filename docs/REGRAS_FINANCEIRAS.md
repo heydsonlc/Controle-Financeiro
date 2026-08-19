@@ -2,7 +2,7 @@
 
 Regras globais e por módulo que governam o comportamento do Controle Financeiro.
 
-Última atualização: 2026-08-19
+Última atualização: 2026-08-19 (CORE-ESTORNO-UI-1)
 
 ---
 
@@ -81,6 +81,7 @@ Esta regra não tem exceções.
 - `ReceitaRealizada` não tem campo de status próprio (a existência do registro já significa "recebido" desde o CORE-RECEITA-1); o estado "estornada" é calculado dinamicamente pela presença de um `MovimentoFinanceiro` com `origem='ESTORNO_RECEITA'` vinculado — nenhum campo novo foi adicionado ao model.
 - Exige `motivo` e `data_estorno` (HTTP 400 se ausentes); registra o motivo em `observacoes` sem apagar o conteúdo anterior.
 - Bloqueia estorno duplicado (HTTP 409) e receita sem movimento original vinculado (HTTP 422, ex.: contemplação de consórcio ainda pendente de confirmação).
+- **UI (CORE-ESTORNO-UI-1)**: botão "Estornar recebimento" na listagem de receitas (`frontend/static/js/receitas.js`), visível apenas quando `receita.status === 'REALIZADA'` e `receita.realizada_id` está definido (linha agregada de múltiplas realizações não mostra o botão, evitando ambiguidade). Modal próprio (`modal-estornar-receita`) com aviso, data e motivo obrigatórios; frontend só coleta e envia — todo bloqueio (409/422) é decidido pelo backend.
 
 **Saneamento de receitas históricas (DATA-HYGIENE-RECEITA-1)**:
 - Script `scripts/data_hygiene_receitas_historicas.py` audita `ReceitaRealizada` sem `conta_bancaria_id` e sem `MovimentoFinanceiro` vinculado, no banco real da aplicação (`DATABASE_URL`, não em arquivos SQLite legados).
@@ -115,6 +116,7 @@ Esta regra não tem exceções.
 - Não apaga o movimento `DEBITO` original. Cria movimento compensatório `CREDITO` (`origem='ESTORNO_FATURA'`) e volta `status_pagamento` para `'Pendente'`.
 - **Não altera** `status_fatura` (fechamento/consolidação, controlado por `POST /cartoes/{id}/faturas/{competencia}/consolidar`), `valor_executado`, `LancamentoAgregado`, `compra_id` ou `categoria_cartao_id` — o estorno é puramente financeiro/bancário.
 - Bloqueia estorno de fatura não paga (HTTP 409), sem movimento vinculado (HTTP 422) e estorno duplicado (HTTP 409).
+- **UI (CORE-ESTORNO-UI-1)**: fatura de cartão é exibida e paga na tela de Despesas, não em Cartões — o botão "Estornar pagamento" reaproveita o mesmo modal do estorno de despesa comum (CORE-ESTORNO-1), trocando dinamicamente título/rótulo/aviso quando `despesa.is_fatura_cartao === true` (`abrirModalEstorno()` em `frontend/static/js/despesas.js`). Mesmo endpoint (`POST /api/despesas/{id}/estornar-pagamento`) para os dois casos.
 
 **Idempotência de lançamentos recorrentes (CORE-CARTAO-1)**:
 - Lançamentos recorrentes de cartão usam `compra_id` UUID5 determinístico: `uuid5(NS, f'{item_despesa_id}-{mes_fatura.isoformat()}')`.
@@ -277,7 +279,7 @@ Bloqueada quando existir qualquer dos seguintes:
 - **Estorno de despesa pendente bloqueado** — HTTP 409.
 - **Movimento original ausente** — HTTP 422 com mensagem descritiva.
 - Operação transacional: se falhar, nenhuma alteração persiste.
-- Pendências futuras: **CORE-ESTORNO-2** (receita), **CORE-ESTORNO-3** (fatura de cartão), **CORE-ESTORNO-4** (parcela de financiamento).
+- Mesmo padrão aplicado em **CORE-ESTORNO-2** (receita), **CORE-ESTORNO-3** (fatura de cartão) e **CORE-ESTORNO-4** (parcela de financiamento), ver seções específicas abaixo.
 - Dívida técnica: campo `movimento_original_id` em `MovimentoFinanceiro` para rastreabilidade explícita.
 
 **Pagamento de parcelas de financiamento (CORE-SALDO-1C)**:
@@ -296,6 +298,7 @@ Bloqueada quando existir qualquer dos seguintes:
 - Recompõe `Financiamento.saldo_devedor_atual` com o `saldo_devedor_apos_pagamento` da parcela anterior (`numero_parcela - 1`), ou `valor_financiado` se for a primeira parcela — mesma lógica de fallback já usada em `Financiamento.to_dict()`.
 - Não altera amortizações extraordinárias, ajustes de saldo, documentos/conferências CAIXA, simulação de quitação nem cronograma futuro em massa.
 - Bloqueia estorno duplicado (HTTP 409) e parcela sem movimento vinculado (HTTP 422).
+- **UI (CORE-ESTORNO-UI-1)**: botão "Estornar pagamento" na coluna de ações do cronograma de parcelas (`renderizarTabelaParcelas()` em `frontend/static/js/financiamentos.js`), visível sempre que `parcela.status === 'pago'`. O payload da parcela não expõe se o pagamento foi direto ou via despesa vinculada nem se já existe estorno — o frontend não infere essas regras; o backend bloqueia com HTTP 409 e mensagem clara quando aplicável.
 
 ---
 

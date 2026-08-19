@@ -652,23 +652,23 @@
         </div>
     </div>
 
-    <!-- Modal: Estornar Pagamento (CORE-ESTORNO-1) -->
+    <!-- Modal: Estornar Pagamento (CORE-ESTORNO-1 / CORE-ESTORNO-3) -->
     <div id="modal-estorno" class="modal" aria-hidden="true">
         <div class="modal-content" style="max-width: 420px;">
             <div class="modal-header">
-                <h2>Estornar Pagamento</h2>
+                <h2 id="estorno-titulo">Estornar Pagamento</h2>
                 <span class="close" onclick="fecharModalEstorno()">&times;</span>
             </div>
 
             <form id="form-estorno" onsubmit="confirmarEstorno(event)">
                 <input type="hidden" id="estorno-despesa-id">
 
-                <div class="estorno-aviso">
+                <div class="estorno-aviso" id="estorno-aviso-texto">
                     O estorno <strong>não apaga</strong> o pagamento original. O sistema criará um movimento compensatório e reabrirá a despesa como pendente.
                 </div>
 
                 <div class="form-group">
-                    <label>Despesa</label>
+                    <label id="estorno-label-item">Despesa</label>
                     <p id="estorno-nome-despesa" class="estorno-nome"></p>
                 </div>
 

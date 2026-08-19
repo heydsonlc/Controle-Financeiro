@@ -667,7 +667,12 @@ function renderizarTabelaParcelas(parcelas) {
                 <td><span class="fin-pill ${pago ? 'paid' : 'pending'}">${pago ? 'PAGO' : 'PENDENTE'}</span></td>
                 <td>
                     ${pago
-                        ? '<button type="button" class="fin-table-menu-btn" title="Parcela paga">...</button>'
+                        ? `<button type="button" class="fin-table-menu-btn fin-table-menu-btn-danger" onclick="abrirModalEstornoParcela(${parcela.id})" title="Estornar pagamento" aria-label="Estornar pagamento">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="1 4 1 10 7 10"></polyline>
+                                <path d="M3.51 15a9 9 0 1 0 .49-4.99"></path>
+                            </svg>
+                        </button>`
                         : `<button type="button" class="fin-table-menu-btn" onclick="abrirModalPagamento(${parcela.id})" title="Registrar pagamento">⋮</button>`}
                 </td>
             </tr>
@@ -1426,6 +1431,74 @@ async function salvarPagamento(event) {
         }
     } catch (error) {
         mostrarToast(error.message, 'erro');
+    }
+}
+
+// ============================================================================
+// ESTORNO DE PAGAMENTO DE PARCELA (CORE-ESTORNO-4)
+// ============================================================================
+
+function abrirModalEstornoParcela(parcelaId) {
+    const financiamento = estadoFinanciamentos.atual;
+    const parcela = financiamento?.parcelas?.find((item) => Number(item.id) === Number(parcelaId));
+    if (!parcela) {
+        mostrarToast('Parcela não encontrada.', 'erro');
+        return;
+    }
+
+    setValue('estornar-parcela-id', parcela.id);
+    setValue('estornar-parcela-data', toISODate(new Date()));
+    setValue('estornar-parcela-motivo', '');
+    const info = document.getElementById('estornar-parcela-info');
+    if (info) {
+        info.innerHTML = `<strong>Parcela ${parcela.numero_parcela}</strong><br>Vencimento: ${formatarDataBR(parcela.data_vencimento)}<br>Valor pago: ${formatarMoedaDisplay(parcela.valor_pago || parcela.valor_previsto_total)}`;
+    }
+
+    abrirModal('modal-estornar-parcela');
+}
+
+async function confirmarEstornoParcela(event) {
+    event.preventDefault();
+
+    const parcelaId = document.getElementById('estornar-parcela-id')?.value;
+    const dataEstorno = document.getElementById('estornar-parcela-data')?.value;
+    const motivo = document.getElementById('estornar-parcela-motivo')?.value.trim();
+
+    if (!dataEstorno) {
+        mostrarToast('Informe a data do estorno.', 'erro');
+        return;
+    }
+    if (!motivo) {
+        mostrarToast('Informe o motivo do estorno.', 'erro');
+        return;
+    }
+
+    const btnSubmit = document.querySelector('#form-estornar-parcela button[type="submit"]');
+    if (btnSubmit) btnSubmit.disabled = true;
+
+    try {
+        const response = await fetch(`${API_BASE}/parcelas/${parcelaId}/estornar-pagamento`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data_estorno: dataEstorno, motivo }),
+        });
+        const resultado = await response.json();
+
+        if (!resultado.success) {
+            mostrarToast(resultado.error || 'Erro ao estornar pagamento.', 'erro');
+            return;
+        }
+
+        fecharModal('modal-estornar-parcela');
+        mostrarToast(resultado.message || 'Pagamento da parcela estornado com sucesso.');
+        if (estadoFinanciamentos.atual) {
+            await verDetalhes(estadoFinanciamentos.atual.id);
+        }
+    } catch (error) {
+        console.error('Erro ao estornar pagamento da parcela:', error);
+        mostrarToast('Erro ao estornar pagamento.', 'erro');
+    } finally {
+        if (btnSubmit) btnSubmit.disabled = false;
     }
 }
 

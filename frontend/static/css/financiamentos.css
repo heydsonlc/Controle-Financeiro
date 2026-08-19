@@ -1185,6 +1185,18 @@ body.app-shell-body .app-content {
     cursor: pointer;
 }
 
+.fin-table-menu-btn-danger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-danger, #dc2626);
+    border-color: var(--color-danger, #dc2626);
+}
+
+.fin-table-menu-btn-danger:hover {
+    background: #fee2e2;
+}
+
 .fin-side-stack {
     display: grid;
     gap: 16px;
@@ -1519,6 +1531,18 @@ body.app-shell-body .app-content {
     padding: 12px;
     margin-bottom: 14px;
     color: var(--fin-muted);
+}
+
+.fin-aviso {
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    border-left: 3px solid #f59e0b;
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    font-size: .875rem;
+    color: #92400e;
+    line-height: 1.5;
 }
 
 .fin-modal-toolbar {

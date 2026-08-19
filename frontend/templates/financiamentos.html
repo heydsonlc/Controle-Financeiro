@@ -626,6 +626,35 @@
     </div>
 </div>
 
+<!-- Modal: Estornar Pagamento de Parcela (CORE-ESTORNO-4) -->
+<div id="modal-estornar-parcela" class="fin-modal" aria-hidden="true">
+    <div class="fin-modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-estornar-parcela-title">
+        <div class="fin-modal-header">
+            <h2 id="modal-estornar-parcela-title">Estornar pagamento</h2>
+            <button type="button" onclick="fecharModal('modal-estornar-parcela')" aria-label="Fechar">×</button>
+        </div>
+        <form id="form-estornar-parcela" onsubmit="confirmarEstornoParcela(event)">
+            <input type="hidden" id="estornar-parcela-id">
+            <div class="fin-aviso">
+                O estorno <strong>não apaga</strong> o pagamento original. O sistema criará um crédito compensatório e reabrirá a parcela.
+            </div>
+            <div id="estornar-parcela-info" class="fin-modal-info"></div>
+            <label class="fin-field">
+                <span>Data do estorno <span style="color:var(--color-danger)">*</span></span>
+                <input id="estornar-parcela-data" type="date" required>
+            </label>
+            <label class="fin-field">
+                <span>Motivo do estorno <span style="color:var(--color-danger)">*</span></span>
+                <textarea id="estornar-parcela-motivo" rows="3" placeholder="Ex: Pagamento lançado por engano" required style="width:100%;padding:8px;border:1px solid var(--fin-border-soft);border-radius:6px;font-size:14px;resize:vertical;"></textarea>
+            </label>
+            <div class="fin-modal-actions">
+                <button type="button" class="fin-secondary-btn" onclick="fecharModal('modal-estornar-parcela')">Cancelar</button>
+                <button type="submit" class="fin-danger-btn">Estornar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <div id="modal-amortizacao" class="fin-modal" aria-hidden="true">
     <div class="fin-modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-amortizacao-title">
         <div class="fin-modal-header">
