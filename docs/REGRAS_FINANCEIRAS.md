@@ -2,7 +2,7 @@
 
 Regras globais e por módulo que governam o comportamento do Controle Financeiro.
 
-Última atualização: 2026-08-18
+Última atualização: 2026-08-19
 
 ---
 
@@ -74,8 +74,13 @@ Esta regra não tem exceções.
 - Duplicidade de recebimento é bloqueada: uma `ReceitaRealizada` não pode ter mais de um `MovimentoFinanceiro` de `origem='RECEITA'`.
 - `PUT /api/receitas/realizadas/{id}` não pode alterar `valor_recebido`, `conta_bancaria_id` ou `data_recebimento` de uma receita que já tem movimento vinculado — retorna HTTP 400 com mensagem "Receitas realizadas só podem ser alteradas por fluxo financeiro próprio". Campos neutros (`descricao`, `observações`, `item_receita_id`/competência) continuam editáveis.
 - Exceção intencional: receita **sem** movimento vinculado ainda (ex.: contemplação de consórcio pendente, ver regra acima) pode ser completada via `PUT` — nesse caso o movimento é criado nessa chamada, preservando o fluxo de "consolidar receita pendente" já existente no frontend.
-- `DELETE /api/receitas/realizadas/{id}` é bloqueado (HTTP 409) se existir `MovimentoFinanceiro` vinculado — receita recebida preserva histórico financeiro; correção exige estorno (fora do escopo do CORE-RECEITA-1, ver `CORE-ESTORNO-GLOBAL-1` no roadmap).
-- Estorno de receita, assim como estorno de fatura e de financiamento, não está implementado — apenas o de despesas (`CORE-ESTORNO-1`).
+- `DELETE /api/receitas/realizadas/{id}` é bloqueado (HTTP 409) se existir `MovimentoFinanceiro` vinculado — receita recebida preserva histórico financeiro; correção exige estorno (`CORE-ESTORNO-2`, ver abaixo).
+
+**Estorno de recebimento (CORE-ESTORNO-2)**:
+- `POST /api/receitas/realizadas/{id}/estornar` estorna uma receita realizada. Não apaga `ReceitaRealizada` nem o `MovimentoFinanceiro` original (`origem='RECEITA'`) — cria movimento compensatório de `DEBITO` com `origem='ESTORNO_RECEITA'`, mantendo ambos os movimentos vinculados ao mesmo `receita_realizada_id` para rastreabilidade.
+- `ReceitaRealizada` não tem campo de status próprio (a existência do registro já significa "recebido" desde o CORE-RECEITA-1); o estado "estornada" é calculado dinamicamente pela presença de um `MovimentoFinanceiro` com `origem='ESTORNO_RECEITA'` vinculado — nenhum campo novo foi adicionado ao model.
+- Exige `motivo` e `data_estorno` (HTTP 400 se ausentes); registra o motivo em `observacoes` sem apagar o conteúdo anterior.
+- Bloqueia estorno duplicado (HTTP 409) e receita sem movimento original vinculado (HTTP 422, ex.: contemplação de consórcio ainda pendente de confirmação).
 
 **Saneamento de receitas históricas (DATA-HYGIENE-RECEITA-1)**:
 - Script `scripts/data_hygiene_receitas_historicas.py` audita `ReceitaRealizada` sem `conta_bancaria_id` e sem `MovimentoFinanceiro` vinculado, no banco real da aplicação (`DATABASE_URL`, não em arquivos SQLite legados).
@@ -104,6 +109,12 @@ Esta regra não tem exceções.
 - Fatura já paga bloqueia segunda baixa (`ValueError`); rota HTTP retorna 409.
 - Movimento bancário criado via `ContaBancariaService.criar_movimento()` com `origem='FATURA'`.
 - `db.session.commit()` controlado pelo chamador (rota), não pelo service.
+
+**Estorno de pagamento de fatura (CORE-ESTORNO-3)**:
+- Fatura de cartão é uma `Conta` com `is_fatura_cartao=True`, paga pela mesma rota genérica de despesas (`POST /api/despesas/{id}/pagar`). O estorno reaproveita, pelo mesmo motivo, `POST /api/despesas/{id}/estornar-pagamento` — a rota detecta `is_fatura_cartao` e usa `origem='ESTORNO_FATURA'` em vez de `origem='ESTORNO_DESPESA'`. Não existe rota separada em `cartoes.py` para isso.
+- Não apaga o movimento `DEBITO` original. Cria movimento compensatório `CREDITO` (`origem='ESTORNO_FATURA'`) e volta `status_pagamento` para `'Pendente'`.
+- **Não altera** `status_fatura` (fechamento/consolidação, controlado por `POST /cartoes/{id}/faturas/{competencia}/consolidar`), `valor_executado`, `LancamentoAgregado`, `compra_id` ou `categoria_cartao_id` — o estorno é puramente financeiro/bancário.
+- Bloqueia estorno de fatura não paga (HTTP 409), sem movimento vinculado (HTTP 422) e estorno duplicado (HTTP 409).
 
 **Idempotência de lançamentos recorrentes (CORE-CARTAO-1)**:
 - Lançamentos recorrentes de cartão usam `compra_id` UUID5 determinístico: `uuid5(NS, f'{item_despesa_id}-{mes_fatura.isoformat()}')`.
@@ -277,6 +288,14 @@ Bloqueada quando existir qualquer dos seguintes:
 - **Parcela com despesa vinculada pendente retorna HTTP 409** — o pagamento deve ocorrer pelo fluxo de Despesas.
 - Transação atômica: se criação do `MovimentoFinanceiro` falhar, o status da parcela é revertido.
 - `MovimentoFinanceiro.financiamento_parcela_id` rastreia qual parcela originou o movimento (coluna adicionada em `9b8a09ecc52f`).
+
+**Estorno de pagamento direto de parcela (CORE-ESTORNO-4)**:
+- `POST /financiamentos/parcelas/<id>/estornar-pagamento` estorna apenas pagamentos feitos pelo fluxo direto de financiamento (`MovimentoFinanceiro.origem='FINANCIAMENTO'`). Não apaga o movimento original; cria `CREDITO` compensatório (`origem='ESTORNO_FINANCIAMENTO'`) e volta a parcela para `status='pendente'`.
+- **Parcela com despesa vinculada paga é bloqueada (HTTP 409)** — orienta a estornar pelo fluxo de Despesas (`CORE-ESTORNO-1`), simétrico ao bloqueio de pagamento duplicado do CORE-SALDO-1C. Preserva a regra de que despesa e parcela não podem "brigar" sobre quem é dono do pagamento.
+- **Só a parcela paga mais recente (maior `numero_parcela` entre as pagas) pode ser estornada** — o sistema permite pagar parcelas fora de ordem sem validação de sequência, então estornar uma parcela do meio corromperia a cadeia de `saldo_devedor_apos_pagamento`. Existe parcela paga posterior → HTTP 409.
+- Recompõe `Financiamento.saldo_devedor_atual` com o `saldo_devedor_apos_pagamento` da parcela anterior (`numero_parcela - 1`), ou `valor_financiado` se for a primeira parcela — mesma lógica de fallback já usada em `Financiamento.to_dict()`.
+- Não altera amortizações extraordinárias, ajustes de saldo, documentos/conferências CAIXA, simulação de quitação nem cronograma futuro em massa.
+- Bloqueia estorno duplicado (HTTP 409) e parcela sem movimento vinculado (HTTP 422).
 
 ---
 

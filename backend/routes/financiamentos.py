@@ -838,6 +838,180 @@ def pagar_parcela(parcela_id):
         return jsonify({'success': False, 'error': 'Erro interno ao registrar pagamento'}), 500
 
 
+@financiamentos_bp.route('/parcelas/<int:parcela_id>/estornar-pagamento', methods=['POST'])
+def estornar_pagamento_parcela(parcela_id):
+    """
+    CORE-ESTORNO-4: estorno de pagamento direto de parcela de financiamento.
+
+    Nao apaga o movimento original (DEBITO, origem=FINANCIAMENTO). Cria movimento
+    compensatorio de CREDITO (origem=ESTORNO_FINANCIAMENTO), reabre a parcela como
+    pendente e recompoe financiamento.saldo_devedor_atual.
+
+    Bloqueado se:
+    - parcela nao esta paga;
+    - pagamento foi feito via despesa vinculada (Conta.financiamento_parcela_id),
+      nao via fluxo direto de financiamento — nesse caso o estorno deve ser feito
+      pelo fluxo de despesas para preservar rastreabilidade;
+    - existe parcela com numero_parcela maior, tambem paga diretamente, no mesmo
+      financiamento — so a parcela paga mais recente (maior numero) pode ser
+      estornada, para nao corromper a cadeia de saldo_devedor_apos_pagamento;
+    - ja existe estorno para esta parcela.
+
+    Body (JSON):
+        {
+            "data_estorno": "YYYY-MM-DD" (obrigatorio),
+            "motivo": "string" (obrigatorio)
+        }
+    """
+    try:
+        from decimal import Decimal
+        from backend.models import Conta, MovimentoFinanceiro
+        from backend.services.conta_bancaria_service import ContaBancariaService
+        from backend.services.perfil_financeiro_service import PerfilFinanceiroService
+    except ImportError:
+        from decimal import Decimal
+        from models import Conta, MovimentoFinanceiro
+        from services.conta_bancaria_service import ContaBancariaService
+        from services.perfil_financeiro_service import PerfilFinanceiroService
+
+    try:
+        parcela = PerfilFinanceiroService.aplicar_perfil_query(
+            FinanciamentoParcela.query, FinanciamentoParcela
+        ).filter(FinanciamentoParcela.id == parcela_id).first()
+        if not parcela:
+            return jsonify({'success': False, 'error': 'Parcela nao encontrada'}), 404
+
+        if parcela.status != 'pago':
+            return jsonify({'success': False, 'error': 'Apenas parcelas pagas podem ser estornadas.'}), 409
+
+        # Regra especial: parcela paga via despesa vinculada nao pode ser estornada aqui
+        conta_vinculada = Conta.query.filter_by(financiamento_parcela_id=parcela.id).first()
+        if conta_vinculada and conta_vinculada.status_pagamento == 'Pago':
+            return jsonify({
+                'success': False,
+                'error': 'Esta parcela possui despesa vinculada. Estorne pelo fluxo de despesas para preservar a rastreabilidade.',
+            }), 409
+
+        # Bloquear estorno duplicado
+        estorno_existente = MovimentoFinanceiro.query.filter_by(
+            financiamento_parcela_id=parcela.id,
+            origem='ESTORNO_FINANCIAMENTO',
+        ).first()
+        if estorno_existente:
+            return jsonify({
+                'success': False,
+                'error': 'Este pagamento/recebimento ja foi estornado.',
+            }), 409
+
+        # So a parcela paga mais recente (maior numero_parcela) pode ser estornada,
+        # para nao corromper a cadeia de saldo_devedor_apos_pagamento
+        parcela_paga_mais_recente = PerfilFinanceiroService.aplicar_perfil_query(
+            FinanciamentoParcela.query, FinanciamentoParcela
+        ).filter(
+            FinanciamentoParcela.financiamento_id == parcela.financiamento_id,
+            FinanciamentoParcela.status == 'pago',
+        ).order_by(FinanciamentoParcela.numero_parcela.desc()).first()
+        if parcela_paga_mais_recente and parcela_paga_mais_recente.numero_parcela > parcela.numero_parcela:
+            return jsonify({
+                'success': False,
+                'error': f'Existe uma parcela paga mais recente (numero {parcela_paga_mais_recente.numero_parcela}). '
+                         f'Estorne a partir da parcela mais recente para preservar a cadeia de saldo devedor.',
+            }), 409
+
+        # Localizar movimento original de debito vinculado a esta parcela
+        movimento_original = MovimentoFinanceiro.query.filter_by(
+            financiamento_parcela_id=parcela.id,
+            origem='FINANCIAMENTO',
+            tipo='DEBITO',
+        ).order_by(MovimentoFinanceiro.id.desc()).first()
+        if not movimento_original:
+            return jsonify({
+                'success': False,
+                'error': 'Nao foi possivel estornar porque o movimento financeiro original nao foi encontrado.',
+            }), 422
+
+        if not movimento_original.conta_bancaria_id:
+            return jsonify({
+                'success': False,
+                'error': 'Movimento original nao possui conta bancaria vinculada.',
+            }), 422
+
+        valor_original = Decimal(str(movimento_original.valor or 0))
+        if valor_original <= 0:
+            return jsonify({
+                'success': False,
+                'error': 'Valor do movimento original invalido para estorno.',
+            }), 422
+
+        dados = request.get_json() or {}
+        motivo = (dados.get('motivo') or '').strip()
+        if not motivo:
+            return jsonify({'success': False, 'error': 'Motivo do estorno e obrigatorio.'}), 400
+
+        data_estorno_str = (dados.get('data_estorno') or '').strip()
+        if not data_estorno_str:
+            return jsonify({'success': False, 'error': 'Data do estorno e obrigatoria.'}), 400
+        try:
+            data_estorno = datetime.strptime(data_estorno_str, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'success': False, 'error': 'Formato de data_estorno invalido. Use YYYY-MM-DD.'}), 400
+
+        conta_bancaria_id = movimento_original.conta_bancaria_id
+        financiamento = FinanciamentoService.obter_financiamento_no_perfil(parcela.financiamento_id)
+        nome_fin = getattr(financiamento, 'descricao', None) or f'Financiamento #{parcela.financiamento_id}'
+
+        descricao_estorno = f'Estorno de pagamento da parcela {parcela.numero_parcela} - {nome_fin}'
+        observacao_estorno = f'[ESTORNO] {data_estorno_str} — {motivo}'
+
+        movimento_estorno = ContaBancariaService.criar_movimento(
+            conta_bancaria_id,
+            tipo='CREDITO',
+            valor=valor_original,
+            descricao=descricao_estorno,
+            data_movimento=data_estorno,
+            origem='ESTORNO_FINANCIAMENTO',
+            financiamento_parcela_id=parcela.id,
+        )
+
+        # Recompor saldo devedor: valor antes deste pagamento e o
+        # saldo_devedor_apos_pagamento da parcela anterior, ou valor_financiado se for a 1a.
+        if financiamento:
+            if parcela.numero_parcela > 1:
+                parcela_anterior = FinanciamentoParcela.query.filter_by(
+                    financiamento_id=parcela.financiamento_id,
+                    numero_parcela=parcela.numero_parcela - 1,
+                ).first()
+                financiamento.saldo_devedor_atual = (
+                    parcela_anterior.saldo_devedor_apos_pagamento
+                    if parcela_anterior and parcela_anterior.saldo_devedor_apos_pagamento is not None
+                    else financiamento.valor_financiado
+                )
+            else:
+                financiamento.saldo_devedor_atual = financiamento.valor_financiado
+
+        parcela.status = 'pendente'
+        parcela.valor_pago = 0
+        parcela.dif_apurada = 0
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': 'Pagamento da parcela estornado com sucesso.',
+            'data': {
+                'parcela_id': parcela.id,
+                'movimento_estorno_id': movimento_estorno.id,
+                'status': parcela.status,
+                'valor_estornado': float(valor_original),
+                'saldo_devedor_atual': float(financiamento.saldo_devedor_atual) if financiamento and financiamento.saldo_devedor_atual is not None else None,
+            },
+        }), 200
+
+    except Exception:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': 'Erro interno ao estornar pagamento'}), 500
+
+
 # ============================================================================
 # 3. AMORTIZAÇÕES EXTRAORDINÁRIAS
 # ============================================================================

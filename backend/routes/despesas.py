@@ -1233,10 +1233,16 @@ def marcar_como_pago(id):
 
 @despesas_bp.route('/<int:id>/estornar-pagamento', methods=['POST'])
 def estornar_pagamento(id):
-    """CORE-ESTORNO-1: estorno de pagamento de despesa com movimento compensatorio.
+    """CORE-ESTORNO-1 / CORE-ESTORNO-3: estorno de pagamento de despesa ou fatura de
+    cartao com movimento compensatorio.
 
-    Nao apaga o movimento original. Cria movimento de credito compensatorio
-    (origem=ESTORNO_DESPESA) e reabre a despesa como Pendente.
+    Fatura de cartao (Conta.is_fatura_cartao=True) e paga pela mesma rota generica
+    de despesas (POST /despesas/<id>/pagar), entao o estorno tambem e unificado aqui:
+    usa origem=ESTORNO_FATURA (em vez de ESTORNO_DESPESA) e mensagens especificas,
+    mas nao altera lancamentos, compra_id, categoria_cartao_id nem status_fatura.
+
+    Nao apaga o movimento original. Cria movimento compensatorio e reabre o objeto
+    como Pendente.
     """
     try:
         from backend.models import ContaBancaria, MovimentoFinanceiro
@@ -1250,24 +1256,28 @@ def estornar_pagamento(id):
         if not conta:
             return jsonify({'success': False, 'error': 'Despesa nao encontrada'}), 404
 
+        eh_fatura = bool(conta.is_fatura_cartao)
+        origem_estorno = 'ESTORNO_FATURA' if eh_fatura else 'ESTORNO_DESPESA'
+        rotulo = 'fatura' if eh_fatura else 'despesa'
+
         if conta.status_pagamento != 'Pago':
             return jsonify({
                 'success': False,
-                'error': 'Apenas despesas pagas podem ser estornadas.',
+                'error': f'Apenas {rotulo}s pagas podem ser estornadas.' if eh_fatura else 'Apenas despesas pagas podem ser estornadas.',
             }), 409
 
         # Bloquear estorno duplicado
         estorno_existente = MovimentoFinanceiro.query.filter_by(
             conta_id=conta.id,
-            origem='ESTORNO_DESPESA',
+            origem=origem_estorno,
         ).first()
         if estorno_existente:
             return jsonify({
                 'success': False,
-                'error': 'Esta despesa ja possui um estorno registrado e nao pode ser estornada novamente.',
+                'error': f'Este pagamento/recebimento ja foi estornado.' if eh_fatura else 'Esta despesa ja possui um estorno registrado e nao pode ser estornada novamente.',
             }), 409
 
-        # Localizar movimento original de debito vinculado a esta despesa
+        # Localizar movimento original de debito vinculado a esta despesa/fatura
         movimento_original = MovimentoFinanceiro.query.filter_by(
             conta_id=conta.id,
             tipo='DEBITO',
@@ -1307,7 +1317,11 @@ def estornar_pagamento(id):
         conta_bancaria_id = movimento_original.conta_bancaria_id
 
         # Transacao atomica
-        descricao_estorno = f'Estorno de pagamento da despesa: {conta.descricao or str(conta.id)}'
+        descricao_estorno = (
+            f'Estorno de pagamento da fatura: {conta.descricao or str(conta.id)}'
+            if eh_fatura else
+            f'Estorno de pagamento da despesa: {conta.descricao or str(conta.id)}'
+        )
         observacao_estorno = f'[ESTORNO] {data_estorno_str} — {motivo}'
 
         movimento_estorno = ContaBancariaService.criar_movimento(
@@ -1316,10 +1330,13 @@ def estornar_pagamento(id):
             valor=valor_original,
             descricao=descricao_estorno,
             data_movimento=data_estorno,
-            origem='ESTORNO_DESPESA',
+            origem=origem_estorno,
             conta_id=conta.id,
+            fatura_id=conta.id if eh_fatura else None,
         )
 
+        # Fatura: nao altera status_fatura (fechamento/consolidacao), lancamentos,
+        # compra_id ou categoria_cartao_id — apenas volta a poder ser paga novamente.
         conta.status_pagamento = 'Pendente'
         conta.data_pagamento = None
         if conta.observacoes:
@@ -1331,7 +1348,7 @@ def estornar_pagamento(id):
 
         return jsonify({
             'success': True,
-            'message': 'Pagamento estornado com sucesso.',
+            'message': 'Pagamento da fatura estornado com sucesso.' if eh_fatura else 'Pagamento estornado com sucesso.',
             'data': {
                 'despesa_id': conta.id,
                 'movimento_estorno_id': movimento_estorno.id,

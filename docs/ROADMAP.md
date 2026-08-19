@@ -2,7 +2,7 @@
 
 Pendências conhecidas, MVPs planejados e débitos técnicos.
 
-Última atualização: 2026-08-18
+Última atualização: 2026-08-19
 
 ---
 
@@ -38,6 +38,7 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 | FIN-QUIT-OPER-1 | Quitação operacional do financiamento | Baixa |
 | FIN-QUIT-1 | Simulação de quitação antecipada com cálculo de desconto | Concluído |
 | FIN-CAIXA-IMPORT-1 | Importação de demonstrativos CAIXA para comparação real × simulado | Baixa |
+| CORE-ESTORNO-4 | Estorno de pagamento direto de parcela de financiamento | Concluído |
 
 ### Importação de Cartão
 
@@ -54,13 +55,14 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 |----|-----------|-----------|
 | CORE-RECEITA-1 | Fluxo protegido de recebimento: conta bancária obrigatória, movimento transacional, PUT/DELETE bloqueados após recebimento | Concluído |
 | DATA-HYGIENE-RECEITA-1 | Saneamento de receitas históricas sem conta/movimento (`scripts/data_hygiene_receitas_historicas.py`) — dry-run auditado; 1 receita real pendente de decisão manual (id=20) | Concluído (com pendência manual) |
-| CORE-ESTORNO-GLOBAL-1 | Estorno de receita, fatura e financiamento (padrão de `CORE-ESTORNO-1` de despesas) | Média |
+| CORE-ESTORNO-2 | Estorno de receita realizada com movimento compensatório | Concluído |
 
 ### Cartões
 
 | ID | Descrição | Prioridade |
 |----|-----------|-----------|
 | CORE-CARTAO-FATURA-1 | Idempotência e pagamento seguro de fatura de cartão | Concluído |
+| CORE-ESTORNO-3 | Estorno de pagamento de fatura de cartão (reaproveita rota de estorno de despesas) | Concluído |
 | CART-1 | Despesas fatura: parcelamento inline com descrição, categoria e edição no mesmo modal | Alta |
 | CART-2 | Relatório de gastos por Categoria do Cartão com histórico | Média |
 
@@ -137,6 +139,10 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 | CORS irrestrito | `backend/app.py` | Parcialmente corrigido no SEC-0 |
 | Dados de cartão em texto puro | `ContaCartao` | Risco de segurança em dados em repouso |
 | Scheduler comentado | `backend/app.py:264` | Geração automática de recorrências desabilitada |
+| `MovimentoFinanceiro.movimento_original_id` ausente | `models.py` | Estornos (CORE-ESTORNO-1/2/3/4) localizam o movimento original por `(conta_id\|receita_realizada_id\|financiamento_parcela_id) + tipo`, não por FK direta — funciona mas é indireto; FK explícita tornaria a consulta e a auditoria mais diretas |
+| Estorno de transferência entre contas | `ContaBancariaService.gerar_transferencia()` | Não implementado — só estorno de despesa/receita/fatura/financiamento |
+| Estorno de ajuste manual de saldo (`origem='AJUSTE'`) | — | Não implementado |
+| Conciliação bancária (extrato real × sistema) | — | Não implementada |
 
 ---
 

@@ -950,6 +950,126 @@ def deletar_realizada(id):
         return _internal_error('receitas')
 
 
+@receitas_bp.route('/realizadas/<int:id>/estornar', methods=['POST'])
+def estornar_realizada(id):
+    """
+    CORE-ESTORNO-2: estorno de receita realizada com movimento compensatorio.
+
+    Nao apaga a ReceitaRealizada nem o MovimentoFinanceiro original (origem=RECEITA):
+    o MovimentoFinanceiro.receita_realizada_id de ambos continua apontando para o
+    mesmo registro, preservando rastreabilidade. Cria movimento de debito
+    compensatorio (origem=ESTORNO_RECEITA). A receita passa a ser considerada
+    estornada dinamicamente pela presenca desse movimento — nao ha campo de status
+    proprio no model (a existencia do registro ReceitaRealizada ja significa
+    'recebido' desde o CORE-RECEITA-1).
+
+    Body (JSON):
+        {
+            "data_estorno": "YYYY-MM-DD" (obrigatorio),
+            "motivo": "string" (obrigatorio)
+        }
+    """
+    try:
+        from backend.models import MovimentoFinanceiro
+        from backend.services.conta_bancaria_service import ContaBancariaService
+    except ImportError:
+        from models import MovimentoFinanceiro
+        from services.conta_bancaria_service import ContaBancariaService
+
+    try:
+        receita = ReceitaRealizada.query.filter(
+            ReceitaRealizada.id == id,
+            PerfilFinanceiroService.condicao_perfil(ReceitaRealizada),
+        ).first()
+        if not receita:
+            return jsonify({'success': False, 'error': 'Receita nao encontrada'}), 404
+
+        # Bloquear estorno duplicado
+        estorno_existente = MovimentoFinanceiro.query.filter_by(
+            receita_realizada_id=receita.id,
+            origem='ESTORNO_RECEITA',
+        ).first()
+        if estorno_existente:
+            return jsonify({
+                'success': False,
+                'error': 'Este pagamento/recebimento ja foi estornado.',
+            }), 409
+
+        # Localizar movimento original de credito vinculado a esta receita
+        movimento_original = MovimentoFinanceiro.query.filter_by(
+            receita_realizada_id=receita.id,
+            origem='RECEITA',
+            tipo='CREDITO',
+        ).order_by(MovimentoFinanceiro.id.desc()).first()
+        if not movimento_original:
+            return jsonify({
+                'success': False,
+                'error': 'Nao foi possivel estornar porque o movimento financeiro original nao foi encontrado.',
+            }), 422
+
+        if not movimento_original.conta_bancaria_id:
+            return jsonify({
+                'success': False,
+                'error': 'Movimento original nao possui conta bancaria vinculada.',
+            }), 422
+
+        valor_original = Decimal(str(movimento_original.valor or 0))
+        if valor_original <= 0:
+            return jsonify({
+                'success': False,
+                'error': 'Valor do movimento original invalido para estorno.',
+            }), 422
+
+        dados = request.get_json() or {}
+        motivo = (dados.get('motivo') or '').strip()
+        if not motivo:
+            return jsonify({'success': False, 'error': 'Motivo do estorno e obrigatorio.'}), 400
+
+        data_estorno_str = (dados.get('data_estorno') or '').strip()
+        if not data_estorno_str:
+            return jsonify({'success': False, 'error': 'Data do estorno e obrigatoria.'}), 400
+        try:
+            data_estorno = datetime.strptime(data_estorno_str, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'success': False, 'error': 'Formato de data_estorno invalido. Use YYYY-MM-DD.'}), 400
+
+        conta_bancaria_id = movimento_original.conta_bancaria_id
+
+        descricao_estorno = f'Estorno de recebimento da receita: {receita.descricao or str(receita.id)}'
+        observacao_estorno = f'[ESTORNO] {data_estorno_str} — {motivo}'
+
+        movimento_estorno = ContaBancariaService.criar_movimento(
+            conta_bancaria_id,
+            tipo='DEBITO',
+            valor=valor_original,
+            descricao=descricao_estorno,
+            data_movimento=data_estorno,
+            origem='ESTORNO_RECEITA',
+            receita_realizada_id=receita.id,
+        )
+
+        if receita.observacoes:
+            receita.observacoes = f'{receita.observacoes}\n{observacao_estorno}'
+        else:
+            receita.observacoes = observacao_estorno
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': 'Recebimento estornado com sucesso.',
+            'data': {
+                'receita_id': receita.id,
+                'movimento_estorno_id': movimento_estorno.id,
+                'valor_estornado': float(valor_original),
+            },
+        }), 200
+
+    except Exception:
+        db.session.rollback()
+        return _internal_error('receitas')
+
+
 # ============================================================================
 # 4. RELATÃ“RIOS E ANÃLISES
 # ============================================================================
