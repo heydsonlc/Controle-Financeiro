@@ -84,8 +84,12 @@ Esta regra não tem exceções.
 - `REABRIR_COMO_PENDENTE`: `valor_recebido` ausente ou `<= 0` → exclui a `ReceitaRealizada` (não há evidência de recebimento real, mesmo com `data_recebimento` preenchida — o campo é `NOT NULL` no schema, então "sem data" não ocorre em dado não corrompido).
 - `PENDENTE_DECISAO_USUARIO`: valor válido mas conta não pode ser inferida com segurança → nenhuma alteração automática.
 - `BLOQUEADO_INCONSISTENTE`: já existe `MovimentoFinanceiro` vinculado apesar de `conta_bancaria_id` ausente na receita → investigação manual, sem correção automática.
-- Backup obrigatório (`BackupService.executar_backup_manual()`, PostgreSQL) antes de qualquer escrita; nenhum backup é criado se não houver ação seiga a aplicar.
-- **Achado de infraestrutura relevante**: `PerfilFinanceiroService.obter_ou_criar_perfis_iniciais()` (chamado indiretamente por `ContaBancariaService.criar_movimento()` via `obter_perfil_ativo_id()`) executa `db.session.commit()` próprio quando os perfis padrão (Pessoal/Empresa) ainda não existem. Isso quebra a atomicidade de qualquer transação maior que chame `criar_movimento()` antes dos perfis existirem — em ambiente já inicializado isso é inofensivo (perfis já existem), mas é uma fragilidade estrutural que afeta CORE-RECEITA-1, CORE-SALDO-1A/1B e qualquer fluxo futuro que dependa de commit único. Não corrigido nesta etapa (fora de escopo); candidato a item técnico futuro.
+- Backup obrigatório (`BackupService.executar_backup_manual()`, PostgreSQL) antes de qualquer escrita; nenhum backup é criado se não houver ação segura a aplicar.
+
+**Atomicidade de transações (TX-ATOMIC-1)**:
+- `PerfilFinanceiroService.obter_ou_criar_perfis_iniciais()` usa apenas `db.session.flush()`, nunca `db.session.commit()` — esse método é acionado indiretamente por praticamente qualquer leitura/escrita escopada por perfil (`obter_perfil_ativo_id()`, `condicao_perfil()`, `aplicar_perfil_query()`, e por consequência `ContaBancariaService.criar_movimento()`), então um `commit()` ali finalizaria prematuramente qualquer transação maior em andamento — quebrando a garantia de atomicidade de que CORE-RECEITA-1, CORE-SALDO-1A/1B e futuros fluxos de estorno dependem.
+- A persistência da criação idempotente dos perfis padrão (Pessoal/Empresa) fica a cargo do hook global `commit_pending_session` (`backend/app.py`, `teardown_request`), que comita ao fim de qualquer requisição HTTP bem-sucedida com mudanças pendentes na sessão. Rotas de escrita continuam responsáveis pelo próprio `commit()`/`rollback()` explícito; o hook cobre apenas o que sobrar pendente (tipicamente rotas GET).
+- Descoberto durante o diagnóstico de rollback do `DATA-HYGIENE-RECEITA-1`.
 
 ---
 

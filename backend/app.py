@@ -136,6 +136,24 @@ def create_app(config_name=None):
             response.content_type = f'{response.content_type}; charset=utf-8'
         return response
 
+    # TX-ATOMIC-1: alguns services (ex.: PerfilFinanceiroService.obter_ou_criar_perfis_iniciais)
+    # usam apenas flush() para nunca finalizar prematuramente a transacao de quem os chama.
+    # Rotas somente-leitura nunca chamam commit() explicitamente; sem este hook, mudancas
+    # como a criacao idempotente dos perfis financeiros padrao ficariam pendentes e seriam
+    # descartadas ao final da requisicao. Rotas de escrita ja commitam/rollback explicitamente,
+    # entao aqui so sobra trabalho pendente se nada foi commitado ainda (commit() extra e no-op).
+    @app.teardown_request
+    def commit_pending_session(exc=None):
+        if exc is not None:
+            db.session.rollback()
+            return
+        if db.session.dirty or db.session.new or db.session.deleted:
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+                raise
+
     # Rotas de páginas
     @app.route('/')
     def index():

@@ -85,6 +85,7 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 
 | ID | Descrição | Prioridade |
 |----|-----------|-----------|
+| TX-ATOMIC-1 | Remover commit interno de `PerfilFinanceiroService.obter_ou_criar_perfis_iniciais()` que quebrava atomicidade de transações maiores | Concluído |
 | DB-CLEAN-1 | Corrigir `lazy='dynamic'` depreciado (~12 relacionamentos em `models.py`) | Média |
 | DB-CLEAN-2 | Corrigir `datetime.utcnow` depreciado (~20 ocorrências) | Média |
 | DB-CLEAN-3 | Corrigir N+1 queries em `to_dict()` com lazy load | Média |
@@ -136,7 +137,6 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 | CORS irrestrito | `backend/app.py` | Parcialmente corrigido no SEC-0 |
 | Dados de cartão em texto puro | `ContaCartao` | Risco de segurança em dados em repouso |
 | Scheduler comentado | `backend/app.py:264` | Geração automática de recorrências desabilitada |
-| Commit implícito em `obter_ou_criar_perfis_iniciais()` | `perfil_financeiro_service.py:60` | Quebra atomicidade de transações maiores (ex.: `ContaBancariaService.criar_movimento()`) se perfis padrão ainda não existirem; achado durante DATA-HYGIENE-RECEITA-1 |
 
 ---
 

@@ -43,23 +43,25 @@ class PerfilFinanceiroService:
 
     @staticmethod
     def obter_ou_criar_perfis_iniciais():
-        criados = []
-
+        """
+        TX-ATOMIC-1: usa apenas flush(), nunca commit() — este service pode ser chamado
+        no meio de uma transacao maior (ex.: ContaBancariaService.criar_movimento()), e um
+        commit() aqui finalizaria prematuramente a transacao do chamador. A persistencia da
+        criacao idempotente dos perfis padrao fica a cargo do hook global
+        `commit_pending_session` (backend/app.py, teardown_request), que comita ao fim de
+        qualquer requisicao bem-sucedida com mudancas pendentes.
+        """
         for dados in PERFIS_INICIAIS:
             perfil = PerfilFinanceiro.query.filter_by(nome=dados['nome']).first()
             if not perfil:
                 perfil = PerfilFinanceiro(**dados, ativo=True, padrao=dados['nome'] == 'Pessoal')
                 db.session.add(perfil)
-                criados.append(perfil)
             else:
                 perfil.tipo = perfil.tipo or dados['tipo']
                 perfil.avatar = perfil.avatar or dados['avatar']
                 perfil.cor = perfil.cor or dados['cor']
 
-        if criados:
-            db.session.commit()
-        else:
-            db.session.flush()
+        db.session.flush()
 
         if not PerfilFinanceiro.query.filter_by(padrao=True, ativo=True).first():
             perfil_padrao = PerfilFinanceiro.query.filter_by(nome='Pessoal').first()
