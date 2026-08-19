@@ -6,6 +6,8 @@ Este arquivo inicializa a aplicação Flask e configura rotas, banco de dados e 
 import os
 import sys
 import logging
+import threading
+import webbrowser
 from pathlib import Path
 from flask import Flask, jsonify, redirect, render_template
 from flask_cors import CORS
@@ -24,7 +26,25 @@ except ImportError:
     from models import db
 
 # Carregar variáveis de ambiente
-load_dotenv('.env.local')  # Para desenvolvimento
+load_dotenv('.env.local', encoding='utf-8-sig')  # utf-8-sig lida com BOM do Windows
+
+# Workaround: psycopg2 no Windows decodifica mensagens de erro do libpq como UTF-8,
+# mas o Windows retorna erros em cp1252 (ex: "autenticação" tem 'ç' = 0xe7).
+# Monkey-patch para redecodificar e lançar OperationalError legível.
+try:
+    import psycopg2 as _pg2
+    _pg2_connect_orig = _pg2.connect
+
+    def _pg2_connect_patched(*a, **kw):
+        try:
+            return _pg2_connect_orig(*a, **kw)
+        except UnicodeDecodeError as _e:
+            msg = _e.object.decode('cp1252', errors='replace')
+            raise _pg2.OperationalError(msg) from None
+
+    _pg2.connect = _pg2_connect_patched
+except Exception:
+    pass
 
 
 def _parse_bool_env(value, default=False):
@@ -348,6 +368,11 @@ if __name__ == '__main__':
         print(f"=> Ambiente: {os.getenv('FLASK_ENV', 'development')}")
         print(f"=> Debug: {'ativado' if flask_debug else 'desativado'}")
         print("=> Pressione CTRL+C para parar")
+
+    # Abrir navegador automaticamente (apenas na primeira vez, evita dupla abertura com reloader)
+    if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
+        url = f"http://{flask_host}:{flask_port}"
+        threading.Timer(1.5, lambda: webbrowser.open_new_tab(url)).start()
 
     # Executar servidor
     app.run(
