@@ -892,17 +892,6 @@ def estornar_pagamento_parcela(parcela_id):
                 'error': 'Esta parcela possui despesa vinculada. Estorne pelo fluxo de despesas para preservar a rastreabilidade.',
             }), 409
 
-        # Bloquear estorno duplicado
-        estorno_existente = MovimentoFinanceiro.query.filter_by(
-            financiamento_parcela_id=parcela.id,
-            origem='ESTORNO_FINANCIAMENTO',
-        ).first()
-        if estorno_existente:
-            return jsonify({
-                'success': False,
-                'error': 'Este pagamento/recebimento ja foi estornado.',
-            }), 409
-
         # So a parcela paga mais recente (maior numero_parcela) pode ser estornada,
         # para nao corromper a cadeia de saldo_devedor_apos_pagamento
         parcela_paga_mais_recente = PerfilFinanceiroService.aplicar_perfil_query(
@@ -929,6 +918,23 @@ def estornar_pagamento_parcela(parcela_id):
                 'success': False,
                 'error': 'Nao foi possivel estornar porque o movimento financeiro original nao foi encontrado.',
             }), 422
+
+        # MOV-REF-1: bloquear estorno duplicado preferencialmente via movimento_original_id;
+        # fallback legado (origem + financiamento_parcela_id) cobre estornos anteriores a esta coluna.
+        estorno_existente = MovimentoFinanceiro.query.filter_by(
+            movimento_original_id=movimento_original.id,
+            origem='ESTORNO_FINANCIAMENTO',
+        ).first()
+        if not estorno_existente:
+            estorno_existente = MovimentoFinanceiro.query.filter_by(
+                financiamento_parcela_id=parcela.id,
+                origem='ESTORNO_FINANCIAMENTO',
+            ).first()
+        if estorno_existente:
+            return jsonify({
+                'success': False,
+                'error': 'Este pagamento/recebimento ja foi estornado.',
+            }), 409
 
         if not movimento_original.conta_bancaria_id:
             return jsonify({
@@ -971,6 +977,7 @@ def estornar_pagamento_parcela(parcela_id):
             data_movimento=data_estorno,
             origem='ESTORNO_FINANCIAMENTO',
             financiamento_parcela_id=parcela.id,
+            movimento_original_id=movimento_original.id,
         )
 
         # Recompor saldo devedor: valor antes deste pagamento e o

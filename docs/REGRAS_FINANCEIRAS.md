@@ -2,7 +2,7 @@
 
 Regras globais e por módulo que governam o comportamento do Controle Financeiro.
 
-Última atualização: 2026-08-19 (CORE-ESTORNO-UI-1)
+Última atualização: 2026-08-19 (MOV-REF-1)
 
 ---
 
@@ -80,7 +80,7 @@ Esta regra não tem exceções.
 - `POST /api/receitas/realizadas/{id}/estornar` estorna uma receita realizada. Não apaga `ReceitaRealizada` nem o `MovimentoFinanceiro` original (`origem='RECEITA'`) — cria movimento compensatório de `DEBITO` com `origem='ESTORNO_RECEITA'`, mantendo ambos os movimentos vinculados ao mesmo `receita_realizada_id` para rastreabilidade.
 - `ReceitaRealizada` não tem campo de status próprio (a existência do registro já significa "recebido" desde o CORE-RECEITA-1); o estado "estornada" é calculado dinamicamente pela presença de um `MovimentoFinanceiro` com `origem='ESTORNO_RECEITA'` vinculado — nenhum campo novo foi adicionado ao model.
 - Exige `motivo` e `data_estorno` (HTTP 400 se ausentes); registra o motivo em `observacoes` sem apagar o conteúdo anterior.
-- Bloqueia estorno duplicado (HTTP 409) e receita sem movimento original vinculado (HTTP 422, ex.: contemplação de consórcio ainda pendente de confirmação).
+- Bloqueia estorno duplicado (HTTP 409, verificação via `movimento_original_id` com fallback legado por `receita_realizada_id` — ver MOV-REF-1) e receita sem movimento original vinculado (HTTP 422, ex.: contemplação de consórcio ainda pendente de confirmação).
 - **UI (CORE-ESTORNO-UI-1)**: botão "Estornar recebimento" na listagem de receitas (`frontend/static/js/receitas.js`), visível apenas quando `receita.status === 'REALIZADA'` e `receita.realizada_id` está definido (linha agregada de múltiplas realizações não mostra o botão, evitando ambiguidade). Modal próprio (`modal-estornar-receita`) com aviso, data e motivo obrigatórios; frontend só coleta e envia — todo bloqueio (409/422) é decidido pelo backend.
 
 **Saneamento de receitas históricas (DATA-HYGIENE-RECEITA-1)**:
@@ -115,7 +115,7 @@ Esta regra não tem exceções.
 - Fatura de cartão é uma `Conta` com `is_fatura_cartao=True`, paga pela mesma rota genérica de despesas (`POST /api/despesas/{id}/pagar`). O estorno reaproveita, pelo mesmo motivo, `POST /api/despesas/{id}/estornar-pagamento` — a rota detecta `is_fatura_cartao` e usa `origem='ESTORNO_FATURA'` em vez de `origem='ESTORNO_DESPESA'`. Não existe rota separada em `cartoes.py` para isso.
 - Não apaga o movimento `DEBITO` original. Cria movimento compensatório `CREDITO` (`origem='ESTORNO_FATURA'`) e volta `status_pagamento` para `'Pendente'`.
 - **Não altera** `status_fatura` (fechamento/consolidação, controlado por `POST /cartoes/{id}/faturas/{competencia}/consolidar`), `valor_executado`, `LancamentoAgregado`, `compra_id` ou `categoria_cartao_id` — o estorno é puramente financeiro/bancário.
-- Bloqueia estorno de fatura não paga (HTTP 409), sem movimento vinculado (HTTP 422) e estorno duplicado (HTTP 409).
+- Bloqueia estorno de fatura não paga (HTTP 409), sem movimento vinculado (HTTP 422) e estorno duplicado (HTTP 409, via `movimento_original_id` com fallback legado por `conta_id` — ver MOV-REF-1).
 - **UI (CORE-ESTORNO-UI-1)**: fatura de cartão é exibida e paga na tela de Despesas, não em Cartões — o botão "Estornar pagamento" reaproveita o mesmo modal do estorno de despesa comum (CORE-ESTORNO-1), trocando dinamicamente título/rótulo/aviso quando `despesa.is_fatura_cartao === true` (`abrirModalEstorno()` em `frontend/static/js/despesas.js`). Mesmo endpoint (`POST /api/despesas/{id}/estornar-pagamento`) para os dois casos.
 
 **Idempotência de lançamentos recorrentes (CORE-CARTAO-1)**:
@@ -275,12 +275,17 @@ Bloqueada quando existir qualquer dos seguintes:
 - **Despesa reaberta como Pendente** — `status_pagamento='Pendente'`, `data_pagamento=NULL`, `valor_pago=NULL`.
 - **Motivo é obrigatório** (HTTP 400 sem ele). Registrado em `Conta.observacoes`.
 - **Saldo bancário recalculado** automaticamente após criação do movimento compensatório.
-- **Estorno duplicado bloqueado** — se já existe `MovimentoFinanceiro` com `origem='ESTORNO_DESPESA'` vinculado à despesa, retorna HTTP 409.
+- **Estorno duplicado bloqueado** — verificação preferencial via `movimento_original_id` (MOV-REF-1), com fallback para a checagem legada (`origem='ESTORNO_DESPESA'` + `conta_id`) quando o campo novo não estiver preenchido. Retorna HTTP 409.
 - **Estorno de despesa pendente bloqueado** — HTTP 409.
 - **Movimento original ausente** — HTTP 422 com mensagem descritiva.
 - Operação transacional: se falhar, nenhuma alteração persiste.
 - Mesmo padrão aplicado em **CORE-ESTORNO-2** (receita), **CORE-ESTORNO-3** (fatura de cartão) e **CORE-ESTORNO-4** (parcela de financiamento), ver seções específicas abaixo.
-- Dívida técnica: campo `movimento_original_id` em `MovimentoFinanceiro` para rastreabilidade explícita.
+
+**Referência explícita ao movimento original (MOV-REF-1)**:
+- `MovimentoFinanceiro.movimento_original_id` (FK nullable para `movimento_financeiro.id`, migration `76fa60a587fd`) aponta do movimento de estorno direto para o movimento financeiro original que ele compensa — substitui a necessidade de combinar `origem`/`conta_id`/`receita_realizada_id`/`financiamento_parcela_id`/`tipo` para localizar o par.
+- Preenchido pelos quatro fluxos de estorno existentes (`ESTORNO_DESPESA`, `ESTORNO_RECEITA`, `ESTORNO_FATURA`, `ESTORNO_FINANCIAMENTO`) via `ContaBancariaService.criar_movimento(..., movimento_original_id=...)`.
+- **Nullable por design.** Estornos criados antes desta migration não têm o campo preenchido e continuam válidos — o bloqueio de duplicidade em cada rota tenta primeiro `movimento_original_id`, e só recorre à lógica indireta legada se a busca preferencial não encontrar nada. Nenhum dado antigo foi alterado retroativamente.
+- Relacionamento `MovimentoFinanceiro.movimento_original` (auto-referência, `remote_side`) e `backref='estornos_relacionados'` — permite navegar de um movimento original para os estornos que o compensaram (hoje sempre 0 ou 1, já que estorno duplicado é bloqueado).
 
 **Pagamento de parcelas de financiamento (CORE-SALDO-1C)**:
 - `POST /financiamentos/parcelas/<id>/pagar` requer `conta_bancaria_id` e `data_pagamento` (HTTP 400 sem eles).
@@ -297,7 +302,7 @@ Bloqueada quando existir qualquer dos seguintes:
 - **Só a parcela paga mais recente (maior `numero_parcela` entre as pagas) pode ser estornada** — o sistema permite pagar parcelas fora de ordem sem validação de sequência, então estornar uma parcela do meio corromperia a cadeia de `saldo_devedor_apos_pagamento`. Existe parcela paga posterior → HTTP 409.
 - Recompõe `Financiamento.saldo_devedor_atual` com o `saldo_devedor_apos_pagamento` da parcela anterior (`numero_parcela - 1`), ou `valor_financiado` se for a primeira parcela — mesma lógica de fallback já usada em `Financiamento.to_dict()`.
 - Não altera amortizações extraordinárias, ajustes de saldo, documentos/conferências CAIXA, simulação de quitação nem cronograma futuro em massa.
-- Bloqueia estorno duplicado (HTTP 409) e parcela sem movimento vinculado (HTTP 422).
+- Bloqueia estorno duplicado (HTTP 409, via `movimento_original_id` com fallback legado por `financiamento_parcela_id` — ver MOV-REF-1) e parcela sem movimento vinculado (HTTP 422).
 - **UI (CORE-ESTORNO-UI-1)**: botão "Estornar pagamento" na coluna de ações do cronograma de parcelas (`renderizarTabelaParcelas()` em `frontend/static/js/financiamentos.js`), visível sempre que `parcela.status === 'pago'`. O payload da parcela não expõe se o pagamento foi direto ou via despesa vinculada nem se já existe estorno — o frontend não infere essas regras; o backend bloqueia com HTTP 409 e mensagem clara quando aplicável.
 
 ---

@@ -984,17 +984,6 @@ def estornar_realizada(id):
         if not receita:
             return jsonify({'success': False, 'error': 'Receita nao encontrada'}), 404
 
-        # Bloquear estorno duplicado
-        estorno_existente = MovimentoFinanceiro.query.filter_by(
-            receita_realizada_id=receita.id,
-            origem='ESTORNO_RECEITA',
-        ).first()
-        if estorno_existente:
-            return jsonify({
-                'success': False,
-                'error': 'Este pagamento/recebimento ja foi estornado.',
-            }), 409
-
         # Localizar movimento original de credito vinculado a esta receita
         movimento_original = MovimentoFinanceiro.query.filter_by(
             receita_realizada_id=receita.id,
@@ -1006,6 +995,23 @@ def estornar_realizada(id):
                 'success': False,
                 'error': 'Nao foi possivel estornar porque o movimento financeiro original nao foi encontrado.',
             }), 422
+
+        # MOV-REF-1: bloquear estorno duplicado preferencialmente via movimento_original_id;
+        # fallback legado (origem + receita_realizada_id) cobre estornos anteriores a esta coluna.
+        estorno_existente = MovimentoFinanceiro.query.filter_by(
+            movimento_original_id=movimento_original.id,
+            origem='ESTORNO_RECEITA',
+        ).first()
+        if not estorno_existente:
+            estorno_existente = MovimentoFinanceiro.query.filter_by(
+                receita_realizada_id=receita.id,
+                origem='ESTORNO_RECEITA',
+            ).first()
+        if estorno_existente:
+            return jsonify({
+                'success': False,
+                'error': 'Este pagamento/recebimento ja foi estornado.',
+            }), 409
 
         if not movimento_original.conta_bancaria_id:
             return jsonify({
@@ -1046,6 +1052,7 @@ def estornar_realizada(id):
             data_movimento=data_estorno,
             origem='ESTORNO_RECEITA',
             receita_realizada_id=receita.id,
+            movimento_original_id=movimento_original.id,
         )
 
         if receita.observacoes:

@@ -2,7 +2,7 @@
 
 Pendências conhecidas, MVPs planejados e débitos técnicos.
 
-Última atualização: 2026-08-19 (CORE-ESTORNO-UI-1)
+Última atualização: 2026-08-19 (MOV-REF-1)
 
 ---
 
@@ -88,6 +88,7 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 | ID | Descrição | Prioridade |
 |----|-----------|-----------|
 | TX-ATOMIC-1 | Remover commit interno de `PerfilFinanceiroService.obter_ou_criar_perfis_iniciais()` que quebrava atomicidade de transações maiores | Concluído |
+| MOV-REF-1 | `MovimentoFinanceiro.movimento_original_id` — referência explícita ao movimento compensado pelos 4 fluxos de estorno (migration `76fa60a587fd`) | Concluído |
 | DB-CLEAN-1 | Corrigir `lazy='dynamic'` depreciado (~12 relacionamentos em `models.py`) | Média |
 | DB-CLEAN-2 | Corrigir `datetime.utcnow` depreciado (~20 ocorrências) | Média |
 | DB-CLEAN-3 | Corrigir N+1 queries em `to_dict()` com lazy load | Média |
@@ -139,7 +140,6 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 | CORS irrestrito | `backend/app.py` | Parcialmente corrigido no SEC-0 |
 | Dados de cartão em texto puro | `ContaCartao` | Risco de segurança em dados em repouso |
 | Scheduler comentado | `backend/app.py:264` | Geração automática de recorrências desabilitada |
-| `MovimentoFinanceiro.movimento_original_id` ausente | `models.py` | Estornos (CORE-ESTORNO-1/2/3/4) localizam o movimento original por `(conta_id\|receita_realizada_id\|financiamento_parcela_id) + tipo`, não por FK direta — funciona mas é indireto; FK explícita tornaria a consulta e a auditoria mais diretas |
 | Estorno de transferência entre contas | `ContaBancariaService.gerar_transferencia()` | Não implementado — só estorno de despesa/receita/fatura/financiamento |
 | Estorno de ajuste manual de saldo (`origem='AJUSTE'`) | — | Não implementado |
 | Conciliação bancária (extrato real × sistema) | — | Não implementada |

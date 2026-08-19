@@ -2445,6 +2445,15 @@ class MovimentoFinanceiro(db.Model):
     receita_realizada_id = db.Column(db.Integer, db.ForeignKey('receita_realizada.id'))
     transferencia_id = db.Column(db.String(36))  # UUID para parear débito/crédito
     financiamento_parcela_id = db.Column(db.Integer, db.ForeignKey('financiamento_parcela.id'), nullable=True)
+    # MOV-REF-1: referência explícita ao movimento original compensado por um estorno.
+    # Nullable — estornos antigos (anteriores a esta migration) não têm esse vínculo direto
+    # e continuam sendo localizados pela lógica indireta (origem/conta_id/receita_realizada_id/
+    # financiamento_parcela_id/tipo), mantida como fallback.
+    movimento_original_id = db.Column(
+        db.Integer,
+        db.ForeignKey('movimento_financeiro.id', name='fk_movimento_financeiro_movimento_original'),
+        nullable=True,
+    )
 
     # Metadados de rastreio
     origem = db.Column(db.String(20), default='MANUAL')  # MANUAL, RECEITA, DESPESA, FATURA, TRANSFERENCIA, AJUSTE, FINANCIAMENTO
@@ -2458,6 +2467,12 @@ class MovimentoFinanceiro(db.Model):
     conta = db.relationship('Conta', foreign_keys=[conta_id])
     receita_realizada = db.relationship('ReceitaRealizada', foreign_keys=[receita_realizada_id])
     financiamento_parcela = db.relationship('FinanciamentoParcela', foreign_keys=[financiamento_parcela_id])
+    movimento_original = db.relationship(
+        'MovimentoFinanceiro',
+        remote_side='MovimentoFinanceiro.id',
+        foreign_keys=[movimento_original_id],
+        backref='estornos_relacionados',
+    )
 
     # Índices
     __table_args__ = (
@@ -2465,6 +2480,7 @@ class MovimentoFinanceiro(db.Model):
         db.Index('idx_movimento_data', 'data_movimento'),
         db.Index('idx_movimento_fatura', 'fatura_id'),
         db.Index('idx_movimento_perfil_data', 'perfil_financeiro_id', 'data_movimento'),
+        db.Index('ix_movimento_financeiro_movimento_original_id', 'movimento_original_id'),
     )
 
     def __repr__(self):
@@ -2484,6 +2500,7 @@ class MovimentoFinanceiro(db.Model):
             'receita_realizada_id': self.receita_realizada_id,
             'transferencia_id': self.transferencia_id,
             'financiamento_parcela_id': self.financiamento_parcela_id,
+            'movimento_original_id': self.movimento_original_id,
             'origem': self.origem,
             'ajustavel': bool(self.ajustavel),
             'criado_em': self.criado_em.strftime('%Y-%m-%d %H:%M:%S') if self.criado_em else None

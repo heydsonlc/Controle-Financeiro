@@ -1266,17 +1266,6 @@ def estornar_pagamento(id):
                 'error': f'Apenas {rotulo}s pagas podem ser estornadas.' if eh_fatura else 'Apenas despesas pagas podem ser estornadas.',
             }), 409
 
-        # Bloquear estorno duplicado
-        estorno_existente = MovimentoFinanceiro.query.filter_by(
-            conta_id=conta.id,
-            origem=origem_estorno,
-        ).first()
-        if estorno_existente:
-            return jsonify({
-                'success': False,
-                'error': f'Este pagamento/recebimento ja foi estornado.' if eh_fatura else 'Esta despesa ja possui um estorno registrado e nao pode ser estornada novamente.',
-            }), 409
-
         # Localizar movimento original de debito vinculado a esta despesa/fatura
         movimento_original = MovimentoFinanceiro.query.filter_by(
             conta_id=conta.id,
@@ -1287,6 +1276,23 @@ def estornar_pagamento(id):
                 'success': False,
                 'error': 'Nao foi possivel estornar porque o movimento financeiro original nao foi encontrado.',
             }), 422
+
+        # MOV-REF-1: bloquear estorno duplicado preferencialmente via movimento_original_id;
+        # fallback legado (origem + conta_id) cobre estornos anteriores a esta coluna.
+        estorno_existente = MovimentoFinanceiro.query.filter_by(
+            movimento_original_id=movimento_original.id,
+            origem=origem_estorno,
+        ).first()
+        if not estorno_existente:
+            estorno_existente = MovimentoFinanceiro.query.filter_by(
+                conta_id=conta.id,
+                origem=origem_estorno,
+            ).first()
+        if estorno_existente:
+            return jsonify({
+                'success': False,
+                'error': f'Este pagamento/recebimento ja foi estornado.' if eh_fatura else 'Esta despesa ja possui um estorno registrado e nao pode ser estornada novamente.',
+            }), 409
 
         if not movimento_original.conta_bancaria_id:
             return jsonify({
@@ -1333,6 +1339,7 @@ def estornar_pagamento(id):
             origem=origem_estorno,
             conta_id=conta.id,
             fatura_id=conta.id if eh_fatura else None,
+            movimento_original_id=movimento_original.id,
         )
 
         # Fatura: nao altera status_fatura (fechamento/consolidacao), lancamentos,
