@@ -53,6 +53,7 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 | ID | Descrição | Prioridade |
 |----|-----------|-----------|
 | CORE-RECEITA-1 | Fluxo protegido de recebimento: conta bancária obrigatória, movimento transacional, PUT/DELETE bloqueados após recebimento | Concluído |
+| DATA-HYGIENE-RECEITA-1 | Saneamento de receitas históricas sem conta/movimento (`scripts/data_hygiene_receitas_historicas.py`) — dry-run auditado; 1 receita real pendente de decisão manual (id=20) | Concluído (com pendência manual) |
 | CORE-ESTORNO-GLOBAL-1 | Estorno de receita, fatura e financiamento (padrão de `CORE-ESTORNO-1` de despesas) | Média |
 
 ### Cartões
@@ -135,6 +136,7 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 | CORS irrestrito | `backend/app.py` | Parcialmente corrigido no SEC-0 |
 | Dados de cartão em texto puro | `ContaCartao` | Risco de segurança em dados em repouso |
 | Scheduler comentado | `backend/app.py:264` | Geração automática de recorrências desabilitada |
+| Commit implícito em `obter_ou_criar_perfis_iniciais()` | `perfil_financeiro_service.py:60` | Quebra atomicidade de transações maiores (ex.: `ContaBancariaService.criar_movimento()`) se perfis padrão ainda não existirem; achado durante DATA-HYGIENE-RECEITA-1 |
 
 ---
 

@@ -77,6 +77,16 @@ Esta regra não tem exceções.
 - `DELETE /api/receitas/realizadas/{id}` é bloqueado (HTTP 409) se existir `MovimentoFinanceiro` vinculado — receita recebida preserva histórico financeiro; correção exige estorno (fora do escopo do CORE-RECEITA-1, ver `CORE-ESTORNO-GLOBAL-1` no roadmap).
 - Estorno de receita, assim como estorno de fatura e de financiamento, não está implementado — apenas o de despesas (`CORE-ESTORNO-1`).
 
+**Saneamento de receitas históricas (DATA-HYGIENE-RECEITA-1)**:
+- Script `scripts/data_hygiene_receitas_historicas.py` audita `ReceitaRealizada` sem `conta_bancaria_id` e sem `MovimentoFinanceiro` vinculado, no banco real da aplicação (`DATABASE_URL`, não em arquivos SQLite legados).
+- Classificação é sempre determinística — nenhuma conta bancária é inferida por heurística (única conta existente, conta mais usada, descrição parecida, etc.). Só é aceita conta explícita em `ItemReceita.conta_bancaria_id` da fonte vinculada à receita.
+- `REGULARIZAR_MOVIMENTO`: conta explícita + valor válido (`> 0`) → cria `MovimentoFinanceiro` via `ContaBancariaService.criar_movimento()`.
+- `REABRIR_COMO_PENDENTE`: `valor_recebido` ausente ou `<= 0` → exclui a `ReceitaRealizada` (não há evidência de recebimento real, mesmo com `data_recebimento` preenchida — o campo é `NOT NULL` no schema, então "sem data" não ocorre em dado não corrompido).
+- `PENDENTE_DECISAO_USUARIO`: valor válido mas conta não pode ser inferida com segurança → nenhuma alteração automática.
+- `BLOQUEADO_INCONSISTENTE`: já existe `MovimentoFinanceiro` vinculado apesar de `conta_bancaria_id` ausente na receita → investigação manual, sem correção automática.
+- Backup obrigatório (`BackupService.executar_backup_manual()`, PostgreSQL) antes de qualquer escrita; nenhum backup é criado se não houver ação seiga a aplicar.
+- **Achado de infraestrutura relevante**: `PerfilFinanceiroService.obter_ou_criar_perfis_iniciais()` (chamado indiretamente por `ContaBancariaService.criar_movimento()` via `obter_perfil_ativo_id()`) executa `db.session.commit()` próprio quando os perfis padrão (Pessoal/Empresa) ainda não existem. Isso quebra a atomicidade de qualquer transação maior que chame `criar_movimento()` antes dos perfis existirem — em ambiente já inicializado isso é inofensivo (perfis já existem), mas é uma fragilidade estrutural que afeta CORE-RECEITA-1, CORE-SALDO-1A/1B e qualquer fluxo futuro que dependa de commit único. Não corrigido nesta etapa (fora de escopo); candidato a item técnico futuro.
+
 ---
 
 ## Regras de Cartões
