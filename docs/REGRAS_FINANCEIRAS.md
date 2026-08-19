@@ -2,7 +2,7 @@
 
 Regras globais e por módulo que governam o comportamento do Controle Financeiro.
 
-Última atualização: 2026-05-11
+Última atualização: 2026-08-18
 
 ---
 
@@ -67,6 +67,15 @@ Esta regra não tem exceções.
 - Pendências de competências anteriores permanecem visíveis até confirmação
 - Confirmação de pendência preserva a competência original (não usa a data da confirmação)
 - Contemplação de consórcio sem efetivação bancária aparece como receita prevista
+
+**Recebimento protegido (CORE-RECEITA-1)**:
+- `POST /api/receitas/realizadas` é o fluxo oficial de recebimento: exige `conta_bancaria_id`, cria `ReceitaRealizada` e `MovimentoFinanceiro` (`CREDITO`, `origem='RECEITA'`) na mesma transação.
+- Receita sem conta bancária informada nem herdada da fonte (`ItemReceita.conta_bancaria_id`) é rejeitada com HTTP 400 — recebimento sem conta não existe.
+- Duplicidade de recebimento é bloqueada: uma `ReceitaRealizada` não pode ter mais de um `MovimentoFinanceiro` de `origem='RECEITA'`.
+- `PUT /api/receitas/realizadas/{id}` não pode alterar `valor_recebido`, `conta_bancaria_id` ou `data_recebimento` de uma receita que já tem movimento vinculado — retorna HTTP 400 com mensagem "Receitas realizadas só podem ser alteradas por fluxo financeiro próprio". Campos neutros (`descricao`, `observações`, `item_receita_id`/competência) continuam editáveis.
+- Exceção intencional: receita **sem** movimento vinculado ainda (ex.: contemplação de consórcio pendente, ver regra acima) pode ser completada via `PUT` — nesse caso o movimento é criado nessa chamada, preservando o fluxo de "consolidar receita pendente" já existente no frontend.
+- `DELETE /api/receitas/realizadas/{id}` é bloqueado (HTTP 409) se existir `MovimentoFinanceiro` vinculado — receita recebida preserva histórico financeiro; correção exige estorno (fora do escopo do CORE-RECEITA-1, ver `CORE-ESTORNO-GLOBAL-1` no roadmap).
+- Estorno de receita, assim como estorno de fatura e de financiamento, não está implementado — apenas o de despesas (`CORE-ESTORNO-1`).
 
 ---
 

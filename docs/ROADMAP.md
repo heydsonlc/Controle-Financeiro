@@ -2,7 +2,7 @@
 
 Pendências conhecidas, MVPs planejados e débitos técnicos.
 
-Última atualização: 2026-05-11
+Última atualização: 2026-08-18
 
 ---
 
@@ -47,6 +47,13 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 | IMPORT-3B | Parser PDF para faturas além do formato CAIXA (outros bancos) | Média |
 | IMPORT-3C | OCR para PDFs escaneados | Baixa |
 | IMPORT-3D | Melhorar assinatura de reconhecimento (histórico acumulativo) | Média |
+
+### Receitas
+
+| ID | Descrição | Prioridade |
+|----|-----------|-----------|
+| CORE-RECEITA-1 | Fluxo protegido de recebimento: conta bancária obrigatória, movimento transacional, PUT/DELETE bloqueados após recebimento | Concluído |
+| CORE-ESTORNO-GLOBAL-1 | Estorno de receita, fatura e financiamento (padrão de `CORE-ESTORNO-1` de despesas) | Média |
 
 ### Cartões
 

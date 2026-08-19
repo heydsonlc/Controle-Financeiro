@@ -169,12 +169,14 @@ def test_inativacao_muda_status(client):
 
 
 def test_cards_resumo_calculam_previsto_realizado_diferenca_confiabilidade(client):
+    conta = _criar_conta(saldo=0.0)
     fonte = _criar_fonte(client, valor=3000.0)
     client.post('/api/receitas/realizadas', json={
         'item_receita_id': fonte['id'],
         'data_recebimento': '2026-05-05',
         'valor_recebido': 1500.0,
         'competencia': '2026-05-01',
+        'conta_bancaria_id': conta.id,
         'descricao': 'Receita parcial',
     })
 

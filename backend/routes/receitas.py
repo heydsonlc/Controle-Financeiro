@@ -562,8 +562,21 @@ def atualizar_realizada(id):
     """
     Atualiza uma receita realizada.
 
+    CORE-RECEITA-1: se a receita ja possui MovimentoFinanceiro vinculado
+    (origem=RECEITA), o PUT comum nao pode alterar valor_recebido,
+    conta_bancaria_id nem data_recebimento — essas alteracoes exigem fluxo
+    financeiro proprio (estorno + novo recebimento). Demais campos
+    (descricao, observacoes, item_receita_id/competencia) continuam editaveis.
+
     Body (JSON): mesmos campos do POST /realizadas
     """
+    try:
+        from backend.services.conta_bancaria_service import ContaBancariaService
+        from backend.models import MovimentoFinanceiro
+    except ImportError:
+        from services.conta_bancaria_service import ContaBancariaService
+        from models import MovimentoFinanceiro
+
     try:
         receita_antes = ReceitaRealizada.query.filter(
             ReceitaRealizada.id == id,
@@ -579,6 +592,34 @@ def atualizar_realizada(id):
                 'success': False,
                 'error': 'Dados nÃ£o fornecidos'
             }), 400
+
+        mov_existente = MovimentoFinanceiro.query.filter_by(
+            receita_realizada_id=id,
+            origem='RECEITA',
+            perfil_financeiro_id=_perfil_id(),
+        ).first()
+
+        if mov_existente:
+            valor_recebido_novo = data.get('valor_recebido')
+            tentativa_valor = (
+                'valor_recebido' in data
+                and valor_recebido_novo is not None
+                and Decimal(str(valor_recebido_novo)) != Decimal(str(receita_antes.valor_recebido))
+            )
+            tentativa_conta = (
+                'conta_bancaria_id' in data
+                and data.get('conta_bancaria_id') != receita_antes.conta_bancaria_id
+            )
+            tentativa_data = (
+                'data_recebimento' in data
+                and data.get('data_recebimento')
+                and data.get('data_recebimento') != receita_antes.data_recebimento.strftime('%Y-%m-%d')
+            )
+            if tentativa_valor or tentativa_conta or tentativa_data:
+                return jsonify({
+                    'success': False,
+                    'error': 'Receitas realizadas so podem ser alteradas por fluxo financeiro proprio.',
+                }), 400
 
         # Default de conta bancÃ¡ria: se nÃ£o veio no payload, tenta herdar da fonte
         if not data.get('conta_bancaria_id') and data.get('item_receita_id'):
@@ -596,52 +637,20 @@ def atualizar_realizada(id):
                 'error': 'Receita nÃ£o encontrada'
             }), 404
 
-        # Sync do movimento financeiro (se houver conta_bancaria_id)
-        try:
-            from backend.services.conta_bancaria_service import ContaBancariaService
-            from backend.models import MovimentoFinanceiro
-        except ImportError:
-            from services.conta_bancaria_service import ContaBancariaService
-            from models import MovimentoFinanceiro
+        # Sem movimento vinculado ainda: manter compatibilidade permitindo
+        # que o PUT complete o recebimento (cria o movimento agora).
+        if not mov_existente and receita.conta_bancaria_id:
+            ContaBancariaService.criar_movimento(
+                receita.conta_bancaria_id,
+                tipo='CREDITO',
+                valor=Decimal(str(receita.valor_recebido)),
+                descricao=f'Receita - {receita.descricao or "Receita"}',
+                data_movimento=receita.data_recebimento,
+                origem='RECEITA',
+                ajustavel=False,
+                receita_realizada_id=receita.id,
+            )
 
-        mov = MovimentoFinanceiro.query.filter_by(
-            receita_realizada_id=receita.id,
-            origem='RECEITA',
-            perfil_financeiro_id=_perfil_id(),
-        ).first()
-        contas_recalc = set()
-        if receita_antes.conta_bancaria_id:
-            contas_recalc.add(receita_antes.conta_bancaria_id)
-        if receita.conta_bancaria_id:
-            contas_recalc.add(receita.conta_bancaria_id)
-
-        if receita.conta_bancaria_id:
-            if mov:
-                mov.conta_bancaria_id = receita.conta_bancaria_id
-                mov.tipo = 'CREDITO'
-                mov.valor = Decimal(str(receita.valor_recebido))
-                mov.descricao = f'Receita - {receita.descricao or "Receita"}'
-                mov.data_movimento = receita.data_recebimento
-                mov.ajustavel = False
-                mov.origem = 'RECEITA'
-            else:
-                ContaBancariaService.criar_movimento(
-                    receita.conta_bancaria_id,
-                    tipo='CREDITO',
-                    valor=Decimal(str(receita.valor_recebido)),
-                    descricao=f'Receita - {receita.descricao or "Receita"}',
-                    data_movimento=receita.data_recebimento,
-                    origem='RECEITA',
-                    ajustavel=False,
-                    receita_realizada_id=receita.id,
-                )
-        else:
-            if mov:
-                contas_recalc.add(mov.conta_bancaria_id)
-                db.session.delete(mov)
-
-        for cid in contas_recalc:
-            ContaBancariaService.recalcular_saldo_conta(cid)
         db.session.commit()
 
         return jsonify({
@@ -651,6 +660,7 @@ def atualizar_realizada(id):
         }), 200
 
     except ValueError as e:
+        db.session.rollback()
         return jsonify({
             'success': False,
             'error': str(e)
@@ -664,13 +674,17 @@ def atualizar_realizada(id):
 @receitas_bp.route('/realizadas', methods=['POST'])
 def criar_realizada():
     """
-    Registra uma receita efetivamente recebida
+    Registra uma receita efetivamente recebida (CORE-RECEITA-1).
+
+    Fluxo unico de recebimento: exige conta bancaria, cria a receita e o
+    MovimentoFinanceiro de credito na mesma transacao.
 
     Body (JSON):
         {
             "item_receita_id": int (obrigatÃ³rio),
             "data_recebimento": "YYYY-MM-DD" (obrigatÃ³rio),
-            "valor_recebido": float (obrigatÃ³rio),
+            "valor_recebido": float (obrigatÃ³rio, > 0),
+            "conta_bancaria_id": int (obrigatÃ³rio),
             "competencia": "YYYY-MM-01" (opcional, usa mÃªs do recebimento se nÃ£o informado),
             "descricao": "string" (opcional),
             "conta_origem_id": int (opcional),
@@ -680,6 +694,13 @@ def criar_realizada():
     Returns:
         JSON com a receita registrada
     """
+    try:
+        from backend.models import ContaBancaria, MovimentoFinanceiro
+        from backend.services.conta_bancaria_service import ContaBancariaService
+    except ImportError:
+        from models import ContaBancaria, MovimentoFinanceiro
+        from services.conta_bancaria_service import ContaBancariaService
+
     try:
         data = request.get_json()
 
@@ -691,10 +712,6 @@ def criar_realizada():
 
         # Default de conta bancÃ¡ria: se nÃ£o veio no payload, tenta herdar da fonte
         if not data.get('conta_bancaria_id') and data.get('item_receita_id'):
-            try:
-                from backend.models import ItemReceita
-            except ImportError:
-                from models import ItemReceita
             item = ItemReceita.query.filter(
                 ItemReceita.id == data.get('item_receita_id'),
                 PerfilFinanceiroService.condicao_perfil(ItemReceita),
@@ -702,34 +719,49 @@ def criar_realizada():
             if item and item.conta_bancaria_id:
                 data['conta_bancaria_id'] = item.conta_bancaria_id
 
+        # CORE-RECEITA-1: conta bancaria e obrigatoria para receber
+        if not data.get('conta_bancaria_id'):
+            return jsonify({
+                'success': False,
+                'error': 'Selecione uma conta bancaria para registrar o recebimento.',
+            }), 400
+
+        conta_bancaria = ContaBancaria.query.filter(
+            ContaBancaria.id == data['conta_bancaria_id'],
+            PerfilFinanceiroService.condicao_perfil(ContaBancaria),
+        ).first()
+        if not conta_bancaria:
+            return jsonify({'success': False, 'error': 'Conta bancaria nao encontrada'}), 404
+        if conta_bancaria.status != 'ATIVO':
+            return jsonify({'success': False, 'error': 'Conta bancaria esta inativa'}), 400
+
         receita = ReceitaService.registrar_receita_realizada(data)
 
-        # IntegraÃ§Ã£o com Contas BancÃ¡rias: crÃ©dito automÃ¡tico via MovimentoFinanceiro
-        try:
-            from backend.services.conta_bancaria_service import ContaBancariaService
-            from backend.models import MovimentoFinanceiro
-        except ImportError:
-            from services.conta_bancaria_service import ContaBancariaService
-            from models import MovimentoFinanceiro
+        # Bloqueio de duplicidade: nao permitir dois movimentos de recebimento
+        # para a mesma receita (defesa em profundidade; receita acabou de ser criada)
+        existe = MovimentoFinanceiro.query.filter_by(
+            receita_realizada_id=receita.id,
+            origem='RECEITA',
+            perfil_financeiro_id=_perfil_id(),
+        ).first()
+        if existe:
+            db.session.rollback()
+            return jsonify({
+                'success': False,
+                'error': 'Esta receita ja possui um recebimento registrado.',
+            }), 409
 
-        if receita.conta_bancaria_id:
-            existe = MovimentoFinanceiro.query.filter_by(
-                receita_realizada_id=receita.id,
-                origem='RECEITA',
-                perfil_financeiro_id=_perfil_id(),
-            ).first()
-            if not existe:
-                ContaBancariaService.criar_movimento(
-                    receita.conta_bancaria_id,
-                    tipo='CREDITO',
-                    valor=Decimal(str(receita.valor_recebido)),
-                    descricao=f'Receita - {receita.descricao or "Receita"}',
-                    data_movimento=receita.data_recebimento,
-                    origem='RECEITA',
-                    ajustavel=False,
-                    receita_realizada_id=receita.id,
-                )
-                db.session.commit()
+        ContaBancariaService.criar_movimento(
+            receita.conta_bancaria_id,
+            tipo='CREDITO',
+            valor=Decimal(str(receita.valor_recebido)),
+            descricao=f'Receita - {receita.descricao or "Receita"}',
+            data_movimento=receita.data_recebimento,
+            origem='RECEITA',
+            ajustavel=False,
+            receita_realizada_id=receita.id,
+        )
+        db.session.commit()
 
         return jsonify({
             'success': True,
@@ -738,6 +770,7 @@ def criar_realizada():
         }), 201
 
     except ValueError as e:
+        db.session.rollback()
         return jsonify({
             'success': False,
             'error': str(e)
@@ -862,7 +895,11 @@ def criar_receita_pontual():
 @receitas_bp.route('/realizadas/<int:id>', methods=['DELETE'])
 def deletar_realizada(id):
     """
-    Deleta uma receita realizada
+    Deleta uma receita realizada.
+
+    CORE-RECEITA-1: bloqueada se existir MovimentoFinanceiro vinculado
+    (origem=RECEITA) — receita recebida preserva historico financeiro e
+    exige fluxo de estorno proprio (fora deste escopo).
 
     Args:
         id: ID da receita
@@ -871,10 +908,8 @@ def deletar_realizada(id):
         JSON com confirmaÃ§Ã£o
     """
     try:
-        from backend.services.conta_bancaria_service import ContaBancariaService
         from backend.models import MovimentoFinanceiro
     except ImportError:
-        from services.conta_bancaria_service import ContaBancariaService
         from models import MovimentoFinanceiro
 
     try:
@@ -889,20 +924,20 @@ def deletar_realizada(id):
                 'error': 'Receita nÃ£o encontrada'
             }), 404
 
-        # Remover movimento financeiro vinculado (se existir) e recalcular saldo
-        movimentos = MovimentoFinanceiro.query.filter_by(
+        tem_movimento = MovimentoFinanceiro.query.filter_by(
             receita_realizada_id=receita.id,
             origem='RECEITA',
         ).filter(
             PerfilFinanceiroService.condicao_perfil(MovimentoFinanceiro),
-        ).all()
-        contas_para_recalcular = {m.conta_bancaria_id for m in movimentos}
-        for m in movimentos:
-            db.session.delete(m)
+        ).first()
+
+        if tem_movimento:
+            return jsonify({
+                'success': False,
+                'error': 'Receita realizada ou com movimento financeiro nao pode ser excluida.',
+            }), 409
 
         db.session.delete(receita)
-        for cid in contas_para_recalcular:
-            ContaBancariaService.recalcular_saldo_conta(cid)
         db.session.commit()
 
         return jsonify({
