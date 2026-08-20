@@ -13,6 +13,7 @@ from backend.models import (
 )
 from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 from backend.services.categoria_palavra_chave_service import CategoriaPalavraChaveService
+from tests.conftest import autenticar_cliente_teste
 
 
 @pytest.fixture()
@@ -29,7 +30,7 @@ def app():
 
 @pytest.fixture()
 def client(app):
-    return app.test_client()
+    return autenticar_cliente_teste(app.test_client(), app)
 
 
 def _perfis(client):

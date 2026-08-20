@@ -13,6 +13,7 @@ from backend.models import (
     db,
 )
 from backend.routes.receitas import receitas_bp
+from tests.conftest import autenticar_cliente_teste
 
 
 @pytest.fixture()
@@ -48,7 +49,7 @@ def app_context():
 
 @pytest.fixture()
 def client(app_context):
-    return app_context.test_client()
+    return autenticar_cliente_teste(app_context.test_client(), app_context)
 
 
 def _criar_conta(nome='Banco Demo', saldo=100.0):

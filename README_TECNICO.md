@@ -839,6 +839,17 @@ DATABASE_URL=postgresql://controle_financeiro:***@localhost:5432/controle_financ
 flask db current
 ```
 
+### Passo 5: Criar Usuário de Acesso (SEG-1)
+
+Desde o SEG-1, toda rota exige login. Crie o usuário local antes do primeiro acesso:
+
+```bash
+venv\Scripts\python.exe scripts\criar_admin.py --email seu@email.com
+# Pede a senha no prompt (nao aparece no terminal, nao fica salva em arquivo)
+```
+
+Para redefinir a senha de um usuário já existente, use `--reset`. Detalhes completos das opções em `scripts/criar_admin.py`.
+
 ---
 
 ## 💻 Uso

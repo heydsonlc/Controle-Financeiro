@@ -8,6 +8,7 @@ from backend.app import create_app
 from backend.models import Categoria, DespesaPrevista, IrComprovante, IrComprovanteVinculo, PerfilFinanceiro, db
 from backend.services.ir_nfse_goiania_parser import eh_nfse_goiania
 from backend.services.perfil_financeiro_service import PerfilFinanceiroService
+from tests.conftest import autenticar_cliente_teste
 
 
 @pytest.fixture()
@@ -24,7 +25,7 @@ def app():
 
 @pytest.fixture()
 def client(app):
-    return app.test_client()
+    return autenticar_cliente_teste(app.test_client(), app)
 
 
 def _perfis(client):

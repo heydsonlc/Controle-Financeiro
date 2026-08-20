@@ -17,6 +17,7 @@ from backend.models import (
 )
 from backend.services.debito_automatico_service import executar_baixa_debito_automatico
 from backend.services.perfil_financeiro_service import PerfilFinanceiroService
+from tests.conftest import autenticar_cliente_teste
 
 
 HOJE = date.today()
@@ -356,6 +357,7 @@ def test_listagem_de_despesas_dispara_baixa_automatica(app_context):
     perfil = _perfil()
 
     with app_context.test_client() as client:
+        autenticar_cliente_teste(client, app_context)
         with client.session_transaction() as sess:
             sess['perfil_financeiro_id'] = perfil.id
 

@@ -17,6 +17,7 @@ from backend.models import (
 from backend.services.ir_documento_service import IrDocumentoService
 from backend.services.ocr_service import OcrService
 from backend.services.perfil_financeiro_service import PerfilFinanceiroService
+from tests.conftest import autenticar_cliente_teste
 
 
 TEXTO_CUPOM = (
@@ -75,6 +76,7 @@ def test_upload_pdf_com_texto_cupom_detecta_cupom(app_context, monkeypatch):
     monkeypatch.setattr(IrDocumentoService, 'extrair_texto_pdf', staticmethod(lambda _: TEXTO_CUPOM))
 
     with app_context.test_client() as client:
+        autenticar_cliente_teste(client, app_context)
         r = client.post(
             '/api/ir/comprovantes/upload',
             data={'ano_calendario': '2026', 'arquivos': (_pdf_cupom(), 'cupom.pdf', 'application/pdf')},
@@ -94,6 +96,7 @@ def test_comprovante_recebe_dados_do_cupom(app_context, monkeypatch):
     monkeypatch.setattr(IrDocumentoService, 'extrair_texto_pdf', staticmethod(lambda _: TEXTO_CUPOM))
 
     with app_context.test_client() as client:
+        autenticar_cliente_teste(client, app_context)
         client.post(
             '/api/ir/comprovantes/upload',
             data={'ano_calendario': '2026', 'arquivos': (_pdf_cupom(), 'cupom.pdf', 'application/pdf')},
@@ -117,6 +120,7 @@ def test_evento_cupom_fiscal_detectado_registrado(app_context, monkeypatch):
     monkeypatch.setattr(IrDocumentoService, 'extrair_texto_pdf', staticmethod(lambda _: TEXTO_CUPOM))
 
     with app_context.test_client() as client:
+        autenticar_cliente_teste(client, app_context)
         client.post(
             '/api/ir/comprovantes/upload',
             data={'ano_calendario': '2026', 'arquivos': (_pdf_cupom(), 'cupom.pdf', 'application/pdf')},
@@ -136,6 +140,7 @@ def test_sugestao_financeira_usa_dados_do_cupom(app_context, monkeypatch):
     monkeypatch.setattr(IrDocumentoService, 'extrair_texto_pdf', staticmethod(lambda _: TEXTO_CUPOM))
 
     with app_context.test_client() as client:
+        autenticar_cliente_teste(client, app_context)
         client.post(
             '/api/ir/comprovantes/upload',
             data={'ano_calendario': '2026', 'arquivos': (_pdf_cupom(), 'cupom.pdf', 'application/pdf')},
@@ -162,6 +167,7 @@ def test_categoria_por_palavra_chave_e_aplicada(app_context, monkeypatch):
     monkeypatch.setattr(IrDocumentoService, 'extrair_texto_pdf', staticmethod(lambda _: TEXTO_CUPOM))
 
     with app_context.test_client() as client:
+        autenticar_cliente_teste(client, app_context)
         client.post(
             '/api/ir/comprovantes/upload',
             data={'ano_calendario': '2026', 'arquivos': (_pdf_cupom(), 'cupom2.pdf', 'application/pdf')},
@@ -179,6 +185,7 @@ def test_documento_nao_e_validado_automaticamente(app_context, monkeypatch):
     monkeypatch.setattr(IrDocumentoService, 'extrair_texto_pdf', staticmethod(lambda _: TEXTO_CUPOM))
 
     with app_context.test_client() as client:
+        autenticar_cliente_teste(client, app_context)
         client.post(
             '/api/ir/comprovantes/upload',
             data={'ano_calendario': '2026', 'arquivos': (_pdf_cupom(), 'cupom.pdf', 'application/pdf')},
@@ -196,6 +203,7 @@ def test_sem_categoria_gera_aviso_nao_erro(app_context, monkeypatch):
     monkeypatch.setattr(IrDocumentoService, 'extrair_texto_pdf', staticmethod(lambda _: TEXTO_CUPOM))
 
     with app_context.test_client() as client:
+        autenticar_cliente_teste(client, app_context)
         r_upload = client.post(
             '/api/ir/comprovantes/upload',
             data={'ano_calendario': '2026', 'arquivos': (_pdf_cupom(), 'cupom.pdf', 'application/pdf')},
@@ -219,6 +227,7 @@ def test_perfil_empresa_mantem_isolamento(app_context, monkeypatch):
     monkeypatch.setattr(IrDocumentoService, 'extrair_texto_pdf', staticmethod(lambda _: TEXTO_CUPOM))
 
     with app_context.test_client() as client:
+        autenticar_cliente_teste(client, app_context)
         perfis = client.get('/api/perfis-financeiros').get_json()['perfis']
         empresa = next(p for p in perfis if p['nome'] == 'Empresa')
         pessoal = next(p for p in perfis if p['nome'] == 'Pessoal')
@@ -257,6 +266,7 @@ def test_ocr_reprocessado_reaplica_parser_cupom(app_context, monkeypatch):
     monkeypatch.setattr(IrDocumentoService, 'extrair_texto_pdf', staticmethod(lambda _: texto_inicial))
 
     with app_context.test_client() as client:
+        autenticar_cliente_teste(client, app_context)
         client.post(
             '/api/ir/comprovantes/upload',
             data={'ano_calendario': '2026', 'arquivos': (_pdf_cupom(), 'cupom.pdf', 'application/pdf')},

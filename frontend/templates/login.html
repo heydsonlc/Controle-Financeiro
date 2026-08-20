@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ page_title or "Entrar" }} — Controle Financeiro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme-light.css') }}">
+    <style>
+        body.login-body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--cf-bg, #f4f6fa);
+            margin: 0;
+        }
+        .login-card {
+            width: 100%;
+            max-width: 360px;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+            padding: 32px;
+        }
+        .login-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 0 0 4px;
+            text-align: center;
+        }
+        .login-subtitle {
+            font-size: 0.875rem;
+            color: #6b7280;
+            margin: 0 0 24px;
+            text-align: center;
+        }
+        .login-field {
+            margin-bottom: 16px;
+        }
+        .login-field label {
+            display: block;
+            font-size: 0.8125rem;
+            font-weight: 500;
+            margin-bottom: 6px;
+        }
+        .login-field input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 0.9375rem;
+            box-sizing: border-box;
+        }
+        .login-error {
+            background: #fef2f2;
+            color: #b91c1c;
+            border: 1px solid #fecaca;
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 0.8125rem;
+            margin-bottom: 16px;
+        }
+        .login-submit {
+            width: 100%;
+            padding: 10px 12px;
+            background: #2563eb;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9375rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .login-submit:hover {
+            background: #1d4ed8;
+        }
+    </style>
+</head>
+<body class="login-body">
+    <div class="login-card">
+        <p class="login-title">Controle Financeiro</p>
+        <p class="login-subtitle">Entre para continuar</p>
+
+        {% if erro %}
+        <div class="login-error">{{ erro }}</div>
+        {% endif %}
+
+        <form method="post" action="{{ url_for('login_submit') }}">
+            <input type="hidden" name="next" value="{{ request.args.get('next', '') }}">
+            <div class="login-field">
+                <label for="email">E-mail</label>
+                <input type="email" id="email" name="email" required autofocus autocomplete="username">
+            </div>
+            <div class="login-field">
+                <label for="senha">Senha</label>
+                <input type="password" id="senha" name="senha" required autocomplete="current-password">
+            </div>
+            <button type="submit" class="login-submit">Entrar</button>
+        </form>
+    </div>
+</body>
+</html>

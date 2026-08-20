@@ -3,6 +3,7 @@ import pytest
 from backend.app import create_app
 from backend.models import Categoria, PerfilFinanceiro, db
 from backend.services.perfil_financeiro_service import PerfilFinanceiroService
+from tests.conftest import autenticar_cliente_teste
 
 
 @pytest.fixture()
@@ -17,7 +18,7 @@ def app():
 
 @pytest.fixture()
 def client(app):
-    return app.test_client()
+    return autenticar_cliente_teste(app.test_client(), app)
 
 
 def _perfil(client, nome):
@@ -132,6 +133,7 @@ def test_perfil_padrao_usado_quando_sessao_vazia(app):
         db.session.commit()
 
     with app.test_client() as client:
+        autenticar_cliente_teste(client, app)
         response = client.get('/api/perfis-financeiros/ativo')
 
     assert response.status_code == 200

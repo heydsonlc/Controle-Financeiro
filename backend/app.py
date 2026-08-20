@@ -9,9 +9,10 @@ import logging
 import threading
 import webbrowser
 from pathlib import Path
-from flask import Flask, jsonify, redirect, render_template
+from flask import Flask, jsonify, redirect, render_template, request, url_for
 from flask_cors import CORS
 from flask_migrate import Migrate
+from flask_login import LoginManager, current_user, login_required
 from dotenv import load_dotenv
 
 # Adicionar diretório raiz ao path se necessário
@@ -20,10 +21,10 @@ if __name__ == '__main__':
 
 try:
     from backend.config import get_config
-    from backend.models import db
+    from backend.models import db, Usuario
 except ImportError:
     from config import get_config
-    from models import db
+    from models import db, Usuario
 
 # Carregar variáveis de ambiente
 load_dotenv('.env.local', encoding='utf-8-sig')  # utf-8-sig lida com BOM do Windows
@@ -114,6 +115,36 @@ def create_app(config_name=None):
     # Inicializar Flask-Migrate
     migrate = Migrate(app, db)
 
+    # SEG-1: autenticacao global via Flask-Login. Usuario unico, sem
+    # RBAC/multiusuario nesta etapa. Sessao via cookie assinado por
+    # SECRET_KEY (mesmo padrao ja usado para o perfil financeiro ativo).
+    login_manager = LoginManager()
+    login_manager.init_app(app)
+    login_manager.login_view = 'login_page'
+
+    @login_manager.user_loader
+    def carregar_usuario(usuario_id):
+        return Usuario.query.get(int(usuario_id))
+
+    # Allowlist fechada: por padrao toda rota exige sessao. So as rotas
+    # abaixo (e /static/*) ficam publicas. Rotas /api/* sem sessao retornam
+    # 401 JSON; as demais (paginas) redirecionam para /login?next=<rota>.
+    _ROTAS_PUBLICAS = {'/login', '/logout', '/health'}
+
+    @app.before_request
+    def exigir_login():
+        if request.path in _ROTAS_PUBLICAS:
+            return None
+        if request.path.startswith('/static/'):
+            return None
+        if current_user.is_authenticated:
+            return None
+
+        if request.path.startswith('/api/'):
+            return jsonify({'success': False, 'error': 'Não autenticado'}), 401
+
+        return redirect(url_for('login_page', next=request.path))
+
     # Compatibilidade de schema (SQLite): alguns ambientes usam DB criado fora do Alembic.
     try:
         from backend.services.sqlite_schema_compat import ensure_sqlite_schema_compat
@@ -154,7 +185,48 @@ def create_app(config_name=None):
                 db.session.rollback()
                 raise
 
-    # Rotas de páginas
+    # Rotas de autenticação (SEG-1)
+    @app.route('/login', methods=['GET'])
+    def login_page():
+        """Página de login. Não protegida (allowlist)."""
+        if current_user.is_authenticated:
+            return redirect(url_for('index'))
+        return render_template('login.html', page_title='Entrar')
+
+    @app.route('/login', methods=['POST'])
+    def login_submit():
+        """Autentica e cria sessão. Mensagem de erro sempre genérica —
+        não revela se foi o e-mail ou a senha que errou, nem se o e-mail existe."""
+        from flask_login import login_user
+
+        dados = request.get_json(silent=True) or request.form
+        email = (dados.get('email') or '').strip().lower()
+        senha = dados.get('senha') or ''
+        proximo = (dados.get('next') or request.args.get('next') or '').strip()
+
+        erro_generico = 'E-mail ou senha inválidos.'
+        usuario = Usuario.query.filter_by(email=email).first() if email else None
+
+        if not usuario or not usuario.ativo or not usuario.verificar_senha(senha):
+            if request.is_json:
+                return jsonify({'success': False, 'error': erro_generico}), 401
+            return render_template('login.html', page_title='Entrar', erro=erro_generico), 401
+
+        login_user(usuario)
+        destino = proximo if proximo.startswith('/') and not proximo.startswith('//') else url_for('index')
+
+        if request.is_json:
+            return jsonify({'success': True, 'data': {'redirect': destino}}), 200
+        return redirect(destino)
+
+    @app.route('/logout', methods=['POST'])
+    def logout_submit():
+        """Encerra a sessão inteira (não só o token de usuário)."""
+        from flask_login import logout_user
+
+        logout_user()
+        return redirect(url_for('login_page'))
+
     @app.route('/')
     def index():
         """Página inicial - Dashboard"""

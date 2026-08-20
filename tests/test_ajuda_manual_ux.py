@@ -2,6 +2,7 @@ import pytest
 
 from backend.app import create_app
 from backend.models import db
+from tests.conftest import autenticar_cliente_teste
 
 
 @pytest.fixture()
@@ -16,7 +17,7 @@ def app():
 
 @pytest.fixture()
 def client(app):
-    return app.test_client()
+    return autenticar_cliente_teste(app.test_client(), app)
 
 
 def test_ajuda_renderiza(client):

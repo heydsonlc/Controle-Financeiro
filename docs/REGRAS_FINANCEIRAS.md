@@ -2,7 +2,7 @@
 
 Regras globais e por módulo que governam o comportamento do Controle Financeiro.
 
-Última atualização: 2026-08-19 (CARD-CVV-LOCK-1)
+Última atualização: 2026-08-19 (SEG-1)
 
 ---
 
@@ -355,6 +355,19 @@ Bloqueada quando existir qualquer dos seguintes:
 - Despesas geradas por Mobilidade usam categorias sistêmicas granulares por natureza do gasto
 - Categorias sistêmicas são buscadas por `codigo_sistema`, não por nome ou ID fixo
 - Categoria do Cartão continua fora do escopo da classificação sistêmica de Mobilidade
+
+---
+
+## Regras de Autenticação e Sessão (SEG-1)
+
+- Toda rota exige sessão autenticada por padrão. A proteção é uma **allowlist fechada** (`/login`, `/logout`, `/static/*`, `/health`), nunca uma lista de rotas a bloquear — uma rota nova nasce protegida automaticamente, sem exigir alteração no gate.
+- A decisão entre "página" (redirect para `/login?next=<rota>`) e "API" (401 JSON) é feita pelo **prefixo da URL** (`/api/*`), nunca pelo cabeçalho `Accept` nem por uma lista de rotas conhecidas — cobre corretamente rotas de página registradas dentro de blueprints de API (ex.: `/indexadores`).
+- APIs nunca retornam HTML em caso de sessão ausente; sempre JSON `{'success': False, 'error': ...}` com status 401.
+- Mensagens de erro de login são sempre genéricas ("E-mail ou senha inválidos.") — nunca revelam se o e-mail existe ou qual campo errou.
+- Senhas são armazenadas apenas como hash (`werkzeug.security.generate_password_hash`); nunca em texto puro, nunca logadas, nunca retornadas em JSON (`Usuario.to_dict()` nunca inclui `password_hash`).
+- Criação/redefinição de usuário é feita apenas via `scripts/criar_admin.py` (linha de comando local); não existe rota HTTP de auto-cadastro. Redefinir senha de usuário existente exige a flag explícita `--reset`.
+- SEG-1 é autenticação de usuário único (porta de entrada), não RBAC/multiusuário. `Usuario` (identidade de quem está logado) é conceito distinto de `PerfilFinanceiro` (contexto de dados Pessoal/Empresa) — ver docstring de `Usuario` em `backend/models.py`.
+- Testes que exercitam o app real (`create_app()`, não um Flask isolado por blueprint) autenticam via `tests.conftest.autenticar_cliente_teste()` antes de chamar rotas protegidas.
 
 ---
 

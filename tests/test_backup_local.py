@@ -8,6 +8,7 @@ from backend.app import create_app
 from backend.models import Preferencia, db
 from backend.services.backup_service import BackupService
 from backend.services.perfil_financeiro_service import PerfilFinanceiroService
+from tests.conftest import autenticar_cliente_teste
 
 
 @pytest.fixture()
@@ -32,7 +33,7 @@ def app(tmp_path):
 
 @pytest.fixture()
 def client(app):
-    return app.test_client()
+    return autenticar_cliente_teste(app.test_client(), app)
 
 
 def _usar_postgres(app):

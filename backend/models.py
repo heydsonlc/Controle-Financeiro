@@ -9,8 +9,65 @@ Modelos do banco de dados - Sistema de Controle Financeiro
 from datetime import datetime, date
 import json
 from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
 
 db = SQLAlchemy()
+
+
+class Usuario(db.Model):
+    """
+    SEG-1: usuário único de autenticação da aplicação. Sem multiusuário/RBAC
+    nesta etapa — é a porta de entrada, não um sistema de permissões.
+
+    Distinto de PerfilFinanceiro: Usuario é quem está logado; PerfilFinanceiro
+    é o contexto de dados (Pessoal/Empresa) que o usuário logado está vendo.
+    """
+    __tablename__ = 'usuario'
+
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(255), nullable=False, unique=True, index=True)
+    password_hash = db.Column(db.String(255), nullable=False)
+    nome = db.Column(db.String(120), nullable=True)
+    ativo = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<Usuario {self.email}>'
+
+    def definir_senha(self, senha_plana):
+        self.password_hash = generate_password_hash(senha_plana)
+
+    def verificar_senha(self, senha_plana):
+        if not self.password_hash:
+            return False
+        return check_password_hash(self.password_hash, senha_plana)
+
+    # Interface exigida pelo Flask-Login (evita depender de UserMixin para
+    # manter o model explicito e sem heranca externa nos atributos)
+    def get_id(self):
+        return str(self.id)
+
+    @property
+    def is_authenticated(self):
+        return True
+
+    @property
+    def is_active(self):
+        return bool(self.ativo)
+
+    @property
+    def is_anonymous(self):
+        return False
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'email': self.email,
+            'nome': self.nome,
+            'ativo': self.ativo,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
 
 
 class PerfilFinanceiro(db.Model):

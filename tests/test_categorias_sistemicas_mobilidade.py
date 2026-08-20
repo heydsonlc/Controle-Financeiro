@@ -29,6 +29,7 @@ from backend.services.mobilidade_service import (
 from backend.services.transporte_app_service import TransporteAppConfig, gerar_projecoes_transporte_app
 from backend.services.veiculo_financiamento_service import _categoria_padrao_financiamento_id
 from backend.services.veiculo_service import aplicar_defaults_categorias_veiculo, gerar_projecoes_mvp
+from tests.conftest import autenticar_cliente_teste
 
 
 @pytest.fixture()
@@ -52,7 +53,7 @@ def app_context():
 
 @pytest.fixture()
 def client(app_context):
-    return app_context.test_client()
+    return autenticar_cliente_teste(app_context.test_client(), app_context)
 
 
 def _codigo(categoria_id):

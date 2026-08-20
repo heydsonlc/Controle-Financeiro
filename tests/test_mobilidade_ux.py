@@ -19,6 +19,7 @@ from backend.models import (
 )
 from backend.services.perfil_financeiro_service import PERFIL_SESSION_KEY, PerfilFinanceiroService
 from backend.services.veiculo_service import calcular_total_mensal_estimado_veiculo
+from tests.conftest import autenticar_cliente_teste
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,7 +39,7 @@ def app():
 
 @pytest.fixture()
 def client(app):
-    return app.test_client()
+    return autenticar_cliente_teste(app.test_client(), app)
 
 
 def _perfil(nome):

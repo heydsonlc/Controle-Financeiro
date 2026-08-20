@@ -13,6 +13,7 @@ from backend.models import (
 )
 from backend.services.ir_documento_service import IrDocumentoService
 from backend.services.perfil_financeiro_service import PerfilFinanceiroService
+from tests.conftest import autenticar_cliente_teste
 
 
 TEXTO_CUPOM = (
@@ -56,6 +57,7 @@ def test_endpoint_documentos_para_financeiro_retorna_lista(app_context, monkeypa
     monkeypatch.setattr(IrDocumentoService, 'extrair_texto_pdf', staticmethod(lambda _: TEXTO_CUPOM))
 
     with app_context.test_client() as client:
+        autenticar_cliente_teste(client, app_context)
         _fazer_upload(client)
         r = client.get('/api/ir/comprovantes/documentos-para-financeiro')
 
@@ -73,6 +75,7 @@ def test_endpoint_retorna_campos_minimos(app_context, monkeypatch):
     monkeypatch.setattr(IrDocumentoService, 'extrair_texto_pdf', staticmethod(lambda _: TEXTO_CUPOM))
 
     with app_context.test_client() as client:
+        autenticar_cliente_teste(client, app_context)
         _fazer_upload(client)
         r = client.get('/api/ir/comprovantes/documentos-para-financeiro')
 
@@ -88,6 +91,7 @@ def test_filtro_sem_vinculo_exclui_vinculados(app_context, monkeypatch):
     monkeypatch.setattr(IrDocumentoService, 'extrair_texto_pdf', staticmethod(lambda _: TEXTO_CUPOM))
 
     with app_context.test_client() as client:
+        autenticar_cliente_teste(client, app_context)
         _fazer_upload(client)
         comp = IrComprovante.query.one()
 
@@ -116,6 +120,7 @@ def test_filtro_sem_vinculo_false_inclui_vinculados(app_context, monkeypatch):
     monkeypatch.setattr(IrDocumentoService, 'extrair_texto_pdf', staticmethod(lambda _: TEXTO_CUPOM))
 
     with app_context.test_client() as client:
+        autenticar_cliente_teste(client, app_context)
         _fazer_upload(client)
         comp = IrComprovante.query.one()
         vinculo = IrComprovanteVinculo(
@@ -142,6 +147,7 @@ def test_sugestao_financeira_enriquecida_com_cupom(app_context, monkeypatch):
     monkeypatch.setattr(IrDocumentoService, 'extrair_texto_pdf', staticmethod(lambda _: TEXTO_CUPOM))
 
     with app_context.test_client() as client:
+        autenticar_cliente_teste(client, app_context)
         _fazer_upload(client)
         comp = IrComprovante.query.one()
         r = client.get(f'/api/ir/comprovantes/{comp.id}/sugestao-financeira')
@@ -160,6 +166,7 @@ def test_criar_lancamento_a_partir_documento_cria_vinculo(app_context, monkeypat
     monkeypatch.setattr(IrDocumentoService, 'extrair_texto_pdf', staticmethod(lambda _: TEXTO_CUPOM))
 
     with app_context.test_client() as client:
+        autenticar_cliente_teste(client, app_context)
         _fazer_upload(client)
         comp = IrComprovante.query.one()
 
@@ -190,6 +197,7 @@ def test_criar_despesa_a_partir_documento_cria_vinculo(app_context, monkeypatch)
     monkeypatch.setattr(IrDocumentoService, 'extrair_texto_pdf', staticmethod(lambda _: TEXTO_CUPOM))
 
     with app_context.test_client() as client:
+        autenticar_cliente_teste(client, app_context)
         _fazer_upload(client)
         comp = IrComprovante.query.one()
 
@@ -220,6 +228,7 @@ def test_evento_lancamento_criado_registrado(app_context, monkeypatch):
     monkeypatch.setattr(IrDocumentoService, 'extrair_texto_pdf', staticmethod(lambda _: TEXTO_CUPOM))
 
     with app_context.test_client() as client:
+        autenticar_cliente_teste(client, app_context)
         _fazer_upload(client)
         comp = IrComprovante.query.one()
         client.post(
@@ -239,6 +248,7 @@ def test_evento_despesa_criada_registrado(app_context, monkeypatch):
     monkeypatch.setattr(IrDocumentoService, 'extrair_texto_pdf', staticmethod(lambda _: TEXTO_CUPOM))
 
     with app_context.test_client() as client:
+        autenticar_cliente_teste(client, app_context)
         _fazer_upload(client)
         comp = IrComprovante.query.one()
         client.post(
@@ -258,6 +268,7 @@ def test_tipo_destino_invalido_retorna_erro(app_context, monkeypatch):
     monkeypatch.setattr(IrDocumentoService, 'extrair_texto_pdf', staticmethod(lambda _: TEXTO_CUPOM))
 
     with app_context.test_client() as client:
+        autenticar_cliente_teste(client, app_context)
         _fazer_upload(client)
         comp = IrComprovante.query.one()
         r = client.post(
@@ -275,6 +286,7 @@ def test_documento_de_outro_perfil_nao_aparece(app_context, monkeypatch):
     monkeypatch.setattr(IrDocumentoService, 'extrair_texto_pdf', staticmethod(lambda _: TEXTO_CUPOM))
 
     with app_context.test_client() as client:
+        autenticar_cliente_teste(client, app_context)
         perfis = client.get('/api/perfis-financeiros').get_json()['perfis']
         empresa = next(p for p in perfis if p['nome'] == 'Empresa')
         pessoal = next(p for p in perfis if p['nome'] == 'Pessoal')
@@ -296,6 +308,7 @@ def test_vinculos_count_reflete_vinculos_ativos(app_context, monkeypatch):
     monkeypatch.setattr(IrDocumentoService, 'extrair_texto_pdf', staticmethod(lambda _: TEXTO_CUPOM))
 
     with app_context.test_client() as client:
+        autenticar_cliente_teste(client, app_context)
         _fazer_upload(client)
         comp = IrComprovante.query.one()
 
@@ -323,6 +336,7 @@ def test_filtro_busca_por_nome_prestador(app_context, monkeypatch):
     monkeypatch.setattr(IrDocumentoService, 'extrair_texto_pdf', staticmethod(lambda _: TEXTO_CUPOM))
 
     with app_context.test_client() as client:
+        autenticar_cliente_teste(client, app_context)
         _fazer_upload(client)
         r_match = client.get('/api/ir/comprovantes/documentos-para-financeiro?busca=VALE+VERDE')
         r_no_match = client.get('/api/ir/comprovantes/documentos-para-financeiro?busca=INEXISTENTE')
@@ -336,6 +350,7 @@ def test_filtro_busca_por_nome_prestador(app_context, monkeypatch):
 # ---------------------------------------------------------------------------
 def test_sugestao_documento_inexistente_retorna_404(app_context):
     with app_context.test_client() as client:
+        autenticar_cliente_teste(client, app_context)
         r = client.get('/api/ir/comprovantes/99999/sugestao-financeira')
 
     assert r.status_code == 404

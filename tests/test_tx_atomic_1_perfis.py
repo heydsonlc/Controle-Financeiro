@@ -26,6 +26,7 @@ from backend.models import (
     ReceitaRealizada,
     db,
 )
+from tests.conftest import autenticar_cliente_teste
 
 
 @pytest.fixture()
@@ -40,7 +41,7 @@ def app():
 
 @pytest.fixture()
 def client(app):
-    return app.test_client()
+    return autenticar_cliente_teste(app.test_client(), app)
 
 
 def test_banco_novo_sem_perfis_ainda_nao_tem_nenhum(app):

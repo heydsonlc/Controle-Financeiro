@@ -2,14 +2,14 @@
 
 Pendências conhecidas, MVPs planejados e débitos técnicos.
 
-Última atualização: 2026-08-19 (CARD-CVV-LOCK-1)
+Última atualização: 2026-08-19 (SEG-1)
 
 ---
 
 ## Ordem de Trabalho (Prioridade)
 
 ```
-SEC-0 ✅ → TEST-BASE-1 ✅ → ICONES-1B → DB-CLEAN-1 → CARD-SEC-1 → FIN-RULES-1 → TEST-FIN-1 → DATA-HYGIENE-1 → PERF-1 → FRONT-ARCH-1 → SEG-1 → DEPLOY-1
+SEC-0 ✅ → TEST-BASE-1 ✅ → SEG-1 ✅ → ICONES-1B → DB-CLEAN-1 → CARD-SEC-1 → FIN-RULES-1 → TEST-FIN-1 → DATA-HYGIENE-1 → PERF-1 → FRONT-ARCH-1 → DEPLOY-1
 ```
 
 Para detalhes de priorização completa, ver `README_TECNICO.md`.
@@ -80,7 +80,7 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 
 | ID | Descrição | Prioridade |
 |----|-----------|-----------|
-| SEG-1 | Autenticação global — bloqueante para qualquer deploy externo | Crítica |
+| SEG-1 | Autenticação global de rotas e APIs — usuário único, sessão via Flask-Login, allowlist fechada (`/login`, `/logout`, `/static/*`, `/health`) | Concluído |
 | CARD-CVV-LOCK-1 | Bloqueio de visibilidade do CVV: oculto por padrão, revelação por senha (`CARTOES_CVV_MASTER_PASSWORD`), falha fechada | Concluído |
 | CARD-SEC-1 | Restante: mascarar/criptografar `numero_cartao` e criptografar `codigo_seguranca` em repouso no banco (hoje só a exposição na API/UI foi bloqueada, o dado continua em texto puro no banco) | Alta |
 
@@ -124,7 +124,7 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 |----|-----------|-----------|
 | IR-1 | Módulo de Imposto de Renda / Documentos Fiscais IRPF | Futuro |
 | CTX-FIN-1 | Diagnóstico de perfis financeiros alternáveis (pessoal/empresa) | Futuro |
-| DEPLOY-1 | Deploy em produção com autenticação, HTTPS e PostgreSQL remoto | Bloqueado por SEG-1 |
+| DEPLOY-1 | Deploy em produção com autenticação, HTTPS e PostgreSQL remoto | Alta (SEG-1 concluído; ainda depende de HTTPS/hosting) |
 | SCHED-1 | Ativar scheduler de geração automática mensal de contas recorrentes | Futuro |
 
 ---
@@ -137,7 +137,8 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 | `datetime.utcnow` depreciado | Múltiplos arquivos (~20 ocorrências) | Python 3.12+ avisa |
 | N+1 queries em `to_dict()` | Vários serviços | Performance degradada em listas grandes |
 | `Query.get()` legado | Múltiplos serviços | SQLAlchemy 2.0 remove em versões futuras |
-| Autenticação ausente | 18 rotas de API | Bloqueante para qualquer exposição externa |
+| ~~Autenticação ausente~~ | ~~18 rotas de API~~ | Resolvido no SEG-1 (autenticação global, usuário único) |
+| `SECRET_KEY` fraca em `.env.local` | `dev-secret-key-local-123456` | Agora assina também o cookie de sessão de login (SEG-1); trocar por valor forte antes de qualquer exposição fora de localhost |
 | CORS irrestrito | `backend/app.py` | Parcialmente corrigido no SEC-0 |
 | Dados de cartão em texto puro | `ContaCartao` | Risco de segurança em dados em repouso |
 | Scheduler comentado | `backend/app.py:264` | Geração automática de recorrências desabilitada |

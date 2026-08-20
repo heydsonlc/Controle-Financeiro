@@ -6,6 +6,7 @@ from backend.app import create_app
 from backend.models import db
 from backend.services.ocr_tools_service import OcrToolsService
 from backend.services.perfil_financeiro_service import PerfilFinanceiroService
+from tests.conftest import autenticar_cliente_teste
 
 
 class FakeCompletedProcess:
@@ -32,7 +33,7 @@ def app(tmp_path):
 
 @pytest.fixture()
 def client(app):
-    return app.test_client()
+    return autenticar_cliente_teste(app.test_client(), app)
 
 
 def _fake_run_tesseract(cmd, capture_output=True, text=True, timeout=10, check=False):

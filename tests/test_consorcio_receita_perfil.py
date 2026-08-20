@@ -12,6 +12,7 @@ from backend.services.consorcio_receita_service import (
     marcador_consorcio,
 )
 from backend.services.perfil_financeiro_service import PerfilFinanceiroService
+from tests.conftest import autenticar_cliente_teste
 
 
 @pytest.fixture()
@@ -28,7 +29,7 @@ def app():
 
 @pytest.fixture()
 def client(app):
-    return app.test_client()
+    return autenticar_cliente_teste(app.test_client(), app)
 
 
 def _perfis(client):
