@@ -953,8 +953,8 @@ A auditoria técnica de 2026-05 identificou os principais riscos e definiu a ord
 | FRONT-ARCH-1 | Extrair helpers JS comuns, eliminar duplicação de código | Débito técnico | Baixa | — |
 | SEG-1 | Autenticação global (Flask-Login ativo, proteção de rotas e APIs) | Segurança | Concluído | — |
 | DEPLOY-PREP-1 | Preparação segura para deploy (ambientes, hardening, `docs/DEPLOY.md`) | Segurança | Concluído | SEG-1 |
-| SUPABASE-MIGRATE-1 | Migração do PostgreSQL local para Supabase | Infra | Depende de DEPLOY-PREP-1 | DEPLOY-PREP-1 |
-| DEPLOY-HOST-1 / CLOUDFLARE-1 | Host do backend Flask + DNS/proxy Cloudflare | Infra | Depende de SUPABASE-MIGRATE-1 | SUPABASE-MIGRATE-1 |
+| SUPABASE-MIGRATE-1 | Banco Supabase (staging) validado: migrations, admin, smoke tests | Infra | Concluído | DEPLOY-PREP-1 |
+| DEPLOY-HOST-1 / CLOUDFLARE-1 | Host do backend Flask + DNS/proxy Cloudflare | Infra | Depende de SUPABASE-MIGRATE-1 (concluído) | SUPABASE-MIGRATE-1 |
 
 **Regra de ouro**: Qualquer acesso externo à internet exige SEG-1 e DEPLOY-PREP-1 completos antes.
 

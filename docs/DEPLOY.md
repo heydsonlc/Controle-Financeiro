@@ -1,8 +1,8 @@
 # Deploy — Controle Financeiro
 
-Guia de preparação e execução do deploy. Última atualização: 2026-08-19 (DEPLOY-PREP-1).
+Guia de preparação e execução do deploy. Última atualização: 2026-08-20 (SUPABASE-MIGRATE-1).
 
-Este documento cobre **o que já está pronto** e **o que ainda depende de ação manual** para sair do uso puramente local. Nenhum deploy real, criação de projeto Supabase ou configuração de Cloudflare foi feita ainda — isto é preparação, não execução.
+Este documento cobre **o que já está pronto** e **o que ainda depende de ação manual** para sair do uso puramente local. O banco Supabase (staging) já foi validado com a cadeia completa de migrations; deploy real do backend, Cloudflare e migração de dados financeiros locais ainda não foram feitos.
 
 ---
 
@@ -11,10 +11,10 @@ Este documento cobre **o que já está pronto** e **o que ainda depende de açã
 ```
 Cloudflare  → DNS / proxy / (futuramente) frontend estático
 Backend Flask → hospedado em serviço compatível (a definir), fora do Cloudflare
-Supabase → PostgreSQL gerenciado, substitui o PostgreSQL local
+Supabase → PostgreSQL gerenciado (staging validado no SUPABASE-MIGRATE-1), substitui o PostgreSQL local
 ```
 
-Ordem de dependência: **SEG-1 (concluído) → DEPLOY-PREP-1 (este documento) → SUPABASE-MIGRATE-1 → DEPLOY-HOST-1 (host do Flask) → CLOUDFLARE-1 (DNS/proxy)**. Repositório é público — sem SEG-1 e sem este preparo, publicar a URL do backend seria expor dados financeiros reais sem proteção.
+Ordem de dependência: **SEG-1 (concluído) → DEPLOY-PREP-1 (concluído) → SUPABASE-MIGRATE-1 (banco staging validado) → DEPLOY-HOST-1 (host do Flask) → CLOUDFLARE-1 (DNS/proxy)**. Repositório é público — sem SEG-1 e sem este preparo, publicar a URL do backend seria expor dados financeiros reais sem proteção.
 
 ---
 
@@ -74,20 +74,26 @@ Valida (sem nunca imprimir valores reais): `SECRET_KEY` adequada ao ambiente, `D
 
 ---
 
-## 6. Banco de dados — Supabase (preparação)
+## 6. Banco de dados — Supabase
 
-**Ainda não executado nesta etapa.** Quando o projeto Supabase for criado (SUPABASE-MIGRATE-1):
+**Projeto Supabase criado pelo usuário (fora desta ferramenta) e validado como banco `staging` no SUPABASE-MIGRATE-1**: cadeia completa de migrations rodada do zero com sucesso (52 tabelas, `alembic_version` no head), usuário admin criado, smoke tests de login/CRUD passando.
 
-1. Use a connection string em formato compatível com SQLAlchemy: `postgresql+psycopg2://usuario:senha@host:porta/dbname` (ou `postgresql://`, ambos funcionam com o driver já usado no projeto).
-2. Prefira o modo **pooler** (transaction/session pooling) do Supabase se a hospedagem do Flask tiver múltiplos workers — conexões diretas esgotam rápido em plano gratuito.
-3. **Nunca** use a `service_role key` do Supabase como `DATABASE_URL` — essa chave é para a API REST/Admin do Supabase, não para a conexão Postgres direta. A `DATABASE_URL` usa usuário/senha do Postgres, não uma API key.
-4. Nunca exponha nenhuma credencial do Supabase no JavaScript do frontend — o frontend deste projeto não fala com o Supabase diretamente, só o backend Flask via `DATABASE_URL`.
-5. Depois de apontar `DATABASE_URL` para o Supabase:
+1. Use a connection string em formato compatível com SQLAlchemy: `postgresql://usuario:senha@host:porta/dbname` (funciona com o driver `psycopg2-binary` já usado no projeto; `postgresql+psycopg2://` também funciona se preferir ser explícito).
+2. A conexão **direta** (porta `5432`) foi a usada para rodar as migrations — é a que permite DDL sem restrições. O modo **pooler** (transaction/session pooling, porta `6543`) é recomendado para a aplicação em produção com múltiplos workers, mas pode ter restrições para `ALTER TABLE`/DDL; use a direta para `flask db upgrade` e avalie o pooler separadamente para a conexão de runtime da aplicação.
+3. **Nunca** use a `service_role key` nem a `anon key`/`publishable key` do Supabase como `DATABASE_URL` — essas chaves são para a API REST/SDK JS do Supabase (`@supabase/supabase-js`), não para a conexão Postgres direta que este projeto usa. O quickstart padrão do painel Supabase (Next.js + SDK JS) **não se aplica** a este projeto Flask/Python.
+4. **Senhas com caracteres especiais** (`@`, `*`, etc.) precisam de URL-encoding na connection string (`urllib.parse.quote(senha, safe='')`) — do contrário o parser da URL quebra a divisão usuário/senha/host.
+5. Nunca exponha nenhuma credencial do Supabase no JavaScript do frontend — o frontend deste projeto não fala com o Supabase diretamente, só o backend Flask via `DATABASE_URL`.
+6. Depois de apontar `DATABASE_URL` para o Supabase:
    ```bash
    flask db upgrade
    venv\Scripts\python.exe scripts\criar_admin.py --email seu@email.com
+   venv\Scripts\python.exe scripts\check_supabase_db.py
    ```
-6. Testar login e `/health` (deve retornar `database_connected: true`) antes de considerar a migração concluída.
+7. Testar login e `/health` (deve retornar `database_connected: true`) antes de considerar a migração concluída.
+
+### Achado importante: drift de schema pré-existente
+
+A cadeia de migrations tinha bugs reais de drift, não relacionados a esta etapa — 6 tabelas (`categoria_cartao`, `categoria_palavra_chave`, `categoria_cartao_despesa`, `cartao_categoria_limite`, `mobilidade_assinatura`, `mobilidade_cenario_ativo`) e várias colunas (`item_despesa.categoria_cartao_id`/`origem_tipo`/`origem_id`/`origem_contexto`, `lancamento_agregado.categoria_cartao_id`, `financiamento_documento.parcela_id`/`amortizacao_id`/`ajuste_saldo_id`) nunca foram criadas por nenhuma migration — só existiam em bancos locais mais antigos por terem sido criadas fora do Alembic (provavelmente `db.create_all()` num ponto anterior ao baseline). Isso funcionava silenciosamente porque nenhum banco tinha sido criado do zero via `flask db upgrade` desde então. Corrigido com uma nova migration (`9e67ec16977b`) e ajustes defensivos em `9b8a09ecc52f`, ambos guardados por checagem de existência via SQLAlchemy inspector — no-op em bancos onde o drift já existia (ex.: o banco local), cria o que faltava em bancos novos (Supabase).
 
 ---
 
@@ -139,11 +145,11 @@ Pede a senha no prompt (nunca aparece no terminal, nunca é salva em arquivo). P
 
 ---
 
-## 11. Pendências (fora do escopo desta etapa)
+## 11. Pendências
 
-- **SUPABASE-MIGRATE-1**: criar o projeto Supabase e migrar de fato os dados
 - **DEPLOY-HOST-1**: escolher e configurar o host do backend Flask (servidor WSGI de produção, ex.: gunicorn, ainda não está em `requirements.txt`)
 - **CLOUDFLARE-1**: configurar DNS/proxy no Cloudflare apontando para o host do backend
+- **DATA-MIGRATE-1** (se desejado no futuro): migração seletiva de dados financeiros locais reais para o Supabase — não foi feita nesta etapa por decisão explícita (nenhum dado financeiro real foi migrado, só schema + usuário admin)
 - **DB-CLEAN**: débitos técnicos de `models.py`/queries, não relacionados a deploy
 - RBAC/multiusuário: fora de escopo (SEG-1 é usuário único)
 - Comercialização/pagamentos: fora de escopo
