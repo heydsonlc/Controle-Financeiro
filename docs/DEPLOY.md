@@ -1,8 +1,8 @@
 # Deploy — Controle Financeiro
 
-Guia de preparação e execução do deploy. Última atualização: 2026-08-20 (SUPABASE-MIGRATE-1).
+Guia de preparação e execução do deploy. Última atualização: 2026-08-20 (DEPLOY-HOST-1).
 
-Este documento cobre **o que já está pronto** e **o que ainda depende de ação manual** para sair do uso puramente local. O banco Supabase (staging) já foi validado com a cadeia completa de migrations; deploy real do backend, Cloudflare e migração de dados financeiros locais ainda não foram feitos.
+Este documento cobre **o que já está pronto** e **o que ainda depende de ação manual** para sair do uso puramente local. O banco Supabase (staging) já foi validado com a cadeia completa de migrations; o backend está preparado para deploy no Render (`render.yaml`, `runtime.txt`, `gunicorn`), mas o deploy real (publicar o serviço no painel do Render e configurar as variáveis de ambiente) depende de ação manual do usuário. Cloudflare e migração de dados financeiros locais ainda não foram feitos.
 
 ---
 
@@ -10,11 +10,11 @@ Este documento cobre **o que já está pronto** e **o que ainda depende de açã
 
 ```
 Cloudflare  → DNS / proxy / (futuramente) frontend estático
-Backend Flask → hospedado em serviço compatível (a definir), fora do Cloudflare
+Backend Flask → Render (staging), servido via gunicorn
 Supabase → PostgreSQL gerenciado (staging validado no SUPABASE-MIGRATE-1), substitui o PostgreSQL local
 ```
 
-Ordem de dependência: **SEG-1 (concluído) → DEPLOY-PREP-1 (concluído) → SUPABASE-MIGRATE-1 (banco staging validado) → DEPLOY-HOST-1 (host do Flask) → CLOUDFLARE-1 (DNS/proxy)**. Repositório é público — sem SEG-1 e sem este preparo, publicar a URL do backend seria expor dados financeiros reais sem proteção.
+Ordem de dependência: **SEG-1 (concluído) → DEPLOY-PREP-1 (concluído) → SUPABASE-MIGRATE-1 (concluído) → DEPLOY-HOST-1 (preparado; publicação manual pendente) → CLOUDFLARE-1 (DNS/proxy)**. Repositório é público — sem SEG-1 e sem este preparo, publicar a URL do backend seria expor dados financeiros reais sem proteção.
 
 ---
 
@@ -97,12 +97,62 @@ A cadeia de migrations tinha bugs reais de drift, não relacionados a esta etapa
 
 ---
 
-## 7. Cloudflare / hospedagem do backend
+## 7. Hospedagem do backend — Render (staging)
 
-**Ainda não configurado.** Papel esperado de cada peça:
+**Preparado no DEPLOY-HOST-1; publicação do serviço no painel do Render é ação manual.**
 
-- **Cloudflare**: DNS do domínio e proxy (e, futuramente, hospedagem do frontend estático caso ele seja separado do Flask). Cloudflare **não hospeda o backend Flask** — Workers/Pages não rodam uma aplicação Flask tradicional.
-- **Backend Flask**: precisa de um host próprio compatível com WSGI (a definir — fora do escopo desta etapa). O `requirements.txt` ainda não lista um servidor WSGI de produção (ex.: gunicorn); isso é tarefa do DEPLOY-HOST-1, não deste documento.
+- **Cloudflare**: DNS do domínio e proxy (e, futuramente, hospedagem do frontend estático caso ele seja separado do Flask). Cloudflare **não hospeda o backend Flask** — Workers/Pages não rodam uma aplicação Flask tradicional. Fica para o CLOUDFLARE-1.
+- **Backend Flask**: hospedado no Render via `render.yaml`. `requirements.txt` já lista `gunicorn`; `runtime.txt` fixa a versão do Python.
+
+### Configuração do serviço (`render.yaml`)
+
+| Item | Valor |
+|------|-------|
+| Build command | `pip install -r requirements.txt` |
+| Start command | `gunicorn backend.app:app` (usa a instância `app` já criada no import do módulo — não `create_app()`, para não instanciar o Flask app duas vezes) |
+| Health check path | `/health` |
+| Porta | Automática — o Gunicorn usa `0.0.0.0:$PORT` por padrão quando a env var `PORT` existe (o Render sempre injeta), sem precisar de `--bind` explícito |
+| Auto-deploy | Desligado (`autoDeploy: false`) — deploy é disparado manualmente até staging estar validado |
+
+`render.yaml` **não contém nenhum segredo** — `SECRET_KEY`, `DATABASE_URL` e `CARTOES_CVV_MASTER_PASSWORD` são configurados manualmente no painel do Render (Settings → Environment), nunca no arquivo versionado.
+
+### Variáveis de ambiente a configurar no painel do Render
+
+```
+APP_ENV=staging
+SECRET_KEY=<gerar com secrets.token_urlsafe(64), nunca reaproveitar a do .env.local>
+DATABASE_URL=<connection string do Supabase validada no SUPABASE-MIGRATE-1>
+CARTOES_CVV_MASTER_PASSWORD=<forte, ou vazio se nenhum cartão com CVV for usado em staging>
+FLASK_APP=backend/app.py
+FLASK_DEBUG=0
+```
+
+`APP_ENV=staging` já ativa (via `StagingConfig`) `SESSION_COOKIE_SECURE=True` e a validação de `SECRET_KEY`/`DATABASE_URL` fortes automaticamente — não há necessidade de configurar `SESSION_COOKIE_SECURE` manualmente.
+
+### Migrations no Render
+
+Depois do primeiro deploy, rodar via Render Shell (não no build automático — migrations DDL são deliberadas, nunca disparadas por push):
+
+```bash
+python -m flask --app backend/app.py db current
+python -m flask --app backend/app.py db upgrade
+python -m flask --app backend/app.py db current
+```
+
+Como o Supabase já foi migrado no SUPABASE-MIGRATE-1 (`alembic_version = 5c91e95eb05d`), `db upgrade` deve ser um no-op se a `DATABASE_URL` configurada no Render apontar para o mesmo banco.
+
+### Validação local do smoke test
+
+```bash
+set BASE_URL=https://<url-do-servico>.onrender.com
+venv\Scripts\python.exe scripts\smoke_staging.py
+```
+
+Testa `/health`, redirect de página protegida sem sessão, 401 JSON de API sem sessão, e `GET /login`. Login com credenciais reais é opcional — só roda se `SMOKE_ADMIN_EMAIL`/`SMOKE_ADMIN_SENHA` estiverem definidas localmente (nunca versionadas, nunca impressas).
+
+### Armazenamento de arquivos (pendência registrada, não resolvida aqui)
+
+O sistema grava documentos/comprovantes/logos em disco local (`data/uploads/`, anexos de financiamento, IR). O filesystem do Render é efêmero em planos padrão — arquivos gravados em runtime não sobrevivem a um redeploy/restart. Registrado como pendência **STORAGE-1**; não resolvido nesta etapa.
 
 ---
 
@@ -147,8 +197,9 @@ Pede a senha no prompt (nunca aparece no terminal, nunca é salva em arquivo). P
 
 ## 11. Pendências
 
-- **DEPLOY-HOST-1**: escolher e configurar o host do backend Flask (servidor WSGI de produção, ex.: gunicorn, ainda não está em `requirements.txt`)
-- **CLOUDFLARE-1**: configurar DNS/proxy no Cloudflare apontando para o host do backend
+- **Publicação real no Render**: criar o serviço no painel (ou via `render.yaml` blueprint), configurar as variáveis de ambiente sensíveis, disparar o primeiro deploy manual e rodar as migrations via Render Shell — ação manual do usuário, não feita por esta ferramenta
+- **STORAGE-1**: definir storage persistente para uploads/documentos (o filesystem do Render é efêmero; hoje o sistema grava em disco local)
+- **CLOUDFLARE-1**: configurar DNS/proxy no Cloudflare apontando para o host do backend no Render
 - **DATA-MIGRATE-1** (se desejado no futuro): migração seletiva de dados financeiros locais reais para o Supabase — não foi feita nesta etapa por decisão explícita (nenhum dado financeiro real foi migrado, só schema + usuário admin)
 - **DB-CLEAN**: débitos técnicos de `models.py`/queries, não relacionados a deploy
 - RBAC/multiusuário: fora de escopo (SEG-1 é usuário único)

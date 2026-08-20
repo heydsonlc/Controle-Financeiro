@@ -954,7 +954,8 @@ A auditoria técnica de 2026-05 identificou os principais riscos e definiu a ord
 | SEG-1 | Autenticação global (Flask-Login ativo, proteção de rotas e APIs) | Segurança | Concluído | — |
 | DEPLOY-PREP-1 | Preparação segura para deploy (ambientes, hardening, `docs/DEPLOY.md`) | Segurança | Concluído | SEG-1 |
 | SUPABASE-MIGRATE-1 | Banco Supabase (staging) validado: migrations, admin, smoke tests | Infra | Concluído | DEPLOY-PREP-1 |
-| DEPLOY-HOST-1 / CLOUDFLARE-1 | Host do backend Flask + DNS/proxy Cloudflare | Infra | Depende de SUPABASE-MIGRATE-1 (concluído) | SUPABASE-MIGRATE-1 |
+| DEPLOY-HOST-1 | Backend preparado para Render (gunicorn, render.yaml); publicação real é ação manual | Infra | Concluído (preparação) | SUPABASE-MIGRATE-1 |
+| CLOUDFLARE-1 | DNS/proxy Cloudflare apontando para o Render | Infra | Depende de publicação real no Render | DEPLOY-HOST-1 |
 
 **Regra de ouro**: Qualquer acesso externo à internet exige SEG-1 e DEPLOY-PREP-1 completos antes.
 
@@ -1060,9 +1061,9 @@ O sistema está sendo construído seguindo uma arquitetura modular com foco na e
 
 ---
 
-## 🌐 Produção Futura (Supabase + Cloudflare)
+## 🌐 Produção Futura (Render + Supabase + Cloudflare)
 
-Guia completo em [`docs/DEPLOY.md`](docs/DEPLOY.md) — variáveis obrigatórias, hardening de `SECRET_KEY`/CVV por ambiente, `scripts/check_deploy_env.py`, e o papel de cada peça (Supabase para PostgreSQL, Cloudflare para DNS/proxy, host separado para o backend Flask).
+Guia completo em [`docs/DEPLOY.md`](docs/DEPLOY.md) — variáveis obrigatórias, hardening de `SECRET_KEY`/CVV por ambiente, `scripts/check_deploy_env.py`, `scripts/smoke_staging.py`, e o papel de cada peça (Render hospeda o backend Flask via `gunicorn`/`render.yaml`, Supabase é o PostgreSQL, Cloudflare fica para DNS/proxy).
 
 Resumo rápido: produção usa `APP_ENV=production`, PostgreSQL remoto (Supabase), `SECRET_KEY` forte gerada com `secrets.token_urlsafe(48)`, `FLASK_DEBUG=0`, HTTPS obrigatório. A aplicação recusa iniciar em `staging`/`production` sem essas condições — falha fechado, sem fallback silencioso.
 

@@ -2,14 +2,14 @@
 
 Pendências conhecidas, MVPs planejados e débitos técnicos.
 
-Última atualização: 2026-08-20 (SUPABASE-MIGRATE-1)
+Última atualização: 2026-08-20 (DEPLOY-HOST-1)
 
 ---
 
 ## Ordem de Trabalho (Prioridade)
 
 ```
-SEC-0 ✅ → TEST-BASE-1 ✅ → SEG-1 ✅ → DEPLOY-PREP-1 ✅ → SUPABASE-MIGRATE-1 ✅ → DEPLOY-HOST-1 → CLOUDFLARE-1 → ICONES-1B → DB-CLEAN-1 → CARD-SEC-1 → FIN-RULES-1 → TEST-FIN-1 → DATA-HYGIENE-1 → PERF-1 → FRONT-ARCH-1
+SEC-0 ✅ → TEST-BASE-1 ✅ → SEG-1 ✅ → DEPLOY-PREP-1 ✅ → SUPABASE-MIGRATE-1 ✅ → DEPLOY-HOST-1 ✅ → CLOUDFLARE-1 → STORAGE-1 → ICONES-1B → DB-CLEAN-1 → CARD-SEC-1 → FIN-RULES-1 → TEST-FIN-1 → DATA-HYGIENE-1 → PERF-1 → FRONT-ARCH-1
 ```
 
 Para detalhes de priorização completa, ver `README_TECNICO.md`.
@@ -126,7 +126,8 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 | CTX-FIN-1 | Diagnóstico de perfis financeiros alternáveis (pessoal/empresa) | Futuro |
 | DEPLOY-PREP-1 | Preparação segura para deploy: ambientes (`APP_ENV`), hardening de `SECRET_KEY`/CVV, `.env.example`, `check_deploy_env.py`, `docs/DEPLOY.md` | Concluído |
 | SUPABASE-MIGRATE-1 | Projeto Supabase validado como banco `staging`: migrations completas do zero, admin criado, smoke tests OK. Também corrigiu 6 tabelas + 8 colunas de drift pré-existente nunca criadas por nenhuma migration | Concluído |
-| DEPLOY-HOST-1 | Escolher e configurar host do backend Flask (servidor WSGI de produção) | Alta |
+| DEPLOY-HOST-1 | Backend preparado para Render (gunicorn, render.yaml, runtime.txt, smoke test); publicação real no painel do Render é ação manual pendente | Concluído (preparação) |
+| STORAGE-1 | Definir storage persistente para uploads/documentos (filesystem do Render é efêmero) | Alta |
 | CLOUDFLARE-1 | Configurar DNS/proxy no Cloudflare apontando para o host do backend | Alta |
 | SCHED-1 | Ativar scheduler de geração automática mensal de contas recorrentes | Futuro |
 

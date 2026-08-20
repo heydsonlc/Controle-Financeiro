@@ -1,0 +1,26 @@
+# DEPLOY-HOST-1: configuracao do servico de staging no Render.
+#
+# Nao coloque segredos aqui (SECRET_KEY, DATABASE_URL, senha admin,
+# CARTOES_CVV_MASTER_PASSWORD). Variaveis sensiveis sao configuradas
+# manualmente no painel do Render (Environment), nunca neste arquivo.
+#
+# autoDeploy: false -- deploy e disparado manualmente ate a etapa de
+# staging estar validada; nao dispara automaticamente a cada push.
+services:
+  - type: web
+    name: controle-financeiro-staging
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn backend.app:app
+    healthCheckPath: /health
+    autoDeploy: false
+    envVars:
+      - key: APP_ENV
+        value: staging
+      - key: FLASK_APP
+        value: backend/app.py
+      - key: FLASK_DEBUG
+        value: "0"
+      # SECRET_KEY, DATABASE_URL e CARTOES_CVV_MASTER_PASSWORD: definir
+      # manualmente no painel do Render (Environment), nao aqui.
