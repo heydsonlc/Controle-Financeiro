@@ -753,7 +753,7 @@ Permite identificar economias ou gastos extras em relação ao planejado, facili
 - **Desenvolvimento:** PostgreSQL local (`controle_financeiro_dev`) via `DATABASE_URL` em `.env.local`
 - **Testing:** SQLite em memória para isolamento automatizado
 - **Fallback legado:** SQLite local apenas quando `DATABASE_URL` não estiver definida
-- **Produção futura:** PostgreSQL remoto/DigitalOcean somente em `production`
+- **Produção futura:** PostgreSQL remoto (Supabase) somente em `production`/`staging`
 
 **Frontend:**
 - HTML5 + CSS3
@@ -951,10 +951,12 @@ A auditoria técnica de 2026-05 identificou os principais riscos e definiu a ord
 | DATA-HYGIENE-1 | `SENHA_MESTRE` hardcoded, rotas sem uso, limpeza geral | Débito técnico | Média | — |
 | PERF-1 | Eager loading, índices de query críticos | Performance | Baixa | DB-CLEAN-1 |
 | FRONT-ARCH-1 | Extrair helpers JS comuns, eliminar duplicação de código | Débito técnico | Baixa | — |
-| SEG-1 | Autenticação global (Flask-Login ativo, proteção de rotas e APIs) | Segurança | Bloqueante para deploy | — |
-| DEPLOY-1 | Publicação web controlada no DigitalOcean | Infra | Depende de SEG-1 | SEG-1 |
+| SEG-1 | Autenticação global (Flask-Login ativo, proteção de rotas e APIs) | Segurança | Concluído | — |
+| DEPLOY-PREP-1 | Preparação segura para deploy (ambientes, hardening, `docs/DEPLOY.md`) | Segurança | Concluído | SEG-1 |
+| SUPABASE-MIGRATE-1 | Migração do PostgreSQL local para Supabase | Infra | Depende de DEPLOY-PREP-1 | DEPLOY-PREP-1 |
+| DEPLOY-HOST-1 / CLOUDFLARE-1 | Host do backend Flask + DNS/proxy Cloudflare | Infra | Depende de SUPABASE-MIGRATE-1 | SUPABASE-MIGRATE-1 |
 
-**Regra de ouro**: Qualquer acesso externo à internet exige SEG-1 completo antes.
+**Regra de ouro**: Qualquer acesso externo à internet exige SEG-1 e DEPLOY-PREP-1 completos antes.
 
 ### Pontos fortes identificados na auditoria
 
@@ -1058,46 +1060,13 @@ O sistema está sendo construído seguindo uma arquitetura modular com foco na e
 
 ---
 
-## 🌐 Produção Futura (PostgreSQL)
+## 🌐 Produção Futura (Supabase + Cloudflare)
 
-Produção futura deve usar PostgreSQL remoto apenas em ambiente `production`, com autenticação, `DEBUG=False`, HTTPS e configuração segura. Não use DigitalOcean em `development`.
+Guia completo em [`docs/DEPLOY.md`](docs/DEPLOY.md) — variáveis obrigatórias, hardening de `SECRET_KEY`/CVV por ambiente, `scripts/check_deploy_env.py`, e o papel de cada peça (Supabase para PostgreSQL, Cloudflare para DNS/proxy, host separado para o backend Flask).
 
-### 1. Configurar Variáveis de Ambiente
+Resumo rápido: produção usa `APP_ENV=production`, PostgreSQL remoto (Supabase), `SECRET_KEY` forte gerada com `secrets.token_urlsafe(48)`, `FLASK_DEBUG=0`, HTTPS obrigatório. A aplicação recusa iniciar em `staging`/`production` sem essas condições — falha fechado, sem fallback silencioso.
 
-Criar arquivo `.env.production`:
-
-```bash
-FLASK_ENV=production
-SECRET_KEY=sua-chave-secreta-super-segura
-DATABASE_URL=postgresql://usuario:senha@host:porta/nome_banco
-FLASK_APP=backend/app.py
-FLASK_DEBUG=0
-```
-
-### 2. Instalar Driver PostgreSQL
-
-```bash
-pip install psycopg2-binary
-```
-
-### 3. Executar Migrations
-
-```bash
-# Conferir revision atual
-flask db current
-
-# Aplicar migrations pendentes no ambiente correto
-FLASK_ENV=production flask db upgrade
-```
-
-### 4. Deploy no DigitalOcean
-
-O deploy deve usar a mesma chain Alembic oficial já iniciada pelo baseline `dd1a552aec6a`. Não execute scripts SQLite/custom arquivados.
-
-Apenas:
-1. Configure as variáveis de ambiente seguras.
-2. Execute `flask db current` e `flask db upgrade` no ambiente correto.
-3. Inicie a aplicação com `DEBUG=False`.
+Migrations seguem a mesma chain Alembic oficial iniciada pelo baseline `dd1a552aec6a`; não execute scripts SQLite/custom arquivados.
 
 ---
 
@@ -1131,11 +1100,11 @@ npx playwright test tests/e2e/smoke.spec.js
 
 ## 🔧 Desenvolvimento Local vs Produção
 
-| Aspecto | Desenvolvimento (Local) | Produção (DigitalOcean) |
+| Aspecto | Desenvolvimento (Local) | Produção (Supabase) |
 |---------|------------------------|-------------------------|
-| Banco de Dados | PostgreSQL local (`controle_financeiro_dev`) | PostgreSQL remoto |
+| Banco de Dados | PostgreSQL local (`controle_financeiro_dev`) | PostgreSQL remoto (Supabase) |
 | Debug | Ativado | Desativado |
-| Arquivo Config | `.env.local` | `.env.production` |
+| Arquivo Config | `.env.local` | `.env.production` (nunca commitado) |
 | Schema | Alembic baseline `dd1a552aec6a` + migrations futuras | Mesma chain Alembic |
 
 SQLite permanece apenas como fallback/legado/teste temporário. Não execute scripts de `backend/migrations/`, `migrations/*.py` custom, `migrations/legacy_sqlite/` ou `scripts/debug/` como fluxo de schema.

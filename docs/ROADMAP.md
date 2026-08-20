@@ -2,14 +2,14 @@
 
 Pendências conhecidas, MVPs planejados e débitos técnicos.
 
-Última atualização: 2026-08-19 (SEG-1)
+Última atualização: 2026-08-19 (DEPLOY-PREP-1)
 
 ---
 
 ## Ordem de Trabalho (Prioridade)
 
 ```
-SEC-0 ✅ → TEST-BASE-1 ✅ → SEG-1 ✅ → ICONES-1B → DB-CLEAN-1 → CARD-SEC-1 → FIN-RULES-1 → TEST-FIN-1 → DATA-HYGIENE-1 → PERF-1 → FRONT-ARCH-1 → DEPLOY-1
+SEC-0 ✅ → TEST-BASE-1 ✅ → SEG-1 ✅ → DEPLOY-PREP-1 ✅ → SUPABASE-MIGRATE-1 → DEPLOY-HOST-1 → CLOUDFLARE-1 → ICONES-1B → DB-CLEAN-1 → CARD-SEC-1 → FIN-RULES-1 → TEST-FIN-1 → DATA-HYGIENE-1 → PERF-1 → FRONT-ARCH-1
 ```
 
 Para detalhes de priorização completa, ver `README_TECNICO.md`.
@@ -124,7 +124,10 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 |----|-----------|-----------|
 | IR-1 | Módulo de Imposto de Renda / Documentos Fiscais IRPF | Futuro |
 | CTX-FIN-1 | Diagnóstico de perfis financeiros alternáveis (pessoal/empresa) | Futuro |
-| DEPLOY-1 | Deploy em produção com autenticação, HTTPS e PostgreSQL remoto | Alta (SEG-1 concluído; ainda depende de HTTPS/hosting) |
+| DEPLOY-PREP-1 | Preparação segura para deploy: ambientes (`APP_ENV`), hardening de `SECRET_KEY`/CVV, `.env.example`, `check_deploy_env.py`, `docs/DEPLOY.md` | Concluído |
+| SUPABASE-MIGRATE-1 | Criar projeto Supabase e migrar o banco de PostgreSQL local para Supabase | Alta (depende de DEPLOY-PREP-1, concluído) |
+| DEPLOY-HOST-1 | Escolher e configurar host do backend Flask (servidor WSGI de produção) | Alta |
+| CLOUDFLARE-1 | Configurar DNS/proxy no Cloudflare apontando para o host do backend | Alta |
 | SCHED-1 | Ativar scheduler de geração automática mensal de contas recorrentes | Futuro |
 
 ---
@@ -138,7 +141,7 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 | N+1 queries em `to_dict()` | Vários serviços | Performance degradada em listas grandes |
 | `Query.get()` legado | Múltiplos serviços | SQLAlchemy 2.0 remove em versões futuras |
 | ~~Autenticação ausente~~ | ~~18 rotas de API~~ | Resolvido no SEG-1 (autenticação global, usuário único) |
-| `SECRET_KEY` fraca em `.env.local` | `dev-secret-key-local-123456` | Agora assina também o cookie de sessão de login (SEG-1); trocar por valor forte antes de qualquer exposição fora de localhost |
+| `SECRET_KEY` fraca em `.env.local` | `dev-secret-key-local-123456` | Aceitável em `local` por design (bloqueada automaticamente em `staging`/`production` desde o DEPLOY-PREP-1); ainda assim, trocar por valor forte se este `.env.local` for reutilizado em qualquer ambiente exposto |
 | CORS irrestrito | `backend/app.py` | Parcialmente corrigido no SEC-0 |
 | Dados de cartão em texto puro | `ContaCartao` | Risco de segurança em dados em repouso |
 | Scheduler comentado | `backend/app.py:264` | Geração automática de recorrências desabilitada |

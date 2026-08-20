@@ -20,10 +20,10 @@ if __name__ == '__main__':
     sys.path.insert(0, str(Path(__file__).parent.parent))
 
 try:
-    from backend.config import get_config
+    from backend.config import get_config, normalizar_nome_ambiente, resolver_app_env
     from backend.models import db, Usuario
 except ImportError:
-    from config import get_config
+    from config import get_config, normalizar_nome_ambiente, resolver_app_env
     from models import db, Usuario
 
 # Carregar variáveis de ambiente
@@ -74,7 +74,8 @@ def create_app(config_name=None):
     Factory para criar a aplicação Flask
 
     Args:
-        config_name: Nome da configuração ('development', 'production', 'testing')
+        config_name: Nome da configuração ('local', 'staging', 'production', 'testing').
+            Aceita tambem sinonimos legados (ex.: 'development' -> 'local').
 
     Returns:
         app: Instância configurada do Flask
@@ -85,14 +86,16 @@ def create_app(config_name=None):
 
     # Configuração baseada no ambiente
     if config_name is None:
-        config_name = os.getenv('FLASK_ENV', 'development')
+        config_name = resolver_app_env()
+    else:
+        config_name = normalizar_nome_ambiente(config_name)
 
     app.config.from_object(get_config(config_name))
 
     # Logging mÃ­nimo coerente por ambiente
     if not logging.getLogger().handlers:
         level = logging.INFO
-        if config_name in {'development', 'testing'}:
+        if config_name in {'local', 'testing'}:
             level = logging.DEBUG
         logging.basicConfig(
             level=level,
@@ -103,8 +106,8 @@ def create_app(config_name=None):
     app.config['JSON_AS_ASCII'] = False
     app.config['JSON_SORT_KEYS'] = False
 
-    # Desabilitar cache de templates e arquivos estáticos em desenvolvimento
-    if config_name == 'development':
+    # Desabilitar cache de templates e arquivos estáticos em ambiente local
+    if config_name == 'local':
         app.config['TEMPLATES_AUTO_RELOAD'] = True
         app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 
@@ -318,12 +321,23 @@ def create_app(config_name=None):
 
     @app.route('/health')
     def health():
-        """Health check para monitoramento"""
+        """Health check para monitoramento. Publica (allowlist SEG-1).
+
+        Minimalista de proposito: nunca expor DATABASE_URL, SECRET_KEY,
+        dados de usuario ou variaveis de ambiente — apenas status agregado.
+        """
+        database_connected = True
+        try:
+            db.session.execute(db.text('SELECT 1'))
+        except Exception:
+            database_connected = False
+
+        status_code = 200 if database_connected else 503
         return jsonify({
-            'status': 'ok',
-            'environment': config_name,
-            'database': 'connected'
-        })
+            'status': 'ok' if database_connected else 'degraded',
+            'app_env': config_name,
+            'database_connected': database_connected,
+        }), status_code
 
     return app
 
@@ -455,7 +469,7 @@ if __name__ == '__main__':
         )
 
         print(f"=> Servidor iniciando em http://{flask_host}:{flask_port}")
-        print(f"=> Ambiente: {os.getenv('FLASK_ENV', 'development')}")
+        print(f"=> Ambiente: {resolver_app_env()}")
         print(f"=> Debug: {'ativado' if flask_debug else 'desativado'}")
         print("=> Pressione CTRL+C para parar")
 

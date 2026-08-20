@@ -186,10 +186,11 @@ A ordem de trabalho foi definida em auditoria técnica realizada em 2026-05:
 5. **CARD-SEC-1** — Remover `numero_cartao` e `codigo_seguranca` em texto puro
 6. **FIN-RULES-1** — Validar regras de negócio de financiamento SAC/PRICE com testes
 7. **DATA-HYGIENE-1** — `SENHA_MESTRE` hardcoded, limpeza de rotas sem uso
-8. **SEG-1** — Autenticação global (bloqueante para qualquer acesso externo)
-9. **DEPLOY-1** — Publicação web controlada (depende de SEG-1)
+8. **SEG-1** — Autenticação global (concluído)
+9. **DEPLOY-PREP-1** — Preparação segura para deploy: ambientes, hardening, `docs/DEPLOY.md` (concluído)
+10. **SUPABASE-MIGRATE-1 / DEPLOY-HOST-1 / CLOUDFLARE-1** — Migração para Supabase, host do backend e DNS/proxy Cloudflare
 
-Antes de qualquer acesso pela internet: implementar SEG-1 completo.
+Antes de qualquer acesso pela internet: SEG-1 e DEPLOY-PREP-1 completos (ambos concluídos). Ver [`docs/DEPLOY.md`](docs/DEPLOY.md) para o guia completo.
 
 ## Para Desenvolvedores
 

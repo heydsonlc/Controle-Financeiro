@@ -32,16 +32,14 @@ ENV/
 *.db
 *.sqlite
 *.sqlite3
-data/gastos.db
-data/uploads/
-data/backups/
-data/ocr/
+data/
 backups/
 
 # Environment Variables
 .env
-.env.local
-.env.production
+.env.*
+!.env.example
+!.env.local.example
 
 # IDE
 .vscode/
@@ -68,6 +66,12 @@ htmlcov/
 node_modules/
 playwright-report/
 test-results/
+
+# Ferramentas locais (Claude Code / Playwright MCP)
+# settings.local.json ja e versionado deliberadamente (config de projeto);
+# apenas settings.json (cache/estado local da maquina) fica de fora.
+.claude/settings.json
+.playwright-mcp/
 
 # Temporary files
 *.tmp
