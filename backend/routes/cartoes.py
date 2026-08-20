@@ -178,24 +178,45 @@ def atualizar_cartao(id):
 
 @cartoes_bp.route('/<int:id>/codigo-seguranca', methods=['POST'])
 def revelar_codigo_seguranca(id):
-    """Revela o cÃ³digo de seguranÃ§a mediante senha"""
-    try:
-        dados = request.get_json(silent=True) or {}
-        senha = dados.get('senha')
-        senha_mestre = current_app.config.get('CARTOES_CVV_MASTER_PASSWORD') or current_app.config.get('SECRET_KEY')
+    """CARD-CVV-LOCK-1: revela o codigo de seguranca (CVV) mediante senha de
+    desbloqueio, exigida por CARTOES_CVV_MASTER_PASSWORD.
 
+    Mecanismo transitorio ate SEG-1 (autenticacao global): nao ha usuario/senha
+    de sessao ainda, entao a senha de desbloqueio e uma configuracao local
+    (env var), nunca com fallback para SECRET_KEY (que serve a outro proposito
+    e nao deve dobrar como segredo de CVV). Falha fechada se nao configurada:
+    nunca revela o CVV sem senha mestre definida.
+    """
+    try:
+        senha_mestre = current_app.config.get('CARTOES_CVV_MASTER_PASSWORD')
         if not senha_mestre:
-            logger.error('Configuracao de senha mestre de cartoes ausente')
-            return _business_error('Configuracao de seguranca indisponivel', 503)
+            logger.error('Desbloqueio de CVV nao configurado (CARTOES_CVV_MASTER_PASSWORD ausente)')
+            return _business_error('Desbloqueio de CVV nao configurado.', 503)
+
+        dados = request.get_json(silent=True) or {}
+        senha = (dados.get('senha') or '').strip()
+        if not senha:
+            return _business_error('Senha e obrigatoria.', 400)
 
         if senha != senha_mestre:
-            return _business_error('Senha incorreta', 401)
+            return _business_error('Senha incorreta.', 401)
 
         cartao = _obter_cartao(id)
         if not cartao or not cartao.config_agregador:
             return _business_error('Cartao nao encontrado', 404)
 
-        return jsonify({'success': True, 'data': {'codigo_seguranca': cartao.config_agregador.codigo_seguranca or ''}}), 200
+        if not cartao.config_agregador.codigo_seguranca:
+            return _business_error('Este cartao nao possui codigo de seguranca cadastrado.', 404)
+
+        resposta = jsonify({
+            'success': True,
+            'data': {
+                'codigo_seguranca': cartao.config_agregador.codigo_seguranca,
+                'expires_in_seconds': 30,
+            },
+        })
+        resposta.headers['Cache-Control'] = 'no-store'
+        return resposta, 200
 
     except Exception:
         return _internal_error('revelar_codigo_seguranca')

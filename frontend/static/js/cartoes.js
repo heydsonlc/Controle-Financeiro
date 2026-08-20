@@ -19,7 +19,8 @@ const estadoCartoes = {
     buscaGeral: '',
     buscaLateral: '',
     status: 'ativos',
-    mesSelecionado: new Date().toISOString().slice(0, 7)
+    mesSelecionado: new Date().toISOString().slice(0, 7),
+    cvvOcultarTimeoutId: null,
 };
 
 function cartoesIcon(name) {
@@ -152,6 +153,7 @@ function configurarEventosCartoes() {
 }
 
 async function carregarTelaCartoes() {
+    ocultarCvv();
     try {
         const [cartoesResp, categoriasResp] = await Promise.all([
             fetchJson(API_CARTOES),
@@ -207,6 +209,7 @@ async function carregarFaturaSelecionada() {
 async function selecionarCartao(cartaoId) {
     estadoCartoes.cartaoSelecionadoId = Number(cartaoId);
     estadoCartoes.filtroLancamentosFatura = 'todos';
+    ocultarCvv();
     renderizarListaCartoes();
     renderizarDetalheCartao();
     try {
@@ -368,6 +371,7 @@ function renderizarDetalheCartao() {
             </div>
             <div class="cartao-detail-actions">
                 <button class="cf-button cf-button-secondary" type="button" data-action="editar-cartao">${cartoesIcon('edit')} <span>Editar cart&atilde;o</span></button>
+                ${cartao.config?.possui_cvv ? `<button class="cf-button cf-button-secondary" type="button" data-action="revelar-cvv">${cartoesIcon('lock')} <span>Ver CVV</span></button>` : ''}
                 <button class="cf-button cf-button-primary" type="button" data-action="abrir-limite">Salvar limites</button>
             </div>
         </header>
@@ -693,6 +697,8 @@ async function tratarCliqueDetalhe(event) {
     const action = button.dataset.action;
     if (action === 'editar-cartao') {
         abrirModalEditarCartao();
+    } else if (action === 'revelar-cvv') {
+        abrirModalRevelarCvv();
     } else if (action === 'abrir-limite') {
         abrirModalLimite();
     } else if (action === 'editar-limite') {
@@ -1159,25 +1165,79 @@ function fecharModal(modalId) {
     if (modalId === 'modal-categoria-limite') {
         document.getElementById('limite-categoria-cartao').disabled = false;
     }
+    if (modalId === 'modal-revelar-cvv') {
+        ocultarCvv();
+    }
+}
+
+/**
+ * CARD-CVV-LOCK-1: abre o modal de desbloqueio do CVV para o cartao
+ * selecionado. O CVV so vem do backend apos senha correta (POST
+ * /cartoes/<id>/codigo-seguranca); nada e pre-preenchido aqui.
+ */
+function abrirModalRevelarCvv() {
+    const cartao = obterCartaoSelecionado();
+    if (!cartao) return;
+
+    ocultarCvv();
+    document.getElementById('cvv-cartao-id').value = cartao.id;
+    document.getElementById('cvv-senha').value = '';
+    abrirModal('modal-revelar-cvv');
 }
 
 async function revelarCodigoSeguranca(event) {
     event.preventDefault();
 
     const cartaoId = document.getElementById('cvv-cartao-id').value;
-    const senha = document.getElementById('cvv-senha').value;
+    const senhaInput = document.getElementById('cvv-senha');
+    const senha = senhaInput.value;
     try {
         const resp = await fetchJson(`${API_CARTOES}/${cartaoId}/codigo-seguranca`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ senha })
         });
+        // Senha nunca precisa continuar no DOM apos o uso, sucesso ou nao.
+        senhaInput.value = '';
+
         document.getElementById('cvv-codigo').textContent = resp.data?.codigo_seguranca || '***';
         document.getElementById('cvv-resultado').hidden = false;
         document.getElementById('btn-revelar').hidden = true;
+        document.getElementById('btn-ocultar-cvv').hidden = false;
+
+        const segundos = Number(resp.data?.expires_in_seconds) || 30;
+        agendarOcultarCvv(segundos);
     } catch (error) {
+        senhaInput.value = '';
         mostrarErro(error.message);
     }
+}
+
+function agendarOcultarCvv(segundos) {
+    if (estadoCartoes.cvvOcultarTimeoutId) {
+        clearTimeout(estadoCartoes.cvvOcultarTimeoutId);
+    }
+    estadoCartoes.cvvOcultarTimeoutId = setTimeout(ocultarCvv, segundos * 1000);
+}
+
+/**
+ * Limpa o CVV exibido e cancela o timer de auto-ocultacao. Nao ha
+ * persistencia em localStorage/sessionStorage/atributos data-* — o valor
+ * so existe em memoria (textContent) enquanto visivel.
+ */
+function ocultarCvv() {
+    if (estadoCartoes.cvvOcultarTimeoutId) {
+        clearTimeout(estadoCartoes.cvvOcultarTimeoutId);
+        estadoCartoes.cvvOcultarTimeoutId = null;
+    }
+    const codigoEl = document.getElementById('cvv-codigo');
+    if (codigoEl) codigoEl.textContent = '***';
+    const resultadoEl = document.getElementById('cvv-resultado');
+    if (resultadoEl) resultadoEl.hidden = true;
+    const btnRevelar = document.getElementById('btn-revelar');
+    if (btnRevelar) btnRevelar.hidden = false;
+    const btnOcultar = document.getElementById('btn-ocultar-cvv');
+    if (btnOcultar) btnOcultar.hidden = true;
 }
 
 function mascaraMesAno(input) {

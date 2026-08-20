@@ -664,6 +664,10 @@ class ConfigAgregador(db.Model):
         return f'<ConfigAgregador Item:{self.item_despesa_id} Fecha:{self.dia_fechamento} Vence:{self.dia_vencimento}>'
 
     def to_dict(self):
+        # CARD-CVV-LOCK-1: codigo_seguranca (CVV) nunca sai daqui. 'possui_cvv'
+        # informa a UI se ha um codigo cadastrado (para exibir o botao de
+        # revelar) sem expor o valor — a revelacao exige senha em endpoint
+        # proprio (POST /cartoes/<id>/codigo-seguranca).
         return {
             'id': self.id,
             'item_despesa_id': self.item_despesa_id,
@@ -673,6 +677,7 @@ class ConfigAgregador(db.Model):
             'numero_cartao': self.numero_cartao,  # Número completo
             'data_validade': self.data_validade,  # MM/AAAA
             'tem_codigo': self.tem_codigo if self.tem_codigo is not None else True,  # Se o cartão possui código de segurança
+            'possui_cvv': bool(self.codigo_seguranca),
             'observacoes': self.observacoes
         }
 

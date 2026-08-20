@@ -256,6 +256,7 @@
         </div>
     </div>
 
+    <!-- Modal: Revelar CVV (CARD-CVV-LOCK-1) -->
     <div id="modal-revelar-cvv" class="modal">
         <div class="modal-content modal-sm">
             <div class="modal-header">
@@ -265,15 +266,18 @@
 
             <form id="form-revelar-cvv">
                 <input type="hidden" id="cvv-cartao-id">
+                <p class="cvv-aviso">Por seguran&ccedil;a, o CVV fica oculto. Informe a senha de desbloqueio para exibi-lo temporariamente.</p>
                 <div class="form-group">
                     <label for="cvv-senha">Digite a senha para visualizar</label>
-                    <input type="password" id="cvv-senha" required placeholder="Senha de prote&ccedil;&atilde;o">
+                    <input type="password" id="cvv-senha" required placeholder="Senha de prote&ccedil;&atilde;o" autocomplete="off">
                 </div>
                 <div id="cvv-resultado" class="cvv-result" hidden>
                     <span>C&oacute;digo de Seguran&ccedil;a</span>
                     <strong id="cvv-codigo">***</strong>
+                    <small>Ocultado automaticamente em at&eacute; 30 segundos.</small>
                 </div>
                 <div class="form-actions">
+                    <button type="button" class="cf-button cf-button-secondary" id="btn-ocultar-cvv" onclick="ocultarCvv()" hidden>Ocultar</button>
                     <button type="button" class="cf-button cf-button-secondary" data-close-modal="modal-revelar-cvv">Fechar</button>
                     <button type="submit" class="cf-button cf-button-primary" id="btn-revelar">Revelar</button>
                 </div>

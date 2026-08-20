@@ -2,7 +2,7 @@
 
 Pendências conhecidas, MVPs planejados e débitos técnicos.
 
-Última atualização: 2026-08-19 (MOV-REF-1)
+Última atualização: 2026-08-19 (CARD-CVV-LOCK-1)
 
 ---
 
@@ -81,7 +81,8 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 | ID | Descrição | Prioridade |
 |----|-----------|-----------|
 | SEG-1 | Autenticação global — bloqueante para qualquer deploy externo | Crítica |
-| CARD-SEC-1 | Remover `numero_cartao` e `codigo_seguranca` em texto puro do banco | Alta |
+| CARD-CVV-LOCK-1 | Bloqueio de visibilidade do CVV: oculto por padrão, revelação por senha (`CARTOES_CVV_MASTER_PASSWORD`), falha fechada | Concluído |
+| CARD-SEC-1 | Restante: mascarar/criptografar `numero_cartao` e criptografar `codigo_seguranca` em repouso no banco (hoje só a exposição na API/UI foi bloqueada, o dado continua em texto puro no banco) | Alta |
 
 ### Banco de Dados / Backend
 

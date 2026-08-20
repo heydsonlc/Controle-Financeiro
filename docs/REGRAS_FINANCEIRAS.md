@@ -2,7 +2,7 @@
 
 Regras globais e por módulo que governam o comportamento do Controle Financeiro.
 
-Última atualização: 2026-08-19 (MOV-REF-1)
+Última atualização: 2026-08-19 (CARD-CVV-LOCK-1)
 
 ---
 
@@ -123,6 +123,17 @@ Esta regra não tem exceções.
 - Namespace fixo (`7f3a1b2c-...`) exclusivo para recorrências — não colide com UUID v4 da importação.
 - Deduplicação primária por `compra_id`; fallback para registros legados (sem `compra_id`) que preenchem o campo retroativamente.
 - Garantia: 1 recorrência = 1 lançamento por mês, independente de quantas vezes `gerar_lancamentos_cartao_recorrente()` é chamado.
+
+**Bloqueio de visibilidade do CVV (CARD-CVV-LOCK-1)**:
+- Escopo desta etapa: só o CVV/código de segurança. **Número do cartão continua visível** conforme decisão do usuário — não mascarado, não removido, não criptografado nesta etapa.
+- `ConfigAgregador.codigo_seguranca` (CVV) **nunca** sai do `to_dict()` padrão nem de listagem/detalhe de cartão. Em vez do valor, `to_dict()` retorna `possui_cvv` (booleano derivado de `bool(codigo_seguranca)`) — permite a UI mostrar o botão "Ver CVV" sem conhecer o valor.
+- Revelação exige `POST /api/cartoes/{id}/codigo-seguranca` com `{ "senha": "..." }`. Nunca `GET` (CVV não pode ir em URL/query string).
+- **Senha de desbloqueio** vem de `CARTOES_CVV_MASTER_PASSWORD` (env var, `.env.local` não versionado) — mecanismo transitório até `SEG-1` (autenticação global com usuário/senha reais). **Falha fechada**: sem essa variável configurada, o endpoint retorna HTTP 503 ("Desbloqueio de CVV não configurado.") e nunca revela o CVV, mesmo com senha correta digitada.
+- **Nunca há fallback para `SECRET_KEY`** — achado do diagnóstico: a implementação original caía em `SECRET_KEY` quando `CARTOES_CVV_MASTER_PASSWORD` não estava configurada, e como `SECRET_KEY` local (`.env.local`) era uma string fraca e visível, isso equivalia a uma senha pública. Corrigido e coberto por teste (`test_revelar_com_secret_key_nao_funciona`) para não regredir.
+- Senha incorreta → HTTP 401. Senha ausente/vazia → HTTP 400. Cartão sem CVV cadastrado → HTTP 404 (nem tenta revelar). Resposta de sucesso inclui `Cache-Control: no-store`.
+- Nada relacionado a CVV é logado (nem senha tentada, nem valor do CVV) — só o fato de estar mal configurado.
+- **Frontend**: botão "Ver CVV" no cabeçalho do detalhe do cartão (`frontend/static/js/cartoes.js`), visível apenas quando `config.possui_cvv === true`. Modal de desbloqueio pede senha, exibe o CVV por até 30 segundos com auto-ocultação (`setTimeout` limpo em qualquer fechamento de modal/troca de cartão/recarga de lista) e botão "Ocultar" manual. Campo de senha é limpo do DOM imediatamente após qualquer tentativa (sucesso ou erro). CVV nunca é persistido em `localStorage`/`sessionStorage`/atributos `data-*` — só existe em memória (`textContent`) enquanto visível.
+- Débito técnico de CSS corrigido incidentalmente: `.cf-button[hidden] { display: none; }` — a classe `.cf-button` (usada em todo o módulo de cartões) tinha `display: inline-flex` que sobrescrevia o atributo HTML `hidden`, então qualquer botão `.cf-button` com `hidden` continuava visível. Afetava potencialmente outros botões do módulo, não só o de CVV.
 
 **Categoria do Cartão × Categoria da Despesa**:
 - **Categoria do Cartão** (`CategoriaCartao`): organiza internamente a fatura do cartão

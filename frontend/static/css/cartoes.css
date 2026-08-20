@@ -175,6 +175,10 @@
     padding-block: 0;
 }
 
+.cf-button[hidden] {
+    display: none;
+}
+
 .cf-button {
     min-height: 36px;
     border: 1px solid transparent;
@@ -1492,6 +1496,18 @@
     border-top: 1px solid rgba(15, 23, 42, 0.08);
 }
 
+.cvv-aviso {
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    border-left: 3px solid #f59e0b;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 14px;
+    font-size: 13px;
+    color: #92400e;
+    line-height: 1.5;
+}
+
 .cvv-result {
     display: grid;
     gap: 6px;
@@ -1510,6 +1526,12 @@
 .cvv-result strong {
     color: #0f172a;
     font-size: 22px;
+    letter-spacing: 2px;
+}
+
+.cvv-result small {
+    color: #94a3b8;
+    font-size: 11px;
 }
 
 .notificacao-toast {
