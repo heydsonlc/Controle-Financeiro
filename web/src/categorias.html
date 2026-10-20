@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Categorias — Controle Financeiro</title>
+    <link rel="stylesheet" href="css/shared/style.css">
+    <link rel="stylesheet" href="css/shared/theme-light.css">
+    <link rel="stylesheet" href="css/app.css">
+</head>
+<!-- Conteudo oculto ate a sessao ser validada no servidor do Supabase Auth.
+     A protecao real dos dados e a RLS no banco; isto evita apenas o "flash". -->
+<body class="app-body" data-protegido hidden>
+    <header class="app-header">
+        <span class="app-marca">Controle Financeiro</span>
+        <span class="app-usuario">
+            <span id="usuario-email"></span>
+            <button type="button" class="app-sair" id="sair">Sair</button>
+        </span>
+    </header>
+
+    <main class="app-conteudo">
+        <h1 class="app-titulo">Categorias</h1>
+        <p class="app-aviso">Visualização somente leitura — primeiro módulo da nova arquitetura.</p>
+
+        <div class="login-error" id="categorias-erro" role="alert" hidden></div>
+        <p class="app-vazio" id="categorias-vazio" hidden>Nenhuma categoria cadastrada.</p>
+
+        <table class="app-tabela" id="categorias-tabela" hidden>
+            <thead>
+                <tr>
+                    <th scope="col">Cor</th>
+                    <th scope="col">Nome</th>
+                    <th scope="col">Descrição</th>
+                    <th scope="col">Situação</th>
+                </tr>
+            </thead>
+            <tbody id="categorias-corpo"></tbody>
+        </table>
+    </main>
+
+    <script src="config.js"></script>
+    <script src="vendor/supabase.js"></script>
+    <script type="module" src="js/categorias.js"></script>
+</body>
+</html>

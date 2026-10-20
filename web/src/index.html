@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entrar — Controle Financeiro</title>
+    <link rel="stylesheet" href="css/shared/style.css">
+    <link rel="stylesheet" href="css/shared/theme-light.css">
+    <link rel="stylesheet" href="css/app.css">
+</head>
+<body class="login-body">
+    <main class="login-card">
+        <h1 class="login-title">Controle Financeiro</h1>
+        <p class="login-subtitle">Entre para continuar</p>
+
+        <div class="login-error" id="login-erro" role="alert" hidden></div>
+
+        <form id="login-form" novalidate>
+            <div class="login-field">
+                <label for="email">E-mail</label>
+                <input type="email" id="email" name="email" autocomplete="username" required autofocus>
+            </div>
+            <div class="login-field">
+                <label for="senha">Senha</label>
+                <input type="password" id="senha" name="senha" autocomplete="current-password" required>
+            </div>
+            <button type="submit" class="login-submit" id="login-enviar">Entrar</button>
+        </form>
+    </main>
+
+    <script src="config.js"></script>
+    <script src="vendor/supabase.js"></script>
+    <script type="module" src="js/login.js"></script>
+</body>
+</html>

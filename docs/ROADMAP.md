@@ -2,7 +2,7 @@
 
 Pendências conhecidas, MVPs planejados e débitos técnicos.
 
-Última atualização: 2026-10-19 (STAGING-RENDER-2)
+Última atualização: 2026-10-20 (CF-SUPABASE-REFACTOR-1)
 
 ---
 
@@ -83,6 +83,7 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 | SEG-1 | Autenticação global de rotas e APIs — usuário único, sessão via Flask-Login, allowlist fechada (`/login`, `/logout`, `/static/*`, `/health`) | Concluído |
 | CARD-CVV-LOCK-1 | Bloqueio de visibilidade do CVV: oculto por padrão, revelação por senha (`CARTOES_CVV_MASTER_PASSWORD`), falha fechada | Concluído |
 | DEPLOY-READY-FIN-1 | Hardening para internet pública: cookie `__Host-` com expiração de 12h, verificação de `Origin` em escritas (CSRF entre subdomínios `*.kortexbrasil.com`), HSTS/cabeçalhos, limite de 64 MB, backup local via `pg_dump`/`pg_restore` bloqueado no host | Concluído |
+| SEG-SUPA-PUBLIC-1 | **URGENTE:** no Supabase de staging, as 52 tabelas do Flask no `public` estão sem RLS e com SELECT/INSERT/UPDATE/DELETE para `anon`, com a Data API ativa. Corrigir tirando o `public` da Data API; depois RLS + revoke por migration (`docs/CF_SUPABASE_REFACTOR_1.md` §2) | Crítica (aguarda autorização) |
 | SEG-2 | Limitar tentativas de login (não existe hoje). **Bloqueador de produção.** Proposta em `docs/STAGING_RENDER_2.md` §D | Alta |
 | CARD-SEC-1 | Restante: mascarar/criptografar `numero_cartao` e criptografar `codigo_seguranca` em repouso no banco (hoje só a exposição na API/UI foi bloqueada, o dado continua em texto puro no banco) | Alta |
 
@@ -132,6 +133,8 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 | STORAGE-1 | Storage persistente: `DATA_DIR` centraliza os diretórios graváveis; disco Render de 1 GB em `/var/data` (DEPLOY-READY-FIN-1) | Concluído (preparação) |
 | STAGING-RENDER-1/2 | Contrato e preparação do staging: Supabase Pro confirmado, Session pooler IPv4 validado, `.env.staging` no pooler, custos e checklist (`docs/STAGING_RENDER_1.md`, `docs/STAGING_RENDER_2.md`) | Concluído (preparação) |
 | STAGING-RENDER-3 | Criar o Web Service pago no Render e executar o checklist de staging com dados fictícios | Aguarda autorização |
+| CF-SUPABASE-REFACTOR-1 | Nova arquitetura (Cloudflare Pages + Supabase Auth/PostgREST/RLS): MVP de login e categorias somente leitura em `web/` + `supabase/`, testado em ambiente isolado (26 RLS/REST, 7 build, 9 E2E). Plano por módulos em `docs/CF_SUPABASE_REFACTOR_1.md` §6 | Concluído (MVP local, não publicado) |
+| CF-SUPABASE-AUTH-REAL | Validar com Supabase Auth real (Docker + `supabase start` ou projeto remoto, depois do SEG-SUPA-PUBLIC-1) | Próxima |
 | CF-PYTHON-POC-1 | Viabilidade de Flask em Cloudflare Python Workers: possível com ≥7 mudanças estruturais (driver pg8000/Hyperdrive, Python 3.14, shim de scrypt, R2, config por `env`) e 114/128 MB de memória. Não recomendado; manter Render (`docs/CF_PYTHON_POC_1.md`) | Concluído (diagnóstico) |
 | BACKUP-DOCS-1 | Backup independente dos documentos do disco (o snapshot diário do Render não substitui). Bloqueador de produção | Alta |
 | CLOUDFLARE-1 | `financeiro.kortexbrasil.com` → Render (CNAME, DNS only até o certificado; *Full (strict)* só para o hostname); rate limit em `/login` | Alta |

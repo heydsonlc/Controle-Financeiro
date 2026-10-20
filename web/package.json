@@ -1,0 +1,14 @@
+{
+  "name": "controle-financeiro-web",
+  "private": true,
+  "type": "module",
+  "description": "CF-SUPABASE-REFACTOR-1: frontend estatico (Cloudflare Pages) + Supabase Auth/PostgREST. Independente do Flask.",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test:unit": "node --test \"tests/unit/*.test.mjs\"",
+    "test:e2e": "playwright test -c playwright.config.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.118.0"
+  }
+}
