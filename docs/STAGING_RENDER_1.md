@@ -1,12 +1,12 @@
 # STAGING-RENDER-1 — Contrato de publicação do staging no Render
 
-Preparado em 2026-10-19, a partir do DEPLOY-READY-FIN-1 (commit `409a650`, publicado em `origin/main`). **Este documento não executa nada.** Cada etapa marcada com 🔒 exige autorização específica do usuário no momento da execução.
+Preparado em 2026-10-19, a partir do DEPLOY-READY-FIN-1 (commit `409a650`, publicado em `origin/main`). Atualizado no STAGING-RENDER-2 com o plano Supabase confirmado e a Etapa 0 concluída (relatório em `docs/STAGING_RENDER_2.md`). **Este documento não executa nada.** Cada etapa marcada com 🔒 exige autorização específica do usuário no momento da execução.
 
 ## 1. Decisões já tomadas
 
 | # | Decisão |
 |---|---|
-| D1 | Conexão do backend pelo **Session pooler IPv4** do Supabase de staging (`fzjmge…`, região `us-east-2`) |
+| D1 | Conexão do backend pelo **Session pooler IPv4** do Supabase (`aws-0-us-east-2.pooler.supabase.com:5432`, usuário `postgres.<ref>`, `sslmode=require`). Validado com TLS 1.3 |
 | D2 | **Render Starter** com disco persistente em `/var/data` (`DATA_DIR`), mantendo o armazenamento local já existente no código |
 | D3 | Supabase Storage fica como melhoria futura (STORAGE-2), sem refatoração agora |
 | D4 | Publicação inicial **só no endereço provisório** `https://<servico>.onrender.com` |
@@ -27,8 +27,16 @@ Preparado em 2026-10-19, a partir do DEPLOY-READY-FIN-1 (commit `409a650`, publi
 | Web service Starter | **US$ 7/mês**: 512 MB de RAM, 0,5 CPU | fontes de terceiros de 2026 (a página oficial de preços não pôde ser lida automaticamente) |
 | Disco persistente de 1 GB | **US$ 0,25/GB/mês**, ou seja US$ 0,25/mês | fontes de terceiros de 2026 |
 | Banda de saída | Franquia do plano Hobby **não confirmada**; excedente a US$ 0,15/GB | docs do Render (excedente) |
-| Supabase (staging) | US$ 0 no plano Free | — |
-| **Total estimado** | **≈ US$ 7,25/mês**, cobrado proporcionalmente ao tempo de uso | — |
+| **Incremento do Render** | **≈ US$ 7,25/mês**, cobrado proporcionalmente ao tempo de uso | — |
+| Supabase Pro (assinatura da organização) | US$ 25,00/mês | confirmado pelo usuário no painel |
+| Fatura projetada da organização Supabase | **US$ 44,96** (ciclo 07/10–07/11/2026: 3 projetos, compute e créditos) | confirmado pelo usuário no painel |
+| **Total combinado projetado** | **≈ US$ 52,21/mês**, antes de variações de consumo | — |
+
+Sobre o Supabase:
+- O Controle Financeiro (`fzjmge…`) pertence à organização com assinatura **Pro**; não é preciso contratar outro plano para o staging.
+- A assinatura Pro **não elimina custos por projeto** (compute) nem garante ausência de cobranças adicionais.
+- O **Spend cap está ativado**: evita cobrança acima das franquias, mas pode **limitar funcionalidades** quando elas se esgotam.
+- Nesta etapa não se altera plano, compute, Spend cap ou qualquer configuração de cobrança.
 
 Bloqueio de etapa: se a tela do Blueprint mostrar valor diferente de ≈ US$ 7,25/mês, **parar** e reportar antes de aplicar.
 
@@ -71,14 +79,18 @@ Fora de `/var/data`, tudo se perde a cada deploy ou reinício. Isso é esperado 
 | Camada | Staging | Antes de produção |
 |---|---|---|
 | Disco `/var/data` | Snapshot automático do Render a cada 24h, retido por **pelo menos 7 dias**. A restauração é do disco inteiro (sem restauração parcial) e descarta o que foi gravado depois do snapshot | Igual. Validar uma restauração de teste |
-| Banco Supabase | **Plano Free: sem backup gerenciado.** Aceitável no staging, que não tem dados reais | Decidir (etapa BACKUP-REMOTE-1): **(a)** Supabase Pro, ≈ US$ 25/mês, com backups diários retidos por 7 dias; ou **(b)** `pg_dump` periódico da máquina local via Session pooler, com cliente `pg_dump` de versão ≥ à do servidor |
+| Banco Supabase | **Plano Pro: backups diários automáticos**, confirmados de 13 a 19/10/2026 | Definir e testar o procedimento de restauração. Opcional: `pg_dump` periódico independente via Session pooler (cliente `pg_dump` 17 ou superior, igual ou acima do servidor 17.6) |
 | Backup pela tela do sistema | **Bloqueado no host** (403), por segurança | Continua bloqueado. Backup é responsabilidade da infraestrutura |
 
-Riscos do plano Free do Supabase a confirmar no painel: projetos inativos podem ser pausados, e o banco tem limite de 500 MB.
+Limites importantes:
+- Os backups do Supabase cobrem **apenas o PostgreSQL**. Não incluem objetos do Supabase Storage, que hoje não é usado, nem os arquivos do disco do Render.
+- O **snapshot diário do Render não substitui um backup independente dos documentos**: ele fica no mesmo provedor, só restaura o disco inteiro e é perdido se o serviço for apagado. Antes de produção: BACKUP-DOCS-1.
 
 ## 7. Procedimento
 
-### Etapa 0: pré-checagem local (sem custo, sem publicação)
+### Etapa 0: pré-checagem local (sem custo, sem publicação) — ✅ concluída no STAGING-RENDER-2
+
+Resultado: `.env.staging` aponta para o Session pooler com `sslmode=require`, e a senha foi preservada. A aplicação, em modo staging, conecta com TLS 1.3; `alembic_version = 5c91e95eb05d`; `/health` 200; `check_deploy_env.py` com exit 0. Os passos abaixo ficam como referência para repetição.
 
 1. No Supabase (projeto de staging): *Connect* → **Session pooler**. Copiar a URI (host `aws-?-us-east-2.pooler.supabase.com`, porta `5432`, usuário `postgres.<ref>`). Senha com URL-encoding.
 2. Atualizar **apenas** a `DATABASE_URL` em `.env.staging` (arquivo ignorado pelo git).
@@ -193,6 +205,7 @@ Todos os itens precisam dar `OK`:
 ## 10. Próximas etapas (fora deste contrato)
 
 - **CLOUDFLARE-1:** `financeiro.kortexbrasil.com` via CNAME (DNS only até o certificado; *Full (strict)* só para o hostname), mais rate limit em `/login` ou Cloudflare Access.
-- **BACKUP-REMOTE-1:** decisão e implementação do backup do banco (§6).
+- **SEG-2:** limitar tentativas de login (bloqueador de produção; proposta em `docs/STAGING_RENDER_2.md`).
+- **BACKUP-DOCS-1:** backup independente dos documentos do disco, e teste de restauração do backup diário do Supabase (§6).
 - **DATA-MIGRATE-1:** dados reais e documentos para o banco e o disco, com autorização específica.
 - **STORAGE-2:** Supabase Storage (futuro).

@@ -1,6 +1,6 @@
 # Deploy — Controle Financeiro
 
-Guia de preparação e execução do deploy. Última atualização: 2026-10-19 (DEPLOY-READY-FIN-1 — ver `docs/DEPLOY_READY_FIN_1.md` para o diagnóstico completo, bloqueadores e checklist de staging).
+Guia de preparação e execução do deploy. Última atualização: 2026-10-19 (STAGING-RENDER-2). Diagnóstico: `docs/DEPLOY_READY_FIN_1.md`. Procedimento de staging: `docs/STAGING_RENDER_1.md`. Estado da preparação: `docs/STAGING_RENDER_2.md`.
 
 Este documento cobre **o que já está pronto** e **o que ainda depende de ação manual** para sair do uso puramente local. O banco Supabase (staging) já foi validado com a cadeia completa de migrations; o backend está preparado para deploy no Render (`render.yaml`, `runtime.txt`, `gunicorn`), mas o deploy real (publicar o serviço no painel do Render e configurar as variáveis de ambiente) depende de ação manual do usuário. Cloudflare e migração de dados financeiros locais ainda não foram feitos.
 
@@ -212,9 +212,10 @@ Pede a senha no prompt (nunca aparece no terminal, nunca é salva em arquivo). P
 ## 11. Pendências
 
 - **Publicação real no Render**: criar o serviço no painel (ou via `render.yaml` blueprint), configurar as variáveis de ambiente sensíveis, disparar o primeiro deploy manual e rodar as migrations via Render Shell — ação manual do usuário, não feita por esta ferramenta
-- **Bloqueadores e checklist de staging**: ver `docs/DEPLOY_READY_FIN_1.md` (B1 Session pooler, B2 plano/disco, B3 serviço, B4 domínio)
+- **Staging**: B1 (Session pooler) e B2 (Render Starter com disco) resolvidos no STAGING-RENDER-2. Falta a autorização para criar o Web Service pago (B3); o domínio (B4) vem depois do staging validado
 - **CLOUDFLARE-1**: CNAME `financeiro` → Render (DNS only até o certificado; *Full (strict)* só para este hostname). Rate limit em `/login` ou Cloudflare Access
-- **Backups do banco remoto**: o backup local fica bloqueado no host; definir plano Supabase com backups ou `pg_dump` periódico via pooler
+- **Backups**: o Supabase Pro faz backups diários do PostgreSQL (confirmados), mas falta testar a restauração. Os documentos do disco precisam de backup independente (BACKUP-DOCS-1): o snapshot do Render não substitui
+- **SEG-2**: limitar tentativas de login — bloqueador de produção
 - **DATA-MIGRATE-1** (se desejado no futuro): migração seletiva de dados financeiros locais reais para o Supabase — não foi feita nesta etapa por decisão explícita (nenhum dado financeiro real foi migrado, só schema + usuário admin)
 - **DB-CLEAN**: débitos técnicos de `models.py`/queries, não relacionados a deploy
 - RBAC/multiusuário: fora de escopo (SEG-1 é usuário único)

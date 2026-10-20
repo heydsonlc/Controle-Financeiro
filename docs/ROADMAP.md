@@ -2,14 +2,14 @@
 
 Pendências conhecidas, MVPs planejados e débitos técnicos.
 
-Última atualização: 2026-08-20 (DEPLOY-HOST-1)
+Última atualização: 2026-10-19 (STAGING-RENDER-2)
 
 ---
 
 ## Ordem de Trabalho (Prioridade)
 
 ```
-SEC-0 ✅ → TEST-BASE-1 ✅ → SEG-1 ✅ → DEPLOY-PREP-1 ✅ → SUPABASE-MIGRATE-1 ✅ → DEPLOY-HOST-1 ✅ → CLOUDFLARE-1 → STORAGE-1 → ICONES-1B → DB-CLEAN-1 → CARD-SEC-1 → FIN-RULES-1 → TEST-FIN-1 → DATA-HYGIENE-1 → PERF-1 → FRONT-ARCH-1
+SEC-0 ✅ → TEST-BASE-1 ✅ → SEG-1 ✅ → DEPLOY-PREP-1 ✅ → SUPABASE-MIGRATE-1 ✅ → DEPLOY-HOST-1 ✅ → DEPLOY-READY-FIN-1 ✅ → STAGING-RENDER-2 ✅ (preparação) → **criação do staging no Render (aguarda autorização comercial)** → SEG-2 → BACKUP-DOCS-1 → CLOUDFLARE-1 → ICONES-1B → DB-CLEAN-1 → CARD-SEC-1 → FIN-RULES-1 → TEST-FIN-1 → DATA-HYGIENE-1 → PERF-1 → FRONT-ARCH-1
 ```
 
 Para detalhes de priorização completa, ver `README_TECNICO.md`.
@@ -82,6 +82,8 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 |----|-----------|-----------|
 | SEG-1 | Autenticação global de rotas e APIs — usuário único, sessão via Flask-Login, allowlist fechada (`/login`, `/logout`, `/static/*`, `/health`) | Concluído |
 | CARD-CVV-LOCK-1 | Bloqueio de visibilidade do CVV: oculto por padrão, revelação por senha (`CARTOES_CVV_MASTER_PASSWORD`), falha fechada | Concluído |
+| DEPLOY-READY-FIN-1 | Hardening para internet pública: cookie `__Host-` com expiração de 12h, verificação de `Origin` em escritas (CSRF entre subdomínios `*.kortexbrasil.com`), HSTS/cabeçalhos, limite de 64 MB, backup local via `pg_dump`/`pg_restore` bloqueado no host | Concluído |
+| SEG-2 | Limitar tentativas de login (não existe hoje). **Bloqueador de produção.** Proposta em `docs/STAGING_RENDER_2.md` §D | Alta |
 | CARD-SEC-1 | Restante: mascarar/criptografar `numero_cartao` e criptografar `codigo_seguranca` em repouso no banco (hoje só a exposição na API/UI foi bloqueada, o dado continua em texto puro no banco) | Alta |
 
 ### Banco de Dados / Backend
@@ -127,8 +129,13 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 | DEPLOY-PREP-1 | Preparação segura para deploy: ambientes (`APP_ENV`), hardening de `SECRET_KEY`/CVV, `.env.example`, `check_deploy_env.py`, `docs/DEPLOY.md` | Concluído |
 | SUPABASE-MIGRATE-1 | Projeto Supabase validado como banco `staging`: migrations completas do zero, admin criado, smoke tests OK. Também corrigiu 6 tabelas + 8 colunas de drift pré-existente nunca criadas por nenhuma migration | Concluído |
 | DEPLOY-HOST-1 | Backend preparado para Render (gunicorn, render.yaml, runtime.txt, smoke test); publicação real no painel do Render é ação manual pendente | Concluído (preparação) |
-| STORAGE-1 | Definir storage persistente para uploads/documentos (filesystem do Render é efêmero) | Alta |
-| CLOUDFLARE-1 | Configurar DNS/proxy no Cloudflare apontando para o host do backend | Alta |
+| STORAGE-1 | Storage persistente: `DATA_DIR` centraliza os diretórios graváveis; disco Render de 1 GB em `/var/data` (DEPLOY-READY-FIN-1) | Concluído (preparação) |
+| STAGING-RENDER-1/2 | Contrato e preparação do staging: Supabase Pro confirmado, Session pooler IPv4 validado, `.env.staging` no pooler, custos e checklist (`docs/STAGING_RENDER_1.md`, `docs/STAGING_RENDER_2.md`) | Concluído (preparação) |
+| STAGING-RENDER-3 | Criar o Web Service pago no Render e executar o checklist de staging com dados fictícios | Aguarda autorização |
+| BACKUP-DOCS-1 | Backup independente dos documentos do disco (o snapshot diário do Render não substitui). Bloqueador de produção | Alta |
+| CLOUDFLARE-1 | `financeiro.kortexbrasil.com` → Render (CNAME, DNS only até o certificado; *Full (strict)* só para o hostname); rate limit em `/login` | Alta |
+| DATA-MIGRATE-1 | Migração seletiva de dados e documentos reais para produção | Futuro (autorização específica) |
+| STORAGE-2 | Migrar uploads para Supabase Storage (elimina dependência do disco) | Futuro |
 | SCHED-1 | Ativar scheduler de geração automática mensal de contas recorrentes | Futuro |
 
 ---
@@ -150,6 +157,8 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 | Estorno de transferência entre contas | `ContaBancariaService.gerar_transferencia()` | Não implementado — só estorno de despesa/receita/fatura/financiamento |
 | Estorno de ajuste manual de saldo (`origem='AJUSTE'`) | — | Não implementado |
 | Conciliação bancária (extrato real × sistema) | — | Não implementada |
+| Dependências transitivas não fixadas | `requirements.txt` | O Render instala versões atuais (ex.: pillow, pypdfium2, cryptography), que podem diferir do venv local; avaliar arquivo de lock |
+| 5 testes falhando desde antes do deploy | ver `docs/STAGING_RENDER_2.md` §F | Comprovado em `0e04407`; não relacionados a deploy |
 
 ---
 
