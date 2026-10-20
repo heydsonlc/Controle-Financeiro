@@ -2,8 +2,10 @@
 // Dados e contas ficticios do ambiente isolado de run_e2e.py.
 import { expect, test } from '@playwright/test';
 
-const A = { email: 'usuario.a@teste.local', senha: process.env.CF_SENHA_A };
-const B = { email: 'usuario.b@teste.local', senha: process.env.CF_SENHA_B };
+// Contas ficticias: as do ambiente isolado (run_e2e.py) ou as contas de teste do
+// projeto real (run_e2e_real.py), sempre vindas do ambiente, nunca do codigo.
+const A = { email: process.env.CF_EMAIL_A || 'usuario.a@teste.local', senha: process.env.CF_SENHA_A };
+const B = { email: process.env.CF_EMAIL_B || 'usuario.b@teste.local', senha: process.env.CF_SENHA_B };
 const CATEGORIAS_A = ['Lazer (A)', 'Moradia (A)', 'Transporte (A)'];
 const CATEGORIAS_B = ['Educacao (B)', 'Saude (B)'];
 const CHAVE_SESSAO = 'cf-financeiro-auth';
@@ -41,7 +43,7 @@ async function nomesNaTabela(page) {
 
 test('sem sessao: pagina protegida redireciona e nada e consultado', async ({ page }) => {
     const consultasRest = [];
-    page.on('request', (req) => { if (req.url().includes('/rest/v1/')) consultasRest.push(req.url()); });
+    page.on('request', (req) => { if (req.url().includes('/rest/v1/')) consultasRest.push(new URL(req.url()).pathname); });
 
     await page.goto('/categorias.html');
     await page.waitForURL(/index\.html\?next=categorias\.html$/);
@@ -109,7 +111,7 @@ test('token adulterado no navegador e recusado e nao exibe dados', async ({ page
 test('API REST direta pelo navegador: sem token nao le, com token de A nao escreve', async ({ page }) => {
     await page.goto('/index.html');
     const semToken = await page.evaluate(async () => {
-        const r = await fetch('/rest/v1/categorias?select=nome', {
+        const r = await fetch(`${window.CF_CONFIG.supabaseUrl}/rest/v1/categorias?select=nome`, {
             headers: { apikey: window.CF_CONFIG.supabasePublishableKey, 'Accept-Profile': 'financeiro' },
         });
         return { status: r.status, corpo: await r.text() };
@@ -126,8 +128,9 @@ test('API REST direta pelo navegador: sem token nao le, com token de A nao escre
             'Content-Profile': 'financeiro',
             'Content-Type': 'application/json',
         };
-        const post = await fetch('/rest/v1/categorias', { method: 'POST', headers: cabecalhos, body: '{"nome":"Injetada"}' });
-        const del = await fetch('/rest/v1/categorias?id=gt.0', { method: 'DELETE', headers: cabecalhos });
+        const base = `${window.CF_CONFIG.supabaseUrl}/rest/v1/categorias`;
+        const post = await fetch(base, { method: 'POST', headers: cabecalhos, body: '{"nome":"Injetada"}' });
+        const del = await fetch(`${base}?id=gt.0`, { method: 'DELETE', headers: cabecalhos });
         return [post.status, del.status];
     }, CHAVE_SESSAO);
     for (const status of escrita) expect([401, 403]).toContain(status);
