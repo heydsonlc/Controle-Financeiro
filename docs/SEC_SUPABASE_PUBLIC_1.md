@@ -3,8 +3,8 @@
 Data: 2026-10-20. Projeto: **somente** o do Controle Financeiro (`fzjmge…`). Nenhum outro projeto Supabase foi consultado ou alterado.
 
 Situação atual:
-- **Contenção (Etapa A) aguardando a ação do usuário no painel.**
-- Migration permanente (Etapa B) preparada e testada, **não executada no remoto**.
+- **Contenção (Etapa A) concluída e validada** em 2026-10-20 (§2.1).
+- Migration permanente (Etapa B) preparada e testada, com rollback verificado; **não executada no remoto** (§3.1).
 
 Nenhum registro foi lido: as sondagens usam `limit=0` ou filtros impossíveis, e o diagnóstico no banco só lê catálogos e estatísticas.
 
@@ -47,6 +47,24 @@ Esperado:
 
 Depois disso, confirmar que o Flask continua funcionando: `/health` e o gate `check_deploy_env.py` com `.env.staging`.
 
+### 2.1 Validação após a contenção (2026-10-20)
+
+O usuário retirou `public` dos Exposed schemas. Resultado:
+
+| Verificação | Resultado |
+|---|---|
+| Schemas expostos | **apenas `graphql_public`** |
+| GET anônimo (`limit=0`) em `usuario`, `config_agregador`, `conta_bancaria`, `categoria`, `alembic_version` | **HTTP 406 PGRST106**: schema não exposto |
+| PATCH e DELETE anônimos (`id=eq.-1`) em `usuario` e `categoria` | **HTTP 406 PGRST106** |
+| `verificar_exposicao_supabase.py --via-cli --com-escrita` | `RESULTADO: public BLOQUEADO para anonimo` (exit 0) |
+| Nenhum registro alterado pelas sondagens | ✅ contadores de escrita (`n_tup_ins/upd/del`) e contagem de linhas das 5 tabelas **idênticos** antes e depois |
+| Conexão PostgreSQL direta (pooler) | ✅ |
+| Flask em modo staging | ✅ `/health` 200 (`database_connected: true`); ORM lê `usuario`/`categoria` (só contagens); API do Flask sem sessão continua 401; o papel do Flask mantém SELECT/INSERT/UPDATE/DELETE |
+| Gate `check_deploy_env.py` | ✅ exit 0 |
+| Migration remota | **Não executada** (banco continua em `5c91e95eb05d`) |
+
+A contenção fecha a Data API. Os privilégios de `anon`/`authenticated` **continuam no banco** e voltariam a valer se o `public` fosse reexposto, ou por outro caminho (ex.: `pg_graphql` habilitado). Por isso a Etapa B continua necessária.
+
 O script usa **somente a chave pública**, que é o que um terceiro teria. Pela CLI, as chaves privilegiadas são descartadas em memória e nenhuma chave é impressa. O ref do projeto vem do `.env.staging` local e nunca entra no Git.
 
 ## 3. Etapa B — Proteção permanente (migration preparada, não executada)
@@ -72,6 +90,52 @@ python -m flask --app backend/app.py db upgrade   # com .env.staging carregado
 ```
 
 Depois, repetir `verificar_exposicao_supabase.py --com-escrita` e o smoke do Flask.
+
+### 3.1 Rollback e recuperação (preparados antes de aplicar)
+
+`scripts/sec_public_rollback.py`: só lê metadados e **nunca executa nada no remoto**.
+
+| Subcomando | Função |
+|---|---|
+| `snapshot --saida <json>` | Captura RLS/FORCE, dono e ACLs de tabelas e sequências, ACLs de funções e default privileges do `public` |
+| `comparar --snapshot <json>` | Classifica cada diferença em **esperada** (RLS ligada sem FORCE; remoção de privilégios de `anon`/`authenticated`; remoção dos default privileges deles) ou **inesperada** (qualquer outra coisa, ex.: o dono perder privilégio ou um FORCE). Exit 0 só se não houver inesperadas |
+| `gerar-sql --snapshot <json> --saida <sql>` | **Gera** (não executa) o SQL que restaura exatamente o estado do snapshot para `anon`/`authenticated` |
+
+Provado em teste (`test_ciclo_completo_de_rollback_restaura_estado_exato`):
+1. snapshot em `5c91`;
+2. migration real;
+3. `comparar`: só mudanças esperadas;
+4. rollback gerado;
+5. estado **idêntico** ao original;
+6. reaplicação da proteção funciona.
+
+**Material já capturado do staging** (somente leitura, em `data/sec_public/`, fora do Git, sem dados):
+
+| Arquivo | Conteúdo |
+|---|---|
+| `antes_c4f7a2d91b3e.json` | Snapshot: alembic `5c91e95eb05d`, 52 tabelas (0 com RLS), 51 sequências |
+| `rollback_c4f7a2d91b3e.sql` | 206 GRANTs, 52 `disable row level security` e os default privileges (não executado) |
+| `public_schema_antes_c4f7a2d91b3e.sql` | `pg_dump --schema-only --schema=public`: 52 `CREATE TABLE`, 337 `GRANT`, **0 linhas de dados** |
+
+**Procedimento de aplicação** (exige autorização):
+1. Confirmar no painel (*Database → Backups*) que o backup diário mais recente existe.
+2. Refazer `snapshot` e o `pg_dump --schema-only` **imediatamente antes**: o estado pode ter mudado.
+3. `python -m flask --app backend/app.py db upgrade` com `.env.staging`. O Alembic roda **numa única transação** (`env.py`); se algo falhar, nada é aplicado, nem a `alembic_version`.
+4. Verificar:
+   - `comparar` com 0 inesperadas;
+   - `/health`;
+   - leitura por ORM;
+   - gate;
+   - `verificar_exposicao_supabase.py --com-escrita` ainda bloqueado.
+
+**Recuperação, em ordem de preferência:**
+
+| Situação | Ação | Perda de dados |
+|---|---|---|
+| Falha durante o upgrade | Rollback automático da transação | Nenhuma |
+| Flask com problema depois do upgrade (não esperado: o Flask é dono das tabelas, tem BYPASSRLS e foi testado) | Executar `rollback_c4f7a2d91b3e.sql` (revisado) e `flask db stamp 5c91e95eb05d`. Seguro só com o `public` **fora** da Data API | Nenhuma |
+| Dano estrutural inesperado | Comparar com o `pg_dump --schema-only` e restaurar o objeto afetado | Nenhuma |
+| Último recurso | Restaurar o backup diário do Supabase Pro (o projeto inteiro volta ao ponto do backup) | Tudo o que foi gravado depois do backup |
 
 ## 4. Testes
 

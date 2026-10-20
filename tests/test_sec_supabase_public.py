@@ -352,3 +352,75 @@ def test_noop_em_postgres_sem_papeis_do_supabase(tmp_path):
                 assert cur.fetchone()[0] is False
         finally:
             conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Rollback/recuperacao: snapshot -> migration -> comparacao -> rollback -> reaplicacao
+# ---------------------------------------------------------------------------
+
+def _carregar_script_rollback():
+    spec = importlib.util.spec_from_file_location('sec_public_rollback', ROOT / 'scripts' / 'sec_public_rollback.py')
+    modulo = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(modulo)
+    return modulo
+
+
+def test_ciclo_completo_de_rollback_restaura_estado_exato(tmp_path):
+    from sqlalchemy import create_engine
+    rb = _carregar_script_rollback()
+    with ClusterLocal(PG_BIN, tmp_path) as cluster:
+        cluster.aplicar_shim()
+        papel = cluster.criar_papel_estilo_supabase()
+        _rodar(_SCRIPT_ALEMBIC, cluster, papel, REVISAO_ANTERIOR)
+
+        def snapshot():
+            conn = cluster.conectar(papel)
+            try:
+                return rb.capturar(conn)
+            finally:
+                conn.close()
+
+        antes = snapshot()
+        assert antes['alembic_version'] == REVISAO_ANTERIOR
+        sql_rollback = rb.gerar_sql(antes)
+
+        _rodar(_SCRIPT_ALEMBIC, cluster, papel, 'head')
+        depois = snapshot()
+        esperadas, inesperadas = rb.comparar(antes, depois)
+        assert inesperadas == []
+        assert any('RLS False -> True' in e for e in esperadas)
+        assert any("privilegio removido ('anon'" in e for e in esperadas)
+        assert any(e.startswith('default ') for e in esperadas)
+
+        # Rollback gerado, executado como o papel do Flask (dono), volta ao estado exato.
+        conn = cluster.conectar(papel)
+        try:
+            with conn.cursor() as cur:
+                cur.execute(sql_rollback)
+        finally:
+            conn.close()
+        restaurado = snapshot()
+        assert rb.comparar(antes, restaurado) == ([], [])
+
+        # E a protecao pode ser reaplicada depois do rollback.
+        engine = create_engine(cluster.dsn(papel))
+        try:
+            with engine.begin() as c:
+                resumo = _carregar_migration().aplicar_protecao(c)
+        finally:
+            engine.dispose()
+        assert resumo['aplicado'] and len(resumo['habilitadas']) >= 50
+        assert rb.comparar(antes, snapshot())[1] == []
+
+
+def test_comparacao_acusa_mudanca_inesperada():
+    rb = _carregar_script_rollback()
+    base = {'capturado_em': 'x', 'papel': 'postgres', 'alembic_version': REVISAO_ANTERIOR, 'funcoes': {}, 'defaults': {},
+            'objetos': {'usuario': {'tipo': 'table', 'dono': 'postgres', 'rls': False, 'force': False,
+                                    'acl': [('postgres', 'SELECT', False), ('anon', 'SELECT', False)]}}}
+    alterado = json.loads(json.dumps(base))
+    alterado['objetos']['usuario']['acl'] = [['anon', 'SELECT', False]]  # dono perdeu privilegio
+    alterado['objetos']['usuario']['force'] = True
+    _, inesperadas = rb.comparar(base, alterado)
+    assert any('FORCE' in i for i in inesperadas)
+    assert any("('postgres', 'SELECT', False)" in i for i in inesperadas)
