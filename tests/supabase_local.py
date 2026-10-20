@@ -105,12 +105,35 @@ class ClusterLocal:
         conn.autocommit = True
         return conn
 
-    def preparar(self):
-        """Shim do Supabase + migrations do repositorio + dados ficticios."""
+    def aplicar_shim(self):
         conn = self.conectar()
         try:
             with conn.cursor() as cur:
                 cur.execute((SUPABASE_DIR / 'tests' / 'local_supabase_shim.sql').read_text(encoding='utf-8'))
+        finally:
+            conn.close()
+
+    def criar_papel_estilo_supabase(self, nome='supa_postgres'):
+        """Papel que imita o `postgres` do Supabase: sem superuser, com BYPASSRLS e
+        com os default privileges da plataforma (ALL para anon/authenticated no public)."""
+        conn = self.conectar()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(f'create role {nome} login nosuperuser bypassrls')
+                cur.execute(f'grant usage, create on schema public to {nome}')
+                for tipo in ('tables', 'sequences', 'functions'):
+                    cur.execute(f'alter default privileges for role {nome} in schema public '
+                                f'grant all on {tipo} to anon, authenticated, service_role')
+        finally:
+            conn.close()
+        return nome
+
+    def preparar(self):
+        """Shim do Supabase + migrations do repositorio + dados ficticios."""
+        self.aplicar_shim()
+        conn = self.conectar()
+        try:
+            with conn.cursor() as cur:
                 for migration in sorted((SUPABASE_DIR / 'migrations').glob('*.sql')):
                     cur.execute(migration.read_text(encoding='utf-8'))
                 for usuario in (USUARIO_A, USUARIO_B):
@@ -145,11 +168,15 @@ def claims_usuario(usuario, segundos=3600):
 class PostgrestLocal:
     """PostgREST apontando para o cluster descartavel, expondo public e financeiro."""
 
-    def __init__(self, binario, cluster, segredo_jwt, diretorio):
+    def __init__(self, binario, cluster, segredo_jwt, diretorio, schemas='public,financeiro'):
+        # Todos os schemas expostos precisam existir: se faltar um, o PostgREST nao
+        # carrega o cache de schema e fica em 503 indefinidamente.
+        self.schemas = schemas
         self.binario = Path(binario)
         self.cluster = cluster
         self.segredo_jwt = segredo_jwt
         self.porta = porta_livre()
+        self.porta_admin = porta_livre()
         self.log = Path(diretorio) / 'postgrest.log'
         self.processo = None
 
@@ -161,28 +188,40 @@ class PostgrestLocal:
         env = dict(os.environ)
         env.update({
             'PGRST_DB_URI': self.cluster.dsn('authenticator'),
-            'PGRST_DB_SCHEMAS': 'public,financeiro',
+            'PGRST_DB_SCHEMAS': self.schemas,
             'PGRST_DB_ANON_ROLE': 'anon',
             'PGRST_JWT_SECRET': self.segredo_jwt,
             'PGRST_JWT_AUD': 'authenticated',
             'PGRST_SERVER_HOST': '127.0.0.1',
             'PGRST_SERVER_PORT': str(self.porta),
+            'PGRST_ADMIN_SERVER_PORT': str(self.porta_admin),
             'PGRST_DB_CHANNEL_ENABLED': 'false',
         })
         self._log = open(self.log, 'wb')
         self.processo = subprocess.Popen([str(self.binario)], env=env, stdout=self._log, stderr=subprocess.STDOUT)
+        try:
+            self._aguardar_pronto()
+        except BaseException:
+            # Nunca deixar processo orfao se a subida falhar.
+            self.__exit__(None, None, None)
+            raise
+        return self
+
+    def _aguardar_pronto(self):
+        """/ready do servidor admin: 200 so quando conexao e cache de schema estao prontos."""
         limite = time.time() + 30
+        ultimo_erro = None
         while time.time() < limite:
             if self.processo.poll() is not None:
                 raise RuntimeError(f'PostgREST encerrou: {self.log.read_text(errors="replace")[-800:]}')
             try:
-                urllib.request.urlopen(self.url + '/', timeout=2)
-                return self
-            except urllib.error.HTTPError:
-                return self
-            except OSError:
-                time.sleep(0.3)
-        raise RuntimeError('PostgREST nao respondeu em 30 s')
+                with urllib.request.urlopen(f'http://127.0.0.1:{self.porta_admin}/ready', timeout=2) as resp:
+                    if resp.status == 200:
+                        return
+            except OSError as exc:
+                ultimo_erro = exc
+            time.sleep(0.2)
+        raise RuntimeError(f'PostgREST nao ficou pronto em 30 s (ultimo erro: {ultimo_erro!r})')
 
     def __exit__(self, *exc):
         if self.processo and self.processo.poll() is None:

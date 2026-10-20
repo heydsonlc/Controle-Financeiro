@@ -2,7 +2,7 @@
 
 Pendências conhecidas, MVPs planejados e débitos técnicos.
 
-Última atualização: 2026-10-20 (CF-SUPABASE-REFACTOR-1)
+Última atualização: 2026-10-20 (SEC-SUPABASE-PUBLIC-1)
 
 ---
 
@@ -83,7 +83,7 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 | SEG-1 | Autenticação global de rotas e APIs — usuário único, sessão via Flask-Login, allowlist fechada (`/login`, `/logout`, `/static/*`, `/health`) | Concluído |
 | CARD-CVV-LOCK-1 | Bloqueio de visibilidade do CVV: oculto por padrão, revelação por senha (`CARTOES_CVV_MASTER_PASSWORD`), falha fechada | Concluído |
 | DEPLOY-READY-FIN-1 | Hardening para internet pública: cookie `__Host-` com expiração de 12h, verificação de `Origin` em escritas (CSRF entre subdomínios `*.kortexbrasil.com`), HSTS/cabeçalhos, limite de 64 MB, backup local via `pg_dump`/`pg_restore` bloqueado no host | Concluído |
-| SEG-SUPA-PUBLIC-1 | **URGENTE:** no Supabase de staging, as 52 tabelas do Flask no `public` estão sem RLS e com SELECT/INSERT/UPDATE/DELETE para `anon`, com a Data API ativa. Corrigir tirando o `public` da Data API; depois RLS + revoke por migration (`docs/CF_SUPABASE_REFACTOR_1.md` §2) | Crítica (aguarda autorização) |
+| SEC-SUPABASE-PUBLIC-1 | **URGENTE.** Exposição confirmada por HTTP: anônimo lia as tabelas do Flask no `public` pela Data API. Auditoria sem indício de acesso indevido. Contenção: remover `public` dos Exposed schemas (usuário). Proteção permanente: migration `c4f7a2d91b3e` (RLS sem FORCE + revoke), testada e não executada no remoto (`docs/SEC_SUPABASE_PUBLIC_1.md`) | Crítica: contenção e migration aguardam autorização |
 | SEG-2 | Limitar tentativas de login (não existe hoje). **Bloqueador de produção.** Proposta em `docs/STAGING_RENDER_2.md` §D | Alta |
 | CARD-SEC-1 | Restante: mascarar/criptografar `numero_cartao` e criptografar `codigo_seguranca` em repouso no banco (hoje só a exposição na API/UI foi bloqueada, o dado continua em texto puro no banco) | Alta |
 

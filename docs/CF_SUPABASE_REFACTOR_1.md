@@ -27,6 +27,8 @@ Supabase Auth ──JWT──► Data API (PostgREST) ──► PostgreSQL (sche
 
 ## 2. ⚠️ Achado de segurança preexistente no Supabase de staging (ação urgente)
 
+> Tratado no **SEC-SUPABASE-PUBLIC-1** (`docs/SEC_SUPABASE_PUBLIC_1.md`): exposição confirmada por HTTP, auditoria sem indício de acesso indevido, contenção orientada e migration permanente preparada.
+
 Diagnóstico somente leitura no projeto do Controle Financeiro (`fzjmge…`), que já guarda as tabelas criadas pelo Flask/Alembic:
 
 | Verificação | Resultado |

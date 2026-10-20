@@ -76,3 +76,7 @@ test-results/
 # Temporary files
 *.tmp
 *.bak
+
+# Supabase CLI: metadados locais (projeto vinculado, versoes). Nunca versionar.
+supabase/.temp/
+supabase/.branches/
