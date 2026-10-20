@@ -1,0 +1,25 @@
+[project]
+name = "poc-deps-reais"
+version = "0.1.0"
+requires-python = ">=3.12"
+# Dependencias de producao do Controle Financeiro, com os 2 ajustes minimos que a POC
+# provou necessarios: psycopg2-binary -> pg8000 (sem build wasm) e SQLAlchemy 2.0.23 ->
+# 2.0.x atual (2.0.23 nao importa no Python 3.14 do runtime). Sem gunicorn/pytest.
+dependencies = [
+    "Flask==3.0.0",
+    "Flask-SQLAlchemy==3.1.1",
+    "Flask-Migrate==4.0.5",
+    "Flask-CORS==4.0.0",
+    "SQLAlchemy>=2.0,<2.1",
+    "pg8000",
+    "Flask-Login==0.6.3",
+    "Flask-WTF==1.2.1",
+    "python-dotenv==1.0.0",
+    "python-dateutil==2.8.2",
+    "APScheduler==3.10.4",
+    "openpyxl==3.1.5",
+    "pdfplumber==0.11.5",
+]
+
+[dependency-groups]
+dev = ["workers-py", "workers-runtime-sdk"]

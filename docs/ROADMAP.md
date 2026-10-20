@@ -132,6 +132,7 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 | STORAGE-1 | Storage persistente: `DATA_DIR` centraliza os diretórios graváveis; disco Render de 1 GB em `/var/data` (DEPLOY-READY-FIN-1) | Concluído (preparação) |
 | STAGING-RENDER-1/2 | Contrato e preparação do staging: Supabase Pro confirmado, Session pooler IPv4 validado, `.env.staging` no pooler, custos e checklist (`docs/STAGING_RENDER_1.md`, `docs/STAGING_RENDER_2.md`) | Concluído (preparação) |
 | STAGING-RENDER-3 | Criar o Web Service pago no Render e executar o checklist de staging com dados fictícios | Aguarda autorização |
+| CF-PYTHON-POC-1 | Viabilidade de Flask em Cloudflare Python Workers: possível com ≥7 mudanças estruturais (driver pg8000/Hyperdrive, Python 3.14, shim de scrypt, R2, config por `env`) e 114/128 MB de memória. Não recomendado; manter Render (`docs/CF_PYTHON_POC_1.md`) | Concluído (diagnóstico) |
 | BACKUP-DOCS-1 | Backup independente dos documentos do disco (o snapshot diário do Render não substitui). Bloqueador de produção | Alta |
 | CLOUDFLARE-1 | `financeiro.kortexbrasil.com` → Render (CNAME, DNS only até o certificado; *Full (strict)* só para o hostname); rate limit em `/login` | Alta |
 | DATA-MIGRATE-1 | Migração seletiva de dados e documentos reais para produção | Futuro (autorização específica) |
