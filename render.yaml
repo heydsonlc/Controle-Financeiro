@@ -1,26 +1,54 @@
-# DEPLOY-HOST-1: configuracao do servico de staging no Render.
+# DEPLOY-HOST-1 / DEPLOY-READY-FIN-1: servico de staging no Render.
 #
 # Nao coloque segredos aqui (SECRET_KEY, DATABASE_URL, senha admin,
-# CARTOES_CVV_MASTER_PASSWORD). Variaveis sensiveis sao configuradas
-# manualmente no painel do Render (Environment), nunca neste arquivo.
+# CARTOES_CVV_MASTER_PASSWORD). As variaveis sensiveis usam `sync: false`:
+# o Render pede o valor no painel ao aplicar o Blueprint e nunca o le deste
+# arquivo.
 #
 # autoDeploy: false -- deploy e disparado manualmente ate a etapa de
 # staging estar validada; nao dispara automaticamente a cada push.
+#
+# plan: starter + disk -- disco persistente exige plano pago no Render. Sem
+# ele, uploads (logos, documentos de financiamento) somem a cada deploy ou
+# reinicio. Comprovantes de IR ja ficam no banco (BYTEA), nao no disco.
+#
+# region: ohio -- o projeto Supabase de staging resolve para AWS us-east-2
+# (Ohio); manter app e banco na mesma regiao reduz a latencia por consulta.
+#
+# DATABASE_URL: usar a connection string do *Session pooler* do Supabase
+# (host aws-*.pooler.supabase.com). O host direto db.<ref>.supabase.co so
+# tem IPv6, e o Render nao abre conexoes de saida IPv6.
 services:
   - type: web
     name: controle-financeiro-staging
-    env: python
-    plan: free
+    runtime: python
+    region: ohio
+    plan: starter
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn backend.app:app
+    # gunicorn usa 0.0.0.0:$PORT automaticamente (o Render injeta PORT).
+    startCommand: gunicorn backend.app:app --workers 2 --timeout 120 --access-logfile -
     healthCheckPath: /health
     autoDeploy: false
+    disk:
+      name: controle-financeiro-data
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
       - key: APP_ENV
         value: staging
+      - key: DATA_DIR
+        value: /var/data
+      - key: CORS_ORIGINS
+        value: https://financeiro.kortexbrasil.com
       - key: FLASK_APP
         value: backend/app.py
       - key: FLASK_DEBUG
         value: "0"
-      # SECRET_KEY, DATABASE_URL e CARTOES_CVV_MASTER_PASSWORD: definir
-      # manualmente no painel do Render (Environment), nao aqui.
+      - key: SECRET_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: CARTOES_CVV_MASTER_PASSWORD
+        sync: false

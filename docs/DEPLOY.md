@@ -1,6 +1,6 @@
 # Deploy — Controle Financeiro
 
-Guia de preparação e execução do deploy. Última atualização: 2026-08-20 (DEPLOY-HOST-1).
+Guia de preparação e execução do deploy. Última atualização: 2026-10-19 (DEPLOY-READY-FIN-1 — ver `docs/DEPLOY_READY_FIN_1.md` para o diagnóstico completo, bloqueadores e checklist de staging).
 
 Este documento cobre **o que já está pronto** e **o que ainda depende de ação manual** para sair do uso puramente local. O banco Supabase (staging) já foi validado com a cadeia completa de migrations; o backend está preparado para deploy no Render (`render.yaml`, `runtime.txt`, `gunicorn`), mas o deploy real (publicar o serviço no painel do Render e configurar as variáveis de ambiente) depende de ação manual do usuário. Cloudflare e migração de dados financeiros locais ainda não foram feitos.
 
@@ -9,8 +9,8 @@ Este documento cobre **o que já está pronto** e **o que ainda depende de açã
 ## 1. Visão geral do deploy planejado
 
 ```
-Cloudflare  → DNS / proxy / (futuramente) frontend estático
-Backend Flask → Render (staging), servido via gunicorn
+Cloudflare  → DNS de financeiro.kortexbrasil.com (zona kortexbrasil.com, independente do Portal Kortex)
+Backend Flask → Render (staging), servido via gunicorn, disco persistente em /var/data
 Supabase → PostgreSQL gerenciado (staging validado no SUPABASE-MIGRATE-1), substitui o PostgreSQL local
 ```
 
@@ -43,7 +43,8 @@ Ver `.env.example` para o arquivo completo com comentários. Resumo:
 | `FLASK_APP` | Sempre | `backend/app.py` |
 | `FLASK_DEBUG` | Sempre | Deve ser `false`/`0` fora de `local` |
 | `FLASK_HOST` / `FLASK_PORT` | Local (dev server) | Não relevante atrás de um WSGI server real |
-| `CORS_ORIGINS` | Se frontend/backend forem separados | Nunca usar `*`; listar origens explícitas (ex.: domínio Cloudflare futuro) |
+| `CORS_ORIGINS` | staging/production | Nunca usar `*`. No host: `https://financeiro.kortexbrasil.com` — também é a allowlist da verificação de `Origin` em requisições de escrita |
+| `DATA_DIR` | production (bloqueante); staging (recomendado) | Raiz absoluta dos arquivos gravados em runtime (uploads, OCR, backups locais). No Render: `/var/data` (disco persistente) |
 
 ### Como gerar uma `SECRET_KEY` forte
 
@@ -79,7 +80,7 @@ Valida (sem nunca imprimir valores reais): `SECRET_KEY` adequada ao ambiente, `D
 **Projeto Supabase criado pelo usuário (fora desta ferramenta) e validado como banco `staging` no SUPABASE-MIGRATE-1**: cadeia completa de migrations rodada do zero com sucesso (52 tabelas, `alembic_version` no head), usuário admin criado, smoke tests de login/CRUD passando.
 
 1. Use a connection string em formato compatível com SQLAlchemy: `postgresql://usuario:senha@host:porta/dbname` (funciona com o driver `psycopg2-binary` já usado no projeto; `postgresql+psycopg2://` também funciona se preferir ser explícito).
-2. A conexão **direta** (porta `5432`) foi a usada para rodar as migrations — é a que permite DDL sem restrições. O modo **pooler** (transaction/session pooling, porta `6543`) é recomendado para a aplicação em produção com múltiplos workers, mas pode ter restrições para `ALTER TABLE`/DDL; use a direta para `flask db upgrade` e avalie o pooler separadamente para a conexão de runtime da aplicação.
+2. A conexão **direta** (`db.<ref>.supabase.co:5432`) foi a usada para rodar as migrations da máquina local. **Ela só tem IPv6, e o Render não abre conexões de saída IPv6** (DEPLOY-READY-FIN-1). No Render, use a connection string do **Session pooler** (`aws-?-us-east-2.pooler.supabase.com:5432`, usuário `postgres.<ref>`), que tem IPv4 e aceita DDL — serve tanto para a aplicação quanto para `flask db upgrade` via Render Shell. `scripts/check_deploy_env.py` recusa o host direto em staging/production. A aplicação aplica `sslmode=require`, `pool_pre_ping` e um pool pequeno (3+2 por worker) automaticamente.
 3. **Nunca** use a `service_role key` nem a `anon key`/`publishable key` do Supabase como `DATABASE_URL` — essas chaves são para a API REST/SDK JS do Supabase (`@supabase/supabase-js`), não para a conexão Postgres direta que este projeto usa. O quickstart padrão do painel Supabase (Next.js + SDK JS) **não se aplica** a este projeto Flask/Python.
 4. **Senhas com caracteres especiais** (`@`, `*`, etc.) precisam de URL-encoding na connection string (`urllib.parse.quote(senha, safe='')`) — do contrário o parser da URL quebra a divisão usuário/senha/host.
 5. Nunca exponha nenhuma credencial do Supabase no JavaScript do frontend — o frontend deste projeto não fala com o Supabase diretamente, só o backend Flask via `DATABASE_URL`.
@@ -102,32 +103,36 @@ A cadeia de migrations tinha bugs reais de drift, não relacionados a esta etapa
 **Preparado no DEPLOY-HOST-1; publicação do serviço no painel do Render é ação manual.**
 
 - **Cloudflare**: DNS do domínio e proxy (e, futuramente, hospedagem do frontend estático caso ele seja separado do Flask). Cloudflare **não hospeda o backend Flask** — Workers/Pages não rodam uma aplicação Flask tradicional. Fica para o CLOUDFLARE-1.
-- **Backend Flask**: hospedado no Render via `render.yaml`. `requirements.txt` já lista `gunicorn`; `runtime.txt` fixa a versão do Python.
+- **Backend Flask**: hospedado no Render via `render.yaml`. `requirements.txt` já lista `gunicorn`. A versão do Python vem de `PYTHON_VERSION` no `render.yaml` (o Render não lê `runtime.txt`, mantido apenas como referência).
 
 ### Configuração do serviço (`render.yaml`)
 
 | Item | Valor |
 |------|-------|
 | Build command | `pip install -r requirements.txt` |
-| Start command | `gunicorn backend.app:app` (usa a instância `app` já criada no import do módulo — não `create_app()`, para não instanciar o Flask app duas vezes) |
+| Start command | `gunicorn backend.app:app --workers 2 --timeout 120 --access-logfile -` (usa a instância `app` já criada no import do módulo — não `create_app()`, para não instanciar o Flask app duas vezes) |
+| Plano / região / disco | `starter` / `ohio` (mesma região AWS do Supabase de staging) / disco `controle-financeiro-data` em `/var/data` (1 GB) |
 | Health check path | `/health` |
 | Porta | Automática — o Gunicorn usa `0.0.0.0:$PORT` por padrão quando a env var `PORT` existe (o Render sempre injeta), sem precisar de `--bind` explícito |
 | Auto-deploy | Desligado (`autoDeploy: false`) — deploy é disparado manualmente até staging estar validado |
 
-`render.yaml` **não contém nenhum segredo** — `SECRET_KEY`, `DATABASE_URL` e `CARTOES_CVV_MASTER_PASSWORD` são configurados manualmente no painel do Render (Settings → Environment), nunca no arquivo versionado.
+`render.yaml` **não contém nenhum segredo** — `SECRET_KEY`, `DATABASE_URL` e `CARTOES_CVV_MASTER_PASSWORD` são declarados com `sync: false`: o Render pede o valor no painel ao aplicar o Blueprint, e eles nunca ficam no arquivo versionado.
 
 ### Variáveis de ambiente a configurar no painel do Render
 
 ```
 APP_ENV=staging
 SECRET_KEY=<gerar com secrets.token_urlsafe(64), nunca reaproveitar a do .env.local>
-DATABASE_URL=<connection string do Supabase validada no SUPABASE-MIGRATE-1>
+DATABASE_URL=<connection string do Session pooler do Supabase — NÃO o host direto db.<ref>.supabase.co>
 CARTOES_CVV_MASTER_PASSWORD=<forte, ou vazio se nenhum cartão com CVV for usado em staging>
 FLASK_APP=backend/app.py
 FLASK_DEBUG=0
+DATA_DIR=/var/data
+CORS_ORIGINS=https://financeiro.kortexbrasil.com
+PYTHON_VERSION=3.11.9
 ```
 
-`APP_ENV=staging` já ativa (via `StagingConfig`) `SESSION_COOKIE_SECURE=True` e a validação de `SECRET_KEY`/`DATABASE_URL` fortes automaticamente — não há necessidade de configurar `SESSION_COOKIE_SECURE` manualmente.
+(As quatro últimas já vêm do `render.yaml`.) `APP_ENV=staging` ativa automaticamente (via `HospedadoConfig`) a validação de `SECRET_KEY`/`DATABASE_URL`, o cookie `__Host-` com `Secure`, a expiração de sessão, os cabeçalhos de segurança, a verificação de `Origin` e o bloqueio do backup local — ver seção 8.
 
 ### Migrations no Render
 
@@ -150,9 +155,9 @@ venv\Scripts\python.exe scripts\smoke_staging.py
 
 Testa `/health`, redirect de página protegida sem sessão, 401 JSON de API sem sessão, e `GET /login`. Login com credenciais reais é opcional — só roda se `SMOKE_ADMIN_EMAIL`/`SMOKE_ADMIN_SENHA` estiverem definidas localmente (nunca versionadas, nunca impressas).
 
-### Armazenamento de arquivos (pendência registrada, não resolvida aqui)
+### Armazenamento de arquivos (STORAGE-1 — preparado no DEPLOY-READY-FIN-1)
 
-O sistema grava documentos/comprovantes/logos em disco local (`data/uploads/`, anexos de financiamento, IR). O filesystem do Render é efêmero em planos padrão — arquivos gravados em runtime não sobrevivem a um redeploy/restart. Registrado como pendência **STORAGE-1**; não resolvido nesta etapa.
+Tudo o que é gravado em runtime fica abaixo de `DATA_DIR`: logos de categorias, documentos de financiamento, OCR, backups locais e o cenário ativo de mobilidade. Comprovantes de IR ficam no banco (BYTEA). O filesystem do Render é efêmero; o `render.yaml` monta um disco persistente em `/var/data` (`DATA_DIR=/var/data`), o que exige o plano pago `starter`. Alternativa sem disco: migrar os uploads para o Supabase Storage (STORAGE-2, exige refatoração).
 
 ---
 
@@ -164,6 +169,15 @@ Já configurado em `backend/config.py` por ambiente:
 - `SESSION_COOKIE_SAMESITE=Lax` sempre
 - `SESSION_COOKIE_SECURE=True` em `staging`/`production` (exige HTTPS — se o deploy real ficar sem HTTPS, o cookie de sessão não será enviado e o login não vai funcionar; isso é intencional)
 - `SESSION_COOKIE_SECURE=False` em `local` (sem HTTPS local)
+
+Em `staging`/`production` (`AMBIENTE_HOSPEDADO`, DEPLOY-READY-FIN-1):
+
+- Cookie `__Host-financeiro_session` (sem `Domain`: nenhum outro subdomínio `*.kortexbrasil.com` consegue sobrescrevê-lo)
+- Sessão permanente com expiração de 12h sem uso (`PERMANENT_SESSION_LIFETIME`)
+- POST/PUT/PATCH/DELETE com `Origin`/`Referer` diferente do próprio host ou de `CORS_ORIGINS` → 403. `SameSite=Lax` sozinho não protege contra o Portal ou o site institucional, que são o mesmo *site*
+- HSTS (sem `includeSubDomains`), `nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy: same-origin`
+- Limite de 64 MB por requisição (`MAX_CONTENT_LENGTH`)
+- Backup/restauração via `pg_dump`/`pg_restore` e configuração de executáveis → 403
 
 ---
 
@@ -198,8 +212,9 @@ Pede a senha no prompt (nunca aparece no terminal, nunca é salva em arquivo). P
 ## 11. Pendências
 
 - **Publicação real no Render**: criar o serviço no painel (ou via `render.yaml` blueprint), configurar as variáveis de ambiente sensíveis, disparar o primeiro deploy manual e rodar as migrations via Render Shell — ação manual do usuário, não feita por esta ferramenta
-- **STORAGE-1**: definir storage persistente para uploads/documentos (o filesystem do Render é efêmero; hoje o sistema grava em disco local)
-- **CLOUDFLARE-1**: configurar DNS/proxy no Cloudflare apontando para o host do backend no Render
+- **Bloqueadores e checklist de staging**: ver `docs/DEPLOY_READY_FIN_1.md` (B1 Session pooler, B2 plano/disco, B3 serviço, B4 domínio)
+- **CLOUDFLARE-1**: CNAME `financeiro` → Render (DNS only até o certificado; *Full (strict)* só para este hostname). Rate limit em `/login` ou Cloudflare Access
+- **Backups do banco remoto**: o backup local fica bloqueado no host; definir plano Supabase com backups ou `pg_dump` periódico via pooler
 - **DATA-MIGRATE-1** (se desejado no futuro): migração seletiva de dados financeiros locais reais para o Supabase — não foi feita nesta etapa por decisão explícita (nenhum dado financeiro real foi migrado, só schema + usuário admin)
 - **DB-CLEAN**: débitos técnicos de `models.py`/queries, não relacionados a deploy
 - RBAC/multiusuário: fora de escopo (SEG-1 é usuário único)

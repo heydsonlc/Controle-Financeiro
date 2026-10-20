@@ -1,6 +1,6 @@
 import json
 
-from flask import Blueprint, Response, jsonify, request, send_file
+from flask import Blueprint, Response, current_app, jsonify, request, send_file
 
 try:
     from backend.services.backup_service import BackupService
@@ -9,6 +9,30 @@ except ImportError:  # pragma: no cover
 
 
 backup_bp = Blueprint('backup', __name__)
+
+# DEPLOY-READY-FIN-1: em ambiente hospedado, estas operacoes executariam
+# binarios configuraveis pela propria tela (pg_dump/pg_restore) contra o banco
+# de producao. O backup do banco remoto fica a cargo do provedor (Supabase).
+_ENDPOINTS_BLOQUEADOS_EM_HOSPEDADO = {
+    'backup.executar_backup',
+    'backup.testar_restauracao_backup',
+    'backup.restaurar_backup',
+    'backup.configurar_ferramentas',
+    'backup.autodetectar_ferramentas',
+}
+
+
+@backup_bp.before_request
+def bloquear_backup_local_em_ambiente_hospedado():
+    if not current_app.config.get('AMBIENTE_HOSPEDADO'):
+        return None
+    if request.endpoint not in _ENDPOINTS_BLOQUEADOS_EM_HOSPEDADO:
+        return None
+    return jsonify({
+        'success': False,
+        'error': 'Backup e restauração locais indisponíveis no ambiente hospedado. '
+                 'Use os backups do provedor do banco (Supabase).',
+    }), 403
 
 
 @backup_bp.route('/status', methods=['GET'])

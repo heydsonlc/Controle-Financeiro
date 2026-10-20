@@ -12,6 +12,7 @@ qualquer outro segredo — so relata "ausente"/"presente"/"fraco"/"forte".
 """
 import os
 import sys
+from urllib.parse import urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -22,7 +23,12 @@ from dotenv import load_dotenv
 # o que staging/production ja injetou via variavel de ambiente real).
 load_dotenv('.env.local', encoding='utf-8-sig')
 
-from backend.config import resolver_app_env, validar_secret_key, validar_cvv_master_password
+from backend.config import (
+    resolver_app_env,
+    resolver_data_dir,
+    validar_cvv_master_password,
+    validar_secret_key,
+)
 
 
 def _cvv_esta_habilitado():
@@ -77,8 +83,30 @@ def main():
         print(f'DATABASE_URL: presente ({"PostgreSQL" if usa_postgres else "outro dialeto"})')
         if ambiente in {'staging', 'production'} and not usa_postgres:
             avisos.append('DATABASE_URL em staging/production nao parece PostgreSQL.')
+        # DEPLOY-READY-FIN-1: o host direto do Supabase so tem IPv6 e o Render
+        # nao abre conexoes de saida IPv6 — usar o Session pooler.
+        host = (urlparse(database_url.strip()).hostname or '').lower()
+        if ambiente in {'staging', 'production'} and host.startswith('db.') and host.endswith('.supabase.co'):
+            problemas.append(
+                'DATABASE_URL usa o host direto do Supabase (somente IPv6); '
+                'use a connection string do Session pooler (aws-*.pooler.supabase.com).'
+            )
+            print('DATABASE_URL: host direto do Supabase (INADEQUADO para o Render)')
     else:
         print('DATABASE_URL: ausente (fallback SQLite local sera usado)')
+
+    # DATA_DIR (DEPLOY-READY-FIN-1): uploads precisam de disco persistente
+    try:
+        data_dir = resolver_data_dir(ambiente)
+        origem = 'DATA_DIR' if (os.getenv('DATA_DIR') or '').strip() else 'padrao data/ do projeto'
+        print(f'DATA_DIR: {origem}')
+        if ambiente == 'staging' and origem != 'DATA_DIR':
+            avisos.append('DATA_DIR nao definido em staging: uploads somem a cada deploy/reinicio.')
+        elif ambiente in {'staging', 'production'} and not data_dir.exists():
+            avisos.append('DATA_DIR definido, mas o diretorio nao existe neste host (disco montado?).')
+    except RuntimeError as exc:
+        problemas.append(str(exc))
+        print('DATA_DIR: INADEQUADO')
 
     # CARTOES_CVV_MASTER_PASSWORD
     cvv_senha = os.getenv('CARTOES_CVV_MASTER_PASSWORD')

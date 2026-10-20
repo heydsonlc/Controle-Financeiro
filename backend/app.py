@@ -9,7 +9,8 @@ import logging
 import threading
 import webbrowser
 from pathlib import Path
-from flask import Flask, jsonify, redirect, render_template, request, url_for
+from urllib.parse import urlparse
+from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 from flask_cors import CORS
 from flask_migrate import Migrate
 from flask_login import LoginManager, current_user, login_required
@@ -67,6 +68,31 @@ def _cors_origins_from_env():
         'http://localhost:5000',
         'http://127.0.0.1:5000',
     ]
+
+
+_METODOS_SEGUROS = {'GET', 'HEAD', 'OPTIONS'}
+
+
+def _origem_da_requisicao_permitida():
+    """DEPLOY-READY-FIN-1: defesa CSRF por Origin/Referer em requisicoes de escrita.
+
+    SameSite=Lax nao basta: portal.kortexbrasil.com e kortexbrasil.com sao o
+    mesmo "site" que financeiro.kortexbrasil.com, entao o navegador envia o
+    cookie de sessao em POSTs vindos deles. Aceita apenas o proprio host e as
+    origens explicitas de CORS_ORIGINS. Sem Origin e sem Referer (cliente nao
+    navegador, que nao carrega o cookie automaticamente) a requisicao segue.
+    """
+    origem = request.headers.get('Origin') or request.headers.get('Referer')
+    if origem is None:
+        return True
+
+    host_origem = urlparse(origem).netloc.lower()
+    if not host_origem:
+        return False  # Origin: null (sandbox, file://, redirecionamentos opacos)
+
+    permitidos = {request.host.lower()}
+    permitidos.update(urlparse(o).netloc.lower() for o in _cors_origins_from_env())
+    return host_origem in permitidos
 
 
 def create_app(config_name=None):
@@ -135,6 +161,16 @@ def create_app(config_name=None):
     _ROTAS_PUBLICAS = {'/login', '/logout', '/health'}
 
     @app.before_request
+    def verificar_origem_em_escrita():
+        if not app.config.get('AMBIENTE_HOSPEDADO'):
+            return None
+        if request.method in _METODOS_SEGUROS:
+            return None
+        if _origem_da_requisicao_permitida():
+            return None
+        return jsonify({'success': False, 'error': 'Origem da requisição não permitida'}), 403
+
+    @app.before_request
     def exigir_login():
         if request.path in _ROTAS_PUBLICAS:
             return None
@@ -168,6 +204,20 @@ def create_app(config_name=None):
         """Adiciona charset UTF-8 explicitamente no Content-Type de todas as respostas"""
         if response.content_type and 'charset' not in response.content_type:
             response.content_type = f'{response.content_type}; charset=utf-8'
+        return response
+
+    # DEPLOY-READY-FIN-1: cabecalhos de seguranca apenas em ambiente hospedado.
+    # Em local o Windows pode servir .js como text/plain (registro de MIME),
+    # e nosniff bloquearia os scripts — por isso nao se aplica fora do host.
+    # HSTS sem includeSubDomains para nunca afetar outros subdominios Kortex.
+    @app.after_request
+    def aplicar_cabecalhos_seguranca(response):
+        if not app.config.get('AMBIENTE_HOSPEDADO'):
+            return response
+        response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+        response.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
+        response.headers.setdefault('Referrer-Policy', 'same-origin')
+        response.headers.setdefault('Strict-Transport-Security', 'max-age=31536000')
         return response
 
     # TX-ATOMIC-1: alguns services (ex.: PerfilFinanceiroService.obter_ou_criar_perfis_iniciais)
@@ -216,6 +266,7 @@ def create_app(config_name=None):
             return render_template('login.html', page_title='Entrar', erro=erro_generico), 401
 
         login_user(usuario)
+        session.permanent = bool(app.config.get('SESSION_PERMANENTE'))
         destino = proximo if proximo.startswith('/') and not proximo.startswith('//') else url_for('index')
 
         if request.is_json:

@@ -12,7 +12,7 @@ import os
 from datetime import date, datetime
 from decimal import Decimal
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 from dateutil.relativedelta import relativedelta
 
 try:
@@ -551,8 +551,7 @@ def deletar_financiamento_veiculo(veiculo_id):
 # ---------------------------------------------------------------------------
 
 def _cenario_ativo_path():
-    base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    return os.path.join(base, 'data', 'mobilidade_cenario_ativo.json')
+    return os.path.join(current_app.config['DATA_DIR'], 'mobilidade_cenario_ativo.json')
 
 
 @veiculos_bp.route('/cenario-ativo', methods=['GET'])

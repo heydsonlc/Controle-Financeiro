@@ -2,12 +2,14 @@
 Configurações da aplicação por ambiente
 """
 import os
+from datetime import timedelta
 from pathlib import Path
 from urllib.parse import urlparse
 
 # Diretório base do projeto
 BASE_DIR = Path(__file__).resolve().parent.parent
-SQLITE_FALLBACK_URI = f"sqlite:///{BASE_DIR / 'data' / 'gastos.db'}"
+DATA_DIR_PADRAO = BASE_DIR / 'data'
+SQLITE_FALLBACK_URI = f"sqlite:///{DATA_DIR_PADRAO / 'gastos.db'}"
 DEVELOPMENT_REMOTE_DATABASE_ERROR = (
     'Ambiente local nao pode usar DATABASE_URL remota. '
     'Use PostgreSQL local ou remova DATABASE_URL para fallback SQLite.'
@@ -99,6 +101,66 @@ def validar_cvv_master_password(senha, ambiente, cvv_habilitado):
     return None
 
 
+def resolver_data_dir(ambiente):
+    """DEPLOY-READY-FIN-1: raiz unica dos arquivos gravados em runtime.
+
+    Uploads (logos, documentos de financiamento), area de trabalho do OCR,
+    backups locais e o cenario ativo de mobilidade vivem abaixo de DATA_DIR.
+    Sem DATA_DIR, mantem a pasta data/ do projeto (comportamento historico).
+    Em production o filesystem do host e efemero sem disco persistente, entao
+    DATA_DIR e obrigatorio — falha fechado para nao perder documentos.
+    """
+    bruto = (os.getenv('DATA_DIR') or '').strip()
+    if not bruto:
+        if ambiente == 'production':
+            raise RuntimeError(
+                'DATA_DIR ausente em production: aponte para o disco persistente '
+                '(ex.: /var/data) para nao perder uploads a cada deploy.'
+            )
+        return DATA_DIR_PADRAO
+
+    caminho = Path(bruto)
+    if not caminho.is_absolute():
+        raise RuntimeError('DATA_DIR deve ser um caminho absoluto.')
+    return caminho
+
+
+def aplicar_diretorios_dados(cfg, data_dir):
+    """Deriva de DATA_DIR todos os diretorios gravaveis lidos pelos services."""
+    cfg.DATA_DIR = data_dir
+    cfg.UPLOAD_LOGOS_DIR = data_dir / 'uploads' / 'logos' / 'categorias'
+    cfg.FINANCIAMENTO_DOCUMENTOS_DIR = data_dir / 'uploads' / 'financiamentos'
+    cfg.OCR_BASE_DIR = data_dir / 'ocr'
+    cfg.BACKUP_BASE_DIR = data_dir / 'backups'
+
+
+def normalizar_database_url(database_url):
+    """SQLAlchemy 2 nao aceita o esquema legado 'postgres://'."""
+    valor = (database_url or '').strip()
+    if valor.startswith('postgres://'):
+        return 'postgresql://' + valor[len('postgres://'):]
+    return valor
+
+
+def opcoes_engine_remoto(database_url):
+    """Opcoes do engine para PostgreSQL remoto (Supabase via pooler).
+
+    - pool_pre_ping/pool_recycle: o pooler encerra conexoes ociosas.
+    - pool pequeno: cada worker do gunicorn tem seu proprio pool, e o pooler
+      do Supabase em modo sessao limita conexoes simultaneas por projeto.
+    - sslmode=require quando a URL nao define sslmode explicitamente.
+    """
+    opcoes = {
+        'pool_pre_ping': True,
+        'pool_recycle': 300,
+        'pool_size': 3,
+        'max_overflow': 2,
+    }
+    if 'sslmode=' not in (database_url or ''):
+        opcoes['connect_args'] = {'sslmode': 'require'}
+    return opcoes
+
+
 def _is_local_database_url(database_url):
     """Return True only for clearly local development database URLs."""
     raw_url = (database_url or '').strip()
@@ -143,8 +205,15 @@ class Config:
     CARTOES_CVV_MASTER_PASSWORD = os.getenv('CARTOES_CVV_MASTER_PASSWORD')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ECHO = False
-    UPLOAD_LOGOS_DIR = BASE_DIR / 'data' / 'uploads' / 'logos' / 'categorias'
+    DATA_DIR = DATA_DIR_PADRAO
+    UPLOAD_LOGOS_DIR = DATA_DIR_PADRAO / 'uploads' / 'logos' / 'categorias'
     MAX_LOGO_SIZE = 1024 * 1024
+
+    # DEPLOY-READY-FIN-1: True apenas em staging/production (internet publica).
+    # Liga verificacao de Origin, cabecalhos de seguranca/HSTS e bloqueia o
+    # backup local via pg_dump/pg_restore. Local e testes ficam inalterados.
+    AMBIENTE_HOSPEDADO = False
+    SESSION_PERMANENTE = False
 
     # JSON
     JSON_AS_ASCII = False
@@ -170,22 +239,33 @@ class LocalConfig(Config):
     SQLALCHEMY_DATABASE_URI = SQLITE_FALLBACK_URI
 
 
-class StagingConfig(Config):
+class HospedadoConfig(Config):
+    """Base comum de staging/production (internet publica, HTTPS obrigatorio)."""
+    DEBUG = False
+    TESTING = False
+    AMBIENTE_HOSPEDADO = True
+
+    # Prefixo __Host-: exige Secure, Path=/ e proibe Domain, impedindo que
+    # outros subdominios *.kortexbrasil.com sobrescrevam o cookie de sessao.
+    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_NAME = '__Host-financeiro_session'
+    # Sessao expira apos 12h sem uso (renovada a cada requisicao).
+    SESSION_PERMANENTE = True
+    PERMANENT_SESSION_LIFETIME = timedelta(hours=12)
+
+    # Limite global do corpo da requisicao (uploads); limites por arquivo
+    # continuam nos services (logos 1 MB, documentos 10 MB).
+    MAX_CONTENT_LENGTH = 64 * 1024 * 1024
+
+    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL')
+
+
+class StagingConfig(HospedadoConfig):
     """Configuracao de staging (PostgreSQL remoto, HTTPS esperado)"""
-    DEBUG = False
-    TESTING = False
-    SESSION_COOKIE_SECURE = True
-
-    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL')
 
 
-class ProductionConfig(Config):
+class ProductionConfig(HospedadoConfig):
     """Configuração de produção (PostgreSQL remoto, HTTPS obrigatório)"""
-    DEBUG = False
-    TESTING = False
-    SESSION_COOKIE_SECURE = True
-
-    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL')
 
 
 class TestingConfig(Config):
@@ -235,9 +315,13 @@ def get_config(env=None):
         if erro_secret:
             raise RuntimeError(erro_secret)
 
-        db_url = os.getenv('DATABASE_URL')
-        if not db_url or db_url.strip() == '':
+        db_url = normalizar_database_url(os.getenv('DATABASE_URL'))
+        if not db_url:
             raise RuntimeError(f'DATABASE_URL de {env} ausente')
-        cfg.SQLALCHEMY_DATABASE_URI = db_url.strip()
+        cfg.SQLALCHEMY_DATABASE_URI = db_url
+        if db_url.startswith('postgresql'):
+            cfg.SQLALCHEMY_ENGINE_OPTIONS = opcoes_engine_remoto(db_url)
+
+    aplicar_diretorios_dados(cfg, resolver_data_dir(env))
 
     return cfg

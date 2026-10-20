@@ -129,9 +129,10 @@ def test_resolver_app_env_usa_flask_env_como_fallback(monkeypatch):
 # Cookies de sessao
 # ---------------------------------------------------------------------------
 
-def test_session_cookie_secure_true_em_production(monkeypatch):
+def test_session_cookie_secure_true_em_production(monkeypatch, tmp_path):
     monkeypatch.setenv('SECRET_KEY', 'x7K9mP2qR5vN8wZ3jL6hF1cB4dS0aXyEuT2Mn5pQ8rW')
     monkeypatch.setenv('DATABASE_URL', 'postgresql://user:pass@remote:5432/db')
+    monkeypatch.setenv('DATA_DIR', str(tmp_path))  # DEPLOY-READY-FIN-1: obrigatorio em production
     cfg = get_config('production')
     assert cfg.SESSION_COOKIE_SECURE is True
 
@@ -143,13 +144,14 @@ def test_session_cookie_secure_false_em_local(monkeypatch):
     assert cfg.SESSION_COOKIE_SECURE is False
 
 
-def test_session_cookie_httponly_sempre_true_em_qualquer_ambiente(monkeypatch):
+def test_session_cookie_httponly_sempre_true_em_qualquer_ambiente(monkeypatch, tmp_path):
     monkeypatch.delenv('SECRET_KEY', raising=False)
     monkeypatch.delenv('DATABASE_URL', raising=False)
     assert get_config('local').SESSION_COOKIE_HTTPONLY is True
 
     monkeypatch.setenv('SECRET_KEY', 'x7K9mP2qR5vN8wZ3jL6hF1cB4dS0aXyEuT2Mn5pQ8rW')
     monkeypatch.setenv('DATABASE_URL', 'postgresql://user:pass@remote:5432/db')
+    monkeypatch.setenv('DATA_DIR', str(tmp_path))  # DEPLOY-READY-FIN-1: obrigatorio em production
     assert get_config('production').SESSION_COOKIE_HTTPONLY is True
 
 
