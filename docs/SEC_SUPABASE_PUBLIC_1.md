@@ -4,7 +4,7 @@ Data: 2026-10-20. Projeto: **somente** o do Controle Financeiro (`fzjmge…`). N
 
 Situação atual:
 - **Contenção (Etapa A) concluída e validada** em 2026-10-20 (§2.1).
-- Migration permanente (Etapa B) preparada e testada, com rollback verificado; **não executada no remoto** (§3.1).
+- Migration permanente (Etapa B) **aplicada no staging** em 2026-10-20, com autorização do usuário (banco de teste, sem dados a preservar). Resultado no §3.2.
 
 Nenhum registro foi lido: as sondagens usam `limit=0` ou filtros impossíveis, e o diagnóstico no banco só lê catálogos e estatísticas.
 
@@ -137,6 +137,24 @@ Provado em teste (`test_ciclo_completo_de_rollback_restaura_estado_exato`):
 | Dano estrutural inesperado | Comparar com o `pg_dump --schema-only` e restaurar o objeto afetado | Nenhuma |
 | Último recurso | Restaurar o backup diário do Supabase Pro (o projeto inteiro volta ao ponto do backup) | Tudo o que foi gravado depois do backup |
 
+### 3.2 Aplicação no staging (2026-10-20)
+
+Executado `flask db upgrade` (transação única): `5c91e95eb05d → c4f7a2d91b3e`. Log da migration: *"RLS habilitada em 52 tabela(s); 0 ja tinham; privilegios de anon, authenticated revogados"*, sem tabelas ignoradas.
+
+| Verificação | Resultado |
+|---|---|
+| `sec_public_rollback.py comparar` contra o snapshot pré-migration | **1214 mudanças esperadas, 0 inesperadas** |
+| Tabelas do `public` | 52/52 com RLS, 0 com FORCE |
+| Grants de `anon`/`authenticated` em tabelas / sequências acessíveis | 0 / 0 |
+| Default privileges do `postgres` no `public` para `anon`/`authenticated` | 0 |
+| `SET ROLE anon` / `authenticated` + `select` em `usuario` (transação somente leitura) | `InsufficientPrivilege` |
+| Papel do Flask em `usuario` | SELECT/INSERT/UPDATE/DELETE mantidos |
+| Flask em staging | `/health` 200; ORM lê `usuario`/`categoria`; API do Flask sem sessão continua 401 |
+| Gate `check_deploy_env.py` | exit 0 |
+| Data API (`--com-escrita`) | `public BLOQUEADO para anonimo`; só `graphql_public` exposto |
+
+Proteção agora em **duas camadas independentes**: o `public` está fora da Data API **e**, no próprio banco, os papéis da API não têm nenhum privilégio. O rollback dirigido (`data/sec_public/rollback_c4f7a2d91b3e.sql`, fora do Git) continua disponível e não foi usado.
+
 ## 4. Testes
 
 `tests/test_sec_supabase_public.py` roda num cluster PostgreSQL **descartável** que reproduz o Supabase:
@@ -221,8 +239,8 @@ As requisições anônimas de 2026-10-20 a `usuario`, `config_agregador`, `conta
 
 ## 7. Pendências de segurança
 
-1. **Etapa A:** remover `public` dos Exposed schemas (usuário) e rodar a verificação.
-2. **Etapa B:** autorizar `flask db upgrade` da migration `c4f7a2d91b3e` no staging.
+1. ~~Etapa A~~: concluída e validada.
+2. ~~Etapa B~~: aplicada no staging e validada.
 3. **Antes do Auth real:** desligar o cadastro público, criar o usuário dono por convite e expor apenas `financeiro`.
 4. **Se o `pg_graphql` for habilitado um dia:** revisar a exposição (a Etapa B já remove os privilégios que ele usaria).
 5. Itens anteriores: SEG-2 (limite de tentativas de login), CARD-SEC-1 (dados de cartão em texto puro no banco), BACKUP-DOCS-1.
