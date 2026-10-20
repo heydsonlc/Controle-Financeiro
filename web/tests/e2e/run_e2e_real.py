@@ -10,7 +10,8 @@ Recusa rodar se (verificacoes somente leitura):
 - a Data API nao expuser `financeiro` ou ainda expuser `public`;
 - faltarem as contas de teste no ambiente.
 
-Contas de teste (ficticias, criadas pelo usuario no painel do Supabase), so por ambiente:
+Contas de teste (ficticias, criadas pelo usuario no painel do Supabase), por ambiente ou
+no arquivo local .env.e2e-real (fora do Git):
     CF_EMAIL_A, CF_SENHA_A, CF_EMAIL_B, CF_SENHA_B
 Dados ficticios: scripts/supabase_mvp_seed_teste.py.
 
@@ -78,6 +79,10 @@ def main():
     if PROJETO in PROJETOS_PROIBIDOS:
         raise SystemExit('Projeto proibido.')
     origem = f'https://{PROJETO}.supabase.co'
+    # Contas de teste: variaveis de ambiente ou o arquivo local .env.e2e-real
+    # (ignorado pelo Git pela regra .env.*). Nunca no codigo nem no chat.
+    from dotenv import load_dotenv
+    load_dotenv(RAIZ / '.env.e2e-real', override=False, encoding='utf-8-sig')
     chave, _ = chave_publica_via_cli()
 
     problemas = verificar_pre_requisitos(origem, chave)
