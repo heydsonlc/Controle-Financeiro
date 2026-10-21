@@ -1,6 +1,6 @@
 # MOBILE-CONTAS-1 — Contas do mês (somente leitura)
 
-Data: 2026-10-21. Implementado e testado **localmente**.
+Data: 2026-10-21. Implementado, testado localmente e **validado no Supabase real de teste** (MOBILE-CONTAS-REAL-1, §9).
 
 **Não executado:** migration no Supabase remoto, publicação no Cloudflare, alteração de dados reais. Decisões aprovadas: D1 a D4 (ver `docs/MOBILE_CONTAS_1_CONTRATO.md`).
 
@@ -138,3 +138,85 @@ O aviso aparece quando há indício: recorrência mensal ativa sem conta no mês
   - `web/tests/e2e/run_e2e_real.py` (trava da migration);
   - `docs/ROADMAP.md`.
 - **Flask:** nenhum arquivo alterado.
+
+## 9. Validação real — MOBILE-CONTAS-REAL-1 (2026-10-21)
+
+Alvo: projeto **Controle-Financeiro** (`fzjmge…`). Calculadora Judicial não tocada.
+
+### 9.1 Push e prova do deploy manual
+
+| Item | Resultado |
+|---|---|
+| Push do `deb3810` | Feito (contém a migration `20261022090000`; sem segredos) |
+| Check "Supabase Preview" do push | **`completed/skipped`**; os pushes que aplicavam migrations terminavam em `success` |
+| Migration após o push | **Continuou pendente** (`supabase_migrations.py status`): o push **não** aplicou nada. Prova de que o "Deploy to production" desligado funciona |
+
+### 9.2 Aplicação manual
+
+| Item | Resultado |
+|---|---|
+| Antes | Todas as colunas referenciadas existem; `pode_acessar_perfil` existe; as funções não existiam; histórico com 2 versões; tabelas de contas/compras/limites vazias |
+| Aplicação | `supabase_migrations.py aplicar --versoes 20261022090000`: **só essa versão**; 3/3 aplicadas, nenhuma pendente |
+| Conferência | 9 comandos registrados, **idênticos** ao arquivo commitado |
+| Objetos | `contas_do_mes`, `lancamentos_da_fatura`, `mes_pode_estar_incompleto`: `STABLE`, `SECURITY DEFINER`, `search_path=""`, `EXECUTE` só `authenticated` (não `anon` nem `PUBLIC`) |
+| Privilégios | Tabelas legadas: 0 grants para `anon`/`authenticated`; schema `financeiro`: só `SELECT` em `categorias` e `perfil_acesso` |
+
+### 9.3 Dados fictícios temporários
+
+| Origem | Conteúdo |
+|---|---|
+| `scripts/supabase_perfis_seed_teste.py` | Perfil B e perfil inativo temporários, vínculos, contas bancárias |
+| `scripts/supabase_contas_seed_teste.py` | **41 registros**: os mesmos dados declarados em `tests/supabase_local.py`, com ids gerados pelo banco e categorias com marcador `[teste MOBILE-CONTAS-REAL-1]` |
+| `scripts/supabase_mvp_seed_teste.py` | Categorias do AUTH-REAL-1 |
+
+Pessoal e Empresa existentes foram só **lidos**. O seed recusa rodar se as tabelas de contas, compras, limites ou cartões já tiverem dados.
+
+### 9.4 Equivalência financeira no banco real
+
+`scripts/supabase_contas_equivalencia_real.py`:
+- o Flask em modo staging lê o mesmo banco sem `mes_referencia` e com a baixa neutralizada;
+- a fachada é chamada por REST com o login real das contas de teste.
+
+| Caso | Flask | Fachada | Esperado | |
+|---|---|---|---|---|
+| Pessoal 11/2026 | 4.390,50 / pago 270,50 | 4.390,50 / 270,50 | 4.390,50 / 270,50 | ✅ |
+| Pessoal 01/2026 | 3.330,50 / 650,50 | 3.330,50 / 650,50 | 3.330,50 / 650,50 | ✅ |
+| Empresa 11/2026 | 1.450,00 / 0,00 | 1.450,00 / 0,00 | 1.450,00 / 0,00 | ✅ |
+| Perfil B 11/2026 | 999,99 / 0,00 | 999,99 / 0,00 | 999,99 / 0,00 | ✅ |
+| Mês vazio | 0,00 / 0,00 | 0,00 / 0,00 | 0,00 / 0,00 | ✅ |
+
+Conta a conta, mesmos ids, valores, vencimentos e situação de pagamento. **0 divergências.** Banco **idêntico** antes e depois do Flask e da fachada.
+
+Na primeira execução, o script de comparação acusou divergência nos 5 casos. A causa eram **dois defeitos do próprio script**, não do sistema:
+- a soma vazia de `Decimal` gerava `'0'` em vez de `'0.00'`;
+- o mapa de ids misturava tabelas, e ids repetidos entre tabelas trocavam a referência.
+
+Os totais já coincidiam. Corrigido, o resultado foi 0 divergências.
+
+### 9.5 Testes reais
+
+| Suíte | Resultado |
+|---|---|
+| E2E real (`run_e2e_real.py`): 9 AUTH-REAL-1 + 5 PERFIS-1 + 11 Contas do mês, em celular | **25/25 passaram** |
+| Autorização com tokens reais | Anônimo → **401**; A → Perfil B, A → perfil inativo, B → Pessoal: **403**; compras da fatura da Empresa pelo Pessoal, de uma despesa, ou da fatura de A por B: **403**; aviso de perfil alheio: **403**; `public.conta` direto (leitura e escrita) → **406**; controle (A no Pessoal) → 200 |
+| Sem gravação | Impressão digital idêntica após os 25 testes e as chamadas acima |
+| Tabelas legadas | `public BLOQUEADO para anonimo`; expostos só `graphql_public` e `financeiro` |
+| Flask | `/health` 200; API do Flask sem sessão → 401 |
+
+### 9.6 Limpeza
+
+Removido exatamente o que foi criado:
+- 4 limites, 11 compras, 12 contas, 8 itens, 3 categorias de cartão e 3 categorias;
+- 4 vínculos, 5 contas bancárias e 2 perfis temporários;
+- as categorias do AUTH-REAL-1.
+
+**Estado final idêntico ao inicial:** conteúdo das tabelas-chave (inclusive Pessoal, Empresa e o usuário do Flask), contagens das 52 tabelas do `public`, Auth, Alembic e histórico de migrations.
+
+As sequências de ids avançaram com os registros temporários. Isso é comportamento normal do PostgreSQL e não altera dados.
+
+### 9.7 Pendências e limitações
+
+1. **D1:** meses nunca abertos no Flask podem aparecer incompletos até existir geração explícita (MOBILE-CONTAS-2 ou rotina agendada). O aviso discreto indica quando há indício.
+2. **D2:** débitos automáticos não são baixados na consulta.
+3. **Identidade definitiva:** as contas de teste usam endereços pessoais, só no projeto de teste. Falta definir a conta definitiva e vinculá-la a Pessoal e Empresa.
+4. **Próximo marco sugerido:** MOBILE-PWA-1 (Cloudflare Pages + ícone na tela inicial), somente consulta, com autorização.
