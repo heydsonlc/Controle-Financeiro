@@ -8,7 +8,7 @@ estatico em 127.0.0.1 entregando web/dist com a CSP real do _headers.
 Recusa rodar se (verificacoes somente leitura):
 - o cadastro publico do Auth estiver ligado (disable_signup precisa ser true);
 - a Data API nao expuser `financeiro` ou ainda expuser `public`;
-- a migration PERFIS-1 nao estiver aplicada (funcoes de perfil ausentes);
+- as migrations PERFIS-1, MOBILE-CONTAS-1 e FIN-RECORRENCIA-1/T1 nao estiverem aplicadas;
 - faltarem as contas de teste no ambiente.
 
 Contas de teste (ficticias, criadas pelo usuario no painel do Supabase), por ambiente ou
@@ -74,6 +74,8 @@ def verificar_pre_requisitos(origem, chave):
     for funcao, corpo, migration in (
         ('meus_perfis', b'{}', 'PERFIS-1 (20261021090000_financeiro_perfis_acesso)'),
         ('contas_do_mes', b'{"p_perfil_id": 0, "p_mes": "2026-01-01"}', 'MOBILE-CONTAS-1 (20261022090000_financeiro_contas_do_mes)'),
+        ('previa_geracao', b'{"p_perfil_id": 0, "p_mes": "2026-01-01"}',
+         'FIN-RECORRENCIA-1/T1 (20261023090000_financeiro_recorrencia + 20261024090000_financeiro_gerador_recorrencia)'),
     ):
         req = urllib.request.Request(f'{origem}/rest/v1/rpc/{funcao}', method='POST', data=corpo)
         for nome, valor in (('apikey', chave), ('Content-Type', 'application/json'), ('Content-Profile', 'financeiro')):

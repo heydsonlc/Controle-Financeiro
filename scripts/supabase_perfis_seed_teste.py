@@ -6,7 +6,8 @@ forma identificavel e so para o teste:
 - 2 perfis temporarios: "Perfil B" (ativo) e "Perfil inativo (A)" (inativo);
 - 5 contas bancarias ficticias (instituicao com o marcador do teste), uma delas
   sem perfil para validar a regra NULL -> Pessoal do Flask;
-- 4 vinculos: A -> Pessoal (TITULAR), A -> Empresa (LEITOR), A -> inativo, B -> Perfil B.
+- 4 vinculos: A -> Pessoal (TITULAR), A -> Empresa (LEITOR), A -> inativo, B -> Perfil B
+  (pode_gerir so nos TITULAR de teste; FIN-RECORRENCIA-REAL-1).
 O que foi criado fica em data/perfis_real_1_teste.json (fora do Git) e e o UNICO
 alvo do --remover.
 
@@ -32,7 +33,10 @@ PROJETOS_PROIBIDOS = {'dshqjhyymtpxpxuntzbz'}
 PERFIS_TEMPORARIOS = [('PERFIL_B', 'Perfil B', 'PESSOAL', True), ('INATIVO_A', 'Perfil inativo (A)', 'EMPRESA', False)]
 CONTAS = [('Conta Pessoal (A)', 'PESSOAL'), ('Carteira legado sem perfil', None), ('Conta Empresa (A)', 'EMPRESA'),
           ('Conta Perfil B', 'PERFIL_B'), ('Conta do perfil inativo', 'INATIVO_A')]
-VINCULOS = [('A', 'PESSOAL', 'TITULAR'), ('A', 'EMPRESA', 'LEITOR'), ('A', 'INATIVO_A', 'TITULAR'), ('B', 'PERFIL_B', 'TITULAR')]
+# (conta, perfil, papel, pode_gerir) — pode_gerir (FIN-RECORRENCIA-1) so nos vinculos de teste; gerar ainda exige
+# o perfil atribuido ao novo gerador (T1), que so o seed de recorrencia faz, e so no Perfil B ficticio.
+VINCULOS = [('A', 'PESSOAL', 'TITULAR', True), ('A', 'EMPRESA', 'LEITOR', False), ('A', 'INATIVO_A', 'TITULAR', True),
+            ('B', 'PERFIL_B', 'TITULAR', True)]
 
 
 def mascarar(email):
@@ -92,9 +96,9 @@ def criar(cur, email_a, email_b):
         contas.append(cur.fetchone()[0])
 
     vinculos = []
-    for rotulo, chave, papel in VINCULOS:
-        cur.execute('insert into financeiro.perfil_acesso (user_id, perfil_financeiro_id, papel) values (%s, %s, %s)',
-                    (usuarios[rotulo], perfis[chave], papel))
+    for rotulo, chave, papel, pode_gerir in VINCULOS:
+        cur.execute('insert into financeiro.perfil_acesso (user_id, perfil_financeiro_id, papel, pode_gerir) '
+                    'values (%s, %s, %s, %s)', (usuarios[rotulo], perfis[chave], papel, pode_gerir))
         vinculos.append([usuarios[rotulo], perfis[chave]])
 
     return {'perfis_temporarios': [perfis['PERFIL_B'], perfis['INATIVO_A']], 'contas': contas,
