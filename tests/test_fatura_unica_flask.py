@@ -150,3 +150,25 @@ def test_migration_alembic_cria_o_indice_e_e_idempotente(app):
         _rodar_migration(conn)
         _rodar_migration(conn)
         assert _indice_existe(conn)
+
+
+def test_indice_do_model_e_a_mesma_regra_da_migration_e_nao_e_recriado(app):
+    with db.engine.begin() as conn:
+        definicao = conn.exec_driver_sql(
+            "select sql from sqlite_master where name = 'ux_conta_fatura_cartao_competencia'").scalar()
+        _rodar_migration(conn)  # indice ja existe com a mesma definicao: nada a fazer
+        assert conn.exec_driver_sql(
+            "select sql from sqlite_master where name = 'ux_conta_fatura_cartao_competencia'").scalar() == definicao
+    spec = importlib.util.spec_from_file_location('migration_fatura_unica_def', MIGRATION)
+    modulo = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(modulo)
+    assert modulo.definicao_confere(definicao, 'sqlite')
+
+
+def test_migration_aborta_se_existir_indice_com_o_mesmo_nome_e_outra_regra(app):
+    with db.engine.begin() as conn:
+        conn.exec_driver_sql('drop index ux_conta_fatura_cartao_competencia')
+        conn.exec_driver_sql('create unique index ux_conta_fatura_cartao_competencia on conta (item_despesa_id, '
+                             'cartao_competencia, perfil_financeiro_id) where is_fatura_cartao = 1')
+        with pytest.raises(RuntimeError, match='outra definicao'):
+            _rodar_migration(conn)

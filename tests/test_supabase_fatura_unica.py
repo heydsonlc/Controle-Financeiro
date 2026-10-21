@@ -373,3 +373,64 @@ def test_navegador_continua_sem_criar_faturas_nem_executar_o_motor_interno(banco
     with pytest.raises(errors.RaiseException, match='sistema atual'):  # T1 continua valendo (Pessoal no Flask)
         gerar(banco, 17)
     assert ID['PESSOAL'] == 101
+
+
+# ---------------------------------------------------------------------------
+# Regra unica, qualquer que seja o mecanismo (Supabase, Alembic, create_all do Flask)
+# ---------------------------------------------------------------------------
+
+DEFINICAO_APROVADA = ('CREATE UNIQUE INDEX ux_conta_fatura_cartao_competencia ON public.conta USING btree '
+                      '(item_despesa_id, cartao_competencia) WHERE is_fatura_cartao')
+
+
+def _migration_alembic():
+    import importlib.util
+    caminho = next((ROOT / 'migrations' / 'versions').glob('d81f5a2b9c3e_*.py'))
+    spec = importlib.util.spec_from_file_location('migration_fatura_unica_pg', caminho)
+    modulo = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(modulo)
+    return modulo
+
+
+def _alembic_upgrade(dsn):
+    from alembic.operations import Operations
+    from alembic.runtime.migration import MigrationContext
+    from sqlalchemy import create_engine
+    engine = create_engine(dsn)
+    try:
+        with engine.begin() as conn, Operations.context(MigrationContext.configure(conn)):
+            _migration_alembic().upgrade()
+    finally:
+        engine.dispose()
+
+
+def _indices_da_regra(dsn):
+    return sql(dsn, "select indexname, indexdef from pg_indexes where schemaname = 'public' and tablename = 'conta' "
+                    "and indexdef like '%%(item_despesa_id, cartao_competencia)%%'")
+
+
+def test_um_unico_indice_com_a_definicao_aprovada_e_o_alembic_nao_cria_outro(banco):
+    # O cluster tem o create_all do model e a migration do Supabase aplicados.
+    assert _indices_da_regra(banco) == [{'indexname': 'ux_conta_fatura_cartao_competencia',
+                                         'indexdef': DEFINICAO_APROVADA}]
+    assert _migration_alembic().definicao_confere(DEFINICAO_APROVADA, 'postgresql')
+    _alembic_upgrade(banco)
+    assert _indices_da_regra(banco) == [{'indexname': 'ux_conta_fatura_cartao_competencia',
+                                         'indexdef': DEFINICAO_APROVADA}]
+
+
+def test_alembic_sozinho_cria_exatamente_a_mesma_definicao(banco):
+    sql(banco, 'drop index public.ux_conta_fatura_cartao_competencia')
+    _alembic_upgrade(banco)
+    assert _indices_da_regra(banco) == [{'indexname': 'ux_conta_fatura_cartao_competencia',
+                                         'indexdef': DEFINICAO_APROVADA}]
+    _aplicar_migration(banco)  # a do Supabase depois: nao cria outro
+    assert len(_indices_da_regra(banco)) == 1
+
+
+def test_alembic_aborta_se_o_indice_existente_tiver_outra_regra(banco):
+    sql(banco, 'drop index public.ux_conta_fatura_cartao_competencia')
+    sql(banco, 'create unique index ux_conta_fatura_cartao_competencia on public.conta '
+               '(item_despesa_id, cartao_competencia, perfil_financeiro_id) where is_fatura_cartao')
+    with pytest.raises(RuntimeError, match='outra definicao'):
+        _alembic_upgrade(banco)
