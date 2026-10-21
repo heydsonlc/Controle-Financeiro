@@ -1,6 +1,6 @@
 # SUPABASE-DEPLOY-CONTROL-1 — Controle da aplicação automática de migrations
 
-Data: 2026-10-21. Diagnóstico e preparação. **Nenhuma configuração remota foi alterada**, nenhuma migration executada, nada publicado.
+Data: 2026-10-21. **Encerrado:** "Deploy to production" desligado pelo usuário e confirmado por captura do painel (§7). Aplicação manual de migrations adotada como padrão do projeto.
 
 ## 1. Mecanismo identificado
 
@@ -65,3 +65,26 @@ Validado agora, sem efeito no banco: `status` (2 locais, 2 aplicadas, nenhuma pe
 ## 6. Não alterado
 
 Migrations existentes e o histórico do banco; a integração GitHub (aguarda o usuário); Supabase Auth; Data API (`graphql_public` + `financeiro`); frontend.
+
+## 7. Encerramento (2026-10-21)
+
+Confirmado pelo usuário com captura de *Project Settings → Integrations → GitHub* do projeto Controle-Financeiro:
+
+| Configuração | Estado |
+|---|---|
+| Deploy to production | **Desligado**; o campo "Production branch name" fica vazio/inativo |
+| Automatic branching (preview por PR) | Desligado |
+| Integração GitHub | Mantida conectada ("Disable integration" não usado) |
+| Supabase Auth e Data API | Inalterados (Data API: `graphql_public` + `financeiro`) |
+
+Verificações somente leitura depois da mudança:
+- projeto Controle-Financeiro (`us-east-2`, ACTIVE_HEALTHY);
+- `supabase_migrations.py status`: 2 locais, 2 aplicadas, **nenhuma pendente nem divergência**;
+- `simular`: "Remote database is up to date".
+
+O estado do toggle não é legível pela CLI (`branches get` só devolve os endereços de conexão). Por isso a confirmação é a captura do painel. A prova de funcionamento será a **primeira migration real** do MOBILE-CONTAS-1: pendente antes do push e **continuando pendente depois dele**, até `aplicar --versoes` autorizado.
+
+**Padrão do projeto, daqui em diante:**
+- migrations em `supabase/migrations` são criadas e testadas localmente;
+- **nunca** são aplicadas por push;
+- só são aplicadas por `scripts/supabase_migrations.py aplicar --versoes <v>`, com autorização expressa para cada versão.
