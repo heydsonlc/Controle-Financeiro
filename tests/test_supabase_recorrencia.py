@@ -124,9 +124,19 @@ def copiar(cluster):
     return _dsn(cluster, nome)
 
 
+def atribuir(dsn, perfil, gerador='NOVO'):
+    """FIN-RECORRENCIA-T1: troca administrativa do gerador do perfil (padrao: FLASK)."""
+    return sql(dsn, 'select financeiro.definir_gerador_recorrencia(%s, %s, %s, %s) as r',
+               (ID.get(perfil, perfil), gerador, 'administrador de teste', 'cenario ficticio'))[0]['r']
+
+
 @pytest.fixture
 def banco(cluster):
-    return copiar(cluster)
+    """Copia com Pessoal e Perfil B atribuidos ao novo motor (Empresa segue no Flask)."""
+    dsn = copiar(cluster)
+    atribuir(dsn, 'PESSOAL')
+    atribuir(dsn, 'PERFIL_B')
+    return dsn
 
 
 def chamar(dsn, usuario, sql, params=()):
@@ -248,6 +258,8 @@ def comparacao(cluster):
     # No novo motor, a Empresa precisa de quem a gerencie (no cenario, A e LEITOR).
     sql(dsn_novo, "update financeiro.perfil_acesso set papel = 'TITULAR', pode_gerir = true "
                   "where perfil_financeiro_id = %s", (ID['EMPRESA'],))
+    for perfil in ('PESSOAL', 'EMPRESA', 'PERFIL_B'):
+        atribuir(dsn_novo, perfil)
     for perfil, usuario in (('PESSOAL', USUARIO_A), ('EMPRESA', USUARIO_A), ('PERFIL_B', USUARIO_B)):
         gerar_confirmado(dsn_novo, perfil, usuario)
     novo = registros_novos(dsn_novo, CONTAS_PRE, LANCAMENTOS_PRE)
@@ -277,6 +289,7 @@ def test_registros_iguais_ao_flask_onde_nao_ha_correcao(comparacao):
 
 def test_flask_primeiro_registros_reconhecidos_sem_duplicar(comparacao, cluster):
     dsn = comparacao['dsn_flask']
+    atribuir(dsn, 'PESSOAL')  # transicao do perfil depois de o Flask ja ter gerado
     antes_contas, antes_lancs = ids(dsn, 'conta'), ids(dsn, 'lancamento_agregado')
     p = previa(dsn)
     # So falta o que o Flask nao consegue criar: a fatura de abril (dia 31).
@@ -290,6 +303,7 @@ def test_flask_primeiro_registros_reconhecidos_sem_duplicar(comparacao, cluster)
 
 def test_correcao_do_vencimento_nao_duplica_registro_antigo_do_flask(comparacao):
     dsn = comparacao['dsn_flask']
+    atribuir(dsn, 'PESSOAL')
     gerar_confirmado(dsn)  # idempotente se o teste anterior ja gerou
     marco = [c['data_vencimento'] for c in contas_do_item(dsn, 901) if c['mes_referencia'] == D(2027, 3, 1)]
     assert marco == [D(2027, 3, 28)]  # mantido como o Flask gravou; nada de 31/03 a mais
@@ -299,34 +313,20 @@ def test_correcao_do_vencimento_nao_duplica_registro_antigo_do_flask(comparacao)
 
 @pytest.fixture(scope='module')
 def flask_depois_do_novo(cluster):
-    """Novo motor gera (com uma competencia dispensada); depois o Flask navega no mesmo mes."""
+    """Pessoal atribuido ao novo motor (T1): gera com uma dispensa; depois o Flask navega no mesmo mes."""
     dsn = copiar(cluster)
+    atribuir(dsn, 'PESSOAL')
     gerar_confirmado(dsn, dispensar=[{'natureza': 'CONTA', 'item_id': 902, 'competencia': MES}])
     contas, lancs = ids(dsn, 'conta'), ids(dsn, 'lancamento_agregado')
     rodar_flask(dsn, perfis=('PESSOAL',))
     return {'dsn': dsn, 'flask': registros_novos(dsn, contas, lancs)}
 
 
-def test_incompatibilidade_documentada_flask_recria_dispensada_e_duplica_corrigidas(flask_depois_do_novo):
-    """Evidencia do item 6 do contrato: enquanto o Flask gerar por GET, ele desfaz as correcoes."""
-    criadas = flask_depois_do_novo['flask']
-    datas = {k: [dict(linha)['data_vencimento' if k[0] != 'LANCAMENTO_CARTAO' else 'data_compra'] for linha in v]
-             for k, v in criadas.items()}
-    assert datas[('CONTA', 902, D(2027, 3, 1))] == [D(2027, 3, 10)]   # competencia dispensada recriada
-    assert datas[('CONTA', 901, D(2027, 3, 1))] == [D(2027, 3, 28)]   # duplicata da conta de 31/03
-    assert datas[('CONTA', 901, D(2027, 4, 1))] == [D(2027, 4, 28)]   # duplicata da conta de 30/04
-    assert len(datas[('CONTA', 904, D(2027, 3, 1))]) == 1             # inativa volta a gerar
-    # Compras de cartao NAO duplicam: o compra_id deterministico e o mesmo nos dois motores.
-    assert not any(k[0] == 'LANCAMENTO_CARTAO' for k in criadas)
-    # Faturas tambem nao: a identidade e cartao + competencia.
-    assert not any(k[0] == 'FATURA' for k in criadas)
-
-
-@pytest.mark.xfail(strict=True, reason='Item 6 do contrato: exige escritor unico (o GET do Flask ainda gera). '
-                                       'Ver docs/FIN_RECORRENCIA_1_CONTRATO.md, secao "Transicao".')
 def test_flask_nao_recria_competencias_dispensadas_nem_corrigidas(flask_depois_do_novo):
+    """Item 6 do contrato, garantido pelo gerador unico por perfil (FIN-RECORRENCIA-T1)."""
     criadas = flask_depois_do_novo['flask']
     assert not {('CONTA', 902, D(2027, 3, 1)), ('CONTA', 901, D(2027, 3, 1)), ('CONTA', 901, D(2027, 4, 1))} & set(criadas)
+    assert criadas == {}  # nem inativa, nem semanal, nem compras, nem faturas: o Flask nao gera neste perfil
 
 
 # ---------------------------------------------------------------------------
@@ -652,6 +652,12 @@ def test_anonimo_nao_executa(banco, comando):
 @pytest.mark.parametrize('comando', [
     "select count(*) from financeiro.plano_recorrencia(101, '2027-03-01')",
     "select financeiro.dia_contratual('2027-03-01', 31)",
+    "select financeiro.gerar_mes_interno(101, '2027-03-01', 17, '[]')",
+    "select financeiro.previa_geracao_interna(101, '2027-03-01')",
+    "select financeiro.exigir_gerador_novo(101)",
+    "select financeiro.definir_gerador_recorrencia(102, 'NOVO', 'navegador', 'tentativa')",
+    'select count(*) from financeiro.gerador_recorrencia',
+    'select count(*) from financeiro.gerador_recorrencia_historico',
     'select count(*) from financeiro.recorrencia_competencia',
     'select count(*) from financeiro.geracao_execucao',
     "insert into financeiro.recorrencia_competencia (item_despesa_id, natureza, competencia, situacao) "

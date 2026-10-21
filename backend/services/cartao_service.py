@@ -20,11 +20,13 @@ try:
                                 OrcamentoAgregado, LancamentoAgregado, ConfigAgregador)
     from backend.services.categoria_cartao_service import CategoriaCartaoService
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
+    from backend.services.gerador_recorrencia_service import flask_pode_gerar
 except ImportError:
     from models import (db, Conta, ItemDespesa, ItemAgregado,
                        OrcamentoAgregado, LancamentoAgregado, ConfigAgregador)
     from services.categoria_cartao_service import CategoriaCartaoService
     from services.perfil_financeiro_service import PerfilFinanceiroService
+    from services.gerador_recorrencia_service import flask_pode_gerar
 
 logger = logging.getLogger(__name__)
 
@@ -1001,6 +1003,9 @@ class CartaoService:
         faturas_criadas = []
 
         for cartao in cartoes:
+            # FIN-RECORRENCIA-T1: job/scheduler nao gera faturas de perfil atribuido ao novo aplicativo.
+            if not flask_pode_gerar(cartao.perfil_financeiro_id, f'job faturas cartao_id={cartao.id}'):
+                continue
             try:
                 fatura = CartaoService.get_or_create_fatura(cartao.id, mes_atual)
                 faturas_criadas.append(fatura)

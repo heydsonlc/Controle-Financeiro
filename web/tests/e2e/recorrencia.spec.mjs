@@ -116,6 +116,32 @@ test('quem so le o perfil ve o aviso, mas nao tem a acao de gerar', async ({ pag
     await expect(page.locator('#gerar-contas')).toHaveCount(0);
 });
 
+test('perfil ainda gerado pelo sistema atual: aviso sem a acao de gerar (FIN-RECORRENCIA-T1)', async ({ page }) => {
+    await entrar(page, A);
+    await abrirMes(page, '2028-01');
+    await expect(page.locator('#aviso-texto')).toHaveText(/^2 lançamentos recorrentes ou faturas a gerar até 02\/2028/);
+    await expect(page.locator('#geracao-acoes')).toContainText('A geração deste perfil ainda é feita pelo sistema atual.');
+    await expect(page.locator('#gerar-contas')).toHaveCount(0);
+    const status = await page.evaluate(async () => {
+        const token = JSON.parse(localStorage.getItem('cf-financeiro-auth')).access_token;
+        const resposta = await fetch(`${window.CF_CONFIG.supabaseUrl}/rest/v1/rpc/gerar_mes`, {
+            method: 'POST',
+            headers: {
+                apikey: window.CF_CONFIG.supabasePublishableKey,
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                'Content-Profile': 'financeiro',
+            },
+            body: JSON.stringify({ p_perfil_id: Number(document.getElementById('perfil-ativo').value),
+                p_mes: '2028-01-01', p_total_previsto: 2 }),
+        });
+        return [resposta.status, (await resposta.json()).message];
+    });
+    expect(status).toEqual([400, 'A geracao deste perfil ainda e feita pelo sistema atual (Flask)']);
+    await abrirMes(page, '2028-01');
+    await expect(page.locator('#lista-despesas .conta')).toHaveCount(0);  // nada foi gravado
+});
+
 test('gerar por fora da tela: perfil de outro usuario e perfil so de leitura recebem 403', async ({ page }) => {
     await entrar(page, A);
     await abrirMes(page, '2027-05');

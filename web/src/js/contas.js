@@ -165,7 +165,10 @@ function mostrarGeracao(previa, perfilId, mes) {
         });
         acoes.append(gerarBotao);
     } else if (previa.a_gerar) {
-        acoes.append(el('span', 'geracao-nota', 'Somente quem gerencia este perfil pode gerar.'));
+        // FIN-RECORRENCIA-T1: um unico gerador por perfil; o padrao continua sendo o sistema atual.
+        acoes.append(el('span', 'geracao-nota', previa.pode_gerir
+            ? 'A geração deste perfil ainda é feita pelo sistema atual.'
+            : 'Somente quem gerencia este perfil pode gerar.'));
     }
     if (previa.rejeitadas || previa.dispensadas) acoes.append(listaNaoGerados(previa));
     aviso.hidden = false;

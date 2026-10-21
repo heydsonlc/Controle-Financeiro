@@ -145,6 +145,8 @@ O Flask real gerou por GET em março/2027 (Pessoal, Empresa e Perfil B); o novo 
 
 ## 6. Incompatibilidade: o item 6 exige escritor único
 
+> **Atualização (FIN-RECORRENCIA-T1, 2026-10-21):** a transição **T1 foi aprovada e implementada** (`docs/FIN_RECORRENCIA_T1.md`). Com o perfil atribuído ao novo motor, o item 6 **passa** e o xfail foi removido. O texto abaixo registra a situação anterior.
+
 **Evidência** (teste `test_incompatibilidade_documentada…`): depois de o novo motor gerar com uma dispensa, o GET do Flask no mesmo mês:
 - **recria a competência dispensada** (Escola, 10/03);
 - **duplica as contas corrigidas** (28/03 ao lado de 31/03, e 28/04 ao lado de 30/04);

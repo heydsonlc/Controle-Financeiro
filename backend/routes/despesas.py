@@ -15,12 +15,14 @@ try:
     from backend.services.cartao_service import CartaoService
     from backend.services.categoria_cartao_service import CategoriaCartaoService
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
+    from backend.services.gerador_recorrencia_service import flask_pode_gerar
     from backend.routes.dashboard import _calcular_receitas_mes
 except ImportError:
     from models import db, ItemDespesa, Categoria, LancamentoAgregado, CartaoCategoriaLimite, Conta
     from services.cartao_service import CartaoService
     from services.categoria_cartao_service import CategoriaCartaoService
     from services.perfil_financeiro_service import PerfilFinanceiroService
+    from services.gerador_recorrencia_service import flask_pode_gerar
     from routes.dashboard import _calcular_receitas_mes
 
 despesas_bp = Blueprint('despesas', __name__, url_prefix='/api/despesas')
@@ -160,6 +162,9 @@ def gerar_execucao_despesa_recorrente(item_despesa_id, meses_futuros=1, mes_refe
     if not item:
         raise ValueError('ItemDespesa nÃ£o encontrado')
     if not item.recorrente:
+        return []
+    # FIN-RECORRENCIA-T1: perfil atribuido ao novo aplicativo nao e gerado pelo Flask.
+    if not flask_pode_gerar(item.perfil_financeiro_id, f'recorrencia item_despesa_id={item.id}'):
         return []
 
     if item.meio_pagamento == 'cartao':
@@ -304,6 +309,9 @@ def listar_despesas():
                 cartoes_ativos = _query_itens().filter_by(tipo='Agregador', ativo=True).all()
                 for cartao in cartoes_ativos:
                     for comp in competencias_fatura:
+                        # FIN-RECORRENCIA-T1: verificado a cada fatura (get_or_create_fatura faz commit).
+                        if not flask_pode_gerar(cartao.perfil_financeiro_id, f'fatura virtual cartao_id={cartao.id}'):
+                            continue
                         try:
                             CartaoService.get_or_create_fatura(cartao.id, comp)
                         except Exception:

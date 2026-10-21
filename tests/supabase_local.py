@@ -510,7 +510,10 @@ def semear_recorrencias(cur):
 RECORRENCIAS_E2E = [  # id, nome, perfil, ancora, valor
     (451, 'Mensalidade B', 'PERFIL_B', '2027-01-31', '120.00'),
     (453, 'Aluguel sala', 'EMPRESA', '2027-05-15', '900.00'),
+    (454, 'Seguro 2028', 'PESSOAL', '2028-01-10', '10.00'),  # Pessoal segue no gerador Flask (T1)
 ]
+# FIN-RECORRENCIA-T1: so o Perfil B e atribuido ao novo motor; os demais ficam no padrao (Flask).
+GERADOR_NOVO_E2E = ['PERFIL_B']
 CARTAO_E2E = (452, 'Cartao B', 'PERFIL_B', 31)
 
 
@@ -525,3 +528,6 @@ def semear_recorrencia_e2e(cur, categoria_id=201):
                 "values (%s, %s, 'Agregador', %s, %s, true, false)", (iid, nome, PERFIS[chave]['id'], categoria_id))
     cur.execute('insert into public.config_agregador (item_despesa_id, dia_fechamento, dia_vencimento) values (%s, 25, %s)',
                 (iid, dia))
+    for chave in GERADOR_NOVO_E2E:
+        cur.execute("select financeiro.definir_gerador_recorrencia(%s, 'NOVO', 'administrador de teste', 'cenario E2E')",
+                    (PERFIS[chave]['id'],))
