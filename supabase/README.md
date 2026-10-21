@@ -24,6 +24,10 @@ Toda função nova que receber um perfil do navegador deve chamar `financeiro.po
 - na camada de banco (`SET ROLE` + claims do JWT, como o PostgREST faz);
 - na camada REST (PostgREST real), quando `POSTGREST_BIN` está definido.
 
+## ⚠️ Deploy automático (SUPABASE-DEPLOY-CONTROL-1)
+
+A integração GitHub do Supabase aplica as migrations desta pasta a cada push em `main` enquanto "Deploy to production" estiver ligado. **Push com migration nova = deploy no banco.** Procedimento manual e seguro: `scripts/supabase_migrations.py` (`docs/SUPABASE_DEPLOY_CONTROL_1.md`).
+
 ## Antes de aplicar no projeto remoto (exige autorização específica)
 
 1. **Corrigir a exposição atual do schema `public`** (ver `docs/CF_SUPABASE_REFACTOR_1.md` §2).
