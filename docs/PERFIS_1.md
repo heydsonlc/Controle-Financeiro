@@ -1,6 +1,6 @@
 # PERFIS-1 — Identidade, perfis financeiros e isolamento de dados
 
-Data: 2026-10-21. Implementação controlada e testada **localmente**.
+Data: 2026-10-21. Implementação testada localmente e **validada no Supabase real de teste** (PERFIS-REAL-1, §8).
 
 **Não executado:** migration no Supabase remoto, publicação no Cloudflare, migração de dados reais. Nenhuma alteração no Flask nem em regras financeiras.
 
@@ -92,3 +92,63 @@ O ambiente de teste (`tests/supabase_local.py`) agora reproduz o staging: tabela
 1. Aplicar `20261021090000_financeiro_perfis_acesso.sql` no Supabase de teste. Exige autorização; depois, `run_e2e_real.py` volta a valer com os perfis.
 2. Vínculos para as contas de teste no remoto (fictícios) e, depois, para a identidade definitiva.
 3. Escrita (cadastro e pagamentos): só por RPC transacional, no MOBILE-CONTAS-2.
+
+## 8. Validação real — PERFIS-REAL-1 (2026-10-21)
+
+Alvo: projeto **Controle-Financeiro** (`fzjmge…`, `us-east-2`, ACTIVE_HEALTHY). Calculadora Judicial não tocada.
+
+### 8.1 Migration
+
+| Item | Resultado |
+|---|---|
+| Verificações antes | Colunas referenciadas existem com tipos compatíveis; `auth.uid()` existe; nenhum objeto do PERFIS-1 existia; `public` fora da Data API; perfis existentes: **Pessoal (1, padrão) e Empresa (2)** |
+| Aplicação | `20261021090000_financeiro_perfis_acesso` **aplicada** e registrada em `supabase_migrations.schema_migrations` (17 comandos) |
+| Conferência | Os 17 comandos registrados no remoto são **idênticos** ao arquivo commitado (comparação normalizada) |
+| ⚠️ Forma de aplicação | A migration apareceu no remoto **logo após o push do `d04eb9d`**, antes de qualquer comando de aplicação meu (só rodei `--dry-run` e listagens). O mesmo aconteceu com `20261020120000` após o push do `0ee59f6`. Indício forte de uma **integração GitHub do Supabase que aplica `supabase/migrations` a cada push em `main`**. **Confirmar no painel** (*Project Settings → Integrations → GitHub*): enquanto existir, **push com migration = deploy no projeto de teste** |
+
+### 8.2 Objetos e RLS no remoto
+
+| Objeto | Verificado |
+|---|---|
+| `financeiro.perfil_acesso` | RLS habilitada e **forçada**; policy única `SELECT` dos próprios vínculos; só `SELECT` para `authenticated`; FKs para `auth.users` e `public.perfil_financeiro` (`on delete cascade`) |
+| `meus_perfis`, `pode_acessar_perfil`, `contas_bancarias_do_perfil` | `SECURITY DEFINER`, `search_path=""`, `EXECUTE` só para `authenticated` (não para `anon` nem `PUBLIC`) |
+| Tabelas legadas | 0 grants para `anon`/`authenticated`; `public` fora da Data API |
+
+### 8.3 Dados de teste (fictícios e temporários)
+
+Os perfis existentes **Pessoal e Empresa foram usados sem alteração**. Criados só para o teste, por `scripts/supabase_perfis_seed_teste.py`, com estado registrado em `data/` (fora do Git):
+- 2 perfis temporários: "Perfil B" (ativo) e "Perfil inativo (A)" (inativo);
+- 5 contas fictícias com o marcador `Banco ficticio [teste PERFIS-REAL-1]`, uma sem perfil (regra NULL→Pessoal);
+- 4 vínculos: A→Pessoal (TITULAR), A→Empresa (LEITOR), A→inativo, B→Perfil B;
+- as categorias fictícias do AUTH-REAL-1.
+
+O script recusa rodar se as contas de teste já tiverem vínculos, preservando vínculos preexistentes.
+
+### 8.4 Testes reais
+
+| Teste | Resultado |
+|---|---|
+| E2E real (`run_e2e_real.py`): 9 do AUTH-REAL-1 + 5 do PERFIS-1 | **14/14 passaram** |
+| A acessa só os próprios perfis | `meus_perfis` → Pessoal, Empresa (inativo fora) |
+| B acessa só os próprios perfis | `meus_perfis` → Perfil B |
+| A alterna entre Pessoal e Empresa | ✅ (E2E), escolha persiste ao recarregar |
+| Perfil não autorizado | A→Perfil B, B→Pessoal, B→Empresa: **HTTP 403 (42501)** |
+| Perfil inativo | A→inativo próprio: **403**; `pode_acessar_perfil` → `false` |
+| Id alterado no navegador | Tela volta ao perfil padrão; chamada direta com o id de B → 403 |
+| Autoconcessão de vínculo | `POST perfil_acesso` com token de A → **403**; A lê só os próprios 3 vínculos; 4 vínculos no banco (os criados) |
+| Tabelas legadas pela Data API | Com token: **406 PGRST106**; anônimo (`--com-escrita`): `public BLOQUEADO` |
+| Anônimo | `meus_perfis` → 401 |
+
+### 8.5 Compatibilidade com o Flask
+
+`/health` 200; o ORM do Flask leu os perfis, inclusive os temporários enquanto existiam, o que mostra que **as duas aplicações compartilham a mesma fonte de perfis**; a API do Flask sem sessão continua 401. Nenhuma das 52 tabelas legadas teve estrutura alterada.
+
+### 8.6 Limpeza
+
+Removidos exatamente o que foi criado: 4 vínculos, 5 contas, 2 perfis temporários e as categorias fictícias. Comparação com a impressão digital tirada antes dos testes: perfis existentes (Pessoal/Empresa, todas as colunas) **idênticos**, e as contagens voltaram ao estado inicial (2 perfis, 0 contas, 0 vínculos, 0 categorias, 2 contas no Auth, Alembic `c4f7a2d91b3e`). As contas do Auth e os perfis existentes foram preservados.
+
+### 8.7 Bloqueadores e próximos passos
+
+1. **Confirmar a integração GitHub do Supabase** (§8.1): decidir se o deploy automático de migrations a cada push continua, ou se migrations passam a ser aplicadas só sob comando.
+2. **Identidade definitiva:** criar a conta pessoal real e vinculá-la a Pessoal e Empresa por SQL de administrador, com recuperação de acesso definida.
+3. **MOBILE-CONTAS-1:** fachadas de leitura por perfil para despesas correntes e faturas do mês, reproduzindo os valores e agrupamentos do Flask (sem duplicar compras de cartão no total de despesas), com testes de equivalência.
