@@ -18,6 +18,10 @@ create role authenticator login noinherit;
 grant anon, authenticated, service_role to authenticator;
 
 create schema auth;
+
+-- No Supabase as extensoes (uuid-ossp, pgcrypto) ficam no schema `extensions`.
+create schema extensions;
+grant usage on schema extensions to anon, authenticated, service_role;
 grant usage on schema auth to anon, authenticated, service_role;
 
 create table auth.users (

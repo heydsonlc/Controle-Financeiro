@@ -1,9 +1,10 @@
-// MOBILE-CONTAS-1 — Contas do mes (somente leitura).
+// MOBILE-CONTAS-1 — Contas do mes.
 //
-// Dados vem de financeiro.contas_do_mes / lancamentos_da_fatura /
-// mes_pode_estar_incompleto, que revalidam o perfil no banco a cada chamada e
-// nunca gravam (funcoes STABLE). Sem geracao de recorrencias e sem baixa de
-// debito automatico: a tela mostra o que esta registrado.
+// Consulta: financeiro.contas_do_mes / lancamentos_da_fatura / previa_geracao,
+// que revalidam o perfil no banco a cada chamada e nunca gravam (STABLE).
+// FIN-RECORRENCIA-1: a unica escrita e financeiro.gerar_mes, acionada pelo botao
+// "Gerar contas" e so depois da confirmacao (com o total da previa confirmada e
+// as competencias desmarcadas como dispensadas). Sem baixa de debito automatico.
 
 import { supabase } from './cliente.js';
 import { carregarPerfis, escolherPerfilAtivo, salvarPerfilAtivo } from './perfil.js';
@@ -117,6 +118,136 @@ function itemFatura(conta, perfilId, mes) {
     return item;
 }
 
+const competenciaCurta = (iso) => `${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+const NATUREZA = { CONTA: 'Conta', LANCAMENTO_CARTAO: 'Compra no cartão', FATURA: 'Fatura' };
+const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
+
+function botao(texto, classe) {
+    const elemento = el('button', classe ? `botao ${classe}` : 'botao', texto);
+    elemento.type = 'button';
+    return elemento;
+}
+
+function listaNaoGerados(previa) {
+    const detalhe = el('details');
+    detalhe.append(el('summary', null, 'Ver itens não gerados'));
+    const lista = el('ul', 'geracao-lista');
+    for (const item of [...previa.rejeitados, ...previa.dispensados]) {
+        const quando = item.competencia ? ` · ${competenciaCurta(item.competencia)}` : '';
+        lista.append(el('li', null, `${item.nome}${quando} — ${item.motivo}`));
+    }
+    detalhe.append(lista);
+    return detalhe;
+}
+
+function mostrarGeracao(previa, perfilId, mes) {
+    const aviso = document.getElementById('aviso-geracao');
+    const acoes = document.getElementById('geracao-acoes');
+    const painel = document.getElementById('geracao-confirmacao');
+    acoes.replaceChildren();
+    painel.replaceChildren();
+    painel.hidden = true;
+    if (!previa || (!previa.a_gerar && !previa.rejeitadas)) {
+        aviso.hidden = true;
+        return;
+    }
+    const partes = [];
+    if (previa.a_gerar) partes.push(`${plural(previa.a_gerar, 'lançamento recorrente ou fatura', 'lançamentos recorrentes ou faturas')} a gerar até ${competenciaCurta(deslocarMes(mes, 1))}`);
+    if (previa.rejeitadas) partes.push(`${plural(previa.rejeitadas, 'item não pode', 'itens não podem')} ser gerado${previa.rejeitadas === 1 ? '' : 's'}`);
+    document.getElementById('aviso-texto').textContent = `${partes.join(' · ')}.`;
+
+    if (previa.a_gerar && previa.pode_gerar) {
+        const gerarBotao = botao('Gerar contas', 'botao-principal');
+        gerarBotao.id = 'gerar-contas';
+        gerarBotao.addEventListener('click', () => {
+            gerarBotao.hidden = true;
+            abrirConfirmacao(previa, perfilId, mes, () => { gerarBotao.hidden = false; });
+        });
+        acoes.append(gerarBotao);
+    } else if (previa.a_gerar) {
+        acoes.append(el('span', 'geracao-nota', 'Somente quem gerencia este perfil pode gerar.'));
+    }
+    if (previa.rejeitadas || previa.dispensadas) acoes.append(listaNaoGerados(previa));
+    aviso.hidden = false;
+}
+
+function abrirConfirmacao(previa, perfilId, mes, aoCancelar) {
+    const painel = document.getElementById('geracao-confirmacao');
+    painel.replaceChildren();
+    const competencias = previa.competencias.map(competenciaCurta);
+    painel.append(
+        el('h2', 'geracao-titulo', 'Confirmar geração'),
+        el('p', null, `${plural(previa.a_gerar, 'registro', 'registros')} em ${plural(competencias.length, 'competência', 'competências')}: ${competencias.join(', ')}.`),
+    );
+    if (previa.extenso) {
+        painel.append(el('p', 'geracao-alerta', previa.retroativo
+            ? 'Inclui competências anteriores ao mês exibido (lacunas não geradas).'
+            : 'Inclui mais de um mês.'));
+    }
+    painel.append(el('p', 'geracao-dica', 'Desmarque o que não deve ser cobrado: a competência fica registrada como dispensada e não é gerada de novo.'));
+
+    const lista = el('ul', 'geracao-lista');
+    const marcadores = [];
+    for (const item of previa.itens) {
+        const linha = el('li');
+        const texto = `${competenciaCurta(item.competencia)} · ${item.nome} · ${NATUREZA[item.natureza]} · ${dataCurta(item.data_vencimento)} · ${reais(centavos(item.valor))}`;
+        if (item.natureza === 'FATURA') {
+            linha.append(el('span', null, texto));  // fatura sempre existe: nao e dispensavel
+        } else {
+            const rotulo = el('label');
+            const caixa = el('input');
+            caixa.type = 'checkbox';
+            caixa.checked = true;
+            marcadores.push({ caixa, item });
+            rotulo.append(caixa, el('span', null, texto));
+            linha.append(rotulo);
+        }
+        lista.append(linha);
+    }
+    painel.append(lista);
+
+    const erro = el('p', 'login-error');
+    erro.setAttribute('role', 'alert');
+    erro.hidden = true;
+    const confirmar = botao('Confirmar', 'botao-principal');
+    const cancelar = botao('Cancelar');
+    const botoes = el('div', 'geracao-botoes');
+    botoes.append(confirmar, cancelar);
+    painel.append(erro, botoes);
+    painel.hidden = false;
+
+    cancelar.addEventListener('click', () => {
+        painel.replaceChildren();
+        painel.hidden = true;
+        aoCancelar();
+    });
+    confirmar.addEventListener('click', async () => {
+        confirmar.disabled = true;
+        cancelar.disabled = true;
+        erro.hidden = true;
+        const dispensar = marcadores.filter((m) => !m.caixa.checked)
+            .map(({ item }) => ({ natureza: item.natureza, item_id: item.item_id, competencia: item.competencia }));
+        const { data, error } = await supabase.rpc('gerar_mes', {
+            p_perfil_id: perfilId, p_mes: `${mes}-01`, p_total_previsto: previa.a_gerar, p_dispensar: dispensar,
+        });
+        if (error) {
+            erro.textContent = /previa mudou/i.test(error.message || '')
+                ? 'As contas mudaram desde a prévia. Recarregue o mês e confirme de novo.'
+                : 'Não foi possível gerar as contas. Nada foi gravado.';
+            erro.hidden = false;
+            confirmar.disabled = false;
+            cancelar.disabled = false;
+            return;
+        }
+        const resultado = document.getElementById('geracao-resultado');
+        resultado.textContent = `Geração concluída: ${plural(data.criadas.total, 'criada', 'criadas')}, `
+            + `${plural(data.existentes, 'já existente', 'já existentes')}, `
+            + `${plural(data.dispensadas, 'dispensada', 'dispensadas')}, ${plural(data.rejeitadas, 'rejeitada', 'rejeitadas')}.`;
+        resultado.hidden = false;
+        await carregarMes(perfilId, mes);
+    });
+}
+
 function limpar() {
     for (const id of ['totais', 'aviso-geracao', 'contas-erro', 'contas-vazio', 'secao-despesas', 'secao-cartoes']) {
         document.getElementById(id).hidden = true;
@@ -127,9 +258,9 @@ function limpar() {
 
 async function carregarMes(perfilId, mes) {
     limpar();
-    const [contasResp, avisoResp] = await Promise.all([
+    const [contasResp, previaResp] = await Promise.all([
         supabase.rpc('contas_do_mes', { p_perfil_id: perfilId, p_mes: `${mes}-01` }),
-        supabase.rpc('mes_pode_estar_incompleto', { p_perfil_id: perfilId, p_mes: `${mes}-01` }),
+        supabase.rpc('previa_geracao', { p_perfil_id: perfilId, p_mes: `${mes}-01` }),
     ]);
     if (contasResp.error) {
         const erro = document.getElementById('contas-erro');
@@ -138,7 +269,7 @@ async function carregarMes(perfilId, mes) {
         return;
     }
     const contas = contasResp.data || [];
-    document.getElementById('aviso-geracao').hidden = avisoResp.error ? true : !avisoResp.data;
+    mostrarGeracao(previaResp.error ? null : previaResp.data, perfilId, mes);
 
     // Cada conta (despesa ou fatura) entra uma unica vez; compras nunca sao somadas aqui.
     const total = contas.reduce((soma, c) => soma + centavos(c.valor), 0);
@@ -214,6 +345,7 @@ if (usuario) {
         document.getElementById('perfil-rotulo').hidden = false;
         seletor.addEventListener('change', async () => {
             salvarPerfilAtivo(usuario.id, seletor.value);
+            document.getElementById('geracao-resultado').hidden = true;
             await carregarMes(Number(seletor.value), mes);
         });
         await carregarMes(ativo.id, mes);

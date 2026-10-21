@@ -69,7 +69,15 @@ test('novembro (Pessoal): despesas por vencimento, faturas por cartao e totais c
     const faturas = page.locator('#lista-cartoes .conta');
     expect(await textos(faturas.locator('.conta-valor'))).toEqual(['R$ 120,00', 'R$ 1.320,00']);
     expect(await textos(faturas.locator('.situacao'))).toEqual(['Paga', 'Pendente']);
-    await expect(page.locator('#aviso-geracao')).toBeHidden();
+    // FIN-RECORRENCIA-1: nada a gerar, mas itens que o motor recusa ficam visiveis (sem acao de gerar).
+    await expect(page.locator('#aviso-texto')).toHaveText('3 itens não podem ser gerados.');
+    await expect(page.locator('#gerar-contas')).toHaveCount(0);
+    await page.locator('#geracao-acoes summary').click();
+    expect(await textos(page.locator('#geracao-acoes .geracao-lista li'))).toEqual([
+        'Aluguel — Sem valor valido',
+        'Cartao Azul · 12/2026 — Cartao sem dia de vencimento configurado',
+        'Cartao Verde · 12/2026 — Cartao sem dia de vencimento configurado',
+    ]);
 });
 
 test('detalhe da fatura mostra as compras do mes, sem compras de outro mes', async ({ page }) => {

@@ -147,8 +147,10 @@ class ClusterLocal:
         finally:
             engine.dispose()
 
-    def preparar(self):
-        """Shim do Supabase + tabelas do Flask protegidas + migrations de supabase/ + dados ficticios."""
+    def preparar(self, contas=True):
+        """Shim do Supabase + tabelas do Flask protegidas + migrations de supabase/ + dados ficticios.
+
+        contas=False: sem as contas do MOBILE-CONTAS-1 (cenarios proprios, ex.: FIN-RECORRENCIA-1)."""
         self.aplicar_shim()
         self.criar_tabelas_legadas()
         conn = self.conectar()
@@ -165,7 +167,8 @@ class ClusterLocal:
                             (usuario['id'], nome, 'Dado ficticio de teste'),
                         )
                 semear_perfis(cur)
-                semear_contas(cur)
+                if contas:
+                    semear_contas(cur)
         finally:
             conn.close()
 
@@ -177,11 +180,11 @@ PERFIS = {
     'PERFIL_B': {'id': 103, 'nome': 'Perfil B', 'tipo': 'PESSOAL', 'padrao': False, 'ativo': True},
     'INATIVO_A': {'id': 104, 'nome': 'Perfil inativo (A)', 'tipo': 'EMPRESA', 'padrao': False, 'ativo': False},
 }
-VINCULOS = [  # (usuario, perfil, papel) — nada e vinculado automaticamente
-    (USUARIO_A, 'PESSOAL', 'TITULAR'),
-    (USUARIO_A, 'EMPRESA', 'LEITOR'),
-    (USUARIO_A, 'INATIVO_A', 'TITULAR'),
-    (USUARIO_B, 'PERFIL_B', 'TITULAR'),
+VINCULOS = [  # (usuario, perfil, papel, pode_gerir) — nada e vinculado automaticamente
+    (USUARIO_A, 'PESSOAL', 'TITULAR', True),
+    (USUARIO_A, 'EMPRESA', 'LEITOR', False),
+    (USUARIO_A, 'INATIVO_A', 'TITULAR', True),
+    (USUARIO_B, 'PERFIL_B', 'TITULAR', True),
 ]
 CONTAS = [  # (nome, perfil ou None = legado do "Pessoal")
     ('Conta Pessoal (A)', 'PESSOAL'),
@@ -203,9 +206,9 @@ def semear_perfis(cur):
             'insert into public.perfil_financeiro (id, nome, tipo, cor, ativo, padrao) values (%s, %s, %s, %s, %s, %s)',
             (perfil['id'], perfil['nome'], perfil['tipo'], '#2563eb', perfil['ativo'], perfil['padrao']),
         )
-    for usuario, chave, papel in VINCULOS:
-        cur.execute('insert into financeiro.perfil_acesso (user_id, perfil_financeiro_id, papel) values (%s, %s, %s)',
-                    (usuario['id'], PERFIS[chave]['id'], papel))
+    for usuario, chave, papel, pode_gerir in VINCULOS:
+        cur.execute('insert into financeiro.perfil_acesso (user_id, perfil_financeiro_id, papel, pode_gerir) '
+                    'values (%s, %s, %s, %s)', (usuario['id'], PERFIS[chave]['id'], papel, pode_gerir))
     for nome, chave in CONTAS:
         cur.execute(
             "insert into public.conta_bancaria (perfil_financeiro_id, nome, instituicao, tipo, status, cor_display) "
@@ -418,3 +421,107 @@ CONTAS_MES_ESPERADO = {
                               'valores': {508: '999.99'}},
     ('PESSOAL', '2026-06'): {'despesas': [], 'faturas': [], 'total': '0.00', 'pago': '0.00', 'valores': {}},
 }
+
+
+# FIN-RECORRENCIA-1: cenario FICTICIO de geracao (ids logicos fixos, cluster local).
+# Competencia de referencia: 2027-03 (gera ate 2027-04). Valores esperados nos testes.
+CATEGORIAS_RECORRENCIA = [(951, 'Moradia R', '#2563eb'), (952, 'Assinaturas R', '#9333ea')]
+CATEGORIAS_CARTAO_RECORRENCIA = [(961, 'Streaming CC', 'PESSOAL'), (962, 'Outros CC', 'PESSOAL'), (963, 'Legado CC', None)]
+CARTOES_RECORRENCIA = [  # id, nome, perfil, dia_vencimento (None = sem config_agregador)
+    (910, 'Cartao Teste', 'PESSOAL', 31),
+    (911, 'Cartao Sem Config', 'PESSOAL', None),
+    (930, 'Cartao B', 'PERFIL_B', 10),
+]
+LIMITES_RECORRENCIA = [  # id, cartao, categoria_cartao, limite, ativo, perfil
+    (981, 910, 961, '500.00', True, 'PESSOAL'),
+    (982, 910, 962, '300.00', False, 'PESSOAL'),   # inativo: fora do planejado
+    (983, 910, 963, '200.00', True, None),         # perfil NULL: o Flask so soma limites do perfil
+]
+RECORRENCIAS = [  # id, nome, perfil, categoria, tipo_recorrencia, ancora, valor, meio, cartao, ativo, descricao
+    (901, 'Aluguel 31', 'PESSOAL', 951, 'mensal', '2027-01-31', '1500.00', 'boleto', None, True, None),
+    (902, 'Escola', 'PESSOAL', 951, 'mensal', '2026-12-10', '800.00', 'debito_automatico', None, True, 'Mensalidade escolar'),
+    (903, 'IPVA', 'PESSOAL', 951, 'anual', '2026-03-15', '1200.00', 'boleto', None, True, None),
+    (904, 'Academia', 'PESSOAL', 951, 'mensal', '2027-01-05', '100.00', 'pix', None, False, None),
+    (906, 'Streaming', 'PESSOAL', 952, 'mensal', '2027-01-31', '39.90', 'cartao', 910, True, None),
+    (907, 'Bissexto', 'PESSOAL', 951, 'mensal', '2028-01-31', '10.00', 'boleto', None, True, None),
+    (908, 'Feira semanal', 'PESSOAL', 951, 'semanal', '2027-01-04', '50.00', 'pix', None, True, None),
+    (909, 'Legado sem perfil', None, 951, 'mensal', '2027-02-12', '60.00', 'boleto', None, True, None),
+    (920, 'Valido B', 'PERFIL_B', 951, 'mensal', '2027-03-05', '70.00', 'boleto', None, True, None),
+    (921, 'Sem valor B', 'PERFIL_B', 951, 'mensal', '2027-03-01', None, 'boleto', None, True, None),
+    (922, 'Cartao sem categoria B', 'PERFIL_B', None, 'mensal', '2027-03-02', '20.00', 'cartao', 930, True, None),
+    (940, 'Aluguel sala', 'EMPRESA', 951, 'mensal', '2027-03-10', '300.00', 'boleto', None, True, None),
+]
+# Registros ja gravados "pelo Flask" antes do novo motor.
+CONTAS_PREEXISTENTES = [  # id, item, perfil, mes_ref, venc, valor, status, data_pag, debito
+    (960, 902, 'PESSOAL', '2027-01-01', '2027-01-10', '800.00', 'Pendente', None, True),
+    (961, 902, 'PESSOAL', '2027-02-01', '2027-02-15', '800.00', 'Pago', '2027-02-15', True),  # vencimento editado
+]
+LANCAMENTOS_PREEXISTENTES = [  # id, item, cartao, perfil, categoria, cat_cartao, data_compra, mes_fatura (sem compra_id: legado)
+    (970, 906, 910, 'PESSOAL', 952, 961, '2027-01-31', '2027-01-01'),
+]
+
+
+def semear_recorrencias(cur):
+    """Cenario do FIN-RECORRENCIA-1 (exige semear_perfis; sem semear_contas)."""
+    def perfil(chave):
+        return PERFIS[chave]['id'] if chave else None
+
+    cur.execute("select id from public.conta_bancaria where nome = 'Conta Pessoal (A)'")
+    conta_bancaria = cur.fetchone()[0]
+    for cid, nome, cor in CATEGORIAS_RECORRENCIA:
+        cur.execute('insert into public.categoria (id, nome, cor, ativo, sistemica, bloquear_edicao, bloquear_exclusao) '
+                    'values (%s, %s, %s, true, false, false, false)', (cid, nome, cor))
+    for cid, nome, chave in CATEGORIAS_CARTAO_RECORRENCIA:
+        cur.execute('insert into public.categoria_cartao (id, nome, ativo, perfil_financeiro_id) values (%s, %s, true, %s)',
+                    (cid, nome, perfil(chave)))
+    cur.execute('insert into public.categoria_cartao_despesa (categoria_cartao_id, categoria_id, ativo, perfil_financeiro_id) '
+                'values (961, 952, true, %s)', (perfil('PESSOAL'),))
+    for iid, nome, chave, dia in CARTOES_RECORRENCIA:
+        cur.execute("insert into public.item_despesa (id, nome, tipo, perfil_financeiro_id, categoria_id, ativo, recorrente) "
+                    "values (%s, %s, 'Agregador', %s, 951, true, false)", (iid, nome, perfil(chave)))
+        if dia:
+            cur.execute('insert into public.config_agregador (item_despesa_id, dia_fechamento, dia_vencimento) '
+                        'values (%s, 25, %s)', (iid, dia))
+    for lid, cartao, catc, limite, ativo, chave in LIMITES_RECORRENCIA:
+        cur.execute('insert into public.cartao_categoria_limite (id, cartao_id, categoria_cartao_id, limite_mensal, ativo, '
+                    'perfil_financeiro_id) values (%s, %s, %s, %s, %s, %s)', (lid, cartao, catc, limite, ativo, perfil(chave)))
+    for iid, nome, chave, cat, tipo, ancora, valor, meio, cartao, ativo, descricao in RECORRENCIAS:
+        cur.execute("insert into public.item_despesa (id, nome, tipo, perfil_financeiro_id, categoria_id, ativo, recorrente, "
+                    "tipo_recorrencia, data_vencimento, valor, meio_pagamento, cartao_id, conta_bancaria_id, descricao) "
+                    "values (%s, %s, 'Simples', %s, %s, %s, true, %s, %s, %s, %s, %s, %s, %s)",
+                    (iid, nome, perfil(chave), cat, ativo, tipo, ancora, valor, meio, cartao,
+                     conta_bancaria if meio == 'debito_automatico' else None, descricao))
+    for cid, item, chave, mes, venc, valor, status, pag, debito in CONTAS_PREEXISTENTES:
+        cur.execute("insert into public.conta (id, item_despesa_id, perfil_financeiro_id, mes_referencia, descricao, valor, "
+                    "data_vencimento, status_pagamento, data_pagamento, debito_automatico, conta_bancaria_id, observacoes, "
+                    "is_fatura_cartao, estouro_orcamento, status_fatura) "
+                    "values (%s, %s, %s, %s, 'Escola', %s, %s, %s, %s, %s, %s, 'Mensalidade escolar', false, false, 'ABERTA')",
+                    (cid, item, perfil(chave), mes, valor, venc, status, pag, debito, conta_bancaria))
+    for lid, item, cartao, chave, cat, catc, compra, mes in LANCAMENTOS_PREEXISTENTES:
+        cur.execute("insert into public.lancamento_agregado (id, item_despesa_id, cartao_id, perfil_financeiro_id, categoria_id, "
+                    "categoria_cartao_id, descricao, valor, data_compra, mes_fatura, numero_parcela, total_parcelas, "
+                    "observacoes, is_recorrente, is_importado) "
+                    "values (%s, %s, %s, %s, %s, %s, 'Streaming', 39.90, %s, %s, 1, 1, '', true, false)",
+                    (lid, item, cartao, perfil(chave), cat, catc, compra, mes))
+
+
+# FIN-RECORRENCIA-1 (E2E): recorrencia e cartao do "Perfil B" e recorrencia da Empresa
+# (A e so LEITOR). Datas em 2027, longe dos meses usados pelos outros cenarios E2E.
+RECORRENCIAS_E2E = [  # id, nome, perfil, ancora, valor
+    (451, 'Mensalidade B', 'PERFIL_B', '2027-01-31', '120.00'),
+    (453, 'Aluguel sala', 'EMPRESA', '2027-05-15', '900.00'),
+]
+CARTAO_E2E = (452, 'Cartao B', 'PERFIL_B', 31)
+
+
+def semear_recorrencia_e2e(cur, categoria_id=201):
+    for iid, nome, chave, ancora, valor in RECORRENCIAS_E2E:
+        cur.execute("insert into public.item_despesa (id, nome, tipo, perfil_financeiro_id, categoria_id, ativo, recorrente, "
+                    "tipo_recorrencia, data_vencimento, valor, meio_pagamento) "
+                    "values (%s, %s, 'Simples', %s, %s, true, true, 'mensal', %s, %s, 'boleto')",
+                    (iid, nome, PERFIS[chave]['id'], categoria_id, ancora, valor))
+    iid, nome, chave, dia = CARTAO_E2E
+    cur.execute("insert into public.item_despesa (id, nome, tipo, perfil_financeiro_id, categoria_id, ativo, recorrente) "
+                "values (%s, %s, 'Agregador', %s, %s, true, false)", (iid, nome, PERFIS[chave]['id'], categoria_id))
+    cur.execute('insert into public.config_agregador (item_despesa_id, dia_fechamento, dia_vencimento) values (%s, 25, %s)',
+                (iid, dia))

@@ -8,7 +8,8 @@
     <link rel="stylesheet" href="css/shared/theme-light.css">
     <link rel="stylesheet" href="css/app.css">
 </head>
-<!-- MOBILE-CONTAS-1: tela inicial. Somente leitura; conteudo oculto ate a sessao ser validada. -->
+<!-- MOBILE-CONTAS-1: tela inicial; conteudo oculto ate a sessao ser validada. Consulta nunca grava;
+     FIN-RECORRENCIA-1: "Gerar contas" so grava depois da confirmacao do usuario. -->
 <body class="app-body" data-protegido hidden>
     <header class="app-header">
         <span class="app-marca">Controle Financeiro</span>
@@ -34,7 +35,12 @@
             <span>A pagar <strong id="total-a-pagar"></strong></span>
         </p>
 
-        <p class="aviso-geracao" id="aviso-geracao" hidden>Algumas contas recorrentes ou faturas deste mês podem ainda não ter sido geradas no sistema atual.</p>
+        <p class="geracao-resultado" id="geracao-resultado" role="status" hidden></p>
+        <section class="geracao" id="aviso-geracao" aria-label="Geração de contas recorrentes" hidden>
+            <p class="aviso-geracao" id="aviso-texto"></p>
+            <div class="geracao-acoes" id="geracao-acoes"></div>
+            <div class="geracao-confirmacao" id="geracao-confirmacao" hidden></div>
+        </section>
         <div class="login-error" id="perfis-erro" role="alert" hidden></div>
         <p class="app-vazio" id="perfis-vazio" hidden>Nenhum perfil financeiro autorizado para esta conta.</p>
         <div class="login-error" id="contas-erro" role="alert" hidden></div>

@@ -74,7 +74,9 @@ test('verificacao de dist detecta segredo injetado', async () => {
 });
 
 const RPCS_DE_LEITURA = new Set(['meus_perfis', 'contas_bancarias_do_perfil', 'contas_do_mes',
-    'lancamentos_da_fatura', 'mes_pode_estar_incompleto']);
+    'lancamentos_da_fatura', 'mes_pode_estar_incompleto', 'previa_geracao']);
+// Escrita so por RPC transacional autorizada no banco, revisada uma a uma, e so na tela que a usa.
+const RPCS_DE_ESCRITA = new Map([['gerar_mes', 'contas.js']]);
 
 test('codigo-fonte do frontend nao escreve em tabelas nem usa innerHTML', async () => {
     const dir = new URL('../../src/js/', import.meta.url);
@@ -85,9 +87,10 @@ test('codigo-fonte do frontend nao escreve em tabelas nem usa innerHTML', async 
             .replace(/^\s*\/\/.*$/gm, '')
             .replace(/\s\/\/.*$/gm, '');
         assert.doesNotMatch(fonte, /\.(insert|update|upsert|delete)\s*\(/, `${nome} faz escrita direta`);
-        // RPC so de leitura e so as liberadas (PERFIS-1); escrita futura exige revisao explicita.
+        // So RPCs liberadas (PERFIS-1); escrita exige revisao explicita (FIN-RECORRENCIA-1: gerar_mes).
         for (const [, funcao] of fonte.matchAll(/\.rpc\s*\(\s*['"`]([^'"`]+)['"`]/g)) {
-            assert.ok(RPCS_DE_LEITURA.has(funcao), `${nome} chama RPC nao liberada: ${funcao}`);
+            assert.ok(RPCS_DE_LEITURA.has(funcao) || RPCS_DE_ESCRITA.get(funcao) === nome,
+                `${nome} chama RPC nao liberada: ${funcao}`);
         }
         assert.doesNotMatch(fonte.replace(/\.rpc\s*\(\s*['"`][^'"`]+['"`]/g, ''), /\.rpc\s*\(/, `${nome} chama RPC com nome dinamico`);
         assert.doesNotMatch(fonte, /innerHTML|outerHTML|insertAdjacentHTML|document\.write/, `${nome} injeta HTML`);

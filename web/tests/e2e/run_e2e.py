@@ -47,6 +47,7 @@ from tests.supabase_local import (  # noqa: E402
     encontrar_pg_bin,
     encontrar_postgrest,
     porta_livre,
+    semear_recorrencia_e2e,
 )
 
 CHAVE_PUBLICAVEL = 'sb_publishable_harness_local_somente_teste'
@@ -267,6 +268,10 @@ def main():
     with tempfile.TemporaryDirectory(prefix='cf-e2e-') as tmp:
         with ClusterLocal(pg_bin, tmp) as cluster:
             cluster.preparar()
+            conn = cluster.conectar()
+            with conn.cursor() as cur:
+                semear_recorrencia_e2e(cur)  # FIN-RECORRENCIA-1 (recorrencia.spec.mjs)
+            conn.close()
             with PostgrestLocal(postgrest_bin, cluster, segredo, tmp) as postgrest:
                 handler = criar_handler(dist, postgrest.url, segredo, ler_headers(dist))
                 # Fila de conexoes maior que o padrao (5): o Chrome abre ~6 em paralelo.
