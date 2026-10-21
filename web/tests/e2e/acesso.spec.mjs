@@ -76,7 +76,8 @@ test('usuario B ve somente as proprias categorias', async ({ page }) => {
 
 test('pagina de categorias nao oferece nenhuma acao de escrita', async ({ page }) => {
     await entrar(page, A);
-    await expect(page.locator('form, input, textarea, select')).toHaveCount(0);
+    // O unico controle alem de "Sair" e o seletor de perfil (PERFIS-1), que so filtra a visualizacao.
+    await expect(page.locator('form, input, textarea, select:not(#perfil-ativo)')).toHaveCount(0);
     await expect(page.locator('button')).toHaveCount(1);
     await expect(page.locator('button')).toHaveText('Sair');
 });

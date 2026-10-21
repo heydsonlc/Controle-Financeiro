@@ -14,14 +14,39 @@
     <header class="app-header">
         <span class="app-marca">Controle Financeiro</span>
         <span class="app-usuario">
+            <label class="app-perfil" for="perfil-ativo" hidden id="perfil-rotulo">Perfil
+                <select id="perfil-ativo"></select>
+            </label>
             <span id="usuario-email"></span>
             <button type="button" class="app-sair" id="sair">Sair</button>
         </span>
     </header>
 
     <main class="app-conteudo">
-        <h1 class="app-titulo">Categorias</h1>
-        <p class="app-aviso">Visualização somente leitura — primeiro módulo da nova arquitetura.</p>
+        <p class="app-aviso">Visualização somente leitura — nova arquitetura em construção.</p>
+
+        <section class="app-secao" aria-labelledby="contas-titulo">
+            <h1 class="app-titulo" id="contas-titulo">Contas bancárias do perfil</h1>
+            <div class="login-error" id="perfis-erro" role="alert" hidden></div>
+            <p class="app-vazio" id="perfis-vazio" hidden>Nenhum perfil financeiro autorizado para esta conta.</p>
+            <div class="login-error" id="contas-erro" role="alert" hidden></div>
+            <p class="app-vazio" id="contas-vazio" hidden>Nenhuma conta bancária neste perfil.</p>
+            <table class="app-tabela" id="contas-tabela" hidden>
+                <thead>
+                    <tr>
+                        <th scope="col">Cor</th>
+                        <th scope="col">Conta</th>
+                        <th scope="col">Instituição</th>
+                        <th scope="col">Tipo</th>
+                    </tr>
+                </thead>
+                <tbody id="contas-corpo"></tbody>
+            </table>
+        </section>
+
+        <section class="app-secao" aria-labelledby="categorias-titulo">
+        <h2 class="app-titulo" id="categorias-titulo">Categorias</h2>
+        <p class="app-aviso">Comuns a todos os perfis, como no sistema atual.</p>
 
         <div class="login-error" id="categorias-erro" role="alert" hidden></div>
         <p class="app-vazio" id="categorias-vazio" hidden>Nenhuma categoria cadastrada.</p>
@@ -37,6 +62,7 @@
             </thead>
             <tbody id="categorias-corpo"></tbody>
         </table>
+        </section>
     </main>
 
     <script src="config.js"></script>

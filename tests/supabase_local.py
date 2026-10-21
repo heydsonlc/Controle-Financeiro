@@ -128,9 +128,29 @@ class ClusterLocal:
             conn.close()
         return nome
 
+    def criar_tabelas_legadas(self):
+        """Tabelas do Flask (models) + protecao SEC-SUPABASE-PUBLIC-1, como no staging."""
+        import importlib.util
+
+        from sqlalchemy import create_engine
+
+        from backend.models import db
+        engine = create_engine(self.dsn())
+        try:
+            db.metadata.create_all(bind=engine)
+            caminho = next((ROOT / 'migrations' / 'versions').glob('c4f7a2d91b3e_*.py'))
+            spec = importlib.util.spec_from_file_location('migration_sec_public_local', caminho)
+            migration = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(migration)
+            with engine.begin() as conn:
+                migration.aplicar_protecao(conn)
+        finally:
+            engine.dispose()
+
     def preparar(self):
-        """Shim do Supabase + migrations do repositorio + dados ficticios."""
+        """Shim do Supabase + tabelas do Flask protegidas + migrations de supabase/ + dados ficticios."""
         self.aplicar_shim()
+        self.criar_tabelas_legadas()
         conn = self.conectar()
         try:
             with conn.cursor() as cur:
@@ -144,8 +164,53 @@ class ClusterLocal:
                             'insert into financeiro.categorias (user_id, nome, descricao) values (%s, %s, %s)',
                             (usuario['id'], nome, 'Dado ficticio de teste'),
                         )
+                semear_perfis(cur)
         finally:
             conn.close()
+
+
+# PERFIS-1: perfis, vinculos e contas bancarias FICTICIOS (ids fixos para os testes).
+PERFIS = {
+    'PESSOAL': {'id': 101, 'nome': 'Pessoal', 'tipo': 'PESSOAL', 'padrao': True, 'ativo': True},
+    'EMPRESA': {'id': 102, 'nome': 'Empresa', 'tipo': 'EMPRESA', 'padrao': False, 'ativo': True},
+    'PERFIL_B': {'id': 103, 'nome': 'Perfil B', 'tipo': 'PESSOAL', 'padrao': False, 'ativo': True},
+    'INATIVO_A': {'id': 104, 'nome': 'Perfil inativo (A)', 'tipo': 'EMPRESA', 'padrao': False, 'ativo': False},
+}
+VINCULOS = [  # (usuario, perfil, papel) — nada e vinculado automaticamente
+    (USUARIO_A, 'PESSOAL', 'TITULAR'),
+    (USUARIO_A, 'EMPRESA', 'LEITOR'),
+    (USUARIO_A, 'INATIVO_A', 'TITULAR'),
+    (USUARIO_B, 'PERFIL_B', 'TITULAR'),
+]
+CONTAS = [  # (nome, perfil ou None = legado do "Pessoal")
+    ('Conta Pessoal (A)', 'PESSOAL'),
+    ('Carteira legado sem perfil', None),
+    ('Conta Empresa (A)', 'EMPRESA'),
+    ('Conta Perfil B', 'PERFIL_B'),
+    ('Conta do perfil inativo', 'INATIVO_A'),
+]
+CONTAS_ESPERADAS = {
+    'PESSOAL': ['Carteira legado sem perfil', 'Conta Pessoal (A)'],
+    'EMPRESA': ['Conta Empresa (A)'],
+    'PERFIL_B': ['Conta Perfil B'],
+}
+
+
+def semear_perfis(cur):
+    for perfil in PERFIS.values():
+        cur.execute(
+            'insert into public.perfil_financeiro (id, nome, tipo, cor, ativo, padrao) values (%s, %s, %s, %s, %s, %s)',
+            (perfil['id'], perfil['nome'], perfil['tipo'], '#2563eb', perfil['ativo'], perfil['padrao']),
+        )
+    for usuario, chave, papel in VINCULOS:
+        cur.execute('insert into financeiro.perfil_acesso (user_id, perfil_financeiro_id, papel) values (%s, %s, %s)',
+                    (usuario['id'], PERFIS[chave]['id'], papel))
+    for nome, chave in CONTAS:
+        cur.execute(
+            "insert into public.conta_bancaria (perfil_financeiro_id, nome, instituicao, tipo, status, cor_display) "
+            "values (%s, %s, 'Banco ficticio', 'Conta Corrente', 'ATIVO', '#3b82f6')",
+            (PERFIS[chave]['id'] if chave else None, nome),
+        )
 
 
 def assinar_jwt(claims, segredo):

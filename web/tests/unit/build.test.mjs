@@ -73,6 +73,8 @@ test('verificacao de dist detecta segredo injetado', async () => {
     }
 });
 
+const RPCS_DE_LEITURA = new Set(['meus_perfis', 'contas_bancarias_do_perfil']);
+
 test('codigo-fonte do frontend nao escreve em tabelas nem usa innerHTML', async () => {
     const dir = new URL('../../src/js/', import.meta.url);
     for (const nome of await readdir(dir)) {
@@ -82,7 +84,11 @@ test('codigo-fonte do frontend nao escreve em tabelas nem usa innerHTML', async 
             .replace(/^\s*\/\/.*$/gm, '')
             .replace(/\s\/\/.*$/gm, '');
         assert.doesNotMatch(fonte, /\.(insert|update|upsert|delete)\s*\(/, `${nome} faz escrita direta`);
-        assert.doesNotMatch(fonte, /\.rpc\s*\(/, `${nome} chama RPC`);
+        // RPC so de leitura e so as liberadas (PERFIS-1); escrita futura exige revisao explicita.
+        for (const [, funcao] of fonte.matchAll(/\.rpc\s*\(\s*['"`]([^'"`]+)['"`]/g)) {
+            assert.ok(RPCS_DE_LEITURA.has(funcao), `${nome} chama RPC nao liberada: ${funcao}`);
+        }
+        assert.doesNotMatch(fonte.replace(/\.rpc\s*\(\s*['"`][^'"`]+['"`]/g, ''), /\.rpc\s*\(/, `${nome} chama RPC com nome dinamico`);
         assert.doesNotMatch(fonte, /innerHTML|outerHTML|insertAdjacentHTML|document\.write/, `${nome} injeta HTML`);
     }
 });

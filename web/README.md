@@ -2,14 +2,15 @@
 
 Primeiro módulo da nova arquitetura (CF-SUPABASE-REFACTOR-1): login pelo **Supabase Auth** e **categorias em modo somente leitura**, protegidas por RLS. É **independente do Flask**: não chama nenhuma rota do backend atual. O Flask continua sendo a aplicação em uso e a implementação de referência.
 
-**Ainda não publicado.** Nenhum deploy no Cloudflare e nenhuma migration no Supabase remoto foram feitos.
+**Ainda não publicado** no Cloudflare. Validado contra o Supabase real no AUTH-REAL-1 (`docs/AUTH_REAL_1.md`). A migration de perfis (PERFIS-1) ainda não foi aplicada no remoto.
 
 ## Estrutura
 
 | Caminho | Conteúdo |
 |---|---|
 | `src/index.html` | Login (Supabase Auth, e-mail e senha) |
-| `src/categorias.html` | Tela protegida: categorias do usuário logado, só leitura |
+| `src/categorias.html` | Tela protegida provisória: seletor de perfil, contas bancárias do perfil ativo (PERFIS-1) e categorias, só leitura |
+| `src/js/perfil.js` | Perfis autorizados (`meus_perfis`) e perfil ativo por usuário no `sessionStorage` (só preferência; o banco revalida) |
 | `src/js/cliente.js` | Cliente Supabase único (`storageKey` próprio, schema `financeiro`) |
 | `src/js/sessao.js` | Guarda de sessão com `getUser()` (valida o token no servidor); `next` restrito a uma allowlist |
 | `src/css/app.css` | Estilos próprios. O tema vem de `frontend/static/css` no build |

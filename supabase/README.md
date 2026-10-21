@@ -2,10 +2,21 @@
 
 | Caminho | Conteúdo |
 |---|---|
-| `migrations/` | Migrations da nova arquitetura (schema `financeiro`). **Nenhuma foi aplicada no Supabase remoto.** |
+| `migrations/` | Migrations da nova arquitetura (schema `financeiro`). No Supabase de teste: `20261020120000` (categorias) **consta aplicada**; `20261021090000` (perfis) **não aplicada** |
 | `tests/local_supabase_shim.sql` | Reprodução mínima dos objetos que o Supabase já fornece (roles `anon`/`authenticated`, `auth.uid()`). **Só para o cluster descartável dos testes**; nunca aplicar num projeto Supabase |
 
 As tabelas do Flask continuam sendo geridas pelo Alembic (`migrations/` na raiz). Esta pasta não as altera.
+
+## Perfis (PERFIS-1)
+
+`financeiro.perfil_acesso` liga usuários do Auth aos perfis de `public.perfil_financeiro`. **Vínculos só por administrador**, nunca pelo navegador. Exemplo (SQL editor, com os ids reais):
+
+```sql
+insert into financeiro.perfil_acesso (user_id, perfil_financeiro_id, papel)
+values ('<uuid do usuario em auth.users>', <id do perfil>, 'TITULAR');
+```
+
+Toda função nova que receber um perfil do navegador deve chamar `financeiro.pode_acessar_perfil(id)` e revogar `EXECUTE` de `PUBLIC`/`anon`.
 
 ## Validação
 

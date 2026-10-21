@@ -8,6 +8,7 @@ estatico em 127.0.0.1 entregando web/dist com a CSP real do _headers.
 Recusa rodar se (verificacoes somente leitura):
 - o cadastro publico do Auth estiver ligado (disable_signup precisa ser true);
 - a Data API nao expuser `financeiro` ou ainda expuser `public`;
+- a migration PERFIS-1 nao estiver aplicada (funcoes de perfil ausentes);
 - faltarem as contas de teste no ambiente.
 
 Contas de teste (ficticias, criadas pelo usuario no painel do Supabase), por ambiente ou
@@ -68,6 +69,17 @@ def verificar_pre_requisitos(origem, chave):
         problemas.append(f'schema financeiro nao esta exposto na Data API (expostos: {expostos or "?"})')
     if 'public' in expostos:
         problemas.append('schema public voltou a ser exposto na Data API')
+
+    # PERFIS-1: as funcoes precisam existir no projeto (404 PGRST202 = migration nao aplicada).
+    req = urllib.request.Request(f'{origem}/rest/v1/rpc/meus_perfis', method='POST', data=b'{}')
+    for nome, valor in (('apikey', chave), ('Content-Type', 'application/json'), ('Content-Profile', 'financeiro')):
+        req.add_header(nome, valor)
+    try:
+        status_rpc = urllib.request.urlopen(req, timeout=20).status
+    except urllib.error.HTTPError as exc:
+        status_rpc = exc.code
+    if status_rpc == 404:
+        problemas.append('migration PERFIS-1 (20261021090000_financeiro_perfis_acesso) nao aplicada no projeto')
 
     faltando = [nome for nome in CONTAS if not os.getenv(nome)]
     if faltando:
