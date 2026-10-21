@@ -12,6 +12,7 @@ from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
 from decimal import Decimal
 from sqlalchemy import func, and_
+from sqlalchemy.exc import IntegrityError
 import uuid
 import logging
 
@@ -29,6 +30,18 @@ except ImportError:
     from services.gerador_recorrencia_service import flask_pode_gerar
 
 logger = logging.getLogger(__name__)
+
+INDICE_FATURA_UNICA = 'ux_conta_fatura_cartao_competencia'
+
+
+def _violou_fatura_unica(exc):
+    """True so para a violacao da unicidade de fatura (cartao + competencia); o resto propaga."""
+    original = getattr(exc, 'orig', None)
+    diag = getattr(original, 'diag', None)
+    if diag is not None and getattr(diag, 'constraint_name', None):
+        return diag.constraint_name == INDICE_FATURA_UNICA
+    texto = str(original)
+    return INDICE_FATURA_UNICA in texto or 'conta.item_despesa_id, conta.cartao_competencia' in texto  # SQLite
 
 
 class CartaoService:
@@ -126,7 +139,30 @@ class CartaoService:
             estouro_orcamento=False
         )
 
-        db.session.add(fatura)
+        # FIN-FATURA-UNICA-1: a consulta acima nao basta com acessos simultaneos (Flask ou
+        # novo aplicativo). O indice unico decide; o INSERT vai num savepoint para que,
+        # se outra transacao criou a mesma fatura, a existente seja devolvida sem desfazer
+        # o restante da transacao do chamador.
+        try:
+            with db.session.begin_nested():
+                db.session.add(fatura)
+        except IntegrityError as exc:
+            if not _violou_fatura_unica(exc):
+                raise
+            existente = Conta.query.filter(
+                Conta.item_despesa_id == cartao_id,
+                Conta.is_fatura_cartao == True,
+                Conta.cartao_competencia == comp_primeiro_dia,
+            ).first()
+            if existente is None:
+                raise
+            if existente.perfil_financeiro_id != cartao.perfil_financeiro_id:
+                logger.warning('Fatura %s do cartao %s em perfil diferente do cartao', existente.id, cartao_id)
+            logger.info('Fatura cartao_id=%s competencia=%s criada por outra transacao; usando a existente (id=%s)',
+                        cartao_id, comp_primeiro_dia, existente.id)
+            db.session.commit()  # mantem o contrato original: o chamador recebe estado gravado
+            return existente
+
         db.session.commit()
 
         return fatura

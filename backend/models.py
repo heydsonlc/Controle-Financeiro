@@ -833,6 +833,10 @@ class Conta(db.Model):
         db.Index('idx_conta_status', 'status_pagamento'),
         db.Index('idx_conta_item_mes', 'item_despesa_id', 'mes_referencia'),
         db.Index('idx_conta_perfil_status', 'perfil_financeiro_id', 'status_pagamento'),
+        # FIN-FATURA-UNICA-1: uma unica fatura por cartao e competencia, garantida pelo banco
+        # (mesmo nome e predicado na migration Alembic d81f5a2b9c3e e na do Supabase).
+        db.Index('ux_conta_fatura_cartao_competencia', 'item_despesa_id', 'cartao_competencia', unique=True,
+                 postgresql_where=db.text('is_fatura_cartao'), sqlite_where=db.text('is_fatura_cartao = 1')),
     )
 
     def __repr__(self):
