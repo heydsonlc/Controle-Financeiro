@@ -73,7 +73,8 @@ test('verificacao de dist detecta segredo injetado', async () => {
     }
 });
 
-const RPCS_DE_LEITURA = new Set(['meus_perfis', 'contas_bancarias_do_perfil']);
+const RPCS_DE_LEITURA = new Set(['meus_perfis', 'contas_bancarias_do_perfil', 'contas_do_mes',
+    'lancamentos_da_fatura', 'mes_pode_estar_incompleto']);
 
 test('codigo-fonte do frontend nao escreve em tabelas nem usa innerHTML', async () => {
     const dir = new URL('../../src/js/', import.meta.url);

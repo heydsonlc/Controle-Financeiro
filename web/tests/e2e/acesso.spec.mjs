@@ -33,7 +33,9 @@ async function entrar(page, conta) {
     await page.fill('#email', conta.email);
     await page.fill('#senha', conta.senha);
     await page.click('#login-enviar');
-    await page.waitForURL('**/categorias.html');
+    // MOBILE-CONTAS-1: o login leva a "Contas do mes"; estes testes seguem na tela de categorias.
+    await page.waitForURL('**/contas.html');
+    await page.goto('/categorias.html');
     await expect(page.locator('#categorias-tabela')).toBeVisible();
 }
 
@@ -146,6 +148,6 @@ test('parametro next nao permite redirecionamento para fora', async ({ page }) =
     await page.fill('#email', A.email);
     await page.fill('#senha', A.senha);
     await page.click('#login-enviar');
-    await page.waitForURL('**/categorias.html');
+    await page.waitForURL('**/contas.html');
     expect(new URL(page.url()).hostname).toBe('127.0.0.1');
 });

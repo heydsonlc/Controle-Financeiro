@@ -30,7 +30,8 @@ async function entrar(page, conta) {
     await page.fill('#email', conta.email);
     await page.fill('#senha', conta.senha);
     await page.click('#login-enviar');
-    await page.waitForURL('**/categorias.html');
+    await page.waitForURL('**/contas.html');
+    await page.goto('/categorias.html');
 }
 
 const contas = (page) => page.locator('#contas-corpo tr td:nth-child(2)');

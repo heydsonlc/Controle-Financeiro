@@ -165,6 +165,7 @@ class ClusterLocal:
                             (usuario['id'], nome, 'Dado ficticio de teste'),
                         )
                 semear_perfis(cur)
+                semear_contas(cur)
         finally:
             conn.close()
 
@@ -296,3 +297,96 @@ class PostgrestLocal:
             except subprocess.TimeoutExpired:
                 self.processo.kill()
         self._log.close()
+
+
+# MOBILE-CONTAS-1: contas do mes FICTICIAS (ids fixos). Valores esperados calculados a mao
+# em CONTAS_MES_ESPERADO; os testes de equivalencia comparam tambem com o Flask.
+def semear_contas(cur):
+    p = {chave: perfil['id'] for chave, perfil in PERFIS.items()}
+    cur.execute('update public.perfil_financeiro set avatar = upper(left(nome, 2))')  # evita o Flask completar o avatar
+    for cid, nome, cor in ((201, 'Moradia', '#2563eb'), (202, 'Saude', '#16a34a'), (203, 'Cartoes', '#9333ea')):
+        cur.execute('insert into public.categoria (id, nome, cor, ativo, sistemica, bloquear_edicao, bloquear_exclusao) '
+                    'values (%s, %s, %s, true, false, false, false)', (cid, nome, cor))
+    for cid, nome in ((301, 'Mercado'), (302, 'Restaurantes'), (303, 'Combustivel')):
+        cur.execute('insert into public.categoria_cartao (id, nome, ativo) values (%s, %s, true)', (cid, nome))
+    itens = [  # id, nome, tipo, perfil, categoria, recorrente, data_vencimento
+        (401, 'Aluguel', 'Simples', p['PESSOAL'], 201, True, '2026-01-10'),
+        (402, 'Internet', 'Simples', None, 201, False, '2026-01-20'),
+        (403, 'Plano de saude', 'Simples', p['PESSOAL'], 202, False, '2026-01-15'),
+        (404, 'Cartao Azul', 'Agregador', p['PESSOAL'], 203, False, None),
+        (405, 'Cartao Verde', 'Agregador', None, 203, False, None),
+        (406, 'Contador', 'Simples', p['EMPRESA'], 201, False, '2026-11-10'),
+        (407, 'Cartao Empresa', 'Agregador', p['EMPRESA'], 203, False, None),
+        (408, 'Aluguel B', 'Simples', p['PERFIL_B'], 201, False, '2026-11-08'),
+    ]
+    for iid, nome, tipo, perfil, cat, rec, venc in itens:
+        cur.execute('insert into public.item_despesa (id, nome, tipo, perfil_financeiro_id, categoria_id, ativo, recorrente, '
+                    "tipo_recorrencia, data_vencimento) values (%s, %s, %s, %s, %s, true, %s, 'mensal', %s)",
+                    (iid, nome, tipo, perfil, cat, rec, venc))
+    contas = [  # id, item, perfil, mes_ref, venc, valor, status, data_pag, parcela, total, debito, fatura, competencia
+        (501, 401, p['PESSOAL'], '2026-11-01', '2026-12-05', '2000.00', 'Pendente', None, None, None, False, False, None),
+        (502, 402, None, '2026-11-01', '2026-11-20', '150.50', 'Pago', '2026-11-19', None, None, False, False, None),
+        (503, 403, p['PESSOAL'], '2026-11-01', '2026-11-15', '800.00', 'Pendente', None, 3, 12, True, False, None),
+        (504, 401, p['PESSOAL'], '2026-01-01', '2026-01-10', '1900.00', 'Pendente', None, None, None, False, False, None),
+        (505, 403, p['PESSOAL'], '2026-01-01', '2026-01-15', '780.00', 'Atrasado', None, None, None, False, False, None),
+        (506, 402, None, '2026-01-01', '2026-01-20', '150.50', 'Pago', '2026-01-25', None, None, False, False, None),
+        (507, 406, p['EMPRESA'], '2026-11-01', '2026-11-10', '1200.00', 'Pendente', None, None, None, False, False, None),
+        (508, 408, p['PERFIL_B'], '2026-11-01', '2026-11-08', '999.99', 'Pendente', None, None, None, False, False, None),
+        (509, 404, p['PESSOAL'], '2026-11-01', '2026-12-10', '0.00', 'Pendente', None, None, None, False, True, '2026-11-01'),
+        (510, 405, None, '2026-11-01', '2026-11-25', '1.00', 'Pago', '2026-11-24', None, None, False, True, '2026-11-01'),
+        (511, 407, p['EMPRESA'], '2026-11-01', '2026-12-01', '0.00', 'Pendente', None, None, None, False, True, '2026-11-01'),
+        (512, 404, p['PESSOAL'], '2026-01-01', '2026-02-10', '0.00', 'Pago', '2026-02-09', None, None, False, True, '2026-01-01'),
+    ]
+    nomes_item = {i[0]: i[1] for i in itens}
+    for (cid, item, perfil, mes, venc, valor, status, pag, parc, tot, deb, fatura, comp) in contas:
+        if fatura:
+            descricao = f'Fatura {nomes_item[item]} - {comp[5:7]}/{comp[:4]}'
+        else:
+            descricao = f'{nomes_item[item]} {mes[5:7]}/{mes[:4]}'
+        cur.execute('insert into public.conta (id, item_despesa_id, perfil_financeiro_id, mes_referencia, descricao, valor, '
+                    'data_vencimento, status_pagamento, data_pagamento, numero_parcela, total_parcelas, debito_automatico, '
+                    'is_fatura_cartao, cartao_competencia, valor_planejado, valor_executado) '
+                    'values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+                    (cid, item, perfil, mes, descricao, valor, venc, status, pag, parc, tot, deb, fatura, comp,
+                     valor if fatura else None, valor if fatura else None))
+    lancamentos = [  # id, cartao, perfil, categoria_cartao, descricao, valor, mes_fatura, parcela, total
+        (601, 404, p['PESSOAL'], 301, 'Supermercado X', '300.00', '2026-11-01', 1, 1),
+        (602, 404, p['PESSOAL'], 301, 'Supermercado Y', '150.00', '2026-11-01', 1, 1),
+        (603, 404, p['PESSOAL'], 302, 'Restaurante Z', '420.00', '2026-11-01', 1, 1),
+        (604, 404, p['PESSOAL'], 303, 'Posto', '100.00', '2026-11-01', 1, 1),
+        (605, 404, p['PESSOAL'], None, 'Compra parcelada', '200.00', '2026-11-01', 2, 3),
+        (606, 404, None, 301, 'Farmacia (legado)', '50.00', '2026-11-01', 1, 1),
+        (607, 404, p['PESSOAL'], 301, 'Supermercado dezembro', '999.00', '2026-12-01', 1, 1),
+        (608, 405, None, 302, 'Livraria', '80.00', '2026-11-01', 1, 1),
+        (609, 405, None, None, 'Cinema', '40.00', '2026-11-01', 1, 1),
+        (610, 407, p['EMPRESA'], None, 'Papelaria', '250.00', '2026-11-01', 1, 1),
+        (611, 404, p['PESSOAL'], 301, 'Mercado janeiro', '500.00', '2026-01-01', 1, 1),
+    ]
+    for lid, cartao, perfil, catc, desc, valor, mes, parc, tot in lancamentos:
+        cur.execute('insert into public.lancamento_agregado (id, cartao_id, perfil_financeiro_id, categoria_id, '
+                    'categoria_cartao_id, descricao, valor, data_compra, mes_fatura, numero_parcela, total_parcelas) '
+                    'values (%s,%s,%s,203,%s,%s,%s,%s,%s,%s,%s)',
+                    (lid, cartao, perfil, catc, desc, valor, mes[:8] + '05', mes, parc, tot))
+    limites = [  # cartao, categoria_cartao, limite, ativo
+        (404, 301, '600.00', True),   # gasto 500 -> complemento 100
+        (404, 302, '300.00', True),   # gasto 420 -> complemento 0
+        (404, 303, '500.00', False),  # inativo: ignorado
+        (405, 301, '200.00', True),   # fatura paga: o previsto nao vale
+    ]
+    for cartao, catc, limite, ativo in limites:
+        cur.execute('insert into public.cartao_categoria_limite (cartao_id, categoria_cartao_id, limite_mensal, ativo) '
+                    'values (%s, %s, %s, %s)', (cartao, catc, limite, ativo))
+
+
+CONTAS_MES_ESPERADO = {
+    # (perfil, mes): ids na ordem da tela (vencimento crescente), total, pago, valor exibido de cada conta
+    ('PESSOAL', '2026-11'): {'despesas': [503, 502, 501], 'faturas': [510, 509], 'total': '4390.50', 'pago': '270.50',
+                             'valores': {501: '2000.00', 502: '150.50', 503: '800.00', 509: '1320.00', 510: '120.00'}},
+    ('PESSOAL', '2026-01'): {'despesas': [504, 505, 506], 'faturas': [512], 'total': '3330.50', 'pago': '650.50',
+                             'valores': {504: '1900.00', 505: '780.00', 506: '150.50', 512: '500.00'}},
+    ('EMPRESA', '2026-11'): {'despesas': [507], 'faturas': [511], 'total': '1450.00', 'pago': '0.00',
+                             'valores': {507: '1200.00', 511: '250.00'}},
+    ('PERFIL_B', '2026-11'): {'despesas': [508], 'faturas': [], 'total': '999.99', 'pago': '0.00',
+                              'valores': {508: '999.99'}},
+    ('PESSOAL', '2026-06'): {'despesas': [], 'faturas': [], 'total': '0.00', 'pago': '0.00', 'valores': {}},
+}

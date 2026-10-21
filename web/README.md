@@ -9,6 +9,7 @@ Primeiro módulo da nova arquitetura (CF-SUPABASE-REFACTOR-1): login pelo **Supa
 | Caminho | Conteúdo |
 |---|---|
 | `src/index.html` | Login (Supabase Auth, e-mail e senha) |
+| `src/contas.html` + `src/js/contas.js` | **Tela inicial: Contas do mês** (MOBILE-CONTAS-1), somente leitura, mobile |
 | `src/categorias.html` | Tela protegida provisória: seletor de perfil, contas bancárias do perfil ativo (PERFIS-1) e categorias, só leitura |
 | `src/js/perfil.js` | Perfis autorizados (`meus_perfis`) e perfil ativo por usuário no `sessionStorage` (só preferência; o banco revalida) |
 | `src/js/cliente.js` | Cliente Supabase único (`storageKey` próprio, schema `financeiro`) |

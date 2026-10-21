@@ -6,8 +6,9 @@
 
 import { supabase } from './cliente.js';
 
-const PAGINAS_PERMITIDAS = new Set(['categorias.html']);
-const PAGINA_INICIAL = 'categorias.html';
+// MOBILE-CONTAS-1: a tela inicial e "Contas do mes"; categorias/contas bancarias segue acessivel.
+const PAGINAS_PERMITIDAS = new Set(['contas.html', 'categorias.html']);
+const PAGINA_INICIAL = 'contas.html';
 
 export function destinoSeguro(next) {
     return PAGINAS_PERMITIDAS.has(next) ? next : PAGINA_INICIAL;

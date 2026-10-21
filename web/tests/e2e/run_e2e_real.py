@@ -70,16 +70,20 @@ def verificar_pre_requisitos(origem, chave):
     if 'public' in expostos:
         problemas.append('schema public voltou a ser exposto na Data API')
 
-    # PERFIS-1: as funcoes precisam existir no projeto (404 PGRST202 = migration nao aplicada).
-    req = urllib.request.Request(f'{origem}/rest/v1/rpc/meus_perfis', method='POST', data=b'{}')
-    for nome, valor in (('apikey', chave), ('Content-Type', 'application/json'), ('Content-Profile', 'financeiro')):
-        req.add_header(nome, valor)
-    try:
-        status_rpc = urllib.request.urlopen(req, timeout=20).status
-    except urllib.error.HTTPError as exc:
-        status_rpc = exc.code
-    if status_rpc == 404:
-        problemas.append('migration PERFIS-1 (20261021090000_financeiro_perfis_acesso) nao aplicada no projeto')
+    # As funcoes de cada etapa precisam existir no projeto (404 PGRST202 = migration nao aplicada).
+    for funcao, corpo, migration in (
+        ('meus_perfis', b'{}', 'PERFIS-1 (20261021090000_financeiro_perfis_acesso)'),
+        ('contas_do_mes', b'{"p_perfil_id": 0, "p_mes": "2026-01-01"}', 'MOBILE-CONTAS-1 (20261022090000_financeiro_contas_do_mes)'),
+    ):
+        req = urllib.request.Request(f'{origem}/rest/v1/rpc/{funcao}', method='POST', data=corpo)
+        for nome, valor in (('apikey', chave), ('Content-Type', 'application/json'), ('Content-Profile', 'financeiro')):
+            req.add_header(nome, valor)
+        try:
+            status_rpc = urllib.request.urlopen(req, timeout=20).status
+        except urllib.error.HTTPError as exc:
+            status_rpc = exc.code
+        if status_rpc == 404:
+            problemas.append(f'migration {migration} nao aplicada no projeto')
 
     faltando = [nome for nome in CONTAS if not os.getenv(nome)]
     if faltando:

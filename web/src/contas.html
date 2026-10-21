@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Contas do mês — Controle Financeiro</title>
+    <link rel="stylesheet" href="css/shared/style.css">
+    <link rel="stylesheet" href="css/shared/theme-light.css">
+    <link rel="stylesheet" href="css/app.css">
+</head>
+<!-- MOBILE-CONTAS-1: tela inicial. Somente leitura; conteudo oculto ate a sessao ser validada. -->
+<body class="app-body" data-protegido hidden>
+    <header class="app-header">
+        <span class="app-marca">Controle Financeiro</span>
+        <span class="app-usuario">
+            <label class="app-perfil" for="perfil-ativo" hidden id="perfil-rotulo">Perfil
+                <select id="perfil-ativo"></select>
+            </label>
+            <span id="usuario-email" class="app-email"></span>
+            <button type="button" class="app-sair" id="sair">Sair</button>
+        </span>
+    </header>
+
+    <main class="app-conteudo contas">
+        <nav class="mes-nav" aria-label="Mês de competência">
+            <a id="mes-anterior" class="mes-seta" href="#" aria-label="Mês anterior">◀</a>
+            <h1 id="mes-titulo" class="mes-titulo"></h1>
+            <a id="mes-proximo" class="mes-seta" href="#" aria-label="Próximo mês">▶</a>
+        </nav>
+
+        <p class="totais" id="totais" hidden>
+            <span>Total <strong id="total-mes"></strong></span>
+            <span>Pago <strong id="total-pago"></strong></span>
+            <span>A pagar <strong id="total-a-pagar"></strong></span>
+        </p>
+
+        <p class="aviso-geracao" id="aviso-geracao" hidden>Algumas contas recorrentes ou faturas deste mês podem ainda não ter sido geradas no sistema atual.</p>
+        <div class="login-error" id="perfis-erro" role="alert" hidden></div>
+        <p class="app-vazio" id="perfis-vazio" hidden>Nenhum perfil financeiro autorizado para esta conta.</p>
+        <div class="login-error" id="contas-erro" role="alert" hidden></div>
+        <p class="app-vazio" id="contas-vazio" hidden>Nenhuma conta registrada neste mês.</p>
+
+        <section class="grupo" id="secao-despesas" aria-labelledby="titulo-despesas" hidden>
+            <h2 class="grupo-titulo" id="titulo-despesas">Despesas</h2>
+            <ul class="lista-contas" id="lista-despesas"></ul>
+        </section>
+
+        <section class="grupo" id="secao-cartoes" aria-labelledby="titulo-cartoes" hidden>
+            <h2 class="grupo-titulo" id="titulo-cartoes">Cartões</h2>
+            <div id="lista-cartoes"></div>
+        </section>
+    </main>
+
+    <script src="config.js"></script>
+    <script src="vendor/supabase.js"></script>
+    <script type="module" src="js/contas.js"></script>
+</body>
+</html>
