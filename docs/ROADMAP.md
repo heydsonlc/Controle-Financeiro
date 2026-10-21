@@ -139,7 +139,17 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 | SUPABASE-DEPLOY-CONTROL-1 | Deploy automático de migrations identificado (integração GitHub do Supabase) e **desligado** ("Deploy to production" off, confirmado no painel). Padrão: migrations só por `scripts/supabase_migrations.py aplicar --versoes`, com autorização expressa (`docs/SUPABASE_DEPLOY_CONTROL_1.md`) | Concluído |
 | MOBILE-CONTAS-1 | Tela inicial "Contas do mês" (somente leitura): `contas_do_mes`, `lancamentos_da_fatura`, `mes_pode_estar_incompleto`; equivalência com o Flask sem divergência (5 cenários), 38 testes de banco/REST e 25 E2E locais (`docs/MOBILE_CONTAS_1.md`). Migration **não aplicada no remoto** | Concluído (local) |
 | MOBILE-CONTAS-REAL-1 | Validado no Supabase real: push não aplicou a migration (deploy manual comprovado); `20261022090000` aplicada manualmente e conferida; equivalência Flask × fachada sem divergência; E2E real 25/25; acesso cruzado negado; limpeza com estado final idêntico (`docs/MOBILE_CONTAS_1.md` §9) | Concluído |
-| MOBILE-PWA-1 | Publicar a consulta no Cloudflare Pages e permitir ícone na tela inicial do celular (somente leitura) | Próxima (autorização) |
+| CICLO-FIN (decisão 2026-10-21) | **Nada vai para o Cloudflare antes de o ciclo financeiro estar completo e validado.** Critério de publicação: criar despesa → ver na competência certa → pagar → saldo bancário atualizado → conferir movimento → estornar; o mesmo para receitas e faturas. Exige equivalência financeira, autorização por perfil e nenhuma alteração indevida de histórico. Antes de cada MVP, conferir o que já existe no Flask e no `web/`. Financiamentos, veículos, OCR e relatórios avançados não bloqueiam, mas devem aparecer como indisponíveis. O mobile vem depois do ciclo | Decisão vigente |
+| FIN-RECORRENCIA-1 | Gerar recorrências (mensal/anual, conta e cartão) e faturas do mês por RPC explícita, transacional, idempotente e só para TITULAR, com as mesmas chaves do Flask (`docs/FIN_RECORRENCIA_1_CONTRATO.md`) | Próxima (contrato aguardando D1–D9) |
+| FIN-DESPESAS-1 | Cadastro de despesas e recorrências | Ciclo |
+| FIN-RECEITAS-1 | Receitas | Ciclo |
+| FIN-CARTOES-1 | Cartões e lançamentos | Ciclo |
+| FIN-PAGAMENTOS-1 | Pagamentos, movimentos e saldo bancário (inclui baixa de débito automático) | Ciclo |
+| FIN-ESTORNOS-1 | Estornos e correções | Ciclo |
+| FIN-CONCILIACAO-1 | Conferência e conciliação | Ciclo |
+| WEB-VALIDACAO-1 | Validação do ciclo completo pelo critério de publicação | Ciclo |
+| WEB-PROD-1 | Publicação no Cloudflare Pages (substitui o MOBILE-PWA-1) | Após o ciclo |
+| MOBILE-PWA-1 | Publicar a consulta no Cloudflare Pages com ícone no celular | Adiado (vira WEB-PROD-1, após o ciclo financeiro) |
 | CF-PYTHON-POC-1 | Viabilidade de Flask em Cloudflare Python Workers: possível com ≥7 mudanças estruturais (driver pg8000/Hyperdrive, Python 3.14, shim de scrypt, R2, config por `env`) e 114/128 MB de memória. Não recomendado; manter Render (`docs/CF_PYTHON_POC_1.md`) | Concluído (diagnóstico) |
 | BACKUP-DOCS-1 | Backup independente dos documentos do disco (o snapshot diário do Render não substitui). Bloqueador de produção | Alta |
 | CLOUDFLARE-1 | `financeiro.kortexbrasil.com` → Render (CNAME, DNS only até o certificado; *Full (strict)* só para o hostname); rate limit em `/login` | Alta |
