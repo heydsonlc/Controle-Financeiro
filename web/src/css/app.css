@@ -159,6 +159,27 @@ body.app-body { margin: 0; background: var(--cf-bg, #f4f6fa); }
 .botao-principal { background: #2563eb; border-color: #2563eb; color: #fff; }
 .botao:disabled { opacity: 0.6; cursor: default; }
 .geracao-resultado { font-size: 0.8125rem; color: #166534; margin: 0 0 12px; }
+/* FIN-DESPESAS-1: cadastro e edicao no proprio fluxo da tela (sem painel novo). */
+.acoes-mes { display: flex; justify-content: flex-end; margin: 0 0 8px; }
+.acoes-mes:empty { display: none; }
+.despesa-painel { margin: 0 0 12px; padding: 12px; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; }
+.despesa-form { display: flex; flex-direction: column; gap: 10px; font-size: 0.875rem; }
+.form-campo { display: flex; flex-direction: column; gap: 4px; }
+.form-rotulo { font-size: 0.8125rem; color: #4b5563; }
+.form-campo input, .form-campo select, .form-campo textarea {
+    min-height: 44px; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; font: inherit; background: #fff;
+    width: 100%; box-sizing: border-box;
+}
+.form-campo textarea { min-height: 64px; resize: vertical; }
+.form-campo input:disabled, .form-campo select:disabled { background: #f3f4f6; color: #6b7280; }
+.form-check { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
+.form-check input { width: 20px; height: 20px; margin: 0; }
+.despesa-caixa { padding: 0 12px 12px; font-size: 0.8125rem; }
+.despesa-caixa:empty { display: none; }
+.despesa-acoes { display: flex; flex-wrap: wrap; gap: 8px; }
+.despesa-bloqueio { margin: 0 0 8px; color: #6b7280; }
+.despesa-pergunta { margin: 8px 0 0; }
+.botao-perigo { background: #b91c1c; border-color: #b91c1c; color: #fff; }
 .grupo { margin-bottom: 18px; }
 .grupo-titulo { font-size: 0.8125rem; text-transform: uppercase; letter-spacing: 0.04em; color: #6b7280; margin: 0 0 6px; }
 .cartao-nome { font-size: 0.9375rem; margin: 10px 0 4px; }

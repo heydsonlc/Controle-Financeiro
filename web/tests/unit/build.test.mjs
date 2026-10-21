@@ -74,9 +74,18 @@ test('verificacao de dist detecta segredo injetado', async () => {
 });
 
 const RPCS_DE_LEITURA = new Set(['meus_perfis', 'contas_bancarias_do_perfil', 'contas_do_mes',
-    'lancamentos_da_fatura', 'mes_pode_estar_incompleto', 'previa_geracao']);
+    'lancamentos_da_fatura', 'mes_pode_estar_incompleto', 'previa_geracao', 'categorias_de_despesa',
+    'despesa_para_edicao']);
 // Escrita so por RPC transacional autorizada no banco, revisada uma a uma, e so na tela que a usa.
-const RPCS_DE_ESCRITA = new Map([['gerar_mes', 'contas.js']]);
+const RPCS_DE_ESCRITA = new Map([
+    ['gerar_mes', 'contas.js'],
+    // FIN-DESPESAS-1
+    ['criar_despesa', 'despesas.js'],
+    ['editar_despesa', 'despesas.js'],
+    ['excluir_despesa', 'despesas.js'],
+    ['editar_recorrencia', 'despesas.js'],
+    ['inativar_recorrencia', 'despesas.js'],
+]);
 
 test('codigo-fonte do frontend nao escreve em tabelas nem usa innerHTML', async () => {
     const dir = new URL('../../src/js/', import.meta.url);

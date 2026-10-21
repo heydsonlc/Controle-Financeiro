@@ -170,7 +170,7 @@ test('perfil ou fatura alterados no navegador nao dao acesso a contas de outro p
     expect(status).toEqual([403, 403]);
 });
 
-test('tela de celular: sem rolagem horizontal, setas tocaveis e nenhuma acao de escrita', async ({ page }) => {
+test('tela de celular: sem rolagem horizontal, setas tocaveis e escrita so pela acao "Nova despesa"', async ({ page }) => {
     await entrar(page, A);
     await abrirMes(page, '2026-11');
     const larguras = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
@@ -181,7 +181,7 @@ test('tela de celular: sem rolagem horizontal, setas tocaveis e nenhuma acao de 
         expect(caixa.height).toBeGreaterThanOrEqual(44);
     }
     await expect(page.locator('form, input, textarea, select:not(#perfil-ativo)')).toHaveCount(0);
-    await expect(page.locator('button')).toHaveText(['Sair']);
+    await expect(page.locator('button')).toHaveText(['Sair', 'Nova despesa']);  // FIN-DESPESAS-1 (formulario fechado)
 });
 
 test('parametro de mes invalido volta para o mes atual', async ({ page }) => {

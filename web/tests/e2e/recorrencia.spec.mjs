@@ -170,3 +170,71 @@ test('gerar por fora da tela: perfil de outro usuario e perfil so de leitura rec
     expect(status.slice(0, 3)).toEqual([403, 403, 403]);
     expect([401, 403, 404]).toContain(status[3]);  // funcao interna: sem EXECUTE para o navegador
 });
+
+// FIN-DESPESAS-1 — recorrencia cadastrada pela tela, gerada pelo FIN-RECORRENCIA-1 (sem outro
+// gerador), editada, conta excluida (competencia dispensada) e inativada. Perfil B (novo gerador),
+// em 2029; roda depois dos cenarios de 2027 deste arquivo.
+async function escolherCategoria(page, nome) {
+    const valor = await page.locator('#despesa-categoria option', { hasText: nome }).first().getAttribute('value');
+    await page.selectOption('#despesa-categoria', valor);
+}
+
+const escolaB = (page) => page.locator('#lista-despesas .conta', { has: page.locator('.conta-nome', { hasText: 'Escola B' }) });
+
+test('recorrencia pela tela: cadastrar, gerar, editar, excluir conta (dispensada) e inativar', async ({ page }) => {
+    await entrar(page, B);
+    await abrirMes(page, '2029-03');
+    await page.click('#nova-despesa');
+    await page.selectOption('#despesa-tipo', 'mensal');
+    await expect(page.locator('#despesa-competencia')).toBeHidden();  // na recorrencia, o mes de cada vencimento
+    await page.fill('#despesa-nome', 'Escola B');
+    await page.fill('#despesa-valor', '500,00');
+    await escolherCategoria(page, 'Moradia');
+    await page.fill('#despesa-vencimento', '2029-03-31');
+    await page.locator('#despesa-painel').getByRole('button', { name: 'Salvar' }).click();
+    await expect(page.locator('#acao-resultado'))
+        .toHaveText('Recorrência cadastrada. As contas são geradas pela ação "Gerar contas".');
+    await expect(escolaB(page)).toHaveCount(0);  // nenhum segundo gerador: ainda nao ha conta
+
+    await page.click('#gerar-contas');
+    const painel = page.locator('#geracao-confirmacao');
+    expect(await textos(painel.locator('.geracao-lista li', { hasText: 'Escola B' })))
+        .toEqual(['03/2029 · Escola B · Conta · 31/03/2029 · R$ 500,00', '04/2029 · Escola B · Conta · 30/04/2029 · R$ 500,00']);
+    await painel.getByRole('button', { name: 'Confirmar' }).click();
+    await expect(page.locator('#geracao-resultado')).toContainText('Geração concluída');
+    await expect(escolaB(page).locator('.conta-vencimento')).toHaveText('Vence 31/03/2029');
+
+    await escolaB(page).locator('summary').click();
+    await expect(escolaB(page).locator('.despesa-acoes button'))
+        .toHaveText(['Editar', 'Excluir', 'Editar recorrência', 'Inativar recorrência']);
+    await escolaB(page).getByRole('button', { name: 'Editar recorrência' }).click();
+    await page.fill('#despesa-valor', '550,00');
+    await page.locator('#despesa-painel').getByRole('button', { name: 'Salvar' }).click();
+    await expect(page.locator('#acao-resultado'))
+        .toHaveText('Recorrência atualizada. Vale para as próximas contas; as já existentes não mudam.');
+    await expect(escolaB(page).locator('.conta-valor')).toHaveText(/500,00/);  // conta existente nao muda
+
+    await escolaB(page).locator('summary').click();
+    await escolaB(page).getByRole('button', { name: 'Excluir' }).click();
+    await expect(escolaB(page).locator('.despesa-pergunta'))
+        .toHaveText('Excluir esta conta? A competência fica dispensada e não volta a ser gerada.');
+    await escolaB(page).getByRole('button', { name: 'Confirmar exclusão' }).click();
+    await expect(page.locator('#acao-resultado')).toHaveText('Despesa excluída.');
+    await expect(escolaB(page)).toHaveCount(0);
+    await abrirMes(page, '2029-03');
+    await expect(escolaB(page)).toHaveCount(0);           // nao volta
+    await expect(page.locator('#gerar-contas')).toHaveCount(0);  // e nao e oferecida de novo
+
+    await abrirMes(page, '2029-04');
+    await escolaB(page).locator('summary').click();
+    await escolaB(page).getByRole('button', { name: 'Inativar recorrência' }).click();
+    await escolaB(page).getByRole('button', { name: 'Confirmar inativação' }).click();
+    await expect(page.locator('#acao-resultado')).toHaveText('Recorrência inativada.');
+    await expect(escolaB(page).locator('.conta-valor')).toHaveText(/500,00/);  // historico fica
+    await escolaB(page).locator('summary').click();
+    await expect(escolaB(page).getByRole('button', { name: 'Inativar recorrência' })).toHaveCount(0);
+
+    await abrirMes(page, '2029-06');
+    await page.click('#gerar-contas');
+    await expect(page.locator('#geracao-confirmacao .geracao-lista li', { hasText: 'Escola B' })).toHaveCount(0);
+});

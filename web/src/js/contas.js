@@ -5,8 +5,10 @@
 // FIN-RECORRENCIA-1: a unica escrita e financeiro.gerar_mes, acionada pelo botao
 // "Gerar contas" e so depois da confirmacao (com o total da previa confirmada e
 // as competencias desmarcadas como dispensadas). Sem baixa de debito automatico.
+// FIN-DESPESAS-1: cadastro/edicao/exclusao em despesas.js, tambem so por RPC.
 
 import { supabase } from './cliente.js';
+import { carregarAcoes, mostrarAcoesDoMes } from './despesas.js';
 import { carregarPerfis, escolherPerfilAtivo, salvarPerfilAtivo } from './perfil.js';
 import { exigirUsuario, sair } from './sessao.js';
 
@@ -67,7 +69,7 @@ function resumoDaConta(conta, nome) {
     return resumo;
 }
 
-function itemDespesa(conta) {
+function itemDespesa(conta, contexto) {
     const item = el('li', 'conta');
     item.dataset.contaId = String(conta.id);
     const detalhe = el('details');
@@ -76,7 +78,15 @@ function itemDespesa(conta) {
     if (conta.numero_parcela && conta.total_parcelas) linhaDetalhe(lista, 'Parcela', `${conta.numero_parcela} de ${conta.total_parcelas}`);
     linhaDetalhe(lista, 'Pago em', dataCurta(conta.data_pagamento));
     if (conta.debito_automatico) linhaDetalhe(lista, 'Débito automático', 'Sim');
-    detalhe.append(resumoDaConta(conta, conta.nome), lista);
+    const acoes = el('div', 'despesa-caixa');
+    detalhe.append(resumoDaConta(conta, conta.nome), lista, acoes);
+    // Acoes (editar, excluir, recorrencia) so ao abrir: o banco informa o que e permitido.
+    let carregadas = false;
+    detalhe.addEventListener('toggle', () => {
+        if (!detalhe.open || carregadas) return;
+        carregadas = true;
+        carregarAcoes(acoes, conta.id, contexto);
+    });
     item.append(detalhe);
     return item;
 }
@@ -272,7 +282,19 @@ async function carregarMes(perfilId, mes) {
         return;
     }
     const contas = contasResp.data || [];
-    mostrarGeracao(previaResp.error ? null : previaResp.data, perfilId, mes);
+    const previa = previaResp.error ? null : previaResp.data;
+    const contexto = {
+        perfilId,
+        mes,
+        recarregar: async (mensagem) => {
+            const aviso = document.getElementById('acao-resultado');
+            aviso.textContent = mensagem;
+            aviso.hidden = false;
+            await carregarMes(perfilId, mes);
+        },
+    };
+    mostrarAcoesDoMes(contexto, Boolean(previa && previa.pode_gerir));
+    mostrarGeracao(previa, perfilId, mes);
 
     // Cada conta (despesa ou fatura) entra uma unica vez; compras nunca sao somadas aqui.
     const total = contas.reduce((soma, c) => soma + centavos(c.valor), 0);
@@ -290,7 +312,7 @@ async function carregarMes(perfilId, mes) {
     const despesas = contas.filter((c) => c.grupo === 'DESPESA');
     if (despesas.length) {
         const lista = document.getElementById('lista-despesas');
-        for (const conta of despesas) lista.append(itemDespesa(conta));
+        for (const conta of despesas) lista.append(itemDespesa(conta, contexto));
         document.getElementById('secao-despesas').hidden = false;
     }
 
@@ -349,6 +371,7 @@ if (usuario) {
         seletor.addEventListener('change', async () => {
             salvarPerfilAtivo(usuario.id, seletor.value);
             document.getElementById('geracao-resultado').hidden = true;
+            document.getElementById('acao-resultado').hidden = true;
             await carregarMes(Number(seletor.value), mes);
         });
         await carregarMes(ativo.id, mes);

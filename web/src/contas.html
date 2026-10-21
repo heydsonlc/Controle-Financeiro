@@ -9,7 +9,8 @@
     <link rel="stylesheet" href="css/app.css">
 </head>
 <!-- MOBILE-CONTAS-1: tela inicial; conteudo oculto ate a sessao ser validada. Consulta nunca grava;
-     FIN-RECORRENCIA-1: "Gerar contas" so grava depois da confirmacao do usuario. -->
+     FIN-RECORRENCIA-1: "Gerar contas" so grava depois da confirmacao do usuario.
+     FIN-DESPESAS-1: "Nova despesa" e as acoes de cada despesa so aparecem para quem gerencia o perfil. -->
 <body class="app-body" data-protegido hidden>
     <header class="app-header">
         <span class="app-marca">Controle Financeiro</span>
@@ -35,6 +36,9 @@
             <span>A pagar <strong id="total-a-pagar"></strong></span>
         </p>
 
+        <div class="acoes-mes" id="acoes-mes"></div>
+        <div class="despesa-painel" id="despesa-painel" hidden></div>
+        <p class="geracao-resultado" id="acao-resultado" role="status" hidden></p>
         <p class="geracao-resultado" id="geracao-resultado" role="status" hidden></p>
         <section class="geracao" id="aviso-geracao" aria-label="Geração de contas recorrentes" hidden>
             <p class="aviso-geracao" id="aviso-texto"></p>
