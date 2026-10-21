@@ -1,6 +1,6 @@
 # AUTH-REAL-1 — Validação do MVP com o Supabase Auth real
 
-Data: 2026-10-20. **Preparação concluída; nada executado no projeto remoto.** Ordem acordada: segurança do banco (✅ SEC-SUPABASE-PUBLIC-1) → **autenticação real** → modelagem de perfis → migração das funcionalidades.
+Data: 2026-10-20. **Validação concluída com sucesso** (§7). Sem migrations novas, sem alteração no Flask ou em dados reais, sem publicação no Cloudflare. Ordem acordada: segurança do banco (✅ SEC-SUPABASE-PUBLIC-1) → **autenticação real** → modelagem de perfis → migração das funcionalidades.
 
 Alvo: projeto Supabase do Controle Financeiro (`fzjmge…`, banco de teste). Nunca o da Calculadora Judicial. Sem Docker: usa o próprio projeto.
 
@@ -73,3 +73,31 @@ Critérios de aceite, todos medidos pelo E2E real:
 ## 6. Depois da validação
 
 Seguir para a **modelagem de perfis**. Identidade (usuário do Auth) não é o mesmo que perfil financeiro: uma pessoa pode administrar vários perfis ou conjuntos de contas. Isso precisa estar definido antes de migrar receitas, despesas e financiamentos.
+
+## 7. Resultado da validação (2026-10-20)
+
+Ajustes feitos pelo usuário no painel: cadastro público desligado, duas contas criadas e confirmadas, `financeiro` exposto.
+
+As contas de teste usam endereços pessoais do usuário, mas **só neste projeto de teste** e sem nenhum dado financeiro. As senhas foram **redefinidas por mim** com valores aleatórios, a pedido do usuário, pela API administrativa (chave de serviço só em memória), e gravadas apenas em `.env.e2e-real` (fora do Git). As senhas escolhidas no painel deixaram de valer.
+
+| Passo | Resultado |
+|---|---|
+| 1. Cadastro público desligado | ✅ `disable_signup: true`, e uma tentativa real de cadastro recebeu **422 `signup_disabled`** (contas no Auth continuaram 2) |
+| 2. Duas contas autenticam | ✅ login com a chave publicável: HTTP 200 nas duas |
+| 3. Schemas expostos | ✅ **apenas `graphql_public` e `financeiro`**; `public` fora |
+| 4. Privilégios e RLS do `financeiro` | ✅ uma tabela; RLS habilitada e **forçada**; policy única `user_id = auth.uid()` (SELECT, `authenticated`); só SELECT concedido; `anon` sem USAGE; nenhuma função |
+| 5. `run_e2e_real.py` | ✅ **9/9 passaram contra o Supabase real**, sem violação de CSP |
+| 6. Dados fictícios isolados | ✅ 3 categorias para A e 2 para B; cada conta viu só as suas |
+| 7. Anônimo não lê; escrita não autorizada impossível | ✅ REST sem token negado; POST/DELETE com token válido de A negados; no banco: 5 categorias e 0 "Injetada"/"Alterada" depois das tentativas |
+| 8. Tabelas legadas | ✅ `verificar_exposicao_supabase.py --com-escrita`: `public BLOQUEADO para anonimo` |
+| 9. Limpeza | ✅ categorias de teste removidas; `financeiro.categorias` com 0 linhas |
+
+**Objetivo prático atingido:** o novo frontend abre, autentica com conta real do Supabase, mostra as categorias da conta e mantém invisíveis as da outra.
+
+## 8. Próximos bloqueadores
+
+1. **Modelagem de perfis financeiros:** relação identidade (Auth) ↔ perfil financeiro ↔ dados, antes de receitas, despesas, pagamentos e do MOBILE-CONTAS-1. As categorias do Flask **não** serão migradas automaticamente.
+2. **Publicação no Cloudflare Pages:** exige autorização. O build já recusa chaves privilegiadas e o projeto da Calculadora.
+3. **Escrita pelo frontend:** só por RPC transacional validada (nenhuma ainda).
+4. **Contas de teste:** manter só para testes. Para uso real, definir a conta dona e senha própria.
+5. **SEG-2:** o Supabase Auth tem limites de taxa próprios; o login do Flask continua sem limite de tentativas.
