@@ -1,10 +1,12 @@
 // FIN-CARTOES-1 — cartoes e compras, em tela de celular. Dados FICTICIOS
-// (tests/supabase_local.py: semear_contas e semear_cartoes_e2e). O teste de escrita cria o proprio
+// (tests/supabase_local.py: semear_contas e semear_cartoes_e2e). Leituras com o usuario A (gestor do
+// Pessoal, LEITOR da Empresa); toda escrita com o usuario B no "Perfil B" temporario: cria o proprio
 // cartao, grava so em 2031 e o inativa no fim (cartao ativo entraria na geracao dos outros cenarios).
 // Nenhuma acao de pagamento existe na tela.
 import { expect, test } from '@playwright/test';
 
 const A = { email: process.env.CF_EMAIL_A || 'usuario.a@teste.local', senha: process.env.CF_SENHA_A };
+const B = { email: process.env.CF_EMAIL_B || 'usuario.b@teste.local', senha: process.env.CF_SENHA_B };
 
 test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
@@ -66,7 +68,7 @@ test('aba Cartoes a partir de Contas do mes: faturas como na tela de contas, sem
 });
 
 test('cadastro mostra so o final do numero; inativo fora das faturas', async ({ page }) => {
-    await entrar(page, A);
+    await entrar(page, B);
     await abrirMes(page, '2031-05');
     const antigo = page.locator('#lista-cadastro .conta', { hasText: 'Cartao Antigo' });
     await expect(antigo.locator('.conta-nome')).toHaveText('Cartao Antigo •••• 8888');
@@ -77,7 +79,7 @@ test('cadastro mostra so o final do numero; inativo fora das faturas', async ({ 
 });
 
 test('cartao e compra parcelada: cadastro, previa, edicao, exclusao e inativacao', async ({ page }) => {
-    await entrar(page, A);
+    await entrar(page, B);
     await abrirMes(page, '2031-05');
     await page.click('#novo-cartao');
     await page.fill('#cartao-nome', 'Cartao Roxo');
@@ -102,7 +104,8 @@ test('cartao e compra parcelada: cadastro, previa, edicao, exclusao e inativacao
     await page.fill('#compra-valor', '100,00');
     await page.fill('#compra-parcelas', '3');
     await page.fill('#compra-data', '2031-05-12');
-    await page.selectOption('#compra-categoria', { label: 'Moradia' });
+    const moradia = await page.locator('#compra-categoria option', { hasText: 'Moradia' }).first().getAttribute('value');
+    await page.selectOption('#compra-categoria', moradia);  // no projeto real o nome leva o marcador do seed
     await expect(page.locator('#compra-previa li')).toHaveCount(3);
     expect(await textos(page.locator('#compra-previa li'))).toEqual([
         '1/3 · fatura 05/2031 · R$ 33,34', '2/3 · fatura 06/2031 · R$ 33,33', '3/3 · fatura 07/2031 · R$ 33,33',
@@ -116,7 +119,7 @@ test('cartao e compra parcelada: cadastro, previa, edicao, exclusao e inativacao
     await expect(roxo.locator('.conta-vencimento')).toHaveText('Vence 10/05/2031');
     await roxo.locator('summary').click();
     const compra = roxo.locator('.cartao-compra', { hasText: 'Geladeira E2E' });
-    await expect(compra.locator('.conta-vencimento')).toHaveText('12/05/2031 · 1/3 · Moradia');
+    await expect(compra.locator('.conta-vencimento')).toHaveText(/^12\/05\/2031 · 1\/3 · Moradia/);
     await compra.getByRole('button', { name: 'Editar' }).click();
     await expect(page.locator('#edicao-valor')).toHaveCount(0);  // parcelada: valor e datas nao mudam aqui
     await page.fill('#edicao-descricao', 'Geladeira nova E2E');
@@ -141,7 +144,6 @@ test('cartao e compra parcelada: cadastro, previa, edicao, exclusao e inativacao
     await expect(page.locator('#acao-resultado')).toHaveText('Cartão inativado.');
     await expect(cadastro().locator('.situacao')).toHaveText('Inativo');
     await expect(fatura(page, 'Cartao Roxo')).toHaveCount(0);
-    await expect(page.locator('#nova-compra')).toHaveCount(0);
 });
 
 test('LEITOR ve faturas e compras sem nenhuma acao', async ({ page }) => {

@@ -127,7 +127,7 @@
 - faturas iguais às de Contas do mês e nenhum botão de pagamento;
 - compras de fatura paga sem ações;
 - final do número sem o número completo;
-- ciclo completo (cartão → prévia → compra parcelada → edição → exclusão → inativação);
+- ciclo completo (cartão → prévia → compra parcelada → edição → exclusão → inativação), escrito pelo usuário B no Perfil B (ajuste do FIN-CARTOES-REAL-1);
 - LEITOR sem nenhuma ação.
 
 **Unitários do `web/`:** allowlist de RPCs atualizada; 7/7.
@@ -142,7 +142,7 @@
 
 ## 7. Suíte completa
 
-**1417 passaram**, 19 pulados; só as 5 falhas que já existiam:
+**1417 passaram**, 19 pulados (número confirmado pelo resumo real do pytest no FIN-CARTOES-REAL-1); só as 5 falhas que já existiam:
 - `test_categorias_sistemicas_mobilidade::test_projecoes_veiculo_usam_categorias_sistemicas_granulares`
 - `test_ocr_tools::test_status_sem_ferramentas_retorna_estrutura_valida`
 - `test_ocr_tools::test_poppler_ausente_retorna_aviso`
@@ -184,5 +184,5 @@
 
 ## 11. Próximos passos (não autorizados)
 
-- **FIN-CARTOES-REAL-1:** aplicar `20261028090000` no Supabase de teste, com E2E e testes reais e limpeza. O `run_e2e_real.py` e os seeds reais precisarão do cartão inativo fictício.
+- **FIN-CARTOES-REAL-1:** concluído em 2026-10-22 (`docs/FIN_CARTOES_REAL_1.md`).
 - **FIN-PAGAMENTO-TRAVA-1** continua obrigatório antes de pagamentos, recebimentos e estornos.

@@ -564,9 +564,9 @@ def semear_receitas_e2e(cur):
                         (conta, realizada))
 
 
-# FIN-CARTOES-1 (E2E): cartao FICTICIO INATIVO do Pessoal (cadastro: final do numero). Um cartao ativo
+# FIN-CARTOES-1 (E2E): cartao FICTICIO INATIVO do "Perfil B" (cadastro: final do numero). Um cartao ativo
 # entraria na geracao de faturas dos outros cenarios; cartoes.spec.mjs cria o seu e o inativa no fim.
-CARTAO_INATIVO_E2E = (455, 'Cartao Antigo', 'PESSOAL', 25, 10)  # id, nome, perfil, fechamento, vencimento
+CARTAO_INATIVO_E2E = (455, 'Cartao Antigo', 'PERFIL_B', 25, 10)  # id, nome, perfil, fechamento, vencimento
 
 
 def semear_cartoes_e2e(cur, categoria_id=203):

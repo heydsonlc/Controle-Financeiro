@@ -1,11 +1,12 @@
 """
-FIN-DESPESAS-REAL-1 / FIN-RECEITAS-DATA-REAL-1 — limpeza do que os TESTES criaram (alem dos seeds)
+FIN-DESPESAS-REAL-1 / FIN-RECEITAS-DATA-REAL-1 / FIN-CARTOES-REAL-1 — limpeza do que os TESTES criaram (alem dos seeds)
 no Supabase de teste.
 
 `marcar` (antes dos seeds): guarda o maior id de cada tabela financeira e o instante inicial.
 `remover` (depois dos testes, ANTES dos removedores dos seeds): apaga so o que os testes criaram
-pela tela ou pela API — despesas e recorrencias novas (com contas, compras, identidades,
-dispensas e chaves de idempotencia) e movimentos de teste. Linhas dos seeds ficam para os
+pela tela ou pela API — despesas, recorrencias e cartoes novos (com contas/faturas, compras,
+configuracao, limites, identidades, dispensas e chaves de idempotencia), categorias do cartao e
+vinculos de teste e movimentos de teste. Linhas dos seeds ficam para os
 proprios removedores. Nada com id ate a marca e tocado.
 
 Uso:
@@ -23,7 +24,8 @@ from supabase_contas_seed_teste import conectar  # noqa: E402
 
 MARCA = RAIZ / 'data' / 'despesas_real_1_marca.json'
 TABELAS = ('item_despesa', 'conta', 'lancamento_agregado', 'movimento_financeiro',
-           'item_receita', 'receita_orcamento', 'receita_realizada')
+           'item_receita', 'receita_orcamento', 'receita_realizada', 'categoria_cartao')
+MARCADOR_CARTAO = '%[teste FIN-CARTOES-REAL-1]%'
 
 
 def itens_dos_seeds():
@@ -36,6 +38,9 @@ def itens_dos_seeds():
         ids |= {mapa[str(i[0])] for i in ITENS_DESPESA}
     if recorrencia.exists():
         ids |= set(json.loads(recorrencia.read_text(encoding='utf-8'))['itens'].values())
+    cartoes = RAIZ / 'data' / 'cartoes_real_1_teste.json'
+    if cartoes.exists():
+        ids |= set(json.loads(cartoes.read_text(encoding='utf-8'))['itens'])
     return ids
 
 
@@ -72,6 +77,9 @@ def main():
                 ('compras', 'delete from public.lancamento_agregado where item_despesa_id = any(%s) or cartao_id = any(%s)',
                  [itens, itens]),
                 ('contas', 'delete from public.conta where item_despesa_id = any(%s)', [itens]),
+                # Cartoes (FIN-CARTOES-REAL-1): configuracao e limites dos cartoes criados pelos testes.
+                ('limites', 'delete from public.cartao_categoria_limite where cartao_id = any(%s)', [itens]),
+                ('configs_cartao', 'delete from public.config_agregador where item_despesa_id = any(%s)', [itens]),
                 ('itens', 'delete from public.item_despesa where id = any(%s)', [itens]),
                 ('chaves', 'delete from financeiro.operacao_despesa where criado_em >= %s::timestamptz', [marca['inicio']]),
                 # Receitas (FIN-RECEITAS): tudo acima da marca e de teste (seed ficticio ou criado pelos testes).
@@ -82,7 +90,21 @@ def main():
                 ('receitas_fontes', 'delete from public.item_receita where id > %s', [marca.get('item_receita', 0)]),
                 ('chaves_receita', 'delete from financeiro.operacao_receita where criado_em >= %s::timestamptz',
                  [marca['inicio']]),
+                ('chaves_cartao', 'delete from financeiro.operacao_cartao where criado_em >= %s::timestamptz',
+                 [marca['inicio']]),
+                # Categorias do cartao criadas pelos testes reais: so as com o marcador (as do seed de contas
+                # tambem ficam acima da marca e sao removidas pelo proprio seed).
+                ('limites_teste', 'delete from public.cartao_categoria_limite where categoria_cartao_id in '
+                 '(select id from public.categoria_cartao where id > %s and nome like %s)',
+                 [marca.get('categoria_cartao'), MARCADOR_CARTAO]),
+                ('vinculos_categoria', 'delete from public.categoria_cartao_despesa where categoria_cartao_id in '
+                 '(select id from public.categoria_cartao where id > %s and nome like %s)',
+                 [marca.get('categoria_cartao'), MARCADOR_CARTAO]),
+                ('categorias_cartao', 'delete from public.categoria_cartao where id > %s and nome like %s',
+                 [marca.get('categoria_cartao'), MARCADOR_CARTAO]),
             ):
+                if any(x is None for x in params):
+                    continue
                 cur.execute(sql, params)
                 removidos[rotulo] = cur.rowcount
             print('Removidos (criados pelos testes):', removidos)
