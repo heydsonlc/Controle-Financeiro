@@ -75,7 +75,8 @@ test('verificacao de dist detecta segredo injetado', async () => {
 
 const RPCS_DE_LEITURA = new Set(['meus_perfis', 'contas_bancarias_do_perfil', 'contas_do_mes',
     'lancamentos_da_fatura', 'mes_pode_estar_incompleto', 'previa_geracao', 'categorias_de_despesa',
-    'despesa_para_edicao', 'receitas_do_mes', 'fontes_de_receita', 'receita_para_edicao', 'pode_gerir_perfil']);
+    'despesa_para_edicao', 'receitas_do_mes', 'fontes_de_receita', 'receita_para_edicao', 'pode_gerir_perfil',
+    'cartoes_do_perfil', 'faturas_do_mes', 'compras_da_fatura', 'compra_para_edicao', 'previa_compra']);
 // Escrita so por RPC transacional autorizada no banco, revisada uma a uma, e so na tela que a usa.
 const RPCS_DE_ESCRITA = new Map([
     ['gerar_mes', 'contas.js'],
@@ -91,6 +92,13 @@ const RPCS_DE_ESCRITA = new Map([
     ['excluir_receita', 'receitas.js'],
     ['editar_fonte_receita', 'receitas.js'],
     ['inativar_fonte_receita', 'receitas.js'],
+    // FIN-CARTOES-1 (compras e cartoes; nenhum pagamento de fatura)
+    ['criar_compra', 'cartoes.js'],
+    ['editar_compra', 'cartoes.js'],
+    ['excluir_compra', 'cartoes.js'],
+    ['criar_cartao', 'cartoes.js'],
+    ['editar_cartao', 'cartoes.js'],
+    ['inativar_cartao', 'cartoes.js'],
 ]);
 
 test('codigo-fonte do frontend nao escreve em tabelas nem usa innerHTML', async () => {

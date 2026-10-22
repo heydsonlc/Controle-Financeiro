@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Cartões — Controle Financeiro</title>
+    <link rel="stylesheet" href="css/shared/style.css">
+    <link rel="stylesheet" href="css/shared/theme-light.css">
+    <link rel="stylesheet" href="css/app.css">
+</head>
+<!-- FIN-CARTOES-1: faturas do mes por cartao, compras a vista e parceladas, cadastro de cartoes.
+     Nada aqui paga fatura, estorna ou movimenta conta bancaria. Escritas so para quem gerencia o perfil. -->
+<body class="app-body" data-protegido hidden>
+    <header class="app-header">
+        <span class="app-marca">Controle Financeiro</span>
+        <span class="app-usuario">
+            <label class="app-perfil" for="perfil-ativo" hidden id="perfil-rotulo">Perfil
+                <select id="perfil-ativo"></select>
+            </label>
+            <span id="usuario-email" class="app-email"></span>
+            <button type="button" class="app-sair" id="sair">Sair</button>
+        </span>
+    </header>
+
+    <main class="app-conteudo contas">
+        <nav class="abas" aria-label="Seções">
+            <a id="aba-contas" class="aba" href="contas.html">Contas</a>
+            <a id="aba-receitas" class="aba" href="receitas.html">Receitas</a>
+            <a id="aba-cartoes" class="aba aba-ativa" href="cartoes.html" aria-current="page">Cartões</a>
+        </nav>
+        <nav class="mes-nav" aria-label="Mês da fatura">
+            <a id="mes-anterior" class="mes-seta" href="#" aria-label="Mês anterior">◀</a>
+            <h1 id="mes-titulo" class="mes-titulo"></h1>
+            <a id="mes-proximo" class="mes-seta" href="#" aria-label="Próximo mês">▶</a>
+        </nav>
+
+        <p class="totais" id="totais" hidden>
+            <span>Compras <strong id="total-executado"></strong></span>
+            <span>Previsto <strong id="total-previsto"></strong></span>
+        </p>
+        <p class="receitas-nota" id="cartoes-nota" hidden>Pagamento de fatura continua sendo registrado no sistema atual.</p>
+
+        <div class="acoes-mes" id="acoes-mes"></div>
+        <div class="despesa-painel" id="cartao-painel" hidden></div>
+        <p class="geracao-resultado" id="acao-resultado" role="status" hidden></p>
+        <div class="login-error" id="perfis-erro" role="alert" hidden></div>
+        <p class="app-vazio" id="perfis-vazio" hidden>Nenhum perfil financeiro autorizado para esta conta.</p>
+        <div class="login-error" id="faturas-erro" role="alert" hidden></div>
+        <p class="app-vazio" id="faturas-vazio" hidden>Nenhum cartão ativo neste perfil.</p>
+
+        <section class="grupo" id="secao-faturas" aria-labelledby="titulo-faturas" hidden>
+            <h2 class="grupo-titulo" id="titulo-faturas">Faturas</h2>
+            <ul class="lista-contas" id="lista-faturas"></ul>
+        </section>
+
+        <section class="grupo" id="secao-cadastro" aria-labelledby="titulo-cadastro" hidden>
+            <h2 class="grupo-titulo" id="titulo-cadastro">Cartões cadastrados</h2>
+            <ul class="lista-contas" id="lista-cadastro"></ul>
+        </section>
+    </main>
+
+    <script src="config.js"></script>
+    <script src="vendor/supabase.js"></script>
+    <script type="module" src="js/cartoes.js"></script>
+</body>
+</html>

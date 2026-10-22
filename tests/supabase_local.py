@@ -562,3 +562,16 @@ def semear_receitas_e2e(cur):
             cur.execute("insert into public.movimento_financeiro (conta_bancaria_id, tipo, valor, descricao, data_movimento, "
                         "receita_realizada_id, origem) values (%s, 'CREDITO', 2000, 'Recebimento', '2026-11-05', %s, 'RECEITA')",
                         (conta, realizada))
+
+
+# FIN-CARTOES-1 (E2E): cartao FICTICIO INATIVO do Pessoal (cadastro: final do numero). Um cartao ativo
+# entraria na geracao de faturas dos outros cenarios; cartoes.spec.mjs cria o seu e o inativa no fim.
+CARTAO_INATIVO_E2E = (455, 'Cartao Antigo', 'PESSOAL', 25, 10)  # id, nome, perfil, fechamento, vencimento
+
+
+def semear_cartoes_e2e(cur, categoria_id=203):
+    iid, nome, chave, fechamento, vencimento = CARTAO_INATIVO_E2E
+    cur.execute("insert into public.item_despesa (id, nome, tipo, perfil_financeiro_id, categoria_id, ativo, recorrente) "
+                "values (%s, %s, 'Agregador', %s, %s, false, false)", (iid, nome, PERFIS[chave]['id'], categoria_id))
+    cur.execute('insert into public.config_agregador (item_despesa_id, dia_fechamento, dia_vencimento, numero_cartao) '
+                "values (%s, %s, %s, '5555 6666 7777 8888')", (iid, fechamento, vencimento))

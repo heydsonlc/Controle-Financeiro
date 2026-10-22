@@ -407,6 +407,7 @@ document.getElementById('mes-anterior').href = `receitas.html?mes=${deslocarMes(
 document.getElementById('mes-proximo').href = `receitas.html?mes=${deslocarMes(mes, 1)}`;
 document.getElementById('aba-contas').href = `contas.html?mes=${mes}`;
 document.getElementById('aba-receitas').href = `receitas.html?mes=${mes}`;
+document.getElementById('aba-cartoes').href = `cartoes.html?mes=${mes}`;  // FIN-CARTOES-1
 
 const usuario = await exigirUsuario();
 if (usuario) {
