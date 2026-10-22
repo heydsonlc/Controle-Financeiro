@@ -125,6 +125,18 @@ class CartaoService:
         # Calcular data de vencimento baseada no dia de vencimento configurado
         data_vencimento = comp_primeiro_dia.replace(day=config.dia_vencimento)
 
+        # FIN-FATURA-INTEGRIDADE-1: criar fatura trava o cartao (ordem global cartao -> faturas). Quem
+        # segura o cartao (compra, recorrencia, importacao) nao ve surgir e ser paga uma fatura nova dele.
+        CartaoService.travar_cartao(cartao_id)
+        existente = Conta.query.filter(
+            Conta.item_despesa_id == cartao_id,
+            Conta.is_fatura_cartao == True,  # noqa: E712
+            Conta.cartao_competencia == comp_primeiro_dia,
+        ).first()
+        if existente:
+            db.session.commit()  # mesmo contrato do caminho de criacao (estado gravado)
+            return existente  # criada por quem tinha o cartao antes
+
         # Criar fatura
         fatura = Conta(
             perfil_financeiro_id=cartao.perfil_financeiro_id,
@@ -701,12 +713,23 @@ class CartaoService:
         """Paga pelo pagamento do Flask (status_pagamento) ou marcada PAGA (status_fatura)."""
         return fatura is not None and (fatura.status_pagamento == 'Pago' or fatura.status_fatura == 'PAGA')
 
+    # FIN-FATURA-INTEGRIDADE-1 — ordem global de travas: cartao (item_despesa, por id) -> faturas
+    # dele (por id) -> compras -> conta bancaria -> movimento. Quem trava mais de uma fatura trava o
+    # cartao ANTES; quem trava uma so fatura (pagamento) nunca espera outra fatura. Assim nenhuma
+    # operacao segura uma fatura enquanto espera outra fatura de um cartao que nao travou: nao ha
+    # ciclo de espera (o novo aplicativo segue a mesma ordem; migration 20261029090000).
+
+    @staticmethod
+    def travar_cartao(cartao_id):
+        return travar_um(ItemDespesa, cartao_id)
+
     @staticmethod
     def travar_faturas(cartao_id, competencias):
-        """FIN-PAGAMENTO-TRAVA-1: trava (em ordem de id) as faturas existentes do cartao nos meses dados."""
+        """Trava o cartao e depois (em ordem de id) as faturas existentes dele nos meses dados."""
         meses = {CartaoService._primeiro_dia_mes(c) for c in competencias if c}
         if not meses:
             return []
+        CartaoService.travar_cartao(cartao_id)
         ids = [f.id for f in Conta.query.filter(
             Conta.item_despesa_id == cartao_id,
             Conta.is_fatura_cartao == True,  # noqa: E712
@@ -716,9 +739,137 @@ class CartaoService:
 
     @staticmethod
     def _fatura_travada(cartao_id, competencia):
-        """Garante a fatura do mes (pode confirmar a criacao) e devolve-a travada e relida."""
+        """Garante a fatura do mes (a criacao confirma a transacao e solta as travas), trava o cartao
+        (se ja travado, nada muda) e devolve a fatura travada e relida."""
         fatura = CartaoService.get_or_create_fatura(cartao_id, competencia)
+        CartaoService.travar_cartao(cartao_id)
         return travar_um(Conta, fatura.id)
+
+    @staticmethod
+    def fatura_elegivel(cartao_id, competencia, minimo=None):
+        """FIN-FATURA-INTEGRIDADE-1: primeira fatura NAO paga a partir do mes (e nao antes de `minimo`),
+        travada. Fatura paga e imutavel quanto as compras; FECHADA continua elegivel (estado proprio).
+        Devolve (mes_destino, fatura)."""
+        mes = CartaoService._primeiro_dia_mes(competencia)
+        if minimo and mes < minimo:
+            mes = minimo
+        fatura = CartaoService._fatura_travada(cartao_id, mes)
+        desvios = 0
+        while CartaoService.fatura_esta_paga(fatura):
+            desvios += 1
+            if desvios > 24:
+                raise ValueError('Nao ha fatura aberta nos proximos 24 meses')
+            mes = mes + relativedelta(months=1)
+            fatura = CartaoService._fatura_travada(cartao_id, mes)
+        return mes, fatura
+
+    @staticmethod
+    def planejar_destinos(pedidos):
+        """FIN-FATURA-INTEGRIDADE-1: destino de cada parcela ANTES de inserir qualquer uma.
+
+        pedidos: lista de (cartao_id, chave, [competencias pretendidas, em ordem de parcela]).
+        Devolve {chave: [mes de destino por parcela]}: a primeira fatura NAO paga a partir da pretendida,
+        uma por fatura (um desvio desloca as parcelas seguintes). Ao devolver, os cartoes (por id) e as
+        faturas deles estao travados ate o commit do chamador. As faturas que faltam sao criadas antes
+        (a criacao confirma a transacao, mas nada da compra esta pendente ainda): a compra continua
+        atomica e nenhuma trava anterior e usada depois de solta.
+        """
+        extras = {}
+        for _tentativa in range(30):
+            for cartao_id, _chave, meses in pedidos:
+                for mes in sorted({CartaoService._primeiro_dia_mes(m) for m in meses} | extras.get(cartao_id, set())):
+                    CartaoService.get_or_create_fatura(cartao_id, mes)
+            travadas = {}
+            for cartao_id in sorted({c for c, _k, _m in pedidos}):
+                meses = {CartaoService._primeiro_dia_mes(m) for c, _k, ms in pedidos if c == cartao_id for m in ms}
+                travadas[cartao_id] = {f.cartao_competencia: f for f in
+                                       CartaoService.travar_faturas(cartao_id, meses | extras.get(cartao_id, set()))}
+            destinos, faltou = {}, None
+            for cartao_id, chave, meses in pedidos:
+                lista, anterior = [], None
+                for mes in meses:
+                    mes = CartaoService._primeiro_dia_mes(mes)
+                    if anterior and mes <= anterior:
+                        mes = anterior + relativedelta(months=1)
+                    for _ in range(25):
+                        fatura = travadas[cartao_id].get(mes)
+                        if fatura is None or not CartaoService.fatura_esta_paga(fatura):
+                            break
+                        mes = mes + relativedelta(months=1)
+                    else:
+                        raise ValueError('Nao ha fatura aberta nos proximos 24 meses')
+                    if travadas[cartao_id].get(mes) is None:
+                        faltou = (cartao_id, mes)
+                        break
+                    lista.append(mes)
+                    anterior = mes
+                if faltou:
+                    break
+                destinos[chave] = lista
+            if not faltou:
+                return destinos
+            extras.setdefault(faltou[0], set()).add(faltou[1])  # criada na proxima volta
+        raise ValueError('Nao foi possivel definir as faturas de destino')
+
+    @staticmethod
+    def fatura_elegivel_existente(cartao_id, competencia):
+        """Como fatura_elegivel, sem criar fatura nem confirmar a transacao (a geracao de recorrencias
+        do Flask roda numa transacao do chamador, com a trava do gerador T1). Trava o cartao, pula as
+        faturas pagas existentes e devolve o primeiro mes sem fatura paga. Com o cartao travado,
+        ninguem cria (get_or_create_fatura tambem trava o cartao) nem paga uma fatura nova dele."""
+        CartaoService.travar_cartao(cartao_id)
+        mes = CartaoService._primeiro_dia_mes(competencia)
+        for _ in range(25):
+            existente = Conta.query.filter(
+                Conta.item_despesa_id == cartao_id,
+                Conta.is_fatura_cartao == True,  # noqa: E712
+                Conta.cartao_competencia == mes,
+            ).first()
+            if existente is None or not CartaoService.fatura_esta_paga(travar_um(Conta, existente.id)):
+                return mes
+            mes = mes + relativedelta(months=1)
+        raise ValueError('Nao ha fatura aberta nos proximos 24 meses')
+
+    _colunas_desvio = {}
+
+    @staticmethod
+    def suporta_desvio_auditado():
+        """True se o banco ja tem lancamento_agregado.mes_fatura_original (migration local
+        FIN-FATURA-INTEGRIDADE-1). Um banco ainda nao migrado (ex.: gastos.db) continua funcionando."""
+        from sqlalchemy import inspect
+        chave = str(db.engine.url)
+        if chave not in CartaoService._colunas_desvio:
+            colunas = {c['name'] for c in inspect(db.engine).get_columns('lancamento_agregado')}
+            CartaoService._colunas_desvio[chave] = 'mes_fatura_original' in colunas
+        return CartaoService._colunas_desvio[chave]
+
+    @staticmethod
+    def registrar_desvio(lancamento, mes_original, exigir_coluna=False):
+        """Registra de forma auditavel que a compra saiu da competencia `mes_original` (fatura paga).
+
+        Com a coluna: mes_fatura_original. Sem ela (banco nao migrado): marca nas observacoes, ou
+        recusa (exigir_coluna, usado pela importacao, que precisa da competencia original para nao
+        duplicar numa reimportacao)."""
+        mes_original = CartaoService._primeiro_dia_mes(mes_original)
+        if lancamento.mes_fatura == mes_original:
+            return
+        if CartaoService.suporta_desvio_auditado():
+            lancamento.mes_fatura_original = mes_original
+            return
+        if exigir_coluna:
+            raise ValueError(f'A fatura de {mes_original.strftime("%m/%Y")} esta paga e este banco ainda nao registra '
+                             'a competencia original do desvio (migration pendente). Nada foi importado.')
+        marca = f'[Fatura de {mes_original.strftime("%m/%Y")} paga: lancada em {lancamento.mes_fatura.strftime("%m/%Y")}]'
+        lancamento.observacoes = f'{lancamento.observacoes}\n{marca}' if lancamento.observacoes else marca
+
+    @staticmethod
+    def filtro_competencia_original(modelo, competencia):
+        """Compra da competencia `competencia`, esteja nela ou desviada dela (deduplicacao)."""
+        from sqlalchemy import or_
+        competencia = CartaoService._primeiro_dia_mes(competencia)
+        if CartaoService.suporta_desvio_auditado():
+            return or_(modelo.mes_fatura == competencia, modelo.mes_fatura_original == competencia)
+        return modelo.mes_fatura == competencia
 
     @staticmethod
     def recalcular_fatura(cartao_id, competencia):
@@ -915,7 +1066,10 @@ class CartaoService:
         primeira_fatura = None
         faturas_afetadas_set = set()  # Armazena meses de faturas afetadas (considerando redirecionamento)
 
-        mes_anterior = None
+        # FIN-FATURA-INTEGRIDADE-1: destinos de todas as parcelas decididos (e faturas criadas) antes de
+        # inserir qualquer parcela; a compra so e confirmada inteira (sem parcela solta se algo falhar).
+        meses_pretendidos = [mes_fatura_inicial + relativedelta(months=n - 1) for n in range(1, total_parcelas + 1)]
+        destinos = CartaoService.planejar_destinos([(cartao_id, 'compra', meses_pretendidos)])['compra']
         # Criar uma parcela para cada mÃªs
         for n in range(1, total_parcelas + 1):
             # Calcular data da parcela (incrementa mÃªs a cada parcela)
@@ -928,17 +1082,13 @@ class CartaoService:
             # simultaneo termina antes e a compra vai para a seguinte); "paga" inclui
             # status_pagamento (o unico que o pagamento grava). Um desvio desloca as parcelas
             # seguintes, uma por fatura, como no novo aplicativo.
-            if mes_anterior and mes_fatura_parcela <= mes_anterior:
-                mes_fatura_parcela = mes_anterior + relativedelta(months=1)
-            fatura_mes = CartaoService._fatura_travada(cartao_id, mes_fatura_parcela)
-            desvios = 0
-            while CartaoService.fatura_esta_paga(fatura_mes):
-                desvios += 1
-                if desvios > 24:
-                    raise ValueError('Nao ha fatura aberta nos proximos 24 meses')
-                mes_fatura_parcela = mes_fatura_parcela + relativedelta(months=1)
-                fatura_mes = CartaoService._fatura_travada(cartao_id, mes_fatura_parcela)
-            mes_anterior = mes_fatura_parcela
+            mes_fatura_original = mes_fatura_parcela
+            mes_fatura_parcela = destinos[n - 1]
+            fatura_mes = Conta.query.filter(  # ja travada pelo planejamento
+                Conta.item_despesa_id == cartao_id,
+                Conta.is_fatura_cartao == True,  # noqa: E712
+                Conta.cartao_competencia == mes_fatura_parcela,
+            ).one()
 
             # Calcular valor desta parcela (distribui centavos do resto nas primeiras parcelas)
             centavos_parcela = centavos_base + (1 if n <= centavos_resto else 0)
@@ -978,6 +1128,7 @@ class CartaoService:
                 compra_id=compra_uuid  # â† FASE 2: UUID Ãºnico da compra
             )
 
+            CartaoService.registrar_desvio(lancamento, mes_fatura_original)
             db.session.add(lancamento)
             lancamentos_criados.append(lancamento)
 

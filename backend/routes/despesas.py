@@ -1632,12 +1632,21 @@ def gerar_lancamentos_cartao_recorrente(item_despesa_id, meses_futuros=12, mes_r
                 item_despesa_id=item_despesa_id,
                 mes_fatura=mes_fatura,
                 is_recorrente=True,
+            ).filter(
+                # FIN-FATURA-INTEGRIDADE-1: so os antigos, sem compra_id. Uma compra de outra competencia
+                # desviada para este mes (fatura paga) tem compra_id proprio e nao e "a deste mes".
+                LancamentoAgregado.compra_id.is_(None),
             ).first()
             if existente and not existente.compra_id:
                 existente.compra_id = compra_id_recorrente
 
         if existente:
             return  # Ja existe, nao duplicar
+
+        # FIN-FATURA-INTEGRIDADE-1: fatura paga nao recebe a compra recorrente; ela vai para a
+        # proxima fatura nao paga (travada: um pagamento simultaneo termina antes). A identidade
+        # continua a da competencia (compra_id acima), entao ela nao e gerada de novo.
+        mes_destino = CartaoService.fatura_elegivel_existente(item.cartao_id, mes_fatura)  # sem commit
 
         resolucao_cartao = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(
             cartao_id=item.cartao_id,
@@ -1654,7 +1663,7 @@ def gerar_lancamentos_cartao_recorrente(item_despesa_id, meses_futuros=12, mes_r
             descricao=item.nome,
             valor=item.valor,
             data_compra=data_compra,
-            mes_fatura=mes_fatura,
+            mes_fatura=mes_destino,
             numero_parcela=1,
             total_parcelas=1,
             observacoes=item.descricao or '',
@@ -1662,6 +1671,7 @@ def gerar_lancamentos_cartao_recorrente(item_despesa_id, meses_futuros=12, mes_r
             item_despesa_id=item_despesa_id,
             compra_id=compra_id_recorrente,
         )
+        CartaoService.registrar_desvio(novo, mes_fatura)
         db.session.add(novo)
         lancamentos_criados.append(novo)
     

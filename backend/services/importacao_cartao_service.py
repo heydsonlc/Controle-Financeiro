@@ -807,10 +807,14 @@ class ImportacaoCartaoService:
             except (TypeError, ValueError):
                 raise ValueError('Parametros de parcela invalidos')
 
+        try:
+            from backend.services.cartao_service import CartaoService
+        except ImportError:
+            from services.cartao_service import CartaoService
         existente_recorrencia = LancamentoAgregado.query.filter(
             PerfilFinanceiroService.condicao_perfil(LancamentoAgregado),
             LancamentoAgregado.cartao_id == cartao_id,
-            LancamentoAgregado.mes_fatura == competencia,
+            CartaoService.filtro_competencia_original(LancamentoAgregado, competencia),  # FIN-FATURA-INTEGRIDADE-1
             LancamentoAgregado.item_despesa_id == recorrencia.id,
         ).first()
         if existente_recorrencia:
@@ -872,14 +876,15 @@ class ImportacaoCartaoService:
             is_recorrente=True,
             item_despesa_id=recorrencia.id,
         )
+        # FIN-FATURA-INTEGRIDADE-1: fatura paga nao recebe a compra; vai para a proxima nao paga,
+        # com a competencia original registrada (sem a coluna, o desvio e recusado).
+        mes_destino, _fatura = CartaoService.fatura_elegivel(cartao_id, competencia)
+        novo_lancamento.mes_fatura = mes_destino
+        CartaoService.registrar_desvio(novo_lancamento, competencia, exigir_coluna=True)
         db.session.add(novo_lancamento)
         db.session.commit()
 
-        try:
-            from backend.services.cartao_service import CartaoService
-        except ImportError:
-            from services.cartao_service import CartaoService
-        CartaoService.recalcular_fatura(cartao_id, competencia)
+        CartaoService.recalcular_fatura(cartao_id, mes_destino)
 
         return {
             'criado': True,
@@ -1102,10 +1107,15 @@ class ImportacaoCartaoService:
             lanc.get('descricao_original_normalizada') or lanc.get('descricao')
         )
 
+        try:
+            from backend.services.cartao_service import CartaoService
+        except ImportError:
+            from services.cartao_service import CartaoService
         existente = LancamentoAgregado.query.filter(
             LancamentoAgregado.cartao_id == lanc['cartao_id'],
             PerfilFinanceiroService.condicao_perfil(LancamentoAgregado),
-            LancamentoAgregado.mes_fatura == lanc['mes_fatura'],
+            # FIN-FATURA-INTEGRIDADE-1: uma compra desviada de fatura paga continua sendo "desta" competencia
+            CartaoService.filtro_competencia_original(LancamentoAgregado, lanc['mes_fatura']),
             LancamentoAgregado.data_compra == lanc['data_compra'],
             LancamentoAgregado.valor == lanc['valor'],
             LancamentoAgregado.numero_parcela == lanc['numero_parcela'],
@@ -1119,6 +1129,27 @@ class ImportacaoCartaoService:
         ).first()
 
         return existente is not None
+
+    @staticmethod
+    def _destinos_elegiveis(lancamentos):
+        """FIN-FATURA-INTEGRIDADE-1: {id(lanc): mes de destino}, decidido antes de inserir, com os cartoes e
+        as faturas travados (CartaoService.planejar_destinos). Parcelas da mesma compra (compra_id) seguem
+        uma por fatura."""
+        try:
+            from backend.services.cartao_service import CartaoService
+        except ImportError:
+            from services.cartao_service import CartaoService
+        grupos = {}
+        for lanc in lancamentos:
+            chave = (int(lanc['cartao_id']), lanc.get('compra_id') or f'linha-{id(lanc)}')
+            grupos.setdefault(chave, []).append(lanc)
+        pedidos, ordem = [], {}
+        for chave, lista in grupos.items():
+            lista.sort(key=lambda l: (l['numero_parcela'], l['mes_fatura']))
+            pedidos.append((chave[0], chave, [l['mes_fatura'] for l in lista]))
+            ordem[chave] = lista
+        planejado = CartaoService.planejar_destinos(pedidos)
+        return {id(lanc): mes for chave, lista in ordem.items() for lanc, mes in zip(lista, planejado[chave])}
 
     @staticmethod
     def persistir_lancamentos(lancamentos, dry_run=False):
@@ -1136,9 +1167,14 @@ class ImportacaoCartaoService:
         Returns:
             dict: {'inseridos': int, 'duplicados': int, 'erros': []}
         """
+        try:
+            from backend.services.cartao_service import CartaoService
+        except ImportError:
+            from services.cartao_service import CartaoService
         inseridos = 0
         duplicados = 0
         erros = []
+        a_inserir = []
         chaves_lote = set()
         amostra_duplicados = []
         amostra_erros = []
@@ -1168,7 +1204,26 @@ class ImportacaoCartaoService:
                 if dry_run:
                     inseridos += 1
                     continue
+                a_inserir.append(lanc)
+            except Exception as e:
+                erro_item = {
+                    'descricao': lanc.get('descricao', 'Desconhecido'),
+                    'erro': str(e)
+                }
+                erros.append(erro_item)
+                if len(amostra_erros) < 20:
+                    amostra_erros.append(erro_item)
 
+        # FIN-FATURA-INTEGRIDADE-1: fatura paga e imutavel. Cada compra vai para a primeira fatura nao
+        # paga a partir da competencia dela (parcelas da mesma compra seguem uma por fatura), com o
+        # cartao e as faturas travados ate o commit; a competencia original fica registrada.
+        if not dry_run and a_inserir:
+            destinos = ImportacaoCartaoService._destinos_elegiveis(a_inserir)
+        for lanc in a_inserir:
+            try:
+                if ImportacaoCartaoService._existe_duplicado_banco(lanc):
+                    duplicados += 1  # outra importacao do mesmo cartao confirmou antes (agora em serie)
+                    continue
                 # Criar novo lanÃ§amento
                 novo_lanc = LancamentoAgregado(
                     perfil_financeiro_id=PerfilFinanceiroService.obter_perfil_ativo_id(),
@@ -1191,6 +1246,8 @@ class ImportacaoCartaoService:
                     is_recorrente=lanc.get('is_recorrente', False),
                     item_despesa_id=lanc.get('item_despesa_id')
                 )
+                novo_lanc.mes_fatura = destinos[id(lanc)]
+                CartaoService.registrar_desvio(novo_lanc, lanc['mes_fatura'], exigir_coluna=True)
 
                 db.session.add(novo_lanc)
                 inseridos += 1

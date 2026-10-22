@@ -349,7 +349,7 @@ def test_vinculo_recorrencia_importada_sem_despesa_avulsa():
     assert 'is_recorrente=True' in service
     assert "origem_importacao='recorrencia'" in service
     assert 'CategoriaCartaoService.resolver_categoria_cartao_para_lancamento' in service
-    assert 'CartaoService.recalcular_fatura(cartao_id, competencia)' in service
+    assert 'CartaoService.recalcular_fatura(cartao_id, mes_destino)' in service  # FIN-FATURA-INTEGRIDADE-1: fatura de destino
 
     assert 'function vincularRecorrenciaImportada' in js
     assert "fetch(`${API_BASE}/recorrencia`" in js

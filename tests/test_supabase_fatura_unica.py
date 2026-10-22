@@ -197,16 +197,17 @@ def test_duas_requisicoes_flask_simultaneas_criam_uma_unica_fatura(banco, tmp_pa
     assert ids == {faturas(banco, '2027-06-01')[0]['id']}  # o perdedor recebeu a existente
 
 
-def test_controle_sem_o_indice_a_mesma_corrida_duplica(banco, tmp_path):
-    """Evidencia da causa: sem a garantia do banco, a consulta previa nao impede a duplicidade."""
+def test_sem_o_indice_a_trava_do_cartao_ainda_impede_a_duplicidade(banco, tmp_path):
+    """Antes (FIN-FATURA-UNICA-1) este controle duplicava: a consulta previa nao bastava sem o indice.
+    FIN-FATURA-INTEGRIDADE-1: criar fatura trava o cartao e reconsulta, entao as duas criacoes ficam em
+    serie mesmo sem o indice; o indice unico continua como segunda defesa no banco."""
     sql(banco, 'drop index public.ux_conta_fatura_cartao_competencia')
     processos = [Flask(banco, tmp_path, f'f{i}', acao='fatura', cartao=CARTAO, competencia='2027-06-01',
                        pausa='antes_do_insert') for i in (1, 2)]
     aguardar(tmp_path, ['f1_consultou', 'f2_consultou'], processos)
     liberar(tmp_path, 'consultou')
-    for p in processos:
-        p.resultado()
-    assert len(faturas(banco, '2027-06-01')) == 2
+    ids = {p.resultado()['fatura'] for p in processos}
+    assert len(faturas(banco, '2027-06-01')) == 1 and len(ids) == 1
 
 
 # ---------------------------------------------------------------------------

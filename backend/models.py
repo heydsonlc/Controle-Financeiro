@@ -1180,6 +1180,12 @@ class LancamentoAgregado(db.Model):
     # Permite identificar que parcelas pertencem à mesma compra original
     # FASE 2: Idempotência robusta - todas as parcelas de uma compra compartilham o mesmo UUID
     compra_id = db.Column(db.String(36), nullable=True, index=True)  # UUID v4
+    # FIN-FATURA-INTEGRIDADE-1: competencia de origem quando a compra foi desviada de uma fatura paga
+    # (nulo = nao desviada). deferred + server_default + eager_defaults=False: o Flask funciona num
+    # banco ainda sem a coluna (nao a seleciona nem a cita no INSERT) e so a grava quando ela existe
+    # (CartaoService.registrar_desvio).
+    mes_fatura_original = db.deferred(db.Column(db.Date, nullable=True, server_default=db.text('NULL')))
+    __mapper_args__ = {'eager_defaults': False}
 
     # Campos para importação CSV (FASE 6.2)
     descricao_original = db.Column(db.Text, nullable=True)  # Texto bruto do CSV (imutável)
