@@ -308,11 +308,17 @@ def test_fatura_paga_preservada_e_parcelas_redirecionadas_sem_duplicar(banco, tm
                "'Fatura Cartao Teste - 06/2027', 500, 500, 120, '2027-06-30', 'Pago', '2027-06-29', true, '2027-06-01', "
                "'PAGA', false)")
     paga = sql(banco, 'select md5(t::text) as h from public.conta t where id = 990')
-    processos = [Flask(banco, tmp_path, nome, acao='compra', dados=compra(f'Compra {nome}', parcelas=1, valor='10.00'),
-                       pausa='antes_do_insert') for nome in ('x', 'y')]
-    aguardar(tmp_path, ['x_consultou', 'y_consultou'], processos)
+    # FIN-PAGAMENTO-TRAVA-1: x trava a fatura paga, desvia e para ao criar a de julho; y espera a
+    # trava (nao chega a barreira) e, liberado x, ve julho ja criada e entra nela.
+    x = Flask(banco, tmp_path, 'x', acao='compra', dados=compra('Compra x', parcelas=1, valor='10.00'),
+              pausa='antes_do_insert')
+    aguardar(tmp_path, ['x_consultou'], [x])
+    y = Flask(banco, tmp_path, 'y', acao='compra', dados=compra('Compra y', parcelas=1, valor='10.00'),
+              pausa='antes_do_insert')
+    time.sleep(3)
+    assert y.processo.poll() is None and not (tmp_path / 'y_consultou').exists()  # esperando a trava
     liberar(tmp_path, 'consultou')
-    for p in processos:
+    for p in (x, y):
         p.resultado()
     assert sql(banco, 'select md5(t::text) as h from public.conta t where id = 990') == paga
     assert len(faturas(banco, '2027-06-01')) == 1 and len(faturas(banco, '2027-07-01')) == 1

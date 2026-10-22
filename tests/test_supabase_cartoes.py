@@ -633,7 +633,7 @@ def test_equivalencia_com_o_flask_no_cadastro_do_cartao(cluster):  # noqa: F811
     assert [_sem_ids(x) for x in sql(dsn_flask, consulta)] == [_sem_ids(x) for x in sql(dsn_novo, consulta)]
 
 
-def test_correcao_intencional_flask_altera_parcela_de_fatura_paga_e_o_novo_bloqueia(cluster):  # noqa: F811
+def test_compra_de_fatura_paga_nao_muda_no_flask_nem_no_novo(cluster):  # noqa: F811
     dsn = copiar(cluster)
     _flask_pessoal(dsn)
     r = comprar(dsn, total_parcelas=1)
@@ -641,7 +641,9 @@ def test_correcao_intencional_flask_altera_parcela_de_fatura_paga_e_o_novo_bloqu
     fatura_antes = fatura(dsn, CARTAO, D(2029, 5, 1))
     with pytest.raises(errors.RaiseException, match='Fatura paga'):
         editar(dsn, r['lancamentos'][0], {'descricao': 'X'})
-    saida = flask(dsn, [['put', f"/api/cartoes/lancamentos/{r['lancamentos'][0]}", {'valor': '1.00'}]])
-    assert saida[0]['status'] == 200  # defeito do Flask: altera compra de fatura paga, sem recalcular
-    assert parcelas(dsn, r['compra_id'])[0]['valor'] == Decimal('1.00')
+    saida = flask(dsn, [['put', f"/api/cartoes/lancamentos/{r['lancamentos'][0]}", {'valor': '1.00'}],
+                        ['delete', f"/api/cartoes/lancamentos/{r['lancamentos'][0]}", None]])
+    # FIN-PAGAMENTO-TRAVA-1: o Flask tambem recusa (antes: 200 e compra alterada em fatura paga).
+    assert [s['status'] for s in saida] == [409, 409]
+    assert parcelas(dsn, r['compra_id'])[0]['valor'] == Decimal('100.00')
     assert fatura(dsn, CARTAO, D(2029, 5, 1)) == fatura_antes

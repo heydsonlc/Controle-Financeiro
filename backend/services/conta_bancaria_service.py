@@ -10,9 +10,11 @@ from sqlalchemy import func, case
 try:
     from backend.models import db, ContaBancaria, MovimentoFinanceiro
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
+    from backend.services.trava_financeira import travar, travar_um
 except ImportError:
     from models import db, ContaBancaria, MovimentoFinanceiro
     from services.perfil_financeiro_service import PerfilFinanceiroService
+    from services.trava_financeira import travar, travar_um
 
 
 class ContaBancariaService:
@@ -85,6 +87,9 @@ class ContaBancariaService:
         if valor_dec <= 0:
             raise ValueError('Valor do movimento deve ser maior que zero')
 
+        # FIN-PAGAMENTO-TRAVA-1: a conta bancaria travada serializa os movimentos dela; o saldo
+        # recalculado abaixo ja ve os movimentos confirmados por outras transacoes.
+        travar_um(ContaBancaria, conta_bancaria_id)
         movimento = MovimentoFinanceiro(
             perfil_financeiro_id=PerfilFinanceiroService.obter_perfil_ativo_id(),
             conta_bancaria_id=conta_bancaria_id,
@@ -133,6 +138,9 @@ class ContaBancariaService:
 
         transferencia_id = str(uuid.uuid4())
         valor_dec = Decimal(str(valor or 0))
+        travar(ContaBancaria, [conta_origem_id, conta_destino_id])  # as duas, em ordem de id (sem deadlock)
+        if conta_origem.status != 'ATIVO' or conta_destino.status != 'ATIVO':  # relidas pela trava
+            raise ValueError('Conta bancária inativa')
 
         mov_debito = ContaBancariaService.criar_movimento(
             conta_origem_id,

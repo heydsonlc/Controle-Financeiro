@@ -17,11 +17,13 @@ try:
     from backend.services.receita_service import ReceitaService
     from backend.services.consorcio_receita_service import gerar_ou_atualizar_receita_contemplacao
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
+    from backend.services.trava_financeira import MENSAGEM_CONFLITO, eh_conflito, travar_um
 except ImportError:
     from models import db, ItemReceita, ReceitaOrcamento, ReceitaRealizada, ContratoConsorcio
     from services.receita_service import ReceitaService
     from services.consorcio_receita_service import gerar_ou_atualizar_receita_contemplacao
     from services.perfil_financeiro_service import PerfilFinanceiroService
+    from services.trava_financeira import MENSAGEM_CONFLITO, eh_conflito, travar_um
 
 # Criar blueprint
 receitas_bp = Blueprint('receitas', __name__)
@@ -983,6 +985,9 @@ def estornar_realizada(id):
         ).first()
         if not receita:
             return jsonify({'success': False, 'error': 'Receita nao encontrada'}), 404
+        # FIN-PAGAMENTO-TRAVA-1: dois estornos simultaneos do mesmo recebimento ficam em serie;
+        # o segundo espera e encontra o estorno ja gravado (409), sem segundo debito.
+        receita = travar_um(ReceitaRealizada, receita.id)
 
         # Localizar movimento original de credito vinculado a esta receita
         movimento_original = MovimentoFinanceiro.query.filter_by(
@@ -1072,8 +1077,10 @@ def estornar_realizada(id):
             },
         }), 200
 
-    except Exception:
+    except Exception as exc:
         db.session.rollback()
+        if eh_conflito(exc):
+            return jsonify({'success': False, 'error': MENSAGEM_CONFLITO}), 409
         return _internal_error('receitas')
 
 

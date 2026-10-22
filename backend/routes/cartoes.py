@@ -6,6 +6,7 @@ from backend.models import db, ItemDespesa, ConfigAgregador, ItemAgregado, Orcam
 from backend.services.cartao_service import CartaoService
 from backend.services.categoria_cartao_service import CategoriaCartaoService
 from backend.services.perfil_financeiro_service import PerfilFinanceiroService
+from backend.services.trava_financeira import MENSAGEM_CONFLITO, eh_conflito
 from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import func, and_
@@ -726,8 +727,12 @@ def criar_lancamento(item_id):
         }), 201
 
     except ValueError as e:
+        db.session.rollback()
         return _business_error(str(e), 400)
-    except Exception:
+    except Exception as exc:
+        db.session.rollback()
+        if eh_conflito(exc):  # FIN-PAGAMENTO-TRAVA-1
+            return _business_error(MENSAGEM_CONFLITO, 409)
         return _internal_error('cartoes')
 
 
@@ -818,8 +823,12 @@ def criar_lancamento_sem_categoria(cartao_id):
         }), 201
 
     except ValueError as e:
+        db.session.rollback()
         return _business_error(str(e), 400)
-    except Exception:
+    except Exception as exc:
+        db.session.rollback()
+        if eh_conflito(exc):  # FIN-PAGAMENTO-TRAVA-1
+            return _business_error(MENSAGEM_CONFLITO, 409)
         return _internal_error('cartoes')
 
 
@@ -832,6 +841,18 @@ def atualizar_lancamento(lancamento_id):
             return _business_error('Recurso nao encontrado', 404)
 
         dados = request.json
+
+        # FIN-PAGAMENTO-TRAVA-1: trava a fatura atual (e a de destino) e rele a compra; compra de
+        # fatura paga nao muda (o pagamento ja foi gravado): correcao so por estorno.
+        meses = [lancamento.mes_fatura]
+        if dados.get('mes_fatura'):
+            meses.append(datetime.strptime(dados['mes_fatura'] + '-01', '%Y-%m-%d').date())
+        faturas = CartaoService.travar_faturas(lancamento.cartao_id, meses)
+        db.session.refresh(lancamento)
+        if any(CartaoService.fatura_esta_paga(f) for f in faturas
+               if f.cartao_competencia in (lancamento.mes_fatura, *meses)):
+            db.session.rollback()
+            return _business_error('Compra de fatura paga nao pode ser alterada. Para corrigir, estorne o pagamento da fatura.', 409)
 
         lancamento.descricao = dados.get('descricao', lancamento.descricao)
         lancamento.valor = dados.get('valor', lancamento.valor)
@@ -857,7 +878,10 @@ def atualizar_lancamento(lancamento_id):
 
         db.session.commit()
         return jsonify(lancamento.to_dict()), 200
-    except Exception:
+    except Exception as exc:
+        db.session.rollback()
+        if eh_conflito(exc):
+            return _business_error(MENSAGEM_CONFLITO, 409)
         return _internal_error('cartoes')
 
 
@@ -868,12 +892,21 @@ def excluir_lancamento(lancamento_id):
         lancamento = _query_lancamentos().filter_by(id=lancamento_id).first()
         if not lancamento:
             return _business_error('Recurso nao encontrado', 404)
+        # FIN-PAGAMENTO-TRAVA-1: idem a edicao (fatura travada; compra de fatura paga fica).
+        faturas = CartaoService.travar_faturas(lancamento.cartao_id, [lancamento.mes_fatura])
+        db.session.refresh(lancamento)
+        if any(CartaoService.fatura_esta_paga(f) for f in faturas if f.cartao_competencia == lancamento.mes_fatura):
+            db.session.rollback()
+            return _business_error('Compra de fatura paga nao pode ser excluida. Para corrigir, estorne o pagamento da fatura.', 409)
 
         db.session.delete(lancamento)
         db.session.commit()
 
         return jsonify({'mensagem': 'LanÃ§amento excluÃ­do com sucesso'}), 200
-    except Exception:
+    except Exception as exc:
+        db.session.rollback()
+        if eh_conflito(exc):
+            return _business_error(MENSAGEM_CONFLITO, 409)
         return _internal_error('cartoes')
 
 

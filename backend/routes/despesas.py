@@ -16,6 +16,7 @@ try:
     from backend.services.categoria_cartao_service import CategoriaCartaoService
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
     from backend.services.gerador_recorrencia_service import flask_pode_gerar
+    from backend.services.trava_financeira import MENSAGEM_CONFLITO, eh_conflito, travar_um
     from backend.routes.dashboard import _calcular_receitas_mes
 except ImportError:
     from models import db, ItemDespesa, Categoria, LancamentoAgregado, CartaoCategoriaLimite, Conta
@@ -23,10 +24,16 @@ except ImportError:
     from services.categoria_cartao_service import CategoriaCartaoService
     from services.perfil_financeiro_service import PerfilFinanceiroService
     from services.gerador_recorrencia_service import flask_pode_gerar
+    from services.trava_financeira import MENSAGEM_CONFLITO, eh_conflito, travar_um
     from routes.dashboard import _calcular_receitas_mes
 
 despesas_bp = Blueprint('despesas', __name__, url_prefix='/api/despesas')
 logger = logging.getLogger(__name__)
+
+
+def _conflito_concorrente():
+    """FIN-PAGAMENTO-TRAVA-1: trava nao obtida ou deadlock; nada foi gravado (rollback ja feito)."""
+    return jsonify({'success': False, 'error': MENSAGEM_CONFLITO}), 409
 
 
 def _internal_error(contexto='despesas'):
@@ -798,6 +805,17 @@ def atualizar_despesa(id):
 
         dados = request.get_json()
 
+        # FIN-PAGAMENTO-TRAVA-1: trava a conta e rele a situacao antes de alterar. Conta paga
+        # nao muda de valor (o movimento ja foi gravado com o valor pago): correcao so por estorno.
+        conta = travar_um(Conta, conta.id)
+        if conta.status_pagamento == 'Pago' and 'valor' in dados \
+                and Decimal(str(dados['valor'])) != Decimal(str(conta.valor or 0)):
+            db.session.rollback()
+            return jsonify({
+                'success': False,
+                'error': 'Esta despesa ja foi paga: o valor nao pode ser alterado. Para corrigir, estorne o pagamento.',
+            }), 409
+
         # Atualizar campos bÃ¡sicos da Conta
         if 'descricao' in dados:
             conta.descricao = dados['descricao']
@@ -854,8 +872,10 @@ def atualizar_despesa(id):
             'message': 'Despesa atualizada com sucesso'
         })
 
-    except Exception:
+    except Exception as exc:
         db.session.rollback()
+        if eh_conflito(exc):
+            return _conflito_concorrente()
         return _internal_error('despesas')
 
 
@@ -1013,6 +1033,7 @@ def deletar_despesa(id):
         conta = _query_contas().filter(Conta.id == id).first()
         if not conta:
             return jsonify({'success': False, 'error': 'Despesa nao encontrada'}), 404
+        conta = travar_um(Conta, conta.id)  # FIN-PAGAMENTO-TRAVA-1: um pagamento em andamento termina antes
 
         # Bloquear exclusao de despesa paga (CORE-SALDO-1A)
         if conta.status_pagamento == 'Pago':
@@ -1034,8 +1055,10 @@ def deletar_despesa(id):
 
         return jsonify({'success': True, 'message': 'Despesa deletada com sucesso'})
 
-    except Exception:
+    except Exception as exc:
         db.session.rollback()
+        if eh_conflito(exc):
+            return _conflito_concorrente()
         return _internal_error('despesas')
 
 
@@ -1128,6 +1151,10 @@ def marcar_como_pago(id):
         if not conta:
             return jsonify({'success': False, 'error': 'Despesa não encontrada'}), 404
 
+        # FIN-PAGAMENTO-TRAVA-1: trava a conta e rele situacao e valor ANTES das conferencias.
+        # Pagamento, estorno ou edicao simultaneos esperam; o segundo pagamento ve 'Pago'.
+        conta = travar_um(Conta, conta.id)
+
         # Bloquear baixa duplicada — despesa já paga não pode ser baixada novamente
         if conta.status_pagamento == 'Pago':
             return jsonify({'success': False, 'error': 'Esta despesa já foi paga e não pode ser baixada novamente'}), 409
@@ -1167,12 +1194,16 @@ def marcar_como_pago(id):
 
         # SE FOR FATURA DE CARTÃO: usar CartaoService
         if conta.is_fatura_cartao:
-            conta = CartaoService.pagar_fatura(
-                fatura_id=id,
-                data_pagamento=data_pagamento,
-                valor_pago=valor_pago,
-                conta_bancaria_id=conta_bancaria_id
-            )
+            try:
+                conta = CartaoService.pagar_fatura(
+                    fatura_id=id,
+                    data_pagamento=data_pagamento,
+                    valor_pago=valor_pago,
+                    conta_bancaria_id=conta_bancaria_id
+                )
+            except ValueError as exc:  # ja paga, conta bancaria invalida, valor zero: nada gravado
+                db.session.rollback()
+                return jsonify({'success': False, 'error': str(exc)}), 409
             db.session.commit()
 
             return jsonify({
@@ -1218,6 +1249,7 @@ def marcar_como_pago(id):
                 parcela_id=conta.financiamento_parcela_id,
                 valor_pago=conta.valor,
                 data_pagamento=conta.data_pagamento or conta.data_vencimento,
+                commit=False,  # um unico commit abaixo: conta, movimento e parcela juntos
             )
 
         db.session.commit()
@@ -1234,8 +1266,10 @@ def marcar_como_pago(id):
             }
         })
 
-    except Exception:
+    except Exception as exc:
         db.session.rollback()
+        if eh_conflito(exc):
+            return _conflito_concorrente()
         return _internal_error('despesas')
 
 
@@ -1263,6 +1297,9 @@ def estornar_pagamento(id):
         conta = _query_contas().filter(Conta.id == id).first()
         if not conta:
             return jsonify({'success': False, 'error': 'Despesa nao encontrada'}), 404
+        # FIN-PAGAMENTO-TRAVA-1: estorno e pagamento da mesma conta em serie; o segundo estorno
+        # espera e ve a conta ja reaberta (Pendente).
+        conta = travar_um(Conta, conta.id)
 
         eh_fatura = bool(conta.is_fatura_cartao)
         origem_estorno = 'ESTORNO_FATURA' if eh_fatura else 'ESTORNO_DESPESA'
@@ -1372,8 +1409,10 @@ def estornar_pagamento(id):
             },
         }), 200
 
-    except Exception:
+    except Exception as exc:
         db.session.rollback()
+        if eh_conflito(exc):
+            return _conflito_concorrente()
         return _internal_error('despesas')
 
 

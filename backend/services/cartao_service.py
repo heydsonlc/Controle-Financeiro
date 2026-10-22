@@ -22,12 +22,14 @@ try:
     from backend.services.categoria_cartao_service import CategoriaCartaoService
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
     from backend.services.gerador_recorrencia_service import flask_pode_gerar
+    from backend.services.trava_financeira import travar, travar_um
 except ImportError:
     from models import (db, Conta, ItemDespesa, ItemAgregado,
                        OrcamentoAgregado, LancamentoAgregado, ConfigAgregador)
     from services.categoria_cartao_service import CategoriaCartaoService
     from services.perfil_financeiro_service import PerfilFinanceiroService
     from services.gerador_recorrencia_service import flask_pode_gerar
+    from services.trava_financeira import travar, travar_um
 
 logger = logging.getLogger(__name__)
 
@@ -607,6 +609,12 @@ class CartaoService:
     def atualizar_parcelas_futuras(lancamento_id, dados):
         base = CartaoService._obter_lancamento_parcelado(lancamento_id)
         parcelas = CartaoService._parcelas_por_compra(base)
+        # FIN-PAGAMENTO-TRAVA-1: trava as faturas das parcelas e rele tudo antes de decidir o que e
+        # "futura" (um pagamento simultaneo termina antes e a parcela dele deixa de ser editavel).
+        CartaoService.travar_faturas(base.cartao_id, [p.mes_fatura for p in parcelas])
+        db.session.expire_all()
+        base = CartaoService._obter_lancamento_parcelado(lancamento_id)
+        parcelas = CartaoService._parcelas_por_compra(base)
         futuras = [p for p in parcelas if CartaoService._parcela_futura_editavel(p, base)]
         if not futuras:
             return {'atualizadas': 0, 'faturas_afetadas': [], 'parcelamento': CartaoService.consultar_parcelamento_lancamento(lancamento_id)}
@@ -650,6 +658,12 @@ class CartaoService:
     def cancelar_parcelas_futuras(lancamento_id):
         base = CartaoService._obter_lancamento_parcelado(lancamento_id)
         parcelas = CartaoService._parcelas_por_compra(base)
+        # FIN-PAGAMENTO-TRAVA-1: trava as faturas das parcelas e rele tudo antes de decidir o que e
+        # "futura" (um pagamento simultaneo termina antes e a parcela dele deixa de ser editavel).
+        CartaoService.travar_faturas(base.cartao_id, [p.mes_fatura for p in parcelas])
+        db.session.expire_all()
+        base = CartaoService._obter_lancamento_parcelado(lancamento_id)
+        parcelas = CartaoService._parcelas_por_compra(base)
         futuras = [p for p in parcelas if CartaoService._parcela_futura_editavel(p, base)]
         faturas_afetadas = {parcela.mes_fatura for parcela in futuras}
 
@@ -683,6 +697,30 @@ class CartaoService:
     # ==========================================================
 
     @staticmethod
+    def fatura_esta_paga(fatura):
+        """Paga pelo pagamento do Flask (status_pagamento) ou marcada PAGA (status_fatura)."""
+        return fatura is not None and (fatura.status_pagamento == 'Pago' or fatura.status_fatura == 'PAGA')
+
+    @staticmethod
+    def travar_faturas(cartao_id, competencias):
+        """FIN-PAGAMENTO-TRAVA-1: trava (em ordem de id) as faturas existentes do cartao nos meses dados."""
+        meses = {CartaoService._primeiro_dia_mes(c) for c in competencias if c}
+        if not meses:
+            return []
+        ids = [f.id for f in Conta.query.filter(
+            Conta.item_despesa_id == cartao_id,
+            Conta.is_fatura_cartao == True,  # noqa: E712
+            Conta.cartao_competencia.in_(meses),
+        ).all()]
+        return travar(Conta, ids)
+
+    @staticmethod
+    def _fatura_travada(cartao_id, competencia):
+        """Garante a fatura do mes (pode confirmar a criacao) e devolve-a travada e relida."""
+        fatura = CartaoService.get_or_create_fatura(cartao_id, competencia)
+        return travar_um(Conta, fatura.id)
+
+    @staticmethod
     def recalcular_fatura(cartao_id, competencia):
         """
         Recalcula uma fatura existente (Ãºtil apÃ³s adicionar/remover lanÃ§amentos)
@@ -695,10 +733,12 @@ class CartaoService:
             Conta: Fatura atualizada
         """
         comp_primeiro_dia = CartaoService._primeiro_dia_mes(competencia)
-        fatura = CartaoService.get_or_create_fatura(cartao_id, comp_primeiro_dia)
+        # FIN-PAGAMENTO-TRAVA-1: travada e relida; sem isso um recalculo que leu "nao paga" podia
+        # gravar valor = planejado por cima de um pagamento confirmado no meio do caminho.
+        fatura = CartaoService._fatura_travada(cartao_id, comp_primeiro_dia)
 
         # Se jÃ¡ foi paga, nÃ£o recalcular
-        if fatura.status_pagamento == 'Pago':
+        if CartaoService.fatura_esta_paga(fatura):
             return fatura
 
         # Recalcular planejado (pode ter mudado o orÃ§amento)
@@ -746,9 +786,13 @@ class CartaoService:
             raise ValueError('Fatura nao encontrada')
         if not fatura.is_fatura_cartao:
             raise ValueError('Esta conta nao e uma fatura de cartao')
+        # FIN-PAGAMENTO-TRAVA-1: travada antes de conferir e somar as compras. Compras e recalculos
+        # da mesma fatura (Flask e novo aplicativo) travam a mesma linha: ou entram antes e sao
+        # somadas, ou esperam e encontram a fatura paga.
+        fatura = travar_um(Conta, fatura.id)
 
         # Bloquear pagamento duplicado
-        if fatura.status_pagamento == 'Pago':
+        if CartaoService.fatura_esta_paga(fatura):
             raise ValueError('Esta fatura ja foi paga e nao pode ser paga novamente')
 
         if isinstance(data_pagamento, str):
@@ -871,6 +915,7 @@ class CartaoService:
         primeira_fatura = None
         faturas_afetadas_set = set()  # Armazena meses de faturas afetadas (considerando redirecionamento)
 
+        mes_anterior = None
         # Criar uma parcela para cada mÃªs
         for n in range(1, total_parcelas + 1):
             # Calcular data da parcela (incrementa mÃªs a cada parcela)
@@ -879,11 +924,21 @@ class CartaoService:
 
             # REGRA DE FECHAMENTO DE FATURA:
             # Se a fatura do mÃªs estiver PAGA, redirecionar para a prÃ³xima fatura
-            fatura_mes = CartaoService.get_or_create_fatura(cartao_id, mes_fatura_parcela)
-            if fatura_mes.status_fatura == 'PAGA':
-                # Buscar prÃ³xima fatura em aberto
+            # FIN-PAGAMENTO-TRAVA-1: a fatura e travada e relida antes da conferencia (um pagamento
+            # simultaneo termina antes e a compra vai para a seguinte); "paga" inclui
+            # status_pagamento (o unico que o pagamento grava). Um desvio desloca as parcelas
+            # seguintes, uma por fatura, como no novo aplicativo.
+            if mes_anterior and mes_fatura_parcela <= mes_anterior:
+                mes_fatura_parcela = mes_anterior + relativedelta(months=1)
+            fatura_mes = CartaoService._fatura_travada(cartao_id, mes_fatura_parcela)
+            desvios = 0
+            while CartaoService.fatura_esta_paga(fatura_mes):
+                desvios += 1
+                if desvios > 24:
+                    raise ValueError('Nao ha fatura aberta nos proximos 24 meses')
                 mes_fatura_parcela = mes_fatura_parcela + relativedelta(months=1)
-                fatura_mes = CartaoService.get_or_create_fatura(cartao_id, mes_fatura_parcela)
+                fatura_mes = CartaoService._fatura_travada(cartao_id, mes_fatura_parcela)
+            mes_anterior = mes_fatura_parcela
 
             # Calcular valor desta parcela (distribui centavos do resto nas primeiras parcelas)
             centavos_parcela = centavos_base + (1 if n <= centavos_resto else 0)
@@ -933,10 +988,14 @@ class CartaoService:
             # Registrar fatura afetada (mÃªs real usado, apÃ³s possÃ­vel redirecionamento)
             faturas_afetadas_set.add(mes_fatura_parcela)
 
-        db.session.flush()
+        # FIN-PAGAMENTO-TRAVA-1: confirma as parcelas (cada uma entrou com a fatura dela travada) e
+        # libera as travas antes dos recalculos. Cada recalculo trava UMA fatura e confirma; sem isso
+        # a compra segurava a ultima fatura e voltava para travar a primeira (deadlock com outra
+        # compra que segurava a primeira e esperava as seguintes).
+        db.session.commit()
 
         # Recalcular TODAS as faturas afetadas (considerando redirecionamentos por status PAGA)
-        for mes_fatura_afetada in faturas_afetadas_set:
+        for mes_fatura_afetada in sorted(faturas_afetadas_set):
             CartaoService.recalcular_fatura(cartao_id, mes_fatura_afetada)
 
         db.session.commit()

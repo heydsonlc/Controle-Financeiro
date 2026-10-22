@@ -583,7 +583,7 @@ def test_equivalencia_com_o_flask_na_edicao_e_exclusao_de_pendentes(cluster):  #
     assert item(dsn_flask, ids['item_id']) is not None and item(dsn_novo, resultados[dsn_novo]['item_id']) is None
 
 
-def test_correcao_intencional_flask_altera_conta_paga_e_o_novo_bloqueia(cluster):  # noqa: F811
+def test_conta_paga_nao_muda_de_valor_no_flask_nem_no_novo(cluster):  # noqa: F811
     dsn = copiar(cluster)
     atribuir(dsn, 'PESSOAL')
     r = criar(dsn)
@@ -592,5 +592,9 @@ def test_correcao_intencional_flask_altera_conta_paga_e_o_novo_bloqueia(cluster)
     versao = edicao(dsn, r['conta_id'])['versao']
     with pytest.raises(errors.RaiseException, match='paga'):
         editar(dsn, r['conta_id'], {'valor': '1.00'}, versao=versao)
-    saida = flask(dsn, [['put', f"/api/despesas/{r['conta_id']}", {'valor': '1.00'}]])
-    assert saida[0]['status'] == 200 and conta(dsn, r['conta_id'])['valor'] == Decimal('1.00')  # defeito do Flask
+    saida = flask(dsn, [['put', f"/api/despesas/{r['conta_id']}", {'valor': '1.00'}],
+                        ['put', f"/api/despesas/{r['conta_id']}", {'observacoes': 'nota'}]])
+    # FIN-PAGAMENTO-TRAVA-1: o Flask tambem recusa mudar o valor de conta paga (antes: 200 e valor 1,00,
+    # divergente do movimento); campos descritivos continuam editaveis.
+    assert [s['status'] for s in saida] == [409, 200]
+    assert (conta(dsn, r['conta_id'])['valor'], conta(dsn, r['conta_id'])['observacoes']) == (Decimal('350.40'), 'nota')
