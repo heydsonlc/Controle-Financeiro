@@ -85,7 +85,7 @@ test('avulsa: cadastrar prevista, editar e excluir sem tocar no recebido', async
     await expect(page.locator('#receita-competencia')).toHaveValue('2029-05');
     await page.fill('#receita-nome', 'Plantão');
     await page.selectOption('#receita-tipo', 'RENDA_EXTRA');
-    await page.fill('#receita-dia', '15');
+    await page.fill('#receita-data', '2029-05-15');
     await page.fill('#receita-valor', '1.500,00');
     await page.locator('#receita-painel').getByRole('button', { name: 'Salvar' }).click();
     await expect(page.locator('#acao-resultado')).toHaveText('Receita prevista cadastrada na competência 05/2029.');
@@ -110,6 +110,33 @@ test('avulsa: cadastrar prevista, editar e excluir sem tocar no recebido', async
     await expect(page.locator('#receitas-vazio')).toBeVisible();
 });
 
+test('competencia de outubro com recebimento previsto em novembro: total fica em outubro', async ({ page }) => {
+    await entrar(page, A);
+    await abrirMes(page, '2029-10');
+    await page.click('#nova-receita');
+    await page.fill('#receita-nome', 'Salário outubro');
+    await page.selectOption('#receita-tipo', 'SALARIO_FIXO');
+    await page.fill('#receita-valor', '5.000,00');
+    await expect(page.locator('#receita-competencia')).toHaveValue('2029-10');
+    await page.fill('#receita-data', '2029-11-05');
+    await page.locator('#receita-painel').getByRole('button', { name: 'Salvar' }).click();
+    await expect(page.locator('#acao-resultado')).toHaveText('Receita prevista cadastrada na competência 10/2029.');
+    await expect(receita(page, 'Salário outubro').locator('.conta-vencimento'))
+        .toHaveText('Prevista para 05/11/2029 · competência 10/2029');
+    expect(await totais(page)).toEqual({ previsto: 'R$ 5.000,00', recebido: 'R$ 0,00', aReceber: 'R$ 5.000,00' });
+    await abrirMes(page, '2029-11');
+    await expect(receita(page, 'Salário outubro')).toHaveCount(0);  // o orcamento e de outubro
+
+    await abrirMes(page, '2029-10');
+    await receita(page, 'Salário outubro').locator('summary').click();
+    await receita(page, 'Salário outubro').getByRole('button', { name: 'Editar', exact: true }).click();
+    await expect(page.locator('#receita-data')).toHaveValue('2029-11-05');
+    await page.fill('#receita-data', '2029-11-06');
+    await page.locator('#receita-painel').getByRole('button', { name: 'Salvar' }).click();
+    await expect(receita(page, 'Salário outubro').locator('.conta-vencimento'))
+        .toHaveText('Prevista para 06/11/2029 · competência 10/2029');
+});
+
 test('recorrente: 12 competencias a partir da escolhida', async ({ page }) => {
     await entrar(page, A);
     await abrirMes(page, '2029-06');
@@ -118,11 +145,13 @@ test('recorrente: 12 competencias a partir da escolhida', async ({ page }) => {
     await page.selectOption('#receita-tipo', 'ALUGUEL');
     await page.selectOption('#receita-recorrencia', 'mensal');
     await page.fill('#receita-valor', '2000');
+    await page.fill('#receita-data', '2029-07-10');  // regra: dia 10 do mes seguinte a cada competencia
     await page.locator('#receita-painel').getByRole('button', { name: 'Salvar' }).click();
     await expect(page.locator('#acao-resultado'))
         .toHaveText('Receita prevista cadastrada: 12 competências a partir de 06/2029.');
     await abrirMes(page, '2030-05');
-    await expect(receita(page, 'Aluguel sala recebido')).toHaveCount(1);
+    await expect(receita(page, 'Aluguel sala recebido').locator('.conta-vencimento'))
+        .toHaveText('Prevista para 10/06/2030 · competência 05/2030');
     await abrirMes(page, '2030-06');
     await expect(receita(page, 'Aluguel sala recebido')).toHaveCount(0);
 });
@@ -164,7 +193,8 @@ test('formulario de receita cabe na tela do celular', async ({ page }) => {
     await page.click('#nova-receita');
     const larguras = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
     expect(larguras[0]).toBeLessThanOrEqual(larguras[1]);
-    for (const campo of ['#receita-fonte', '#receita-nome', '#receita-valor', '#receita-competencia', '#aba-contas']) {
+    for (const campo of ['#receita-fonte', '#receita-nome', '#receita-valor', '#receita-competencia', '#receita-data',
+        '#aba-contas']) {
         expect((await page.locator(campo).boundingBox()).height).toBeGreaterThanOrEqual(44);
     }
     await page.selectOption('#receita-fonte', { label: 'Freelas' });

@@ -22,6 +22,16 @@
 -- tabela de recebimentos e travada em modo SHARE durante a alteracao de uma previsao, para
 -- que um recebimento simultaneo no Flask espere (ou seja visto) — nunca se cruzam;
 -- criacao idempotente por chave (financeiro.operacao_receita).
+-- Data prevista (decisao do usuario, opcao a): a previsao ganha `data_prevista` (DATE, nula),
+-- independente da competencia: competencia 10/2026 pode ter recebimento previsto em 05/11/2026.
+-- Os totais continuam por competencia. NULL = regra antiga (dia previsto da fonte no mes da
+-- competencia); nada e preenchido retroativamente. Mesma coluna da migration Alembic
+-- e3b7c9d1a2f4 (IF NOT EXISTS: a que rodar primeiro cria); o model do Flask a ignora nas consultas.
+
+alter table public.receita_orcamento add column if not exists data_prevista date;
+
+comment on column public.receita_orcamento.data_prevista is
+    'FIN-RECEITAS-1: data prevista de recebimento (independente da competencia). NULL = dia previsto da fonte no mes da competencia.';
 
 create table financeiro.operacao_receita (
     chave                uuid        primary key,
@@ -94,6 +104,21 @@ begin
 end
 $$;
 
+-- Data prevista a ate 12 meses da competencia (antes ou depois). Interna.
+create function financeiro.validar_data_prevista(p_competencia date, p_data date)
+    returns void
+    language plpgsql
+    immutable
+    set search_path = ''
+as $$
+begin
+    if p_data is not null and (p_data < (p_competencia - interval '12 months')::date
+                               or p_data >= (p_competencia + interval '13 months')::date) then
+        raise exception 'Data prevista deve ficar a ate 12 meses da competencia' using errcode = '22023';
+    end if;
+end
+$$;
+
 create function financeiro.versao_previsao(p_orcamento_id integer)
     returns text
     language sql
@@ -121,7 +146,8 @@ create function financeiro.receitas_do_mes(p_perfil_id integer, p_mes date)
     returns table (
         origem text, id integer, item_receita_id integer, nome text, tipo text, competencia date,
         data_prevista date, valor_previsto numeric, valor_recebido numeric, situacao text,
-        conta_bancaria_nome text, recorrente boolean, fonte_ativa boolean, observacoes text
+        conta_bancaria_nome text, recorrente boolean, fonte_ativa boolean, observacoes text,
+        data_prevista_explicita boolean
     )
     language plpgsql
     stable
@@ -151,6 +177,7 @@ begin
     ),
     previsoes as (
         select o.id, o.item_receita_id, i.nome, i.tipo, o.mes_referencia, o.valor_esperado, o.observacoes,
+               o.data_prevista as data_explicita,
                i.dia_previsto_pagamento, i.conta_bancaria_id, coalesce(i.recorrente, true) as recorrente,
                coalesce(i.ativo, true) as ativo,
                coalesce((select sum(r.valor_recebido) from realizadas r
@@ -163,8 +190,9 @@ begin
     linhas as (
     select 'PREVISAO'::text as origem, p.id, p.item_receita_id, p.nome::text as nome, p.tipo::text as tipo,
            v_mes as competencia,
-           case when p.dia_previsto_pagamento between 1 and 31
-                then financeiro.dia_contratual(v_mes, p.dia_previsto_pagamento) end as data_prevista,
+           coalesce(p.data_explicita,
+                    case when p.dia_previsto_pagamento between 1 and 31
+                         then financeiro.dia_contratual(v_mes, p.dia_previsto_pagamento) end) as data_prevista,
            p.valor_esperado as valor_previsto, p.recebido as valor_recebido,
            case when p.valor_esperado = 0 and coalesce(p.observacoes, '') ilike 'Removid%' then 'REMOVIDA'
                 when p.recebido > 0 and (p.valor_esperado <= 0 or p.recebido >= p.valor_esperado) then 'RECEBIDA'
@@ -172,7 +200,7 @@ begin
                 when not p.ativo then 'INATIVA'
                 else 'PREVISTA' end as situacao,
            (select b.nome::text from public.conta_bancaria b where b.id = p.conta_bancaria_id) as conta_bancaria_nome,
-           p.recorrente, p.ativo as fonte_ativa, p.observacoes
+           p.recorrente, p.ativo as fonte_ativa, p.observacoes, p.data_explicita is not null as data_prevista_explicita
       from previsoes p
     union all
     -- Recebimentos sem previsao na competencia, estornos e previsoes de consorcio: linhas proprias.
@@ -182,7 +210,7 @@ begin
            case when r.consorcio then 0 else r.valor_recebido end,
            case when r.estornada then 'ESTORNADA' when r.consorcio then 'PREVISTA_CONSORCIO' else 'RECEBIDA' end,
            (select b.nome::text from public.conta_bancaria b where b.id = r.conta_bancaria_id),
-           coalesce(i.recorrente, false), coalesce(i.ativo, true), r.observacoes
+           coalesce(i.recorrente, false), coalesce(i.ativo, true), r.observacoes, false
       from realizadas r
       left join public.item_receita i on i.id = r.item_receita_id
      where r.estornada or r.consorcio
@@ -190,7 +218,8 @@ begin
     )
     -- Mesma ordem da tela de receitas do Flask: prevista, parcial, recebida; depois as demais.
     select l.origem, l.id, l.item_receita_id, l.nome, l.tipo, l.competencia, l.data_prevista, l.valor_previsto,
-           l.valor_recebido, l.situacao, l.conta_bancaria_nome, l.recorrente, l.fonte_ativa, l.observacoes
+           l.valor_recebido, l.situacao, l.conta_bancaria_nome, l.recorrente, l.fonte_ativa, l.observacoes,
+           l.data_prevista_explicita
       from linhas l
      order by case l.situacao when 'PREVISTA' then 0 when 'PREVISTA_CONSORCIO' then 0 when 'PARCIAL' then 1
                                when 'RECEBIDA' then 2 else 3 end,
@@ -313,6 +342,21 @@ begin
             v_saida := v_saida || jsonb_build_object('conta_bancaria_id', v_int);
         end if;
     end if;
+    if p_dados ? 'data_prevista' then
+        if nullif(p_dados ->> 'data_prevista', '') is null then
+            v_saida := v_saida || jsonb_build_object('data_prevista', null);
+        else
+            begin
+                v_data := (p_dados ->> 'data_prevista')::date;
+            exception when others then
+                v_data := null;
+            end;
+            if v_data is null or v_data < date '2000-01-01' or v_data > date '2101-12-31' then
+                raise exception 'Data prevista invalida' using errcode = '22023';
+            end if;
+            v_saida := v_saida || jsonb_build_object('data_prevista', v_data);
+        end if;
+    end if;
     foreach v_texto in array array['descricao', 'observacoes'] loop
         if p_dados ? v_texto then
             if length(p_dados ->> v_texto) > 1000 then
@@ -353,7 +397,11 @@ begin
     v_gerir := financeiro.pode_gerir_perfil(p_perfil_id);
     return jsonb_build_object(
         'previsao', jsonb_build_object('id', v_orc.id, 'competencia', v_orc.mes_referencia, 'valor', v_orc.valor_esperado,
-                                       'observacoes', v_orc.observacoes, 'periodicidade', v_orc.periodicidade),
+                                       'observacoes', v_orc.observacoes, 'periodicidade', v_orc.periodicidade,
+                                       'data_prevista', v_orc.data_prevista,
+                                       'data_prevista_efetiva', coalesce(v_orc.data_prevista,
+                                           case when v_item.dia_previsto_pagamento between 1 and 31 then
+                                                financeiro.dia_contratual(v_orc.mes_referencia, v_item.dia_previsto_pagamento) end)),
         'fonte', jsonb_build_object('id', v_item.id, 'nome', v_item.nome, 'tipo', v_item.tipo,
                                     'recorrente', coalesce(v_item.recorrente, true), 'ativo', coalesce(v_item.ativo, true),
                                     'dia_previsto', v_item.dia_previsto_pagamento, 'conta_bancaria_id', v_item.conta_bancaria_id,
@@ -391,6 +439,9 @@ declare
     v_ids       integer[] := '{}';
     v_id        integer;
     v_mes       date;
+    v_data      date;
+    v_desloc    integer;
+    v_dia       integer;
     v_resultado jsonb;
 begin
     if not financeiro.pode_gerir_perfil(p_perfil_id) then
@@ -412,6 +463,15 @@ begin
     v_d := financeiro.ler_dados_receita(p_dados, p_perfil_id, false);
     v_rec := coalesce((p_dados ->> 'recorrente')::boolean, false);
     v_comp := (v_d ->> 'competencia')::date;
+    -- Data prevista da (primeira) competencia; na recorrencia ela define a regra: dia contratual e
+    -- deslocamento em meses (ex.: competencia 10, prevista 05/11 -> todo dia 5 do mes seguinte).
+    v_data := (v_d ->> 'data_prevista')::date;
+    perform financeiro.validar_data_prevista(v_comp, v_data);
+    if v_data is not null then
+        v_dia := extract(day from v_data)::integer;
+        v_desloc := (extract(year from v_data)::integer * 12 + extract(month from v_data)::integer)
+                    - (extract(year from v_comp)::integer * 12 + extract(month from v_comp)::integer);
+    end if;
 
     if p_dados ? 'item_receita_id' then
         select * into v_item from public.item_receita i
@@ -436,7 +496,7 @@ begin
         insert into public.item_receita (perfil_financeiro_id, nome, tipo, descricao, ativo, valor_base_mensal,
                                          dia_previsto_pagamento, conta_bancaria_id, recorrente, criado_em)
         values (p_perfil_id, v_d ->> 'nome', v_d ->> 'tipo', coalesce(v_d ->> 'descricao', ''), true,
-                case when v_rec then (v_d ->> 'valor')::numeric end, (v_d ->> 'dia_previsto')::integer,
+                case when v_rec then (v_d ->> 'valor')::numeric end, coalesce((v_d ->> 'dia_previsto')::integer, v_dia),
                 (v_d ->> 'conta_bancaria_id')::integer, v_rec, now() at time zone 'utc')
         returning id into v_item_id;
         select * into v_item from public.item_receita where id = v_item_id;
@@ -447,10 +507,14 @@ begin
             v_mes := (v_comp + make_interval(months => i))::date;
             continue when exists (select 1 from public.receita_orcamento o
                                    where o.item_receita_id = v_item_id and o.mes_referencia = v_mes);
+            -- Cada competencia calcula a sua data a partir do dia contratual: sem deriva (31 -> 28 -> 31).
             insert into public.receita_orcamento (perfil_financeiro_id, item_receita_id, mes_referencia, valor_esperado,
-                                                  periodicidade, observacoes, criado_em)
+                                                  periodicidade, observacoes, data_prevista, criado_em)
             values (p_perfil_id, v_item_id, v_mes, (v_d ->> 'valor')::numeric, 'MENSAL_FIXA',
-                    'Gerado automaticamente - ' || v_item.nome, now() at time zone 'utc')
+                    'Gerado automaticamente - ' || v_item.nome,
+                    case when v_data is not null
+                         then financeiro.dia_contratual((v_mes + make_interval(months => v_desloc))::date, v_dia) end,
+                    now() at time zone 'utc')
             returning id into v_id;
             v_ids := v_ids || v_id;
         end loop;
@@ -459,10 +523,10 @@ begin
             raise exception 'Ja existe previsao desta fonte nesta competencia: edite a existente' using errcode = '22023';
         end if;
         insert into public.receita_orcamento (perfil_financeiro_id, item_receita_id, mes_referencia, valor_esperado,
-                                              periodicidade, observacoes, criado_em)
+                                              periodicidade, observacoes, data_prevista, criado_em)
         values (p_perfil_id, v_item_id, v_comp, (v_d ->> 'valor')::numeric,
                 case when coalesce(v_item.recorrente, false) then 'MENSAL_FIXA' else 'UNICA' end,
-                v_d ->> 'observacoes', now() at time zone 'utc')
+                v_d ->> 'observacoes', v_data, now() at time zone 'utc')
         returning id into v_id;
         v_ids := v_ids || v_id;
     end if;
@@ -537,9 +601,13 @@ begin
             raise exception 'Ja existe previsao desta fonte nesta competencia' using errcode = '22023';
         end if;
     end if;
+    -- A data prevista e so desta previsao: uma excecao nao desloca as demais competencias.
+    perform financeiro.validar_data_prevista(v_comp, case when v_d ? 'data_prevista' then (v_d ->> 'data_prevista')::date
+                                                          else v_orc.data_prevista end);
     update public.receita_orcamento o
        set valor_esperado = coalesce((v_d ->> 'valor')::numeric, o.valor_esperado),
            observacoes = case when v_d ? 'observacoes' then v_d ->> 'observacoes' else o.observacoes end,
+           data_prevista = case when v_d ? 'data_prevista' then (v_d ->> 'data_prevista')::date else o.data_prevista end,
            mes_referencia = v_comp
      where o.id = p_orcamento_id;
     return jsonb_build_object('orcamento_id', p_orcamento_id, 'competencia', v_comp,
@@ -624,7 +692,7 @@ declare
     v_d jsonb;
 begin
     perform financeiro.travar_fonte(p_perfil_id, p_item_id, p_versao);
-    v_d := financeiro.ler_dados_receita(p_dados - 'valor' - 'competencia' - 'observacoes', p_perfil_id, true);
+    v_d := financeiro.ler_dados_receita(p_dados - 'valor' - 'competencia' - 'observacoes' - 'data_prevista', p_perfil_id, true);
     if v_d ? 'nome' and exists (select 1 from public.item_receita i
                                  where i.nome = v_d ->> 'nome' and i.id <> p_item_id
                                    and financeiro.pertence_ao_perfil(i.perfil_financeiro_id, p_perfil_id)) then
@@ -663,6 +731,7 @@ revoke execute on function financeiro.receita_estornada(integer) from public, an
 revoke execute on function financeiro.fonte_de_outro_modulo(integer) from public, anon, authenticated;
 revoke execute on function financeiro.bloqueio_da_previsao(integer) from public, anon, authenticated;
 revoke execute on function financeiro.versao_previsao(integer) from public, anon, authenticated;
+revoke execute on function financeiro.validar_data_prevista(date, date) from public, anon, authenticated;
 revoke execute on function financeiro.versao_fonte(integer) from public, anon, authenticated;
 revoke execute on function financeiro.ler_dados_receita(jsonb, integer, boolean) from public, anon, authenticated;
 revoke execute on function financeiro.travar_previsao(integer, integer, text) from public, anon, authenticated;

@@ -1325,6 +1325,13 @@ class ReceitaOrcamento(db.Model):
     # Valores: MENSAL_FIXA, EVENTUAL, UNICA
 
     observacoes = db.Column(db.Text)
+
+    # FIN-RECEITAS-1: data prevista de recebimento, independente da competencia (mes_referencia).
+    # NULL = regra antiga (dia previsto da fonte no mes da competencia). Deferred: fica fora das
+    # consultas do Flask, que funciona num SQLite ainda sem a coluna e nunca a sobrescreve.
+    # server_default + eager_defaults=False: o INSERT do Flask nao cita a coluna nem a pede de volta.
+    data_prevista = db.deferred(db.Column(db.Date, nullable=True, server_default=db.text('NULL')))
+    __mapper_args__ = {'eager_defaults': False}
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relacionamentos

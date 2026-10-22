@@ -140,10 +140,7 @@
 
 ## 8. Pendências e decisões
 
-- **Data prevista em outro mês:** o modelo do Flask só guarda o **dia** previsto (na fonte), aplicado ao mês da competência. "Salário de outubro pago em 05/11" não é representável sem mudança de esquema. Opções:
-  - **(a)** coluna nullable `data_prevista` em `receita_orcamento` (Alembic + Supabase), exibida pelos dois sistemas;
-  - **(b)** manter como está.
-  Não criei estrutura paralela; **decisão sua**.
+- **Data prevista em outro mês:** **resolvido** (opção (a), decisão do usuário). A previsão ganhou `data_prevista` (nula, sem preenchimento retroativo; sem ela vale o dia da fonte). Ver `docs/FIN_RECEITAS_DATA_REAL_1.md`.
 - **Gravação dentro de consulta no Flask** (backfill de consórcio em `GET /itens` e `GET /resumo-mensal`): registrada, sem alteração.
 - **FIN-PAGAMENTO-TRAVA-1 continua bloqueador** antes de qualquer recebimento ou pagamento efetivo. O recebimento do Flask (`criar_realizada`) não trava a previsão. Aqui a proteção é do lado do novo aplicativo (trava `SHARE`); o recebimento em si será tratado no módulo próprio.
 - **Validação no Supabase de teste** (FIN-RECEITAS-REAL-1, autorização própria): migration `20261027090000`, mais um seed fictício de receitas para o E2E real.

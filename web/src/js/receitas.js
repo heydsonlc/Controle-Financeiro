@@ -84,27 +84,26 @@ async function abrirNovaReceita(contexto) {
     nome.maxLength = 100;
     const tipo = seletor([['', 'Selecione'], ...TIPOS], '');
     const recorrencia = seletor([['avulsa', 'Avulsa (só nesta competência)'], ['mensal', 'Mensal (próximos 12 meses)']], 'avulsa');
-    const dia = entrada('number');
-    dia.min = '1';
-    dia.max = '31';
-    dia.inputMode = 'numeric';
     const conta = seletor([['', 'Sem conta definida'], ...contas.map((c) => [c.id, c.nome])], '');
     const valor = entrada('text');
     valor.inputMode = 'decimal';
     valor.placeholder = '0,00';
     const competencia = entrada('month', contexto.mes);
+    // Competencia = mes do orcamento; data prevista = quando se espera receber (pode cair em outro mes).
+    const dataPrevista = entrada('date');
+    const dicaData = el('p', 'geracao-dica', 'Opcional. Pode cair em outro mês (ex.: competência 10, recebimento em 05/11). '
+        + 'Na recorrência, define o dia e a defasagem de todas as competências.');
     const observacoes = el('textarea');
     observacoes.rows = 2;
     observacoes.maxLength = 1000;
 
     const novaFonte = el('div', 'form-grupo');
     novaFonte.append(campo('Nome da fonte', nome, 'receita-nome'), campo('Categoria', tipo, 'receita-tipo'),
-        campo('Recorrência', recorrencia, 'receita-recorrencia'), campo('Dia previsto (1 a 31)', dia, 'receita-dia'),
-        campo('Conta de destino', conta, 'receita-conta'));
+        campo('Recorrência', recorrencia, 'receita-recorrencia'), campo('Conta de destino', conta, 'receita-conta'));
     fonte.addEventListener('change', () => { novaFonte.hidden = fonte.value !== 'nova'; });
     f.form.append(campo('Fonte', fonte, 'receita-fonte'), novaFonte, campo('Valor previsto (R$)', valor, 'receita-valor'),
-        campo('Competência', competencia, 'receita-competencia'), campo('Observações', observacoes, 'receita-observacoes'),
-        f.erro, f.botoes);
+        campo('Competência', competencia, 'receita-competencia'), campo('Data prevista', dataPrevista, 'receita-data'),
+        dicaData, campo('Observações', observacoes, 'receita-observacoes'), f.erro, f.botoes);
     f.painel.append(f.form);
 
     const chave = crypto.randomUUID();
@@ -123,10 +122,10 @@ async function abrirNovaReceita(contexto) {
             return;
         }
         const dados = { valor: valorNormal, competencia: `${competencia.value}-01` };
+        if (dataPrevista.value) dados.data_prevista = dataPrevista.value;
         if (nova) {
             Object.assign(dados, {
                 nome: nome.value.trim(), tipo: tipo.value, recorrente: recorrencia.value === 'mensal',
-                dia_previsto: dia.value ? Number(dia.value) : null,
                 conta_bancaria_id: conta.value ? Number(conta.value) : null,
             });
             if (recorrencia.value === 'mensal') dados.descricao = observacoes.value.trim();
@@ -154,11 +153,14 @@ function abrirEdicaoPrevisao(contexto, dados) {
     valor.inputMode = 'decimal';
     const competencia = entrada('month', dados.previsao.competencia.slice(0, 7));
     competencia.disabled = !dados.pode_mudar_competencia;
+    const dataPrevista = entrada('date', dados.previsao.data_prevista || '');
+    const dicaData = el('p', 'geracao-dica', 'Só desta competência. Vazio: usa o dia previsto da fonte.');
     const observacoes = el('textarea');
     observacoes.rows = 2;
     observacoes.maxLength = 1000;
     observacoes.value = dados.previsao.observacoes || '';
     f.form.append(campo('Valor previsto (R$)', valor, 'receita-valor'), campo('Competência', competencia, 'receita-competencia'),
+        campo('Data prevista', dataPrevista, 'receita-data'), dicaData,
         campo('Observações', observacoes, 'receita-observacoes'), f.erro, f.botoes);
     f.painel.append(f.form);
     f.form.addEventListener('submit', async (evento) => {
@@ -168,7 +170,7 @@ function abrirEdicaoPrevisao(contexto, dados) {
             f.falhar('Verifique: informe um valor válido.');
             return;
         }
-        const alteracao = { valor: valorNormal, observacoes: observacoes.value.trim() };
+        const alteracao = { valor: valorNormal, observacoes: observacoes.value.trim(), data_prevista: dataPrevista.value || null };
         if (!competencia.disabled) alteracao.competencia = `${competencia.value}-01`;
         f.salvar.disabled = true;
         f.cancelar.disabled = true;
@@ -305,8 +307,11 @@ function itemReceita(receita, contexto) {
     const resumo = el('summary', 'conta-resumo');
     const principal = el('span', 'conta-principal');
     const quando = receita.origem === 'RECEBIMENTO' ? 'Recebida em' : 'Prevista para';
-    principal.append(el('span', 'conta-nome', receita.nome),
-        el('span', 'conta-vencimento', receita.data_prevista ? `${quando} ${dataCurta(receita.data_prevista)}` : 'Sem data prevista'));
+    let textoData = receita.data_prevista ? `${quando} ${dataCurta(receita.data_prevista)}` : 'Sem data prevista';
+    if (receita.data_prevista && receita.data_prevista.slice(0, 7) !== receita.competencia.slice(0, 7)) {
+        textoData += ` · competência ${competenciaCurta(receita.competencia)}`;  // recebimento em outro mes
+    }
+    principal.append(el('span', 'conta-nome', receita.nome), el('span', 'conta-vencimento', textoData));
     const lado = el('span', 'conta-lado');
     const valor = receita.valor_previsto !== null && receita.valor_previsto !== undefined ? receita.valor_previsto : receita.valor_recebido;
     lado.append(el('span', 'conta-valor', reais(centavos(valor))),

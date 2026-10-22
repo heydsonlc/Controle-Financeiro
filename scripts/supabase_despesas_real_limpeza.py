@@ -1,5 +1,6 @@
 """
-FIN-DESPESAS-REAL-1 — limpeza do que os TESTES criaram (alem dos seeds) no Supabase de teste.
+FIN-DESPESAS-REAL-1 / FIN-RECEITAS-DATA-REAL-1 — limpeza do que os TESTES criaram (alem dos seeds)
+no Supabase de teste.
 
 `marcar` (antes dos seeds): guarda o maior id de cada tabela financeira e o instante inicial.
 `remover` (depois dos testes, ANTES dos removedores dos seeds): apaga so o que os testes criaram
@@ -21,7 +22,8 @@ sys.path.insert(0, str(RAIZ / 'scripts'))
 from supabase_contas_seed_teste import conectar  # noqa: E402
 
 MARCA = RAIZ / 'data' / 'despesas_real_1_marca.json'
-TABELAS = ('item_despesa', 'conta', 'lancamento_agregado', 'movimento_financeiro')
+TABELAS = ('item_despesa', 'conta', 'lancamento_agregado', 'movimento_financeiro',
+           'item_receita', 'receita_orcamento', 'receita_realizada')
 
 
 def itens_dos_seeds():
@@ -72,6 +74,14 @@ def main():
                 ('contas', 'delete from public.conta where item_despesa_id = any(%s)', [itens]),
                 ('itens', 'delete from public.item_despesa where id = any(%s)', [itens]),
                 ('chaves', 'delete from financeiro.operacao_despesa where criado_em >= %s::timestamptz', [marca['inicio']]),
+                # Receitas (FIN-RECEITAS): tudo acima da marca e de teste (seed ficticio ou criado pelos testes).
+                ('receitas_realizadas', 'delete from public.receita_realizada where id > %s',
+                 [marca.get('receita_realizada', 0)]),
+                ('receitas_previsoes', 'delete from public.receita_orcamento where id > %s or item_receita_id > %s',
+                 [marca.get('receita_orcamento', 0), marca.get('item_receita', 0)]),
+                ('receitas_fontes', 'delete from public.item_receita where id > %s', [marca.get('item_receita', 0)]),
+                ('chaves_receita', 'delete from financeiro.operacao_receita where criado_em >= %s::timestamptz',
+                 [marca['inicio']]),
             ):
                 cur.execute(sql, params)
                 removidos[rotulo] = cur.rowcount
