@@ -180,6 +180,22 @@ body.app-body { margin: 0; background: var(--cf-bg, #f4f6fa); }
 .despesa-bloqueio { margin: 0 0 8px; color: #6b7280; }
 .despesa-pergunta { margin: 8px 0 0; }
 .botao-perigo { background: #b91c1c; border-color: #b91c1c; color: #fff; }
+/* FIN-RECEITAS-1: duas abas simples (Contas / Receitas) e situacoes de receita. */
+.abas { display: flex; gap: 4px; margin: 0 0 8px; border-bottom: 1px solid #e5e7eb; }
+.aba {
+    display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px;
+    color: #4b5563; text-decoration: none; font-size: 0.9375rem; border-bottom: 2px solid transparent;
+}
+.aba-ativa { color: #111827; font-weight: 600; border-bottom-color: #2563eb; }
+.receitas-nota { font-size: 0.8125rem; color: #6b7280; margin: 0 0 12px; }
+.form-grupo { display: flex; flex-direction: column; gap: 10px; }
+.form-grupo[hidden] { display: none; }
+.situacao-receita-prevista { background: #f3f4f6; color: #374151; }
+.situacao-receita-parcial { background: #fef3c7; color: #92400e; }
+.situacao-receita-recebida { background: #dcfce7; color: #166534; }
+.situacao-receita-inativa, .situacao-receita-removida { background: #f3f4f6; color: #6b7280; }
+.situacao-receita-estornada { background: #fee2e2; color: #991b1b; }
+.situacao-receita-prevista_consorcio { background: #e0e7ff; color: #3730a3; }
 .grupo { margin-bottom: 18px; }
 .grupo-titulo { font-size: 0.8125rem; text-transform: uppercase; letter-spacing: 0.04em; color: #6b7280; margin: 0 0 6px; }
 .cartao-nome { font-size: 0.9375rem; margin: 10px 0 4px; }

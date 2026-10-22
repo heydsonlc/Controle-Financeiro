@@ -47,6 +47,7 @@ from tests.supabase_local import (  # noqa: E402
     encontrar_pg_bin,
     encontrar_postgrest,
     porta_livre,
+    semear_receitas_e2e,
     semear_recorrencia_e2e,
 )
 
@@ -271,6 +272,7 @@ def main():
             conn = cluster.conectar()
             with conn.cursor() as cur:
                 semear_recorrencia_e2e(cur)  # FIN-RECORRENCIA-1 (recorrencia.spec.mjs)
+                semear_receitas_e2e(cur)  # FIN-RECEITAS-1 (receitas.spec.mjs)
             conn.close()
             with PostgrestLocal(postgrest_bin, cluster, segredo, tmp) as postgrest:
                 handler = criar_handler(dist, postgrest.url, segredo, ler_headers(dist))

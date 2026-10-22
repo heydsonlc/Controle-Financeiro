@@ -531,3 +531,34 @@ def semear_recorrencia_e2e(cur, categoria_id=201):
     for chave in GERADOR_NOVO_E2E:
         cur.execute("select financeiro.definir_gerador_recorrencia(%s, 'NOVO', 'administrador de teste', 'cenario E2E')",
                     (PERFIS[chave]['id'],))
+
+
+# FIN-RECEITAS-1 (E2E): receitas FICTICIAS de 11/2026 (previsoes; um recebimento parcial com movimento).
+RECEITAS_E2E = [  # nome, tipo, perfil, recorrente, valor_base, dia, valor previsto 11/2026
+    ('Salário (A)', 'SALARIO_FIXO', 'PESSOAL', True, '5000.00', 5, '5000.00'),
+    ('Freelas', 'RENDA_EXTRA', 'PESSOAL', False, None, 20, '800.00'),
+    ('Consultoria', 'RENDA_EXTRA', 'EMPRESA', False, None, 10, '3000.00'),
+    ('Freela B', 'RENDA_EXTRA', 'PERFIL_B', False, None, 12, '700.00'),
+]
+
+
+def semear_receitas_e2e(cur):
+    cur.execute("select id from public.conta_bancaria where nome = 'Conta Pessoal (A)'")
+    conta = cur.fetchone()[0]
+    for nome, tipo, chave, recorrente, base, dia, previsto in RECEITAS_E2E:
+        perfil = PERFIS[chave]['id']
+        cur.execute('insert into public.item_receita (perfil_financeiro_id, nome, tipo, descricao, ativo, valor_base_mensal, '
+                    "dia_previsto_pagamento, recorrente) values (%s, %s, %s, '', true, %s, %s, %s) returning id",
+                    (perfil, nome, tipo, base, dia, recorrente))
+        item = cur.fetchone()[0]
+        cur.execute("insert into public.receita_orcamento (perfil_financeiro_id, item_receita_id, mes_referencia, valor_esperado, "
+                    "periodicidade) values (%s, %s, '2026-11-01', %s, %s)",
+                    (perfil, item, previsto, 'MENSAL_FIXA' if recorrente else 'UNICA'))
+        if nome == 'Salário (A)':  # recebimento parcial ja registrado (com movimento), como o Flask faz
+            cur.execute("insert into public.receita_realizada (perfil_financeiro_id, item_receita_id, data_recebimento, "
+                        "valor_recebido, mes_referencia, conta_bancaria_id) values (%s, %s, '2026-11-05', 2000, "
+                        "'2026-11-01', %s) returning id", (perfil, item, conta))
+            realizada = cur.fetchone()[0]
+            cur.execute("insert into public.movimento_financeiro (conta_bancaria_id, tipo, valor, descricao, data_movimento, "
+                        "receita_realizada_id, origem) values (%s, 'CREDITO', 2000, 'Recebimento', '2026-11-05', %s, 'RECEITA')",
+                        (conta, realizada))
