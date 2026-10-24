@@ -36,12 +36,26 @@ def _conflito_concorrente():
     return jsonify({'success': False, 'error': MENSAGEM_CONFLITO}), 409
 
 
-def _fatura_do_novo_aplicativo():
-    """FIN-CARTOES-PAGAMENTO-1 (D5): o perfil desta fatura esta atribuido ao novo aplicativo (financeiro.gerador_recorrencia
-    = NOVO), que passa a ser o unico a pagar e estornar faturas dele. Nada foi gravado."""
+def _paga_pelo_novo_aplicativo(conta, contexto):
+    """FIN-CARTOES-PAGAMENTO-1 (D5) / FIN-MOVIMENTACOES-1 (D6): perfil atribuido ao novo aplicativo
+    (financeiro.gerador_recorrencia = NOVO) paga e estorna la faturas e despesas comuns. Parcelas de consorcio e de
+    financiamento continuam aqui (os modulos delas sincronizam o proprio estado)."""
+    if not conta.is_fatura_cartao:
+        try:
+            from backend.models import FinanciamentoParcela
+        except ImportError:
+            from models import FinanciamentoParcela
+        item = ItemDespesa.query.get(conta.item_despesa_id) if conta.item_despesa_id else None
+        if (item is not None and item.tipo in ('Consorcio', 'Financiamento')) or conta.financiamento_parcela_id                 or FinanciamentoParcela.query.filter_by(conta_id=conta.id).first() is not None:
+            return False
+    return not flask_pode_gerar(conta.perfil_financeiro_id, f'{contexto} da conta {conta.id}')
+
+
+def _liquidacao_do_novo_aplicativo():
+    """Resposta do bloqueio de _paga_pelo_novo_aplicativo. Nada foi gravado."""
     db.session.rollback()
     return jsonify({'success': False, 'codigo': 'SISTEMA_NOVO',
-                    'error': 'Os pagamentos das faturas deste perfil sao feitos pelo novo aplicativo.'}), 409
+                    'error': 'Os pagamentos deste perfil sao feitos pelo novo aplicativo.'}), 409
 
 
 def _internal_error(contexto='despesas'):
@@ -1175,8 +1189,8 @@ def marcar_como_pago(id):
         conta = _query_contas().filter(Conta.id == id).first()
         if not conta:
             return jsonify({'success': False, 'error': 'Despesa não encontrada'}), 404
-        if conta.is_fatura_cartao and not flask_pode_gerar(conta.perfil_financeiro_id, f'pagamento da fatura {conta.id}'):
-            return _fatura_do_novo_aplicativo()
+        if _paga_pelo_novo_aplicativo(conta, 'pagamento'):
+            return _liquidacao_do_novo_aplicativo()
 
         # FIN-PAGAMENTO-TRAVA-1: trava a conta e rele situacao e valor ANTES das conferencias.
         # Pagamento, estorno ou edicao simultaneos esperam; o segundo pagamento ve 'Pago'.
@@ -1324,8 +1338,8 @@ def estornar_pagamento(id):
         conta = _query_contas().filter(Conta.id == id).first()
         if not conta:
             return jsonify({'success': False, 'error': 'Despesa nao encontrada'}), 404
-        if conta.is_fatura_cartao and not flask_pode_gerar(conta.perfil_financeiro_id, f'estorno da fatura {conta.id}'):
-            return _fatura_do_novo_aplicativo()
+        if _paga_pelo_novo_aplicativo(conta, 'estorno'):
+            return _liquidacao_do_novo_aplicativo()
         # FIN-PAGAMENTO-TRAVA-1: estorno e pagamento da mesma conta em serie; o segundo estorno
         # espera e ve a conta ja reaberta (Pendente).
         conta = travar_um(Conta, conta.id)

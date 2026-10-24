@@ -31,11 +31,13 @@ try:
     from backend.services.conta_bancaria_service import ContaBancariaService
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
     from backend.services.trava_financeira import travar_um
+    from backend.services.gerador_recorrencia_service import flask_pode_gerar
 except ImportError:
     from models import Conta, ContaBancaria, MovimentoFinanceiro, db
     from services.conta_bancaria_service import ContaBancariaService
     from services.perfil_financeiro_service import PerfilFinanceiroService
     from services.trava_financeira import travar_um
+    from services.gerador_recorrencia_service import flask_pode_gerar
 
 
 def executar_baixa_debito_automatico(perfil_id: int | None = None) -> List[int]:
@@ -47,6 +49,10 @@ def executar_baixa_debito_automatico(perfil_id: int | None = None) -> List[int]:
     """
     if perfil_id is None:
         perfil_id = PerfilFinanceiroService.obter_perfil_ativo_id()
+    # FIN-MOVIMENTACOES-1 (D6, decisao do titular): perfil atribuido ao novo aplicativo nao tem baixa automatica aqui;
+    # a despesa fica pendente e e paga pelo novo aplicativo.
+    if not flask_pode_gerar(perfil_id, 'baixa de debito automatico'):
+        return []
 
     hoje = date.today()
     baixadas: List[int] = []

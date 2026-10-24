@@ -5,8 +5,12 @@
 // com movimento, versao contra edicoes concorrentes, competencia dispensada ao excluir
 // conta recorrente. A tela so mostra as acoes que o banco informa como permitidas
 // (financeiro.despesa_para_edicao) e nunca grava direto em tabela.
+// FIN-MOVIMENTACOES-1: pagar e estornar despesa comum (dados_pagamento_despesa, pagar_despesa,
+// estornar_pagamento_despesa); valor devido, conta, saldo e pagamento vigente sao conferidos no banco.
 
 import { supabase } from './cliente.js';
+import { centavos, dataCurta, reais } from './comum.js';
+import { abrirEstorno, abrirLiquidacao, linhaOperacao, textoAjuste } from './liquidacao.js';
 
 const cache = new Map();  // perfil -> { categorias, contasBancarias }
 
@@ -34,7 +38,7 @@ function normalizarValor(texto) {
 
 // Motivos de bloqueio do banco (sem acento) como o usuario le.
 const BLOQUEIOS = {
-    'Despesa paga: correcao so por estorno': 'Despesa paga: correção só por estorno.',
+    'Despesa paga: correcao so por estorno': 'Despesa paga: para corrigir, estorne o pagamento.',
     'Possui movimento financeiro vinculado': 'Possui movimento financeiro vinculado.',
     'Fatura ou compra de cartao: fica no modulo de cartoes': 'Fatura ou compra de cartão: fica no módulo de cartões.',
     'Parcela de consorcio: fica no modulo de consorcios': 'Parcela de consórcio: fica no módulo de consórcios.',
@@ -285,8 +289,58 @@ function confirmarAcao(area, pergunta, rotulo, executar) {
     });
 }
 
+// Pagamento da despesa: historico (pagamentos e estornos) e a acao permitida agora (Pagar ou Estornar).
+async function mostrarPagamento(caixa, contaId, contexto) {
+    const dados = () => supabase.rpc('dados_pagamento_despesa', { p_perfil_id: contexto.perfilId, p_conta_id: contaId });
+    const { data, error } = await dados();
+    if (error || !data) return;
+    const area = el('div', 'fatura-pagamento');
+    for (const p of data.pagamentos) {
+        let texto = `Pago em ${linhaOperacao(p.data_pagamento, p.valor_pago, p.conta_nome)}`;
+        if (p.tipo_ajuste) texto += ` · ${textoAjuste(p.tipo_ajuste)}: ${p.justificativa}`;
+        if (p.estorno) texto += ` · estornado em ${dataCurta(p.estorno.data)}${p.estorno.motivo ? ` (${p.estorno.motivo})` : ''}`;
+        area.append(el('p', p.vigente ? 'pagamento-linha' : 'pagamento-linha pagamento-estornado', texto));
+    }
+    const painel = document.getElementById('despesa-painel');
+    const vigente = data.pagamentos.find((p) => p.vigente);
+    const despesa = data.despesa;
+    if (data.pode_pagar) {
+        const pagar = botao('Pagar', 'botao-principal');
+        pagar.addEventListener('click', () => abrirLiquidacao({
+            painel, modo: 'pagar', prefixo: 'pagamento', titulo: 'Pagar despesa', mensagemDeErro,
+            resumo: [['Despesa', despesa.descricao], ['Vencimento', dataCurta(despesa.data_vencimento)]],
+            referencia: despesa.valor, rotuloReferencia: 'Valor devido', rotuloValor: 'Valor pago (R$)',
+            rotuloData: 'Data do pagamento', contas: data.contas,
+            enviar: (c, chave) => supabase.rpc('pagar_despesa', {
+                p_perfil_id: contexto.perfilId, p_conta_id: contaId, p_chave: chave, p_dados: {
+                    conta_bancaria_id: c.conta_bancaria_id, data_pagamento: c.data, valor_pago: c.valor,
+                    valor_devido: c.referencia, tipo_ajuste: c.tipo_ajuste, justificativa: c.justificativa } }),
+            recarregarReferencia: async () => { const r = await dados(); return r.error ? null : r.data.despesa.valor; },
+            sucesso: (r) => contexto.recarregar(`Despesa paga: ${reais(centavos(r.valor_pago))} debitados de ${r.conta_nome}. `
+                + `Saldo da conta: ${reais(centavos(r.saldo_conta))}.`),
+        }));
+        area.append(pagar);
+    } else if (data.pode_estornar && vigente) {
+        const estornar = botao('Estornar pagamento');
+        estornar.addEventListener('click', () => abrirEstorno({
+            painel, prefixo: 'estorno', titulo: 'Estornar pagamento', mensagemDeErro,
+            resumo: [['Despesa', despesa.descricao], ['Valor pago', reais(centavos(vigente.valor_pago))],
+                ['Conta bancária', vigente.conta_nome], ['Data do pagamento', dataCurta(vigente.data_pagamento)]],
+            enviar: (d, chave) => supabase.rpc('estornar_pagamento_despesa', {
+                p_perfil_id: contexto.perfilId, p_conta_id: contaId, p_movimento_id: vigente.movimento_id, p_dados: d, p_chave: chave }),
+            sucesso: (r) => contexto.recarregar(`Pagamento estornado: ${reais(centavos(r.valor_estornado))} devolvidos a `
+                + `${vigente.conta_nome}. Saldo da conta: ${reais(centavos(r.saldo_conta))}.`),
+        }));
+        area.append(estornar);
+    } else if (data.sistema === 'FLASK' && !despesa.paga && !despesa.bloqueio) {
+        area.append(el('p', 'geracao-dica', 'O pagamento das despesas deste perfil ainda é feito no sistema atual.'));
+    }
+    if (area.childElementCount) caixa.prepend(area);
+}
+
 // Acoes de uma despesa, carregadas ao abrir o detalhe (o banco diz o que e permitido).
 export async function carregarAcoes(caixa, contaId, contexto) {
+    mostrarPagamento(caixa, contaId, contexto);
     const { data, error } = await supabase.rpc('despesa_para_edicao', { p_perfil_id: contexto.perfilId, p_conta_id: contaId });
     if (error || !data || !data.pode_gerir) return;
     if (data.bloqueio) {

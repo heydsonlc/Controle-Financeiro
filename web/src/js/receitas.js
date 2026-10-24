@@ -4,13 +4,16 @@
 // receitas do Flask), fontes_de_receita, receita_para_edicao (permissoes calculadas no banco).
 // Escrita so por RPC (criar_receita, editar_receita, excluir_receita, editar_fonte_receita,
 // inativar_fonte_receita): previsao nunca e recebimento — nada aqui movimenta conta bancaria.
-// Nao ha botao de recebimento: esse modulo ainda nao existe no novo aplicativo.
+// FIN-MOVIMENTACOES-1: receber (dados_recebimento_receita, receber_receita) e estornar cada recebimento
+// (estornar_recebimento). Recebimentos se acumulam na previsao (Parcial ate o previsto); o que falta, a conta, o
+// saldo e o estorno sao conferidos no banco.
 
 import { supabase } from './cliente.js';
 import {
     MES_VALIDO, botao, campo, centavos, competenciaCurta, dataCurta, deslocarMes, el, entrada, formatarValor,
     linhaDetalhe, mesAtualBrasilia, normalizarValor, reais, seletor, tituloDoMes,
 } from './comum.js';
+import { abrirEstorno, abrirLiquidacao, linhaOperacao } from './liquidacao.js';
 import { carregarPerfis, escolherPerfilAtivo, salvarPerfilAtivo } from './perfil.js';
 import { exigirUsuario, sair } from './sessao.js';
 
@@ -251,7 +254,56 @@ function confirmarAcao(area, pergunta, rotulo, executar) {
     });
 }
 
+// Recebimentos da previsao (cada um estornavel sozinho) e o botao Receber enquanto o banco permitir.
+async function mostrarRecebimento(caixa, orcamentoId, contexto) {
+    const dados = () => supabase.rpc('dados_recebimento_receita', { p_perfil_id: contexto.perfilId, p_orcamento_id: orcamentoId });
+    const { data, error } = await dados();
+    if (error || !data) return;
+    const area = el('div', 'fatura-pagamento');
+    const painel = document.getElementById('receita-painel');
+    const receita = data.receita;
+    for (const r of data.recebimentos) {
+        const texto = `Recebido em ${linhaOperacao(r.data_recebimento, r.valor, r.conta_nome)}${r.estornado ? ' · estornado' : ''}`;
+        area.append(el('p', r.estornado ? 'pagamento-linha pagamento-estornado' : 'pagamento-linha', texto));
+        if (r.pode_estornar) {
+            const estornar = botao('Estornar recebimento');
+            estornar.addEventListener('click', () => abrirEstorno({
+                painel, prefixo: 'estorno', titulo: 'Estornar recebimento', mensagemDeErro,
+                resumo: [['Receita', receita.nome], ['Valor recebido', reais(centavos(r.valor))], ['Conta bancária', r.conta_nome],
+                    ['Data do recebimento', dataCurta(r.data_recebimento)]],
+                enviar: (d, chave) => supabase.rpc('estornar_recebimento', {
+                    p_perfil_id: contexto.perfilId, p_realizada_id: r.id, p_dados: d, p_chave: chave }),
+                sucesso: (x) => contexto.recarregar(`Recebimento estornado: ${reais(centavos(x.valor_estornado))} debitados de `
+                    + `${r.conta_nome}. Saldo da conta: ${reais(centavos(x.saldo_conta))}.`),
+            }));
+            area.append(estornar);
+        }
+    }
+    if (data.pode_receber) {
+        const receber = botao('Receber', 'botao-principal');
+        receber.addEventListener('click', () => abrirLiquidacao({
+            painel, modo: 'receber', prefixo: 'recebimento', titulo: 'Receber receita', mensagemDeErro,
+            resumo: [['Receita', receita.nome], ['Competência', competenciaCurta(receita.competencia)],
+                ['Previsto', reais(centavos(receita.valor_previsto))], ['Já recebido', reais(centavos(receita.valor_recebido))]],
+            referencia: receita.falta, rotuloReferencia: 'Falta receber', rotuloValor: 'Valor recebido (R$)',
+            rotuloData: 'Data do recebimento', contas: data.contas, contaPadrao: receita.conta_padrao,
+            enviar: (c, chave) => supabase.rpc('receber_receita', {
+                p_perfil_id: contexto.perfilId, p_orcamento_id: orcamentoId, p_chave: chave, p_dados: {
+                    conta_bancaria_id: c.conta_bancaria_id, data_recebimento: c.data, valor_recebido: c.valor,
+                    falta: c.referencia, justificativa: c.justificativa } }),
+            recarregarReferencia: async () => { const r = await dados(); return r.error ? null : r.data.receita.falta; },
+            sucesso: (r) => contexto.recarregar(`Recebido: ${reais(centavos(r.valor_recebido))} creditados em ${r.conta_nome}. `
+                + `Saldo da conta: ${reais(centavos(r.saldo_conta))}.`),
+        }));
+        area.append(receber);
+    } else if (data.sistema === 'FLASK' && !receita.bloqueio) {
+        area.append(el('p', 'geracao-dica', 'O recebimento das receitas deste perfil ainda é feito no sistema atual.'));
+    }
+    if (area.childElementCount) caixa.prepend(area);
+}
+
 async function carregarAcoes(caixa, orcamentoId, contexto) {
+    mostrarRecebimento(caixa, orcamentoId, contexto);
     const { data, error } = await supabase.rpc('receita_para_edicao', { p_perfil_id: contexto.perfilId, p_orcamento_id: orcamentoId });
     if (error || !data || !data.pode_gerir) return;
     if (data.bloqueio) caixa.append(el('p', 'despesa-bloqueio', textoBloqueio(data.bloqueio)));

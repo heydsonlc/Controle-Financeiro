@@ -18,16 +18,26 @@ try:
     from backend.services.consorcio_receita_service import gerar_ou_atualizar_receita_contemplacao
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
     from backend.services.trava_financeira import MENSAGEM_CONFLITO, eh_conflito, travar_um
+    from backend.services.gerador_recorrencia_service import flask_pode_gerar
 except ImportError:
     from models import db, ItemReceita, ReceitaOrcamento, ReceitaRealizada, ContratoConsorcio
     from services.receita_service import ReceitaService
     from services.consorcio_receita_service import gerar_ou_atualizar_receita_contemplacao
     from services.perfil_financeiro_service import PerfilFinanceiroService
     from services.trava_financeira import MENSAGEM_CONFLITO, eh_conflito, travar_um
+    from services.gerador_recorrencia_service import flask_pode_gerar
 
 # Criar blueprint
 receitas_bp = Blueprint('receitas', __name__)
 logger = logging.getLogger(__name__)
+
+
+def _receita_do_novo_aplicativo():
+    """FIN-MOVIMENTACOES-1 (D6): perfil atribuido ao novo aplicativo (financeiro.gerador_recorrencia = NOVO) recebe e
+    estorna recebimentos de previsao la. Recebimento pontual (sem previsao) continua aqui. Nada foi gravado."""
+    db.session.rollback()
+    return jsonify({'success': False, 'codigo': 'SISTEMA_NOVO',
+                    'error': 'Os recebimentos deste perfil sao feitos pelo novo aplicativo.'}), 409
 
 
 def _perfil_id():
@@ -712,6 +722,9 @@ def criar_realizada():
                 'error': 'Dados nÃ£o fornecidos'
             }), 400
 
+        if not flask_pode_gerar(_perfil_id(), 'recebimento de receita'):
+            return _receita_do_novo_aplicativo()
+
         # Default de conta bancÃ¡ria: se nÃ£o veio no payload, tenta herdar da fonte
         if not data.get('conta_bancaria_id') and data.get('item_receita_id'):
             item = ItemReceita.query.filter(
@@ -985,6 +998,8 @@ def estornar_realizada(id):
         ).first()
         if not receita:
             return jsonify({'success': False, 'error': 'Receita nao encontrada'}), 404
+        if not flask_pode_gerar(receita.perfil_financeiro_id, f'estorno do recebimento {receita.id}'):
+            return _receita_do_novo_aplicativo()
         # FIN-PAGAMENTO-TRAVA-1: dois estornos simultaneos do mesmo recebimento ficam em serie;
         # o segundo espera e encontra o estorno ja gravado (409), sem segundo debito.
         receita = travar_um(ReceitaRealizada, receita.id)

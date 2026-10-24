@@ -109,7 +109,7 @@ test('despesa paga e fatura nao oferecem edicao nem exclusao', async ({ page }) 
     await abrirMes(page, '2026-11');
     const paga = despesa(page, 'Internet 11/2026');
     await paga.locator('summary').click();
-    await expect(paga.locator('.despesa-bloqueio')).toHaveText('Despesa paga: correção só por estorno.');
+    await expect(paga.locator('.despesa-bloqueio')).toHaveText('Despesa paga: para corrigir, estorne o pagamento.');
     await expect(paga.locator('button')).toHaveCount(0);
     const fatura = page.locator('#lista-cartoes .conta').first();
     await fatura.locator('summary').click();

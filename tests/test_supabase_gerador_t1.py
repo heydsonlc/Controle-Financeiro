@@ -263,15 +263,17 @@ def test_9_troca_invalida_recusada(banco, args, erro):
 # 10: consultas e pagamentos do Flask seguem funcionando no perfil migrado
 # ---------------------------------------------------------------------------
 
-def test_10_flask_consulta_e_paga_no_perfil_migrado(banco):
+def test_10_flask_consulta_e_nao_paga_no_perfil_migrado(banco):
+    # FIN-MOVIMENTACOES-1 (D6): no perfil migrado o Flask continua consultando, mas o pagamento de despesa comum
+    # passou a ser so do novo aplicativo (antes do D6 o T1 deixava o Flask pagar aqui).
     atribuir(banco, 'PESSOAL')
     movimentos = sql(banco, 'select count(*) as n from public.movimento_financeiro')[0]['n']
     resultado, _ = flask(banco, [listar('PESSOAL', '2027-01'), {'tipo': 'pagar', 'perfil': ID['PESSOAL'], 'conta': 960}])
     assert resultado[0] == {'status': 200, 'ids': [960, 961]}
-    assert resultado[1] == {'status': 200}
+    assert resultado[1] == {'status': 409}
     conta = sql(banco, 'select status_pagamento from public.conta where id = 960')[0]
-    assert conta['status_pagamento'] == 'Pago'
-    assert sql(banco, 'select count(*) as n from public.movimento_financeiro')[0]['n'] == movimentos + 1
+    assert conta['status_pagamento'] != 'Pago'
+    assert sql(banco, 'select count(*) as n from public.movimento_financeiro')[0]['n'] == movimentos
 
 
 # ---------------------------------------------------------------------------

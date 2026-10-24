@@ -9,6 +9,7 @@
 
 import { supabase } from './cliente.js';
 import { carregarAcoes, mostrarAcoesDoMes } from './despesas.js';
+import { mostrarMovimentos } from './movimentos.js';
 import { carregarPerfis, escolherPerfilAtivo, salvarPerfilAtivo } from './perfil.js';
 import { exigirUsuario, sair } from './sessao.js';
 
@@ -336,6 +337,7 @@ async function carregarMes(perfilId, mes) {
     };
     mostrarAcoesDoMes(contexto, Boolean(previa && previa.pode_gerir));
     mostrarGeracao(previa, perfilId, mes, contexto);
+    mostrarMovimentos(perfilId, mes);  // FIN-MOVIMENTACOES-1 (so leitura)
 
     // Cada conta (despesa ou fatura) entra uma unica vez; compras nunca sao somadas aqui.
     const total = contas.reduce((soma, c) => soma + centavos(c.valor), 0);

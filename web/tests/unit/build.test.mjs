@@ -79,7 +79,8 @@ const RPCS_DE_LEITURA = new Set(['meus_perfis', 'contas_bancarias_do_perfil', 'c
     'cartoes_do_perfil', 'faturas_do_mes', 'compras_da_fatura', 'compra_para_edicao', 'previa_compra',
     'recorrencias_rejeitadas',
     'sugerir_competencia',  // FIN-CARTOES-FECHAMENTO-1 (so leitura)
-    'dados_pagamento_fatura']);  // FIN-CARTOES-PAGAMENTO-1 (so leitura)
+    'dados_pagamento_fatura',  // FIN-CARTOES-PAGAMENTO-1 (so leitura)
+    'dados_pagamento_despesa', 'dados_recebimento_receita', 'movimentos_do_mes']);  // FIN-MOVIMENTACOES-1 (so leitura)
 // Escrita so por RPC transacional autorizada no banco, revisada uma a uma, e so na tela que a usa.
 const RPCS_DE_ESCRITA = new Map([
     ['gerar_mes', 'contas.js'],
@@ -107,6 +108,11 @@ const RPCS_DE_ESCRITA = new Map([
     // FIN-CARTOES-PAGAMENTO-1 (pagamento integral e estorno de fatura; debito/credito e saldo decididos no banco)
     ['pagar_fatura', 'cartoes.js'],
     ['estornar_pagamento_fatura', 'cartoes.js'],
+    // FIN-MOVIMENTACOES-1 (pagamento/estorno de despesa comum, recebimento/estorno de receita; saldo no banco)
+    ['pagar_despesa', 'despesas.js'],
+    ['estornar_pagamento_despesa', 'despesas.js'],
+    ['receber_receita', 'receitas.js'],
+    ['estornar_recebimento', 'receitas.js'],
 ]);
 
 test('codigo-fonte do frontend nao escreve em tabelas nem usa innerHTML', async () => {
