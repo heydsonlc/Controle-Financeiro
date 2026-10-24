@@ -33,6 +33,16 @@ def _erro_consolidada(exc):
                     'faturas': exc.faturas}), 409
 
 
+def _erro_compra_consolidada(fatura, acao, campos=()):
+    """FIN-CARTOES-D6-INTEGRIDADE-1: 409 para alterar/excluir compra que ja esta em fatura consolidada. Nao ha fluxo
+    de alteracao auditada (a confirmacao da D6 cobre so a inclusao); o novo aplicativo bloqueia do mesmo modo."""
+    mes = fatura.cartao_competencia.strftime('%m/%Y') if fatura.cartao_competencia else ''
+    detalhe = f" ({', '.join(campos)})" if campos else ''
+    return jsonify({'success': False, 'codigo': 'FATURA_CONSOLIDADA', 'fatura_id': fatura.id, 'campos': list(campos),
+                    'error': f'A fatura de {mes} esta consolidada: a compra nao pode ser {acao}{detalhe}. '
+                             'Descricao, observacoes, categoria e data da compra continuam editaveis.'}), 409
+
+
 def _dia(dados, campo, atual=None):
     """Dia 1-31 do campo (ou o atual, se ausente); ValueError se invalido."""
     if campo not in dados or dados.get(campo) in (None, ''):
@@ -926,6 +936,16 @@ def atualizar_lancamento(lancamento_id):
             db.session.rollback()
             return _business_error('Compra de fatura paga nao pode ser alterada. Para corrigir, estorne o pagamento da fatura.', 409)
 
+        # FIN-CARTOES-D6-INTEGRIDADE-1: compra que JA esta em fatura consolidada nao muda valor, competencia, parcelas
+        # nem cartao (tirar dela ou mudar o valor alteraria a composicao sem auditoria). Campos que nao mudam valores
+        # nem a fatura continuam editaveis.
+        fatura_atual = next((f for f in faturas if f.cartao_competencia == lancamento.mes_fatura), None)
+        if CartaoService.fatura_consolidada(fatura_atual):
+            campos = CartaoService.mudancas_financeiras(lancamento, dados)
+            if campos:
+                db.session.rollback()
+                return _erro_compra_consolidada(fatura_atual, 'alterada', campos)
+
         # FIN-CARTOES-FECHAMENTO-1 (D6): mover a compra para fatura consolidada exige a confirmacao desta operacao.
         inclusao = None
         destino = meses[1] if len(meses) > 1 else None
@@ -995,6 +1015,11 @@ def excluir_lancamento(lancamento_id):
         if any(CartaoService.fatura_esta_paga(f) for f in faturas if f.cartao_competencia == lancamento.mes_fatura):
             db.session.rollback()
             return _business_error('Compra de fatura paga nao pode ser excluida. Para corrigir, estorne o pagamento da fatura.', 409)
+        # FIN-CARTOES-D6-INTEGRIDADE-1: excluir tiraria a compra da fatura consolidada sem auditoria.
+        fatura_atual = next((f for f in faturas if f.cartao_competencia == lancamento.mes_fatura), None)
+        if CartaoService.fatura_consolidada(fatura_atual):
+            db.session.rollback()
+            return _erro_compra_consolidada(fatura_atual, 'excluida')
 
         db.session.delete(lancamento)
         db.session.commit()
@@ -1209,8 +1234,18 @@ def consolidar_fatura(cartao_id, competencia):
                 'erro': 'Fatura jÃ¡ estÃ¡ paga e nÃ£o pode ser consolidada novamente'
             }), 400
 
-        # Recalcular executado usando CartaoService
-        fatura_atualizada = CartaoService.recalcular_fatura(cartao_id, competencia_date)
+        # FIN-CARTOES-D6-INTEGRIDADE-1: recalculo e consolidacao numa so transacao, com o cartao e a fatura travados
+        # (antes, recalcular_fatura confirmava e soltava a trava, e uma compra que entrasse no intervalo ficava na
+        # fatura, mas fora do total consolidado). A situacao e relida sob a trava.
+        fatura_atualizada = CartaoService._fatura_travada(cartao_id, competencia_date)
+        if fatura_atualizada.status_fatura in ('FECHADA', 'PAGA'):
+            db.session.rollback()
+            return jsonify({'success': False, 'erro': 'Fatura ja consolidada ou paga por outra operacao'}), 409
+        if not CartaoService.fatura_esta_paga(fatura_atualizada):  # como recalcular_fatura, sem confirmar no meio
+            fatura_atualizada.valor_planejado = CartaoService.calcular_planejado(cartao_id, competencia_date)
+            fatura_atualizada.valor_executado = CartaoService.calcular_executado(cartao_id, competencia_date)
+            fatura_atualizada.estouro_orcamento = fatura_atualizada.valor_executado > fatura_atualizada.valor_planejado
+            fatura_atualizada.valor = fatura_atualizada.valor_planejado
 
         # Consolidar fatura
         fatura_atualizada.status_fatura = 'FECHADA'

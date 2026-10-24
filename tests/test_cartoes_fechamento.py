@@ -760,12 +760,14 @@ def test_conferencia_da_migration_sobre_banco_com_dados_da_versao_anterior(tmp_p
     mudancas = esperado['mudancas']
     novas = {m.split(': ', 1)[1].split('(')[0]: m for m in mudancas if m.startswith('funcao nova')}
     assert set(novas) == {'competencia_da_compra', 'situacao_fatura', 'sugestao_competencia', 'sugerir_competencia',
-                          'exigir_confirmacao_consolidada'}
+                          'exigir_confirmacao_consolidada',
+                          'fatura_consolidada_no_destino'}  # FIN-CARTOES-D6-INTEGRIDADE-1
     assert 'False/False/True' in novas['sugerir_competencia']  # so authenticated
     assert all('False/False/False' in m for n, m in novas.items() if n != 'sugerir_competencia')  # internas
     alteradas = {m.split(': ', 1)[1].split('(')[0]: m for m in mudancas if m.startswith('funcao alterada')}
     assert set(alteradas) == {'plano_compra', 'previa_compra', 'criar_compra', 'editar_compra', 'ler_dados_cartao',
-                              'criar_cartao', 'editar_cartao', 'cartoes_do_perfil'}
+                              'criar_cartao', 'editar_cartao', 'cartoes_do_perfil',
+                              'plano_recorrencia', 'gerar_mes_interno'}  # FIN-CARTOES-D6-INTEGRIDADE-1 (so corpo)
     assert not any(p in m for m in alteradas.values() for p in ('public', 'anon', 'authenticated'))  # sem privilegio
     assert not [m for m in mudancas if m.startswith(('funcao removida', 'tabela removida'))]
     assert 'tabela nova: public.fatura_consolidada_inclusao | rls=[True, False] anon=---- authenticated=----' in mudancas
@@ -797,7 +799,7 @@ def test_conferencia_da_migration_sobre_banco_com_dados_da_versao_anterior(tmp_p
     assert resultado['falhas'] == []
     assert resultado['antes']['conteudo']['public.lancamento_agregado'][0] >= 4  # 3 parcelas + 1 a vista
     assert (tmp_path / f'conferencia_{ALVO}_definicoes_antes.sql').read_text(encoding='utf-8').count(
-        'CREATE OR REPLACE FUNCTION') == 8  # base de rollback das 8 funcoes trocadas
+        'CREATE OR REPLACE FUNCTION') == 10  # base de rollback: 8 + plano_recorrencia e gerar_mes_interno (D6-INTEGRIDADE-1)
 
 
 @pytest.mark.parametrize('usuario, aceito', [

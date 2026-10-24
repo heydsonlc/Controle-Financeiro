@@ -216,6 +216,58 @@ class CartaoService:
     # D6 - fatura consolidada so recebe compra com a confirmacao desta operacao, auditada.
 
     @staticmethod
+    def fatura_consolidada(fatura):
+        """FIN-CARTOES-D6-INTEGRIDADE-1: consolidada (FECHADA) e nao paga. A paga tem protecao propria."""
+        return fatura is not None and fatura.status_fatura == 'FECHADA' and not CartaoService.fatura_esta_paga(fatura)
+
+    @staticmethod
+    def fatura_existente(cartao_id, competencia):
+        return Conta.query.filter(
+            Conta.item_despesa_id == cartao_id,
+            Conta.is_fatura_cartao == True,  # noqa: E712
+            Conta.cartao_competencia == CartaoService._primeiro_dia_mes(competencia),
+        ).first()
+
+    @staticmethod
+    def recusar_inclusao_automatica(fatura, descricao, data_compra=None, valor=None):
+        """FIN-CARTOES-D6-INTEGRIDADE-1: importacao e recorrencia nao confirmam nada pelo usuario (D6) e mantem a
+        competencia escolhida (D5). Com destino em fatura consolidada, nada e gravado: ValueError com os dados da
+        compra, para o usuario lancar pela compra no cartao, com a confirmacao."""
+        if not CartaoService.fatura_consolidada(fatura):
+            return
+        partes = [f'"{descricao}"']
+        if data_compra:
+            partes.append(data_compra.strftime('%d/%m/%Y'))
+        if valor is not None:
+            partes.append(f'R$ {_reais(Decimal(str(valor)))}')
+        raise ValueError(f'Fatura de {fatura.cartao_competencia.strftime("%m/%Y")} consolidada: {", ".join(partes)} nao '
+                         'foi incluida (a inclusao exige confirmacao). Lance-a pela compra no cartao, com a confirmacao.')
+
+    @staticmethod
+    def mudancas_financeiras(lancamento, dados):
+        """Campos de `dados` que mudariam valor, competencia ou parcelas da compra (a composicao e os totais da
+        fatura). Descricao, observacoes, categoria e data da compra nao entram: nao mudam valores nem a fatura."""
+        mudancas = []
+        try:
+            if 'valor' in dados and Decimal(str(dados['valor'])) != Decimal(str(lancamento.valor or 0)):
+                mudancas.append('valor')
+        except (InvalidOperation, TypeError, ValueError):
+            mudancas.append('valor')
+        if dados.get('mes_fatura'):
+            try:
+                mes = datetime.strptime(str(dados['mes_fatura'])[:7] + '-01', '%Y-%m-%d').date()
+            except ValueError:
+                mes = None
+            if mes != lancamento.mes_fatura:
+                mudancas.append('mes_fatura')
+        for campo in ('numero_parcela', 'total_parcelas'):
+            if campo in dados and str(dados[campo]) != str(getattr(lancamento, campo)):
+                mudancas.append(campo)
+        if 'cartao_id' in dados and str(dados['cartao_id']) != str(lancamento.cartao_id):
+            mudancas.append('cartao_id')
+        return mudancas
+
+    @staticmethod
     def total_consolidado(fatura):
         valor = fatura.valor_consolidado if fatura.valor_consolidado is not None else (fatura.valor_executado or 0)
         return Decimal(str(valor)).quantize(Decimal('0.01'))

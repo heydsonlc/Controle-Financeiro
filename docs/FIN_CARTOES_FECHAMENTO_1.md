@@ -190,10 +190,8 @@ A regra está escrita duas vezes, idênticas: `financeiro.competencia_da_compra`
 ## 7. Compatibilidade e riscos
 
 - **Supabase remoto:** continua com as versões anteriores até `20261030090000` ser aplicada. O novo aplicativo publicado chama `sugerir_competencia`, que só existe depois dela, e trata a falha como "não foi possível sugerir" (o mês continua editável). **Publicar o frontend só depois da migration remota.**
-- **`scripts/supabase_cartoes_real.py` (cenário 17)** espera que a fatura FECHADA aceite compra sem confirmação. Precisa ser atualizado na validação remota (FIN-CARTOES-FECHAMENTO-REAL-1).
-- **Pendências de decisão (D5 e §12 do contrato; nada foi mudado):**
-  - recorrências (Flask e novo motor) e importação continuam incluindo em fatura FECHADA sem confirmação, como antes;
-  - o Flask ainda permite editar ou excluir compras que já estão numa fatura FECHADA (o novo aplicativo bloqueia). É uma divergência anterior a este módulo.
+- **`scripts/supabase_cartoes_real.py` (cenário 17):** atualizado na RETOMADA-CASA-2 para a D6 (confirmação, auditoria, reuso recusado) e ensaiado localmente; ainda não commitado.
+- **Recorrências, importação e edição no Flask:** resolvidos no FIN-CARTOES-D6-INTEGRIDADE-1 (§11).
 - **Fora do escopo:** `lancamentos.js`, na confirmação de recebimento (receitas), ainda usa `toISOString()` para a data do dia.
 
 ## 8. Arquivos
@@ -304,3 +302,62 @@ Nada foi aplicado nem lido no remoto. A conferência foi preparada e ensaiada **
 6. Suíte completa (nível 3) antes de publicar; publicar o frontend só depois disso.
 
 A Alembic `c7e2a9d4b8f3` no `gastos.db` continua sendo uma decisão separada, com backup.
+
+## 11. D6 — Integridade transversal das faturas consolidadas (FIN-CARTOES-D6-INTEGRIDADE-1)
+
+**Data:** 2026-10-24. **Situação:** implementado e validado **localmente** (cluster descartável, Flask real, dados fictícios). Nada remoto, nenhum commit.
+
+### 11.1 Caminhos de escrita encontrados
+
+| Ponto de entrada | Função | Tabelas | Consolidada (FECHADA) antes | Agora |
+|---|---|---|---|---|
+| Flask `POST /api/cartoes/<id>/lancamentos` | `adicionar_lancamento` | `lancamento_agregado`, `conta`, auditoria | Confirmação + auditoria (D6) | Igual |
+| Flask `PUT /api/cartoes/lancamentos/<id>` (mover **para** consolidada) | `atualizar_lancamento` | idem | Confirmação + auditoria | Igual |
+| Flask `PUT` de compra que **já está** na consolidada (valor, mês, parcelas) | `atualizar_lancamento` | `lancamento_agregado` | **Aceito em silêncio** (executado ≠ consolidado) | **409 `FATURA_CONSOLIDADA`**; descrição, observações, categoria e data continuam editáveis |
+| Flask `DELETE /api/cartoes/lancamentos/<id>` | `excluir_lancamento` | `lancamento_agregado` | **Aceito em silêncio** | **409** |
+| Flask parcelas futuras (`PUT .../futuras`, `cancelar-futuras`) | `atualizar/cancelar_parcelas_futuras` | `lancamento_agregado` | FECHADA já não é "futura" | Igual (protegido) |
+| Flask `PUT /api/despesas/<id>` sobre a **fatura** (valor) | `atualizar_despesa` | `conta` | **Aceito** (contornava a D6) | **409** (descrição, vencimento e observações seguem editáveis) |
+| Flask `DELETE /api/despesas/<id>` sobre a **fatura** | `deletar_despesa` | `conta` | **Aceito** (apagava a fatura) | **409** |
+| Flask geração de recorrências (gerador Flask) | `gerar_lancamentos_cartao_recorrente` | `lancamento_agregado` | **Incluía em silêncio** | Não grava; registro no log (`FIN-CARTOES-D6`) |
+| Flask importação de CSV | `persistir_lancamentos` | `lancamento_agregado` | **Incluía em silêncio** | Linha recusada com os dados; parcelas da mesma compra recusadas juntas |
+| Flask recorrência importada | `vincular_linha_recorrencia` | `lancamento_agregado` | **Incluía em silêncio** | Recusa (400) |
+| Flask despesa prevista / documento | `adicionar_lancamento` | idem | Recusa (400) | Igual |
+| Flask consolidação `POST .../consolidar` | `consolidar_fatura` | `conta` | Recálculo **confirmava no meio**: compra no intervalo ficava fora do total | Recálculo e consolidação numa transação, sob a trava |
+| Novo app `criar_compra`, `editar_compra` (mover para) | SQL | idem | Confirmação + auditoria | Igual |
+| Novo app editar/excluir compra da consolidada | `travar_compra`/`bloqueio_da_parcela` | — | Bloqueado | Igual |
+| Novo app `editar/excluir_despesa` sobre fatura | SQL | — | Bloqueado (fatura não é despesa) | Igual |
+| Novo motor `gerar_mes` (recorrências) | `plano_recorrencia`, `gerar_mes_interno` | `lancamento_agregado`, `recorrencia_competencia` | **Incluía em silêncio** | `REJEITADA` com motivo na prévia; sob a trava, recusa controlada (`hint CONSOLIDADA`) |
+| Escrita direta pelo navegador | tabelas/funções internas | — | Sem privilégio (RLS, revogado) | Igual (testado) |
+| Triggers | — | — | Só a auditoria do gerador (T1) | Nada a mudar |
+
+### 11.2 Regras preservadas
+
+- **D5:** recorrências e importação **não** passam a usar o fechamento, e a competência não é trocada para contornar a consolidada. Nada é levado para outro mês, nada é confirmado em nome do usuário e nada é duplicado (as reexecuções são idempotentes).
+- **D6:** a inclusão em consolidada continua possível **só** com a confirmação específica (fatura + total visto), conferida sob a trava, com o total atualizado na transação e auditoria. A confirmação reutilizada é recusada (o total já mudou) e não abre fatura paga.
+- **Fatura paga:** proteções do FIN-FATURA-INTEGRIDADE-1 intactas (desvio antes, sem alteração).
+- **Ordem de travas** cartão → faturas, perfis, privilégios e RLS sem mudança. Nenhuma função nova ganhou `EXECUTE` para o navegador.
+
+### 11.3 Pendência representada
+
+- **Novo motor:** a compra recorrente com destino consolidado vira `REJEITADA` (mecanismo existente, não persistente) com o motivo "Fatura de MM/AAAA consolidada: a compra recorrente nao entra sem confirmacao (lance-a pela compra no cartao)". Ela aparece na prévia e no aviso de geração. **Limite:** a dispensa existente só vale para itens `A_GERAR`, então essa linha não pode ser dispensada pela tela.
+- **Flask:** não há mecanismo de pendência. A compra **não é gravada** (D6) e a ocorrência fica **só no log**. A visibilidade para o usuário depende de decisão (§11.6).
+
+### 11.4 Migration
+
+A seção foi acrescentada **à `20261030090000`**, que ainda está pendente no remoto, para manter um único alvo na REAL-1:
+- nova função interna `fatura_consolidada_no_destino` (somente leitura);
+- `plano_recorrencia` e `gerar_mes_interno` substituídos (só o corpo; assinatura e privilégios mantidos).
+
+Nenhuma migration aplicada foi alterada. A conferência local (`test_conferencia_da_migration_sobre_banco_com_dados_da_versao_anterior`) passa: dados idênticos antes/depois, 5 funções novas internas + `sugerir_competencia`, 10 alteradas sem mudança de privilégio. **A conferência `antes` remota feita na RETOMADA-CASA-2 salvou 8 definições e precisa ser refeita** (agora são 10). Nenhuma mudança de schema no Flask (Alembic `c7e2a9d4b8f3` inalterada).
+
+### 11.5 Testes
+
+`tests/test_cartoes_d6_integridade.py`: **18 testes** (A faturas, B recorrências, C importação, D Flask, E segurança e concorrência). **Contra o código anterior, 9 falham** (recorrência nos dois motores, importação, recorrência importada, edição/exclusão no Flask, rota de despesas na fatura, edição durante a consolidação, função nova inexistente); com a correção, 18/18.
+
+Ajustes: `test_cartoes_fechamento.py` (conferência: lista de funções da migration e 10 definições salvas); worker de `test_fatura_integridade.py` (ação `vincular_recorrencia`).
+
+### 11.6 Decisões pendentes
+
+1. **Visibilidade no Flask** da recorrência não lançada por fatura consolidada (hoje só log): (a) listar em `GET /api/despesas` e mostrar um aviso na tela; (b) tabela persistente de pendências; (c) deixar o perfil no gerador novo, que já mostra `REJEITADA`.
+2. **Dispensar** a linha `REJEITADA` por consolidação no novo motor (hoje a dispensa só vale para `A_GERAR`).
+3. **Correção de compra já consolidada** (valor ou retirada): não existe fluxo de alteração auditada; hoje é bloqueada nos dois sistemas.

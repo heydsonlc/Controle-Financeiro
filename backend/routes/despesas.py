@@ -815,6 +815,16 @@ def atualizar_despesa(id):
                 'success': False,
                 'error': 'Esta despesa ja foi paga: o valor nao pode ser alterado. Para corrigir, estorne o pagamento.',
             }), 409
+        # FIN-CARTOES-D6-INTEGRIDADE-1: fatura consolidada nao muda de valor por esta rota (contornaria a D6); o total
+        # dela so muda pela inclusao confirmada e auditada. Descricao, vencimento e observacoes continuam editaveis.
+        if conta.is_fatura_cartao and CartaoService.fatura_consolidada(conta) and 'valor' in dados \
+                and Decimal(str(dados['valor'])) != Decimal(str(conta.valor or 0)):
+            db.session.rollback()
+            return jsonify({
+                'success': False, 'codigo': 'FATURA_CONSOLIDADA',
+                'error': 'Esta fatura esta consolidada: o valor nao pode ser alterado por aqui. Compras novas entram '
+                         'pela compra no cartao, com a confirmacao.',
+            }), 409
 
         # Atualizar campos bÃ¡sicos da Conta
         if 'descricao' in dados:
@@ -1034,6 +1044,13 @@ def deletar_despesa(id):
         if not conta:
             return jsonify({'success': False, 'error': 'Despesa nao encontrada'}), 404
         conta = travar_um(Conta, conta.id)  # FIN-PAGAMENTO-TRAVA-1: um pagamento em andamento termina antes
+
+        # FIN-CARTOES-D6-INTEGRIDADE-1: a fatura consolidada nao e apagada por esta rota (as compras dela ficariam sem
+        # fatura e o total consolidado sumiria sem auditoria).
+        if conta.is_fatura_cartao and CartaoService.fatura_consolidada(conta):
+            db.session.rollback()
+            return jsonify({'success': False, 'codigo': 'FATURA_CONSOLIDADA',
+                            'error': 'Esta fatura esta consolidada e nao pode ser excluida.'}), 409
 
         # Bloquear exclusao de despesa paga (CORE-SALDO-1A)
         if conta.status_pagamento == 'Pago':
@@ -1647,6 +1664,19 @@ def gerar_lancamentos_cartao_recorrente(item_despesa_id, meses_futuros=12, mes_r
         # proxima fatura nao paga (travada: um pagamento simultaneo termina antes). A identidade
         # continua a da competencia (compra_id acima), entao ela nao e gerada de novo.
         mes_destino = CartaoService.fatura_elegivel_existente(item.cartao_id, mes_fatura)  # sem commit
+        # FIN-CARTOES-D6-INTEGRIDADE-1: a geracao automatica nao e confirmacao do usuario (D6) e nao muda a
+        # competencia (D5). Destino em fatura consolidada (ja travada acima): a compra nao e gravada nem levada para
+        # outro mes. Fica registrada no log; a proxima geracao reavalia (idempotente, sem duplicar).
+        fatura_destino = Conta.query.filter(
+            Conta.item_despesa_id == item.cartao_id,
+            Conta.is_fatura_cartao == True,  # noqa: E712
+            Conta.cartao_competencia == mes_destino,
+        ).first()
+        if CartaoService.fatura_consolidada(fatura_destino):
+            logger.warning('FIN-CARTOES-D6: recorrencia %s (competencia %s) nao lancada: fatura %s de %s consolidada; '
+                           'a inclusao exige confirmacao do usuario', item_despesa_id, mes_fatura.isoformat(),
+                           fatura_destino.id, mes_destino.isoformat())
+            return
 
         resolucao_cartao = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(
             cartao_id=item.cartao_id,

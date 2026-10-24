@@ -878,7 +878,10 @@ class ImportacaoCartaoService:
         )
         # FIN-FATURA-INTEGRIDADE-1: fatura paga nao recebe a compra; vai para a proxima nao paga,
         # com a competencia original registrada (sem a coluna, o desvio e recusado).
-        mes_destino, _fatura = CartaoService.fatura_elegivel(cartao_id, competencia)
+        mes_destino, fatura_destino = CartaoService.fatura_elegivel(cartao_id, competencia)
+        # FIN-CARTOES-D6-INTEGRIDADE-1: destino em fatura consolidada -> recusa sem gravar (D6), sem mudar a competencia (D5).
+        CartaoService.recusar_inclusao_automatica(fatura_destino, novo_lancamento.descricao_exibida or novo_lancamento.descricao,
+                                                  novo_lancamento.data_compra, novo_lancamento.valor)
         novo_lancamento.mes_fatura = mes_destino
         CartaoService.registrar_desvio(novo_lancamento, competencia, exigir_coluna=True)
         db.session.add(novo_lancamento)
@@ -1219,11 +1222,28 @@ class ImportacaoCartaoService:
         # cartao e as faturas travados ate o commit; a competencia original fica registrada.
         if not dry_run and a_inserir:
             destinos = ImportacaoCartaoService._destinos_elegiveis(a_inserir)
+            # FIN-CARTOES-D6-INTEGRIDADE-1: uma parcela com destino em fatura consolidada recusa a compra inteira
+            # (todas as parcelas do mesmo compra_id): nenhuma compra fica pela metade.
+            recusadas = {}
+            for lanc in a_inserir:
+                fatura_destino = CartaoService.fatura_existente(lanc['cartao_id'], destinos[id(lanc)])
+                if CartaoService.fatura_consolidada(fatura_destino) and lanc.get('compra_id'):
+                    recusadas.setdefault(lanc['compra_id'], fatura_destino)
         for lanc in a_inserir:
             try:
                 if ImportacaoCartaoService._existe_duplicado_banco(lanc):
                     duplicados += 1  # outra importacao do mesmo cartao confirmou antes (agora em serie)
                     continue
+                # FIN-CARTOES-D6-INTEGRIDADE-1: compra com destino em fatura consolidada (travada pelo planejamento)
+                # nao entra: vira erro identificado da linha, com os dados dela; as demais seguem a regra de sempre.
+                CartaoService.recusar_inclusao_automatica(
+                    CartaoService.fatura_existente(lanc['cartao_id'], destinos[id(lanc)]),
+                    lanc.get('descricao_exibida') or lanc['descricao'], lanc['data_compra'], lanc['valor'])
+                if lanc.get('compra_id') in recusadas:
+                    fatura_bloqueio = recusadas[lanc['compra_id']]
+                    raise ValueError(f'Parcela {lanc["numero_parcela"]}/{lanc["total_parcelas"]} nao incluida: outra '
+                                     f'parcela da mesma compra cai na fatura consolidada de '
+                                     f'{fatura_bloqueio.cartao_competencia.strftime("%m/%Y")} (a compra nao e dividida).')
                 # Criar novo lanÃ§amento
                 novo_lanc = LancamentoAgregado(
                     perfil_financeiro_id=PerfilFinanceiroService.obter_perfil_ativo_id(),

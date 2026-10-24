@@ -128,6 +128,11 @@ with app.app_context():
                 r = ImportacaoCartaoService.persistir_lancamentos([lanc(x) for x in cfg['lancamentos']])
                 resultado = {'inseridos': r['inseridos'], 'duplicados': r['duplicados'],
                              'erros': [e['erro'] for e in r['erros']]}
+            elif cfg['acao'] == 'vincular_recorrencia':  # FIN-CARTOES-D6-INTEGRIDADE-1
+                from backend.services.importacao_cartao_service import ImportacaoCartaoService
+                r = ImportacaoCartaoService.vincular_linha_recorrencia(cfg['linha'], cfg.get('cartao', 910),
+                                                                       date.fromisoformat(cfg['competencia']), cfg['item'])
+                resultado = {'criado': r.get('criado'), 'duplicado': r.get('duplicado')}
             elif cfg['acao'] == 'recorrencia':
                 from backend.routes.despesas import gerar_execucao_despesa_recorrente
                 criados = gerar_execucao_despesa_recorrente(cfg['item'], meses_futuros=cfg['meses'],
