@@ -28,6 +28,7 @@ TABELAS = ('item_despesa', 'conta', 'lancamento_agregado', 'movimento_financeiro
            'item_receita', 'receita_orcamento', 'receita_realizada', 'categoria_cartao', 'conta_bancaria')
 MARCADOR_CARTAO = '%[teste FIN-CARTOES-REAL-1]%'
 MARCADOR_PAGAMENTO = '%[teste FIN-CARTOES-PAGAMENTO-REAL-1]%'
+MARCADORES_CONTA_BANCARIA = [MARCADOR_PAGAMENTO, '%[teste FIN-MOVIMENTACOES-REAL-1]%']
 
 
 def itens_dos_seeds():
@@ -81,10 +82,10 @@ def main():
                 ('ocorrencias_recorrencia', 'delete from public.recorrencia_rejeicao where item_despesa_id = any(%s) '
                  'or cartao_id = any(%s)', [itens, itens] if com_rejeicao else [None]),
                 ('movimentos', 'delete from public.movimento_financeiro where id > %s', [marca['movimento_financeiro']]),
-                # FIN-CARTOES-PAGAMENTO-REAL-1: detalhes dos pagamentos saem junto com os movimentos (cascade); a conta
-                # inativa do cenario 4 so pelo marcador e acima da marca.
-                ('contas_bancarias_teste', 'delete from public.conta_bancaria where id > %s and nome like %s',
-                 [marca.get('conta_bancaria'), MARCADOR_PAGAMENTO]),
+                # FIN-CARTOES-PAGAMENTO-REAL-1 / FIN-MOVIMENTACOES-REAL-1: detalhes dos pagamentos saem junto com os
+                # movimentos (cascade); as contas inativas dos cenarios so pelo marcador e acima da marca.
+                ('contas_bancarias_teste', 'delete from public.conta_bancaria where id > %s and nome like any(%s)',
+                 [marca.get('conta_bancaria'), MARCADORES_CONTA_BANCARIA]),
                 ('identidades', 'delete from financeiro.recorrencia_competencia where item_despesa_id = any(%s)', [itens]),
                 ('compras', 'delete from public.lancamento_agregado where item_despesa_id = any(%s) or cartao_id = any(%s)',
                  [itens, itens]),

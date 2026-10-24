@@ -1,6 +1,6 @@
 # FIN-MOVIMENTACOES-1 — Pagamento de despesas, recebimento de receitas, estornos e movimentos do mês
 
-**Situação:** implementado e validado localmente. A migration `20261101090000` **não** foi aplicada no Supabase remoto.
+**Situação:** concluído e validado localmente; aguardando validação real. A migration `20261101090000` **não** foi aplicada no Supabase remoto (§9).
 
 O novo aplicativo passa a pagar despesas comuns, receber receitas, estornar cada operação e mostrar os movimentos do mês. Tudo usa o mesmo motor do FIN-CARTOES-PAGAMENTO-1: não existe um segundo motor financeiro.
 
@@ -128,7 +128,7 @@ Seleção: 44 de 110 arquivos Python, web unitário e as 11 specs E2E.
 - **`test_contexto_financeiro_escopo::test_conta_cartao_receita_despesa_e_recorrencia_sao_isolados_por_perfil` — preexistente e não relacionado.**
   - É um 500 em `criar_cartao`, no SQLite (`ObjectDeletedError` em `ItemDespesa.to_dict`).
   - Falha igual num worktree limpo do HEAD `86f830a`, sem nenhuma alteração deste MVP.
-  - Passou na suíte completa da mesma tarde, então depende do horário. Não foi corrigido (fora do escopo).
+  - **Causa revista no §9.1:** depende da ordem de execução, não do horário. Não foi corrigido (fora do escopo).
 - **E2E — 4 falhas com uma única causa, no spec novo.**
   - `movimentacoes.spec.mjs`, que roda antes de `pagamento.spec.mjs`, deixava a "Conta Perfil B" com saldo 700. O `pagamento.spec` espera 0 e parou antes de inativar o cartão.
   - O cartão ativo mudou as contagens da geração em `pendencia.spec` e `recorrencia.spec` (2 testes).
@@ -142,3 +142,88 @@ A suíte completa (nível 3) fica para antes da aplicação remota.
 2. Cenários reais de despesa, receita e movimentos, no padrão do `supabase_cartoes_pagamento_real.py`, e limpeza específica (recebimentos e movimentos de teste).
 3. Atribuir ao novo aplicativo (D6) só os perfis migrados. Lembrar que, a partir daí, o débito automático deixa de ser baixado sozinho.
 4. Fora deste MVP: baixa automática de débito automático e recebimento pontual (sem previsão) no novo aplicativo; parcelas de consórcio e de financiamento seguem no Flask.
+
+## 9. Preparação da validação real (FIN-MOVIMENTACOES-REAL-1)
+
+Nada foi escrito no remoto. HEAD `435670b`, com 7 commits locais.
+
+### 9.1 Regressão completa (bateria única, código final)
+
+| Conjunto | Total | Aprovados | Falhas | Ignorados | Duração |
+|---|---|---|---|---|---|
+| Python (suíte completa) | 1616 | 1611 | 5 | 0 | 17,5 min |
+| Web unitário | 15 | 15 | 0 | 0 | < 0,1 min |
+| E2E local (11 specs) | 52 | 52 | 0 | 0 | 1,0 min |
+
+- **Falhas preexistentes**, as mesmas de `9a50410`:
+  - `test_veiculos_mobilidade_2b`;
+  - `test_categorias_sistemicas_mobilidade`;
+  - `test_ocr_tools` (2, dependem das ferramentas deste computador);
+  - `test_receitas_ux`.
+- **Nenhuma falha nova.** Despesas, receitas, estornos e os E2E financeiros passaram.
+- **`test_contexto_financeiro_escopo` passou na suíte completa.** A causa foi revista: **depende da ordem de execução, não do horário**.
+  - Rodado sozinho, falha sempre (500 em `criar_cartao`, SQLite): 18:20 e 3 vezes às 18:58.
+  - Também falha sozinho no HEAD anterior, sem as alterações deste MVP.
+  - Dentro da suíte completa passa (15:34 e 18:39).
+  - Preexistente, sem relação com este MVP. Fica para observar na validação integrada antes da publicação.
+
+### 9.2 Migration `20261101090000`
+
+- **Versão:** igual à commitada.
+- **Objetos:**
+  - 13 funções novas: 7 com EXECUTE só para `authenticated` e 6 internas, com EXECUTE revogado de PUBLIC, anon e authenticated;
+  - 0 tabelas criadas ou removidas, 0 `ALTER`/`DROP`;
+  - a única declaração sobre objeto anterior é o `comment` em `financeiro.pagamento_fatura`.
+- **Conferência local:** nada alterado nem removido; dados idênticos.
+- **Segurança das funções:** todas `SECURITY DEFINER` com `search_path` vazio. Perfil conferido em todas; identidade por `auth.uid()` nas chaves e nos detalhes.
+- **Funcionamento:** transação única, idempotência por chave e ordem de travas (§3).
+
+### 9.3 Cenários reais preparados (não executados no remoto)
+
+**Código:**
+- `scripts/supabase_movimentacoes_cenarios.py`, com os cenários;
+- `scripts/supabase_movimentacoes_real.py`, para a execução real. Exige o Perfil B atribuído ao novo aplicativo e compara, no cenário 20, os registros fora do Perfil B (contas bancárias, movimentos, contas, receitas e detalhes de pagamento).
+
+**Dados:** despesas e receitas criadas pela API do novo aplicativo, com o marcador `[teste FIN-MOVIMENTACOES-REAL-1]`, em 03/2040, e uma conta inativa criada com o marcador.
+
+**Cenários:**
+- **Despesas:** 1 integral; 2 diferença justificada (com o devido original registrado); 3 conta inativa; 4 conta de outro perfil; 5 duplicado; 6 simultâneos; 7 estorno; 8 segundo pagamento e segundo estorno.
+- **Receitas:** 9 integral; 10 parcial; 11 complemento até o integral; 12 acima do previsto com justificativa; 13 duplicado; 14 simultâneos; 15 estorno; 16 segundo recebimento e segundo estorno.
+- **Integridade geral:**
+  - 17 saldo igual aos movimentos;
+  - 18 falha intermediária: a conta bancária fica presa até o `lock_timeout`, nada é gravado (nem o recebimento) e as mesmas chaves concluem depois;
+  - 19 sem permissão;
+  - 20 outro perfil intacto;
+  - 22 extrato com origens e estornos ligados.
+- **Cenário 21:** coberto por `supabase_cartoes_pagamento_real.py` na mesma execução.
+
+**Ensaio local com o mesmo código: 20/20 + limpeza.** Cluster descartável, PostgREST com o `lock_timeout` de 8 s da Data API e JWT reais.
+
+### 9.4 Limpeza
+
+**`supabase_despesas_real_limpeza.py remover`:**
+- só registros acima da marca e fora dos seeds: despesas (itens e contas), recebimentos, previsões, fontes, movimentos e chaves (`operacao_despesa` e `operacao_receita`);
+- os detalhes de pagamento saem com os movimentos (cascade), e a conferência informa os restantes;
+- a conta inativa sai pelo marcador (lista ampliada para os dois marcadores de teste) e acima da marca;
+- os perfis e contas temporários saem pelos removedores dos seeds.
+
+**Ensaio:** nada do teste restou (0 detalhes, contas, movimentos, recebimentos e despesas), e os recebimentos e movimentos anteriores ficaram idênticos (md5).
+
+**Critério da execução real:** `depois` repetido no fim, com conteúdo idêntico ao de antes da migration.
+
+### 9.5 Estado remoto anterior (somente leitura)
+
+- **Identidade do projeto, pela conexão efetiva:** ref do pooler = ref da Data API (`fzjmge…`); login do usuário B = `auth.users`.
+- **Histórico:** 12 migrations aplicadas (até `20261031090000`); pendente só `20261101090000`; nada só no remoto. Nenhuma sessão ativa nem trava.
+- **Conferência `antes`: OK.**
+  - 64 tabelas e 93 funções capturadas e iguais ao esperado.
+  - Nenhuma definição salva, porque o alvo não troca função existente.
+  - Despesas, receitas, contas bancárias, movimentos, pagamentos e chaves vazias, exceto 1 fonte de receita preexistente.
+  - Estado guardado fora do repositório.
+- Sem `db push`, nem simulação. Nenhum perfil real teve o responsável alterado.
+
+### 9.6 Pendências para a aplicação
+
+1. Autorização para aplicar só `20261101090000`.
+2. `depois` contra a pasta do `antes`.
+3. Marca, seeds, E2E real, `supabase_movimentacoes_real.py` e `supabase_cartoes_pagamento_real.py`; depois a limpeza, os removedores dos seeds e o `depois` final.
