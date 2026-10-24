@@ -6,7 +6,8 @@ no Supabase de teste.
 `remover` (depois dos testes, ANTES dos removedores dos seeds): apaga so o que os testes criaram
 pela tela ou pela API — despesas, recorrencias e cartoes novos (com contas/faturas, compras,
 configuracao, limites, identidades, dispensas e chaves de idempotencia), categorias do cartao e
-vinculos de teste e movimentos de teste. Linhas dos seeds ficam para os
+vinculos de teste, movimentos de teste e ocorrencias de recorrencia rejeitada (public.recorrencia_rejeicao)
+dos itens e cartoes de teste. Linhas dos seeds ficam para os
 proprios removedores. Nada com id ate a marca e tocado.
 
 Uso:
@@ -70,8 +71,14 @@ def main():
             seeds = list(itens_dos_seeds())
             cur.execute('select id from public.item_despesa where id > %s and id <> all(%s)', (marca['item_despesa'], seeds))
             itens = [r[0] for r in cur.fetchall()]
+            cur.execute("select to_regclass('public.recorrencia_rejeicao') is not null")
+            com_rejeicao = cur.fetchone()[0]  # so existe depois da migration 20261030090000
             removidos = {}
             for rotulo, sql, params in (
+                # FIN-CARTOES-RECORRENCIA-PENDENCIA-1: explicito (alem do cascade do item) para cobrir recorrencias dos
+                # seeds rejeitadas em faturas de cartoes de teste.
+                ('ocorrencias_recorrencia', 'delete from public.recorrencia_rejeicao where item_despesa_id = any(%s) '
+                 'or cartao_id = any(%s)', [itens, itens] if com_rejeicao else [None]),
                 ('movimentos', 'delete from public.movimento_financeiro where id > %s', [marca['movimento_financeiro']]),
                 ('identidades', 'delete from financeiro.recorrencia_competencia where item_despesa_id = any(%s)', [itens]),
                 ('compras', 'delete from public.lancamento_agregado where item_despesa_id = any(%s) or cartao_id = any(%s)',
@@ -108,6 +115,10 @@ def main():
                 cur.execute(sql, params)
                 removidos[rotulo] = cur.rowcount
             print('Removidos (criados pelos testes):', removidos)
+            if com_rejeicao:
+                cur.execute('select count(*) from public.recorrencia_rejeicao where item_despesa_id = any(%s) '
+                            'or cartao_id = any(%s)', (itens, itens))
+                print('Conferencia: ocorrencias de recorrencia dos itens/cartoes de teste restantes =', cur.fetchone()[0])
         if args.confirmar:
             conn.commit()
             MARCA.unlink()

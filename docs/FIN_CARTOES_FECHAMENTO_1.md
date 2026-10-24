@@ -190,7 +190,7 @@ A regra está escrita duas vezes, idênticas: `financeiro.competencia_da_compra`
 ## 7. Compatibilidade e riscos
 
 - **Supabase remoto:** continua com as versões anteriores até `20261030090000` ser aplicada. O novo aplicativo publicado chama `sugerir_competencia`, que só existe depois dela, e trata a falha como "não foi possível sugerir" (o mês continua editável). **Publicar o frontend só depois da migration remota.**
-- **`scripts/supabase_cartoes_real.py` (cenário 17):** atualizado na RETOMADA-CASA-2 para a D6 (confirmação, auditoria, reuso recusado) e ensaiado localmente; ainda não commitado.
+- **`scripts/supabase_cartoes_real.py` (cenário 17):** atualizado na RETOMADA-CASA-2 para a D6 (confirmação, auditoria, reuso recusado) e ensaiado localmente; commitado no FIN-CARTOES-FECHAMENTO-PRE-REAL-1, com os cenários 17a/17b (§13).
 - **Recorrências, importação e edição no Flask:** resolvidos no FIN-CARTOES-D6-INTEGRIDADE-1 (§11).
 - **Fora do escopo:** `lancamentos.js`, na confirmação de recebimento (receitas), ainda usa `toISOString()` para a data do dia.
 
@@ -297,7 +297,7 @@ Nada foi aplicado nem lido no remoto. A conferência foi preparada e ensaiada **
 1. Conferência `antes`, com `--saida` fora do repositório.
 2. Aplicar **só** `20261030090000` (`scripts/supabase_migrations.py aplicar --versoes 20261030090000`).
 3. Conferência `depois`.
-4. E2E real e cenários reais. Antes, atualizar o cenário 17 de `scripts/supabase_cartoes_real.py`: a FECHADA passa a exigir confirmação.
+4. E2E real e cenários reais (cenários 17, 17a e 17b já preparados e ensaiados localmente: §13).
 5. Limpeza com estado final idêntico.
 6. Suíte completa (nível 3) antes de publicar; publicar o frontend só depois disso.
 
@@ -424,7 +424,7 @@ Cancelar a recorrência continua sendo a operação própria de recorrências.
 
 ### 12.6 Migrations
 
-- **Supabase `20261030090000`** (pendente no remoto): tabela + 3 funções; `gerar_mes_interno` passa a registrar. A conferência local passa (dados idênticos antes/depois; tabela nova com RLS e sem privilégios; funções novas internas ou só para `authenticated`). **A conferência `antes` remota precisa ser refeita.**
+- **Supabase `20261030090000`** (pendente no remoto): tabela + 3 funções; `gerar_mes_interno` passa a registrar. A conferência local passa (dados idênticos antes/depois; tabela nova com RLS e sem privilégios; funções novas internas ou só para `authenticated`). A conferência `antes` remota foi refeita no FIN-CARTOES-FECHAMENTO-PRE-REAL-1 (§13): OK.
 - **Alembic `c7e2a9d4b8f3`** (nunca executada em banco persistente): a mesma tabela (PostgreSQL e SQLite), com RLS e revogação no Supabase; o `downgrade` a remove.
 - O insert do banco passa todos os valores: a tabela pode ter sido criada pelo Flask (models), sem os defaults do banco (achado nos testes).
 
@@ -443,3 +443,80 @@ Cancelar a recorrência continua sendo a operação própria de recorrências.
   - tela do Flask; SQLite com e sem a tabela.
 - **E2E `web/tests/e2e/pendencia.spec.mjs`** (usuário B, Perfil B, 2033, só no harness local): aviso, dispensa, persistência depois de recarregar, ocorrência `PENDENTE` com o aviso dispensado.
 - **Ajustes:** conferência da migration (3 funções e a tabela nova); semente E2E `PENDENCIA_E2E` e o gancho de consolidação com `criar_se_faltar`; lista de RPCs do `build.test.mjs`.
+
+## 13. Consolidação e preparação da validação remota (FIN-CARTOES-FECHAMENTO-PRE-REAL-1)
+
+Nada foi aplicado no remoto. Nenhum push, nenhuma publicação, `gastos.db` intacto (md5 conferido antes e depois).
+
+### 13.1 Commits locais (sobre `9a50410`)
+
+| Commit | Trabalho |
+|---|---|
+| `db90a8e` | FIN-CARTOES-D6-INTEGRIDADE-1 (§11). Estado intermediário conferido: 98 testes D6/fechamento/integridade aprovados sem o PENDENCIA-1 |
+| `66ac45c` | FIN-CARTOES-RECORRENCIA-PENDENCIA-1 (§12) |
+| commit desta preparação | cenários reais 17a/17b, limpeza e esta seção |
+
+Os arquivos com os dois trabalhos (`cartao_service.py`, `routes/despesas.py`, a migration, `test_cartoes_fechamento.py` e os documentos) foram separados por trecho; a versão final é idêntica à de antes da separação (md5 dos 23 arquivos conferido).
+
+### 13.2 Regressão única (nível 3) da versão consolidada
+
+Desktop na tomada, suspensão bloqueada durante a execução, bancos isolados e dados fictícios.
+
+| Conjunto | Aprovados | Falhas | Ignorados | Duração |
+|---|---|---|---|---|
+| Python (suíte inteira) | 1581 | 5 | 0 | 16,2 min |
+| Web unitário | 15 | 0 | 0 | < 0,1 min |
+| E2E local (todas as specs) | 49 | 0 | 0 | 0,9 min |
+
+As 5 falhas são **preexistentes**: falham igualmente num worktree limpo de `9a50410`, e nenhuma toca arquivo deste trabalho.
+- `test_veiculos_mobilidade_2b::test_suprimir_despesas_previstas_futuras`;
+- `test_categorias_sistemicas_mobilidade::test_projecoes_veiculo_usam_categorias_sistemicas_granulares` (KeyError `IPVA`);
+- `test_ocr_tools` (2 testes, detecção das ferramentas de OCR deste computador);
+- `test_receitas_ux::test_cards_resumo_calculam_previsto_realizado_diferenca_confiabilidade`.
+
+### 13.3 Migration `20261030090000`
+
+- **Conferência `local`:** OK.
+  - 9 funções novas: só `sugerir_competencia`, `recorrencias_rejeitadas` e `dispensar_aviso_recorrencia` executáveis por `authenticated`; as demais são internas.
+  - 10 funções alteradas, sem mudança de privilégio.
+  - Tabelas novas `fatura_consolidada_inclusao` e `recorrencia_rejeicao`, com RLS e sem privilégios.
+  - 3 colunas novas.
+  - Dados idênticos e colunas novas só com o valor padrão.
+- **Remoto (somente leitura):**
+  - `supabase_migrations.py status`: 11 locais, 10 aplicadas, pendente só `20261030090000`, nada só no banco.
+  - **Conferência `antes`: OK**; 61 tabelas e 75 funções capturadas.
+  - As 10 definições atuais das funções que o alvo troca ficaram salvas **fora do repositório**: base de diagnóstico e de um eventual rollback.
+  - Sem `db push` (nem `--dry-run`).
+
+### 13.4 Cenários reais preparados (não executados no remoto)
+
+Código em `scripts/supabase_cartoes_fechamento_cenarios.py`, chamado por `supabase_cartoes_real.py` depois do 17. O módulo não tem acesso próprio a rede ou banco; o ensaio local roda **o mesmo código** com PostgREST e cluster locais: tudo OK.
+
+- **17 (D6):**
+  - recusa sem confirmação ou com confirmação errada;
+  - inclusão confirmada com auditoria `NOVO_APP`;
+  - reuso da confirmação recusado.
+- **17a (fechamento automático):**
+  - competência sugerida (antes, no dia e depois do fechamento; virada de ano);
+  - cartão sem fechamento confirmado não sugere;
+  - compra sem mês segue a sugestão;
+  - mês informado vale, com a sugestão registrada;
+  - outro usuário: 403.
+- **17b (recorrência rejeitada):**
+  - fatura de destino consolidada: nada lançado;
+  - ocorrência `PENDENTE`/`NOVO_APP` com a fatura certa;
+  - novas gerações só contam tentativas (1 → 2 → 3, sem duplicar);
+  - aviso listado; isolamento (403) e anônimo (401) sem efeito;
+  - dispensa auditada e idempotente, fora dos avisos ativos e no histórico, mantida depois de nova geração;
+  - dispensa antes da geração validada pelo banco;
+  - competência sem rejeição: 400;
+  - faturas, compras, recorrência e identidades inalteradas.
+  - A geração de um mês também cobre os meses seguintes do horizonte; por isso a dispensa antes da geração vem primeiro.
+- **Conferências:**
+  - o cenário 22 inclui as ocorrências fora do Perfil B (md5 idêntico antes e depois);
+  - a limpeza (`supabase_despesas_real_limpeza.py remover`) apaga explicitamente as ocorrências dos itens e cartões de teste, além do cascade do item, e informa as restantes (esperado: 0). Só roda o passo se a tabela existir.
+- **Limite:** a origem `FLASK` não é exercitada no remoto. O Perfil B está no novo gerador (T1: um gerador por perfil) e o worker real do Flask só tem `fatura`/`compra`. Ela fica coberta pelos testes locais (§12.7).
+
+### 13.5 Bloqueios
+
+Nenhum bloqueio técnico. O próximo passo depende de autorização específica: aplicar só `20261030090000` (`supabase_migrations.py aplicar --versoes 20261030090000`), conferência `depois` contra a pasta do `antes`, cenários reais e limpeza (§10).

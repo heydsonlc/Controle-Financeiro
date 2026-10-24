@@ -11,7 +11,10 @@ criam faturas, alguns parados em barreiras por arquivo. Concorrencia: requisicoe
 
 Pre-requisitos: supabase_despesas_real_limpeza.py marcar; seeds perfis -> contas -> recorrencia ->
 cartoes; .env.e2e-real. Limpeza: supabase_despesas_real_limpeza.py remover (cartoes, compras,
-faturas, limites, categorias e chaves criados aqui). Nao imprime credenciais nem a URL do banco.
+faturas, limites, categorias e chaves criados aqui; a recorrencia do 17b e suas ocorrencias em
+public.recorrencia_rejeicao). Nao imprime credenciais nem a URL do banco.
+Cenarios 17a/17b (fechamento automatico, recorrencia rejeitada, aviso e dispensa) em
+supabase_cartoes_fechamento_cenarios.py, ensaiados localmente com o mesmo codigo.
 """
 import json
 import sys
@@ -20,6 +23,7 @@ import threading
 import time
 import uuid
 from datetime import date
+from types import SimpleNamespace
 from decimal import Decimal
 from pathlib import Path
 
@@ -32,6 +36,7 @@ from supabase_fatura_concorrencia_real import (  # noqa: E402
 import urllib.error  # noqa: E402
 import urllib.request  # noqa: E402
 
+from supabase_cartoes_fechamento_cenarios import fechamento_automatico, recorrencia_rejeitada  # noqa: E402
 from verificar_exposicao_supabase import chave_publica_via_cli  # noqa: E402
 
 PERFIS = json.loads((RAIZ / 'data' / 'perfis_real_1_teste.json').read_text(encoding='utf-8'))
@@ -87,9 +92,9 @@ def cartao(nome, vencimento, fechamento=3, **extra):
 
 
 def comprar(cartao_id, descricao, mes, valor, parcelas=1, data_compra=None, categoria=MORADIA, chave=None, usuario='B',
-            perfil=B):
+            perfil=B, extra=None):
     dados = {'cartao_id': cartao_id, 'descricao': descricao, 'valor': valor, 'total_parcelas': parcelas,
-             'data_compra': data_compra or mes[:8] + '05', 'mes_fatura': mes, 'categoria_id': categoria}
+             'data_compra': data_compra or mes[:8] + '05', 'mes_fatura': mes, 'categoria_id': categoria, **(extra or {})}
     return rpc('criar_compra', {'p_perfil_id': perfil, 'p_dados': dados, 'p_chave': chave or str(uuid.uuid4())}, usuario)
 
 
@@ -155,6 +160,8 @@ def protegidos():
             banco("select md5(coalesce(string_agg(t::text, '|' order by id), '')) from public.lancamento_agregado t "
                   "where perfil_financeiro_id is distinct from %s", (B,))[0][0],
             banco("select md5(coalesce(string_agg(t::text, '|' order by id), '')) from public.item_despesa t "
+                  "where perfil_financeiro_id is distinct from %s", (B,))[0][0],
+            banco("select md5(coalesce(string_agg(t::text, '|' order by id), '')) from public.recorrencia_rejeicao t "
                   "where perfil_financeiro_id is distinct from %s", (B,))[0][0])
 
 
@@ -398,15 +405,54 @@ def main():
               and faturas(c10, '2035-12-01')[0][3] == Decimal('10.00'),
               f'esperou a transacao do pagamento: {esperando}; depois recusada ({st}); fatura com 10,00')
 
-    # Fechada x paga: so status_fatura = 'FECHADA' (consolidacao do Flask), nunca inferido do vencimento
+    # 17. Fechada x paga: so status_fatura = 'FECHADA' (consolidacao do Flask), nunca inferido do vencimento.
+    # FIN-CARTOES-FECHAMENTO-1 (D6): compra em fatura consolidada so com a confirmacao expressa da operacao
+    # ({fatura_id, total_consolidado} que o usuario viu), com auditoria e atualizacao controlada da consolidacao.
     r = ok(comprar(c10, 'Fechada', '2036-05-01', '20.00'))
-    banco("update public.conta set status_fatura = 'FECHADA' where is_fatura_cartao and item_despesa_id = %s "
-          "and cartao_competencia = '2036-05-01'", (c10,), escrever=True)
+    banco("update public.conta set status_fatura = 'FECHADA', valor_consolidado = valor_executado, "
+          "data_consolidacao = now() where is_fatura_cartao and item_despesa_id = %s "
+          "and cartao_competencia = '2036-05-01'", (c10,), escrever=True)  # como a consolidacao do Flask
+    [fechada] = faturas(c10, '2036-05-01')
     tela = fatura_tela(c10, '2036-05-01')
     s_f, erro_f = editar(r['lancamentos'][0], {'descricao': 'X'})
-    s_nova_f = comprar(c10, 'Na fechada', '2036-05-01', '1.00')[0]
-    registrar('17. Fatura fechada distinta de paga', tela['situacao'] == 'FECHADA' and s_f == 400 and 'fechada' in str(erro_f)
-              and s_nova_f == 200, 'situacao FECHADA (status_fatura); edicao 400; compra nova aceita como no Flask')
+
+    def estado_fechada():
+        return (md5_fatura(fechada[0]),
+                banco("select count(*) from public.lancamento_agregado where cartao_id = %s and mes_fatura = '2036-05-01'",
+                      (c10,))[0][0],
+                banco('select count(*) from public.fatura_consolidada_inclusao where fatura_id = %s', (fechada[0],))[0][0])
+
+    antes_f = estado_fechada()
+    s_sem, erro_sem = comprar(c10, 'Na fechada', '2036-05-01', '1.00')
+    erradas = [comprar(c10, 'Na fechada', '2036-05-01', '1.00', extra={'confirmar_consolidadas': conf})[0] for conf in (
+        [{'fatura_id': fechada[0], 'total_consolidado': '19.00'}],        # total diferente do consolidado
+        [{'fatura_id': fechada[0] + 999999, 'total_consolidado': '20.00'}],  # outra fatura
+        True)]                                                              # confirmacao "global"
+    sem_mudanca = estado_fechada() == antes_f
+    confirmacao = [{'fatura_id': fechada[0], 'total_consolidado': '20.00'}]
+    s_com, corpo_com = comprar(c10, 'Na fechada', '2036-05-01', '1.00', extra={'confirmar_consolidadas': confirmacao})
+    depois_f = banco('select status_fatura, valor_consolidado, valor_executado from public.conta where id = %s',
+                     (fechada[0],))[0]
+    auditoria = banco('select operacao, origem, valor_incluido, total_consolidado_anterior, total_consolidado_novo, '
+                      'user_id is not null from public.fatura_consolidada_inclusao where fatura_id = %s', (fechada[0],))
+    s_reuso, erro_reuso = comprar(c10, 'Na fechada de novo', '2036-05-01', '1.00',
+                                  extra={'confirmar_consolidadas': confirmacao})  # total ja mudou
+    registrar('17. Fatura fechada: distinta de paga e inclusao so com confirmacao (D6)',
+              tela['situacao'] == 'FECHADA' and s_f == 400 and 'fechada' in str(erro_f)
+              and s_sem == 400 and isinstance(erro_sem, dict) and erro_sem.get('hint') == 'CONSOLIDADA'
+              and erradas == [400, 400, 400] and sem_mudanca
+              and s_com == 200 and [x['fatura_id'] for x in corpo_com['consolidadas']] == [fechada[0]]
+              and depois_f == ('FECHADA', Decimal('21.00'), Decimal('21.00'))
+              and auditoria == [('COMPRA', 'NOVO_APP', Decimal('1.00'), Decimal('20.00'), Decimal('21.00'), True)]
+              and s_reuso == 400 and isinstance(erro_reuso, dict) and erro_reuso.get('hint') == 'CONSOLIDADA',
+              'FECHADA (status_fatura); edicao 400; sem confirmacao 400 CONSOLIDADA; confirmacoes erradas 400 (nada '
+              'mudou); com a confirmacao 200, consolidado 20,00 -> 21,00 e 1 auditoria NOVO_APP; reuso 400')
+
+    # 17a/17b. Fechamento automatico e recorrencia rejeitada por fatura consolidada (FIN-CARTOES-RECORRENCIA-PENDENCIA-1)
+    ctx = SimpleNamespace(rpc=rpc, anonimo=anonimo, banco=banco, registrar=registrar, cartao=cartao, B=B, PESSOAL=PESSOAL,
+                          EMPRESA=EMPRESA, c10=c10, MORADIA=MORADIA, SAUDE=SAUDE)
+    fechamento_automatico(ctx)
+    recorrencia_rejeitada(ctx)
 
     # 18. Autorizacao: gestao, LEITOR, outro perfil, perfil inativo
     venc_ok = comprar(c10, 'X', '2034-01-01', '1.00', usuario='A')[0]  # A nao tem vinculo com o Perfil B
@@ -458,7 +504,8 @@ def main():
     registrar('21. Sem duplicidade de faturas e parcelas', dup_f == 0 and dup_p == 0, f'faturas: {dup_f}; parcelas: {dup_p}')
     fim = protegidos()
     registrar('22. Saldos, movimentos e registros fora do Perfil B preservados', fim == inicio,
-              f'movimentos: {fim[0]}; contas bancarias, contas, compras e itens fora do Perfil B identicos')
+              f'movimentos: {fim[0]}; contas bancarias, contas, compras, itens e ocorrencias de recorrencia fora do '
+              'Perfil B identicos')
 
     falhas = [n for n, okk in RESULTADOS if not okk]
     print('RESULTADO:', 'OK' if not falhas else f'FALHAS: {falhas}')
