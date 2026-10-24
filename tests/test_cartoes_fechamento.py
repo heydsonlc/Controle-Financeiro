@@ -761,9 +761,12 @@ def test_conferencia_da_migration_sobre_banco_com_dados_da_versao_anterior(tmp_p
     novas = {m.split(': ', 1)[1].split('(')[0]: m for m in mudancas if m.startswith('funcao nova')}
     assert set(novas) == {'competencia_da_compra', 'situacao_fatura', 'sugestao_competencia', 'sugerir_competencia',
                           'exigir_confirmacao_consolidada',
-                          'fatura_consolidada_no_destino'}  # FIN-CARTOES-D6-INTEGRIDADE-1
-    assert 'False/False/True' in novas['sugerir_competencia']  # so authenticated
-    assert all('False/False/False' in m for n, m in novas.items() if n != 'sugerir_competencia')  # internas
+                          'fatura_consolidada_no_destino',  # FIN-CARTOES-D6-INTEGRIDADE-1
+                          # FIN-CARTOES-RECORRENCIA-PENDENCIA-1
+                          'registrar_rejeicoes_consolidadas', 'recorrencias_rejeitadas', 'dispensar_aviso_recorrencia'}
+    expostas = {'sugerir_competencia', 'recorrencias_rejeitadas', 'dispensar_aviso_recorrencia'}
+    assert all('False/False/True' in novas[n] for n in expostas)  # so authenticated
+    assert all('False/False/False' in m for n, m in novas.items() if n not in expostas)  # internas
     alteradas = {m.split(': ', 1)[1].split('(')[0]: m for m in mudancas if m.startswith('funcao alterada')}
     assert set(alteradas) == {'plano_compra', 'previa_compra', 'criar_compra', 'editar_compra', 'ler_dados_cartao',
                               'criar_cartao', 'editar_cartao', 'cartoes_do_perfil',
@@ -771,6 +774,7 @@ def test_conferencia_da_migration_sobre_banco_com_dados_da_versao_anterior(tmp_p
     assert not any(p in m for m in alteradas.values() for p in ('public', 'anon', 'authenticated'))  # sem privilegio
     assert not [m for m in mudancas if m.startswith(('funcao removida', 'tabela removida'))]
     assert 'tabela nova: public.fatura_consolidada_inclusao | rls=[True, False] anon=---- authenticated=----' in mudancas
+    assert 'tabela nova: public.recorrencia_rejeicao | rls=[True, False] anon=---- authenticated=----' in mudancas
 
     def semear(dsn):  # dados criados pelas funcoes da versao anterior (sem regra de fechamento)
         conn = psycopg2.connect(dsn)

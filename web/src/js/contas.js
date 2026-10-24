@@ -138,32 +138,68 @@ function botao(texto, classe) {
     return elemento;
 }
 
-function listaNaoGerados(previa) {
+// FIN-CARTOES-RECORRENCIA-PENDENCIA-1: compra recorrente rejeitada porque a fatura de destino esta consolidada. O
+// banco registra a ocorrencia; "Dispensar aviso" so reconhece o aviso (a ocorrencia continua pendente e consultavel;
+// recorrencia, compras e faturas nao mudam). A identidade e recorrencia + competencia.
+const chavePendencia = (itemId, competencia) => `${itemId}|${String(competencia).slice(0, 10)}`;
+const porConsolidacao = (item) => item.natureza === 'LANCAMENTO_CARTAO' && /consolidada/i.test(item.motivo || '');
+
+function avisoDispensado(item, dispensadas) {
+    return porConsolidacao(item) && dispensadas.has(chavePendencia(item.item_id, item.competencia));
+}
+
+function listaNaoGerados(previa, contexto) {
     const detalhe = el('details');
     detalhe.append(el('summary', null, 'Ver itens não gerados'));
     const lista = el('ul', 'geracao-lista');
     for (const item of [...previa.rejeitados, ...previa.dispensados]) {
         const quando = item.competencia ? ` · ${competenciaCurta(item.competencia)}` : '';
-        lista.append(el('li', null, `${item.nome}${quando} — ${item.motivo}`));
+        const linha = el('li', null, `${item.nome}${quando} — ${item.motivo}`);
+        if (previa.rejeitados.includes(item) && porConsolidacao(item)) {
+            linha.classList.add('geracao-pendencia');
+            if (avisoDispensado(item, contexto.dispensadas)) {
+                linha.append(el('span', 'geracao-nota', ' · aviso dispensado'));
+            } else if (previa.pode_gerir) {
+                const dispensar = botao('Dispensar aviso');
+                dispensar.title = 'A ocorrência continua registrada; a recorrência não é cancelada.';
+                dispensar.addEventListener('click', async () => {
+                    dispensar.disabled = true;
+                    const { error } = await supabase.rpc('dispensar_aviso_recorrencia', {
+                        p_perfil_id: contexto.perfilId, p_item_id: item.item_id, p_competencia: item.competencia,
+                    });
+                    if (error) {
+                        dispensar.disabled = false;
+                        linha.append(el('span', 'login-error', ' Não foi possível dispensar o aviso.'));
+                        return;
+                    }
+                    await contexto.recarregar('Aviso dispensado. A ocorrência continua registrada.');
+                });
+                linha.append(' ', dispensar);
+            }
+        }
+        lista.append(linha);
     }
     detalhe.append(lista);
     return detalhe;
 }
 
-function mostrarGeracao(previa, perfilId, mes) {
+function mostrarGeracao(previa, perfilId, mes, contexto) {
     const aviso = document.getElementById('aviso-geracao');
     const acoes = document.getElementById('geracao-acoes');
     const painel = document.getElementById('geracao-confirmacao');
     acoes.replaceChildren();
     painel.replaceChildren();
     painel.hidden = true;
-    if (!previa || (!previa.a_gerar && !previa.rejeitadas)) {
+    // Avisos ja dispensados nao contam no aviso (continuam na lista, marcados, e registrados no banco).
+    const rejeitadasAtivas = previa
+        ? previa.rejeitados.filter((item) => !avisoDispensado(item, contexto.dispensadas)).length : 0;
+    if (!previa || (!previa.a_gerar && !rejeitadasAtivas)) {
         aviso.hidden = true;
         return;
     }
     const partes = [];
     if (previa.a_gerar) partes.push(`${plural(previa.a_gerar, 'lançamento recorrente ou fatura', 'lançamentos recorrentes ou faturas')} a gerar até ${competenciaCurta(deslocarMes(mes, 1))}`);
-    if (previa.rejeitadas) partes.push(`${plural(previa.rejeitadas, 'item não pode', 'itens não podem')} ser gerado${previa.rejeitadas === 1 ? '' : 's'}`);
+    if (rejeitadasAtivas) partes.push(`${plural(rejeitadasAtivas, 'item não pode', 'itens não podem')} ser gerado${rejeitadasAtivas === 1 ? '' : 's'}`);
     document.getElementById('aviso-texto').textContent = `${partes.join(' · ')}.`;
 
     if (previa.a_gerar && previa.pode_gerar) {
@@ -180,7 +216,7 @@ function mostrarGeracao(previa, perfilId, mes) {
             ? 'A geração deste perfil ainda é feita pelo sistema atual.'
             : 'Somente quem gerencia este perfil pode gerar.'));
     }
-    if (previa.rejeitadas || previa.dispensadas) acoes.append(listaNaoGerados(previa));
+    if (previa.rejeitadas || previa.dispensadas) acoes.append(listaNaoGerados(previa, contexto));
     aviso.hidden = false;
 }
 
@@ -271,9 +307,11 @@ function limpar() {
 
 async function carregarMes(perfilId, mes) {
     limpar();
-    const [contasResp, previaResp] = await Promise.all([
+    const [contasResp, previaResp, pendenciasResp] = await Promise.all([
         supabase.rpc('contas_do_mes', { p_perfil_id: perfilId, p_mes: `${mes}-01` }),
         supabase.rpc('previa_geracao', { p_perfil_id: perfilId, p_mes: `${mes}-01` }),
+        // FIN-CARTOES-RECORRENCIA-PENDENCIA-1 (so leitura; antes da migration a funcao nao existe: sem avisos)
+        supabase.rpc('recorrencias_rejeitadas', { p_perfil_id: perfilId, p_incluir_dispensadas: true }),
     ]);
     if (contasResp.error) {
         const erro = document.getElementById('contas-erro');
@@ -283,9 +321,12 @@ async function carregarMes(perfilId, mes) {
     }
     const contas = contasResp.data || [];
     const previa = previaResp.error ? null : previaResp.data;
+    const dispensadas = new Set((pendenciasResp.error ? [] : pendenciasResp.data || [])
+        .filter((p) => p.aviso_dispensado_em).map((p) => chavePendencia(p.item_id, p.competencia)));
     const contexto = {
         perfilId,
         mes,
+        dispensadas,
         recarregar: async (mensagem) => {
             const aviso = document.getElementById('acao-resultado');
             aviso.textContent = mensagem;
@@ -294,7 +335,7 @@ async function carregarMes(perfilId, mes) {
         },
     };
     mostrarAcoesDoMes(contexto, Boolean(previa && previa.pode_gerir));
-    mostrarGeracao(previa, perfilId, mes);
+    mostrarGeracao(previa, perfilId, mes, contexto);
 
     // Cada conta (despesa ou fatura) entra uma unica vez; compras nunca sao somadas aqui.
     const total = contas.reduce((soma, c) => soma + centavos(c.valor), 0);

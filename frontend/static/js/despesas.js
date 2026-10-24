@@ -333,6 +333,9 @@ async function carregarDespesas() {
             renderizarSidebar(data.sidebar);
         }
 
+        // FIN-CARTOES-RECORRENCIA-PENDENCIA-1: depois da listagem (a geracao de recorrencias roda nela)
+        carregarPendenciasRecorrencia();
+
     } catch (error) {
         console.error('Erro ao carregar despesas:', error);
         mostrarErro('Erro ao carregar despesas. Por favor, tente novamente.');
@@ -3136,5 +3139,82 @@ async function confirmarDocDesp() {
         if (alertas) { alertas.textContent = 'Erro de conexao.'; alertas.hidden = false; }
     } finally {
         if (botao) { botao.disabled = false; botao.textContent = 'Criar despesa'; }
+    }
+}
+
+
+// ============================================================================
+// FIN-CARTOES-RECORRENCIA-PENDENCIA-1: recorrencias nao lancadas por fatura consolidada
+// A ocorrencia continua registrada (pendente) mesmo depois de dispensar o aviso; dispensar nao cancela a
+// recorrencia, nao cria compra e nao muda fatura. Texto sempre via textContent.
+// ============================================================================
+
+function _competenciaPendencia(iso) {
+    return iso ? `${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '';
+}
+
+async function carregarPendenciasRecorrencia() {
+    const caixa = document.getElementById('pendencias-recorrencia');
+    if (!caixa) return;
+    try {
+        const resposta = await fetch('/api/recorrencias/pendencias');
+        const dados = await resposta.json();
+        renderizarPendenciasRecorrencia(caixa, (dados && dados.success && dados.data) || []);
+    } catch (erro) {
+        console.error('Erro ao carregar avisos de recorrencia:', erro);
+        caixa.hidden = true;
+    }
+}
+
+function renderizarPendenciasRecorrencia(caixa, pendencias) {
+    caixa.replaceChildren();
+    if (!pendencias.length) {
+        caixa.hidden = true;
+        return;
+    }
+    const titulo = document.createElement('p');
+    titulo.className = 'pendencias-recorrencia-titulo';
+    titulo.textContent = pendencias.length === 1
+        ? '1 recorrência não foi lançada: a fatura de destino está consolidada.'
+        : `${pendencias.length} recorrências não foram lançadas: a fatura de destino está consolidada.`;
+    const lista = document.createElement('ul');
+    lista.className = 'pendencias-recorrencia-lista';
+    for (const item of pendencias) {
+        const linha = document.createElement('li');
+        linha.dataset.pendenciaId = String(item.id);
+        const texto = document.createElement('span');
+        const valor = item.valor ? ` · ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(item.valor))}` : '';
+        texto.textContent = `${item.nome || 'Recorrência'} · competência ${_competenciaPendencia(item.competencia)}${valor} — ${item.motivo}`;
+        const botaoDispensar = document.createElement('button');
+        botaoDispensar.type = 'button';
+        botaoDispensar.className = 'btn btn-secondary btn-sm pendencias-recorrencia-dispensar';
+        botaoDispensar.textContent = 'Dispensar aviso';
+        botaoDispensar.title = 'A ocorrência continua registrada; a recorrência não é cancelada.';
+        botaoDispensar.addEventListener('click', () => dispensarPendenciaRecorrencia(item.id, botaoDispensar));
+        linha.append(texto, botaoDispensar);
+        lista.append(linha);
+    }
+    const nota = document.createElement('p');
+    nota.className = 'pendencias-recorrencia-nota';
+    nota.textContent = 'Para incluir a compra na fatura consolidada, lance-a pela compra no cartão, com a confirmação.';
+    caixa.append(titulo, lista, nota);
+    caixa.hidden = false;
+}
+
+async function dispensarPendenciaRecorrencia(id, botaoDispensar) {
+    botaoDispensar.disabled = true;
+    try {
+        const resposta = await fetch(`/api/recorrencias/pendencias/${id}/dispensar`, { method: 'POST' });
+        const dados = await resposta.json();
+        if (!resposta.ok || !dados.success) {
+            mostrarErro(dados.error || 'Não foi possível dispensar o aviso.');
+            botaoDispensar.disabled = false;
+            return;
+        }
+        carregarPendenciasRecorrencia();
+    } catch (erro) {
+        console.error('Erro ao dispensar aviso de recorrencia:', erro);
+        mostrarErro('Não foi possível dispensar o aviso.');
+        botaoDispensar.disabled = false;
     }
 }

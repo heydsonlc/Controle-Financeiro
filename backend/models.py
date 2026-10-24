@@ -1308,6 +1308,51 @@ class FaturaConsolidadaInclusao(db.Model):
         }
 
 
+class RecorrenciaRejeicao(db.Model):
+    """
+    FIN-CARTOES-RECORRENCIA-PENDENCIA-1: compra recorrente NAO lancada porque a fatura de destino estava consolidada
+    (D6; a competencia nao muda, D5). Uma linha por obrigacao (recorrencia + competencia); nova tentativa so atualiza
+    tentativas e horario. situacao e a dimensao financeira (PENDENTE; REGULARIZADA reservada a regularizacao futura);
+    aviso_dispensado_* e so o reconhecimento do aviso. A mesma tabela e criada pela migration do Supabase
+    20261030090000 e pela Alembic c7e2a9d4b8f3; o servico so a usa quando ela existe.
+    """
+    __tablename__ = 'recorrencia_rejeicao'
+    __table_args__ = (
+        db.UniqueConstraint('item_despesa_id', 'competencia', name='ux_recorrencia_rejeicao_competencia'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    item_despesa_id = db.Column(db.Integer, db.ForeignKey('item_despesa.id', ondelete='CASCADE'), nullable=False)
+    competencia = db.Column(db.Date, nullable=False)
+    perfil_financeiro_id = db.Column(db.Integer, nullable=True)
+    cartao_id = db.Column(db.Integer, nullable=False)
+    fatura_id = db.Column(db.Integer, db.ForeignKey('conta.id', ondelete='SET NULL'), nullable=True)
+    valor = db.Column(db.Numeric(12, 2), nullable=True)
+    motivo = db.Column(db.Text, nullable=False)
+    situacao = db.Column(db.String(20), nullable=False, default='PENDENTE', server_default=db.text("'PENDENTE'"))
+    origem = db.Column(db.String(20), nullable=False)  # FLASK ou NOVO_APP
+    tentativas = db.Column(db.Integer, nullable=False, default=1, server_default=db.text('1'))
+    primeira_tentativa_em = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    ultima_tentativa_em = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    aviso_dispensado_em = db.Column(db.DateTime, nullable=True)
+    aviso_dispensado_user_id = db.Column(db.String(36), nullable=True)   # usuario do Supabase Auth (novo aplicativo)
+    aviso_dispensado_usuario_id = db.Column(db.Integer, nullable=True)   # usuario do Flask
+
+    item = db.relationship('ItemDespesa', foreign_keys=[item_despesa_id])
+
+    def to_dict(self):
+        return {
+            'id': self.id, 'item_id': self.item_despesa_id, 'nome': self.item.nome if self.item else None,
+            'competencia': self.competencia.isoformat() if self.competencia else None,
+            'cartao_id': self.cartao_id, 'fatura_id': self.fatura_id,
+            'valor': str(self.valor) if self.valor is not None else None,
+            'motivo': self.motivo, 'situacao': self.situacao, 'origem': self.origem, 'tentativas': self.tentativas,
+            'primeira_tentativa_em': self.primeira_tentativa_em.isoformat() if self.primeira_tentativa_em else None,
+            'ultima_tentativa_em': self.ultima_tentativa_em.isoformat() if self.ultima_tentativa_em else None,
+            'aviso_dispensado_em': self.aviso_dispensado_em.isoformat() if self.aviso_dispensado_em else None,
+        }
+
+
 class ItemReceita(db.Model):
     """
     Fonte de receita com tipos bem definidos

@@ -1666,16 +1666,21 @@ def gerar_lancamentos_cartao_recorrente(item_despesa_id, meses_futuros=12, mes_r
         mes_destino = CartaoService.fatura_elegivel_existente(item.cartao_id, mes_fatura)  # sem commit
         # FIN-CARTOES-D6-INTEGRIDADE-1: a geracao automatica nao e confirmacao do usuario (D6) e nao muda a
         # competencia (D5). Destino em fatura consolidada (ja travada acima): a compra nao e gravada nem levada para
-        # outro mes. Fica registrada no log; a proxima geracao reavalia (idempotente, sem duplicar).
+        # outro mes. FIN-CARTOES-RECORRENCIA-PENDENCIA-1: a ocorrencia fica registrada (uma por recorrencia +
+        # competencia) para o aviso ao usuario; a proxima geracao reavalia sem duplicar nada.
         fatura_destino = Conta.query.filter(
             Conta.item_despesa_id == item.cartao_id,
             Conta.is_fatura_cartao == True,  # noqa: E712
             Conta.cartao_competencia == mes_destino,
         ).first()
         if CartaoService.fatura_consolidada(fatura_destino):
+            motivo = (f'Fatura de {mes_destino.strftime("%m/%Y")} consolidada: a compra recorrente nao entra sem '
+                      'confirmacao (lance-a pela compra no cartao)')
+            registrada = CartaoService.registrar_rejeicao_recorrencia(item, mes_fatura, fatura_destino, motivo)
             logger.warning('FIN-CARTOES-D6: recorrencia %s (competencia %s) nao lancada: fatura %s de %s consolidada; '
-                           'a inclusao exige confirmacao do usuario', item_despesa_id, mes_fatura.isoformat(),
-                           fatura_destino.id, mes_destino.isoformat())
+                           'a inclusao exige confirmacao do usuario (ocorrencia %s)', item_despesa_id,
+                           mes_fatura.isoformat(), fatura_destino.id, mes_destino.isoformat(),
+                           'registrada' if registrada else 'so no log: banco sem recorrencia_rejeicao')
             return
 
         resolucao_cartao = CategoriaCartaoService.resolver_categoria_cartao_para_lancamento(

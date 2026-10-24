@@ -19,14 +19,14 @@ import uuid
 import logging
 
 try:
-    from backend.models import (db, Conta, ItemDespesa, ItemAgregado, FaturaConsolidadaInclusao,
+    from backend.models import (db, Conta, ItemDespesa, ItemAgregado, FaturaConsolidadaInclusao, RecorrenciaRejeicao,
                                 OrcamentoAgregado, LancamentoAgregado, ConfigAgregador)
     from backend.services.categoria_cartao_service import CategoriaCartaoService
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
     from backend.services.gerador_recorrencia_service import flask_pode_gerar
     from backend.services.trava_financeira import travar, travar_um
 except ImportError:
-    from models import (db, Conta, ItemDespesa, ItemAgregado, FaturaConsolidadaInclusao,
+    from models import (db, Conta, ItemDespesa, ItemAgregado, FaturaConsolidadaInclusao, RecorrenciaRejeicao,
                        OrcamentoAgregado, LancamentoAgregado, ConfigAgregador)
     from services.categoria_cartao_service import CategoriaCartaoService
     from services.perfil_financeiro_service import PerfilFinanceiroService
@@ -227,6 +227,68 @@ class CartaoService:
             Conta.is_fatura_cartao == True,  # noqa: E712
             Conta.cartao_competencia == CartaoService._primeiro_dia_mes(competencia),
         ).first()
+
+    # FIN-CARTOES-RECORRENCIA-PENDENCIA-1 - ocorrencia persistente de recorrencia nao lancada por fatura consolidada.
+
+    @staticmethod
+    def suporta_pendencia_recorrencia():
+        """True se o banco ja tem recorrencia_rejeicao (Alembic c7e2a9d4b8f3 / Supabase 20261030090000). Sem ela, a
+        recorrencia continua sem ser lancada (D6) e a ocorrencia fica so no log."""
+        return CartaoService._capacidade('pendencia_recorrencia', lambda i: i.has_table('recorrencia_rejeicao'))
+
+    @staticmethod
+    def registrar_rejeicao_recorrencia(item, competencia, fatura, motivo, origem='FLASK'):
+        """Uma ocorrencia por recorrencia + competencia (identidade unica no banco): a primeira tentativa cria; as
+        seguintes so somam tentativa e atualizam o horario. Na transacao do chamador (a geracao do Flask nao confirma).
+        Devolve False quando o banco ainda nao tem a tabela."""
+        if not CartaoService.suporta_pendencia_recorrencia():
+            return False
+        competencia = CartaoService._primeiro_dia_mes(competencia)
+        agora = datetime.utcnow()
+        valores = dict(item_despesa_id=item.id, competencia=competencia, perfil_financeiro_id=item.perfil_financeiro_id,
+                       cartao_id=item.cartao_id, fatura_id=fatura.id if fatura else None,
+                       valor=Decimal(str(item.valor)) if item.valor is not None else None, motivo=motivo,
+                       situacao='PENDENTE', origem=origem, tentativas=1, primeira_tentativa_em=agora,
+                       ultima_tentativa_em=agora)
+        tabela = RecorrenciaRejeicao.__table__
+        if db.session.get_bind().dialect.name == 'postgresql':
+            from sqlalchemy.dialects.postgresql import insert
+        else:
+            from sqlalchemy.dialects.sqlite import insert
+        comando = insert(tabela).values(**valores)
+        comando = comando.on_conflict_do_update(
+            index_elements=['item_despesa_id', 'competencia'],
+            set_={'tentativas': tabela.c.tentativas + 1, 'ultima_tentativa_em': agora})
+        db.session.execute(comando)
+        return True
+
+    @staticmethod
+    def dispensar_aviso_recorrencia(rejeicao_id, usuario_id=None):
+        """Dispensa so o AVISO (idempotente). Nao muda situacao, recorrencia, compras nem faturas. A ocorrencia e
+        travada e relida; devolve (registro, ja_dispensado) ou (None, False) se nao for do perfil ativo."""
+        registro = RecorrenciaRejeicao.query.join(ItemDespesa, ItemDespesa.id == RecorrenciaRejeicao.item_despesa_id).filter(
+            RecorrenciaRejeicao.id == rejeicao_id,
+            PerfilFinanceiroService.condicao_perfil(ItemDespesa),
+        ).first()
+        if registro is None:
+            return None, False
+        registro = travar_um(RecorrenciaRejeicao, registro.id)
+        ja = registro.aviso_dispensado_em is not None
+        if not ja:
+            registro.aviso_dispensado_em = datetime.utcnow()
+            registro.aviso_dispensado_usuario_id = usuario_id
+        return registro, ja
+
+    @staticmethod
+    def recorrencias_rejeitadas(incluir_dispensadas=False):
+        """Ocorrencias do perfil ativo (avisos ativos; com incluir_dispensadas, tambem o historico)."""
+        if not CartaoService.suporta_pendencia_recorrencia():
+            return []
+        consulta = RecorrenciaRejeicao.query.join(ItemDespesa, ItemDespesa.id == RecorrenciaRejeicao.item_despesa_id).filter(
+            PerfilFinanceiroService.condicao_perfil(ItemDespesa))
+        if not incluir_dispensadas:
+            consulta = consulta.filter(RecorrenciaRejeicao.aviso_dispensado_em.is_(None))
+        return consulta.order_by(RecorrenciaRejeicao.competencia, RecorrenciaRejeicao.id).all()
 
     @staticmethod
     def recusar_inclusao_automatica(fatura, descricao, data_compra=None, valor=None):

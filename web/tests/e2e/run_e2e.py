@@ -53,6 +53,7 @@ from tests.supabase_local import (  # noqa: E402
     encontrar_postgrest,
     porta_livre,
     semear_cartoes_e2e,
+    semear_pendencia_e2e,
     semear_receitas_e2e,
     semear_recorrencia_e2e,
 )
@@ -226,7 +227,8 @@ def criar_handler(dist, postgrest_url, segredo, headers_seguranca, consolidar=No
         def _consolidar(self):
             try:
                 pedido = json.loads(self._dados or b'{}')
-                self._json(200, consolidar(str(pedido['cartao']), str(pedido['competencia'])))
+                self._json(200, consolidar(str(pedido['cartao']), str(pedido['competencia']),
+                                           bool(pedido.get('criar_se_faltar'))))
             except (KeyError, ValueError) as exc:
                 self._json(400, {'msg': str(exc)})
 
@@ -290,15 +292,29 @@ def main():
                 semear_recorrencia_e2e(cur)  # FIN-RECORRENCIA-1 (recorrencia.spec.mjs)
                 semear_receitas_e2e(cur)  # FIN-RECEITAS-1 (receitas.spec.mjs)
                 semear_cartoes_e2e(cur)  # FIN-CARTOES-1 (cartoes.spec.mjs)
+                semear_pendencia_e2e(cur)  # FIN-CARTOES-RECORRENCIA-PENDENCIA-1 (pendencia.spec.mjs)
             conn.close()
 
-            def consolidar(cartao, competencia):
-                """Como a consolidacao do Flask: FECHADA com valor_consolidado = executado (so Perfil B, ficticio)."""
+            def consolidar(cartao, competencia, criar_se_faltar=False):
+                """Como a consolidacao do Flask: FECHADA com valor_consolidado = executado (so Perfil B, ficticio).
+                criar_se_faltar (FIN-CARTOES-RECORRENCIA-PENDENCIA-1): cria antes a fatura vazia do mes."""
                 if not re.fullmatch(r'\d{4}-\d{2}-01', competencia):
                     raise ValueError('competencia deve ser AAAA-MM-01')
                 conn = cluster.conectar()
                 try:
                     with conn.cursor() as cur:
+                        if criar_se_faltar:
+                            cur.execute("insert into public.conta (perfil_financeiro_id, item_despesa_id, mes_referencia, "
+                                        "descricao, valor, valor_planejado, valor_executado, data_vencimento, "
+                                        "status_pagamento, is_fatura_cartao, cartao_competencia, estouro_orcamento, "
+                                        "debito_automatico, status_fatura) "
+                                        "select i.perfil_financeiro_id, i.id, %s, 'Fatura ' || i.nome, 0, 0, 0, "
+                                        "(%s::date + 9), 'Pendente', true, %s, false, false, 'ABERTA' "
+                                        "from public.item_despesa i where i.nome = %s and i.perfil_financeiro_id = %s "
+                                        "and i.tipo = 'Agregador' and not exists (select 1 from public.conta c "
+                                        "where c.item_despesa_id = i.id and c.is_fatura_cartao and c.cartao_competencia = %s)",
+                                        (competencia, competencia, competencia, cartao, PERFIS['PERFIL_B']['id'],
+                                         competencia))
                         cur.execute("update public.conta c set status_fatura = 'FECHADA', "
                                     "valor_consolidado = c.valor_executado, data_consolidacao = now() "
                                     "from public.item_despesa i where c.item_despesa_id = i.id and c.is_fatura_cartao "

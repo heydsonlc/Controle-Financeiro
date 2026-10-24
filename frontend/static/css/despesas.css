@@ -2538,3 +2538,10 @@ body.mobile-view .despesa-valor-principal {
     background: #fef2f2;
     color: #b91c1c;
 }
+
+/* FIN-CARTOES-RECORRENCIA-PENDENCIA-1: aviso de recorrencia nao lancada (informativo, cor neutra) */
+.pendencias-recorrencia { margin: 0 0 16px; padding: 12px 16px; border: 1px solid #d1d5db; border-radius: 10px; background: #f9fafb; }
+.pendencias-recorrencia-titulo { margin: 0 0 8px; font-weight: 600; color: #374151; }
+.pendencias-recorrencia-lista { margin: 0; padding: 0; list-style: none; }
+.pendencias-recorrencia-lista li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 0; border-top: 1px solid #e5e7eb; color: #4b5563; }
+.pendencias-recorrencia-nota { margin: 8px 0 0; font-size: 0.875rem; color: #6b7280; }

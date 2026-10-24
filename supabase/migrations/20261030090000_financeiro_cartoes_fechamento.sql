@@ -58,6 +58,49 @@ create table if not exists public.fatura_consolidada_inclusao (
 );
 comment on table public.fatura_consolidada_inclusao is
     'FIN-CARTOES-FECHAMENTO-1: inclusao confirmada em fatura consolidada (total anterior e novo, origem e autor).';
+-- FIN-CARTOES-RECORRENCIA-PENDENCIA-1: ocorrencia persistente de compra recorrente NAO lancada porque a fatura de
+-- destino estava consolidada (D6: a geracao automatica nao e confirmacao do usuario; D5: a competencia nao muda).
+-- Uma linha por obrigacao (recorrencia + competencia): uma nova tentativa so atualiza tentativas e horario.
+-- Duas dimensoes: situacao (financeira: PENDENTE; REGULARIZADA fica reservada a uma regularizacao futura) e aviso
+-- (aviso_dispensado_*: o usuario reconheceu o aviso). Dispensar o aviso nao muda a situacao nem a recorrencia,
+-- nao cria compra e nao toca fatura. Mesma tabela da Alembic c7e2a9d4b8f3 (IF NOT EXISTS: a que rodar primeiro cria).
+create table if not exists public.recorrencia_rejeicao (
+    id                          serial        primary key,
+    item_despesa_id             integer       not null references public.item_despesa (id) on delete cascade,
+    competencia                 date          not null,
+    perfil_financeiro_id        integer,
+    cartao_id                   integer       not null,
+    fatura_id                   integer       references public.conta (id) on delete set null,
+    valor                       numeric(12,2),
+    motivo                      text          not null,
+    situacao                    varchar(20)   not null default 'PENDENTE',
+    origem                      varchar(20)   not null,
+    tentativas                  integer       not null default 1,
+    primeira_tentativa_em       timestamp     not null default (now() at time zone 'utc'),
+    ultima_tentativa_em         timestamp     not null default (now() at time zone 'utc'),
+    aviso_dispensado_em         timestamp,
+    aviso_dispensado_user_id    varchar(36),
+    aviso_dispensado_usuario_id integer,
+    constraint ux_recorrencia_rejeicao_competencia unique (item_despesa_id, competencia),
+    constraint ck_recorrencia_rejeicao_situacao check (situacao in ('PENDENTE', 'REGULARIZADA')),
+    constraint ck_recorrencia_rejeicao_origem check (origem in ('FLASK', 'NOVO_APP'))
+);
+comment on table public.recorrencia_rejeicao is
+    'FIN-CARTOES-RECORRENCIA-PENDENCIA-1: compra recorrente nao lancada por fatura consolidada (situacao) e aviso ao usuario.';
+alter table public.recorrencia_rejeicao enable row level security;
+do $$
+begin
+    if exists (select 1 from pg_roles where rolname = 'anon') then
+        revoke all on table public.recorrencia_rejeicao from anon;
+        revoke all on sequence public.recorrencia_rejeicao_id_seq from anon;
+    end if;
+    if exists (select 1 from pg_roles where rolname = 'authenticated') then
+        revoke all on table public.recorrencia_rejeicao from authenticated;
+        revoke all on sequence public.recorrencia_rejeicao_id_seq from authenticated;
+    end if;
+end
+$$;
+
 -- Como as demais tabelas do public no Supabase (SEC-SUPABASE-PUBLIC-1): RLS sem policy, fora da Data API.
 alter table public.fatura_consolidada_inclusao enable row level security;
 do $$
@@ -843,6 +886,125 @@ end
 $$;
 revoke execute on function financeiro.fatura_consolidada_no_destino(integer, date) from public, anon, authenticated;
 
+-- FIN-CARTOES-RECORRENCIA-PENDENCIA-1: registra (ou conta mais uma tentativa de) cada compra recorrente do plano
+-- REJEITADA porque o destino e fatura consolidada. Identidade: recorrencia + competencia. Interna.
+create function financeiro.registrar_rejeicoes_consolidadas(p_linhas financeiro.linha_plano[], p_origem text)
+    returns integer
+    language plpgsql
+    volatile
+    security definer
+    set search_path = ''
+as $$
+declare
+    v_linha   financeiro.linha_plano;
+    v_destino date;
+    v_total   integer := 0;
+begin
+    foreach v_linha in array coalesce(p_linhas, '{}') loop
+        continue when v_linha.natureza <> 'LANCAMENTO_CARTAO' or v_linha.situacao <> 'REJEITADA' or v_linha.cartao_id is null;
+        v_destino := financeiro.fatura_consolidada_no_destino(v_linha.cartao_id, v_linha.competencia);
+        continue when v_destino is null;  -- rejeitada por outro motivo (sem categoria, cartao inativo...)
+        -- Todos os valores explicitos: a tabela pode ter sido criada pelo Flask (models), sem os defaults do banco.
+        insert into public.recorrencia_rejeicao as r (item_despesa_id, competencia, perfil_financeiro_id, cartao_id, fatura_id,
+                                                      valor, motivo, situacao, origem, tentativas, primeira_tentativa_em,
+                                                      ultima_tentativa_em)
+        values (v_linha.item_despesa_id, v_linha.competencia, v_linha.perfil_destino, v_linha.cartao_id,
+                financeiro.fatura_do_mes(v_linha.cartao_id, v_destino), v_linha.valor, v_linha.motivo, 'PENDENTE', p_origem,
+                1, now() at time zone 'utc', now() at time zone 'utc')
+        on conflict on constraint ux_recorrencia_rejeicao_competencia do update
+            set tentativas = r.tentativas + 1, ultima_tentativa_em = now() at time zone 'utc';
+        v_total := v_total + 1;
+    end loop;
+    return v_total;
+end
+$$;
+revoke execute on function financeiro.registrar_rejeicoes_consolidadas(financeiro.linha_plano[], text) from public, anon, authenticated;
+
+-- Ocorrencias do perfil (avisos ativos; com p_incluir_dispensadas, tambem o historico dispensado).
+create function financeiro.recorrencias_rejeitadas(p_perfil_id integer, p_incluir_dispensadas boolean default false)
+    returns table (id integer, item_id integer, nome text, competencia date, cartao_id integer, cartao_nome text,
+                   fatura_id integer, valor numeric, motivo text, situacao text, origem text, tentativas integer,
+                   primeira_tentativa_em timestamp, ultima_tentativa_em timestamp, aviso_dispensado_em timestamp)
+    language plpgsql
+    stable
+    security definer
+    set search_path = ''
+as $$
+begin
+    if not financeiro.pode_acessar_perfil(p_perfil_id) then
+        raise exception 'Perfil financeiro nao autorizado' using errcode = '42501';
+    end if;
+    return query
+        select r.id, r.item_despesa_id, i.nome::text, r.competencia, r.cartao_id, c.nome::text, r.fatura_id, r.valor,
+               r.motivo, r.situacao::text, r.origem::text, r.tentativas, r.primeira_tentativa_em, r.ultima_tentativa_em,
+               r.aviso_dispensado_em
+          from public.recorrencia_rejeicao r
+          join public.item_despesa i on i.id = r.item_despesa_id
+          left join public.item_despesa c on c.id = r.cartao_id
+         where financeiro.pertence_ao_perfil(i.perfil_financeiro_id, p_perfil_id)
+           and (p_incluir_dispensadas or r.aviso_dispensado_em is null)
+         order by r.competencia, i.nome, r.id;
+end
+$$;
+
+-- Dispensa o AVISO de uma ocorrencia (so quem gerencia o perfil). Se a ocorrencia ainda nao foi registrada por uma
+-- geracao, o banco a registra antes, desde que o plano a rejeite AGORA por fatura consolidada (nada vem do navegador
+-- alem da identidade). Idempotente: dispensar de novo devolve a mesma dispensa. Nao muda situacao, recorrencia,
+-- compras nem faturas.
+create function financeiro.dispensar_aviso_recorrencia(p_perfil_id integer, p_item_id integer, p_competencia date)
+    returns jsonb
+    language plpgsql
+    volatile
+    security definer
+    set search_path = ''
+as $$
+declare
+    v_comp   date;
+    v_reg    public.recorrencia_rejeicao;
+    v_linhas financeiro.linha_plano[];
+    v_ja     boolean;
+begin
+    if not financeiro.pode_gerir_perfil(p_perfil_id) then
+        raise exception 'Perfil financeiro nao autorizado' using errcode = '42501';
+    end if;
+    if p_item_id is null or p_competencia is null then
+        raise exception 'Recorrencia e competencia sao obrigatorias' using errcode = '22023';
+    end if;
+    if not exists (select 1 from public.item_despesa i where i.id = p_item_id
+                    and financeiro.pertence_ao_perfil(i.perfil_financeiro_id, p_perfil_id)) then
+        raise exception 'Recorrencia nao encontrada neste perfil' using errcode = '42501';
+    end if;
+    v_comp := date_trunc('month', p_competencia::timestamp)::date;
+    perform pg_advisory_xact_lock(20261023, p_perfil_id);  -- em serie com a geracao do perfil
+    select * into v_reg from public.recorrencia_rejeicao r
+     where r.item_despesa_id = p_item_id and r.competencia = v_comp for update;
+    if not found then
+        select coalesce(array_agg(p), '{}') into v_linhas from financeiro.plano_recorrencia(p_perfil_id, v_comp) p
+         where p.item_despesa_id = p_item_id and p.competencia = v_comp;
+        perform financeiro.registrar_rejeicoes_consolidadas(v_linhas, 'NOVO_APP');
+        select * into v_reg from public.recorrencia_rejeicao r
+         where r.item_despesa_id = p_item_id and r.competencia = v_comp for update;
+        if not found then
+            raise exception 'Nao ha aviso de recorrencia rejeitada para esta competencia' using errcode = '22023';
+        end if;
+    end if;
+    v_ja := v_reg.aviso_dispensado_em is not null;
+    if not v_ja then
+        update public.recorrencia_rejeicao
+           set aviso_dispensado_em = now() at time zone 'utc', aviso_dispensado_user_id = (select auth.uid())::text
+         where id = v_reg.id
+        returning * into v_reg;
+    end if;
+    return jsonb_build_object('id', v_reg.id, 'item_id', v_reg.item_despesa_id, 'competencia', v_reg.competencia,
+                              'situacao', v_reg.situacao, 'aviso_dispensado_em', v_reg.aviso_dispensado_em,
+                              'ja_dispensado', v_ja);
+end
+$$;
+revoke execute on function financeiro.recorrencias_rejeitadas(integer, boolean) from public, anon;
+revoke execute on function financeiro.dispensar_aviso_recorrencia(integer, integer, date) from public, anon;
+grant execute on function financeiro.recorrencias_rejeitadas(integer, boolean) to authenticated;
+grant execute on function financeiro.dispensar_aviso_recorrencia(integer, integer, date) to authenticated;
+
 create or replace function financeiro.plano_recorrencia(p_perfil_id integer, p_mes date)
     returns setof financeiro.linha_plano
     language plpgsql
@@ -1141,6 +1303,9 @@ begin
       into v_linhas
       from financeiro.plano_recorrencia(p_perfil_id, v_mes) p;
     select count(*) into v_a_gerar from unnest(v_linhas) l where l.situacao = 'A_GERAR';
+    -- FIN-CARTOES-RECORRENCIA-PENDENCIA-1: a tentativa registra as compras recorrentes rejeitadas por fatura consolidada
+    -- (uma ocorrencia por recorrencia + competencia; se a geracao falhar, o registro e desfeito junto).
+    perform financeiro.registrar_rejeicoes_consolidadas(v_linhas, 'NOVO_APP');
 
     if v_a_gerar = 0 and jsonb_array_length(p_dispensar) = 0 then
         return jsonb_build_object('execucao_id', null, 'mes', v_mes,

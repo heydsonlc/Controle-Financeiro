@@ -411,3 +411,50 @@ def inativar_recorrencia(item_id):
     except Exception as exc:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+# ============================================================================
+# FIN-CARTOES-RECORRENCIA-PENDENCIA-1: recorrencias nao lancadas por fatura consolidada (avisos)
+# ============================================================================
+
+def _cartao_service():
+    try:
+        from backend.services.cartao_service import CartaoService
+    except ImportError:
+        from services.cartao_service import CartaoService
+    return CartaoService
+
+
+@recorrencias_bp.route('/pendencias', methods=['GET'])
+def listar_pendencias_recorrencia():
+    """Ocorrencias do perfil ativo: avisos ativos (padrao) ou todo o historico (?incluir_dispensadas=1)."""
+    servico = _cartao_service()
+    incluir = request.args.get('incluir_dispensadas') in ('1', 'true', 'sim')
+    return jsonify({'success': True, 'disponivel': servico.suporta_pendencia_recorrencia(),
+                    'data': [r.to_dict() for r in servico.recorrencias_rejeitadas(incluir_dispensadas=incluir)]}), 200
+
+
+@recorrencias_bp.route('/pendencias/<int:rejeicao_id>/dispensar', methods=['POST'])
+def dispensar_pendencia_recorrencia(rejeicao_id):
+    """Dispensa so o aviso (idempotente): a ocorrencia continua PENDENTE e consultavel; recorrencia, compras e faturas
+    nao mudam."""
+    servico = _cartao_service()
+    if not servico.suporta_pendencia_recorrencia():
+        return jsonify({'success': False, 'error': 'Este banco ainda nao registra ocorrencias de recorrencia.'}), 409
+    try:
+        usuario_id = None
+        try:
+            from flask_login import current_user
+            if current_user and current_user.is_authenticated:
+                usuario_id = current_user.id
+        except Exception:  # noqa: BLE001 — fora de requisicao autenticada
+            usuario_id = None
+        registro, ja = servico.dispensar_aviso_recorrencia(rejeicao_id, usuario_id)
+        if registro is None:
+            db.session.rollback()
+            return jsonify({'success': False, 'error': 'Aviso nao encontrado neste perfil'}), 404
+        db.session.commit()
+        return jsonify({'success': True, 'ja_dispensado': ja, 'data': registro.to_dict()}), 200
+    except Exception:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': 'Nao foi possivel dispensar o aviso. Nada foi alterado.'}), 500

@@ -533,6 +533,19 @@ def semear_recorrencia_e2e(cur, categoria_id=201):
                     (PERFIS[chave]['id'],))
 
 
+# FIN-CARTOES-RECORRENCIA-PENDENCIA-1 (E2E): compra recorrente FICTICIA no Cartao B do "Perfil B" (novo motor), a
+# partir de 2033 (nenhum outro cenario usa esses meses; antes da ancora ela nao entra no plano).
+PENDENCIA_E2E = (456, 'Streaming B', 'PERFIL_B', '2033-01-10', '25.00')
+
+
+def semear_pendencia_e2e(cur, categoria_id=201):
+    iid, nome, chave, ancora, valor = PENDENCIA_E2E
+    cur.execute("insert into public.item_despesa (id, nome, tipo, perfil_financeiro_id, categoria_id, ativo, recorrente, "
+                "tipo_recorrencia, data_vencimento, valor, meio_pagamento, cartao_id) "
+                "values (%s, %s, 'Simples', %s, %s, true, true, 'mensal', %s, %s, 'cartao', %s)",
+                (iid, nome, PERFIS[chave]['id'], categoria_id, ancora, valor, CARTAO_E2E[0]))
+
+
 # FIN-RECEITAS-1 (E2E): receitas FICTICIAS de 11/2026 (previsoes; um recebimento parcial com movimento).
 RECEITAS_E2E = [  # nome, tipo, perfil, recorrente, valor_base, dia, valor previsto 11/2026
     ('Salário (A)', 'SALARIO_FIXO', 'PESSOAL', True, '5000.00', 5, '5000.00'),

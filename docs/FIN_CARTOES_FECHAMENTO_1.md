@@ -358,6 +358,88 @@ Ajustes: `test_cartoes_fechamento.py` (conferência: lista de funções da migra
 
 ### 11.6 Decisões pendentes
 
-1. **Visibilidade no Flask** da recorrência não lançada por fatura consolidada (hoje só log): (a) listar em `GET /api/despesas` e mostrar um aviso na tela; (b) tabela persistente de pendências; (c) deixar o perfil no gerador novo, que já mostra `REJEITADA`.
-2. **Dispensar** a linha `REJEITADA` por consolidação no novo motor (hoje a dispensa só vale para `A_GERAR`).
+1. **Visibilidade no Flask** e 2. **dispensa da linha `REJEITADA`:** resolvidas no FIN-CARTOES-RECORRENCIA-PENDENCIA-1 (§12), com ocorrência persistente, aviso e dispensa auditável nos dois sistemas.
 3. **Correção de compra já consolidada** (valor ou retirada): não existe fluxo de alteração auditada; hoje é bloqueada nos dois sistemas.
+
+## 12. Recorrência rejeitada: ocorrência persistente, aviso e dispensa auditável (FIN-CARTOES-RECORRENCIA-PENDENCIA-1)
+
+**Data:** 2026-10-24. **Situação:** implementado e validado **localmente** (cluster descartável, SQLite temporário, Flask real, E2E local, dados fictícios). Nada remoto, nenhum commit.
+
+**Decisão funcional aprovada:** quando a fatura de destino está consolidada, a compra recorrente continua **não sendo lançada** (D6) e a competência **não muda** (D5). A ocorrência passa a ser registrada de forma persistente, o usuário vê o aviso e pode **dispensá-lo**. Dispensar o aviso não regulariza a pendência nem cancela a recorrência.
+
+### 12.1 Estrutura: por que uma tabela nova
+
+| Existente | Motivo de não reutilizar |
+|---|---|
+| `financeiro.recorrencia_competencia` | Só o novo motor (schema `financeiro`); o Flask não a mapeia e ela não existe no SQLite. O estado `DISPENSADA` tem sentido **financeiro** (a competência não é mais gerada) e misturaria "dispensar aviso" com "cancelar a ocorrência" |
+| `LastroFinanceiroPendencia` | Saída sem comprovante (`tipo_entidade/entidade_id`); a rejeição não tem entidade (nenhuma compra é criada) nem competência/fatura |
+| `financeiro.geracao_execucao` | Resumo por execução (JSON); sem identidade por ocorrência nem estado de aviso |
+| `fatura_consolidada_inclusao` | Auditoria de inclusões **confirmadas**, não de rejeições |
+| "alertas" do cartão | Calculados na consulta; nada persistente |
+
+Padrão seguido: o de `fatura_consolidada_inclusao` — tabela no `public`, mapeada pelo Flask e gravada pelas funções do Supabase, com RLS e sem privilégios para o navegador.
+
+### 12.2 Modelagem — `public.recorrencia_rejeicao`
+
+- **Identidade:** `UNIQUE (item_despesa_id, competencia)` (`ux_recorrencia_rejeicao_competencia`). Uma obrigação (recorrência + competência) é uma linha só. Uma nova competência é outra linha; uma nova tentativa da mesma competência soma `tentativas` e atualiza `ultima_tentativa_em`, sem duplicar.
+- **Dados:**
+  - perfil (o do item; `NULL` = legado do Pessoal);
+  - recorrência, competência prevista, cartão, fatura de destino (`ON DELETE SET NULL`);
+  - valor no momento da tentativa (o valor do item pode mudar depois);
+  - motivo, origem (`FLASK` ou `NOVO_APP`), primeira e última tentativa.
+- **Dimensão financeira (`situacao`):** `PENDENTE`. `REGULARIZADA` fica reservada (check) para a regularização futura, sem fluxo neste contrato.
+- **Dimensão do aviso:** `aviso_dispensado_em`, `aviso_dispensado_user_id` (Supabase Auth) e `aviso_dispensado_usuario_id` (Flask). Aviso ativo = não dispensado. Não há estado "visualizado" (não era necessário e seria redundante).
+- **Integridade:** `item_despesa_id` com `ON DELETE CASCADE` (a ocorrência não existe sem a recorrência).
+
+### 12.3 Comportamento
+
+- **Novo motor:**
+  - `plano_recorrencia` continua marcando `REJEITADA` com o motivo; a prévia **não grava**;
+  - `gerar_mes_interno` registra a ocorrência (`registrar_rejeicoes_consolidadas`, interna), sob a trava da geração. Se a geração falhar (por exemplo, "a prévia mudou"), o registro é desfeito junto;
+  - `dispensar_aviso_recorrencia(perfil, recorrência, competência)` (só quem gerencia o perfil): se a ocorrência ainda não foi registrada, o banco a registra **se o plano a rejeitar agora por fatura consolidada** (o navegador só envia a identidade). Depois marca a dispensa. É idempotente: na segunda vez devolve `ja_dispensado = true`;
+  - `recorrencias_rejeitadas(perfil, incluir_dispensadas)`: leitura (quem acessa o perfil);
+  - **tela (Contas do mês):** o item aparece na lista "Ver itens não gerados" com o botão **Dispensar aviso**. Depois de dispensado, ele continua listado como "aviso dispensado" e sai da contagem do aviso.
+- **Flask:**
+  - a geração (`gerar_lancamentos_cartao_recorrente`) registra a ocorrência na transação do chamador, sem confirmar (trava T1 preservada), com upsert por identidade (PostgreSQL e SQLite);
+  - `GET /api/recorrencias/pendencias[?incluir_dispensadas=1]` e `POST /api/recorrencias/pendencias/<id>/dispensar` (perfil ativo; ocorrência de outro perfil: 404; a dispensa trava e relê a linha);
+  - **tela (Despesas):** bloco acima dos cards com a recorrência, a competência, o valor, o motivo e o botão **Dispensar aviso** (textos via `textContent`).
+- **Banco sem a tabela** (`gastos.db` antes da Alembic): a compra continua não sendo lançada e a ocorrência fica só no log; a API devolve `disponivel = false`.
+- **Dispensar o aviso não:** cancela a recorrência, cria compra, muda competência ou fatura, representa baixa ou pagamento, nem exclui a ocorrência. O histórico continua consultável.
+
+### 12.4 Regularização futura (não implementada)
+
+A ocorrência guarda a identidade (recorrência + competência), a fatura e o valor. Uma regularização deverá:
+- partir da ocorrência e lançar a compra pelo fluxo D6 (com a confirmação do usuário, sob as travas);
+- marcar `situacao = REGULARIZADA` na mesma transação, sem duplicar o lançamento;
+- registrar o resultado.
+
+Cancelar a recorrência continua sendo a operação própria de recorrências.
+
+### 12.5 Segurança
+
+- RLS na tabela, sem privilégios para `anon` e `authenticated`.
+- `registrar_rejeicoes_consolidadas` é interna. As duas funções expostas são só para `authenticated` e conferem o perfil (leitura: acesso; dispensa: gestão).
+- O Flask filtra pelo perfil ativo.
+- Nenhum privilégio de função financeira foi ampliado.
+
+### 12.6 Migrations
+
+- **Supabase `20261030090000`** (pendente no remoto): tabela + 3 funções; `gerar_mes_interno` passa a registrar. A conferência local passa (dados idênticos antes/depois; tabela nova com RLS e sem privilégios; funções novas internas ou só para `authenticated`). **A conferência `antes` remota precisa ser refeita.**
+- **Alembic `c7e2a9d4b8f3`** (nunca executada em banco persistente): a mesma tabela (PostgreSQL e SQLite), com RLS e revogação no Supabase; o `downgrade` a remove.
+- O insert do banco passa todos os valores: a tabela pode ter sido criada pelo Flask (models), sem os defaults do banco (achado nos testes).
+
+### 12.7 Testes
+
+- **`tests/test_recorrencia_pendencia.py`, 14 testes:**
+  - persistência no novo motor e no Flask (processo novo = aplicação reiniciada);
+  - reexecução e duas gerações simultâneas sem duplicar; competências distintas;
+  - fatura aberta e paga sem ocorrência;
+  - consolidação entre a prévia e a geração (nada gravado);
+  - dispensa concorrente com a geração;
+  - dispensa auditada e idempotente, sem mudar compras, faturas, itens nem identidades, com histórico consultável e a prévia ainda informando;
+  - dispensa antes da geração, validada pelo banco;
+  - isolamento (outro usuário, outro perfil, LEITOR lê e não dispensa, anônimo, tabela e função interna);
+  - API do Flask (lista, dispensa, idempotência, outro perfil 404);
+  - tela do Flask; SQLite com e sem a tabela.
+- **E2E `web/tests/e2e/pendencia.spec.mjs`** (usuário B, Perfil B, 2033, só no harness local): aviso, dispensa, persistência depois de recarregar, ocorrência `PENDENTE` com o aviso dispensado.
+- **Ajustes:** conferência da migration (3 funções e a tabela nova); semente E2E `PENDENCIA_E2E` e o gancho de consolidação com `criar_se_faltar`; lista de RPCs do `build.test.mjs`.

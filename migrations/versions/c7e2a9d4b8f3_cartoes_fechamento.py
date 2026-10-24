@@ -8,7 +8,9 @@ FIN-CARTOES-FECHAMENTO-1:
 - config_agregador.compra_no_fechamento (VARCHAR(10), 'PROXIMO' padrao | 'ATUAL') e
   config_agregador.fechamento_confirmado (BOOLEAN, false): nenhum cartao existente e marcado como confirmado;
 - lancamento_agregado.mes_fatura_sugerido (DATE, nula): competencia que o fechamento sugeria no cadastro;
-- fatura_consolidada_inclusao: auditoria das inclusoes confirmadas em fatura consolidada (D6).
+- fatura_consolidada_inclusao: auditoria das inclusoes confirmadas em fatura consolidada (D6);
+- recorrencia_rejeicao (FIN-CARTOES-RECORRENCIA-PENDENCIA-1): compra recorrente nao lancada porque a fatura de destino
+  estava consolidada; uma linha por recorrencia + competencia, com o aviso ao usuario e a dispensa auditavel.
 Nada e preenchido retroativamente; nenhuma compra, fatura ou pagamento existente e alterado.
 Os mesmos objetos sao criados pela migration do Supabase 20261030090000_financeiro_cartoes_fechamento
 (IF NOT EXISTS: a que rodar primeiro cria). Os models mapeiam as colunas como deferred e o servico so as usa
@@ -26,6 +28,40 @@ branch_labels = None
 depends_on = None
 
 TABELA = 'fatura_consolidada_inclusao'
+REJEICAO = 'recorrencia_rejeicao'
+COLUNAS_REJEICAO = """
+            item_despesa_id             integer       not null references item_despesa (id) on delete cascade,
+            competencia                 date          not null,
+            perfil_financeiro_id        integer,
+            cartao_id                   integer       not null,
+            fatura_id                   integer       references conta (id) on delete set null,
+            valor                       numeric(12,2),
+            motivo                      text          not null,
+            situacao                    varchar(20)   not null default 'PENDENTE',
+            origem                      varchar(20)   not null,
+            tentativas                  integer       not null default 1,
+            aviso_dispensado_user_id    varchar(36),
+            aviso_dispensado_usuario_id integer,"""
+RESTRICOES_REJEICAO = """,
+            constraint ux_recorrencia_rejeicao_competencia unique (item_despesa_id, competencia),
+            constraint ck_recorrencia_rejeicao_situacao check (situacao in ('PENDENTE', 'REGULARIZADA')),
+            constraint ck_recorrencia_rejeicao_origem check (origem in ('FLASK', 'NOVO_APP'))"""
+DDL_REJEICAO = {
+    'postgresql': f"""
+        create table if not exists {REJEICAO} (
+            id                          serial        primary key,{COLUNAS_REJEICAO}
+            primeira_tentativa_em       timestamp     not null default (now() at time zone 'utc'),
+            ultima_tentativa_em         timestamp     not null default (now() at time zone 'utc'),
+            aviso_dispensado_em         timestamp{RESTRICOES_REJEICAO}
+        )""",
+    'sqlite': f"""
+        create table if not exists {REJEICAO} (
+            id                          integer       primary key autoincrement,{COLUNAS_REJEICAO}
+            primeira_tentativa_em       datetime      not null default current_timestamp,
+            ultima_tentativa_em         datetime      not null default current_timestamp,
+            aviso_dispensado_em         datetime{RESTRICOES_REJEICAO}
+        )""",
+}
 
 DDL = {
     'postgresql': f"""
@@ -102,17 +138,20 @@ def upgrade():
         conn.exec_driver_sql('alter table lancamento_agregado add column mes_fatura_sugerido date')
 
     conn.exec_driver_sql(DDL[dialeto])
+    conn.exec_driver_sql(DDL_REJEICAO[dialeto])
     if dialeto == 'postgresql':
         papeis = _papeis_data_api(conn)
         if papeis:  # Supabase: fora da Data API, como as demais tabelas do public
             alvos = ', '.join(papeis)
-            conn.exec_driver_sql(f'alter table {TABELA} enable row level security')
-            conn.exec_driver_sql(f'revoke all on table {TABELA} from {alvos}')
-            conn.exec_driver_sql(f'revoke all on sequence {TABELA}_id_seq from {alvos}')
+            for tabela in (TABELA, REJEICAO):
+                conn.exec_driver_sql(f'alter table {tabela} enable row level security')
+                conn.exec_driver_sql(f'revoke all on table {tabela} from {alvos}')
+                conn.exec_driver_sql(f'revoke all on sequence {tabela}_id_seq from {alvos}')
 
 
 def downgrade():
     conn = op.get_bind()
+    conn.exec_driver_sql(f'drop table if exists {REJEICAO}')
     conn.exec_driver_sql(f'drop table if exists {TABELA}')
     if 'mes_fatura_sugerido' in _colunas(conn, 'lancamento_agregado'):
         conn.exec_driver_sql('alter table lancamento_agregado drop column mes_fatura_sugerido')
