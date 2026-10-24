@@ -384,7 +384,9 @@ def test_ciclo_completo_de_rollback_restaura_estado_exato(tmp_path):
         assert antes['alembic_version'] == REVISAO_ANTERIOR
         sql_rollback = rb.gerar_sql(antes)
 
-        _rodar(_SCRIPT_ALEMBIC, cluster, papel, 'head')
+        # So a revisao da protecao: o rollback e dela. Revisoes posteriores (ex.: c7e2a9d4b8f3 cria
+        # fatura_consolidada_inclusao) nao sao desfeitas por ele; as invariantes em 'head' sao do fixture `ambiente`.
+        _rodar(_SCRIPT_ALEMBIC, cluster, papel, REVISAO_PROTECAO)
         depois = snapshot()
         esperadas, inesperadas = rb.comparar(antes, depois)
         assert inesperadas == []

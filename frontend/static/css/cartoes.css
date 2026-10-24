@@ -1474,6 +1474,22 @@
     align-items: end;
 }
 
+.cartao-fechamento-confirmacao {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+}
+
+#form-cartao [data-fechamento-configuravel][hidden] {
+    display: none;
+}
+
+.cartao-form-hint {
+    color: #64748b;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
 .checkbox-label {
     display: inline-flex;
     align-items: center;

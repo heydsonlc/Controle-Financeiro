@@ -8,23 +8,25 @@ Este serviÃ§o implementa:
 4. Pagamento de faturas (planejado â†’ executado)
 5. Alertas de estouro de orÃ§amento
 """
+import calendar
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from sqlalchemy import func, and_
 from sqlalchemy.exc import IntegrityError
+from zoneinfo import ZoneInfo
 import uuid
 import logging
 
 try:
-    from backend.models import (db, Conta, ItemDespesa, ItemAgregado,
+    from backend.models import (db, Conta, ItemDespesa, ItemAgregado, FaturaConsolidadaInclusao,
                                 OrcamentoAgregado, LancamentoAgregado, ConfigAgregador)
     from backend.services.categoria_cartao_service import CategoriaCartaoService
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
     from backend.services.gerador_recorrencia_service import flask_pode_gerar
     from backend.services.trava_financeira import travar, travar_um
 except ImportError:
-    from models import (db, Conta, ItemDespesa, ItemAgregado,
+    from models import (db, Conta, ItemDespesa, ItemAgregado, FaturaConsolidadaInclusao,
                        OrcamentoAgregado, LancamentoAgregado, ConfigAgregador)
     from services.categoria_cartao_service import CategoriaCartaoService
     from services.perfil_financeiro_service import PerfilFinanceiroService
@@ -44,6 +46,25 @@ def _violou_fatura_unica(exc):
         return diag.constraint_name == INDICE_FATURA_UNICA
     texto = str(original)
     return INDICE_FATURA_UNICA in texto or 'conta.item_despesa_id, conta.cartao_competencia' in texto  # SQLite
+
+
+FUSO_CIVIL = ZoneInfo('America/Sao_Paulo')  # data civil da compra (FIN-CARTOES-FECHAMENTO-1)
+REGRAS_DIA_FECHAMENTO = ('ATUAL', 'PROXIMO')
+
+
+def _reais(valor):
+    return f'{Decimal(valor):.2f}'
+
+
+class ConfirmacaoConsolidadaNecessaria(ValueError):
+    """FIN-CARTOES-FECHAMENTO-1 (D6): a operacao incluiria compra em fatura consolidada (FECHADA) sem a
+    confirmacao especifica dela ({fatura_id, total_consolidado} iguais aos atuais). Nada e gravado."""
+
+    def __init__(self, faturas):
+        self.faturas = faturas
+        partes = '; '.join(f"{f['competencia'][5:7]}/{f['competencia'][:4]} (total R$ {f['total_consolidado']} passa a "
+                           f"R$ {f['total_novo']})" for f in faturas)
+        super().__init__(f'Fatura consolidada: confirme a inclusao desta compra na fatura de {partes}.')
 
 
 class CartaoService:
@@ -72,6 +93,179 @@ class CartaoService:
         inicio_mes = CartaoService._primeiro_dia_mes(data_ou_competencia)
         inicio_mes_seguinte = inicio_mes + relativedelta(months=1)
         return inicio_mes, inicio_mes_seguinte
+
+    # ========================================================================
+    # FIN-CARTOES-FECHAMENTO-1 - competencia sugerida pelo fechamento do cartao
+    # ========================================================================
+
+    @staticmethod
+    def dia_contratual(competencia, dia):
+        """Dia `dia` no mes de `competencia`; 29-31 viram o ultimo dia do mes curto (financeiro.dia_contratual)."""
+        ultimo = calendar.monthrange(competencia.year, competencia.month)[1]
+        return date(competencia.year, competencia.month, min(int(dia), ultimo))
+
+    @staticmethod
+    def data_civil(valor):
+        """Data civil da compra: 'AAAA-MM-DD' e date valem como estao; datetime com fuso vira a data de Brasilia
+        (uma compra as 23h30 de Brasilia nao muda de dia por estar em UTC)."""
+        if valor is None or valor == '':
+            return None
+        if isinstance(valor, datetime):
+            return (valor.astimezone(FUSO_CIVIL) if valor.tzinfo else valor).date()
+        if isinstance(valor, date):
+            return valor
+        return datetime.strptime(str(valor).strip()[:10], '%Y-%m-%d').date()
+
+    @staticmethod
+    def competencia_da_compra(data, dia_fechamento, dia_vencimento, regra='PROXIMO'):
+        """Competencia (1o dia do mes do vencimento) da fatura que recebe uma compra feita em `data`.
+
+        Mesma regra de financeiro.competencia_da_compra (comparadas numa grade de datas):
+        - o ciclo fecha no dia contratual de fechamento do mes da compra; depois dele (ou nele, com a regra
+          PROXIMO, o padrao) fecha no mes seguinte;
+        - o vencimento e o primeiro dia contratual de vencimento depois do fechamento;
+        - None se a configuracao for invalida ou se, por causa dos dias curtos, o mes do vencimento fugir do
+          padrao do cartao (vence no mes do fechamento se o dia do vencimento e maior, senao no seguinte).
+        """
+        data = CartaoService.data_civil(data)
+        regra = regra or 'PROXIMO'
+        if data is None or dia_fechamento is None or dia_vencimento is None or regra not in REGRAS_DIA_FECHAMENTO:
+            return None
+        fechamento_dia, vencimento_dia = int(dia_fechamento), int(dia_vencimento)
+        if not (1 <= fechamento_dia <= 31 and 1 <= vencimento_dia <= 31):
+            return None
+        mes = data.replace(day=1)
+        fechamento = CartaoService.dia_contratual(mes, fechamento_dia)
+        if data > fechamento or (data == fechamento and regra == 'PROXIMO'):
+            mes = mes + relativedelta(months=1)
+            fechamento = CartaoService.dia_contratual(mes, fechamento_dia)
+        vencimento = CartaoService.dia_contratual(mes, vencimento_dia)
+        if vencimento <= fechamento:
+            vencimento = CartaoService.dia_contratual(mes + relativedelta(months=1), vencimento_dia)
+        if vencimento.replace(day=1) != mes + relativedelta(months=0 if vencimento_dia > fechamento_dia else 1):
+            return None  # ciclo ambiguo neste mes
+        return vencimento.replace(day=1)
+
+    _capacidades = {}
+
+    @staticmethod
+    def _capacidade(nome, teste):
+        chave = (str(db.engine.url), nome)
+        if chave not in CartaoService._capacidades:
+            from sqlalchemy import inspect
+            CartaoService._capacidades[chave] = teste(inspect(db.engine))
+        return CartaoService._capacidades[chave]
+
+    @staticmethod
+    def suporta_fechamento_configuravel():
+        """True se o banco ja tem config_agregador.compra_no_fechamento e fechamento_confirmado (migration
+        FIN-CARTOES-FECHAMENTO-1). Sem elas o Flask funciona como antes, sem sugestao de competencia."""
+        return CartaoService._capacidade('fechamento', lambda i: {'compra_no_fechamento', 'fechamento_confirmado'}
+                                         <= {c['name'] for c in i.get_columns('config_agregador')})
+
+    @staticmethod
+    def suporta_competencia_sugerida():
+        return CartaoService._capacidade('sugerida', lambda i: 'mes_fatura_sugerido'
+                                         in {c['name'] for c in i.get_columns('lancamento_agregado')})
+
+    @staticmethod
+    def suporta_auditoria_consolidada():
+        return CartaoService._capacidade('auditoria', lambda i: i.has_table('fatura_consolidada_inclusao'))
+
+    @staticmethod
+    def sugestao_competencia(cartao_id, data):
+        """Sugestao do cartao para a data (como financeiro.sugestao_competencia): situacao SUGERIDA,
+        NAO_CONFIRMADO, CICLO_AMBIGUO, SEM_CONFIGURACAO ou SEM_DATA, competencia e datas do ciclo."""
+        config = ConfigAgregador.query.filter_by(item_despesa_id=cartao_id).first()
+        dados = config.dados_fechamento() if config else {'compra_no_fechamento': 'PROXIMO', 'fechamento_confirmado': False}
+        fechamento_dia = config.dia_fechamento if config else None
+        vencimento_dia = config.dia_vencimento if config else None
+        data = CartaoService.data_civil(data)
+        competencia = None
+        if not (fechamento_dia and vencimento_dia and 1 <= fechamento_dia <= 31 and 1 <= vencimento_dia <= 31):
+            situacao = 'SEM_CONFIGURACAO'
+        elif not dados['fechamento_confirmado']:
+            situacao = 'NAO_CONFIRMADO'
+        elif data is None:
+            situacao = 'SEM_DATA'
+        else:
+            competencia = CartaoService.competencia_da_compra(data, fechamento_dia, vencimento_dia,
+                                                              dados['compra_no_fechamento'])
+            situacao = 'SUGERIDA' if competencia else 'CICLO_AMBIGUO'
+        return {
+            'situacao': situacao,
+            'competencia': competencia,
+            'fechamento': CartaoService.dia_contratual(
+                competencia - relativedelta(months=0 if vencimento_dia > fechamento_dia else 1), fechamento_dia)
+            if competencia else None,
+            'vencimento': CartaoService.dia_contratual(competencia, vencimento_dia) if competencia else None,
+            'dia_fechamento': fechamento_dia,
+            'dia_vencimento': vencimento_dia,
+            'compra_no_fechamento': dados['compra_no_fechamento'],
+            'fechamento_confirmado': dados['fechamento_confirmado'],
+        }
+
+    @staticmethod
+    def situacao_fatura(fatura):
+        if fatura is None:
+            return 'SEM_FATURA'
+        if CartaoService.fatura_esta_paga(fatura):
+            return 'PAGA'
+        return 'FECHADA' if fatura.status_fatura == 'FECHADA' else 'ABERTA'
+
+    # D6 - fatura consolidada so recebe compra com a confirmacao desta operacao, auditada.
+
+    @staticmethod
+    def total_consolidado(fatura):
+        valor = fatura.valor_consolidado if fatura.valor_consolidado is not None else (fatura.valor_executado or 0)
+        return Decimal(str(valor)).quantize(Decimal('0.01'))
+
+    @staticmethod
+    def _confirmada(fatura_id, total, confirmacoes):
+        for item in confirmacoes or []:
+            try:
+                if int(item.get('fatura_id')) == fatura_id and Decimal(str(item.get('total_consolidado'))) == total:
+                    return True
+            except (AttributeError, TypeError, ValueError, InvalidOperation):
+                continue
+        return False
+
+    @staticmethod
+    def conferir_confirmacoes(inclusoes, confirmacoes):
+        """inclusoes: {fatura_id: (fatura travada e relida, valor que entraria)}. Recusa se faltar a confirmacao
+        de alguma fatura ou se o banco ainda nao tiver a auditoria (nenhuma inclusao sem registro)."""
+        faltando = []
+        for fatura, valor in inclusoes.values():
+            total = CartaoService.total_consolidado(fatura)
+            if not CartaoService._confirmada(fatura.id, total, confirmacoes):
+                faltando.append({'fatura_id': fatura.id, 'competencia': fatura.cartao_competencia.isoformat(),
+                                 'total_consolidado': _reais(total), 'valor_incluido': _reais(valor),
+                                 'total_novo': _reais(total + Decimal(valor))})
+        if faltando:
+            raise ConfirmacaoConsolidadaNecessaria(faltando)
+        if inclusoes and not CartaoService.suporta_auditoria_consolidada():
+            raise ValueError('Fatura consolidada: este banco ainda nao registra a auditoria da inclusao '
+                             '(migration pendente). Nada foi gravado.')
+
+    @staticmethod
+    def registrar_inclusao_consolidada(fatura, valor, operacao, compra_id=None, lancamento_id=None):
+        """Atualiza o total consolidado (anterior + incluido) e grava a auditoria, na transacao do chamador."""
+        anterior = CartaoService.total_consolidado(fatura)
+        novo = anterior + Decimal(str(valor))
+        fatura.valor_consolidado = novo
+        usuario_id = None
+        try:
+            from flask_login import current_user
+            if current_user and current_user.is_authenticated:
+                usuario_id = current_user.id
+        except Exception:  # fora de requisicao (scripts, testes)
+            usuario_id = None
+        db.session.add(FaturaConsolidadaInclusao(
+            fatura_id=fatura.id, cartao_id=fatura.item_despesa_id, perfil_financeiro_id=fatura.perfil_financeiro_id,
+            competencia=fatura.cartao_competencia, compra_id=compra_id, lancamento_id=lancamento_id,
+            valor_incluido=Decimal(str(valor)), total_consolidado_anterior=anterior, total_consolidado_novo=novo,
+            operacao=operacao, origem='FLASK', usuario_id=usuario_id))
+        return novo
 
     # ========================================================================
     # GERAÃ‡ÃƒO E RECUPERAÃ‡ÃƒO DE FATURAS
@@ -123,7 +317,8 @@ class CartaoService:
         valor_planejado = CartaoService.calcular_planejado(cartao_id, comp_primeiro_dia)
 
         # Calcular data de vencimento baseada no dia de vencimento configurado
-        data_vencimento = comp_primeiro_dia.replace(day=config.dia_vencimento)
+        # FIN-CARTOES-FECHAMENTO-1 (D4): dia contratual; 29-31 viram o ultimo dia do mes curto (antes, ValueError).
+        data_vencimento = CartaoService.dia_contratual(comp_primeiro_dia, config.dia_vencimento)
 
         # FIN-FATURA-INTEGRIDADE-1: criar fatura trava o cartao (ordem global cartao -> faturas). Quem
         # segura o cartao (compra, recorrencia, importacao) nao ve surgir e ser paga uma fatura nova dele.
@@ -1070,6 +1265,25 @@ class CartaoService:
         # inserir qualquer parcela; a compra so e confirmada inteira (sem parcela solta se algo falhar).
         meses_pretendidos = [mes_fatura_inicial + relativedelta(months=n - 1) for n in range(1, total_parcelas + 1)]
         destinos = CartaoService.planejar_destinos([(cartao_id, 'compra', meses_pretendidos)])['compra']
+        # FIN-CARTOES-FECHAMENTO-1 (D6): fatura consolidada (FECHADA) de destino, ja travada e relida pelo
+        # planejamento, so recebe a compra com a confirmacao desta operacao; conferida antes de inserir.
+        faturas_destino = {mes: Conta.query.filter(
+            Conta.item_despesa_id == cartao_id,
+            Conta.is_fatura_cartao == True,  # noqa: E712
+            Conta.cartao_competencia == mes,
+        ).one() for mes in set(destinos)}
+        inclusoes = {}
+        for n, mes in enumerate(destinos, start=1):
+            fatura = faturas_destino[mes]
+            if fatura.status_fatura == 'FECHADA' and not CartaoService.fatura_esta_paga(fatura):
+                valor_n = Decimal(centavos_base + (1 if n <= centavos_resto else 0)) / 100
+                anterior = inclusoes.get(fatura.id, (fatura, Decimal('0')))[1]
+                inclusoes[fatura.id] = (fatura, anterior + valor_n)
+        CartaoService.conferir_confirmacoes(inclusoes, dados_lancamento.get('confirmar_consolidadas'))
+        # Competencia sugerida pelo fechamento (auditoria do ajuste manual), so num banco com a coluna.
+        sugerida = None
+        if CartaoService.suporta_competencia_sugerida():
+            sugerida = CartaoService.sugestao_competencia(cartao_id, data_compra_inicial)['competencia']
         # Criar uma parcela para cada mÃªs
         for n in range(1, total_parcelas + 1):
             # Calcular data da parcela (incrementa mÃªs a cada parcela)
@@ -1129,6 +1343,8 @@ class CartaoService:
             )
 
             CartaoService.registrar_desvio(lancamento, mes_fatura_original)
+            if sugerida:
+                lancamento.mes_fatura_sugerido = sugerida + relativedelta(months=n - 1)
             db.session.add(lancamento)
             lancamentos_criados.append(lancamento)
 
@@ -1138,6 +1354,14 @@ class CartaoService:
 
             # Registrar fatura afetada (mÃªs real usado, apÃ³s possÃ­vel redirecionamento)
             faturas_afetadas_set.add(mes_fatura_parcela)
+
+        # FIN-CARTOES-FECHAMENTO-1 (D6): total consolidado atualizado e auditado na mesma transacao.
+        if inclusoes:
+            db.session.flush()
+            for _fatura_id, (fatura, valor) in sorted(inclusoes.items()):
+                primeiro = next((l for l in lancamentos_criados if l.mes_fatura == fatura.cartao_competencia), None)
+                CartaoService.registrar_inclusao_consolidada(fatura, valor, 'COMPRA', compra_uuid,
+                                                             primeiro.id if primeiro else None)
 
         # FIN-PAGAMENTO-TRAVA-1: confirma as parcelas (cada uma entrou com a fatura dela travada) e
         # libera as travas antes dos recalculos. Cada recalculo trava UMA fatura e confirma; sem isso

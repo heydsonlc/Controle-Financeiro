@@ -435,14 +435,22 @@ def test_erro_no_meio_da_compra_nao_deixa_parcelas_nem_altera_pagas(pg):
     assert (md5_pagas(d), financeiro(d)) == antes and sem_duplicidade(d)
 
 
-# 11-13. Fatura FECHADA continua elegivel (estado proprio); paga intacta; movimentos e saldos intactos
+# 11-13. Fatura FECHADA continua elegivel (estado proprio); paga intacta; movimentos e saldos intactos.
+# FIN-CARTOES-FECHAMENTO-1 (D6): so recebe a compra com a confirmacao explicita do total visto; sem ela nada e gravado.
 def test_fatura_fechada_nao_e_tratada_como_paga(pg):
     d, p = pg
     fechada = fatura(d, '2029-10-01')
-    sql(d, "update public.conta set status_fatura = 'FECHADA' where id = %s", (fechada,))
+    sql(d, "update public.conta set status_fatura = 'FECHADA', valor_consolidado = 0 where id = %s", (fechada,))
     antes = financeiro(d)
-    assert 'erro' not in Flask(d, p, 'f', acao='compra', dados=compra('Na fechada', '2029-10-01')).resultado()
-    assert compras(d, "descricao = 'Na fechada'")[0]['mes_fatura'] == D(2029, 10, 1)
+    sem = Flask(d, p, 'f', acao='compra', dados=compra('Na fechada', '2029-10-01')).resultado()
+    assert sem['erro'].startswith('ConfirmacaoConsolidadaNecessaria')
+    assert compras(d, "descricao = 'Na fechada'") == []
+    confirmada = {**compra('Na fechada', '2029-10-01'),
+                  'confirmar_consolidadas': [{'fatura_id': fechada, 'total_consolidado': '0.00'}]}
+    assert 'erro' not in Flask(d, p, 'g', acao='compra', dados=confirmada).resultado()
+    assert compras(d, "descricao = 'Na fechada'")[0]['mes_fatura'] == D(2029, 10, 1)  # nao desviada: nao e paga
+    assert sql(d, 'select status_fatura, valor_consolidado from public.conta where id = %s', (fechada,)) == \
+        [{'status_fatura': 'FECHADA', 'valor_consolidado': Decimal('100.00')}]
     assert financeiro(d) == antes
 
 

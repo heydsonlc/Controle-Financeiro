@@ -5,12 +5,18 @@
 // Escrita so por RPC (criar_compra, editar_compra, excluir_compra, criar_cartao, editar_cartao,
 // inativar_cartao). Parcelas, centavos, fatura de destino e bloqueios sao decididos no banco;
 // a previa (previa_compra) mostra o que sera gravado. Nao ha pagamento de fatura aqui.
+// FIN-CARTOES-FECHAMENTO-1: a fatura da 1a parcela e sugerida pelo fechamento (sugerir_competencia, so
+// leitura) e pode ser trocada; a escolha manual nunca e sobrescrita. Fatura consolidada so recebe compra
+// com a confirmacao do total visto, uma caixa por fatura (o banco reconfere sob trava).
 
 import { supabase } from './cliente.js';
 import {
     MES_VALIDO, botao, campo, centavos, competenciaCurta, dataCurta, deslocarMes, el, entrada, formatarValor,
     linhaDetalhe, mesAtualBrasilia, normalizarValor, reais, seletor, tituloDoMes,
 } from './comum.js';
+import {
+    REGRAS_DIA_FECHAMENTO, confirmacoes, consolidadaDoErro, mesSemSugestao, textoConsolidada, textoRegra, textoSugestao,
+} from './fechamento.js';
 import { carregarPerfis, escolherPerfilAtivo, salvarPerfilAtivo } from './perfil.js';
 import { exigirUsuario, sair } from './sessao.js';
 
@@ -72,26 +78,51 @@ function hojeBrasilia() {
     return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
 }
 
-// Previa das parcelas: calculada no banco (mesma funcao do cadastro), so leitura.
-function montarPrevia(destino, contexto, lerDados) {
+// Caixa de confirmacao de uma fatura consolidada (marcada so pelo usuario).
+function caixaConsolidada(consolidada, prefixo) {
+    const caixa = entrada('checkbox');
+    caixa.id = `${prefixo}-consolidada-${consolidada.fatura_id}`;
+    const linha = el('label', 'form-check');
+    linha.htmlFor = caixa.id;
+    linha.append(caixa, el('span', null, textoConsolidada(consolidada)));
+    return { linha, caixa };
+}
+
+// Previa das parcelas: calculada no banco (mesma funcao do cadastro), so leitura. Destino em fatura
+// consolidada: uma caixa por fatura em estado.consolidadas. O conteudo so e trocado quando a resposta chega:
+// limpar antes deslocaria o botao Salvar no meio do clique (o `change` do campo sai no mousedown).
+function montarPrevia(destino, contexto, lerDados, estado) {
     let pedido = 0;
     return async () => {
         const dados = lerDados();
-        destino.replaceChildren();
-        if (!dados) return;
         const atual = ++pedido;
+        if (!dados) {
+            destino.replaceChildren();
+            estado.consolidadas = [];
+            return;
+        }
         const { data, error } = await supabase.rpc('previa_compra', { p_perfil_id: contexto.perfilId, p_dados: dados });
         if (atual !== pedido) return;
         if (error) {
-            destino.append(el('p', 'geracao-dica', mensagemDeErro(error)));
+            destino.replaceChildren(el('p', 'geracao-dica', mensagemDeErro(error)));
+            estado.consolidadas = [];
             return;
         }
         const lista = el('ul', 'cartao-previa');
         for (const p of data.parcelas) {
             const texto = `${p.numero}/${p.total} · fatura ${competenciaCurta(p.mes_fatura)} · ${reais(centavos(p.valor))}`;
-            lista.append(el('li', null, p.redirecionada ? `${texto} (fatura paga: vai para a próxima)` : texto));
+            lista.append(el('li', null, p.redirecionada ? `${texto} (fatura paga: vai para a próxima)`
+                : p.situacao_fatura === 'FECHADA' ? `${texto} (fatura consolidada)` : texto));
         }
-        destino.append(el('p', 'form-rotulo', `Parcelas (soma ${reais(centavos(data.soma))})`), lista);
+        const conteudo = [el('p', 'form-rotulo', `Parcelas (soma ${reais(centavos(data.soma))})`), lista];
+        const consolidadas = [];
+        for (const consolidada of data.consolidadas || []) {
+            const { linha, caixa } = caixaConsolidada(consolidada, 'compra');
+            conteudo.push(linha);
+            consolidadas.push({ ...consolidada, caixa });
+        }
+        destino.replaceChildren(...conteudo);
+        estado.consolidadas = consolidadas;
     };
 }
 
@@ -109,7 +140,14 @@ function abrirNovaCompra(contexto) {
     parcelas.max = '60';
     const dataCompra = entrada('date', hojeBrasilia());
     const mesFatura = entrada('month', contexto.mes);
-    const dicaMes = el('p', 'geracao-dica', 'Fatura da 1ª parcela, como no sistema atual. As seguintes vão para os meses seguintes.');
+    const dicaMes = el('p', 'geracao-dica', 'Fatura da 1ª parcela; as seguintes vão para os meses seguintes.');
+    const dicaSugestao = el('p', 'geracao-dica');
+    dicaSugestao.id = 'compra-sugestao';
+    dicaSugestao.setAttribute('role', 'status');
+    dicaSugestao.hidden = true;
+    const usarSugerida = botao('Usar a sugerida');
+    usarSugerida.id = 'compra-usar-sugerida';
+    usarSugerida.hidden = true;
     const categoria = seletor([['', 'Selecione']], '');
     categorias().then((lista) => { for (const c of lista) categoria.append(new Option(c.nome, String(c.id))); });
     const observacoes = el('textarea');
@@ -128,17 +166,60 @@ function abrirNovaCompra(contexto) {
             categoria_id: Number(categoria.value), observacoes: observacoes.value.trim(),
         };
     };
-    const atualizarPrevia = montarPrevia(previa, contexto, lerDados);
-    for (const controle of [cartao, descricao, valor, parcelas, dataCompra, mesFatura, categoria]) {
+    const estado = { consolidadas: [] };
+    const atualizarPrevia = montarPrevia(previa, contexto, lerDados, estado);
+    for (const controle of [descricao, valor, parcelas, mesFatura, categoria]) {
         controle.addEventListener('change', atualizarPrevia);
     }
+
+    // Sugestao pelo fechamento: recalculada ao trocar cartao ou data; so preenche o mes enquanto o usuario
+    // nao o escolheu.
+    let manual = false;
+    let sugestao = null;
+    let pedidoSugestao = 0;
+    const mostrarSugestao = () => {
+        const { texto, alerta } = textoSugestao(sugestao, { manual, escolhido: mesFatura.value });
+        dicaSugestao.textContent = texto;
+        dicaSugestao.hidden = !texto;
+        dicaSugestao.classList.toggle('dica-alerta', alerta);
+        usarSugerida.hidden = !(sugestao && sugestao.situacao === 'SUGERIDA' && manual
+            && mesFatura.value !== sugestao.competencia.slice(0, 7));
+    };
+    const sugerir = async () => {
+        const atual = ++pedidoSugestao;
+        sugestao = null;
+        if (cartao.value && dataCompra.value) {
+            const { data, error } = await supabase.rpc('sugerir_competencia', {
+                p_perfil_id: contexto.perfilId, p_cartao_id: Number(cartao.value), p_data_compra: dataCompra.value,
+            });
+            if (atual !== pedidoSugestao) return;
+            sugestao = error || !data ? { situacao: 'INDISPONIVEL' } : data;
+            if (!manual) {
+                mesFatura.value = sugestao.situacao === 'SUGERIDA' ? sugestao.competencia.slice(0, 7)
+                    : mesSemSugestao(sugestao.situacao, contexto.mes);
+            }
+        }
+        mostrarSugestao();
+        await atualizarPrevia();
+    };
+    cartao.addEventListener('change', sugerir);
+    dataCompra.addEventListener('change', sugerir);
+    mesFatura.addEventListener('input', () => { manual = true; mostrarSugestao(); });
+    usarSugerida.addEventListener('click', () => {
+        manual = false;
+        mesFatura.value = sugestao.competencia.slice(0, 7);
+        mostrarSugestao();
+        atualizarPrevia();
+    });
 
     f.form.append(campo('Cartão', cartao, 'compra-cartao'), campo('Descrição', descricao, 'compra-descricao'),
         campo('Valor total (R$)', valor, 'compra-valor'), campo('Parcelas', parcelas, 'compra-parcelas'),
         campo('Data da compra', dataCompra, 'compra-data'), campo('Mês da fatura', mesFatura, 'compra-mes'), dicaMes,
+        dicaSugestao, usarSugerida,
         campo('Categoria', categoria, 'compra-categoria'), campo('Observações', observacoes, 'compra-observacoes'),
         previa, f.erro, f.botoes);
     f.painel.append(f.form);
+    sugerir();
 
     const chave = crypto.randomUUID();
     f.form.addEventListener('submit', async (evento) => {
@@ -149,9 +230,19 @@ function abrirNovaCompra(contexto) {
             f.falhar('Verifique: cartão, descrição, valor, data, mês da fatura e categoria são obrigatórios.');
             return;
         }
+        if (estado.consolidadas.some((c) => !c.caixa.checked)) {
+            f.falhar('Confirme a inclusão na fatura consolidada ou escolha outro mês da fatura.');
+            return;
+        }
+        if (estado.consolidadas.length) dados.confirmar_consolidadas = confirmacoes(estado.consolidadas);
         f.travar();
         const { data, error } = await supabase.rpc('criar_compra', { p_perfil_id: contexto.perfilId, p_dados: dados, p_chave: chave });
         if (error) {
+            if (consolidadaDoErro(error)) {  // consolidada ou total mudou depois da previa: nada gravado
+                await atualizarPrevia();
+                f.falhar('A fatura de destino está consolidada e o total mudou ou não foi confirmado. Revise a prévia e confirme de novo.');
+                return;
+            }
             f.falhar(mensagemDeErro(error));
             return;
         }
@@ -181,13 +272,33 @@ async function abrirEdicaoCompra(contexto, lancamentoId) {
     let valor;
     let dataCompra;
     let mesFatura;
+    let pendente = null;  // fatura consolidada que o banco pediu para confirmar
+    const confirmacao = el('div');
     if (aVista) {
         valor = entrada('text', formatarValor(data.compra.valor));
         valor.inputMode = 'decimal';
         dataCompra = entrada('date', data.compra.data_compra);
         mesFatura = entrada('month', data.compra.mes_fatura.slice(0, 7));
+        // Na edicao o mes gravado e escolha do usuario: a sugestao da nova data so aparece como dica.
+        const dicaSugestao = el('p', 'geracao-dica');
+        dicaSugestao.id = 'edicao-sugestao';
+        dicaSugestao.hidden = true;
+        let pedidoSugestao = 0;
+        dataCompra.addEventListener('change', async () => {
+            const atual = ++pedidoSugestao;
+            const resposta = dataCompra.value ? await supabase.rpc('sugerir_competencia', {
+                p_perfil_id: contexto.perfilId, p_cartao_id: data.compra.cartao_id, p_data_compra: dataCompra.value,
+            }) : { data: null };
+            if (atual !== pedidoSugestao) return;
+            const sugestao = resposta.error ? { situacao: 'INDISPONIVEL' } : resposta.data;
+            const { texto, alerta } = textoSugestao(sugestao, { manual: true, escolhido: mesFatura.value });
+            dicaSugestao.textContent = texto;
+            dicaSugestao.hidden = !texto;
+            dicaSugestao.classList.toggle('dica-alerta', alerta);
+        });
+        mesFatura.addEventListener('change', () => { pendente = null; confirmacao.replaceChildren(); });
         f.form.append(campo('Valor (R$)', valor, 'edicao-valor'), campo('Data da compra', dataCompra, 'edicao-data'),
-            campo('Mês da fatura', mesFatura, 'edicao-mes'));
+            campo('Mês da fatura', mesFatura, 'edicao-mes'), dicaSugestao, confirmacao);
     } else {
         const preservadas = data.parcelas.length - data.abertas;
         f.form.append(el('p', 'geracao-dica', preservadas
@@ -210,12 +321,25 @@ async function abrirEdicaoCompra(contexto, lancamentoId) {
                 return;
             }
             Object.assign(alteracao, { valor: valorNormal, data_compra: dataCompra.value, mes_fatura: `${mesFatura.value}-01` });
+            if (pendente && !pendente.caixa.checked) {
+                f.falhar('Confirme a inclusão na fatura consolidada ou escolha outro mês da fatura.');
+                return;
+            }
+            if (pendente) alteracao.confirmar_consolidadas = confirmacoes([pendente.detalhe]);
         }
         f.travar();
         const resposta = await supabase.rpc('editar_compra', {
             p_perfil_id: contexto.perfilId, p_lancamento_id: lancamentoId, p_versao: data.versao, p_dados: alteracao,
         });
         if (resposta.error) {
+            const detalhe = consolidadaDoErro(resposta.error);
+            if (detalhe && aVista) {  // nada gravado: mostra o total atual para a confirmacao desta operacao
+                const { linha, caixa } = caixaConsolidada(detalhe, 'edicao');
+                pendente = { detalhe, caixa };
+                confirmacao.replaceChildren(linha);
+                f.falhar('A fatura escolhida está consolidada: confirme a inclusão para salvar.');
+                return;
+            }
             f.falhar(mensagemDeErro(resposta.error));
             return;
         }
@@ -330,6 +454,17 @@ function abrirCartao(contexto, cartao) {
         dia.min = '1';
         dia.max = '31';
     }
+    const regra = seletor(REGRAS_DIA_FECHAMENTO, cartao ? cartao.compra_no_fechamento || 'PROXIMO' : 'PROXIMO');
+    // Confirmacao explicita: sem ela a fatura nao e sugerida. Mudar um dia ou a regra pede nova confirmacao.
+    const confirmado = entrada('checkbox');
+    confirmado.checked = Boolean(cartao && cartao.fechamento_confirmado);
+    confirmado.id = 'cartao-confirmado';
+    const linhaConfirmado = el('label', 'form-check');
+    linhaConfirmado.htmlFor = confirmado.id;
+    linhaConfirmado.append(confirmado, el('span', null, 'Confirmo os dias de fechamento e vencimento conforme a administradora'));
+    for (const controle of [fechamento, vencimento, regra]) {
+        controle.addEventListener('change', () => { confirmado.checked = false; });
+    }
     const limite = entrada('text', cartao ? formatarValor(cartao.limite_credito) : '');
     limite.inputMode = 'decimal';
     const observacoes = el('textarea');
@@ -337,8 +472,11 @@ function abrirCartao(contexto, cartao) {
     observacoes.maxLength = 1000;
     observacoes.value = cartao ? cartao.observacoes || '' : '';
     f.form.append(campo('Nome', nome, 'cartao-nome'), campo('Dia de fechamento', fechamento, 'cartao-fechamento'),
-        campo('Dia de vencimento', vencimento, 'cartao-vencimento'), campo('Limite de crédito (R$)', limite, 'cartao-limite'),
-        el('p', 'geracao-dica', cartao ? 'O novo vencimento vale para as próximas faturas; as já criadas não mudam.'
+        campo('Dia de vencimento', vencimento, 'cartao-vencimento'),
+        campo('Compra no dia do fechamento', regra, 'cartao-regra'), linhaConfirmado,
+        el('p', 'geracao-dica', 'Sem a confirmação, a fatura de cada compra não é sugerida. Dias 29 a 31 usam o último dia nos meses curtos.'),
+        campo('Limite de crédito (R$)', limite, 'cartao-limite'),
+        el('p', 'geracao-dica', cartao ? 'Os novos dias valem para as próximas compras e faturas; as já criadas não mudam.'
             : 'Número e código de segurança não são registrados aqui.'),
         campo('Observações', observacoes, 'cartao-observacoes'), f.erro, f.botoes);
     f.painel.append(f.form);
@@ -353,6 +491,7 @@ function abrirCartao(contexto, cartao) {
         const dados = {
             nome: nome.value.trim(), dia_fechamento: Number(fechamento.value), dia_vencimento: Number(vencimento.value),
             limite_credito: limiteNormal || null, observacoes: observacoes.value.trim(),
+            compra_no_fechamento: regra.value, fechamento_confirmado: confirmado.checked,
         };
         f.travar();
         const { error } = cartao
@@ -378,8 +517,10 @@ function itemCadastro(cartao, contexto) {
         el('span', 'conta-vencimento', dias));
     const lado = el('span', 'conta-lado');
     lado.append(el('span', `situacao situacao-fatura-${cartao.ativo ? 'aberta' : 'sem_fatura'}`, cartao.ativo ? 'Ativo' : 'Inativo'));
+    if (cartao.ativo && !cartao.fechamento_confirmado) lado.append(el('span', 'cartao-aviso', 'Fechamento a confirmar'));
     resumo.append(principal, lado);
     const lista = el('dl', 'conta-detalhe');
+    if (cartao.dia_vencimento) linhaDetalhe(lista, 'Compra no dia do fechamento', textoRegra(cartao.compra_no_fechamento));
     if (cartao.limite_credito !== null) linhaDetalhe(lista, 'Limite', reais(centavos(cartao.limite_credito)));
     linhaDetalhe(lista, 'Observações', cartao.observacoes);
     detalhe.append(resumo, lista);

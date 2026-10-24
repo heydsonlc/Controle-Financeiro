@@ -19,7 +19,8 @@ const estadoCartoes = {
     buscaGeral: '',
     buscaLateral: '',
     status: 'ativos',
-    mesSelecionado: new Date().toISOString().slice(0, 7),
+    // Mes civil local (toISOString usa UTC e, perto da meia-noite do ultimo dia, mostraria o mes seguinte)
+    mesSelecionado: (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; })(),
     cvvOcultarTimeoutId: null,
 };
 
@@ -129,6 +130,9 @@ function configurarEventosCartoes() {
     document.getElementById('cartao-detalhe')?.addEventListener('click', tratarCliqueDetalhe);
     document.getElementById('cartao-detalhe')?.addEventListener('change', tratarMudancaDetalhe);
     document.getElementById('form-cartao')?.addEventListener('submit', salvarCartao);
+    ['cartao-dia-fechamento', 'cartao-dia-vencimento', 'cartao-compra-no-fechamento'].forEach((id) => {
+        document.getElementById(id)?.addEventListener('change', desconfirmarFechamento);
+    });
     document.getElementById('form-categoria-limite')?.addEventListener('submit', salvarCategoriaLimite);
     document.getElementById('form-revelar-cvv')?.addEventListener('submit', revelarCodigoSeguranca);
     document.getElementById('form-gerenciar-parcelamento')?.addEventListener('submit', salvarParcelasFuturas);
@@ -366,8 +370,12 @@ function renderizarDetalheCartao() {
                 <div>
                     <h2>${escapeHtml(cartao.nome)}</h2>
                     <p>${escapeHtml(obterInstituicaoCartao(cartao) || 'Emissor nao informado')} &bull; **** ${escapeHtml(final)} ${final !== '----' ? `(Final ${escapeHtml(final)})` : ''}</p>
+                    <p>${descreverCicloCartao(cartao.config)}</p>
                 </div>
                 <span class="compact-pill status-ativo">Ativo</span>
+                ${cartao.config?.fechamento_configuravel && !cartao.config?.fechamento_confirmado
+                    ? '<span class="compact-pill status-atencao" title="Sem confirma&ccedil;&atilde;o, a fatura de cada compra n&atilde;o &eacute; sugerida">Fechamento a confirmar</span>'
+                    : ''}
             </div>
             <div class="cartao-detail-actions">
                 <button class="cf-button cf-button-secondary" type="button" data-action="editar-cartao">${cartoesIcon('edit')} <span>Editar cart&atilde;o</span></button>
@@ -770,11 +778,40 @@ function renderizarIconeCategoriaCartao(categoria, size = '18px') {
     return cartoesIcon('card');
 }
 
+function descreverCicloCartao(config) {
+    if (!config?.dia_fechamento || !config?.dia_vencimento) return 'Fechamento e vencimento n&atilde;o informados';
+    const regra = config.compra_no_fechamento === 'ATUAL' ? 'entra na fatura que fecha' : 'vai para a pr&oacute;xima fatura';
+    const texto = `Fecha dia ${Number(config.dia_fechamento)} &bull; vence dia ${Number(config.dia_vencimento)}`;
+    return config.fechamento_configuravel ? `${texto} &bull; compra no dia do fechamento ${regra}` : texto;
+}
+
+// Banco sem a migration FIN-CARTOES-FECHAMENTO-1: a regra do dia e a confirmacao nao sao gravadas, entao ficam ocultas.
+function fechamentoConfiguravel() {
+    return estadoCartoes.cartoes.every((cartao) => cartao.config?.fechamento_configuravel !== false);
+}
+
+function prepararCamposFechamento(config = null) {
+    const configuravel = fechamentoConfiguravel();
+    document.querySelectorAll('#form-cartao [data-fechamento-configuravel]').forEach((campo) => {
+        campo.hidden = !configuravel;
+    });
+    document.getElementById('cartao-dia-fechamento').value = config?.dia_fechamento || '';
+    document.getElementById('cartao-dia-vencimento').value = config?.dia_vencimento || '';
+    document.getElementById('cartao-compra-no-fechamento').value = config?.compra_no_fechamento || 'PROXIMO';
+    document.getElementById('cartao-fechamento-confirmado').checked = config?.fechamento_confirmado === true;
+}
+
+// Mudou um dia ou a regra: a confirmacao anterior nao vale para os novos valores; o usuario confirma de novo.
+function desconfirmarFechamento() {
+    document.getElementById('cartao-fechamento-confirmado').checked = false;
+}
+
 function abrirModalCartao() {
     document.getElementById('modal-cartao-titulo').textContent = 'Novo Cart\u00e3o';
     document.getElementById('form-cartao').reset();
     document.getElementById('cartao-id').value = '';
     document.getElementById('cartao-tem-codigo').checked = true;
+    prepararCamposFechamento();
     abrirModal('modal-cartao');
 }
 
@@ -786,7 +823,7 @@ function abrirModalEditarCartao() {
     document.getElementById('cartao-id').value = cartao.id;
     document.getElementById('cartao-nome').value = cartao.nome || '';
     document.getElementById('cartao-descricao').value = cartao.descricao || '';
-    document.getElementById('cartao-dia-vencimento').value = cartao.config?.dia_vencimento || '';
+    prepararCamposFechamento(cartao.config);
     document.getElementById('cartao-limite').value = cartao.config?.limite_credito || '';
     document.getElementById('cartao-numero').value = cartao.config?.numero_cartao || '';
     document.getElementById('cartao-data-validade').value = cartao.config?.data_validade || '';
@@ -800,11 +837,12 @@ async function salvarCartao(event) {
     event.preventDefault();
 
     const id = document.getElementById('cartao-id').value;
+    const diaFechamento = Number(document.getElementById('cartao-dia-fechamento').value);
     const diaVencimento = Number(document.getElementById('cartao-dia-vencimento').value);
     const dados = {
         nome: document.getElementById('cartao-nome').value.trim(),
         descricao: document.getElementById('cartao-descricao').value.trim(),
-        dia_fechamento: diaVencimento,
+        dia_fechamento: diaFechamento,
         dia_vencimento: diaVencimento,
         limite_credito: parseFloat(document.getElementById('cartao-limite').value) || null,
         numero_cartao: document.getElementById('cartao-numero').value || null,
@@ -814,9 +852,14 @@ async function salvarCartao(event) {
         observacoes: document.getElementById('cartao-observacoes').value
     };
 
-    if (!dados.nome || !diaVencimento) {
-        mostrarErro('Informe nome e vencimento do cart\u00e3o.');
+    const diaValido = (dia) => Number.isInteger(dia) && dia >= 1 && dia <= 31;
+    if (!dados.nome || !diaValido(diaFechamento) || !diaValido(diaVencimento)) {
+        mostrarErro('Informe nome, dia do fechamento e dia do vencimento (1 a 31) do cart\u00e3o.');
         return;
+    }
+    if (fechamentoConfiguravel()) {
+        dados.compra_no_fechamento = document.getElementById('cartao-compra-no-fechamento').value;
+        dados.fechamento_confirmado = document.getElementById('cartao-fechamento-confirmado').checked;
     }
 
     try {

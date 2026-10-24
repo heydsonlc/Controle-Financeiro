@@ -73,7 +73,7 @@ function inicializarFiltros() {
     const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
 
     document.getElementById('filtro-mes').value = mesAtual;
-    document.getElementById('lancamento-data').value = hoje.toISOString().split('T')[0];
+    document.getElementById('lancamento-data').value = dataLocalISO(hoje);
     document.getElementById('lancamento-mes-fatura').value = mesAtual;
 
     state.filtros.mes = mesAtual;
@@ -90,6 +90,10 @@ function inicializarFiltros() {
     document.getElementById('filtro-busca')?.addEventListener('input', aplicarFiltros);
     document.getElementById('lancamento-categoria-despesa-cartao')?.addEventListener('change', resolverCategoriaCartaoLancamento);
     document.getElementById('lancamento-cartao')?.addEventListener('change', resolverCategoriaCartaoLancamento);
+    document.getElementById('lancamento-cartao')?.addEventListener('change', atualizarSugestaoFatura);
+    document.getElementById('lancamento-data')?.addEventListener('change', atualizarSugestaoFatura);
+    document.getElementById('lancamento-mes-fatura')?.addEventListener('input', marcarFaturaManual);
+    document.getElementById('lancamento-usar-sugerida')?.addEventListener('click', usarFaturaSugerida);
 
     const campoObservacoes = document.getElementById('lancamento-observacoes');
     campoObservacoes?.addEventListener('input', () => {
@@ -712,9 +716,13 @@ function abrirModalLancamento() {
     document.getElementById('campos-credito').style.display = 'none';
 
     const hoje = new Date();
-    document.getElementById('lancamento-data').value = hoje.toISOString().split('T')[0];
-    document.getElementById('lancamento-mes-fatura').value = state.filtros.mes ||
-        `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+    document.getElementById('lancamento-data').value = dataLocalISO(hoje);
+    document.getElementById('lancamento-mes-fatura').value = mesPadraoFatura();
+    sugestaoFatura.manual = false;
+    sugestaoFatura.sugerida = null;
+    sugestaoFatura.resposta = null;
+    sugestaoFatura.requisicao += 1;
+    exibirSugestaoFatura('');
 
     // CRÍTICO: Limpar validações ao abrir modal (tipo ainda não selecionado)
     ajustarCamposPorTipo('');
@@ -840,6 +848,139 @@ function alternarTipoLancamento() {
 
     // CRÍTICO: Ajustar validações após mudar visibilidade
     ajustarCamposPorTipo(tipo);
+
+    if (tipo === 'cartao') {
+        atualizarSugestaoFatura();
+    } else {
+        exibirSugestaoFatura('');
+    }
+}
+
+// ===================================
+// FATURA SUGERIDA PELO FECHAMENTO (FIN-CARTOES-FECHAMENTO-1)
+// ===================================
+
+// A sugestão nunca sobrescreve um mês escolhido pelo usuário; em edição, vale o mês já gravado.
+const sugestaoFatura = { manual: false, sugerida: null, resposta: null, requisicao: 0 };
+
+// Data civil local (toISOString usa UTC: perto da meia-noite trocaria o dia e, no fechamento, a fatura).
+function dataLocalISO(data = new Date()) {
+    return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`;
+}
+
+function mesPadraoFatura() {
+    const hoje = new Date();
+    return state.filtros.mes || `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function mesAnoFatura(competencia) {
+    const [ano, mes] = String(competencia || '').split('-');
+    return ano && mes ? `${mes}/${ano}` : '';
+}
+
+function diaMesFatura(data) {
+    const [, mes, dia] = String(data || '').split('-');
+    return mes && dia ? `${dia}/${mes}` : '';
+}
+
+function exibirSugestaoFatura(texto, alerta = false) {
+    const aviso = document.getElementById('lancamento-fatura-sugestao');
+    const botao = document.getElementById('lancamento-usar-sugerida');
+    if (aviso) {
+        aviso.textContent = texto || '';
+        aviso.hidden = !texto;
+        aviso.parentElement.hidden = !texto;
+        aviso.classList.toggle('is-alerta', Boolean(texto) && alerta);
+    }
+    if (botao) {
+        const escolhido = document.getElementById('lancamento-mes-fatura').value;
+        botao.hidden = !(texto && sugestaoFatura.sugerida && sugestaoFatura.manual && escolhido !== sugestaoFatura.sugerida);
+    }
+}
+
+function textoSugestaoFatura(sugestao) {
+    if (sugestao.situacao === 'NAO_CONFIRMADO') {
+        return 'Fechamento deste cartão ainda não confirmado: confira o mês da fatura (os dias são confirmados na tela de Cartões).';
+    }
+    if (sugestao.situacao === 'CICLO_AMBIGUO') {
+        return 'Os dias de fechamento e vencimento não definem a fatura desta data: escolha o mês manualmente.';
+    }
+    if (sugestao.situacao === 'SEM_CONFIGURACAO') {
+        return 'Cartão sem dias de fechamento e vencimento: confira o mês da fatura.';
+    }
+    if (sugestao.situacao !== 'SUGERIDA') return '';
+    const partes = [`Sugerida pelo fechamento: fatura de ${mesAnoFatura(sugestao.competencia)} `
+        + `(fecha ${diaMesFatura(sugestao.fechamento)}, vence ${diaMesFatura(sugestao.vencimento)}).`];
+    const escolhido = document.getElementById('lancamento-mes-fatura').value;
+    if (sugestaoFatura.manual && escolhido && escolhido !== sugestao.competencia.slice(0, 7)) {
+        partes.push(`Mês escolhido manualmente: ${mesAnoFatura(escolhido)}.`);
+    } else if (sugestao.fatura_situacao === 'FECHADA') {
+        partes.push('Essa fatura está consolidada: a inclusão pedirá confirmação.');
+    } else if (sugestao.fatura_situacao === 'PAGA') {
+        partes.push('Essa fatura já está paga: a compra irá para a próxima fatura em aberto.');
+    }
+    return partes.join(' ');
+}
+
+async function atualizarSugestaoFatura() {
+    if (document.getElementById('lancamento-tipo').value !== 'cartao' || document.getElementById('lancamento-id').value) {
+        return;
+    }
+    const cartaoId = document.getElementById('lancamento-cartao').value;
+    const data = document.getElementById('lancamento-data').value;
+    const requisicao = ++sugestaoFatura.requisicao;
+    sugestaoFatura.sugerida = null;
+    sugestaoFatura.resposta = null;
+    if (!cartaoId || !data) {
+        exibirSugestaoFatura('');
+        return;
+    }
+    try {
+        const response = await fetch(`/api/cartoes/${cartaoId}/competencia-sugerida?data=${encodeURIComponent(data)}`);
+        const json = await response.json();
+        if (requisicao !== sugestaoFatura.requisicao) return; // cartão ou data mudaram durante a consulta
+        if (!response.ok) throw new Error(json.error || 'Falha ao sugerir a fatura');
+        const campoMes = document.getElementById('lancamento-mes-fatura');
+        sugestaoFatura.resposta = json;
+        if (json.situacao === 'SUGERIDA') {
+            sugestaoFatura.sugerida = json.competencia.slice(0, 7);
+            if (!sugestaoFatura.manual) campoMes.value = sugestaoFatura.sugerida;
+        } else if (!sugestaoFatura.manual) {
+            // Sem sugestão: ciclo ambíguo exige escolha; cartão não confirmado volta ao mês padrão de antes (com aviso),
+            // nunca ao mês que outro cartão ou outra data sugeriram.
+            campoMes.value = json.situacao === 'CICLO_AMBIGUO' ? '' : mesPadraoFatura();
+        }
+        renderizarSugestaoFatura();
+    } catch (error) {
+        if (requisicao !== sugestaoFatura.requisicao) return;
+        console.error('Erro ao sugerir fatura:', error);
+        exibirSugestaoFatura('Não foi possível sugerir a fatura: escolha o mês manualmente.', true);
+    }
+}
+
+function renderizarSugestaoFatura() {
+    const json = sugestaoFatura.resposta;
+    if (!json) return;
+    const alerta = json.situacao !== 'SUGERIDA' || (!sugestaoFatura.manual && json.fatura_situacao === 'FECHADA');
+    exibirSugestaoFatura(textoSugestaoFatura(json), alerta);
+}
+
+function marcarFaturaManual() {
+    sugestaoFatura.manual = true;
+    renderizarSugestaoFatura();
+}
+
+function usarFaturaSugerida() {
+    if (!sugestaoFatura.sugerida) return;
+    sugestaoFatura.manual = false;
+    document.getElementById('lancamento-mes-fatura').value = sugestaoFatura.sugerida;
+    renderizarSugestaoFatura();
+}
+
+function descreverFaturasConsolidadas(faturas) {
+    return faturas.map((f) => `• Fatura ${mesAnoFatura(f.competencia)}: total consolidado `
+        + `${formatarMoeda(Number(f.total_consolidado))} passa a ${formatarMoeda(Number(f.total_novo))} `
+        + `(inclusão de ${formatarMoeda(Number(f.valor_incluido))})`).join('\n');
 }
 
 async function salvarLancamento(event) {
@@ -858,7 +999,7 @@ async function salvarLancamento(event) {
     }
 }
 
-async function salvarLancamentoCartao() {
+async function salvarLancamentoCartao(confirmacoes = null) {
     // Validação de campos obrigatórios
     const cartaoId = document.getElementById('lancamento-cartao').value;
     const categoriaDespesaId = document.getElementById('lancamento-categoria-despesa-cartao').value;
@@ -886,6 +1027,12 @@ async function salvarLancamentoCartao() {
         total_parcelas: parseInt(document.getElementById('lancamento-parcelas').value) || 1,
         observacoes: document.getElementById('lancamento-observacoes').value
     };
+    if (!dados.mes_fatura) {
+        mostrarErro('Escolha o mês da fatura');
+        return;
+    }
+    // Confirmação da operação específica: cada fatura consolidada com o total que o usuário viu
+    if (confirmacoes) dados.confirmar_consolidadas = confirmacoes;
 
     try {
         const url = `/api/cartoes/${cartaoId}/lancamentos`;
@@ -894,8 +1041,23 @@ async function salvarLancamentoCartao() {
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(dados)
         });
+        const json = await response.json().catch(() => ({}));
 
-        if (!response.ok) throw new Error('Erro ao salvar lançamento');
+        if (response.status === 409 && json.codigo === 'CONFIRMAR_FATURA_CONSOLIDADA') {
+            const confirmado = confirm('Esta compra entra em fatura já consolidada:\n'
+                + `${descreverFaturasConsolidadas(json.faturas || [])}\n\n`
+                + 'Confirmar a inclusão? O total consolidado será atualizado e a inclusão ficará registrada.');
+            if (!confirmado) {
+                mostrarErro('Compra não salva: a inclusão na fatura consolidada não foi confirmada.');
+                return;
+            }
+            await salvarLancamentoCartao((json.faturas || []).map((f) => ({
+                fatura_id: f.fatura_id,
+                total_consolidado: f.total_consolidado
+            })));
+            return;
+        }
+        if (!response.ok) throw new Error(json.error || 'Erro ao salvar lançamento no cartão');
 
         finalizarLancamentoInline();
         await carregarLancamentos();
@@ -903,7 +1065,7 @@ async function salvarLancamentoCartao() {
 
     } catch (error) {
         console.error('Erro ao salvar lançamento:', error);
-        mostrarErro('Erro ao salvar lançamento no cartão');
+        mostrarErro(error.message || 'Erro ao salvar lançamento no cartão');
     }
 }
 

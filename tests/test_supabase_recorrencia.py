@@ -66,7 +66,8 @@ DIVERGENCIAS_INTENCIONAIS = {
     **{('CONTA', 904, m): 'CORRECAO D4: recorrencia inativa nao gera'
        for m in _meses((2027, 1), (2027, 2), (2027, 3), (2027, 4))},
     ('CONTA', 907, D(2028, 1, 1)): 'CORRECAO D2: nao gera competencia alem do mes seguinte',
-    ('FATURA', 910, D(2027, 4, 1)): 'CORRECAO D6: fatura com vencimento 31 em mes de 30 dias (Flask nao cria)',
+    # ('FATURA', 910, 2027-04): deixou de divergir — o Flask cria a fatura com vencimento 31 em mes de 30 dias
+    # no ultimo dia (FIN-CARTOES-FECHAMENTO-1, D4), igual ao novo motor.
     **{('CONTA', 920, m): 'CORRECAO D7: falha isolada por item (Flask desfaz o perfil inteiro)'
        for m in _meses((2027, 3), (2027, 4))},
     **{('FATURA', 930, m): 'CORRECAO D7: falha isolada por item (Flask desfaz o perfil inteiro)'
@@ -282,7 +283,7 @@ def test_registros_iguais_ao_flask_onde_nao_ha_correcao(comparacao):
                  ('CONTA', 903, D(2026, 3, 1)), ('CONTA', 903, D(2027, 3, 1)),
                  ('LANCAMENTO_CARTAO', 906, D(2027, 2, 1)),
                  ('CONTA', 909, D(2027, 2, 1)), ('CONTA', 909, D(2027, 3, 1)), ('CONTA', 909, D(2027, 4, 1)),
-                 ('FATURA', 910, D(2027, 3, 1)),
+                 ('FATURA', 910, D(2027, 3, 1)), ('FATURA', 910, D(2027, 4, 1)),  # abril: FIN-CARTOES-FECHAMENTO-1
                  ('CONTA', 940, D(2027, 3, 1)), ('CONTA', 940, D(2027, 4, 1))}
     assert iguais == esperadas  # todos os campos, inclusive perfil NULL, debito, conta bancaria, compra_id
 
@@ -292,13 +293,10 @@ def test_flask_primeiro_registros_reconhecidos_sem_duplicar(comparacao, cluster)
     atribuir(dsn, 'PESSOAL')  # transicao do perfil depois de o Flask ja ter gerado
     antes_contas, antes_lancs = ids(dsn, 'conta'), ids(dsn, 'lancamento_agregado')
     p = previa(dsn)
-    # So falta o que o Flask nao consegue criar: a fatura de abril (dia 31).
-    assert [(i['natureza'], i['item_id'], i['competencia']) for i in p['itens']] == [('FATURA', 910, '2027-04-01')]
-    r = gerar(dsn, p['a_gerar'])
-    assert r['criadas'] == {'contas': 0, 'lancamentos': 0, 'faturas': 1, 'total': 1}
-    assert ids(dsn, 'lancamento_agregado') == antes_lancs
-    novas = ids(dsn, 'conta') - antes_contas
-    assert [x['item_despesa_id'] for x in sql(dsn, 'select * from public.conta where id = any(%s)', (list(novas),))] == [910]
+    # Nada falta: desde o FIN-CARTOES-FECHAMENTO-1 (D4) o Flask tambem cria a fatura de abril (vencimento 31 -> 30/04),
+    # que antes so o novo motor criava. Tudo o que o Flask gerou e reconhecido; nada e duplicado.
+    assert p['itens'] == []
+    assert ids(dsn, 'lancamento_agregado') == antes_lancs and ids(dsn, 'conta') == antes_contas
 
 
 def test_correcao_do_vencimento_nao_duplica_registro_antigo_do_flask(comparacao):

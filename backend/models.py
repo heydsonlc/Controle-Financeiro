@@ -713,6 +713,16 @@ class ConfigAgregador(db.Model):
     tem_codigo = db.Column(db.Boolean, default=True)  # Se o cartão possui código de segurança
     observacoes = db.Column(db.Text)
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    # FIN-CARTOES-FECHAMENTO-1: compra no dia do fechamento entra no ciclo ATUAL ou no PROXIMO (padrao) e
+    # fechamento confirmado pelo usuario (sem isso nao ha sugestao de competencia). Deferred + server_default +
+    # eager_defaults=False, como mes_fatura_original: o Flask funciona num banco ainda sem as colunas
+    # (CartaoService.suporta_fechamento_configuravel decide se elas sao lidas ou gravadas).
+    compra_no_fechamento = db.deferred(db.Column(db.String(10), nullable=False, server_default=db.text("'PROXIMO'")))
+    fechamento_confirmado = db.deferred(db.Column(db.Boolean, nullable=False, server_default=db.false()))
+    __mapper_args__ = {'eager_defaults': False}
+    __table_args__ = (
+        db.CheckConstraint("compra_no_fechamento in ('ATUAL', 'PROXIMO')", name='ck_config_agregador_compra_no_fechamento'),
+    )
 
     # Relacionamentos
     item_despesa = db.relationship('ItemDespesa', back_populates='config_agregador')
@@ -735,8 +745,23 @@ class ConfigAgregador(db.Model):
             'data_validade': self.data_validade,  # MM/AAAA
             'tem_codigo': self.tem_codigo if self.tem_codigo is not None else True,  # Se o cartão possui código de segurança
             'possui_cvv': bool(self.codigo_seguranca),
-            'observacoes': self.observacoes
+            'observacoes': self.observacoes,
+            **self.dados_fechamento(),
         }
+
+    def dados_fechamento(self):
+        """FIN-CARTOES-FECHAMENTO-1: regra do dia do fechamento e confirmacao (num banco ainda sem as colunas,
+        padroes conservadores: nenhuma sugestao automatica)."""
+        from flask import has_app_context
+        if not has_app_context():  # objeto em memoria, sem banco: so o que foi definido nele
+            estado = self.__dict__
+            return {'compra_no_fechamento': estado.get('compra_no_fechamento') or 'PROXIMO',
+                    'fechamento_confirmado': bool(estado.get('fechamento_confirmado')), 'fechamento_configuravel': False}
+        from backend.services.cartao_service import CartaoService
+        if not CartaoService.suporta_fechamento_configuravel():
+            return {'compra_no_fechamento': 'PROXIMO', 'fechamento_confirmado': False, 'fechamento_configuravel': False}
+        return {'compra_no_fechamento': self.compra_no_fechamento or 'PROXIMO',
+                'fechamento_confirmado': bool(self.fechamento_confirmado), 'fechamento_configuravel': True}
 
 
 class Orcamento(db.Model):
@@ -1185,6 +1210,9 @@ class LancamentoAgregado(db.Model):
     # banco ainda sem a coluna (nao a seleciona nem a cita no INSERT) e so a grava quando ela existe
     # (CartaoService.registrar_desvio).
     mes_fatura_original = db.deferred(db.Column(db.Date, nullable=True, server_default=db.text('NULL')))
+    # FIN-CARTOES-FECHAMENTO-1: competencia que o fechamento do cartao sugeria para a parcela no cadastro
+    # (auditoria do ajuste manual; nula = sem sugestao). Mesmo tratamento num banco sem a coluna.
+    mes_fatura_sugerido = db.deferred(db.Column(db.Date, nullable=True, server_default=db.text('NULL')))
     __mapper_args__ = {'eager_defaults': False}
 
     # Campos para importação CSV (FASE 6.2)
@@ -1240,6 +1268,43 @@ class LancamentoAgregado(db.Model):
                 'icone': self.categoria_cartao.icone,
                 'logo_url': self.categoria_cartao.logo_url
             } if self.categoria_cartao else None
+        }
+
+
+class FaturaConsolidadaInclusao(db.Model):
+    """
+    FIN-CARTOES-FECHAMENTO-1 (D6): auditoria de cada inclusao CONFIRMADA de compra em fatura consolidada
+    (status_fatura 'FECHADA'): total consolidado anterior e novo, origem (FLASK ou NOVO_APP) e autor.
+    A mesma tabela e criada pela migration do Supabase 20261030090000 e pela Alembic c7e2a9d4b8f3.
+    """
+    __tablename__ = 'fatura_consolidada_inclusao'
+
+    id = db.Column(db.Integer, primary_key=True)
+    fatura_id = db.Column(db.Integer, db.ForeignKey('conta.id', ondelete='CASCADE'), nullable=False)
+    cartao_id = db.Column(db.Integer, nullable=False)
+    perfil_financeiro_id = db.Column(db.Integer, nullable=True)
+    competencia = db.Column(db.Date, nullable=False)
+    compra_id = db.Column(db.String(36), nullable=True)
+    lancamento_id = db.Column(db.Integer, db.ForeignKey('lancamento_agregado.id', ondelete='SET NULL'), nullable=True)
+    valor_incluido = db.Column(db.Numeric(12, 2), nullable=False)
+    total_consolidado_anterior = db.Column(db.Numeric(12, 2), nullable=False)
+    total_consolidado_novo = db.Column(db.Numeric(12, 2), nullable=False)
+    operacao = db.Column(db.String(20), nullable=False)  # COMPRA ou EDICAO
+    origem = db.Column(db.String(20), nullable=False)    # FLASK ou NOVO_APP
+    user_id = db.Column(db.String(36), nullable=True)    # usuario do Supabase Auth (novo aplicativo)
+    usuario_id = db.Column(db.Integer, nullable=True)    # usuario do Flask
+    criado_em = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id, 'fatura_id': self.fatura_id, 'cartao_id': self.cartao_id,
+            'competencia': self.competencia.isoformat() if self.competencia else None,
+            'compra_id': self.compra_id, 'lancamento_id': self.lancamento_id,
+            'valor_incluido': str(self.valor_incluido),
+            'total_consolidado_anterior': str(self.total_consolidado_anterior),
+            'total_consolidado_novo': str(self.total_consolidado_novo),
+            'operacao': self.operacao, 'origem': self.origem,
+            'criado_em': self.criado_em.isoformat() if self.criado_em else None,
         }
 
 

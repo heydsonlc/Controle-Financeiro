@@ -2,12 +2,14 @@
 Rotas para gerenciamento de CartÃµes de CrÃ©dito
 """
 from flask import Blueprint, request, jsonify, current_app
-from backend.models import db, ItemDespesa, ConfigAgregador, ItemAgregado, OrcamentoAgregado, LancamentoAgregado, Categoria
-from backend.services.cartao_service import CartaoService
+from backend.models import (db, Conta, ItemDespesa, ConfigAgregador, ItemAgregado, OrcamentoAgregado,
+                            LancamentoAgregado, Categoria)
+from backend.services.cartao_service import REGRAS_DIA_FECHAMENTO, CartaoService, ConfirmacaoConsolidadaNecessaria
 from backend.services.categoria_cartao_service import CategoriaCartaoService
 from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 from backend.services.trava_financeira import MENSAGEM_CONFLITO, eh_conflito
 from datetime import datetime, date
+from decimal import Decimal
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import func, and_
 import logging
@@ -23,6 +25,38 @@ def _internal_error(contexto='cartoes'):
 
 def _business_error(message, status=400):
     return jsonify({'success': False, 'error': message}), status
+
+
+def _erro_consolidada(exc):
+    """FIN-CARTOES-FECHAMENTO-1 (D6): 409 com as faturas consolidadas que precisam de confirmacao desta operacao."""
+    return jsonify({'success': False, 'error': str(exc), 'codigo': 'CONFIRMAR_FATURA_CONSOLIDADA',
+                    'faturas': exc.faturas}), 409
+
+
+def _dia(dados, campo, atual=None):
+    """Dia 1-31 do campo (ou o atual, se ausente); ValueError se invalido."""
+    if campo not in dados or dados.get(campo) in (None, ''):
+        if atual is None:
+            raise ValueError('Informe os dias de fechamento e vencimento (1 a 31)')
+        return atual
+    try:
+        valor = int(dados[campo])
+    except (TypeError, ValueError):
+        raise ValueError('Dias de fechamento e vencimento devem ficar entre 1 e 31')
+    if not 1 <= valor <= 31:
+        raise ValueError('Dias de fechamento e vencimento devem ficar entre 1 e 31')
+    return valor
+
+
+def _config_fechamento(dados):
+    """Regra do dia do fechamento e confirmacao enviadas, validadas (None = ausente)."""
+    regra = dados.get('compra_no_fechamento')
+    if regra is not None and regra not in REGRAS_DIA_FECHAMENTO:
+        raise ValueError('Regra da compra no dia do fechamento invalida (ATUAL ou PROXIMO)')
+    confirmado = dados.get('fechamento_confirmado')
+    if confirmado is not None and not isinstance(confirmado, bool):
+        raise ValueError('Confirmacao do fechamento invalida')
+    return regra, confirmado
 
 
 def _perfil_id():
@@ -93,6 +127,12 @@ def criar_cartao():
     """Cria um novo cartÃ£o de crÃ©dito"""
     try:
         dados = request.json
+        # FIN-CARTOES-FECHAMENTO-1 (D4): fechamento e vencimento independentes e validados.
+        try:
+            dia_fechamento, dia_vencimento = _dia(dados, 'dia_fechamento'), _dia(dados, 'dia_vencimento')
+            regra, confirmado = _config_fechamento(dados)
+        except ValueError as exc:
+            return _business_error(str(exc), 400)
 
         # Se nÃ£o especificou categoria, usa a categoria padrÃ£o "CartÃµes de CrÃ©dito" — Categoria global
         categoria_id = dados.get('categoria_id')
@@ -119,8 +159,8 @@ def criar_cartao():
         # Criar a configuraÃ§Ã£o do agregador
         config = ConfigAgregador(
             item_despesa_id=novo_cartao.id,
-            dia_fechamento=dados['dia_fechamento'],
-            dia_vencimento=dados['dia_vencimento'],
+            dia_fechamento=dia_fechamento,
+            dia_vencimento=dia_vencimento,
             limite_credito=dados.get('limite_credito'),
             numero_cartao=dados.get('numero_cartao'),
             data_validade=dados.get('data_validade'),
@@ -128,6 +168,9 @@ def criar_cartao():
             tem_codigo=dados.get('tem_codigo', True),
             observacoes=dados.get('observacoes', '')
         )
+        if CartaoService.suporta_fechamento_configuravel():  # conservador: sem confirmacao explicita, nao confirmado
+            config.compra_no_fechamento = regra or 'PROXIMO'
+            config.fechamento_confirmado = bool(confirmado)
 
         db.session.add(config)
         db.session.commit()
@@ -157,8 +200,27 @@ def atualizar_cartao(id):
 
         # Atualizar ConfigAgregador
         if cartao.config_agregador:
-            cartao.config_agregador.dia_fechamento = dados.get('dia_fechamento', cartao.config_agregador.dia_fechamento)
-            cartao.config_agregador.dia_vencimento = dados.get('dia_vencimento', cartao.config_agregador.dia_vencimento)
+            # FIN-CARTOES-FECHAMENTO-1 (D4): cada campo so muda se enviado; o fechamento nunca vem do
+            # vencimento. Mudar um dia ou a regra sem reconfirmar desfaz a confirmacao (como no banco).
+            cfg = cartao.config_agregador
+            try:
+                novo_fechamento = _dia(dados, 'dia_fechamento', cfg.dia_fechamento)
+                novo_vencimento = _dia(dados, 'dia_vencimento', cfg.dia_vencimento)
+                regra, confirmado = _config_fechamento(dados)
+            except ValueError as exc:
+                db.session.rollback()
+                return _business_error(str(exc), 400)
+            if CartaoService.suporta_fechamento_configuravel():
+                nova_regra = regra or cfg.compra_no_fechamento or 'PROXIMO'
+                mudou = (novo_fechamento != cfg.dia_fechamento or novo_vencimento != cfg.dia_vencimento
+                         or nova_regra != (cfg.compra_no_fechamento or 'PROXIMO'))
+                if confirmado is not None:
+                    cfg.fechamento_confirmado = confirmado
+                elif mudou:
+                    cfg.fechamento_confirmado = False
+                cfg.compra_no_fechamento = nova_regra
+            cfg.dia_fechamento = novo_fechamento
+            cfg.dia_vencimento = novo_vencimento
             cartao.config_agregador.limite_credito = dados.get('limite_credito', cartao.config_agregador.limite_credito)
             cartao.config_agregador.numero_cartao = dados.get('numero_cartao', cartao.config_agregador.numero_cartao)
             cartao.config_agregador.data_validade = dados.get('data_validade', cartao.config_agregador.data_validade)
@@ -695,11 +757,16 @@ def criar_lancamento(item_id):
             'mes_fatura': mes_fatura,
             'numero_parcela': dados.get('numero_parcela', 1),
             'total_parcelas': dados.get('total_parcelas', 1),
-            'observacoes': dados.get('observacoes', '')
+            'observacoes': dados.get('observacoes', ''),
+            'confirmar_consolidadas': dados.get('confirmar_consolidadas') or [],  # FIN-CARTOES-FECHAMENTO-1 (D6)
         }
 
         # Usar CartaoService para adicionar lanÃ§amento e garantir fatura
-        lancamento, fatura = CartaoService.adicionar_lancamento(dados_lancamento)
+        try:
+            lancamento, fatura = CartaoService.adicionar_lancamento(dados_lancamento)
+        except ConfirmacaoConsolidadaNecessaria as exc:
+            db.session.rollback()
+            return _erro_consolidada(exc)
 
         # Decisao soberana de valor da fatura
         fatura_paga = (fatura.status_pagamento == 'Pago')
@@ -791,11 +858,16 @@ def criar_lancamento_sem_categoria(cartao_id):
             'mes_fatura': mes_fatura,
             'numero_parcela': dados.get('numero_parcela', 1),
             'total_parcelas': dados.get('total_parcelas', 1),
-            'observacoes': dados.get('observacoes', '')
+            'observacoes': dados.get('observacoes', ''),
+            'confirmar_consolidadas': dados.get('confirmar_consolidadas') or [],  # FIN-CARTOES-FECHAMENTO-1 (D6)
         }
 
         # Usar CartaoService para adicionar lanÃ§amento e garantir fatura
-        lancamento, fatura = CartaoService.adicionar_lancamento(dados_lancamento)
+        try:
+            lancamento, fatura = CartaoService.adicionar_lancamento(dados_lancamento)
+        except ConfirmacaoConsolidadaNecessaria as exc:
+            db.session.rollback()
+            return _erro_consolidada(exc)
 
         # Decisao soberana de valor da fatura
         fatura_paga = (fatura.status_pagamento == 'Pago')
@@ -854,11 +926,33 @@ def atualizar_lancamento(lancamento_id):
             db.session.rollback()
             return _business_error('Compra de fatura paga nao pode ser alterada. Para corrigir, estorne o pagamento da fatura.', 409)
 
+        # FIN-CARTOES-FECHAMENTO-1 (D6): mover a compra para fatura consolidada exige a confirmacao desta operacao.
+        inclusao = None
+        destino = meses[1] if len(meses) > 1 else None
+        if destino and destino != lancamento.mes_fatura:
+            fatura_destino = next((f for f in faturas if f.cartao_competencia == destino), None)
+            if fatura_destino is not None and fatura_destino.status_fatura == 'FECHADA':
+                valor_novo = Decimal(str(dados.get('valor', lancamento.valor)))
+                try:
+                    CartaoService.conferir_confirmacoes({fatura_destino.id: (fatura_destino, valor_novo)},
+                                                        dados.get('confirmar_consolidadas'))
+                except ConfirmacaoConsolidadaNecessaria as exc:
+                    db.session.rollback()
+                    return _erro_consolidada(exc)
+                except ValueError as exc:
+                    db.session.rollback()
+                    return _business_error(str(exc), 409)
+                inclusao = (fatura_destino, valor_novo)
+        data_anterior = lancamento.data_compra
+
         lancamento.descricao = dados.get('descricao', lancamento.descricao)
         lancamento.valor = dados.get('valor', lancamento.valor)
 
         if 'data_compra' in dados:
             lancamento.data_compra = datetime.strptime(dados['data_compra'], '%Y-%m-%d').date()
+            if lancamento.data_compra != data_anterior and CartaoService.suporta_competencia_sugerida():
+                lancamento.mes_fatura_sugerido = CartaoService.sugestao_competencia(
+                    lancamento.cartao_id, lancamento.data_compra)['competencia']
 
         if 'mes_fatura' in dados:
             lancamento.mes_fatura = datetime.strptime(dados['mes_fatura'] + '-01', '%Y-%m-%d').date()
@@ -875,6 +969,9 @@ def atualizar_lancamento(lancamento_id):
             categoria_cartao_id=None,
         )
         lancamento.categoria_cartao_id = resolucao_cartao.get('categoria_cartao_id')
+        if inclusao:
+            CartaoService.registrar_inclusao_consolidada(inclusao[0], inclusao[1], 'EDICAO', lancamento.compra_id,
+                                                         lancamento.id)
 
         db.session.commit()
         return jsonify(lancamento.to_dict()), 200
@@ -1034,6 +1131,37 @@ def obter_resumo_cartao(cartao_id):
 
 
 # ============================================================================
+# FIN-CARTOES-FECHAMENTO-1 — fatura sugerida pela data da compra e pelo fechamento do cartao
+# ============================================================================
+
+@cartoes_bp.route('/<int:cartao_id>/competencia-sugerida', methods=['GET'])
+def obter_competencia_sugerida(cartao_id):
+    """Sugestao (so leitura) para ?data=AAAA-MM-DD: situacao, competencia, fechamento e vencimento do ciclo e a
+    situacao da fatura sugerida. Sem fechamento confirmado (ou com ciclo ambiguo) nao ha competencia."""
+    try:
+        if not _obter_cartao(cartao_id):
+            return _business_error('Recurso nao encontrado', 404)
+        try:
+            data = CartaoService.data_civil(request.args.get('data'))
+        except ValueError:
+            return _business_error('Data da compra invalida (AAAA-MM-DD)', 400)
+        sugestao = CartaoService.sugestao_competencia(cartao_id, data)
+        resposta = {k: (v.isoformat() if isinstance(v, date) else v) for k, v in sugestao.items()}
+        if sugestao['competencia']:
+            fatura = Conta.query.filter(
+                Conta.item_despesa_id == cartao_id,
+                Conta.is_fatura_cartao == True,  # noqa: E712
+                Conta.cartao_competencia == sugestao['competencia'],
+            ).first()
+            resposta['fatura_situacao'] = CartaoService.situacao_fatura(fatura)
+            if resposta['fatura_situacao'] == 'FECHADA':
+                resposta['fatura_id'] = fatura.id
+                resposta['total_consolidado'] = f'{CartaoService.total_consolidado(fatura):.2f}'
+        return jsonify({'success': True, **resposta}), 200
+    except Exception:
+        return _internal_error('competencia_sugerida')
+
+
 # ROTAS PARA FECHAMENTO DE FATURA
 # ============================================================================
 

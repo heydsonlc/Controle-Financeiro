@@ -206,6 +206,9 @@ body.app-body { margin: 0; background: var(--cf-bg, #f4f6fa); }
 .cartao-compra-linha { display: flex; justify-content: space-between; gap: 8px; }
 .cartao-compra .despesa-acoes { margin-top: 6px; }
 .cartao-previa { margin: 4px 0 0; padding-left: 18px; font-size: 0.875rem; color: #374151; }
+/* FIN-CARTOES-FECHAMENTO-1 */
+.cartao-aviso { font-size: 0.75rem; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: #fef3c7; color: #92400e; }
+.geracao-dica.dica-alerta { color: #92400e; }
 .grupo { margin-bottom: 18px; }
 .grupo-titulo { font-size: 0.8125rem; text-transform: uppercase; letter-spacing: 0.04em; color: #6b7280; margin: 0 0 6px; }
 .cartao-nome { font-size: 0.9375rem; margin: 10px 0 4px; }

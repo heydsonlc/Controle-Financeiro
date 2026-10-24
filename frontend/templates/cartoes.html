@@ -176,14 +176,37 @@
 
                 <div class="form-row">
                     <div class="form-group">
+                        <label for="cartao-dia-fechamento">Dia do Fechamento *</label>
+                        <input type="number" id="cartao-dia-fechamento" required min="1" max="31" placeholder="Ex: 3">
+                    </div>
+
+                    <div class="form-group">
                         <label for="cartao-dia-vencimento">Dia do Vencimento *</label>
                         <input type="number" id="cartao-dia-vencimento" required min="1" max="31" placeholder="Ex: 10">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group" data-fechamento-configuravel>
+                        <label for="cartao-compra-no-fechamento">Compra no dia do fechamento</label>
+                        <select id="cartao-compra-no-fechamento">
+                            <option value="PROXIMO">Vai para a pr&oacute;xima fatura</option>
+                            <option value="ATUAL">Entra na fatura que est&aacute; fechando</option>
+                        </select>
                     </div>
 
                     <div class="form-group">
                         <label for="cartao-limite">Limite de Cr&eacute;dito</label>
                         <input type="number" id="cartao-limite" step="0.01" min="0" placeholder="0,00">
                     </div>
+                </div>
+
+                <div class="form-group checkbox-field cartao-fechamento-confirmacao" data-fechamento-configuravel>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="cartao-fechamento-confirmado">
+                        <span>Confirmo os dias de fechamento e vencimento conforme a administradora</span>
+                    </label>
+                    <small class="cartao-form-hint">Sem esta confirma&ccedil;&atilde;o, a fatura de cada compra n&atilde;o &eacute; sugerida e deve ser escolhida manualmente. Dias 29 a 31 usam o &uacute;ltimo dia nos meses mais curtos.</small>
                 </div>
 
                 <div class="form-row">

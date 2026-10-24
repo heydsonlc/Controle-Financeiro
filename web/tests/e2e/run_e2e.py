@@ -8,6 +8,9 @@ Sobe, so em 127.0.0.1 e com dados ficticios:
      faz proxy de /rest/v1 para o PostgREST e substitui os endpoints do Supabase Auth
      usados pelo supabase-js (/auth/v1/token, /auth/v1/user, /auth/v1/logout),
      emitindo JWTs reais. Esse substituto e a unica parte simulada.
+  4. gancho so de teste POST /__e2e__/consolidar (FIN-CARTOES-FECHAMENTO-1): consolida, como o Flask, uma
+     fatura de cartao do Perfil B neste banco descartavel (o novo aplicativo nao consolida faturas).
+     Os specs que o usam sao pulados fora deste ambiente (CF_E2E_LOCAL).
 Depois roda `playwright test` e derruba tudo, mesmo em caso de falha.
 
 Uso (da raiz do repositorio):
@@ -21,6 +24,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 import shutil
 import subprocess
@@ -38,6 +42,7 @@ WEB = RAIZ / 'web'
 sys.path.insert(0, str(RAIZ))
 
 from tests.supabase_local import (  # noqa: E402
+    PERFIS,
     USUARIO_A,
     USUARIO_B,
     ClusterLocal,
@@ -86,7 +91,7 @@ def verificar_jwt(token, segredo):
         return None
 
 
-def criar_handler(dist, postgrest_url, segredo, headers_seguranca):
+def criar_handler(dist, postgrest_url, segredo, headers_seguranca, consolidar=None):
     refresh_tokens = {}
     trava = threading.Lock()
 
@@ -217,6 +222,14 @@ def criar_handler(dist, postgrest_url, segredo, headers_seguranca):
             self.end_headers()
             self.wfile.write(dados)
 
+        # ---- Gancho so de teste: consolida uma fatura do Perfil B (o novo aplicativo nao consolida) ----
+        def _consolidar(self):
+            try:
+                pedido = json.loads(self._dados or b'{}')
+                self._json(200, consolidar(str(pedido['cartao']), str(pedido['competencia'])))
+            except (KeyError, ValueError) as exc:
+                self._json(400, {'msg': str(exc)})
+
         def _despachar(self, metodo):
             # Le o corpo inteiro ANTES de responder: com keep-alive, bytes nao lidos
             # contaminariam a proxima requisicao da mesma conexao.
@@ -226,6 +239,8 @@ def criar_handler(dist, postgrest_url, segredo, headers_seguranca):
                 return self._auth(metodo)
             if self.path.startswith('/rest/v1/'):
                 return self._rest(metodo)
+            if metodo == 'POST' and self.path == '/__e2e__/consolidar' and consolidar:
+                return self._consolidar()
             if metodo == 'GET':
                 return self._estatico()
             self._json(405, {'msg': 'metodo nao permitido'})
@@ -276,8 +291,29 @@ def main():
                 semear_receitas_e2e(cur)  # FIN-RECEITAS-1 (receitas.spec.mjs)
                 semear_cartoes_e2e(cur)  # FIN-CARTOES-1 (cartoes.spec.mjs)
             conn.close()
+
+            def consolidar(cartao, competencia):
+                """Como a consolidacao do Flask: FECHADA com valor_consolidado = executado (so Perfil B, ficticio)."""
+                if not re.fullmatch(r'\d{4}-\d{2}-01', competencia):
+                    raise ValueError('competencia deve ser AAAA-MM-01')
+                conn = cluster.conectar()
+                try:
+                    with conn.cursor() as cur:
+                        cur.execute("update public.conta c set status_fatura = 'FECHADA', "
+                                    "valor_consolidado = c.valor_executado, data_consolidacao = now() "
+                                    "from public.item_despesa i where c.item_despesa_id = i.id and c.is_fatura_cartao "
+                                    "and i.nome = %s and i.perfil_financeiro_id = %s and c.cartao_competencia = %s "
+                                    "returning c.id, c.valor_consolidado",
+                                    (cartao, PERFIS['PERFIL_B']['id'], competencia))
+                        linha = cur.fetchone()
+                finally:
+                    conn.close()
+                if not linha:
+                    raise ValueError('fatura nao encontrada')
+                return {'fatura_id': linha[0], 'valor_consolidado': str(linha[1])}
+
             with PostgrestLocal(postgrest_bin, cluster, segredo, tmp) as postgrest:
-                handler = criar_handler(dist, postgrest.url, segredo, ler_headers(dist))
+                handler = criar_handler(dist, postgrest.url, segredo, ler_headers(dist), consolidar)
                 # Fila de conexoes maior que o padrao (5): o Chrome abre ~6 em paralelo.
                 ThreadingHTTPServer.request_queue_size = 64
                 ThreadingHTTPServer.daemon_threads = True
@@ -289,7 +325,7 @@ def main():
                         while True:
                             time.sleep(1)
                     npx = shutil.which('npx') or 'npx'
-                    env = {**os.environ, 'CF_WEB_BASE_URL': origem,
+                    env = {**os.environ, 'CF_WEB_BASE_URL': origem, 'CF_E2E_LOCAL': '1',
                            'CF_SENHA_A': CONTAS[USUARIO_A['email']]['senha'],
                            'CF_SENHA_B': CONTAS[USUARIO_B['email']]['senha']}
                     return subprocess.run([npx, 'playwright', 'test', '-c', 'playwright.config.mjs', *extras],

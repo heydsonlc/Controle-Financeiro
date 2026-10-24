@@ -557,6 +557,38 @@
     text-align: right;
 }
 
+.lanc-fatura-sugestao-linha {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 10px;
+    margin: -4px 0 12px;
+}
+
+.lanc-fatura-sugestao-linha[hidden] {
+    display: none;
+}
+
+.lanc-fatura-sugestao {
+    color: #475569;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.lanc-fatura-sugestao.is-alerta {
+    color: #92400e;
+}
+
+.lanc-link-button {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: #2563eb;
+    font-size: 12px;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
 .form-actions {
     display: flex;
     justify-content: flex-end;
