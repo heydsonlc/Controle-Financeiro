@@ -10,7 +10,8 @@ administrador via financeiro.definir_gerador_recorrencia). Regras:
 - valor inesperado ou erro na verificacao: a geracao e bloqueada e o motivo e
   registrado no log (nunca deixa os dois motores ativos por acidente).
 
-Consultas, pagamentos, edicoes e o cadastro de compras nao passam por aqui.
+FIN-CARTOES-PAGAMENTO-1 (D5): a mesma atribuicao decide quem paga e estorna FATURAS de cartao (perfil NOVO: so
+o novo aplicativo). Consultas, edicoes, o cadastro de compras e o pagamento de despesas comuns nao passam por aqui.
 
 Concorrencia: no PostgreSQL, a verificacao toma a trava consultiva COMPARTILHADA
 (20261023, perfil) ate o fim da transacao. A troca de gerador e a geracao do novo

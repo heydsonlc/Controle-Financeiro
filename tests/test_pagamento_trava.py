@@ -381,7 +381,12 @@ def test_compra_do_novo_aplicativo_espera_o_pagamento_do_flask(pg):
     pagamento.liberar()
     assert pagamento.resultado()['status'] == 200
     tarefa.join(60)
-    assert 'foi paga durante o cadastro' in str(resposta['erro'])
+    # FIN-CARTOES-PAGAMENTO-1: o pagamento de fatura do Flask passou a conferir o sistema do perfil (D5) com a trava
+    # consultiva do perfil, que criar_compra tambem toma. A compra espera ANTES de planejar e, ja com a fatura paga,
+    # vai para a seguinte (desvio registrado), em vez de ser recusada. A fatura paga nao muda.
+    assert resposta['valor']['faturas'] == ['2027-07-01']
+    assert sql(d, "select mes_fatura, mes_fatura_original from public.lancamento_agregado where descricao = 'Compra nova'") == \
+        [{'mes_fatura': date(2027, 7, 1), 'mes_fatura_original': date(2027, 6, 1)}]
     assert conta(d, fatura)['valor'] == Decimal('250.00') and coerente(d, fatura)
 
 

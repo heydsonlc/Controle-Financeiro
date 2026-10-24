@@ -78,7 +78,8 @@ const RPCS_DE_LEITURA = new Set(['meus_perfis', 'contas_bancarias_do_perfil', 'c
     'despesa_para_edicao', 'receitas_do_mes', 'fontes_de_receita', 'receita_para_edicao', 'pode_gerir_perfil',
     'cartoes_do_perfil', 'faturas_do_mes', 'compras_da_fatura', 'compra_para_edicao', 'previa_compra',
     'recorrencias_rejeitadas',
-    'sugerir_competencia']);  // FIN-CARTOES-FECHAMENTO-1 (so leitura)
+    'sugerir_competencia',  // FIN-CARTOES-FECHAMENTO-1 (so leitura)
+    'dados_pagamento_fatura']);  // FIN-CARTOES-PAGAMENTO-1 (so leitura)
 // Escrita so por RPC transacional autorizada no banco, revisada uma a uma, e so na tela que a usa.
 const RPCS_DE_ESCRITA = new Map([
     ['gerar_mes', 'contas.js'],
@@ -94,7 +95,7 @@ const RPCS_DE_ESCRITA = new Map([
     ['excluir_receita', 'receitas.js'],
     ['editar_fonte_receita', 'receitas.js'],
     ['inativar_fonte_receita', 'receitas.js'],
-    // FIN-CARTOES-1 (compras e cartoes; nenhum pagamento de fatura)
+    // FIN-CARTOES-1 (compras e cartoes)
     ['criar_compra', 'cartoes.js'],
     ['editar_compra', 'cartoes.js'],
     ['excluir_compra', 'cartoes.js'],
@@ -103,6 +104,9 @@ const RPCS_DE_ESCRITA = new Map([
     ['inativar_cartao', 'cartoes.js'],
     // FIN-CARTOES-RECORRENCIA-PENDENCIA-1 (so dispensa o aviso; nao muda recorrencia, compra nem fatura)
     ['dispensar_aviso_recorrencia', 'contas.js'],
+    // FIN-CARTOES-PAGAMENTO-1 (pagamento integral e estorno de fatura; debito/credito e saldo decididos no banco)
+    ['pagar_fatura', 'cartoes.js'],
+    ['estornar_pagamento_fatura', 'cartoes.js'],
 ]);
 
 test('codigo-fonte do frontend nao escreve em tabelas nem usa innerHTML', async () => {

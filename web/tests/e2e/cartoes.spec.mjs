@@ -2,7 +2,7 @@
 // (tests/supabase_local.py: semear_contas e semear_cartoes_e2e). Leituras com o usuario A (gestor do
 // Pessoal, LEITOR da Empresa); toda escrita com o usuario B no "Perfil B" temporario: cria o proprio
 // cartao, grava so em 2031 e o inativa no fim (cartao ativo entraria na geracao dos outros cenarios).
-// Nenhuma acao de pagamento existe na tela.
+// Pessoal fica no Flask (D5 do FIN-CARTOES-PAGAMENTO-1): nenhuma acao de pagamento na tela dele.
 import { expect, test } from '@playwright/test';
 
 const A = { email: process.env.CF_EMAIL_A || 'usuario.a@teste.local', senha: process.env.CF_SENHA_A };
@@ -64,7 +64,7 @@ test('aba Cartoes a partir de Contas do mes: faturas como na tela de contas, sem
     await verde.locator('summary').click();
     await expect(verde.locator('.cartao-compra')).toHaveCount(2);
     await expect(verde.locator('.cartao-compra button')).toHaveCount(0);
-    await expect(verde.locator('.despesa-bloqueio').first()).toHaveText(/Fatura paga: a correção exige estorno/);
+    await expect(verde.locator('.despesa-bloqueio').first()).toHaveText(/Fatura paga: para corrigir, estorne o pagamento/);
 });
 
 test('cadastro mostra so o final do numero; inativo fora das faturas', async ({ page }) => {

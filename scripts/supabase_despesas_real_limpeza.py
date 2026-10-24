@@ -25,8 +25,9 @@ from supabase_contas_seed_teste import conectar  # noqa: E402
 
 MARCA = RAIZ / 'data' / 'despesas_real_1_marca.json'
 TABELAS = ('item_despesa', 'conta', 'lancamento_agregado', 'movimento_financeiro',
-           'item_receita', 'receita_orcamento', 'receita_realizada', 'categoria_cartao')
+           'item_receita', 'receita_orcamento', 'receita_realizada', 'categoria_cartao', 'conta_bancaria')
 MARCADOR_CARTAO = '%[teste FIN-CARTOES-REAL-1]%'
+MARCADOR_PAGAMENTO = '%[teste FIN-CARTOES-PAGAMENTO-REAL-1]%'
 
 
 def itens_dos_seeds():
@@ -80,6 +81,10 @@ def main():
                 ('ocorrencias_recorrencia', 'delete from public.recorrencia_rejeicao where item_despesa_id = any(%s) '
                  'or cartao_id = any(%s)', [itens, itens] if com_rejeicao else [None]),
                 ('movimentos', 'delete from public.movimento_financeiro where id > %s', [marca['movimento_financeiro']]),
+                # FIN-CARTOES-PAGAMENTO-REAL-1: detalhes dos pagamentos saem junto com os movimentos (cascade); a conta
+                # inativa do cenario 4 so pelo marcador e acima da marca.
+                ('contas_bancarias_teste', 'delete from public.conta_bancaria where id > %s and nome like %s',
+                 [marca.get('conta_bancaria'), MARCADOR_PAGAMENTO]),
                 ('identidades', 'delete from financeiro.recorrencia_competencia where item_despesa_id = any(%s)', [itens]),
                 ('compras', 'delete from public.lancamento_agregado where item_despesa_id = any(%s) or cartao_id = any(%s)',
                  [itens, itens]),
@@ -115,6 +120,10 @@ def main():
                 cur.execute(sql, params)
                 removidos[rotulo] = cur.rowcount
             print('Removidos (criados pelos testes):', removidos)
+            cur.execute("select to_regclass('financeiro.pagamento_fatura') is not null")
+            if cur.fetchone()[0]:
+                cur.execute('select count(*) from financeiro.pagamento_fatura')  # tabela nova: vazia antes dos testes
+                print('Conferencia: detalhes de pagamento restantes (tabela inteira) =', cur.fetchone()[0])
             if com_rejeicao:
                 cur.execute('select count(*) from public.recorrencia_rejeicao where item_despesa_id = any(%s) '
                             'or cartao_id = any(%s)', (itens, itens))

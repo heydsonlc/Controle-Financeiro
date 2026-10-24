@@ -4,10 +4,12 @@
 // compras_da_fatura, cartoes_do_perfil (sem numero completo nem CVV), compra_para_edicao.
 // Escrita so por RPC (criar_compra, editar_compra, excluir_compra, criar_cartao, editar_cartao,
 // inativar_cartao). Parcelas, centavos, fatura de destino e bloqueios sao decididos no banco;
-// a previa (previa_compra) mostra o que sera gravado. Nao ha pagamento de fatura aqui.
+// a previa (previa_compra) mostra o que sera gravado.
 // FIN-CARTOES-FECHAMENTO-1: a fatura da 1a parcela e sugerida pelo fechamento (sugerir_competencia, so
 // leitura) e pode ser trocada; a escolha manual nunca e sobrescrita. Fatura consolidada so recebe compra
 // com a confirmacao do total visto, uma caixa por fatura (o banco reconfere sob trava).
+// FIN-CARTOES-PAGAMENTO-1: pagar e estornar a fatura (dados_pagamento_fatura, pagar_fatura,
+// estornar_pagamento_fatura). Total, conta, saldo e pagamento vigente sao conferidos no banco; aqui so a escolha.
 
 import { supabase } from './cliente.js';
 import {
@@ -23,7 +25,7 @@ import { exigirUsuario, sair } from './sessao.js';
 const SITUACAO = { ABERTA: 'Aberta', FECHADA: 'Fechada', PAGA: 'Paga', SEM_FATURA: 'Sem compras' };
 const BLOQUEIOS = {
     'Gerada por recorrencia: edite a recorrencia': 'Gerada por recorrência: altere a recorrência na tela de contas.',
-    'Fatura paga: correcao so por estorno': 'Fatura paga: a correção exige estorno, que ainda é feito no sistema atual.',
+    'Fatura paga: correcao so por estorno': 'Fatura paga: para corrigir, estorne o pagamento da fatura.',
     'Fatura fechada (consolidada)': 'Fatura fechada (consolidada).',
 };
 const textoBloqueio = (motivo) => BLOQUEIOS[motivo] || `${motivo}.`;
@@ -412,6 +414,155 @@ function itemCompra(compra, contexto) {
     return item;
 }
 
+const AJUSTES = { JUROS: 'Juros ou encargos', DESCONTO: 'Desconto', AJUSTE: 'Ajuste de quitação integral' };
+
+// Pagamento integral (D2: sem saldo pendente). O total vem do banco; valor diferente dele pede classificacao e
+// justificativa (D3), conferidas de novo no banco.
+function abrirPagamento(contexto, dados) {
+    const { fatura } = dados;
+    const f = formulario('Pagar fatura');
+    f.salvar.textContent = 'Confirmar pagamento';
+    let executado = centavos(fatura.valor_executado);
+    const resumo = el('dl', 'conta-detalhe');
+    linhaDetalhe(resumo, 'Cartão', fatura.cartao_nome);
+    linhaDetalhe(resumo, 'Fatura', competenciaCurta(fatura.competencia));
+    const totalTexto = el('dd', null, reais(executado));
+    resumo.append(el('dt', null, 'Total das compras'), totalTexto);
+    const valor = entrada('text', formatarValor(executado / 100));
+    valor.inputMode = 'decimal';
+    const data = entrada('date', hojeBrasilia());
+    const conta = seletor(dados.contas.map((c) => [c.id, `${c.nome} · saldo ${reais(centavos(c.saldo))}`]),
+        dados.contas.length ? dados.contas[0].id : '');
+    const tipo = seletor([['', 'Selecione']], '');
+    const justificativa = el('textarea');
+    justificativa.rows = 2;
+    justificativa.maxLength = 500;
+    const ajuste = el('div', 'pagamento-ajuste');
+    ajuste.append(el('p', 'geracao-dica', 'O valor pago é diferente do total: classifique e justifique. A fatura fica quitada.'),
+        campo('Diferença', tipo, 'pagamento-tipo'), campo('Justificativa', justificativa, 'pagamento-justificativa'));
+    const atualizarAjuste = () => {
+        const pago = normalizarValor(valor.value);
+        const diferenca = pago === null ? 0 : centavos(pago) - executado;
+        ajuste.hidden = diferenca === 0;
+        const opcoes = diferenca > 0 ? ['JUROS', 'AJUSTE'] : ['DESCONTO', 'AJUSTE'];
+        const atual = opcoes.includes(tipo.value) ? tipo.value : '';
+        tipo.replaceChildren(new Option('Selecione', ''), ...opcoes.map((t) => new Option(AJUSTES[t], t)));
+        tipo.value = atual;
+    };
+    valor.addEventListener('input', atualizarAjuste);
+    atualizarAjuste();
+    f.form.append(resumo, campo('Valor pago (R$)', valor, 'pagamento-valor'), campo('Data do pagamento', data, 'pagamento-data'),
+        campo('Conta bancária', conta, 'pagamento-conta'), ajuste, f.erro, f.botoes);
+    f.painel.append(f.form);
+    if (!dados.contas.length) f.falhar('Nenhuma conta bancária ativa neste perfil para registrar o pagamento.');
+
+    const chave = crypto.randomUUID();
+    f.form.addEventListener('submit', async (evento) => {
+        evento.preventDefault();
+        f.erro.hidden = true;
+        const pago = normalizarValor(valor.value);
+        if (!pago || !data.value || !conta.value) {
+            f.falhar('Informe o valor pago, a data e a conta bancária.');
+            return;
+        }
+        const corpo = { conta_bancaria_id: Number(conta.value), data_pagamento: data.value, valor_pago: pago,
+            valor_executado: (executado / 100).toFixed(2) };
+        if (centavos(pago) !== executado) {
+            if (!tipo.value || !justificativa.value.trim()) {
+                f.falhar('Classifique a diferença e escreva a justificativa.');
+                return;
+            }
+            corpo.tipo_ajuste = tipo.value;
+            corpo.justificativa = justificativa.value.trim();
+        }
+        f.travar();
+        const { data: r, error } = await supabase.rpc('pagar_fatura', {
+            p_perfil_id: contexto.perfilId, p_fatura_id: fatura.id, p_dados: corpo, p_chave: chave,
+        });
+        if (error) {
+            if (error.hint === 'EXECUTADO_MUDOU') {  // compra entrou ou saiu: mostra o total novo para conferir
+                const novo = await supabase.rpc('dados_pagamento_fatura', { p_perfil_id: contexto.perfilId, p_fatura_id: fatura.id });
+                if (!novo.error) {
+                    executado = centavos(novo.data.fatura.valor_executado);
+                    totalTexto.textContent = reais(executado);
+                    atualizarAjuste();
+                }
+            }
+            f.falhar(mensagemDeErro(error));
+            return;
+        }
+        f.fechar();
+        await contexto.recarregar(`Fatura paga: ${reais(centavos(r.valor_pago))} debitados de ${r.conta_nome}. `
+            + `Saldo da conta: ${reais(centavos(r.saldo_conta))}.`);
+    });
+}
+
+// Estorno do pagamento vigente (identificado pelo movimento de debito). O debito original fica no historico.
+function abrirEstorno(contexto, dados, pagamento) {
+    const f = formulario('Estornar pagamento');
+    f.salvar.textContent = 'Confirmar estorno';
+    f.salvar.className = 'botao botao-perigo';
+    const resumo = el('dl', 'conta-detalhe');
+    linhaDetalhe(resumo, 'Fatura', `${dados.fatura.cartao_nome} · ${competenciaCurta(dados.fatura.competencia)}`);
+    linhaDetalhe(resumo, 'Valor pago', reais(centavos(pagamento.valor_pago)));
+    linhaDetalhe(resumo, 'Conta bancária', pagamento.conta_nome);
+    linhaDetalhe(resumo, 'Data do pagamento', dataCurta(pagamento.data_pagamento));
+    const motivo = el('textarea');
+    motivo.rows = 2;
+    motivo.maxLength = 500;
+    const data = entrada('date', hojeBrasilia());
+    f.form.append(resumo, campo('Motivo do estorno', motivo, 'estorno-motivo'), campo('Data do estorno', data, 'estorno-data'),
+        f.erro, f.botoes);
+    f.painel.append(f.form);
+    const chave = crypto.randomUUID();
+    f.form.addEventListener('submit', async (evento) => {
+        evento.preventDefault();
+        f.erro.hidden = true;
+        if (!motivo.value.trim() || !data.value) {
+            f.falhar('Informe o motivo e a data do estorno.');
+            return;
+        }
+        f.travar();
+        const { data: r, error } = await supabase.rpc('estornar_pagamento_fatura', {
+            p_perfil_id: contexto.perfilId, p_fatura_id: dados.fatura.id, p_movimento_id: pagamento.movimento_id,
+            p_dados: { motivo: motivo.value.trim(), data_estorno: data.value }, p_chave: chave,
+        });
+        if (error) {
+            f.falhar(mensagemDeErro(error));
+            return;
+        }
+        f.fechar();
+        await contexto.recarregar(`Pagamento estornado: ${reais(centavos(r.valor_estornado))} devolvidos a ${pagamento.conta_nome}. `
+            + `Saldo da conta: ${reais(centavos(r.saldo_conta))}.`);
+    });
+}
+
+// Situacao do pagamento na fatura aberta: pago (com estornos anteriores) e as acoes permitidas.
+async function mostrarPagamento(area, fatura, contexto) {
+    const { data, error } = await supabase.rpc('dados_pagamento_fatura', { p_perfil_id: contexto.perfilId, p_fatura_id: fatura.fatura_id });
+    if (error || !data) return;
+    const conteudo = [];
+    for (const p of data.pagamentos) {
+        const ajuste = p.tipo_ajuste ? ` · ${AJUSTES[p.tipo_ajuste]}: ${p.justificativa}` : '';
+        const texto = `Pago em ${dataCurta(p.data_pagamento)} · ${reais(centavos(p.valor_pago))} · ${p.conta_nome || 'conta'}${ajuste}`;
+        conteudo.push(el('p', p.vigente ? 'pagamento-linha' : 'pagamento-linha pagamento-estornado', p.estorno
+            ? `${texto} · estornado em ${dataCurta(p.estorno.data)}${p.estorno.motivo ? ` (${p.estorno.motivo})` : ''}` : texto));
+    }
+    const vigente = data.pagamentos.find((p) => p.vigente);
+    if (data.pode_pagar) {
+        const pagar = botao('Pagar fatura', 'botao-principal');
+        pagar.addEventListener('click', () => abrirPagamento(contexto, data));
+        conteudo.push(pagar);
+    } else if (data.pode_estornar && vigente) {
+        const estornar = botao('Estornar pagamento');
+        estornar.addEventListener('click', () => abrirEstorno(contexto, data, vigente));
+        conteudo.push(estornar);
+    } else if (contexto.podeGerir && data.sistema === 'FLASK' && !data.fatura.paga) {
+        conteudo.push(el('p', 'geracao-dica', 'O pagamento das faturas deste perfil ainda é feito no sistema atual.'));
+    }
+    area.replaceChildren(...conteudo);
+}
+
 function itemFatura(fatura, contexto) {
     const item = el('li', 'conta');
     item.dataset.cartaoId = String(fatura.cartao_id);
@@ -427,12 +578,14 @@ function itemFatura(fatura, contexto) {
     const lista = el('dl', 'conta-detalhe');
     linhaDetalhe(lista, 'Compras', reais(centavos(fatura.valor_executado)));
     linhaDetalhe(lista, fatura.situacao === 'PAGA' ? 'Valor' : 'Previsto', reais(centavos(fatura.valor_previsto)));
+    const pagamento = el('div', 'fatura-pagamento');
     const compras = el('ul', 'cartao-compras');
-    detalhe.append(resumo, lista, compras);
+    detalhe.append(resumo, lista, pagamento, compras);
     let carregadas = false;
     detalhe.addEventListener('toggle', async () => {
         if (!detalhe.open || carregadas) return;
         carregadas = true;
+        if (fatura.fatura_id) mostrarPagamento(pagamento, fatura, contexto);
         const { data, error } = await supabase.rpc('compras_da_fatura', {
             p_perfil_id: contexto.perfilId, p_cartao_id: fatura.cartao_id, p_mes: `${contexto.mes}-01`,
         });

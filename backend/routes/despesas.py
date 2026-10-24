@@ -36,6 +36,14 @@ def _conflito_concorrente():
     return jsonify({'success': False, 'error': MENSAGEM_CONFLITO}), 409
 
 
+def _fatura_do_novo_aplicativo():
+    """FIN-CARTOES-PAGAMENTO-1 (D5): o perfil desta fatura esta atribuido ao novo aplicativo (financeiro.gerador_recorrencia
+    = NOVO), que passa a ser o unico a pagar e estornar faturas dele. Nada foi gravado."""
+    db.session.rollback()
+    return jsonify({'success': False, 'codigo': 'SISTEMA_NOVO',
+                    'error': 'Os pagamentos das faturas deste perfil sao feitos pelo novo aplicativo.'}), 409
+
+
 def _internal_error(contexto='despesas'):
     logger.exception('Erro interno em %s', contexto)
     return jsonify({'success': False, 'error': 'Erro interno ao processar requisicao'}), 500
@@ -1167,6 +1175,8 @@ def marcar_como_pago(id):
         conta = _query_contas().filter(Conta.id == id).first()
         if not conta:
             return jsonify({'success': False, 'error': 'Despesa não encontrada'}), 404
+        if conta.is_fatura_cartao and not flask_pode_gerar(conta.perfil_financeiro_id, f'pagamento da fatura {conta.id}'):
+            return _fatura_do_novo_aplicativo()
 
         # FIN-PAGAMENTO-TRAVA-1: trava a conta e rele situacao e valor ANTES das conferencias.
         # Pagamento, estorno ou edicao simultaneos esperam; o segundo pagamento ve 'Pago'.
@@ -1314,6 +1324,8 @@ def estornar_pagamento(id):
         conta = _query_contas().filter(Conta.id == id).first()
         if not conta:
             return jsonify({'success': False, 'error': 'Despesa nao encontrada'}), 404
+        if conta.is_fatura_cartao and not flask_pode_gerar(conta.perfil_financeiro_id, f'estorno da fatura {conta.id}'):
+            return _fatura_do_novo_aplicativo()
         # FIN-PAGAMENTO-TRAVA-1: estorno e pagamento da mesma conta em serie; o segundo estorno
         # espera e ve a conta ja reaberta (Pendente).
         conta = travar_um(Conta, conta.id)
