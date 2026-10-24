@@ -1,6 +1,6 @@
 # FIN-CARTOES-PAGAMENTO-1 — Pagamento e estorno de fatura de cartão no novo aplicativo
 
-**Situação:** concluído e validado localmente — aguardando validação real. A migration `20261031090000` **não** foi aplicada no Supabase remoto (§9).
+**Situação:** concluído e validado no Supabase de teste (§10). Migration `20261031090000` aplicada só nele, com autorização do titular em 24/10/2026. Publicação do frontend ainda não feita.
 
 O novo aplicativo passa a pagar e estornar faturas de cartão com o Supabase como motor financeiro. O Flask foi a referência das regras; não é preciso mantê-lo rodando para isso.
 
@@ -209,3 +209,64 @@ Nenhuma falha nova.
 2. Conferência `depois` contra a pasta do `antes`.
 3. Marca, seeds, E2E real, `supabase_cartoes_pagamento_real.py` e `supabase_cartoes_real.py`; depois a limpeza e os removedores dos seeds.
 4. `depois` de novo no fim, para confirmar o conteúdo idêntico ao de antes da migration.
+
+## 10. Validação real (FIN-CARTOES-PAGAMENTO-REAL-1)
+
+Autorizada pelo titular, **só no Supabase de teste**. Sem push e sem publicação. O `gastos.db` não foi acessado.
+
+### 10.1 Aplicação e conferências
+
+- **Antes:**
+  - projeto confirmado pela conexão efetiva (ref do pooler = ref da Data API `fzjmge…`; login real do usuário B = `auth.users`);
+  - nenhuma sessão ativa nem trava;
+  - `antes` recapturado **idêntico** ao salvo no §9.4.
+- **Aplicação:** `supabase_migrations.py aplicar --versoes 20261031090000`, das 17:02:33 às 17:02:40 (7 s), saída 0, só essa versão.
+- **`depois`: OK.**
+  - 12 de 12 migrations aplicadas.
+  - Exatamente as 9 funções novas (3 só `authenticated`, 6 internas) e a tabela nova (RLS forçada, sem privilégios).
+  - Nada alterado nem removido; conteúdo das tabelas existentes idêntico.
+
+### 10.2 Testes reais (dados fictícios, Perfil B temporário atribuído ao novo aplicativo)
+
+| Bateria | Executados | Aprovados | Não executados |
+|---|---|---|---|
+| E2E real (inclui `pagamento.spec.mjs`) | 48 | 48 | 2 ignorados: os passos de consolidação que dependem do harness local |
+| `supabase_cartoes_pagamento_real.py` (cenários 1 a 15 + registros fora do Perfil B) | 16 | 16 | 0 |
+| `supabase_cartoes_real.py` (inclui o **cenário 10** corrigido do FIN-CARTOES-FECHAMENTO-REAL-1) | 23 | 23 | 0 |
+
+- **Cenário 10 aprovado no remoto:**
+  - o Flask, parado, segurava o cartão (`TRAVADO`);
+  - a compra do novo aplicativo esperou e concluiu (200);
+  - 1 fatura, 2 compras, executado 133,00 = soma real.
+
+**Primeira rodada do E2E real (descartada e refeita do zero):**
+- `pagamento.spec.mjs` clicou em "Nova compra" logo depois da mensagem "Cartão cadastrado.", antes de a tela recarregar. Com a latência do remoto, o formulário ainda era o antigo, sem o cartão novo.
+- Como o teste parou antes de inativar o cartão, o cartão ficou ativo e alterou a prévia de 2 testes de `recorrencia.spec.mjs` (8 registros em vez de 6).
+- **Correção, só no spec:** esperar o cartão aparecer na lista, como o `cartoes.spec.mjs` já faz, e esperar a situação "Paga" antes de abrir o detalhe. Aprovado localmente.
+- **Recomeço:** limpeza completa, removedores dos seeds e `depois` OK (conteúdo idêntico ao de antes da migration). Depois disso, marca, seeds e a execução acima.
+- Nenhum pagamento tinha sido gravado na primeira rodada (0 detalhes).
+
+### 10.3 Limpeza
+
+- **Antes de confirmar**, a simulação e a conferência de vínculo mostraram que tudo era do Perfil B ou dos seeds. As tabelas financeiras estavam vazias na marca, e a fonte de receita preexistente (id 1) foi preservada:
+  - 17 movimentos de pagamento e estorno, 68 compras e 12 detalhes de pagamento no Perfil B;
+  - 1 conta inativa com o marcador.
+- **`supabase_despesas_real_limpeza.py remover --confirmar`:**
+  - 12 itens, 75 contas e faturas, 68 compras;
+  - 18 movimentos (os 12 detalhes de pagamento em cascade; restantes: 0);
+  - 1 conta inativa de teste;
+  - 2 ocorrências de recorrência rejeitada;
+  - 73 chaves de idempotência;
+  - receitas acima da marca, 1 vínculo e 1 categoria do cartão.
+- **Removedores dos seeds**, em ordem inversa: cartões, MVP, receitas, recorrência (119 identidades, 126 contas, 4 execuções, gerador e histórico), contas e perfis (2 perfis, 5 contas, 4 vínculos).
+- **Resultado:**
+  - `depois` repetido no fim: conteúdo das tabelas existentes **idêntico ao de antes da migration**;
+  - `pagamento_fatura`, `recorrencia_rejeicao` e `fatura_consolidada_inclusao` vazias;
+  - 0 perfis temporários, contas e itens de teste; nenhum arquivo de estado em `data/`.
+- **Diferença permanente:** só os objetos da migration. As sequências avançaram, o que é normal.
+
+### 10.4 Pendências para a publicação
+
+1. Publicar o frontend, que depende de autorização. O banco remoto já tem as funções que ele chama.
+2. Atribuir ao novo aplicativo (D5) os perfis reais **somente quando forem migrados**. Até lá, eles continuam pagando pelo Flask.
+3. Defeito do Flask no 2º estorno (§6): fora do escopo; não afeta perfis atribuídos ao novo aplicativo.

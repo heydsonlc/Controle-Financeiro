@@ -658,3 +658,5 @@ A fatura paga preservada (11/15 e o 7 da integridade) também passou.
 **Testes locais de concorrência Flask × novo aplicativo:** `tests/test_supabase_fatura_unica.py` e `tests/test_fatura_integridade.py`, **27 aprovados**. O código do aplicativo não mudou depois da regressão completa do §13.
 
 **Pendência:** reexecução remota isolada do cenário 10, com autorização. O script real roda os cenários em sequência; o 10 depende da fatura criada no 5.
+
+**Resolvido** no FIN-CARTOES-PAGAMENTO-REAL-1 (24/10/2026): `supabase_cartoes_real.py` 23/23 no Supabase de teste. Cenário 10 aprovado no remoto: cartão `TRAVADO` pelo Flask, compra do novo aplicativo esperou e concluiu (200), 1 fatura, 2 compras, executado 133,00 = soma real (`docs/FIN_CARTOES_PAGAMENTO_1.md` §10).

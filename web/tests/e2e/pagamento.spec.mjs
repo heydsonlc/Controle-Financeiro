@@ -43,6 +43,8 @@ test('pagar com juros justificados, estornar e pagar de novo: situacao, historic
     await page.fill('#cartao-vencimento', '12');
     await page.click('#cartao-painel button[type=submit]');
     await expect(page.locator('#acao-resultado')).toHaveText('Cartão cadastrado.');
+    // A mensagem sai antes de a tela recarregar: espera o cartao novo na lista (senao o formulario ainda e o antigo).
+    await expect(page.locator('#lista-cadastro .conta', { hasText: 'Cartao Pagamento' })).toBeVisible();
     await page.click('#nova-compra');
     await page.selectOption('#compra-cartao', { label: 'Cartao Pagamento' });
     await page.fill('#compra-descricao', 'Compra a pagar E2E');
@@ -94,6 +96,7 @@ test('pagar com juros justificados, estornar e pagar de novo: situacao, historic
     await page.click('#cartao-painel button[type=submit]');
     await expect(page.locator('#acao-resultado'))
         .toHaveText(/^Fatura paga: R\$\s150,00 debitados de Conta Perfil B\. Saldo da conta: -R\$\s150,00\.$/);
+    await expect(item().locator('.situacao')).toHaveText('Paga');
     await item().locator('summary').click();
     await expect(item().locator('.pagamento-linha')).toHaveCount(2);  // estornado + vigente
     await expect(item().getByRole('button', { name: 'Estornar pagamento' })).toBeVisible();
