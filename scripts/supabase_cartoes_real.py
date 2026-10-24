@@ -143,6 +143,23 @@ def md5_fatura(fatura_id):
     return banco('select md5(t::text) from public.conta t where id = %s', (fatura_id,))[0][0]
 
 
+def sonda_cartao(cartao_id):
+    """'TRAVADO' se outra transacao segura a linha do cartao (FOR UPDATE NOWAIT); nada e gravado. Como no
+    supabase_fatura_integridade_real.py (que importa este modulo, por isso nao e importada de la)."""
+    import psycopg2
+    from psycopg2 import errors
+    conn = psycopg2.connect(URL, connect_timeout=15)
+    try:
+        with conn.cursor() as cur:
+            cur.execute('select 1 from public.item_despesa where id = %s for update nowait', (cartao_id,))
+        return 'LIVRE'
+    except errors.LockNotAvailable:
+        return 'TRAVADO'
+    finally:
+        conn.rollback()
+        conn.close()
+
+
 def paralelo(funcoes):
     barreira = threading.Barrier(len(funcoes))
     tarefas = [em_thread(lambda f=f: (barreira.wait(60), f())[1]) for f in funcoes]
@@ -309,23 +326,35 @@ def main():
         tarefa.join(180)
         fs = faturas(c10, '2034-10-01')
         u1 = esperando and resposta['valor'][0] == 200 and [x[0] for x in fs] == [devolvida]             and fs[0][3] == soma(c10, '2034-10-01')
-        # Flask consultou (sem fatura); o novo app cria e grava; o Flask reconhece a existente
+        # Flask e novo app na mesma fatura. Ordem global de travas (FIN-FATURA-INTEGRIDADE-1): o Flask trava cartao e
+        # faturas ANTES de inserir; parado ali, a compra do novo app (em thread, como no 9d) espera a trava do cartao e
+        # conclui depois que o Flask e liberado (dentro do lock_timeout da Data API), sem deadlock nem duplicidade.
+        # A fatura de 12/2034 ja existe (cenario 5): so assim a barreira do Flask fica DEPOIS das travas (sem ela, a
+        # pausa cai na criacao da fatura, antes de travar o cartao).
+        existia = len(faturas(c10, '2034-12-01')) == 1
         p2 = pasta / 'b'
         p2.mkdir()
         pf = Flask(p2, 'g1', acao='compra', pausa='antes_do_insert', dados={
             'cartao_id': c10, 'categoria_id': MORADIA, 'descricao': 'Compra Flask paralela', 'valor': '11.00',
             'data_compra': '2034-12-05', 'mes_fatura': '2034-12-01', 'total_parcelas': 1})
         aguardar(p2, ['g1_consultou'], [pf])
-        st = comprar(c10, 'Compra nova paralela', '2034-12-01', '22.00')[0]
+        sonda = sonda_cartao(c10)
+        tarefa, resposta = em_thread(lambda: comprar(c10, 'Compra nova paralela', '2034-12-01', '22.00'))
+        time.sleep(3)
+        esperou = tarefa.is_alive()
         liberar(p2, 'consultou')
         rf = pf.resultado()
+        tarefa.join(180)
+        st = resposta['valor'][0]
         fs = faturas(c10, '2034-12-01')
         ambas = banco("select count(*) from public.lancamento_agregado where cartao_id = %s and mes_fatura = '2034-12-01' "
                       "and descricao in ('Compra Flask paralela', 'Compra nova paralela')", (c10,))[0][0]
-        u2 = st == 200 and [x[0] for x in fs] == [rf['fatura']] and ambas == 2 and fs[0][3] == soma(c10, '2034-12-01')
+        u2 = existia and sonda == 'TRAVADO' and esperou and st == 200 and [x[0] for x in fs] == [rf['fatura']] and ambas == 2 \
+            and fs[0][3] == soma(c10, '2034-12-01')
         registrar('10. Unicidade da fatura com o Flask', u1 and u2,
-                  f'novo esperou o commit do Flask: {esperando}; 1 fatura reaproveitada; Flask x novo no mesmo mes: '
-                  f'1 fatura, executado {fs[0][3]}')
+                  f'novo esperou o commit do Flask: {esperando}; 1 fatura reaproveitada; Flask parado segurando o cartao '
+                  f'({sonda}), compra do novo app esperou ({esperou}) e concluiu ({st}); mesmo mes: {len(fs)} fatura, '
+                  f'{ambas} compras, executado {fs[0][3]} = soma real')
 
         # 13 (Flask). Compra parcelada criada pelo Flask: lida, comparada, editada e excluida pelo novo app
         p3 = pasta / 'c'

@@ -189,7 +189,7 @@ A regra está escrita duas vezes, idênticas: `financeiro.competencia_da_compra`
 
 ## 7. Compatibilidade e riscos
 
-- **Supabase remoto:** continua com as versões anteriores até `20261030090000` ser aplicada. O novo aplicativo publicado chama `sugerir_competencia`, que só existe depois dela, e trata a falha como "não foi possível sugerir" (o mês continua editável). **Publicar o frontend só depois da migration remota.**
+- **Supabase remoto:** `20261030090000` aplicada no Supabase de teste em 24/10/2026 (FIN-CARTOES-FECHAMENTO-REAL-1, §14). Antes disso continuava com as versões anteriores. O novo aplicativo publicado chama `sugerir_competencia`, que só existe depois dela, e trata a falha como "não foi possível sugerir" (o mês continua editável). **Publicar o frontend só depois da migration remota.**
 - **`scripts/supabase_cartoes_real.py` (cenário 17):** atualizado na RETOMADA-CASA-2 para a D6 (confirmação, auditoria, reuso recusado) e ensaiado localmente; commitado no FIN-CARTOES-FECHAMENTO-PRE-REAL-1, com os cenários 17a/17b (§13).
 - **Recorrências, importação e edição no Flask:** resolvidos no FIN-CARTOES-D6-INTEGRIDADE-1 (§11).
 - **Fora do escopo:** `lancamentos.js`, na confirmação de recebimento (receitas), ainda usa `toISOString()` para a data do dia.
@@ -520,3 +520,141 @@ Código em `scripts/supabase_cartoes_fechamento_cenarios.py`, chamado por `supab
 ### 13.5 Bloqueios
 
 Nenhum bloqueio técnico. O próximo passo depende de autorização específica: aplicar só `20261030090000` (`supabase_migrations.py aplicar --versoes 20261030090000`), conferência `depois` contra a pasta do `antes`, cenários reais e limpeza (§10).
+
+## 14. Validação real (FIN-CARTOES-FECHAMENTO-REAL-1)
+
+Autorizada pelo titular em 24/10/2026, **só no Supabase de teste**. HEAD local `00f445f`; nenhum commit novo, nenhum push, nenhuma publicação.
+
+### 14.1 Conferência inicial (somente leitura)
+
+**Identidade do projeto, pela conexão efetiva:**
+- o ref do pooler (`.env.staging`) é igual ao da Data API (`fzjmge…`, não é o da Calculadora);
+- o login real do usuário B fictício na Data API devolveu o mesmo id que a conexão ao banco vê em `auth.users`.
+
+**Estado do banco:**
+- Histórico: `20261029090000` aplicada; pendente só `20261030090000`; nada só no remoto.
+- Sessões: nenhuma outra sessão ativa ou com transação aberta; nenhuma trava aguardando.
+- "Antes": recapturado e **idêntico** ao do PRE-REAL-1 (conteúdo das 61 tabelas, funções, estrutura e as 10 definições salvas, fora do repositório).
+- Essas definições servem de diagnóstico; sozinhas não são um procedimento de rollback.
+
+### 14.2 Aplicação
+
+`scripts/supabase_migrations.py aplicar --versoes 20261030090000`, das 12:37:15 às 12:37:23 (8 s), saída 0: "Aplicadas agora: ['20261030090000'] | faltando: nenhuma".
+
+### 14.3 Conferência `depois`: OK
+
+| Objeto | Resultado |
+|---|---|
+| Migrations | 11 locais e 11 aplicadas; nada pendente nem só no banco |
+| Funções novas | 9, idênticas ao esperado. Só `sugerir_competencia`, `recorrencias_rejeitadas` e `dispensar_aviso_recorrencia` para `authenticated`; as demais sem EXECUTE para PUBLIC/anon/authenticated |
+| Funções substituídas | 10, idênticas ao esperado (corpo, retorno, `SECURITY DEFINER`, `search_path`, privilégios) |
+| Tabelas novas | 2 (`fatura_consolidada_inclusao`, `recorrencia_rejeicao`), com RLS e sem privilégios para anon/authenticated |
+| Colunas novas | 3, só com o valor padrão |
+| Funções/tabelas removidas | 0 |
+| Privilégios alterados indevidamente | 0; nenhuma tabela do `public` exposta |
+| Dados | Conteúdo das 61 tabelas idêntico ao de antes |
+
+### 14.4 Testes reais (dados fictícios no Perfil B temporário)
+
+**Procedimento:**
+1. Marca da limpeza.
+2. Seeds: perfis → contas → recorrência → receitas → MVP → cartões.
+3. E2E real.
+4. `supabase_cartoes_real.py`.
+5. `supabase_fatura_integridade_real.py`.
+6. Limpeza.
+
+| Bateria | Executados | Aprovados | Reprovados | Não executados |
+|---|---|---|---|---|
+| E2E real (`run_e2e_real.py`) | 47 | 47 | 0 | 2 ignorados: os passos de consolidação de `fechamento` e `pendencia`, que dependem do gancho do harness local (cobertos no E2E local) |
+| `supabase_cartoes_real.py` (inclui 17, 17a e 17b) | 23 | 22 | 1 (cenário 10, abaixo) | 0 |
+| `supabase_fatura_integridade_real.py` (execução `c494aae2`) | 14 | 14 | 0 | 0 |
+
+**Cenário 17 (D6):**
+- inclusão sem confirmação recusada (`CONSOLIDADA`);
+- confirmações de total desatualizado, de outra fatura e genérica (`true`) recusadas, sem mudar nada;
+- confirmação correta aceita: consolidado 20,00 → 21,00, com 1 auditoria `NOVO_APP`;
+- reuso da confirmação recusado.
+
+A fatura paga preservada (11/15 e o 7 da integridade) também passou.
+
+**Cenário 17a (fechamento automático):**
+- competência antes, no dia e depois do fechamento, e na virada de ano;
+- fechamento não confirmado não sugere;
+- sem mês, vale a sugestão; com mês informado, vale o do usuário, e a sugestão fica registrada;
+- outro usuário: 403.
+
+**Cenário 17b (recorrências rejeitadas):**
+- nada lançado na fatura consolidada; ocorrência persistida;
+- tentativas 1 → 2 → 3, sem duplicar; aviso disponível;
+- dispensa auditada e idempotente, preservada depois de nova tentativa;
+- dispensa antes da geração validada pelo banco;
+- recorrência, compras e faturas inalteradas;
+- outro perfil e LEITOR: 403; anônimo: 401.
+
+**Cenário 10, falha de roteiro do teste (não de código nem da migration):**
+- Na segunda metade, o script pausa o Flask no `calcular_planejado` e chama a compra do novo aplicativo **de forma síncrona**, liberando o Flask só depois.
+- Desde o FIN-FATURA-INTEGRIDADE-1 (`b669d5d`), o Flask trava o cartão e as faturas **antes** desse ponto (ordem global).
+- A compra do novo aplicativo esperou a trava e foi cancelada pelo `lock_timeout = 8s` da Data API, sem gravar nada. Depois o Flask concluiu.
+- **Estado conferido:** 1 fatura; executado 111,00 = soma real (100,00 + 11,00); nenhuma gravação parcial.
+- O comportamento é o da ordem global validada no FIN-FATURA-INTEGRIDADE-REAL-1 e **revalidada agora** (9c e 9d: o novo aplicativo espera o Flask e conclui, sem deadlock).
+- O script não roda desde o FIN-CARTOES-REAL-1, anterior a essa mudança.
+- **Ajuste:** feito no FIN-CARTOES-FECHAMENTO-ENCERRAMENTO-1 (§15). **Não reexecutado no remoto.**
+
+### 14.5 Limpeza
+
+**Removidos:**
+- `supabase_despesas_real_limpeza.py remover --confirmar`, só registros acima da marca e fora dos seeds (as tabelas financeiras estavam vazias na marca; a fonte de receita preexistente, id 1, foi preservada):
+  - 16 itens, 90 contas e faturas, 84 compras;
+  - 12 identidades, 13 configurações, 1 limite;
+  - 2 ocorrências de `recorrencia_rejeicao` (restantes: 0);
+  - 1 movimento, 1 recebimento, 17 previsões, 6 fontes de receita;
+  - 62 chaves de idempotência, 1 vínculo e 1 categoria do cartão.
+- A auditoria de `fatura_consolidada_inclusao` saiu com a fatura de teste (cascade).
+- Removedores dos seeds, em ordem inversa: cartões, MVP, receitas, recorrência (127 identidades, 136 contas, 5 execuções, gerador e histórico), contas e perfis (2 perfis, 5 contas fictícias, 4 vínculos).
+
+**Resultado:**
+- Conferência `depois` repetida no fim: conteúdo das 61 tabelas idêntico ao de **antes da migration**; colunas novas só no padrão; schema no estado novo esperado.
+- Tabelas novas vazias; 0 perfis temporários; 0 itens de teste; nenhum arquivo de estado em `data/`.
+- Diferença permanente: só a migration (objetos novos). As sequências avançaram, o que é normal.
+
+### 14.6 Pendências para publicação
+
+1. Cenário 10: roteiro ajustado e ensaiado localmente (§15); falta só a reexecução remota isolada, sem impacto funcional.
+2. A publicação do frontend continua **não feita**. Tecnicamente está liberada: o banco remoto já tem `sugerir_competencia` e as funções da D6 e das pendências.
+3. A Alembic `c7e2a9d4b8f3` no banco do Flask (`gastos.db`) continua sendo decisão separada, com backup.
+
+## 15. Encerramento (FIN-CARTOES-FECHAMENTO-ENCERRAMENTO-1)
+
+**FIN-CARTOES-FECHAMENTO-1 — CONCLUÍDO E VALIDADO, COM RESSALVA DE TESTE DOCUMENTADA.**
+
+**Validação real (§14):**
+- `20261030090000` aplicada no Supabase de teste (11/11), com a conferência `depois` OK.
+- D5, D6, fechamento automático, recorrências rejeitadas e dispensa auditável validados.
+- Integridade de faturas 14/14 e E2E real 47/47.
+- Limpeza com o conteúdo de antes da migration.
+- **Ressalva:** o cenário 10 de `supabase_cartoes_real.py`. O roteiro foi ajustado e ensaiado localmente, mas a aprovação **remota** dele ainda não foi comprovada.
+
+### 15.1 Cenário 10: ajuste do roteiro
+
+**Causa confirmada:**
+- Com a fatura de 12/2034 já existente (criada no cenário 5), o Flask só chega à barreira do teste (`calcular_planejado`, no recálculo) **depois** de `planejar_destinos` travar o cartão e as faturas.
+- O roteiro antigo chamava a compra do novo aplicativo de forma síncrona e só liberava o Flask depois dela.
+- Com isso, a compra esperava a trava até o `lock_timeout` (8 s na Data API) e era cancelada, sem gravar nada.
+- Sem fatura prévia, a barreira cai na criação da fatura, antes da trava. Foi o que confundiu a primeira tentativa de ensaio.
+
+**Roteiro novo** (só o teste mudou; como no 9d):
+- confere que a fatura já existe;
+- sonda `FOR UPDATE NOWAIT` no cartão (o Flask parado deve segurá-lo);
+- compra do novo aplicativo **em thread**, que precisa estar esperando;
+- libera o Flask enquanto ela espera;
+- espera as duas terminarem, sem deadlock;
+- confere 1 fatura, a mesma das duas operações; as 2 compras gravadas, sem duplicidade; e o executado igual à soma real.
+
+**Ensaio descartável** (cluster local, Flask real, novo aplicativo como `authenticated` com `lock_timeout = 8s`, como a Data API):
+- **Roteiro novo:** aprovado. Cartão `TRAVADO`; a compra esperou e concluiu (200); 1 fatura; 2 compras; executado 133,00 = soma real.
+- **Controle com o roteiro antigo:** `lock_timeout`, nada gravado, executado 111,00. É exatamente o resultado do remoto, o que confirma o diagnóstico.
+
+**Testes locais de concorrência Flask × novo aplicativo:** `tests/test_supabase_fatura_unica.py` e `tests/test_fatura_integridade.py`, **27 aprovados**. O código do aplicativo não mudou depois da regressão completa do §13.
+
+**Pendência:** reexecução remota isolada do cenário 10, com autorização. O script real roda os cenários em sequência; o 10 depende da fatura criada no 5.
