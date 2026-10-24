@@ -82,6 +82,22 @@ Diferença não é falha — é informação. Sem julgar se é bom ou ruim.
 
 ---
 
+## Validação por Impacto (TESTES-IMPACTO-1)
+
+Todo MVP é validado na proporção do que alterou. Detalhes, matriz e comandos estão em [TESTES_IMPACTO_1.md](TESTES_IMPACTO_1.md).
+
+- **Nível 1 (desenvolvimento):** os testes do que está sendo mexido.
+- **Nível 2 (encerramento do MVP, padrão):** a seleção de `venv\Scripts\python.exe scripts\testes_impacto.py`. Revise a lista e os motivos e depois rode com `--executar`, que mede o tempo.
+- **Nível 3 (suíte completa):** só nos marcos. Isso inclui publicar, aplicar migration remota, mexer em código central compartilhado, integrar vários MVPs, ter falha de alcance desconhecido ou dúvida relevante.
+- **Nunca, para ganhar tempo:**
+  - tirar um teste necessário;
+  - desligar isolamento, travas, transações ou limpeza;
+  - reaproveitar resultado de outra versão dos arquivos.
+- **Na dúvida:** ampliar a seleção e registrar a incerteza no relatório.
+- **Regra permanente:** na dúvida sobre o impacto financeiro de uma alteração, ampliar. Isso vale sobretudo para pagamentos, estornos, conciliação, consolidação de faturas, saldos e movimentações entre contas: a integridade dos valores vale mais que alguns minutos de execução. O seletor já aplica essa regra quando o trecho alterado cita esses temas.
+
+---
+
 ## Checklist Pré-Commit
 
 - [ ] Lógica de negócio está no backend?

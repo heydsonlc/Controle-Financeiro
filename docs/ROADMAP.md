@@ -103,6 +103,7 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 | ID | Descrição | Prioridade |
 |----|-----------|-----------|
 | TEST-FIN-1 | Ampliar cobertura E2E em Despesas, Cartões e Financiamentos | Alta |
+| TESTES-IMPACTO-1 | Validação por impacto adotada como padrão (`scripts/testes_impacto.py`, `docs/TESTES_IMPACTO_1.md`), com seletor calibrado (rota pelo caminho inteiro, atributo privado, E2E por dados de fatura) e regra permanente "na dúvida sobre impacto financeiro, ampliar". Pendente: medir a economia de tempo na tomada, no próximo marco obrigatório | Alta |
 | TEST-CONV-1 | Converter scripts legados `teste_*.py` para pytest seguro | Baixa |
 
 ### Interface / UX Global

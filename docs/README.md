@@ -19,6 +19,7 @@
 | [UX_REESTRUTURACAO_NAVEGACAO.md](UX_REESTRUTURACAO_NAVEGACAO.md) | Diretriz de navegação, shell visual e organização dos módulos |
 | [WEB_MOBILE_SEGURANCA_POSTGRESQL.md](WEB_MOBILE_SEGURANCA_POSTGRESQL.md) | Decisões sobre plataforma, segurança e banco de dados |
 | [TESTES_E2E.md](TESTES_E2E.md) | Infraestrutura de testes Playwright e scripts npm |
+| [TESTES_IMPACTO_1.md](TESTES_IMPACTO_1.md) | Validação por impacto: níveis, seletor `scripts/testes_impacto.py`, matriz e quando rodar a suíte completa |
 | [api-contract.md](api-contract.md) | Contrato das APIs do sistema |
 
 ## Documentos Operacionais
