@@ -1,6 +1,6 @@
 # FIN-MOVIMENTACOES-1 — Pagamento de despesas, recebimento de receitas, estornos e movimentos do mês
 
-**Situação:** concluído e validado localmente; aguardando validação real. A migration `20261101090000` **não** foi aplicada no Supabase remoto (§9).
+**Situação:** concluído e validado no Supabase de teste (§10). Migration `20261101090000` aplicada só nele, com autorização do titular em 24/10/2026. Publicação e migração de dados pessoais não feitas.
 
 O novo aplicativo passa a pagar despesas comuns, receber receitas, estornar cada operação e mostrar os movimentos do mês. Tudo usa o mesmo motor do FIN-CARTOES-PAGAMENTO-1: não existe um segundo motor financeiro.
 
@@ -227,3 +227,68 @@ Nada foi escrito no remoto. HEAD `435670b`, com 7 commits locais.
 1. Autorização para aplicar só `20261101090000`.
 2. `depois` contra a pasta do `antes`.
 3. Marca, seeds, E2E real, `supabase_movimentacoes_real.py` e `supabase_cartoes_pagamento_real.py`; depois a limpeza, os removedores dos seeds e o `depois` final.
+
+## 10. Validação real (FIN-MOVIMENTACOES-REAL-1)
+
+Autorizada pelo titular, **só no Supabase de teste**. HEAD `6f6c669`; sem push e sem publicação. O `gastos.db` não foi acessado. Nenhum perfil real foi atribuído ao novo aplicativo.
+
+### 10.1 Aplicação e conferências
+
+- **Antes:**
+  - projeto confirmado pela conexão efetiva (ref do pooler = ref da Data API `fzjmge…`; login real do usuário B = `auth.users`);
+  - `20261029`, `20261030` e `20261031` aplicadas; pendente só `20261101090000`;
+  - nenhuma sessão ativa nem trava;
+  - `antes` recapturado **idêntico** ao do §9.5;
+  - fonte de receita preexistente (id 1) com md5 `4dffddb6…` registrado.
+- **Aplicação:** `supabase_migrations.py aplicar --versoes 20261101090000`, das 20:04:45 às 20:04:52 (7 s), saída 0, só essa versão.
+- **`depois`: OK.**
+  - 13 de 13 migrations aplicadas.
+  - Exatamente as 13 funções novas (7 só `authenticated`, 6 internas).
+  - Nada alterado ou removido, inclusive nas funções de cartões; nenhuma tabela nova.
+  - Conteúdo das tabelas existentes idêntico.
+
+### 10.2 Testes reais (dados fictícios, Perfil B temporário atribuído ao novo aplicativo)
+
+| Bateria | Executados | Aprovados | Não executados |
+|---|---|---|---|
+| E2E real (inclui `movimentacoes.spec.mjs`: despesa com juros e estorno; receita parcial, acima do previsto e estornos) | 50 | 50 | 2 ignorados: os passos de consolidação que dependem do harness local |
+| `supabase_movimentacoes_real.py` (cenários 1 a 20 e 22) | 21 | 21 | 0 |
+| `supabase_cartoes_pagamento_real.py` (cenário 21: pagamento de cartões preservado) | 16 | 16 | 0 |
+
+**Evidências conferidas no banco:**
+- situação, valor executado ou recebido, movimento, conta e saldo depois de cada operação. O saldo gravado ficou igual ao calculado pelos movimentos e igual à partida mais as operações: −150,00 + 1.250,00 = 1.100,00;
+- devido original e responsável (19 detalhes de pagamento, todos com usuário de teste);
+- estornos ligados ao movimento original;
+- 18 movimentos do teste no extrato de 03/2040;
+- registros fora do Perfil B idênticos (cenário 20).
+- **Falha intermediária:** com a conta presa até o `lock_timeout`, nada foi gravado, nem o recebimento, e as mesmas chaves concluíram depois.
+
+### 10.3 Limpeza controlada
+
+**Simulação e identidade:**
+- Simulação (`remover` sem `--confirmar`) e conferência só leitura da **identidade de cada registro**: perfil temporário, marcador, nome de fixture do seed, operação de usuário de teste (chave de idempotência) ou vínculo com registro já identificado.
+- **Todos identificados, nenhum pendente:**
+  - 10 itens, 20 contas e faturas, 42 movimentos;
+  - 11 recebimentos, 23 previsões, 12 fontes;
+  - 72 chaves, 2 contas inativas de teste;
+  - 19 detalhes de pagamento, em cascade.
+- A fonte preexistente (id 1) ficou fora da seleção.
+
+**Removidos:** `supabase_despesas_real_limpeza.py remover --confirmar`, depois os removedores dos seeds em ordem inversa: cartões, MVP, receitas, recorrência (28 identidades, 31 contas, 2 execuções, gerador e histórico), contas e perfis (2 perfis, 5 contas, 4 vínculos).
+
+**Resultado:**
+- `depois` repetido no fim: conteúdo das tabelas existentes **idêntico ao de antes da migration**;
+- despesas, contas, movimentos, recebimentos, previsões, detalhes de pagamento, contas bancárias, perfis temporários e chaves voltaram a 0, como antes;
+- fonte preexistente com o mesmo md5;
+- nenhum arquivo de estado em `data/`.
+- **Diferença permanente:** só as 13 funções da migration e o comentário. As sequências avançaram, o que é normal.
+
+### 10.4 Situação
+
+**FIN-MOVIMENTACOES-1 — Concluído e validado no Supabase de teste.**
+
+**Pendências para a publicação (fora deste MVP):**
+1. Atribuir ao novo aplicativo (D6) só os perfis migrados. A partir daí, o débito automático deixa de ser baixado sozinho.
+2. Parcelas de consórcio e de financiamento e o recebimento pontual continuam no Flask.
+3. `test_contexto_financeiro_escopo` depende da ordem de execução (§9.1); observar na validação integrada.
+4. Publicação do frontend e migração dos dados pessoais: não feitas.
