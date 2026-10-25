@@ -1,0 +1,26 @@
+/* FIN-FIDELIDADE-RECORRENCIAS-1 — so o que a tela original de Recorrencias (recorrencias.css) nao tinha. */
+
+/* Quem so le o perfil ve a lista, sem as acoes de escrita (o banco recusaria de qualquer forma). */
+body.cf-somente-leitura #btn-nova-recorrencia,
+body.cf-somente-leitura #secao-formulario,
+body.cf-somente-leitura .recorrencias-actions {
+    display: none;
+}
+
+/* Resultado da ultima operacao (lembra que a geracao das contas e explicita, em Despesas). */
+.recorrencias-resultado {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border: 1px solid #bbf7d0;
+    border-radius: 10px;
+    background: #f0fdf4;
+    color: #166534;
+    font-size: 0.85rem;
+}
+
+/* Consorcios ainda nao migrados: aviso discreto no rodape da lista. */
+.recorrencias-aviso-migracao {
+    margin: 12px 0 0;
+    color: #64748b;
+    font-size: 0.8rem;
+}

@@ -81,16 +81,21 @@ const RPCS_DE_LEITURA = new Set(['meus_perfis', 'contas_bancarias_do_perfil', 'c
     'sugerir_competencia',  // FIN-CARTOES-FECHAMENTO-1 (so leitura)
     'dados_pagamento_fatura',  // FIN-CARTOES-PAGAMENTO-1 (so leitura)
     'dados_pagamento_despesa', 'dados_recebimento_receita', 'movimentos_do_mes',  // FIN-MOVIMENTACOES-1 (so leitura)
-    'perfis_para_configuracao']);  // FIN-MIGRACAO-FIDELIDADE-FASE-1 (so leitura)
+    'perfis_para_configuracao',  // FIN-MIGRACAO-FIDELIDADE-FASE-1 (so leitura)
+    'recorrencias_do_perfil']);  // FIN-FIDELIDADE-RECORRENCIAS-1 (so leitura)
 // Escrita so por RPC transacional autorizada no banco, revisada uma a uma, e so na tela que a usa.
 const RPCS_DE_ESCRITA = new Map([
     ['gerar_mes', 'despesas-recorrencias.js'],  // FIN-FIDELIDADE-DESPESAS-1: extraido de contas.js
     // FIN-DESPESAS-1
     // FIN-FIDELIDADE-DESPESAS-1: a tela original de Despesas chama pelo adaptador (despesas-adaptador.js)
-    ['criar_despesa', 'despesas-adaptador.js'],
+    ['criar_despesa', ['despesas-adaptador.js', 'recorrencias-adaptador.js']],
     ['editar_despesa', 'despesas-adaptador.js'],
     ['excluir_despesa', 'despesas-adaptador.js'],
-    ['inativar_recorrencia', 'despesas-adaptador.js'],
+    ['inativar_recorrencia', ['despesas-adaptador.js', 'recorrencias-adaptador.js']],
+    // FIN-FIDELIDADE-RECORRENCIAS-1 (tela de Recorrencias; o banco exige gestao do perfil e a versao)
+    ['editar_recorrencia', 'recorrencias-adaptador.js'],
+    ['reativar_recorrencia', 'recorrencias-adaptador.js'],
+    ['definir_meio_pagamento_recorrencia', ['recorrencias-adaptador.js', 'despesas-adaptador.js']],
     // FIN-RECEITAS-1 (so previsoes; nenhum recebimento)
     ['criar_receita', 'receitas.js'],
     ['editar_receita', 'receitas.js'],
@@ -150,7 +155,7 @@ const MENU_DO_FLASK = [
     ['Ferramentas', ['Importar Cartão']],
     ['Sistema', ['Configurações e Preferências', 'Ajuda e Manual']],
 ];
-const MIGRADAS = { 'contas.html': 'Despesas', 'receitas.html': 'Receitas', 'cartoes.html': 'Cartões',
+const MIGRADAS = { 'contas.html': 'Despesas', 'recorrencias.html': 'Recorrencias', 'receitas.html': 'Receitas', 'cartoes.html': 'Cartões',
     'categorias.html': 'Categorias', 'configuracoes.html': 'Configurações e Preferências', 'ajuda.html': 'Ajuda e Manual' };
 
 function menuDe(html) {

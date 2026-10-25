@@ -8,52 +8,21 @@
 // recorrencia semanal ou no cartao, consolidacao de fatura).
 
 import { supabase } from './cliente.js';
+import {
+    criarChaves, emMigracao, falha, hojeBrasilia, mensagemDeErro, ok, textoBloqueio, valorTexto,
+} from './adaptador-comum.js';
 import { centavos, deslocarMes, mesAtualBrasilia, reais } from './comum.js';
 import { mostrarGeracao } from './despesas-recorrencias.js';
 import { definirCompetencia, iniciarMoldura } from './moldura.js';
 
 const MES = /^\d{4}-(0[1-9]|1[0-2])$/;
-const estado = { perfilId: null, mes: null, linhas: new Map(), categorias: null, contasAtivas: [], chaves: {} };
-
-const ok = (corpo = {}) => ({ status: 200, corpo: { success: true, ...corpo } });
-const falha = (error, status = 400) => ({ status, corpo: { success: false, error } });
-const emMigracao = (funcao) => falha(`${funcao}: em migração para o novo aplicativo. Até lá, continua no sistema atual.`, 501);
-const valorTexto = (valor) => (Number(valor) || 0).toFixed(2);
-
-// Motivos de bloqueio do banco (sem acento) como o usuario le (mesmos textos do FIN-DESPESAS-1).
-const BLOQUEIOS = {
-    'Despesa paga: correcao so por estorno': 'Despesa paga: para corrigir, estorne o pagamento.',
-    'Possui movimento financeiro vinculado': 'Possui movimento financeiro vinculado.',
-    'Fatura ou compra de cartao: fica no modulo de cartoes': 'Fatura ou compra de cartão: fica no módulo de cartões.',
-    'Parcela de consorcio: fica no modulo de consorcios': 'Parcela de consórcio: fica no módulo de consórcios (em migração).',
-    'Parcela de financiamento: fica no modulo de financiamentos': 'Parcela de financiamento: fica no módulo de financiamentos (em migração).',
-    'Gerada por outro modulo (veiculos, mobilidade ou assinaturas)': 'Gerada por outro módulo (veículos, mobilidade ou assinaturas).',
-};
-const textoBloqueio = (motivo) => BLOQUEIOS[motivo] || `${motivo}.`;
-
-function mensagemDeErro(error) {
-    const texto = (error && error.message) || '';
-    if (/alterad[ao] por outra operacao/i.test(texto)) return 'A despesa foi alterada por outra operação. Recarregue e tente de novo.';
-    if (/nao autorizado|nao encontrada neste perfil/i.test(texto)) return 'Operação não autorizada para este perfil.';
-    if (/Operacao bloqueada: /i.test(texto)) return `Operação bloqueada: ${textoBloqueio(texto.replace(/^.*Operacao bloqueada: /i, ''))}`;
-    if (texto && error.code && /^(22023|P0001|42501)$/.test(error.code)) return texto;
-    return 'Não foi possível concluir a operação. Nada foi gravado.';
-}
-
-function hojeBrasilia() {
-    return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
-}
+const estado = { perfilId: null, mes: null, linhas: new Map(), categorias: null, contasAtivas: [] };
+const chaves = criarChaves();
 
 function somarDias(iso, dias) {
     const data = new Date(`${iso}T00:00:00Z`);
     data.setUTCDate(data.getUTCDate() + dias);
     return data.toISOString().slice(0, 10);
-}
-
-// Mesma chave em reenvios da mesma operacao (o banco nao duplica); nova chave depois do sucesso.
-function chave(operacao) {
-    if (!estado.chaves[operacao]) estado.chaves[operacao] = crypto.randomUUID();
-    return estado.chaves[operacao];
 }
 
 async function categoriasDeDespesa() {
@@ -73,7 +42,7 @@ async function contasBancariasAtivas() {
 }
 
 // Linha de contas_do_mes (+ despesa_para_edicao, so nas despesas do mes) no formato de GET /api/despesas do Flask.
-function linhaDoFlask(c, mes, edicao, categoriasPorNome) {
+function linhaDoFlask(c, mes, edicao, categoriasPorNome, meios = new Map()) {
     const fatura = c.grupo === 'FATURA';
     const categoria = c.categoria_nome
         ? { ...(categoriasPorNome.get(c.categoria_nome) || {}), nome: c.categoria_nome, cor: c.categoria_cor || '#6e6e73' }
@@ -98,7 +67,7 @@ function linhaDoFlask(c, mes, edicao, categoriasPorNome) {
         mes_competencia: mes,
         recorrente: !fatura && Boolean(item && item.recorrente),
         tipo_recorrencia: !fatura && item && item.recorrente ? item.tipo_recorrencia : null,
-        meio_pagamento: fatura ? 'cartao' : (c.debito_automatico ? 'debito' : null),
+        meio_pagamento: fatura ? 'cartao' : (c.debito_automatico ? 'debito_automatico' : (item && meios.get(item.id)) || null),
         debito_automatico: Boolean(c.debito_automatico),
         numero_parcela: c.numero_parcela,
         total_parcelas: c.total_parcelas,
@@ -157,12 +126,23 @@ function barraLateral(doMes, todas, receitasMes) {
     };
 }
 
+// FIN-FIDELIDADE-RECORRENCIAS-1: o cadastro de cartao (Flask e novo aplicativo) marca o proprio cartao (item
+// "Agregador") como recorrente; o gerador o lista como "nao pode ser gerado", mas a fatura e gerada pela parte de
+// cartoes e o cartao em si nunca vira conta. O aviso ignora so essa rejeicao (pelo motivo exato do banco); as demais
+// continuam. A correcao no gerador (pular o cartao) fica pendente: troca uma funcao grande do banco.
+const MOTIVO_CARTAO_COMO_RECORRENCIA = 'Cartao marcado como recorrencia';
+function semCartoesComoRecorrencia(previa) {
+    if (!previa) return previa;
+    const rejeitados = (previa.rejeitados || []).filter((item) => item.motivo !== MOTIVO_CARTAO_COMO_RECORRENCIA);
+    return { ...previa, rejeitados, rejeitadas: rejeitados.length };
+}
+
 async function atualizarGeracao(mes) {
     const [previaResp, pendenciasResp] = await Promise.all([
         supabase.rpc('previa_geracao', { p_perfil_id: estado.perfilId, p_mes: `${mes}-01` }),
         supabase.rpc('recorrencias_rejeitadas', { p_perfil_id: estado.perfilId, p_incluir_dispensadas: true }),
     ]);
-    const previa = previaResp.error ? null : previaResp.data;
+    const previa = semCartoesComoRecorrencia(previaResp.error ? null : previaResp.data);
     // Quem so le o perfil nao ve as acoes de escrita da tela original (o banco recusaria de qualquer forma).
     document.body.classList.toggle('cf-somente-leitura', !(previa && previa.pode_gerir));
     const dispensadas = new Set((pendenciasResp.error ? [] : pendenciasResp.data || [])
@@ -189,10 +169,11 @@ async function listar(parametros) {
     estado.mes = mes;
     definirCompetencia(mes);
     const doMes = (m) => supabase.rpc('contas_do_mes', { p_perfil_id: estado.perfilId, p_mes: `${m}-01` });
-    const [atual, anterior, seguinte, receitas, categorias] = await Promise.all([
+    const [atual, anterior, seguinte, receitas, categorias, , , recorrentes] = await Promise.all([
         doMes(mes), doMes(deslocarMes(mes, -1)), doMes(deslocarMes(mes, 1)),
         supabase.rpc('receitas_do_mes', { p_perfil_id: estado.perfilId, p_mes: `${mes}-01` }),
         categoriasDeDespesa(), contasBancariasAtivas(), atualizarGeracao(mes),
+        supabase.rpc('recorrencias_do_perfil', { p_perfil_id: estado.perfilId }),
     ]);
     if (atual.error) return falha(mensagemDeErro(atual.error), 403);
     const categoriasPorNome = new Map(categorias.map((c) => [c.nome, c]));
@@ -201,7 +182,8 @@ async function listar(parametros) {
         const { data, error } = await supabase.rpc('despesa_para_edicao', { p_perfil_id: estado.perfilId, p_conta_id: c.id });
         return [c.id, error ? null : data];
     })));
-    const linhas = (atual.data || []).map((c) => linhaDoFlask(c, mes, edicoes.get(c.id), categoriasPorNome));
+    const meios = new Map((recorrentes.error ? [] : recorrentes.data || []).map((r) => [r.id, r.meio_pagamento]));
+    const linhas = (atual.data || []).map((c) => linhaDoFlask(c, mes, edicoes.get(c.id), categoriasPorNome, meios));
     // Como o Flask: vencimento mais recente primeiro (a tela agrupa por origem e tipo).
     linhas.sort((x, y) => String(y.data_vencimento || '').localeCompare(String(x.data_vencimento || '')));
     const vizinhas = [[anterior, deslocarMes(mes, -1)], [seguinte, deslocarMes(mes, 1)]]
@@ -254,14 +236,10 @@ function recusaDoFormulario(corpo) {
         return 'Use a ação de pagamento para marcar a despesa como paga: ela escolhe a conta bancária e registra o movimento.';
     }
     if (corpo.recorrente && /^semanal/.test(String(corpo.tipo_recorrencia || ''))) {
-        return 'Recorrência semanal: em migração para o novo aplicativo (tela Recorrências).';
+        return 'Semanal e a cada 2 semanas: o novo aplicativo ainda não gera essa frequência (pendência). Use mensal ou anual.';
     }
     if (corpo.recorrente && !['mensal', 'anual'].includes(corpo.tipo_recorrencia)) return 'Tipo de recorrência inválido.';
-    if (corpo.meio_pagamento === 'cartao') return 'Recorrência paga no cartão de crédito: em migração para o novo aplicativo.';
-    if (corpo.meio_pagamento === 'debito') {
-        return 'Débito automático: o formulário ainda não tem a conta bancária do débito (em migração). '
-            + 'Salve sem o meio de pagamento e registre o pagamento pela ação de pagar.';
-    }
+    if (corpo.meio_pagamento === 'cartao') return 'Recorrência no cartão de crédito: em migração para o novo aplicativo (módulo de cartões).';
     if (!corpo.data_vencimento) return 'Informe a data de vencimento.';
     if (!(Number(corpo.valor) > 0)) return 'Informe um valor válido.';
     return null;
@@ -282,13 +260,21 @@ async function criar(corpo) {
     if (corpo.recorrente) Object.assign(dados, { recorrente: true, tipo_recorrencia: corpo.tipo_recorrencia });
     else if (MES.test(corpo.mes_competencia || '')) dados.competencia = `${corpo.mes_competencia}-01`;
     const operacao = `criar:${JSON.stringify(dados)}`;
-    const { data, error } = await supabase.rpc('criar_despesa', { p_perfil_id: estado.perfilId, p_dados: dados, p_chave: chave(operacao) });
+    const { data, error } = await supabase.rpc('criar_despesa', { p_perfil_id: estado.perfilId, p_dados: dados, p_chave: chaves.de(operacao) });
     if (error) return falha(mensagemDeErro(error));
-    delete estado.chaves[operacao];
+    chaves.esquecer(operacao);
     let message = data.recorrente
         ? 'Recorrência cadastrada. As contas são geradas pela ação "Gerar contas".'
         : `Despesa salva na competência ${String(data.competencia).slice(5, 7)}/${String(data.competencia).slice(0, 4)}.`;
-    if (['boleto', 'pix'].includes(corpo.meio_pagamento)) message += ' O meio de pagamento (boleto ou PIX) ainda não é registrado no novo aplicativo.';
+    // FIN-FIDELIDADE-RECORRENCIAS-1: o meio de pagamento (boleto, PIX ou debito) da recorrencia e gravado, so informativo.
+    if (data.recorrente && ['boleto', 'pix', 'debito'].includes(corpo.meio_pagamento)) {
+        const lista = await supabase.rpc('recorrencias_do_perfil', { p_perfil_id: estado.perfilId });
+        const item = !lista.error && (lista.data || []).find((r) => r.id === data.item_id);
+        const meio = item && await supabase.rpc('definir_meio_pagamento_recorrencia', {
+            p_perfil_id: estado.perfilId, p_item_id: data.item_id, p_versao: item.versao, p_meio: corpo.meio_pagamento,
+        });
+        if (!meio || meio.error) message += ' O meio de pagamento não foi gravado: ajuste na tela Recorrências.';
+    }
     return ok({ message });
 }
 
@@ -305,7 +291,7 @@ async function atualizar(id, corpo) {
     }
     const recorrente = Boolean(edicao.item.recorrente);
     if (Boolean(corpo.recorrente) !== recorrente || (recorrente && corpo.tipo_recorrencia !== edicao.item.tipo_recorrencia)) {
-        return falha('Alterar a recorrência: em migração para o novo aplicativo (tela Recorrências).');
+        return falha('Para alterar a recorrência (frequência e próximas contas), use a tela Recorrências.');
     }
     if (!(Number(corpo.valor) > 0)) return falha('Informe um valor válido.');
     const dados = {
@@ -373,11 +359,11 @@ async function pagar(id, corpo) {
     }
     const operacao = `pagar:${id}`;
     const { data: r, error: erro } = await supabase.rpc('pagar_despesa', {
-        p_perfil_id: estado.perfilId, p_conta_id: id, p_chave: chave(operacao), p_dados: {
+        p_perfil_id: estado.perfilId, p_conta_id: id, p_chave: chaves.de(operacao), p_dados: {
             conta_bancaria_id: corpo.conta_bancaria_id, data_pagamento: corpo.data_pagamento, valor_pago: valorTexto(pago),
             valor_devido: valorTexto(devido), tipo_ajuste: corpo.tipo_ajuste || null, justificativa: corpo.justificativa || null } });
     if (erro) return falha(mensagemDeErro(erro));
-    delete estado.chaves[operacao];
+    chaves.esquecer(operacao);
     return ok({ message: `Despesa paga: ${reais(centavos(r.valor_pago))} debitados de ${r.conta_nome}. `
         + `Saldo da conta: ${reais(centavos(r.saldo_conta))}.` });
 }
@@ -400,12 +386,12 @@ async function pagarFatura(id, corpo) {
     if (centavos(pago) !== centavos(executado)) Object.assign(dados, { tipo_ajuste: corpo.tipo_ajuste, justificativa: corpo.justificativa });
     const operacao = `pagar-fatura:${id}`;
     const { data: r, error: erro } = await supabase.rpc('pagar_fatura', {
-        p_perfil_id: estado.perfilId, p_fatura_id: id, p_dados: dados, p_chave: chave(operacao) });
+        p_perfil_id: estado.perfilId, p_fatura_id: id, p_dados: dados, p_chave: chaves.de(operacao) });
     if (erro) {
         if (erro.hint === 'EXECUTADO_MUDOU') return falha('As compras da fatura mudaram. Recarregue a lista e confira o novo total.');
         return falha(mensagemDeErro(erro));
     }
-    delete estado.chaves[operacao];
+    chaves.esquecer(operacao);
     return ok({ message: `Fatura paga: ${reais(centavos(r.valor_pago))} debitados de ${r.conta_nome}. `
         + `Saldo da conta: ${reais(centavos(r.saldo_conta))}.` });
 }
@@ -426,11 +412,11 @@ async function estornar(id, corpo) {
     const operacao = `estornar:${id}:${vigente.movimento_id}`;
     const resposta = fatura
         ? await supabase.rpc('estornar_pagamento_fatura', { p_perfil_id: estado.perfilId, p_fatura_id: id,
-            p_movimento_id: vigente.movimento_id, p_dados: dados, p_chave: chave(operacao) })
+            p_movimento_id: vigente.movimento_id, p_dados: dados, p_chave: chaves.de(operacao) })
         : await supabase.rpc('estornar_pagamento_despesa', { p_perfil_id: estado.perfilId, p_conta_id: id,
-            p_movimento_id: vigente.movimento_id, p_dados: dados, p_chave: chave(operacao) });
+            p_movimento_id: vigente.movimento_id, p_dados: dados, p_chave: chaves.de(operacao) });
     if (resposta.error) return falha(mensagemDeErro(resposta.error));
-    delete estado.chaves[operacao];
+    chaves.esquecer(operacao);
     return ok({ message: `Pagamento estornado: ${reais(centavos(resposta.data.valor_estornado))} devolvidos a `
         + `${vigente.conta_nome}. Saldo da conta: ${reais(centavos(resposta.data.saldo_conta))}.` });
 }

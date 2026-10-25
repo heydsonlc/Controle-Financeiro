@@ -18,6 +18,7 @@ const MENU_DO_FLASK = [
 ];
 const MIGRADAS = [
     ['despesas', 'contas.html', 'Gerenciamento de Despesas'],
+    ['recorrencias', 'recorrencias.html', 'Recorrencias'],  // FIN-FIDELIDADE-RECORRENCIAS-1
     ['receitas', 'receitas.html', 'Gerenciamento de Receitas'],
     ['cartoes', 'cartoes.html', 'Cartões'],
     ['categorias', 'categorias.html', 'Categorias'],
@@ -27,7 +28,6 @@ const MIGRADAS = [
 const EM_MIGRACAO = [
     ['dashboard', 'dashboard.html', 'Dashboard Financeiro'],
     ['lancamentos', 'lancamentos.html', 'Lançamentos'],
-    ['recorrencias', 'recorrencias.html', 'Recorrencias'],
     ['contas_bancarias', 'contas-bancarias.html', 'Contas Bancárias'],
     ['financiamentos', 'financiamentos.html', 'Financiamentos'],
     ['patrimonio', 'patrimonio.html', 'Patrimônio'],

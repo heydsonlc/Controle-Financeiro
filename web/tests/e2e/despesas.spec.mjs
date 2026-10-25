@@ -111,7 +111,7 @@ test('pedidos do formulario que o novo aplicativo ainda nao atende: recusados co
     await page.selectOption('#tipo_recorrencia', 'semanal');
     await page.selectOption('#dia_semana', { index: 1 });
     await salvarDespesa(page);
-    await expect.poll(() => dialogos.at(-1)).toBe('Erro: Recorrência semanal: em migração para o novo aplicativo (tela Recorrências).');
+    await expect.poll(() => dialogos.at(-1)).toBe('Erro: Semanal e a cada 2 semanas: o novo aplicativo ainda não gera essa frequência (pendência). Use mensal ou anual.');
     await page.locator('#modal-despesa [data-on-click="fecharModal()"]').first().click();
     await page.click('.btn-doc-atalho-despesa');
     await expect(page.locator('#doc-desp-lista')).toHaveText(/Documentos fiscais: em migração/);

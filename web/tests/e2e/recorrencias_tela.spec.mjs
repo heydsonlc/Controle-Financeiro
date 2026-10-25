@@ -1,0 +1,228 @@
+// FIN-FIDELIDADE-RECORRENCIAS-1 — tela original de Recorrencias do Flask sobre o Supabase, e a integracao com Despesas.
+// Dados FICTICIOS (tests/supabase_local.py). Escrita so no "Perfil B" (novo gerador), em 2031; o pagamento feito
+// para conferir a preservacao e estornado no fim (a "Conta Perfil B" volta ao saldo de partida).
+import { expect, test } from '@playwright/test';
+
+import {
+    abrirDespesas, chamarRpc, despesa, estornar, pagar, perfilAtivoId, registrarDialogos,
+} from './despesas.mjs';
+import { itemDoMenu, trocarPerfil } from './moldura.mjs';
+
+const A = { email: process.env.CF_EMAIL_A || 'usuario.a@teste.local', senha: process.env.CF_SENHA_A };
+const B = { email: process.env.CF_EMAIL_B || 'usuario.b@teste.local', senha: process.env.CF_SENHA_B };
+const NOME = 'Internet B (tela)';
+
+test.use({ viewport: { width: 1366, height: 900 } });
+test.describe.configure({ mode: 'serial' });
+
+test.beforeEach(async ({ page }, testInfo) => {
+    const problemas = [];
+    page.on('console', (msg) => {
+        if (msg.type() === 'error' && /Content Security Policy|Refused to/i.test(msg.text())) problemas.push(msg.text());
+        if (/Ponte CSP|Adaptador:/.test(msg.text())) problemas.push(msg.text());
+    });
+    page.on('pageerror', (erro) => problemas.push(`pageerror: ${erro.message}`));
+    page.on('request', (req) => { if (new URL(req.url()).pathname.startsWith('/api/')) problemas.push(`chamada ao Flask: ${req.url()}`); });
+    testInfo.problemas = problemas;
+});
+
+test.afterEach(async ({}, testInfo) => {
+    expect(testInfo.problemas, 'CSP/erros de JS/Flask').toEqual([]);
+});
+
+async function entrar(page, conta) {
+    await page.goto('/index.html');
+    await page.fill('#email', conta.email);
+    await page.fill('#senha', conta.senha);
+    await page.click('#login-enviar');
+    await page.waitForURL('**/contas.html');
+    await expect(page.locator('#despesas-lista')).toHaveAttribute('data-competencia-carregada', /\d{2}\/\d{4}/);
+    await page.waitForLoadState('networkidle');
+}
+
+async function abrirRecorrencias(page) {
+    await page.goto('/recorrencias.html');
+    await expect(page.locator('#recorrencias-total')).toHaveText(/cadastros? no total/);
+}
+
+const linha = (page, nome) => page.locator('#recorrencias-lista .recorrencias-row', { has: page.locator('strong', { hasText: nome }) });
+
+async function preencher(page, d) {
+    if (d.nome !== undefined) await page.fill('#nome', d.nome);
+    if (d.valor !== undefined) await page.fill('#valor', String(d.valor));
+    if (d.categoria !== false) {
+        const categoria = await page.locator('#categoria-id option:not([value=""])').first().getAttribute('value');
+        await page.selectOption('#categoria-id', categoria);
+    }
+    if (d.vencimento !== undefined) await page.fill('#data-vencimento', d.vencimento);
+    if (d.frequencia) await page.selectOption('#frequencia', d.frequencia);
+    if (d.dia !== undefined) await page.selectOption('#dia-semana', String(d.dia));
+    if (d.meio !== undefined) await page.selectOption('#meio-pagamento', d.meio);
+    if (d.observacoes !== undefined) await page.fill('#observacoes', d.observacoes);
+}
+
+const salvar = (page) => page.click('button[type="submit"][form="form-recorrencia"]');
+
+test('tela original: menu, indicadores, lista, filtros e aviso de consorcios', async ({ page }) => {
+    await entrar(page, B);
+    await itemDoMenu(page, 'recorrencias').click();
+    await page.waitForURL('**/recorrencias.html');
+    await expect(page.locator('#recorrencias-total')).toHaveText(/cadastros? no total/);
+    await expect(page.locator('.app-topbar-title')).toHaveText('Recorrencias');
+    await expect(itemDoMenu(page, 'recorrencias')).toHaveClass(/active/);
+    await expect(itemDoMenu(page, 'recorrencias').locator('.app-nav-status')).toHaveCount(0);  // ja migrada
+    await expect(page.locator('.recorrencias-kpi-card')).toHaveCount(4);
+    await expect(linha(page, 'Mensalidade B')).toContainText('Mensal');
+    await expect(linha(page, 'Mensalidade B')).toContainText('R$ 120,00');
+    await expect(page.locator('#recorrencias-aviso-consorcios')).toContainText('Consórcios ainda não');
+    await page.selectOption('#filtro-status', 'inativa');
+    await expect(linha(page, 'Mensalidade B')).toHaveCount(0);
+    await page.selectOption('#filtro-status', '');
+    await page.fill('#filtro-busca', 'mensalidade');
+    await expect(page.locator('#recorrencias-lista .recorrencias-row')).toHaveCount(1);
+});
+
+test('cadastrar, recusas sem gravar, editar e gerar em Despesas com nome, valor, vencimento e meio', async ({ page }) => {
+    const dialogos = registrarDialogos(page);
+    await entrar(page, B);
+    await abrirRecorrencias(page);
+    const total = await page.locator('#recorrencias-lista .recorrencias-row').count();
+
+    // Pedidos que o novo aplicativo ainda nao atende: recusados, nada e gravado.
+    await preencher(page, { nome: NOME, valor: '99.90', vencimento: '2031-01-10', frequencia: 'semanal', dia: 1 });
+    await salvar(page);
+    await expect.poll(() => dialogos.at(-1)).toMatch(/^Semanal e a cada 2 semanas: o novo aplicativo ainda não gera/);
+    await page.selectOption('#frequencia', 'mensal');
+    await page.selectOption('#meio-pagamento', 'cartao');
+    await salvar(page);
+    await expect.poll(() => dialogos.at(-1)).toMatch(/^Recorrência no cartão de crédito: em migração/);
+    await expect(page.locator('#recorrencias-lista .recorrencias-row')).toHaveCount(total);
+
+    await preencher(page, { categoria: false, meio: 'boleto', observacoes: 'Fibra' });
+    await salvar(page);
+    await expect(page.locator('#recorrencias-resultado')).toContainText('Recorrência criada.');
+    await expect(page.locator('#recorrencias-resultado')).toContainText('Gerar contas');
+    await expect(linha(page, NOME)).toContainText('R$ 99,90');
+    await expect(linha(page, NOME)).toContainText('10/01/2031');
+    await expect(linha(page, NOME)).toContainText('Ativa');
+    await expect(linha(page, NOME).locator('[title="boleto"]')).toHaveCount(1);
+
+    await linha(page, NOME).locator('[data-on-click^="editarRecorrencia"]').click();
+    await expect(page.locator('#form-titulo')).toHaveText('Editar recorrencia');
+    await expect(page.locator('#valor')).toHaveValue('99.9');
+    await expect(page.locator('#meio-pagamento')).toHaveValue('boleto');
+    await expect(page.locator('#observacoes')).toHaveValue('Fibra');
+    await page.fill('#valor', '109.90');
+    await page.selectOption('#meio-pagamento', 'pix');
+    await salvar(page);
+    await expect(page.locator('#recorrencias-resultado')).toContainText('Recorrência atualizada.');
+    await expect(linha(page, NOME)).toContainText('R$ 109,90');
+    await expect(linha(page, NOME).locator('[title="pix"]')).toHaveCount(1);
+
+    // Aviso de "itens nao gerados": o cadastro de cartao marca o proprio cartao como recorrente; o gerador o rejeita,
+    // mas o aviso de Despesas nao o mostra (a fatura e gerada pela parte de cartoes).
+    await page.goto('/cartoes.html?mes=2031-01');
+    await page.click('#novo-cartao');
+    await page.fill('#cartao-nome', 'Cartao Rec (tela)');
+    await page.fill('#cartao-fechamento', '3');
+    await page.fill('#cartao-vencimento', '12');
+    await page.click('#cartao-painel button[type=submit]');
+    await expect(page.locator('#lista-cadastro .conta', { hasText: 'Cartao Rec (tela)' })).toBeVisible();
+    const bruta = await chamarRpc(page, 'previa_geracao', { p_perfil_id: await perfilAtivoId(page), p_mes: '2031-01-01' });
+    expect(bruta.corpo.rejeitados.filter((r) => r.nome === 'Cartao Rec (tela)').map((r) => r.motivo)).toEqual(['Cartao marcado como recorrencia']);
+
+    // Integracao: a geracao e explicita, em Despesas.
+    await abrirDespesas(page, '2031-01');
+    await expect(page.locator('#aviso-geracao')).not.toContainText('Cartao marcado como recorrencia');
+    if (await page.locator('#geracao-acoes summary').count()) {
+        await page.locator('#geracao-acoes summary').click();
+        await expect(page.locator('#geracao-acoes .geracao-lista')).not.toContainText('Cartao Rec (tela)');
+    }
+    await expect(despesa(page, NOME)).toHaveCount(0);
+    await page.click('#gerar-contas');
+    const painel = page.locator('#geracao-confirmacao');
+    await expect(painel.locator('.geracao-lista li', { hasText: NOME }).first()).toContainText('01/2031 · Internet B (tela) · Conta · 10/01/2031 · R$ 109,90');
+    await painel.getByRole('button', { name: 'Confirmar' }).click();
+    await expect(page.locator('#geracao-resultado')).toContainText('Geração concluída');
+    const gerada = despesa(page, NOME);
+    await expect(gerada.locator('.despesa-cell-valor')).toHaveText('R$ 109,90');
+    await expect(gerada.locator('.despesa-cell-vencimento')).toHaveText('10/01/2031');
+    await expect(gerada.locator('.despesa-cell-detalhe')).toHaveText('Fibra');  // observacoes da recorrencia
+    await expect(gerada.locator('.despesa-cell-forma-pagamento')).toContainText(/pix/i);
+    expect(await page.locator('.despesas-grupo-titulo').allTextContents()).toContain('DESPESAS RECORRENTES');
+    // Sem duplicidade: reabrir o mes nao oferece de novo a mesma conta.
+    await abrirDespesas(page, '2031-01');
+    await expect(despesa(page, NOME)).toHaveCount(1);
+    if (await page.locator('#gerar-contas').count()) {
+        await page.click('#gerar-contas');
+        await expect(page.locator('#geracao-confirmacao .geracao-lista li', { hasText: '01/2031 · Internet B (tela)' })).toHaveCount(0);
+    }
+});
+
+test('conta paga preservada quando a recorrencia muda; inativar e reativar', async ({ page }) => {
+    const dialogos = registrarDialogos(page);
+    await entrar(page, B);
+    await abrirDespesas(page, '2031-01');
+    await pagar(page, NOME, { data: '2031-01-10' });
+    await expect.poll(() => dialogos.at(-1)).toMatch(/^Despesa paga: R\$\s109,90 debitados de Conta Perfil B\./);
+
+    await abrirRecorrencias(page);
+    await linha(page, NOME).locator('[data-on-click^="editarRecorrencia"]').click();
+    await page.fill('#valor', '150');
+    await salvar(page);
+    await expect(linha(page, NOME)).toContainText('R$ 150,00');
+    await abrirDespesas(page, '2031-01');
+    await expect(despesa(page, NOME).locator('.status-badge')).toHaveText('Pago');
+    await expect(despesa(page, NOME).locator('.despesa-cell-valor')).toHaveText('R$ 109,90');  // a conta paga nao muda
+
+    await abrirRecorrencias(page);
+    await linha(page, NOME).locator('[data-on-click^="inativarRecorrencia"]').click();
+    await expect.poll(() => dialogos.at(-1)).toBe('Inativar recorrencia?');
+    await expect(linha(page, NOME)).toContainText('Inativa');
+    await expect(page.locator('#recorrencias-resultado')).toContainText('nenhuma conta nova será gerada');
+    const previa = await chamarRpc(page, 'previa_geracao', { p_perfil_id: await perfilAtivoId(page), p_mes: '2031-03-01' });
+    expect(previa.corpo.itens.map((i) => i.nome)).not.toContain(NOME);
+
+    await linha(page, NOME).locator('[data-on-click^="editarRecorrencia"]').click();
+    await expect(page.locator('#recorrencia-ativa')).not.toBeChecked();
+    await page.check('#recorrencia-ativa');
+    await salvar(page);
+    await expect(linha(page, NOME)).toContainText('Ativa');
+    const depois = await chamarRpc(page, 'previa_geracao', { p_perfil_id: await perfilAtivoId(page), p_mes: '2031-03-01' });
+    expect(depois.corpo.itens.map((i) => i.nome)).toContain(NOME);
+
+    // Devolve a "Conta Perfil B" ao saldo de partida (os specs compartilham o banco descartavel).
+    await abrirDespesas(page, '2031-01');
+    await estornar(page, NOME, 'Estorno do teste de recorrencias', '2031-01-11');
+    await expect.poll(() => dialogos.at(-1)).toBe('Pagamento estornado com sucesso.');
+});
+
+test('perfil so de leitura: lista sem acoes; isolamento e escrita direta recusada', async ({ page }) => {
+    registrarDialogos(page);
+    await entrar(page, A);
+    await abrirRecorrencias(page);
+    await trocarPerfil(page, 'Empresa');
+    await expect(page.locator('#recorrencias-total')).toHaveText(/cadastros? no total/);
+    await expect(linha(page, 'Aluguel sala')).toBeVisible();
+    await expect(page.locator('#btn-nova-recorrencia')).toBeHidden();
+    await expect(page.locator('#secao-formulario')).toBeHidden();
+    await expect(page.locator('.recorrencias-actions').first()).toBeHidden();
+    await expect(page.getByText(NOME)).toHaveCount(0);  // recorrencia do Perfil B
+    const empresa = await perfilAtivoId(page);
+    const sala = (await chamarRpc(page, 'recorrencias_do_perfil', { p_perfil_id: empresa })).corpo.find((r) => r.nome === 'Aluguel sala');
+    expect((await chamarRpc(page, 'inativar_recorrencia', { p_perfil_id: empresa, p_item_id: sala.id, p_versao: sala.versao })).status).toBe(403);
+    expect((await chamarRpc(page, 'reativar_recorrencia', { p_perfil_id: empresa, p_item_id: sala.id, p_versao: sala.versao })).status).toBe(403);
+    expect((await chamarRpc(page, 'recorrencias_do_perfil', { p_perfil_id: Number(process.env.CF_ID_PERFIL_B || '103') })).status).toBe(403);
+});
+
+test('perfil gerado pelo sistema atual: vencimento e frequencia nao mudam por aqui', async ({ page }) => {
+    const dialogos = registrarDialogos(page);
+    await entrar(page, A);
+    await abrirRecorrencias(page);
+    await linha(page, 'Seguro 2028').locator('[data-on-click^="editarRecorrencia"]').click();
+    await page.fill('#data-vencimento', '2028-01-20');
+    await salvar(page);
+    await expect.poll(() => dialogos.at(-1)).toBe('Vencimento e frequência só mudam quando o novo aplicativo gera este perfil.');
+    await abrirRecorrencias(page);
+    await expect(linha(page, 'Seguro 2028')).toContainText('10/01/2028');
+});

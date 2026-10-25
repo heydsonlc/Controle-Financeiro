@@ -22,9 +22,9 @@ const RAIZ = path.resolve(WEB, '..');
 export const PROJETOS_PROIBIDOS = new Set(['dshqjhyymtpxpxuntzbz']);
 // FIN-MIGRACAO-FIDELIDADE-FASE-1: CSS da moldura e das telas do Flask, sem alteracao.
 const CSS_COMPARTILHADO = ['style.css', 'theme-light.css', 'layout.css', 'instituicoes.css', 'formas_pagamento.css',
-    'configuracoes.css', 'ajuda.css', 'despesas.css'];
+    'configuracoes.css', 'ajuda.css', 'despesas.css', 'recorrencias.css'];
 // JS do Flask reaproveitado: vai para js/original/ so com a conversao de adaptarParaCsp (o arquivo do Flask nao muda).
-const JS_ORIGINAL = ['ajuda.js', 'utils.js', 'icons.js', 'instituicoes.js', 'formas_pagamento.js', 'despesas.js'];
+const JS_ORIGINAL = ['ajuda.js', 'utils.js', 'icons.js', 'instituicoes.js', 'formas_pagamento.js', 'despesas.js', 'recorrencias.js'];
 // Imagens que os componentes do Flask (formas_pagamento.js, instituicoes.js) pedem em /static/...: so as que eles
 // citam pelo nome (versionadas), nunca a pasta inteira (frontend/static/img tem arquivos pessoais fora do Git).
 const IMAGENS_ORIGINAIS = {

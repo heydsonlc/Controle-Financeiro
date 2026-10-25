@@ -216,7 +216,7 @@ test('recorrencia pela tela original: cadastrar, gerar, editar a conta, excluir 
     await abrirEdicaoEscola(page);
     await page.selectOption('#tipo_recorrencia', 'anual');
     await salvarDespesa(page);
-    await expect.poll(() => dialogos.at(-1)).toBe('Erro: Alterar a recorrência: em migração para o novo aplicativo (tela Recorrências).');
+    await expect.poll(() => dialogos.at(-1)).toBe('Erro: Para alterar a recorrência (frequência e próximas contas), use a tela Recorrências.');
     await page.locator('#modal-despesa [data-on-click="fecharModal()"]').first().click();
 
     // Excluir so esta: o modal de tipo de exclusao do original; a competencia fica dispensada.
