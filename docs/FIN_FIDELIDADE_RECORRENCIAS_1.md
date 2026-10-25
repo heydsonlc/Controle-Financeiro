@@ -1,7 +1,10 @@
 # FIN-FIDELIDADE-RECORRENCIAS-1 — Tela original de Recorrências do Flask sobre o Supabase
 
-**Situação:** implementada e testada **localmente**.
-- Sem commit, push, publicação ou migration remota.
+**Situação:** concluída tecnicamente (25/10/2026).
+- Commit `728f234`.
+- Migration aplicada **só no Supabase de teste**.
+- Validada com um perfil temporário e publicada na prévia protegida (§ Validação real e publicação).
+- Sem push e sem produção. A homologação depende do titular.
 - Padrão do FIN-FIDELIDADE-DESPESAS-1: HTML, CSS e JS do Flask copiados no build, ponte CSP e ponte `/api/`, e um adaptador para as funções do Supabase.
 
 ## Funcionalidades identificadas no Flask
@@ -60,7 +63,7 @@ Origem: `recorrencias.html`/`.js`/`.css` e `backend/routes/recorrencias.py`.
 
 ## Supabase
 
-**Migration local `20261103090000_financeiro_recorrencias_tela.sql`** (não aplicada em nenhum ambiente persistente; sem tabela nova; nenhum dado existente é alterado):
+**Migration `20261103090000_financeiro_recorrencias_tela.sql`** (aplicada só no Supabase de teste; sem tabela nova; nenhum dado existente é alterado):
 - `recorrencias_do_perfil`: leitura;
 - `reativar_recorrencia`;
 - `definir_meio_pagamento_recorrencia`: só boleto, PIX ou débito, informativos; o gerador só trata de forma diferente cartão e débito automático.
@@ -69,7 +72,7 @@ As duas últimas usam a mesma trava de gestão, perfil e versão de `inativar_re
 
 **Reaproveitado:** `criar_despesa`, `editar_recorrencia`, `inativar_recorrencia`, `categorias_de_despesa`, `cartoes_do_perfil`, `contas_bancarias_do_perfil` e `pode_gerir_perfil`.
 
-**Para publicar a prévia:** é preciso aplicar esta migration no Supabase de teste (autorização específica). Sem ela, a tela Recorrências não lista nada (404 em `recorrencias_do_perfil`). Despesas continua funcionando, porque a leitura do meio de pagamento é opcional.
+Sem a migration, a tela Recorrências não lista nada (404 em `recorrencias_do_perfil`). Despesas continuaria funcionando, porque a leitura do meio de pagamento é opcional.
 
 ## Decisões técnicas
 
@@ -92,6 +95,37 @@ As duas últimas usam a mesma trava de gestão, perfil e versão de `inativar_re
 | E2E completos | **69/69**, incluindo `recorrencias_tela.spec`: tela, recusas, cadastro, edição, geração em Despesas, conta paga preservada, inativar e reativar, somente leitura, isolamento, perfil Flask e aviso do cartão |
 
 **Comparação visual:** o Flask (SQLite temporário) e o novo aplicativo, com dados fictícios equivalentes, têm o mesmo layout. As capturas estão em `scratchpad/capturas_recorrencias`.
+
+## Validação real e publicação (25/10/2026)
+
+**Inspeção da migration antes de aplicar.** Bate com o relatado:
+- 9 comandos: 3 `create function` (nenhum `create or replace`), mais `revoke` e `grant` só delas;
+- nenhum `alter`, `drop`, `update`, `insert`, tabela, gatilho ou política;
+- as 3 funções são `SECURITY DEFINER` com `search_path` vazio; execução só para `authenticated` (revogada de public e anon);
+- a leitura confere `pode_acessar_perfil`;
+- a escrita passa por `travar_recorrencia`: gestão, item do perfil, tipo e versão; grava só `ativo` ou o meio de pagamento da própria recorrência;
+- reversão: as funções são novas, então basta removê-las (script pronto, não aplicado).
+
+**Aplicação.**
+- `antes`: projeto `fzjmge…`, 14 aplicadas, só `20261103090000` pendente, nenhuma função existente trocada.
+- Aplicada só ela.
+- `depois`: 15/15, só as 3 funções previstas; contagem e md5 de todas as tabelas iguais.
+
+**Validação real** (mesmo `dist` publicado, contra o Supabase de teste; sem erro de CSP ou JS e sem chamada ao Flask):
+- **Demonstração (só leitura):** a tela carrega (0 recorrências: a demonstração só tem despesas avulsas) e o aviso de Despesas não mostra mais o cartão.
+- **Perfil temporário criado pelo aplicativo:**
+  - cadastrar (semanal recusada), editar meio e valor, inativar e reativar;
+  - gerar em Despesas com valor, vencimento e meio (PIX), sem duplicidade;
+  - pagar, mudar a recorrência e conferir que a conta paga não muda; estornar;
+  - a conta B, só leitura, não tem ações.
+- **Limpeza por identidade** (simulação e depois confirmação): banco idêntico ao retrato de antes da migration, inclusive a demonstração.
+
+**Testes depois da aplicação:** banco 11/11, unit 17/17, E2E pertinentes 28/28 (Recorrências, recorrência, Despesas).
+
+**Publicação.**
+- O Access protegia antes e depois do envio: 302 para o login; o endereço principal continua 404.
+- Branch `avaliacao`, implantação `4ba9a4d9`, versão `af1ea59` (impressão do `dist` `afd0a1938c56`).
+- Envio direto, sem push e sem produção.
 
 ## Pendências reais (prioridades do titular, 25/10/2026)
 
