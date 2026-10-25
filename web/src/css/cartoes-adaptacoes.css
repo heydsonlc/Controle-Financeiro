@@ -1,0 +1,96 @@
+/* FIN-FIDELIDADE-CARTOES-1 — so o que a tela original de Cartoes (cartoes.css) nao tinha. */
+
+/* Quem so le o perfil ve cartoes, limites e faturas, sem as acoes de escrita (o banco recusaria de qualquer forma). */
+body.cf-somente-leitura #btn-novo-cartao,
+body.cf-somente-leitura #btn-vincular-categoria,
+body.cf-somente-leitura #btn-nova-compra-cartao,
+body.cf-somente-leitura [data-action="editar-cartao"],
+body.cf-somente-leitura [data-action="abrir-limite"],
+body.cf-somente-leitura .limites-table .row-actions,
+body.cf-somente-leitura [data-action="vincular-disponivel"],
+body.cf-somente-leitura .lancamento-acoes {
+    display: none;
+}
+
+/* Numero, validade e CVV desativados (nao guardados): aviso no formulario do cartao. */
+.cartao-dados-sensiveis {
+    margin: -4px 0 12px;
+}
+
+/* Compra nova no modal: o formulario do novo aplicativo (app.css) com o espacamento do modal original. */
+.nova-compra-painel {
+    padding: 0 4px 4px;
+}
+
+.nova-compra-painel .despesa-form {
+    border: 0;
+    padding: 0;
+    margin: 0;
+    box-shadow: none;
+}
+
+/* Defeito do Flask (visto na captura em 1366 px): as tres colunas pedem no minimo 1180 px, mas o corte de 1320 px do
+   original desconta a viewport inteira, sem a barra lateral do menu (280 px). Entre 981 e 1600 px de viewport a area da
+   tela e menor que 1320 px e o detalhe passava por baixo do painel "Como funciona", encobrindo as acoes dos lancamentos.
+   Mesmo arranjo que o original ja usa abaixo de 1320 px, so com o corte deslocado pela largura do menu. */
+@media (min-width: 981px) and (max-width: 1600px) {
+    .cartoes-shell {
+        grid-template-columns: minmax(280px, 0.36fr) minmax(0, 1fr);
+    }
+
+    .hierarchy-panel {
+        grid-column: 1 / -1;
+        border-left: none;
+        border-top: 1px solid rgba(15, 23, 42, 0.08);
+        grid-template-columns: minmax(260px, 0.32fr) minmax(0, 1fr) minmax(260px, 0.28fr);
+    }
+
+    .how-card {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        align-items: start;
+    }
+
+    .how-card h2,
+    .how-card p {
+        grid-column: 1 / -1;
+    }
+
+    .hierarchy-arrow {
+        display: none;
+    }
+
+    /* Coluna da lista estreita: a situacao e as categorias vinculadas vao para a linha de baixo do nome. */
+    .cartao-list-item {
+        grid-template-columns: 48px minmax(0, 1fr) 22px;
+    }
+
+    .cartao-list-item .cartao-brand {
+        grid-row: 1 / span 2;
+    }
+
+    .cartao-list-item .cartao-list-check {
+        grid-column: 3;
+        grid-row: 1;
+    }
+
+    .cartao-list-item .cartao-list-meta {
+        grid-column: 2;
+        grid-row: 2;
+    }
+}
+
+/* Os cartoes do detalhe cresciam ate a largura minima das tabelas e a coluna do meio estourava (o conjunto rolava para
+   o lado e cortava a lista de cartoes). Na coluna estreita as tabelas rolam dentro do proprio cartao, como a de
+   lancamentos do original ja fazia. */
+.cartao-main > * {
+    min-width: 0;
+}
+
+.fatura-table {
+    overflow-x: auto;
+}
+
+#form-cartao input:disabled {
+    background: #f1f5f9;
+    cursor: not-allowed;
+}

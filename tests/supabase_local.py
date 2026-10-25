@@ -580,6 +580,7 @@ def semear_receitas_e2e(cur):
 # FIN-CARTOES-1 (E2E): cartao FICTICIO INATIVO do "Perfil B" (cadastro: final do numero). Um cartao ativo
 # entraria na geracao de faturas dos outros cenarios; cartoes.spec.mjs cria o seu e o inativa no fim.
 CARTAO_INATIVO_E2E = (455, 'Cartao Antigo', 'PERFIL_B', 25, 10)  # id, nome, perfil, fechamento, vencimento
+CATEGORIAS_CARTAO_E2E_B = [(340, 'Mercado B'), (341, 'Viagem B')]
 
 
 def semear_cartoes_e2e(cur, categoria_id=203):
@@ -588,3 +589,13 @@ def semear_cartoes_e2e(cur, categoria_id=203):
                 "values (%s, %s, 'Agregador', %s, %s, false, false)", (iid, nome, PERFIS[chave]['id'], categoria_id))
     cur.execute('insert into public.config_agregador (item_despesa_id, dia_fechamento, dia_vencimento, numero_cartao) '
                 "values (%s, %s, %s, '5555 6666 7777 8888')", (iid, fechamento, vencimento))
+    # FIN-FIDELIDADE-CARTOES-1: Categorias do Cartao do Perfil B (tela original de Cartoes); "Mercado B" classifica as
+    # compras da categoria de despesa Moradia (201) quando vinculada ao cartao.
+    for cid, nome_cc in CATEGORIAS_CARTAO_E2E_B:
+        cur.execute('insert into public.categoria_cartao (id, nome, ativo, perfil_financeiro_id, cor, icone) '
+                    "values (%s, %s, true, %s, '#16a34a', 'shopping-cart')", (cid, nome_cc, PERFIS['PERFIL_B']['id']))
+    cur.execute('insert into public.categoria_cartao_despesa (categoria_cartao_id, categoria_id, ativo, perfil_financeiro_id) '
+                'values (%s, 201, true, %s)', (CATEGORIAS_CARTAO_E2E_B[0][0], PERFIS['PERFIL_B']['id']))
+    # Importar Cartao: palavras-chave de categoria (globais, como no Flask) para a sugestao das linhas do arquivo.
+    cur.execute("insert into public.categoria_palavra_chave (categoria_id, palavra, ativo) values (201, 'padaria', true), "
+                "(202, 'farmacia', true)")

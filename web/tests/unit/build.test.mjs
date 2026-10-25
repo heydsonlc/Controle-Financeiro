@@ -82,7 +82,11 @@ const RPCS_DE_LEITURA = new Set(['meus_perfis', 'contas_bancarias_do_perfil', 'c
     'dados_pagamento_fatura',  // FIN-CARTOES-PAGAMENTO-1 (so leitura)
     'dados_pagamento_despesa', 'dados_recebimento_receita', 'movimentos_do_mes',  // FIN-MOVIMENTACOES-1 (so leitura)
     'perfis_para_configuracao',  // FIN-MIGRACAO-FIDELIDADE-FASE-1 (so leitura)
-    'recorrencias_do_perfil']);  // FIN-FIDELIDADE-RECORRENCIAS-1 (so leitura)
+    'recorrencias_do_perfil',  // FIN-FIDELIDADE-RECORRENCIAS-1 (so leitura)
+    // FIN-FIDELIDADE-CARTOES-1 (so leitura)
+    'cartoes_da_tela', 'categorias_cartao_do_perfil', 'limites_do_cartao', 'fatura_por_categoria',
+    'lancamentos_fatura_por_categoria', 'parcelamento_da_compra',
+    'analisar_importacao_cartao', 'sugerir_categorias_importacao', 'resolver_categoria_cartao_tela']);
 // Escrita so por RPC transacional autorizada no banco, revisada uma a uma, e so na tela que a usa.
 const RPCS_DE_ESCRITA = new Map([
     ['gerar_mes', 'despesas-recorrencias.js'],  // FIN-FIDELIDADE-DESPESAS-1: extraido de contas.js
@@ -102,18 +106,29 @@ const RPCS_DE_ESCRITA = new Map([
     ['excluir_receita', 'receitas.js'],
     ['editar_fonte_receita', 'receitas.js'],
     ['inativar_fonte_receita', 'receitas.js'],
-    // FIN-CARTOES-1 (compras e cartoes)
-    ['criar_compra', 'cartoes.js'],
-    ['editar_compra', 'cartoes.js'],
-    ['excluir_compra', 'cartoes.js'],
-    ['criar_cartao', 'cartoes.js'],
-    ['editar_cartao', 'cartoes.js'],
-    ['inativar_cartao', 'cartoes.js'],
+    // FIN-CARTOES-1 (compras e cartoes). FIN-FIDELIDADE-CARTOES-1: tela original de Cartoes pelo adaptador; a compra
+    // nova continua com o formulario do novo aplicativo (compra-cartao.js); editar_compra fica sem tela (a do Flask edita
+    // um lancamento por editar_lancamento_cartao).
+    ['criar_compra', 'compra-cartao.js'],
+    ['excluir_compra', 'cartoes-adaptador.js'],
+    ['criar_cartao', 'cartoes-adaptador.js'],
+    ['editar_cartao', 'cartoes-adaptador.js'],
+    ['inativar_cartao', 'cartoes-adaptador.js'],
+    // FIN-FIDELIDADE-CARTOES-1 (limites, um lancamento e parcelas futuras; gestao, perfil, versao e bloqueios no banco)
+    ['vincular_limite_cartao', 'cartoes-adaptador.js'],
+    ['atualizar_limite_cartao', 'cartoes-adaptador.js'],
+    ['desativar_limite_cartao', 'cartoes-adaptador.js'],
+    ['editar_lancamento_cartao', 'cartoes-adaptador.js'],
+    ['editar_parcelas_futuras', 'cartoes-adaptador.js'],
+    ['cancelar_parcelas_futuras', 'cartoes-adaptador.js'],
+    // FIN-FIDELIDADE-CARTOES-1 (Importar Cartao: so depois da confirmacao na tela; tudo ou nada, analise refeita no banco)
+    ['importar_fatura_cartao', 'importar-cartao-adaptador.js'],
     // FIN-CARTOES-RECORRENCIA-PENDENCIA-1 (so dispensa o aviso; nao muda recorrencia, compra nem fatura)
     ['dispensar_aviso_recorrencia', 'despesas-recorrencias.js'],
     // FIN-CARTOES-PAGAMENTO-1 (pagamento integral e estorno de fatura; debito/credito e saldo decididos no banco)
-    ['pagar_fatura', ['cartoes.js', 'despesas-adaptador.js']],  // FIN-FIDELIDADE-DESPESAS-1: fatura tambem em Despesas
-    ['estornar_pagamento_fatura', ['cartoes.js', 'despesas-adaptador.js']],
+    // FIN-FIDELIDADE-CARTOES-1: so em Despesas, como no Flask (a tela original de Cartoes nao paga fatura).
+    ['pagar_fatura', 'despesas-adaptador.js'],
+    ['estornar_pagamento_fatura', 'despesas-adaptador.js'],
     // FIN-MOVIMENTACOES-1 (pagamento/estorno de despesa comum, recebimento/estorno de receita; saldo no banco)
     ['pagar_despesa', 'despesas-adaptador.js'],
     ['estornar_pagamento_despesa', 'despesas-adaptador.js'],
@@ -156,7 +171,8 @@ const MENU_DO_FLASK = [
     ['Sistema', ['Configurações e Preferências', 'Ajuda e Manual']],
 ];
 const MIGRADAS = { 'contas.html': 'Despesas', 'recorrencias.html': 'Recorrencias', 'receitas.html': 'Receitas', 'cartoes.html': 'Cartões',
-    'categorias.html': 'Categorias', 'configuracoes.html': 'Configurações e Preferências', 'ajuda.html': 'Ajuda e Manual' };
+    'categorias.html': 'Categorias', 'configuracoes.html': 'Configurações e Preferências', 'ajuda.html': 'Ajuda e Manual',
+    'importar-cartao.html': 'Importar Cartão' };
 
 function menuDe(html) {
     return [...html.matchAll(/<div class="app-nav-section-title">([^<]+)<\/div>([\s\S]*?)<\/div>\s*(?=<div class="app-nav-section">|<\/nav>)/g)]

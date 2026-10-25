@@ -21,6 +21,7 @@ const MIGRADAS = [
     ['recorrencias', 'recorrencias.html', 'Recorrencias'],  // FIN-FIDELIDADE-RECORRENCIAS-1
     ['receitas', 'receitas.html', 'Gerenciamento de Receitas'],
     ['cartoes', 'cartoes.html', 'Cartões'],
+    ['importar_cartao', 'importar-cartao.html', 'Importar Cartão'],  // FIN-FIDELIDADE-CARTOES-1
     ['categorias', 'categorias.html', 'Categorias'],
     ['configuracoes', 'configuracoes.html', 'Configurações e Preferências'],
     ['ajuda', 'ajuda.html', 'Central de Ajuda e Manual de Uso'],
@@ -33,7 +34,6 @@ const EM_MIGRACAO = [
     ['patrimonio', 'patrimonio.html', 'Patrimônio'],
     ['imposto_renda', 'documentos-fiscais.html', 'Imposto de Renda'],
     ['veiculos', 'mobilidade.html', 'Mobilidade'],
-    ['importar_cartao', 'importar-cartao.html', 'Importar Cartão'],
 ];
 
 test.beforeEach(async ({ page }, testInfo) => {

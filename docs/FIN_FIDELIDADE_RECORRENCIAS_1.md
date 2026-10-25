@@ -132,7 +132,7 @@ Sem a migration, a tela Recorrências não lista nada (404 em `recorrencias_do_p
 | # | Pendência | Prioridade | Encaminhamento |
 |---|---|---|---|
 | R1 | Gerar semanal e a cada 2 semanas | Alta | Contrato de integração do gerador |
-| R2 | Recorrência no cartão (cadastro e edição) | Alta | Bloco Cartões + Importar Cartão (FIN-FIDELIDADE-CARTOES-1) |
+| R2 | Recorrência no cartão (cadastro e edição) | Alta | Parcial no FIN-FIDELIDADE-CARTOES-1: a importação reconhece a compra recorrente do cartão e o gerador não a lança de novo. Cadastro e edição continuam pendentes |
 | R3 | Consórcios na lista e no formulário | Alta | Migração de Consórcios |
 | R4 | Gerador pular o cartão marcado como recorrente | Média | Evolução segura do gerador |
 

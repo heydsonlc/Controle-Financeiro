@@ -1,35 +1,401 @@
-<!-- moldura {"ativo": "cartoes", "titulo": "Cartões", "documento": "Cartões - Controle Financeiro", "css": [], "scripts": ["js/cartoes.js"]} -->
-<!-- FIN-CARTOES-1: faturas do mes por cartao, compras a vista e parceladas, cadastro de cartoes.
-     Nada aqui paga fatura, estorna ou movimenta conta bancaria. Escritas so para quem gerencia o perfil. -->
+<!-- moldura {"ativo": "cartoes", "titulo": "Cartões", "documento": "Cartões - Controle Financeiro", "css": ["css/shared/cartoes.css", "css/cartoes-adaptacoes.css"], "classicos": ["js/original/ponte-permitidas.js", "js/ponte-csp.js", "js/ponte-api.js", "js/original/utils.js", "js/original/icons.js", "js/original/instituicoes.js", "js/original/formas_pagamento.js", "js/original/cartoes.js", "js/cartoes-adaptacoes.js"], "scripts": ["js/cartoes-adaptador.js"]} -->
+<!-- FIN-FIDELIDADE-CARTOES-1: frontend/templates/cartoes.html (barra de acoes e conteudo) sem alteracao, exceto os
+     acrescimos e a remocao marcados. Atributos onclick/style convertidos no build (CSP sem inline). -->
+<!-- acao -->
+    <section class="module-actionbar cartoes-toolbar" aria-label="A&ccedil;&otilde;es de cart&otilde;es">
+        <button class="cf-button cf-button-primary" id="btn-novo-cartao" type="button">
+            <span aria-hidden="true">+</span>
+            <span>Novo cart&atilde;o</span>
+        </button>
+        <button class="cf-button cf-button-secondary" id="btn-vincular-categoria" type="button">
+            <span aria-hidden="true">+</span>
+            <span>Vincular categoria</span>
+        </button>
+        <!-- FIN-FIDELIDADE-CARTOES-1 (acrescimo): compra nova no cartao, formulario do novo aplicativo. -->
+        <button class="cf-button cf-button-secondary" id="btn-nova-compra-cartao" type="button">
+            <span aria-hidden="true">+</span>
+            <span>Nova compra</span>
+        </button>
+        <label class="toolbar-search" for="cartoes-pesquisa">
+            <span aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false">
+                    <circle cx="11" cy="11" r="7"/>
+                    <path d="m20 20-3.5-3.5"/>
+                </svg>
+            </span>
+            <input type="search" id="cartoes-pesquisa" placeholder="Pesquisar">
+        </label>
+        <label class="toolbar-status" for="cartoes-status">
+            <span>Status:</span>
+            <select id="cartoes-status">
+                <option value="ativos">Ativos</option>
+                <option value="inativos">Inativos</option>
+                <option value="todos">Todos</option>
+            </select>
+        </label>
+    </section>
 <!-- conteudo -->
-<div class="app-conteudo contas">
-        <nav class="mes-nav" aria-label="Mês da fatura">
-            <a id="mes-anterior" class="mes-seta" href="#" aria-label="Mês anterior">◀</a>
-            <h1 id="mes-titulo" class="mes-titulo"></h1>
-            <a id="mes-proximo" class="mes-seta" href="#" aria-label="Próximo mês">▶</a>
-        </nav>
+    <div class="container app-content-fluid">
+        <main class="cartoes-page">
+            <section class="cartoes-shell" aria-label="Configura&ccedil;&atilde;o de limites por cart&atilde;o">
+                <aside class="cartoes-sidebar" aria-label="Lista de cart&otilde;es">
+                    <div class="sidebar-title-row">
+                        <h2>Lista de cart&otilde;es</h2>
+                    </div>
+                    <label class="workspace-search" for="cartoes-busca-lateral">
+                        <span aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false">
+                                <circle cx="11" cy="11" r="7"/>
+                                <path d="m20 20-3.5-3.5"/>
+                            </svg>
+                        </span>
+                        <input id="cartoes-busca-lateral" type="search" placeholder="Buscar cart&atilde;o...">
+                    </label>
+                    <div class="cartoes-list" id="lista-cartoes">
+                        <p class="loading">Carregando cart&otilde;es...</p>
+                    </div>
+                </aside>
 
-        <p class="totais" id="totais" hidden>
-            <span>Compras <strong id="total-executado"></strong></span>
-            <span>Previsto <strong id="total-previsto"></strong></span>
-        </p>
-        <p class="receitas-nota" id="cartoes-nota" hidden>Pagamento de fatura continua sendo registrado no sistema atual.</p>
+                <section class="cartao-main" id="cartao-detalhe" aria-live="polite">
+                    <div class="detail-empty">
+                        <h2>Selecione um cart&atilde;o</h2>
+                        <p>Escolha um cart&atilde;o para vincular Categorias do Cart&atilde;o globais e definir limites mensais.</p>
+                    </div>
+                </section>
 
-        <div class="acoes-mes" id="acoes-mes"></div>
-        <div class="despesa-painel" id="cartao-painel" hidden></div>
-        <p class="geracao-resultado" id="acao-resultado" role="status" hidden></p>
-        <div class="login-error" id="perfis-erro" role="alert" hidden></div>
-        <p class="app-vazio" id="perfis-vazio" hidden>Nenhum perfil financeiro autorizado para esta conta.</p>
-        <div class="login-error" id="faturas-erro" role="alert" hidden></div>
-        <p class="app-vazio" id="faturas-vazio" hidden>Nenhum cartão ativo neste perfil.</p>
+                <aside class="hierarchy-panel" aria-label="Como funciona">
+                    <section class="cartoes-summary cartoes-summary-sidebar" aria-label="Resumo dos cart&otilde;es">
+                        <article class="summary-item">
+                            <span class="summary-icon summary-icon-card" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false">
+                                    <rect x="3" y="6" width="18" height="12" rx="2"/>
+                                    <path d="M3 10h18"/>
+                                </svg>
+                            </span>
+                            <span class="summary-label">Cart&otilde;es ativos</span>
+                            <strong id="summary-cartoes-ativos">0</strong>
+                        </article>
+                        <article class="summary-item">
+                            <span class="summary-icon summary-icon-link" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false">
+                                    <path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/>
+                                    <path d="M14 11a5 5 0 0 0-7.1 0l-2 2a5 5 0 0 0 7.1 7.1l1.1-1.1"/>
+                                </svg>
+                            </span>
+                            <span class="summary-label">Categorias vinculadas</span>
+                            <strong id="summary-categorias-vinculadas">0</strong>
+                        </article>
+                        <article class="summary-item">
+                            <span class="summary-icon summary-icon-limit" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false">
+                                    <path d="M4 7h16v10H4V7Z"/>
+                                    <path d="M7 11h6"/>
+                                    <path d="M16 14h1"/>
+                                </svg>
+                            </span>
+                            <span class="summary-label">Limite total</span>
+                            <strong id="summary-limite-total">R$ 0,00</strong>
+                        </article>
+                    </section>
 
-        <section class="grupo" id="secao-faturas" aria-labelledby="titulo-faturas" hidden>
-            <h2 class="grupo-titulo" id="titulo-faturas">Faturas</h2>
-            <ul class="lista-contas" id="lista-faturas"></ul>
-        </section>
+                    <section class="how-card">
+                        <h2>Como funciona</h2>
+                        <p>A hierarquia aplicada &agrave;s despesas neste cart&atilde;o segue esta estrutura.</p>
+                        <div class="hierarchy-step">
+                            <span class="hierarchy-icon hierarchy-doc" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false">
+                                    <path d="M6 3h9l3 3v15H6V3Z"/>
+                                    <path d="M14 3v4h4"/>
+                                    <path d="M9 12h6M9 16h4"/>
+                                </svg>
+                            </span>
+                            <div>
+                                <strong>Categoria de Despesa</strong>
+                                <span>Classifica&ccedil;&atilde;o original da despesa.</span>
+                            </div>
+                        </div>
+                        <span class="hierarchy-arrow" aria-hidden="true">&darr;</span>
+                        <div class="hierarchy-step">
+                            <span class="hierarchy-icon hierarchy-category" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false">
+                                    <rect x="4" y="5" width="16" height="14" rx="2"/>
+                                    <path d="M8 10h8M8 14h5"/>
+                                </svg>
+                            </span>
+                            <div>
+                                <strong>Categoria do Cart&atilde;o</strong>
+                                <span>Agrupamento global configurado em Categorias.</span>
+                            </div>
+                        </div>
+                        <span class="hierarchy-arrow" aria-hidden="true">&darr;</span>
+                        <div class="hierarchy-step">
+                            <span class="hierarchy-icon hierarchy-limit" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false">
+                                    <path d="M4 7h16v10H4V7Z"/>
+                                    <path d="M7 11h6"/>
+                                    <path d="M16 14h1"/>
+                                </svg>
+                            </span>
+                            <div>
+                                <strong>Limite do Cart&atilde;o</strong>
+                                <span>Limite mensal definido para cada categoria vinculada.</span>
+                            </div>
+                        </div>
+                    </section>
 
-        <section class="grupo" id="secao-cadastro" aria-labelledby="titulo-cadastro" hidden>
-            <h2 class="grupo-titulo" id="titulo-cadastro">Cartões cadastrados</h2>
-            <ul class="lista-contas" id="lista-cadastro"></ul>
-        </section>
-</div>
+                    <section class="hint-card">
+                        <h3>Dica</h3>
+                        <p>Defina limites realistas para cada categoria e acompanhe o consumo mensal pelo cart&atilde;o selecionado.</p>
+                    </section>
+                </aside>
+            </section>
+        </main>
+    </div>
+
+    <div id="modal-cartao" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-cartao-titulo">Novo Cart&atilde;o</h2>
+                <button class="modal-close" type="button" data-close-modal="modal-cartao" aria-label="Fechar">&times;</button>
+            </div>
+
+            <form id="form-cartao">
+                <input type="hidden" id="cartao-id">
+
+                <div class="form-group">
+                    <label for="cartao-nome">Nome do Cart&atilde;o *</label>
+                    <input type="text" id="cartao-nome" required placeholder="Ex: Nubank, Inter, Banco do Brasil">
+                </div>
+
+                <div class="form-group">
+                    <label for="cartao-descricao">Banco / Emissor</label>
+                    <textarea id="cartao-descricao" rows="2" placeholder="Ex: Nubank S.A."></textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="cartao-dia-fechamento">Dia do Fechamento *</label>
+                        <input type="number" id="cartao-dia-fechamento" required min="1" max="31" placeholder="Ex: 3">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="cartao-dia-vencimento">Dia do Vencimento *</label>
+                        <input type="number" id="cartao-dia-vencimento" required min="1" max="31" placeholder="Ex: 10">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group" data-fechamento-configuravel>
+                        <label for="cartao-compra-no-fechamento">Compra no dia do fechamento</label>
+                        <select id="cartao-compra-no-fechamento">
+                            <option value="PROXIMO">Vai para a pr&oacute;xima fatura</option>
+                            <option value="ATUAL">Entra na fatura que est&aacute; fechando</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="cartao-limite">Limite de Cr&eacute;dito</label>
+                        <input type="number" id="cartao-limite" step="0.01" min="0" placeholder="0,00">
+                    </div>
+                </div>
+
+                <div class="form-group checkbox-field cartao-fechamento-confirmacao" data-fechamento-configuravel>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="cartao-fechamento-confirmado">
+                        <span>Confirmo os dias de fechamento e vencimento conforme a administradora</span>
+                    </label>
+                    <small class="cartao-form-hint">Sem esta confirma&ccedil;&atilde;o, a fatura de cada compra n&atilde;o &eacute; sugerida e deve ser escolhida manualmente. Dias 29 a 31 usam o &uacute;ltimo dia nos meses mais curtos.</small>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="cartao-numero">N&uacute;mero do Cart&atilde;o</label>
+                        <input type="text" id="cartao-numero" maxlength="19" placeholder="1234 5678 9012 3456">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="cartao-data-validade">Data de Validade</label>
+                        <input type="text" id="cartao-data-validade" maxlength="7" placeholder="MM/AAAA">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="cartao-cvv">C&oacute;digo de Seguran&ccedil;a</label>
+                        <input type="password" id="cartao-cvv" maxlength="4" placeholder="***">
+                    </div>
+
+                    <div class="form-group checkbox-field">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="cartao-tem-codigo">
+                            <span>Possui c&oacute;digo de seguran&ccedil;a</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="cartao-observacoes">Observa&ccedil;&otilde;es</label>
+                    <textarea id="cartao-observacoes" rows="2"></textarea>
+                </div>
+
+                <!-- FIN-FIDELIDADE-CARTOES-1 (acrescimo): numero, validade e CVV nao sao guardados (campos desativados). -->
+                <p class="cartao-form-hint cartao-dados-sensiveis" id="cartao-dados-sensiveis">N&uacute;mero completo, validade e c&oacute;digo de seguran&ccedil;a n&atilde;o s&atilde;o guardados no novo aplicativo. Do n&uacute;mero, s&oacute; o final de cart&otilde;es j&aacute; cadastrados aparece na lista.</p>
+                <div class="form-actions">
+                    <!-- FIN-FIDELIDADE-CARTOES-1 (acrescimo): inativar o cartao em edicao (a rota DELETE de cartoes do Flask, sem botao na tela original). -->
+                    <button type="button" class="cf-button cf-button-danger" id="btn-inativar-cartao" hidden>Inativar cart&atilde;o</button>
+                    <button type="button" class="cf-button cf-button-secondary" data-close-modal="modal-cartao">Cancelar</button>
+                    <button type="submit" class="cf-button cf-button-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-categoria-limite" class="modal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2 id="modal-limite-titulo">Vincular Categoria</h2>
+                <button class="modal-close" type="button" data-close-modal="modal-categoria-limite" aria-label="Fechar">&times;</button>
+            </div>
+
+            <form id="form-categoria-limite">
+                <input type="hidden" id="limite-id">
+                <div class="form-group">
+                    <label for="limite-categoria-cartao">Categoria do Cart&atilde;o *</label>
+                    <select id="limite-categoria-cartao" required></select>
+                </div>
+                <div class="form-group">
+                    <label for="limite-valor">Limite mensal *</label>
+                    <input type="number" id="limite-valor" required min="0" step="0.01" placeholder="0,00">
+                </div>
+                <div class="form-group checkbox-field">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="limite-ativo" checked>
+                        <span>V&iacute;nculo ativo</span>
+                    </label>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="cf-button cf-button-secondary" data-close-modal="modal-categoria-limite">Cancelar</button>
+                    <button type="submit" class="cf-button cf-button-primary">Salvar limite</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- FIN-FIDELIDADE-CARTOES-1 (removido): modal "Revelar CVV". O novo aplicativo nao guarda nem mostra o CVV. -->
+    <!-- Modal: Editar lançamento de fatura -->
+    <div id="modal-editar-lancamento" class="modal">
+        <div class="modal-content modal-md lancamento-edit-modal">
+            <div class="modal-header">
+                <h2>Editar lan&ccedil;amento</h2>
+                <button class="modal-close" type="button" data-close-modal="modal-editar-lancamento" aria-label="Fechar">&times;</button>
+            </div>
+            <form id="form-editar-lancamento" onsubmit="salvarEdicaoLancamento(event)">
+                <input type="hidden" id="lancamento-edit-id">
+                <div class="form-row two-cols">
+                    <div class="form-group">
+                        <label for="lancamento-edit-descricao">Descri&ccedil;&atilde;o *</label>
+                        <input type="text" id="lancamento-edit-descricao" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="lancamento-edit-valor">Valor *</label>
+                        <input type="number" id="lancamento-edit-valor" step="0.01" min="0" required>
+                    </div>
+                </div>
+                <div class="form-row two-cols">
+                    <div class="form-group">
+                        <label for="lancamento-edit-data">Data da compra *</label>
+                        <input type="date" id="lancamento-edit-data" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="lancamento-edit-categoria">Categoria de Despesa</label>
+                        <select id="lancamento-edit-categoria"></select>
+                    </div>
+                </div>
+                <div class="form-row two-cols">
+                    <div class="form-group">
+                        <label for="lancamento-edit-parcela">Parcela atual</label>
+                        <input type="number" id="lancamento-edit-parcela" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="lancamento-edit-total-parcelas">Total de parcelas</label>
+                        <input type="number" id="lancamento-edit-total-parcelas" min="1">
+                    </div>
+                </div>
+                <div class="lancamento-edit-aviso">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    Esta edi&ccedil;&atilde;o altera <strong>apenas este lan&ccedil;amento</strong> da fatura. As demais parcelas do mesmo parcelamento n&atilde;o s&atilde;o afetadas.
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="cf-button cf-button-secondary" data-close-modal="modal-editar-lancamento">Cancelar</button>
+                    <button type="submit" class="cf-button cf-button-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <!-- Modal: Gerenciar parcelamento inteiro -->
+    <div id="modal-gerenciar-parcelamento" class="modal">
+        <div class="modal-content modal-lg parcelamento-gestao-modal">
+            <div class="modal-header">
+                <div>
+                    <h2>Gerenciar parcelamento</h2>
+                    <p>Altere dados das parcelas futuras ou visualize o conjunto completo do parcelamento.</p>
+                </div>
+                <button class="modal-close" type="button" data-close-modal="modal-gerenciar-parcelamento" aria-label="Fechar">&times;</button>
+            </div>
+            <form id="form-gerenciar-parcelamento">
+                <div class="parcelamento-gestao-aviso">
+                    As altera&ccedil;&otilde;es neste modal afetam o parcelamento, n&atilde;o apenas a parcela selecionada. Por seguran&ccedil;a, este MVP altera apenas parcelas futuras.
+                </div>
+                <div id="parcelamento-gestao-resumo" class="parcelamento-gestao-resumo"></div>
+
+                <div class="form-row three-cols">
+                    <div class="form-group">
+                        <label for="parcelamento-gestao-descricao">Descri&ccedil;&atilde;o para parcelas futuras</label>
+                        <input type="text" id="parcelamento-gestao-descricao">
+                    </div>
+                    <div class="form-group">
+                        <label for="parcelamento-gestao-categoria">Categoria da Despesa</label>
+                        <select id="parcelamento-gestao-categoria"></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="parcelamento-gestao-valor">Valor das parcelas futuras</label>
+                        <input type="number" id="parcelamento-gestao-valor" step="0.01" min="0">
+                    </div>
+                </div>
+
+                <div class="parcelamento-gestao-lista">
+                    <table class="parcelamento-gestao-table">
+                        <thead>
+                            <tr>
+                                <th>Parcela</th>
+                                <th>Compet&ecirc;ncia/Fatura</th>
+                                <th>Data</th>
+                                <th>Valor</th>
+                                <th>Status</th>
+                                <th>Observa&ccedil;&atilde;o</th>
+                            </tr>
+                        </thead>
+                        <tbody id="parcelamento-gestao-parcelas"></tbody>
+                    </table>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="cf-button cf-button-secondary" data-close-modal="modal-gerenciar-parcelamento">Cancelar</button>
+                    <button type="button" class="cf-button cf-button-danger" id="btn-cancelar-parcelas-futuras">Cancelar parcelas futuras</button>
+                    <button type="submit" class="cf-button cf-button-primary">Salvar altera&ccedil;&otilde;es futuras</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- FIN-FIDELIDADE-CARTOES-1 (acrescimo): compra nova no cartao (formulario do novo aplicativo: previa das parcelas,
+         fatura sugerida pelo fechamento e confirmacao de fatura consolidada). -->
+    <div id="modal-nova-compra" class="modal">
+        <div class="modal-content modal-md">
+            <div class="modal-header">
+                <h2>Nova compra no cart&atilde;o</h2>
+                <button class="modal-close" type="button" data-close-modal="modal-nova-compra" aria-label="Fechar">&times;</button>
+            </div>
+            <div id="cartao-painel" class="nova-compra-painel"></div>
+        </div>
+    </div>

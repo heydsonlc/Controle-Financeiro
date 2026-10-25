@@ -121,13 +121,13 @@ test('cadastrar, recusas sem gravar, editar e gerar em Despesas com nome, valor,
 
     // Aviso de "itens nao gerados": o cadastro de cartao marca o proprio cartao como recorrente; o gerador o rejeita,
     // mas o aviso de Despesas nao o mostra (a fatura e gerada pela parte de cartoes).
-    await page.goto('/cartoes.html?mes=2031-01');
-    await page.click('#novo-cartao');
+    await page.goto('/cartoes.html');  // FIN-FIDELIDADE-CARTOES-1: tela original de Cartoes
+    await page.click('#btn-novo-cartao');
     await page.fill('#cartao-nome', 'Cartao Rec (tela)');
-    await page.fill('#cartao-fechamento', '3');
-    await page.fill('#cartao-vencimento', '12');
-    await page.click('#cartao-painel button[type=submit]');
-    await expect(page.locator('#lista-cadastro .conta', { hasText: 'Cartao Rec (tela)' })).toBeVisible();
+    await page.fill('#cartao-dia-fechamento', '3');
+    await page.fill('#cartao-dia-vencimento', '12');
+    await page.click('#form-cartao button[type=submit]');
+    await expect(page.locator('#lista-cartoes .cartao-list-item', { hasText: 'Cartao Rec (tela)' })).toBeVisible();
     const bruta = await chamarRpc(page, 'previa_geracao', { p_perfil_id: await perfilAtivoId(page), p_mes: '2031-01-01' });
     expect(bruta.corpo.rejeitados.filter((r) => r.nome === 'Cartao Rec (tela)').map((r) => r.motivo)).toEqual(['Cartao marcado como recorrencia']);
 

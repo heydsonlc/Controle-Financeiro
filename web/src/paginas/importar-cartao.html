@@ -1,0 +1,304 @@
+<!-- moldura {"ativo": "importar_cartao", "titulo": "Importar Cartão", "documento": "Importar Cartão - Controle Financeiro", "css": ["css/shared/importar_cartao.css", "css/importar-cartao-adaptacoes.css"], "classicos": ["js/original/ponte-permitidas.js", "js/ponte-csp.js", "js/ponte-api.js", "js/original/utils.js", "js/original/icons.js", "js/original/instituicoes.js", "js/original/formas_pagamento.js", "js/original/importar_cartao.js"], "scripts": ["js/importar-cartao-adaptador.js"]} -->
+<!-- FIN-FIDELIDADE-CARTOES-1: frontend/templates/importar_cartao.html (barra de acoes e conteudo) sem alteracao.
+     Atributos onclick/style convertidos no build (CSP sem inline). O arquivo e lido no navegador. -->
+<!-- acao -->
+    <section class="import-topbar-compact module-actionbar import-actionbar" id="step1" aria-label="Importação do Cartão">
+        <div class="module-actionbar-inner">
+            <div class="module-actionbar-filters">
+                <div class="import-inline-field">
+                    <label for="cartaoSelect">Cartão</label>
+                    <select id="cartaoSelect" class="module-filter-control"></select>
+                </div>
+
+                <div class="import-inline-field import-inline-field--sm">
+                    <label for="competenciaInput">Competência</label>
+                    <input type="text" id="competenciaInput" class="module-filter-control" placeholder="MM/AAAA" maxlength="7" inputmode="numeric">
+                </div>
+
+                <div class="import-inline-field import-inline-field--format">
+                    <label>Formato</label>
+                    <div class="import-segmented-control" role="radiogroup" aria-label="Formato do arquivo">
+                        <button type="button" class="import-format-option is-selected" data-format="auto" aria-pressed="true">Aut.</button>
+                        <button type="button" class="import-format-option" data-format="pdf" aria-pressed="false">PDF</button>
+                        <button type="button" class="import-format-option" data-format="csv" aria-pressed="false">Excel</button>
+                    </div>
+                </div>
+
+                <div class="import-inline-field import-inline-field--file" id="uploadArea">
+                    <label for="csvFile">Arquivo selecionado</label>
+                    <input type="file" id="csvFile" accept=".csv,.xlsx,.pdf" hidden>
+                    <div class="import-file-inline" id="selectedFileInfo">
+                        <span class="file-icon neutral" aria-hidden="true">
+                            <svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6V3Z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></svg>
+                        </span>
+                        <span class="import-file-inline-text">Selecione Arquivo — pdf, csv ou xlsx</span>
+                    </div>
+                </div>
+            </div>
+            <div class="module-actionbar-actions">
+                <button class="btn btn-primary" type="button" id="btnTopImportar" onclick="abrirSeletorArquivo()">
+                    <span aria-hidden="true"><svg viewBox="0 0 24 24" width="13" height="13"><path d="M12 16V4M8 8l4-4 4 4"/><path d="M4 16.5A4.5 4.5 0 0 0 8.5 21h7a4.5 4.5 0 0 0 1.2-8.8A6 6 0 0 0 5.1 13"/></svg></span>
+                    Importar
+                </button>
+            </div>
+        </div>
+    </section>
+<!-- conteudo -->
+<div class="content-fluid import-page import-operational-page">
+
+    <div id="uploadResult" class="import-feedback-slot"></div>
+    <div id="mapeamentoContainer" class="import-inline-status"></div>
+    <div id="resumoConfiguracaoImportacao" class="import-inline-status"></div>
+
+    <section class="import-section import-main-grid-section" id="step5">
+        <div class="import-table-header">
+            <div class="import-table-title">
+                <span class="import-section-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h16"/><path d="M8 5v14"/></svg>
+                </span>
+                <h2>Lançamentos em processamento</h2>
+            </div>
+            <div class="import-table-actions">
+                <button class="btn btn-secondary" type="button" onclick="alternarFiltroAvancado('principal')">
+                    <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg></span>
+                    Filtro avançado
+                </button>
+                <button class="btn btn-secondary" type="button" id="btnStep4" onclick="proximaEtapa(4)" disabled>
+                    <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4V4ZM13 13h7v7h-7v-7Z"/><path d="M15 4h5v5M20 4l-6 6M9 20H4v-5M4 20l6-6"/></svg></span>
+                    Confrontar resultado
+                </button>
+                <button class="btn btn-primary" id="btnImportar" type="button" onclick="finalizarImportacao()" disabled>
+                    <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+                    Criar despesas
+                </button>
+            </div>
+        </div>
+        <div id="principalFilterPanel" class="import-filter-panel" hidden></div>
+        <div id="editorPrePersistencia">
+            <div class="import-empty-state compact">Importe um arquivo para iniciar a triagem operacional.</div>
+        </div>
+        <div id="confrontoContainer" class="import-result-output" hidden></div>
+        <div id="resumoPreviaTecnica" class="import-inline-status"></div>
+        <div id="resultadoContainer" class="import-result-output"></div>
+    </section>
+
+    <div class="import-bottom-operational" id="step4">
+        <section class="import-section import-retired-section">
+            <div class="import-table-header compact">
+                <div class="import-table-title">
+                    <span class="import-section-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/></svg>
+                    </span>
+                    <h2>Lançamentos retirados da efetivação</h2>
+                </div>
+                <button class="btn btn-secondary" type="button" onclick="alternarFiltroAvancado('retirados')">
+                    <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg></span>
+                    Filtro avançado
+                </button>
+            </div>
+            <div id="retiradosFilterPanel" class="import-filter-panel" hidden></div>
+            <div id="retiradosContainer">
+                <div class="import-empty-state compact">Nenhum lançamento retirado da efetivação.</div>
+            </div>
+        </section>
+
+        <aside class="import-section import-kpi-panel" id="kpisImportacaoPanel">
+            <div class="import-table-title">
+                <span class="import-section-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M5 19V9M12 19V5M19 19v-7"/></svg>
+                </span>
+                <h2>KPIs da importação</h2>
+            </div>
+            <div class="import-kpi-grid">
+                <div class="import-kpi-card">
+                    <span>Encontrados</span>
+                    <strong id="kpiEncontrados">0</strong>
+                </div>
+                <div class="import-kpi-card">
+                    <span>Em processamento</span>
+                    <strong id="kpiProcessamento">0</strong>
+                </div>
+                <div class="import-kpi-card danger">
+                    <span>Retirados</span>
+                    <strong id="kpiRetirados">0</strong>
+                </div>
+                <div class="import-kpi-card success">
+                    <span>Possíveis conhecidas</span>
+                    <strong id="kpiConhecidas">0</strong>
+                </div>
+                <div class="import-kpi-card purple">
+                    <span>Parcelamentos</span>
+                    <strong id="kpiParcelamentos">0</strong>
+                </div>
+                <div class="import-kpi-card success">
+                    <span>Novos</span>
+                    <strong id="kpiNovos">0</strong>
+                </div>
+                <div class="import-kpi-card wide">
+                    <span>Valor em processamento</span>
+                    <strong id="kpiValorProcessamento">R$ 0,00</strong>
+                </div>
+                <div class="import-kpi-card warning wide">
+                    <span>Pendências</span>
+                    <strong id="kpiPendencias">0</strong>
+                    <small>lançamentos exigem ação</small>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <div class="import-hidden-support" hidden>
+        <button class="btn btn-secondary" type="button" id="btnStep3" onclick="proximaEtapa(3)" disabled>Validar layout</button>
+        <div id="previaContainer"></div>
+        <div id="classificationList"></div>
+        <span id="detectedCount">0</span>
+        <span id="parceladoCount">0</span>
+        <span id="duplicateCount">0</span>
+        <span id="validCount">0</span>
+        <span id="reviewCount">0</span>
+        <span id="missingCardCategoryCount">0</span>
+        <span id="validationDuplicateCount">0</span>
+        <span id="plannedTotal">R$ 0,00</span>
+        <span id="uncategorizedCardValue">R$ 0,00</span>
+        <span id="newCount">0</span>
+        <span id="ignoredCount">0</span>
+        <span id="confirmedCardCategoryCount">0</span>
+        <span id="pendingCardCategoryCount">0 a importar</span>
+    </div>
+</div>
+
+<div class="perfil-modal-overlay" id="perfilModal">
+    <div class="perfil-modal-content">
+        <div class="perfil-modal-header">
+            <h2>Validar perfil e mapeamento do CSV</h2>
+            <p>Confirme o perfil detectado, ajuste o mapeamento principal e valide a amostra interpretada antes da prévia técnica.</p>
+        </div>
+
+        <div class="perfil-modal-grid">
+            <div class="import-field">
+                <label for="modalPerfil">Perfil de importação</label>
+                <select id="modalPerfil" onchange="atualizarCamposPerfilModal(); renderizarAmostraModal();"></select>
+            </div>
+
+            <div class="import-field import-deferred-classification" hidden>
+                <label for="modalCategoriaPadrao">Categoria da despesa padrão *</label>
+                <select id="modalCategoriaPadrao" onchange="renderizarAmostraModal();"></select>
+            </div>
+
+            <div class="import-field">
+                <label for="modalMapData">Data</label>
+                <select id="modalMapData" onchange="renderizarAmostraModal();"></select>
+            </div>
+
+            <div class="import-field">
+                <label for="modalMapDescricao">Descrição</label>
+                <select id="modalMapDescricao" onchange="renderizarAmostraModal();"></select>
+            </div>
+
+            <div class="import-field" id="boxCampoValor">
+                <label for="modalMapValor">Valor</label>
+                <select id="modalMapValor" onchange="renderizarAmostraModal();"></select>
+            </div>
+
+            <div class="import-field" hidden>
+                <label for="modalMapParcela">Parcela (opcional)</label>
+                <select id="modalMapParcela" onchange="renderizarAmostraModal();"></select>
+            </div>
+        </div>
+
+        <div class="perfil-modal-grid" id="boxCamposCaixa" hidden>
+            <div class="import-field">
+                <label for="modalMapCredito">Coluna crédito</label>
+                <select id="modalMapCredito" onchange="renderizarAmostraModal();"></select>
+            </div>
+            <div class="import-field">
+                <label for="modalMapDebito">Coluna débito</label>
+                <select id="modalMapDebito" onchange="renderizarAmostraModal();"></select>
+            </div>
+            <div class="import-field">
+                <label for="modalRegraCaixa">Regra de interpretação Caixa</label>
+                <select id="modalRegraCaixa" onchange="renderizarAmostraModal();">
+                    <option value="debito">Usar débito (despesas)</option>
+                    <option value="credito">Usar crédito</option>
+                    <option value="auto">Auto (débito e fallback crédito)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="perfil-modal-grid" id="boxCamposNubank" hidden>
+            <div class="import-field">
+                <label for="modalRegraNubank">Regra de interpretação Nubank</label>
+                <select id="modalRegraNubank" onchange="renderizarAmostraModal();">
+                    <option value="absoluto">Usar valor absoluto</option>
+                    <option value="despesas_negativas">Despesas são valores negativos</option>
+                    <option value="despesas_positivas">Despesas são valores positivos</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="perfil-modal-grid" id="boxCamposManual"></div>
+
+        <div id="modalAmostraInterpretada" class="modal-sample"></div>
+
+        <div class="perfil-modal-actions">
+            <button type="button" class="btn btn-secondary" onclick="fecharModalValidacao()">Cancelar</button>
+            <button type="button" class="btn btn-primary" onclick="confirmarValidacaoModal()">Confirmar validação</button>
+        </div>
+    </div>
+</div>
+
+<div class="perfil-modal-overlay" id="parcelamentoModal" hidden>
+    <div class="perfil-modal-content import-parcel-modal-content">
+        <div class="perfil-modal-header">
+            <h2>Criar parcelamento a partir do lançamento importado</h2>
+            <p>Este fluxo cria o parcelamento do cartão e impede que este lançamento seja importado como despesa avulsa.</p>
+        </div>
+
+        <div class="perfil-modal-grid">
+            <div class="import-field import-field-wide">
+                <label for="parcelamentoDescricaoOriginal">Descrição original do cartão</label>
+                <input id="parcelamentoDescricaoOriginal" class="form-control" type="text" readonly>
+            </div>
+            <div class="import-field import-field-wide">
+                <label for="parcelamentoDescricaoAmigavel">Descrição amigável</label>
+                <input id="parcelamentoDescricaoAmigavel" class="form-control" type="text" onchange="renderizarPreviewParcelamentoModal();">
+            </div>
+            <div class="import-field">
+                <label for="parcelamentoDataCompra">Data da compra</label>
+                <input id="parcelamentoDataCompra" class="form-control" type="date" onchange="renderizarPreviewParcelamentoModal();">
+            </div>
+            <div class="import-field">
+                <label for="parcelamentoValor">Valor da parcela</label>
+                <input id="parcelamentoValor" class="form-control" type="text" inputmode="decimal" onchange="renderizarPreviewParcelamentoModal();">
+            </div>
+            <div class="import-field">
+                <label for="parcelamentoParcelaAtual">Parcela atual</label>
+                <input id="parcelamentoParcelaAtual" class="form-control" type="number" min="1" max="60" onchange="renderizarPreviewParcelamentoModal();">
+            </div>
+            <div class="import-field">
+                <label for="parcelamentoTotalParcelas">Total de parcelas</label>
+                <input id="parcelamentoTotalParcelas" class="form-control" type="number" min="2" max="60" onchange="renderizarPreviewParcelamentoModal();">
+            </div>
+            <div class="import-field">
+                <label for="parcelamentoCategoriaDespesa">Categoria da despesa</label>
+                <select id="parcelamentoCategoriaDespesa" class="form-control" onchange="atualizarCategoriaDespesaParcelamento(this.value);"></select>
+            </div>
+            <div class="import-field">
+                <label for="parcelamentoCartaoLabel">Cartão</label>
+                <input id="parcelamentoCartaoLabel" class="form-control" type="text" readonly>
+            </div>
+            <div class="import-field">
+                <label for="parcelamentoCompetenciaLabel">Competência inicial</label>
+                <input id="parcelamentoCompetenciaLabel" class="form-control" type="text" readonly>
+            </div>
+        </div>
+
+        <div id="parcelamentoPreview" class="modal-sample"></div>
+        <div id="parcelamentoFeedback" class="import-inline-status"></div>
+
+        <div class="perfil-modal-actions">
+            <button type="button" class="btn btn-secondary" onclick="fecharModalParcelamento()">Cancelar</button>
+            <button type="button" class="btn btn-primary" onclick="confirmarParcelamentoImportado()">Criar parcelamento</button>
+        </div>
+    </div>
+</div>

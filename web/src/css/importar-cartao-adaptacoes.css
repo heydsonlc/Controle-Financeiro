@@ -1,0 +1,6 @@
+/* FIN-FIDELIDADE-CARTOES-1 — so o que a tela original Importar Cartao (importar_cartao.css) nao tinha. */
+
+/* Quem so le o perfil pode analisar o arquivo, mas nao importa (o banco recusaria de qualquer forma). */
+body.cf-somente-leitura #btnImportar {
+    display: none;
+}

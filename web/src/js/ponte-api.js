@@ -27,6 +27,9 @@
         if (opcoes && typeof opcoes.body === 'string' && opcoes.body) {
             try { corpo = JSON.parse(opcoes.body); } catch (_erro) { corpo = null; }
         }
+        // FIN-FIDELIDADE-CARTOES-1: envio de arquivo (Importar Cartao). O FormData fica no navegador: o adaptador le o
+        // arquivo localmente; nada e enviado a servidor algum.
+        if (opcoes && typeof FormData !== 'undefined' && opcoes.body instanceof FormData) corpo = opcoes.body;
         const tarefa = fila.then(async () => {
             const adaptador = await adaptadorPronto;
             try {

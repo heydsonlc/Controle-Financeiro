@@ -291,7 +291,7 @@ def main():
             with conn.cursor() as cur:
                 semear_recorrencia_e2e(cur)  # FIN-RECORRENCIA-1 (recorrencia.spec.mjs)
                 semear_receitas_e2e(cur)  # FIN-RECEITAS-1 (receitas.spec.mjs)
-                semear_cartoes_e2e(cur)  # FIN-CARTOES-1 (cartoes.spec.mjs)
+                semear_cartoes_e2e(cur)  # FIN-CARTOES-1 e FIN-FIDELIDADE-CARTOES-1 (cartoes_tela.spec.mjs)
                 semear_pendencia_e2e(cur)  # FIN-CARTOES-RECORRENCIA-PENDENCIA-1 (pendencia.spec.mjs)
             conn.close()
 
