@@ -1,9 +1,10 @@
 # FIN-FIDELIDADE-CARTOES-1 — Cartões e Importar Cartão do Flask sobre o Supabase
 
-**Situação:** implementado e testado localmente (25/10/2026).
-- Nada commitado.
-- Duas migrations novas, **não aplicadas** fora do cluster local descartável.
-- Nada publicado.
+**Situação:** concluído tecnicamente (25/10/2026). A homologação funcional depende da avaliação do titular na prévia.
+- Commit `ef6c0d8`.
+- As duas migrations aplicadas **só no Supabase de teste**.
+- Validado com perfil temporário e publicado na prévia protegida (§ 9).
+- Sem push e sem produção.
 - Mesmo padrão de Despesas e Recorrências: HTML, CSS e JS do Flask copiados no build, ponte CSP, ponte `/api/` e um adaptador por tela sobre funções do Supabase.
 
 ## 1. Cartões
@@ -158,3 +159,65 @@ Flask sobre SQLite temporário e novo aplicativo com dados fictícios equivalent
 
 - **Cartões:** a mesma tela; a diferença é a correção do defeito de layout (item 4.3).
 - **Importação:** a mesma tela, com o mesmo arquivo. O Flask leva "Pagamento recebido −500,00" para despesa nova de R$ 500,00 (total importável R$ 592,50). O novo aplicativo o retira como "Crédito/estorno" (total R$ 42,50). A conciliação ("Já existe na fatura") e a duplicidade ("Duplicado na fatura") coincidem.
+
+## 9. Aplicação no teste, validação real e publicação (25/10/2026)
+
+**Verificações pedidas antes de aplicar:**
+
+| Verificação | Resultado |
+|---|---|
+| Compatibilidade das 3 funções substituídas | A diferença é só acréscimo (emissor e "possui código"). Sem esses campos, o comportamento é o anterior. Assinaturas iguais. Suítes de cartões sem regressão |
+| Segurança | As 28 definições têm `search_path` vazio. Todas as expostas validam o perfil (leitura) ou a gestão (escrita), direto ou pelas travas. As internas não executam para ninguém. Nenhuma executa para `anon` |
+| Integridade | A importação é uma transação. Teste: uma falha na segunda linha desfaz a primeira, e faturas e compras ficam idênticas |
+| Concorrência | Três confirmações simultâneas do mesmo arquivo gravam uma vez só; a mesma chave em paralelo devolve o mesmo resultado |
+| Reversibilidade | Definições anteriores salvas. Roteiro de reversão pronto e não aplicado: remove as 25 funções novas e devolve as 3, sem tocar dados |
+| Auditoria do build | Exceção para `/api/` só para `js/cartoes-adaptador.js` e `js/importar-cartao-adaptador.js`, por nome. Os comentários que citavam a rota foram reescritos para não ampliar nada |
+
+**Crédito na fatura:** verificado e coberto por testes (§ 2). O pagamento recebido nunca entra como compra negativa nem reduz o valor devido.
+
+**Aplicação:**
+1. "Antes": banco igual ao esperado sem as duas migrations.
+2. Aplicadas as duas: o projeto tem 17/17.
+3. "Depois": OK, com o conteúdo de todas as tabelas idêntico.
+4. Demonstração idêntica.
+
+**Validação real**, com um perfil temporário criado pelo aplicativo, o mesmo `dist` publicado e dados marcados "(e2e-real)":
+- **Cartões:** cadastro com número, validade e CVV desativados; limite por categoria; compras; edição de uma parcela; alterar e cancelar parcelas futuras.
+- **Despesas:**
+  - a fatura aberta mostra o previsto pelo limite (R$ 300,00);
+  - o pagamento cobra o executado (R$ 90,00);
+  - paga, ela bloqueia a edição; estornada, libera.
+- **Importação:**
+  - categoria pelo histórico;
+  - conciliação com a compra manual;
+  - "Pagamento recebido" retirado como crédito;
+  - confirmação com 1 inserida; reimportação sem nada novo.
+- **Quem só lê:** vê sem ações, e a escrita direta é recusada (403), inclusive em perfil alheio.
+- **Regressão real de Despesas e Recorrências:** cadastro, geração, pagamento e estorno.
+- **Limpeza por identidade** (simulação e depois confirmação): banco idêntico ao retrato de antes da aplicação.
+
+**Testes depois da aplicação:** banco (importação) 26/26; regressão local de Despesas e Recorrências: E2E 31/31 e banco 163/163.
+
+**Publicação:**
+- O Access protegia antes e depois: 302 para o login, inclusive no endereço da implantação; o endereço principal continua 404.
+- Branch `avaliacao`, implantação `59954c53`, versão `ef6c0d8` (impressão do `dist` `543ae51d0636`).
+- Envio direto, sem push e sem produção.
+
+## 10. Proposta de dados de demonstração (não inserida; depende de autorização)
+
+Para homologar Cartões e Importar Cartão com dados, em vez de telas vazias. Proposta: num perfil próprio de demonstração ou no perfil 31, conforme o titular decidir, todos os nomes marcados "(demonstracao)":
+
+- **Cartões:**
+  - "Cartão Azul (demonstracao)": fecha dia 3, vence dia 12, limite R$ 5.000, fechamento confirmado;
+  - "Cartão Verde (demonstracao)": fecha dia 25, vence dia 5, sem confirmação, para mostrar a falta de sugestão.
+- **Categorias do Cartão** do perfil: Mercado, Restaurantes e Assinaturas, com limites de R$ 800, R$ 400 e R$ 150 no Azul, mapeadas a categorias de despesa existentes.
+- **Compras no mês corrente e no seguinte:**
+  - à vista, uma delas acima do limite da categoria, para mostrar o status "Estourado";
+  - parcelada 3/10 com parcelas futuras;
+  - uma sem Categoria do Cartão, para mostrar "Revisar".
+- **Faturas:** uma paga, com pagamento e movimento na conta de demonstração; uma aberta; uma consolidada (FECHADA), para mostrar a proteção.
+- **Arquivos de importação**, só arquivos e nada gravado:
+  - CSV Nubank: compras, uma repetida, um "Pagamento recebido" negativo, uma já lançada a mão e uma parcela "2/5";
+  - CSV Caixa: crédito e débito;
+  - CSV de layout genérico, para o mapeamento manual.
+- **Inserção:** por script auditável, com identidade registrada para a limpeza, como nas validações reais.
