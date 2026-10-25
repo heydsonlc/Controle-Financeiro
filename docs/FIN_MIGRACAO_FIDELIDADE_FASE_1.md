@@ -1,7 +1,9 @@
 # FIN-MIGRACAO-FIDELIDADE-FASE-1 — Moldura, navegação e perfis do Flask no novo aplicativo
 
-**Situação:** implementada e testada **localmente**, com dados fictícios.
-- Sem migration remota, sem publicação, sem commit e sem push.
+**Situação:** concluída tecnicamente (FIN-MIGRACAO-FIDELIDADE-FASE-1-REAL, 24/10/2026).
+- Migration aplicada só no Supabase de teste.
+- Validada com dados fictícios e publicada na prévia protegida: **https://avaliacao.controle-financeiro-jah.pages.dev**.
+- Sem push e sem deploy de produção. A aprovação da fidelidade visual depende da avaliação do titular no navegador (§G).
 - Diagnóstico e plano: `docs/FIN_MIGRACAO_FIDELIDADE_1.md`, com as decisões do titular na seção H.
 
 ## A. Interface reaproveitada e adaptada
@@ -118,7 +120,87 @@ Todas as de escrita exigem `perfil_acesso.pode_gerir` do perfil e serializam pel
 
 **Observação para a Fase 2:** as notas "Recebimentos/Pagamento de fatura continuam sendo registrados no sistema atual", em Receitas e Cartões, estão desatualizadas desde o FIN-MOVIMENTACOES-1.
 
-## F. Para publicar a prévia (cada etapa depende de autorização)
+## F. Publicação
 
-1. Aplicar `20261102090000` no Supabase de teste. Sem ela, a lista de Configurações mostra "Não foi possível carregar os perfis financeiros"; o restante funciona.
-2. Gerar o `dist` e publicar só na branch `avaliacao` (`docs/FIN_PUBLICACAO_PREVIEW_2.md`, seção 6).
+Executada no FIN-MIGRACAO-FIDELIDADE-FASE-1-REAL (§G): migration aplicada no Supabase de teste e `dist` publicado só na branch `avaliacao`, conforme `docs/FIN_PUBLICACAO_PREVIEW_2.md` §6.
+
+## G. Validação real e publicação (FIN-MIGRACAO-FIDELIDADE-FASE-1-REAL)
+
+**Correção da responsabilidade pelos perfis novos.** Foi incorporada à `20261102090000`, que ainda estava só no repositório: o status remoto mostrava 13 aplicadas e só ela pendente.
+- `criar_perfil` atribui o gerador NOVO na mesma transação, por `definir_gerador_recorrencia`, auditado em `gerador_recorrencia_historico` ("criar_perfil (usuario …)").
+- Perfis existentes não mudam.
+- Testes locais:
+  - atribuição e histórico;
+  - geradores dos demais perfis idênticos;
+  - falha simulada na atribuição desfaz a criação (nenhum perfil nem vínculo sobra);
+  - geração de recorrências no perfil novo;
+  - o criador administra e o outro usuário não vê.
+- Resultados: 48/48 na suíte de perfis; suítes de gerador, perfis e recorrência e E2E de moldura e perfis 16/16.
+
+**Migration no Supabase de teste (`fzjmge…`).**
+
+| Etapa | Resultado |
+|---|---|
+| `antes` (somente leitura) | Projeto confirmado pela conexão; 13 aplicadas, só `20261102090000` pendente, nada só no banco; 64 tabelas e 106 funções registradas |
+| Aplicação | `supabase_migrations.py aplicar --versoes 20261102090000`: só ela |
+| `depois` | 14/14. Só as 10 funções previstas (6 públicas para `authenticated`, 4 internas sem EXECUTE; todas `search_path` vazio). Contagem e md5 de todas as tabelas iguais (nada existente mudou) |
+
+**Validação real** (mesmo `dist` depois publicado, servido com o `_headers` real, contas de teste).
+
+Interface e perfis (4/4):
+- login, menu do Flask, navegação pelas 15 páginas e competência mantida;
+- Alertas, Ajuda, menu e seletor no celular, saída.
+
+Gestão pela tela, num perfil temporário criado pelo próprio aplicativo:
+- criar, editar, usar, inativar e reativar;
+- isolamento: o perfil novo não vê dados da demonstração;
+- definição de padrão recusada, porque o padrão atual (Pessoal) não é gerido pela conta de teste e nada pode mudar nos perfis existentes.
+
+Operações dentro da moldura, só no perfil temporário (4/4):
+- despesa: pagar com juros justificados e estornar;
+- receita: receber parcial e estornar;
+- cartão: comprar, pagar a fatura e estornar;
+- saldos conferidos a cada passo.
+- Leitor: a conta B vê, mas não altera (formulário bloqueado, sem "Nova despesa").
+
+Data API:
+- Isolamento: B não lê a demonstração (403).
+- O leitor recebe 403 em atualizar, inativar, definir padrão e criar despesa.
+- A recebe 403 ao alterar o Pessoal; o padrão é recusado com 42501.
+- Anônimo recebe 401.
+- Geração real no perfil novo: prévia com gerador NOVO e `pode_gerar`; `gerar_mes` 200; contas de 06/2035 geradas.
+
+Nenhuma chamada fora do próprio site e do Supabase; nenhuma chamada ao Flask; sem erro de CSP ou JS.
+
+**Limpeza.**
+- Identidade conferida:
+  - perfil criado pelo aplicativo (histórico do gerador);
+  - só os vínculos do teste;
+  - só a conta bancária marcada;
+  - todas as tabelas com `perfil_financeiro_id` contadas, sem sobra.
+- Simulação, depois confirmação.
+- Resultado: o banco ficou idêntico ao de antes da migration (contagem e md5 de todas as tabelas, inclusive os dados de demonstração). Perfis 1 (Pessoal), 2 (Empresa) e 31 (demonstração) intactos.
+
+**Publicação.**
+- Build com a URL e a chave **publicável** do projeto de teste. 16 páginas, CSP inalterada, sem segredos e sem referência ao Flask (`/api/`, `localhost`, `:5000`, Render).
+- Cloudflare Access protegia a prévia antes e depois do envio: 302 para o login do Access na prévia, em páginas internas, em `config.js` e no endereço da versão. O endereço principal continua sem deploy (404).
+- Envio: `wrangler pages deploy dist --project-name controle-financeiro --branch avaliacao`, versão `1cc8025` (impressão do `dist` `49189f04a7b2`).
+  - Implantação `17a39256` (Preview, branch `avaliacao`), endereço **https://avaliacao.controle-financeiro-jah.pages.dev**.
+  - Nenhuma implantação de produção; `kortex-site` e `kortex-calculadora` não foram tocados.
+- Pós-publicação (mesmo `dist`, 1/1):
+  - perfil de demonstração disponível, com 6 despesas, 4 receitas, faturas e 2 contas;
+  - menu completo e competência mantida;
+  - Configurações e uma página "Em migração" sem erros e sem chamadas ao Flask.
+- **Limite da conferência:** a política do Access (só o e-mail do titular) foi conferida pelo comportamento: tudo exige o login do Access. O conteúdo da política no painel do Zero Trust não pode ser lido com o escopo atual do Wrangler.
+
+**Diferenças visuais que permanecem** (Fase 2):
+- o conteúdo de Despesas, Receitas, Cartões e Categorias ainda é o das telas atuais, não o do Flask;
+- as páginas dos módulos "Em migração" são informativas;
+- Configurações tem as seções além de Perfis "Em migração";
+- o selo "Em migração" é o único acréscimo visual no menu.
+
+**Pendências da Fase 2:**
+- telas originais de Despesas e Recorrências, Receitas, Lançamentos e Cartões, Contas Bancárias e Categorias, que precisam de funções de escrita novas;
+- notas desatualizadas de Receitas e Cartões;
+- `icons.js` e `modals.js` com as telas originais;
+- Importar Cartão com prioridade elevada logo depois.
