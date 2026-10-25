@@ -4,6 +4,8 @@
 // por isso o cenario so roda no banco descartavel (CF_E2E_LOCAL).
 import { expect, test } from '@playwright/test';
 
+import { esperarMes } from './despesas.mjs';
+
 const B = { email: process.env.CF_EMAIL_B || 'usuario.b@teste.local', senha: process.env.CF_SENHA_B };
 
 test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
@@ -33,7 +35,7 @@ async function entrar(page, conta) {
 
 async function abrirMes(page, mes) {
     await page.goto(`/contas.html?mes=${mes}`);
-    await expect(page.locator('#totais')).toBeVisible();
+    await esperarMes(page, mes);  // FIN-FIDELIDADE-DESPESAS-1: tela original de Despesas
 }
 
 function linhaStreaming(page) {
@@ -75,12 +77,12 @@ test('recorrencia com destino consolidado: aviso, dispensa auditavel e ocorrenci
     expect(await ocorrencias(page)).toEqual([]);  // a previa nao grava
 
     await linha.getByRole('button', { name: 'Dispensar aviso' }).click();
-    await expect(page.locator('#acao-resultado')).toHaveText('Aviso dispensado. A ocorrência continua registrada.');
+    await expect(page.locator('#geracao-resultado')).toHaveText('Aviso dispensado. A ocorrência continua registrada.');
     await expect(page.locator('#aviso-texto')).not.toContainText('não pode ser gerado');
 
     // Persistencia depois de recarregar: aviso dispensado, ocorrencia pendente, nada lancado.
     await page.reload();
-    await expect(page.locator('#totais')).toBeVisible();
+    await esperarMes(page, '2033-02');
     await page.locator('#geracao-acoes details summary').click();
     await expect(linhaStreaming(page)).toContainText('aviso dispensado');
     await expect(linhaStreaming(page).getByRole('button', { name: 'Dispensar aviso' })).toHaveCount(0);

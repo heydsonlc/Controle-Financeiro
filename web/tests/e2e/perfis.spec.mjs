@@ -59,7 +59,7 @@ test('usuario A alterna entre os proprios perfis e a escolha persiste ao recarre
     const outraAba = await page.context().newPage();
     await outraAba.goto('/contas.html?mes=2026-11');
     await expect(perfilAtivo(outraAba)).toHaveText('Empresa');
-    await expect(outraAba.locator('#lista-despesas .conta-nome')).toHaveText(['Contador 11/2026']);
+    await expect(outraAba.locator('#despesas-lista .despesa-cell-nome')).toHaveText(['Fatura Cartao Empresa - 11/2026', 'Contador 11/2026']);
     await outraAba.close();
 });
 

@@ -84,13 +84,13 @@ const RPCS_DE_LEITURA = new Set(['meus_perfis', 'contas_bancarias_do_perfil', 'c
     'perfis_para_configuracao']);  // FIN-MIGRACAO-FIDELIDADE-FASE-1 (so leitura)
 // Escrita so por RPC transacional autorizada no banco, revisada uma a uma, e so na tela que a usa.
 const RPCS_DE_ESCRITA = new Map([
-    ['gerar_mes', 'contas.js'],
+    ['gerar_mes', 'despesas-recorrencias.js'],  // FIN-FIDELIDADE-DESPESAS-1: extraido de contas.js
     // FIN-DESPESAS-1
-    ['criar_despesa', 'despesas.js'],
-    ['editar_despesa', 'despesas.js'],
-    ['excluir_despesa', 'despesas.js'],
-    ['editar_recorrencia', 'despesas.js'],
-    ['inativar_recorrencia', 'despesas.js'],
+    // FIN-FIDELIDADE-DESPESAS-1: a tela original de Despesas chama pelo adaptador (despesas-adaptador.js)
+    ['criar_despesa', 'despesas-adaptador.js'],
+    ['editar_despesa', 'despesas-adaptador.js'],
+    ['excluir_despesa', 'despesas-adaptador.js'],
+    ['inativar_recorrencia', 'despesas-adaptador.js'],
     // FIN-RECEITAS-1 (so previsoes; nenhum recebimento)
     ['criar_receita', 'receitas.js'],
     ['editar_receita', 'receitas.js'],
@@ -105,13 +105,13 @@ const RPCS_DE_ESCRITA = new Map([
     ['editar_cartao', 'cartoes.js'],
     ['inativar_cartao', 'cartoes.js'],
     // FIN-CARTOES-RECORRENCIA-PENDENCIA-1 (so dispensa o aviso; nao muda recorrencia, compra nem fatura)
-    ['dispensar_aviso_recorrencia', 'contas.js'],
+    ['dispensar_aviso_recorrencia', 'despesas-recorrencias.js'],
     // FIN-CARTOES-PAGAMENTO-1 (pagamento integral e estorno de fatura; debito/credito e saldo decididos no banco)
-    ['pagar_fatura', 'cartoes.js'],
-    ['estornar_pagamento_fatura', 'cartoes.js'],
+    ['pagar_fatura', ['cartoes.js', 'despesas-adaptador.js']],  // FIN-FIDELIDADE-DESPESAS-1: fatura tambem em Despesas
+    ['estornar_pagamento_fatura', ['cartoes.js', 'despesas-adaptador.js']],
     // FIN-MOVIMENTACOES-1 (pagamento/estorno de despesa comum, recebimento/estorno de receita; saldo no banco)
-    ['pagar_despesa', 'despesas.js'],
-    ['estornar_pagamento_despesa', 'despesas.js'],
+    ['pagar_despesa', 'despesas-adaptador.js'],
+    ['estornar_pagamento_despesa', 'despesas-adaptador.js'],
     ['receber_receita', 'receitas.js'],
     ['estornar_recebimento', 'receitas.js'],
     // FIN-MIGRACAO-FIDELIDADE-FASE-1 (gestao de perfis; o banco exige pode_gerir do perfil). Camada unica: perfil.js
@@ -133,7 +133,7 @@ test('codigo-fonte do frontend nao escreve em tabelas nem usa innerHTML', async 
         assert.doesNotMatch(fonte, /\.(insert|update|upsert|delete)\s*\(/, `${nome} faz escrita direta`);
         // So RPCs liberadas (PERFIS-1); escrita exige revisao explicita (FIN-RECORRENCIA-1: gerar_mes).
         for (const [, funcao] of fonte.matchAll(/\.rpc\s*\(\s*['"`]([^'"`]+)['"`]/g)) {
-            assert.ok(RPCS_DE_LEITURA.has(funcao) || RPCS_DE_ESCRITA.get(funcao) === nome,
+            assert.ok(RPCS_DE_LEITURA.has(funcao) || [RPCS_DE_ESCRITA.get(funcao)].flat().includes(nome),
                 `${nome} chama RPC nao liberada: ${funcao}`);
         }
         assert.doesNotMatch(fonte.replace(/\.rpc\s*\(\s*['"`][^'"`]+['"`]/g, ''), /\.rpc\s*\(/, `${nome} chama RPC com nome dinamico`);

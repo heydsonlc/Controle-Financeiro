@@ -1,0 +1,31 @@
+/* FIN-FIDELIDADE-DESPESAS-1 — so o que a tela original de Despesas (despesas.css) nao tinha. */
+
+/* Quem so le o perfil nao ve as acoes de escrita (o banco recusaria de qualquer forma). Detalhes continuam. */
+body.cf-somente-leitura .btn-nova-despesa,
+body.cf-somente-leitura .btn-doc-atalho-despesa,
+body.cf-somente-leitura .despesa-actions .row-action-button:not([data-on-click^="toggleDetalhesFatura"]):not([data-on-click^="toggleAgrupadorSemanal"]) {
+    display: none;
+}
+
+/* Classificacao e justificativa da diferenca no pagamento (regra do FIN-MOVIMENTACOES-1). */
+.pagar-ajuste {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 12px;
+}
+
+.pagar-ajuste textarea {
+    width: 100%;
+    box-sizing: border-box;
+    resize: vertical;
+}
+
+/* Geracao explicita das recorrencias: no topo do painel da lista (a grade da pagina posiciona cada filho dela). */
+.despesas-list-container > .geracao {
+    margin: 12px 16px;
+}
+
+.despesas-list-container > .geracao-resultado {
+    margin: 12px 16px 0;
+}

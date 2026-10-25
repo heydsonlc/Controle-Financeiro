@@ -1,48 +1,708 @@
-<!-- moldura {"ativo": "despesas", "titulo": "Gerenciamento de Despesas", "documento": "Despesas - Controle Financeiro", "css": [], "scripts": ["js/contas.js"]} -->
-<!-- MOBILE-CONTAS-1: tela inicial; conteudo oculto ate a sessao ser validada. Consulta nunca grava;
-     FIN-RECORRENCIA-1: "Gerar contas" so grava depois da confirmacao do usuario.
-     FIN-DESPESAS-1: "Nova despesa" e as acoes de cada despesa so aparecem para quem gerencia o perfil. -->
+<!-- moldura {"ativo": "despesas", "titulo": "Gerenciamento de Despesas", "documento": "Despesas - Controle Financeiro", "css": ["css/shared/despesas.css", "css/despesas-adaptacoes.css"], "classicos": ["js/original/ponte-permitidas.js", "js/ponte-csp.js", "js/ponte-api.js", "js/original/utils.js", "js/original/icons.js", "js/original/instituicoes.js", "js/original/formas_pagamento.js", "js/original/despesas.js", "js/despesas-adaptacoes.js", "original/despesas-inline.js"], "scripts": ["js/despesas-adaptador.js"]} -->
+<!-- FIN-FIDELIDADE-DESPESAS-1: frontend/templates/despesas.html (barra de acoes e conteudo) sem alteracao, exceto os
+     dois acrescimos marcados. Os atributos onclick/style originais sao convertidos no build (CSP sem inline);
+     o script inline do template esta em original/despesas-inline.js. -->
+<!-- acao -->
+    <div class="module-actionbar" aria-label="Filtros de Despesas">
+        <div class="module-actionbar-inner">
+            <div class="module-actionbar-filters">
+                <div class="module-filter-group">
+                    <label class="module-filter-label" for="filtro-forma-pagamento">Forma de pagamento</label>
+                    <select id="filtro-forma-pagamento" class="module-filter-control filter-select">
+                        <option value="">Todas</option>
+                        <option value="pix">Pix</option>
+                        <option value="dinheiro">Dinheiro</option>
+                        <option value="cartao">Cartao</option>
+                        <option value="boleto">Boleto</option>
+                        <option value="transferencia">Transferencia</option>
+                        <option value="debito_automatico">Debito automatico</option>
+                        <option value="outros">Outros / Nao informado</option>
+                    </select>
+                </div>
+                <div class="module-filter-group">
+                    <label class="module-filter-label" for="filtro-status">Status</label>
+                    <select id="filtro-status" class="module-filter-control filter-select">
+                        <option value="">Todos os status</option>
+                        <option value="pendente">Pendentes</option>
+                        <option value="pago">Pagas</option>
+                    </select>
+                </div>
+                <div class="module-filter-group">
+                    <label class="module-filter-label" for="filtro-vencimento-ate">Vencimento ate</label>
+                    <input type="date" id="filtro-vencimento-ate" class="module-filter-control filter-input"
+                           placeholder="Vencimento ate" onchange="aplicarFiltros()"
+                           title="Filtrar despesas que vencem ate esta data (dentro da competencia)">
+                </div>
+                <div class="module-filter-group">
+                    <label class="module-filter-label" for="filtro-competencia">Competencia</label>
+                    <input type="text" id="filtro-competencia" class="module-filter-control filter-input"
+                           placeholder="Competencia (MM/AAAA)" maxlength="7"
+                           onkeyup="mascaraMesAno(this)" onchange="aplicarFiltros()"
+                           title="Filtrar por mes de competencia">
+                </div>
+                <div class="module-filter-group despesas-busca-group">
+                    <div class="despesas-search-wrapper">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                        </svg>
+                        <input type="search" id="despesas-busca" class="despesas-search-input" placeholder="Buscar..." oninput="filtrarBusca(this.value)" autocomplete="off">
+                    </div>
+                </div>
+            </div>
+            <div class="module-actionbar-actions">
+                <button type="button" class="btn-filtros-adv" onclick="carregarDespesas()" title="Atualizar lista">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/>
+                    </svg>
+                    Atualizar
+                </button>
+                <button type="button" class="btn-doc-atalho-despesa" onclick="abrirSeletorDocumentoDespesa()" aria-label="A partir de documento">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="12" y1="18" x2="12" y2="12"/>
+                        <line x1="9" y1="15" x2="15" y2="15"/>
+                    </svg>
+                    A partir de documento
+                </button>
+                <button type="button" class="btn-nova-despesa" onclick="abrirModal()" aria-label="Nova despesa">
+                    <span aria-hidden="true">+</span>
+                    Nova despesa
+                </button>
+            </div>
+        </div>
+    </div>
 <!-- conteudo -->
-<div class="app-conteudo contas">
-        <nav class="mes-nav" aria-label="Mês de competência">
-            <a id="mes-anterior" class="mes-seta" href="#" aria-label="Mês anterior">◀</a>
-            <h1 id="mes-titulo" class="mes-titulo"></h1>
-            <a id="mes-proximo" class="mes-seta" href="#" aria-label="Próximo mês">▶</a>
-        </nav>
+<div class="container app-content-fluid">
+    <main>
 
-        <p class="totais" id="totais" hidden>
-            <span>Total <strong id="total-mes"></strong></span>
-            <span>Pago <strong id="total-pago"></strong></span>
-            <span>A pagar <strong id="total-a-pagar"></strong></span>
-        </p>
+        <!-- Layout 70/30: coluna principal (cards + lista) + sidebar -->
+        <div class="despesas-page-layout">
 
-        <div class="acoes-mes" id="acoes-mes"></div>
-        <div class="despesa-painel" id="despesa-painel" hidden></div>
-        <p class="geracao-resultado" id="acao-resultado" role="status" hidden></p>
-        <p class="geracao-resultado" id="geracao-resultado" role="status" hidden></p>
-        <section class="geracao" id="aviso-geracao" aria-label="Geração de contas recorrentes" hidden>
-            <p class="aviso-geracao" id="aviso-texto"></p>
-            <div class="geracao-acoes" id="geracao-acoes"></div>
-            <div class="geracao-confirmacao" id="geracao-confirmacao" hidden></div>
-        </section>
-        <div class="login-error" id="perfis-erro" role="alert" hidden></div>
-        <p class="app-vazio" id="perfis-vazio" hidden>Nenhum perfil financeiro autorizado para esta conta.</p>
-        <div class="login-error" id="contas-erro" role="alert" hidden></div>
-        <p class="app-vazio" id="contas-vazio" hidden>Nenhuma conta registrada neste mês.</p>
+        <!-- Coluna principal -->
+        <section class="despesas-main">
 
-        <section class="grupo" id="secao-despesas" aria-labelledby="titulo-despesas" hidden>
-            <h2 class="grupo-titulo" id="titulo-despesas">Despesas</h2>
-            <ul class="lista-contas" id="lista-despesas"></ul>
-        </section>
+        <!-- FIN-CARTOES-RECORRENCIA-PENDENCIA-1: recorrencias nao lancadas por fatura consolidada -->
+        <div class="pendencias-recorrencia" id="pendencias-recorrencia" role="status" aria-live="polite" hidden></div>
 
-        <section class="grupo" id="secao-cartoes" aria-labelledby="titulo-cartoes" hidden>
-            <h2 class="grupo-titulo" id="titulo-cartoes">Cartões</h2>
-            <div id="lista-cartoes"></div>
-        </section>
+        <!-- Cards de resumo (5 cards) -->
+        <div class="despesas-summary-cards" id="summary-cards" aria-label="Resumo financeiro do mes">
+            <article class="summary-card">
+                <div class="summary-card-icon blue" aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                </div>
+                <div class="summary-card-body">
+                    <div class="summary-card-label">Total do mes</div>
+                    <div class="summary-card-value" id="total-geral">R$ 0,00</div>
+                    <div class="summary-card-sub" id="summary-total-sub">todas as despesas</div>
+                </div>
+            </article>
 
-        <section class="grupo" id="secao-movimentos" aria-labelledby="titulo-movimentos" hidden>
-            <h2 class="grupo-titulo" id="titulo-movimentos">Movimentos do mês</h2>
-            <div class="saldos-contas" id="saldos-contas"></div>
-            <ul class="lista-contas" id="lista-movimentos"></ul>
-        </section>
+            <article class="summary-card">
+                <div class="summary-card-icon orange" aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                </div>
+                <div class="summary-card-body">
+                    <div class="summary-card-label">Pendentes</div>
+                    <div class="summary-card-value" id="total-pendentes">R$ 0,00</div>
+                    <div class="summary-card-sub" id="summary-pendentes-sub">aguardando pagamento</div>
+                </div>
+            </article>
+
+            <article class="summary-card">
+                <div class="summary-card-icon green" aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <div class="summary-card-body">
+                    <div class="summary-card-label">Pagas</div>
+                    <div class="summary-card-value" id="total-pagas">R$ 0,00</div>
+                    <div class="summary-card-sub" id="summary-pagas-sub">liquidadas</div>
+                </div>
+            </article>
+
+            <article class="summary-card">
+                <div class="summary-card-icon red" aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                </div>
+                <div class="summary-card-body">
+                    <div class="summary-card-label">Vencendo em 7 dias</div>
+                    <div class="summary-card-value" id="total-vencendo-7d">R$ 0,00</div>
+                    <div class="summary-card-sub" id="summary-vencendo-sub">0 despesas</div>
+                </div>
+            </article>
+
+            <article class="summary-card">
+                <div class="summary-card-icon teal" aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                </div>
+                <div class="summary-card-body">
+                    <div class="summary-card-label">Cartoes / Faturas</div>
+                    <div class="summary-card-value" id="total-cartoes">R$ 0,00</div>
+                    <div class="summary-card-sub" id="summary-cartoes-sub">0 faturas</div>
+                    <span id="total-recorrentes" hidden>0</span>
+                </div>
+            </article>
+
+            <article class="summary-card">
+                <div class="summary-card-icon purple" aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                </div>
+                <div class="summary-card-body">
+                    <div class="summary-card-label">Saldo do mes</div>
+                    <div class="summary-card-value" id="saldo-mes">R$ 0,00</div>
+                    <div class="summary-card-sub">receitas - despesas</div>
+                </div>
+            </article>
+        </div>
+
+        <!-- Lista agrupada -->
+            <div class="module-data-section despesas-data-section despesas-list-container">
+                <!-- FIN-FIDELIDADE-DESPESAS-1: geracao das recorrencias e EXPLICITA no novo aplicativo (FIN-RECORRENCIA-1, com
+                     previa e confirmacao); no Flask ela acontecia ao abrir a tela. Os avisos de recorrencia rejeitada tambem
+                     ficam aqui, no topo do painel da lista (fora da grade da pagina, que posiciona cada filho). -->
+                <section class="pendencias-recorrencia geracao" id="aviso-geracao" aria-label="Geração de contas recorrentes" hidden>
+                    <p class="pendencias-recorrencia-titulo aviso-geracao" id="aviso-texto"></p>
+                    <div class="geracao-acoes" id="geracao-acoes"></div>
+                    <div class="geracao-confirmacao" id="geracao-confirmacao" hidden></div>
+                </section>
+                <p class="geracao-resultado" id="geracao-resultado" role="status" hidden></p>
+                <div class="login-error" id="perfis-erro" role="alert" hidden></div>
+                <p class="app-vazio" id="perfis-vazio" hidden>Nenhum perfil financeiro autorizado para esta conta.</p>
+                    <div class="section-title-row">
+                        <div class="section-title-main">
+                            <span class="section-title-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false">
+                                    <path d="M8 6h13"/>
+                                    <path d="M8 12h13"/>
+                                    <path d="M8 18h13"/>
+                                    <path d="M3 6h.01"/>
+                                    <path d="M3 12h.01"/>
+                                    <path d="M3 18h.01"/>
+                                </svg>
+                            </span>
+                            <h2 class="section-title-text">Lista de Despesas</h2>
+                        </div>
+                        <span class="section-title-meta">Agrupadas por origem e tipo</span>
+                    </div>
+                    <!-- LISTA PRESERVADA: mesmo id, mesma estrutura JS -->
+                    <div class="despesas-lista" id="despesas-lista">
+                        <p class="loading">Carregando despesas...</p>
+                    </div>
+        </div><!-- /.despesas-list-container -->
+
+        </section><!-- /.despesas-main -->
+
+            <!-- Sidebar: composicao mensal -->
+            <aside class="despesas-sidebar" aria-label="Composicao mensal e indicadores">
+
+                <!-- Composicao mensal (donut) -->
+                <div class="sidebar-card" id="sidebar-composicao">
+                    <div class="sidebar-card-header">
+                        <span class="sidebar-card-title">Composicao Mensal</span>
+                    </div>
+                    <div class="sidebar-card-body">
+                        <div class="sidebar-donut-wrapper">
+                            <div class="sidebar-donut" id="sidebar-donut" role="img" aria-label="Grafico de composicao mensal">
+                                <div class="sidebar-donut-center">
+                                    <span class="sidebar-donut-center-value" id="donut-center-value">—</span>
+                                    <span class="sidebar-donut-center-label">total</span>
+                                </div>
+                            </div>
+                            <div class="sidebar-donut-legend" id="donut-legend" aria-label="Legenda do grafico">
+                                <span style="font-size:11px;color:#86868b;">Carregando...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Por categoria -->
+                <div class="sidebar-card" id="sidebar-por-categoria">
+                    <div class="sidebar-card-header">
+                        <span class="sidebar-card-title">Por Categoria</span>
+                    </div>
+                    <div class="sidebar-card-body">
+                        <div class="categoria-bar-list" id="categoria-bar-list" aria-label="Gastos por categoria">
+                            <span style="font-size:11px;color:#86868b;">Carregando...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Proximos vencimentos -->
+                <div class="sidebar-card" id="sidebar-proximos">
+                    <div class="sidebar-card-header">
+                        <span class="sidebar-card-title">Proximos Vencimentos</span>
+                    </div>
+                    <div class="sidebar-card-body" style="padding-top:6px;padding-bottom:6px;">
+                        <div class="proximos-vencimentos-list" id="proximos-vencimentos-list" aria-label="Proximos vencimentos">
+                            <span class="pv-empty">Carregando...</span>
+                        </div>
+                    </div>
+                </div>
+
+            </aside>
+        </div><!-- /.despesas-page-layout -->
+
+    </main>
 </div>
+
+    <!-- Modal para adicionar/editar despesa -->
+    <div id="modal-despesa" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-titulo">Nova Despesa</h2>
+                <span class="close" onclick="fecharModal()">&times;</span>
+            </div>
+
+            <form id="form-despesa" onsubmit="salvarDespesa(event)">
+                <input type="hidden" id="despesa-id">
+
+                <div class="form-group">
+                    <label for="nome">Nome *</label>
+                    <input type="text" id="nome" name="nome" required
+                           placeholder="Ex: Conta de luz, Aluguel, Mercado">
+                </div>
+
+                <div class="form-group">
+                    <label for="descricao">Descrição</label>
+                    <textarea id="descricao" name="descricao" rows="2"
+                              placeholder="Descrição opcional da despesa"></textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="valor">Valor *</label>
+                        <input type="number" id="valor" name="valor" required
+                               step="0.01" min="0" placeholder="0,00" onchange="calcularValorPremio()">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="categoria_id">Categoria *</label>
+                        <select id="categoria_id" name="categoria_id" required>
+                            <option value="">Selecione...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="data_vencimento">Data de Vencimento</label>
+                        <input type="date" id="data_vencimento" name="data_vencimento">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="data_pagamento">Data de Pagamento</label>
+                        <input type="date" id="data_pagamento" name="data_pagamento">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="pago" name="pago">
+                        <span>Despesa já foi paga</span>
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="recorrente" name="recorrente">
+                        <span>Despesa recorrente</span>
+                    </label>
+                </div>
+
+                <div class="form-group" id="tipo-recorrencia-group" style="display: none;">
+                    <label for="tipo_recorrencia">Tipo de Recorrência</label>
+                    <select id="tipo_recorrencia" name="tipo_recorrencia" onchange="alternarCamposSemanal()">
+                        <option value="semanal">Semanal (por dia da semana)</option>
+                        <option value="mensal">Mensal</option>
+                        <option value="anual">Anual</option>
+                    </select>
+                </div>
+
+                <!-- Campo de meio de pagamento (só para recorrentes) -->
+                <div class="form-group" id="meio-pagamento-group" style="display: none;">
+                    <label for="meio_pagamento">Meio de Pagamento</label>
+                    <select id="meio_pagamento" name="meio_pagamento" onchange="alternarCamposCartao()">
+                        <option value="">Selecione...</option>
+                        <option value="boleto">Boleto</option>
+                        <option value="debito">Débito</option>
+                        <option value="pix">PIX</option>
+                        <option value="cartao">Cartão de Crédito</option>
+                    </select>
+                </div>
+
+                <!-- Campos de cartão (só quando meio_pagamento = 'cartao') -->
+                <div id="campos-cartao" style="display: none;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="cartao_id">Cartão de Crédito *</label>
+                            <select id="cartao_id" name="cartao_id">
+                                <option value="">Selecione o cartão...</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Categoria do Cartão</label>
+                            <input type="hidden" id="categoria_cartao_id" name="categoria_cartao_id">
+                            <div id="categoria-cartao-auto-info" class="categoria-cartao-auto-info" aria-live="polite">
+                                Resolvida automaticamente pela Categoria de Despesa.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Campos específicos para recorrência semanal -->
+                <div id="campos-semanal" style="display: none;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="dia_semana">Dia da Semana *</label>
+                            <select id="dia_semana" name="dia_semana">
+                                <option value="">Selecione...</option>
+                                <option value="0">Domingo</option>
+                                <option value="1">Segunda-feira</option>
+                                <option value="2">Terça-feira</option>
+                                <option value="3">Quarta-feira</option>
+                                <option value="4">Quinta-feira</option>
+                                <option value="5">Sexta-feira</option>
+                                <option value="6">Sábado</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="frequencia_semanas">Frequência (semanas)</label>
+                            <input type="number" id="frequencia_semanas" name="frequencia_semanas"
+                                   min="1" max="52" value="1" placeholder="1">
+                            <small style="color: #666; font-size: 0.85em; display: block; margin-top: 5px;">
+                                1 = toda semana, 2 = a cada 2 semanas, etc.
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Checkbox para Consórcio -->
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="e_consorcio" name="e_consorcio" onchange="alternarCamposConsorcio()">
+                        <span>É um Consórcio</span>
+                    </label>
+                </div>
+
+                <!-- Campos específicos para Consórcio -->
+                <div id="campos-consorcio" style="display: none;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="numero_parcelas_consorcio">Número de Parcelas *</label>
+                            <input type="number" id="numero_parcelas_consorcio" name="numero_parcelas_consorcio"
+                                   min="1" placeholder="Ex: 60" onchange="calcularValorPremio()">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="mes_inicio_consorcio">Mês de Início *</label>
+                            <input type="text" id="mes_inicio_consorcio" name="mes_inicio_consorcio"
+                                   placeholder="MM/AAAA" maxlength="7"
+                                   onkeyup="mascaraMesAno(this)" onchange="calcularValorPremio()">
+                            <small style="color: #666; font-size: 0.85em; display: block; margin-top: 5px;">
+                                Formato: 05/2025
+                            </small>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="tipo_reajuste">Tipo de Reajuste</label>
+                            <select id="tipo_reajuste" name="tipo_reajuste" onchange="alternarCamposReajuste(); calcularValorPremio();">
+                                <option value="nenhum">Sem Reajuste</option>
+                                <option value="percentual">Percentual (%)</option>
+                                <option value="fixo">Valor Fixo (R$)</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group" id="campo-valor-reajuste" style="display: none;">
+                            <label for="valor_reajuste" id="label-valor-reajuste">Valor do Reajuste</label>
+                            <input type="number" id="valor_reajuste" name="valor_reajuste"
+                                   step="0.01" min="0" placeholder="0" onchange="calcularValorPremio()">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="mes_contemplacao">Mês de Contemplação</label>
+                            <input type="text" id="mes_contemplacao" name="mes_contemplacao"
+                                   placeholder="MM/AAAA" maxlength="7"
+                                   onkeyup="mascaraMesAno(this)" onchange="calcularValorPremio()">
+                            <small style="color: #666; font-size: 0.85em; display: block; margin-top: 5px;">
+                                Quando receberá o prêmio (Ex: 06/2027)
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="valor_premio">Valor do Prêmio (Calculado)</label>
+                            <input type="number" id="valor_premio" name="valor_premio"
+                                   step="0.01" min="0" placeholder="Será calculado automaticamente"
+                                   readonly style="background-color: #f0f0f0; cursor: not-allowed;">
+                            <small style="color: #666; font-size: 0.85em; display: block; margin-top: 5px;">
+                                Valor calculado automaticamente
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="mes_competencia">Mês de Competência</label>
+                    <input type="month" id="mes_competencia" name="mes_competencia"
+                           placeholder="Calculado automaticamente">
+                    <small style="color: #666; font-size: 0.85em; display: block; margin-top: 5px;">
+                        Mês do salário que pagará esta despesa (calculado automaticamente se houver data de vencimento)
+                    </small>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="fecharModal()">
+                        Cancelar
+                    </button>
+                    <div style="display: flex; gap: 10px;">
+                        <button type="button" id="btn-deletar-modal" class="btn-icon btn-danger" onclick="deletarDespesaModal()" style="display: none;" title="Excluir">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                <line x1="10" y1="11" x2="10" y2="17"></line>
+                                <line x1="14" y1="11" x2="14" y2="17"></line>
+                            </svg>
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            Salvar
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Confirmar Pagamento -->
+    <div id="modal-pagar" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2 id="pagar-nome-despesa"></h2>
+                <span class="close" onclick="fecharModalPagar()">&times;</span>
+            </div>
+
+            <form id="form-pagar" onsubmit="confirmarPagamento(event)">
+                <input type="hidden" id="pagar-despesa-id">
+                <input type="hidden" id="pagar-valor-previsto">
+
+                <!-- Opções de valor -->
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="radio" name="tipo-pagamento" value="total" checked onchange="alternarCampoValor()">
+                        <span>Valor Total: <strong id="pagar-valor-previsto-display"></strong></span>
+                    </label>
+
+                    <label class="checkbox-label">
+                        <input type="radio" name="tipo-pagamento" value="parcial" onchange="alternarCampoValor()">
+                        <span>Pagar outro Valor</span>
+                    </label>
+                </div>
+
+                <!-- Campo de valor (oculto por padrão) -->
+                <div id="campo-valor-custom" style="display: none;" class="form-group">
+                    <label>Valor Pago</label>
+                    <input type="number" id="pagar-valor-pago" step="0.01" min="0" placeholder="R$ 0,00">
+                    <!-- FIN-FIDELIDADE-DESPESAS-1: regra do FIN-MOVIMENTACOES-1. Valor diferente do devido exige
+                         classificacao e justificativa (o pagamento e integral; nao ha pagamento parcial de despesa). -->
+                    <div id="pagar-ajuste" class="pagar-ajuste" hidden>
+                        <label for="pagar-ajuste-tipo">Classificação da diferença</label>
+                        <select id="pagar-ajuste-tipo">
+                            <option value="">Selecione...</option>
+                        </select>
+                        <label for="pagar-ajuste-justificativa">Justificativa</label>
+                        <textarea id="pagar-ajuste-justificativa" rows="2" maxlength="500"></textarea>
+                    </div>
+                </div>
+
+                <!-- Data do pagamento -->
+                <div class="form-group">
+                    <label>Data do Pagamento</label>
+                    <input type="date" id="pagar-data">
+                </div>
+
+                <!-- Botões -->
+                <div class="form-group" id="pagar-conta-bancaria-group">
+                    <label for="pagar-conta-bancaria">Conta Bancária *</label>
+                    <select id="pagar-conta-bancaria" required>
+                        <option value="">Selecione...</option>
+                    </select>
+                    <small class="form-help">Isso criará um débito no extrato da conta.</small>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="fecharModalPagar()">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        Pagar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Tipo de Edição de Consórcio -->
+    <div id="modal-tipo-edicao" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2>Editar Parcela de Consórcio</h2>
+                <span class="close" onclick="fecharModalTipoEdicao()">&times;</span>
+            </div>
+
+            <div style="padding: 20px;">
+                <p style="margin-bottom: 20px; color: #666;">
+                    Esta é uma parcela de consórcio. Como deseja editar?
+                </p>
+
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <button type="button" onclick="confirmarTipoEdicao('unica')" style="width: 100%; padding: 12px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: 500;">
+                        📝 Editar apenas esta parcela
+                    </button>
+
+                    <button type="button" onclick="confirmarTipoEdicao('futuras')" style="width: 100%; padding: 12px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: 500;">
+                        📋 Editar esta e as parcelas futuras
+                    </button>
+
+                    <button type="button" onclick="fecharModalTipoEdicao()" style="width: 100%; padding: 12px; background: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: 500;">
+                        Cancelar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Tipo de Exclusão de Consórcio/Recorrente -->
+    <div id="modal-tipo-exclusao" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2 id="modal-exclusao-titulo">Excluir Despesa</h2>
+                <span class="close" onclick="fecharModalTipoExclusao()">&times;</span>
+            </div>
+
+            <div style="padding: 20px;">
+                <p id="modal-exclusao-texto" style="margin-bottom: 20px; color: #666;">
+                    Como deseja excluir esta despesa?
+                </p>
+
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <button type="button" onclick="confirmarTipoExclusao('unica')" style="width: 100%; padding: 12px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: 500;">
+                        🗑️ Excluir apenas esta parcela
+                    </button>
+
+                    <button type="button" onclick="confirmarTipoExclusao('futuras')" style="width: 100%; padding: 12px; background: #dc2626; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: 500;">
+                        🗑️ Excluir esta e as parcelas futuras
+                    </button>
+
+                    <button type="button" onclick="fecharModalTipoExclusao()" style="width: 100%; padding: 12px; background: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: 500;">
+                        Cancelar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Selecionar documento para criar despesa -->
+    <div id="doc-desp-seletor-modal" class="modal" aria-hidden="true" role="dialog" aria-labelledby="doc-desp-seletor-titulo">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2 id="doc-desp-seletor-titulo">Selecionar documento</h2>
+                <span class="close" onclick="fecharSeletorDocumentoDespesa()" aria-label="Fechar">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="doc-atalho-filtros">
+                    <input type="text" id="doc-desp-busca" placeholder="Buscar por nome, CNPJ..." oninput="filtrarDocumentosDespesa()" autocomplete="off">
+                    <label class="doc-atalho-check"><input type="checkbox" id="doc-desp-sem-vinculo" onchange="filtrarDocumentosDespesa()"> Apenas sem v&iacute;nculo</label>
+                </div>
+                <div id="doc-desp-lista" class="doc-atalho-lista" aria-live="polite">
+                    <p class="doc-atalho-vazio">Carregando documentos...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Sugestao financeira a partir de documento (despesas) -->
+    <div id="doc-desp-sugestao-modal" class="modal" aria-hidden="true" role="dialog" aria-labelledby="doc-desp-sugestao-titulo">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="doc-desp-sugestao-titulo">Criar despesa a partir de documento</h2>
+                <span class="close" onclick="fecharSugestaoDocDesp()" aria-label="Fechar">&times;</span>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="doc-desp-comprovante-id">
+                <div id="doc-desp-documento-info" class="doc-atalho-info-box"></div>
+                <form id="doc-desp-form" class="form-grid">
+                    <div class="form-group form-group-wide">
+                        <label for="doc-desp-descricao">Descri&ccedil;&atilde;o</label>
+                        <input type="text" id="doc-desp-descricao" maxlength="200">
+                    </div>
+                    <div class="form-group">
+                        <label for="doc-desp-valor">Valor (R$)</label>
+                        <input type="number" id="doc-desp-valor" step="0.01" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="doc-desp-data">Data prevista</label>
+                        <input type="date" id="doc-desp-data">
+                    </div>
+                    <div class="form-group">
+                        <label for="doc-desp-competencia">Compet&ecirc;ncia</label>
+                        <input type="month" id="doc-desp-competencia">
+                    </div>
+                    <div class="form-group">
+                        <label for="doc-desp-categoria">Categoria de Despesa</label>
+                        <select id="doc-desp-categoria"></select>
+                    </div>
+                    <div class="form-group form-group-wide">
+                        <label for="doc-desp-observacoes">Observa&ccedil;&otilde;es</label>
+                        <textarea id="doc-desp-observacoes" rows="3"></textarea>
+                    </div>
+                </form>
+                <div id="doc-desp-alertas" class="form-alertas" hidden></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="fecharSugestaoDocDesp()">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="doc-desp-confirmar" onclick="confirmarDocDesp()">Criar despesa</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Estornar Pagamento (CORE-ESTORNO-1 / CORE-ESTORNO-3) -->
+    <div id="modal-estorno" class="modal" aria-hidden="true">
+        <div class="modal-content" style="max-width: 420px;">
+            <div class="modal-header">
+                <h2 id="estorno-titulo">Estornar Pagamento</h2>
+                <span class="close" onclick="fecharModalEstorno()">&times;</span>
+            </div>
+
+            <form id="form-estorno" onsubmit="confirmarEstorno(event)">
+                <input type="hidden" id="estorno-despesa-id">
+
+                <div class="estorno-aviso" id="estorno-aviso-texto">
+                    O estorno <strong>não apaga</strong> o pagamento original. O sistema criará um movimento compensatório e reabrirá a despesa como pendente.
+                </div>
+
+                <div class="form-group">
+                    <label id="estorno-label-item">Despesa</label>
+                    <p id="estorno-nome-despesa" class="estorno-nome"></p>
+                </div>
+
+                <div class="form-group">
+                    <label for="estorno-data">Data do Estorno *</label>
+                    <input type="date" id="estorno-data" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="estorno-motivo">Motivo do Estorno *</label>
+                    <textarea id="estorno-motivo" rows="3" placeholder="Ex: Pagamento lançado por engano" required style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; resize: vertical;"></textarea>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="fecharModalEstorno()">Cancelar</button>
+                    <button type="submit" class="btn btn-danger">Estornar</button>
+                </div>
+            </form>
+        </div>
+    </div>

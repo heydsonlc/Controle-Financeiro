@@ -58,10 +58,20 @@ function ligarMenu() {
 
 function manterCompetencia() {
     const mes = new URLSearchParams(window.location.search).get('mes');
+    if (MES_VALIDO.test(mes || '')) definirCompetencia(mes);
+}
+
+// FIN-FIDELIDADE-DESPESAS-1: telas que trocam de mes sem recarregar (Despesas original) atualizam o endereco e o menu.
+export function definirCompetencia(mes) {
     if (!MES_VALIDO.test(mes || '')) return;
     for (const link of document.querySelectorAll('.app-sidebar a.app-nav-link')) {
-        const destino = link.getAttribute('href');
+        const destino = link.getAttribute('href').split('?')[0];
         if (PAGINAS_POR_COMPETENCIA.has(destino)) link.setAttribute('href', `${destino}?mes=${mes}`);
+    }
+    const endereco = new URL(window.location.href);
+    if (endereco.searchParams.get('mes') !== mes) {
+        endereco.searchParams.set('mes', mes);
+        window.history.replaceState(null, '', endereco);
     }
 }
 

@@ -3,6 +3,8 @@
 // Regra conferida: previsao nao e recebimento — nenhuma acao de receber existe na tela.
 import { expect, test } from '@playwright/test';
 
+import { esperarMes } from './despesas.mjs';
+
 import { irPeloMenu, itemDoMenu, trocarPerfil } from './moldura.mjs';
 
 const A = { email: process.env.CF_EMAIL_A || 'usuario.a@teste.local', senha: process.env.CF_SENHA_A };
@@ -54,7 +56,7 @@ async function totais(page) {
 test('aba Receitas a partir de Contas do mes, no mesmo mes', async ({ page }) => {
     await entrar(page, A);
     await page.goto('/contas.html?mes=2026-11');
-    await expect(page.locator('#totais')).toBeVisible();
+    await esperarMes(page, '2026-11');  // FIN-FIDELIDADE-DESPESAS-1: tela original de Despesas
     await irPeloMenu(page, 'receitas');
     await page.waitForURL(/receitas\.html\?mes=2026-11$/);
     await expect(page.locator('#mes-titulo')).toHaveText('Novembro de 2026');

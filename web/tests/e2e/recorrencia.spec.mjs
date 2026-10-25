@@ -3,13 +3,17 @@
 // banco descartavel: usa so meses de 2027 e roda depois dos outros (workers: 1, ordem alfabetica).
 import { expect, test } from '@playwright/test';
 
+import {
+    despesa, esperarMes, nomes, preencherDespesa, registrarDialogos, salvarDespesa,
+} from './despesas.mjs';
 import { trocarPerfil } from './moldura.mjs';
 
 const A = { email: process.env.CF_EMAIL_A || 'usuario.a@teste.local', senha: process.env.CF_SENHA_A };
 const B = { email: process.env.CF_EMAIL_B || 'usuario.b@teste.local', senha: process.env.CF_SENHA_B };
 const ID_PERFIL_B = process.env.CF_ID_PERFIL_B || '103';
 
-test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+// FIN-FIDELIDADE-DESPESAS-1: tela original de Despesas, em resolucao de computador (como o Flask).
+test.use({ viewport: { width: 1366, height: 900 } });
 
 test.beforeEach(async ({ page }, testInfo) => {
     const problemas = [];
@@ -37,7 +41,7 @@ async function entrar(page, conta) {
 
 async function abrirMes(page, mes) {
     await page.goto(`/contas.html?mes=${mes}`);
-    await expect(page.locator('#totais')).toBeVisible();
+    await esperarMes(page, mes);
 }
 
 const LINHAS_MARCO = [
@@ -52,7 +56,7 @@ const LINHAS_MARCO = [
 test('consulta do mes nao grava: aviso discreto e acao "Gerar contas"; cancelar nao grava', async ({ page }) => {
     await entrar(page, B);
     await abrirMes(page, '2027-03');
-    await expect(page.locator('#contas-vazio')).toBeVisible();
+    await expect(page.locator('#despesas-lista .empty-state')).toBeVisible();
     await expect(page.locator('#aviso-texto')).toHaveText('6 lançamentos recorrentes ou faturas a gerar até 04/2027.');
     await expect(page.locator('#geracao-confirmacao')).toBeHidden();
 
@@ -63,7 +67,7 @@ test('consulta do mes nao grava: aviso discreto e acao "Gerar contas"; cancelar 
     await expect(page.locator('#gerar-contas')).toBeVisible();
 
     await abrirMes(page, '2027-03');
-    await expect(page.locator('#contas-vazio')).toBeVisible();
+    await expect(page.locator('#despesas-lista .empty-state')).toBeVisible();
     await expect(page.locator('#aviso-texto')).toHaveText('6 lançamentos recorrentes ou faturas a gerar até 04/2027.');
 });
 
@@ -84,20 +88,19 @@ test('confirmacao mostra competencias e registros; dispensa fica registrada; dia
         .toHaveText('Geração concluída: 5 criadas, 0 já existentes, 1 dispensada, 0 rejeitadas.');
 
     // Lista recarregada: conta e fatura do mes, aviso some.
-    await expect(page.locator('#lista-despesas .conta-nome')).toHaveText(['Mensalidade B']);
-    await expect(page.locator('#lista-despesas .conta-vencimento')).toHaveText(['Vence 31/03/2027']);
-    await expect(page.locator('#lista-cartoes .cartao-nome')).toHaveText(['Cartao B']);
-    await expect(page.locator('#lista-cartoes .conta-vencimento')).toHaveText(['Vence 31/03/2027']);
+    await expect(despesa(page, 'Mensalidade B').locator('.despesa-cell-vencimento')).toHaveText('31/03/2027');
+    await expect(despesa(page, 'Cartao B').locator('.despesa-cell-vencimento')).toHaveText('31/03/2027');
+    expect(await nomes(page)).toHaveLength(2);  // a conta e a fatura do mes
     await expect(page.locator('#aviso-geracao')).toBeHidden();
 
     // Repetir nao duplica: a mesma consulta nao tem mais nada a gerar.
     await abrirMes(page, '2027-03');
-    await expect(page.locator('#lista-despesas .conta')).toHaveCount(1);
+    await expect(despesa(page, 'Mensalidade B')).toHaveCount(1);
     await expect(page.locator('#aviso-geracao')).toBeHidden();
 
     // Fevereiro: competencia dispensada nao aparece e nao volta a ser oferecida.
     await abrirMes(page, '2027-02');
-    await expect(page.locator('#lista-despesas .conta')).toHaveCount(0);
+    expect(await nomes(page)).toEqual([]);
     await expect(page.locator('#aviso-texto')).toHaveText('1 lançamento recorrente ou fatura a gerar até 03/2027.');
     await page.locator('#geracao-acoes summary').click();
     expect(await textos(page.locator('#geracao-acoes .geracao-lista li')))
@@ -105,8 +108,8 @@ test('confirmacao mostra competencias e registros; dispensa fica registrada; dia
 
     // Abril: dia 31 vira 30, sem deslocar os meses seguintes.
     await abrirMes(page, '2027-04');
-    await expect(page.locator('#lista-despesas .conta-vencimento')).toHaveText(['Vence 30/04/2027']);
-    await expect(page.locator('#lista-despesas .situacao')).toHaveText(['Pendente']);
+    await expect(despesa(page, 'Mensalidade B').locator('.despesa-cell-vencimento')).toHaveText('30/04/2027');
+    await expect(despesa(page, 'Mensalidade B').locator('.status-badge')).toHaveText('Pendente');
 });
 
 test('quem so le o perfil ve o aviso, mas nao tem a acao de gerar', async ({ page }) => {
@@ -141,7 +144,7 @@ test('perfil ainda gerado pelo sistema atual: aviso sem a acao de gerar (FIN-REC
     });
     expect(status).toEqual([400, 'A geracao deste perfil ainda e feita pelo sistema atual (Flask)']);
     await abrirMes(page, '2028-01');
-    await expect(page.locator('#lista-despesas .conta')).toHaveCount(0);  // nada foi gravado
+    expect(await nomes(page)).toEqual([]);  // nada foi gravado
 });
 
 test('gerar por fora da tela: perfil de outro usuario e perfil so de leitura recebem 403', async ({ page }) => {
@@ -173,29 +176,25 @@ test('gerar por fora da tela: perfil de outro usuario e perfil so de leitura rec
     expect([401, 403, 404]).toContain(status[3]);  // funcao interna: sem EXECUTE para o navegador
 });
 
-// FIN-DESPESAS-1 — recorrencia cadastrada pela tela, gerada pelo FIN-RECORRENCIA-1 (sem outro
-// gerador), editada, conta excluida (competencia dispensada) e inativada. Perfil B (novo gerador),
-// em 2029; roda depois dos cenarios de 2027 deste arquivo.
-async function escolherCategoria(page, nome) {
-    const valor = await page.locator('#despesa-categoria option', { hasText: nome }).first().getAttribute('value');
-    await page.selectOption('#despesa-categoria', valor);
+// FIN-DESPESAS-1 — recorrencia cadastrada pela tela, gerada pelo FIN-RECORRENCIA-1 (sem outro gerador), conta
+// editada, excluida so ela (competencia dispensada) e "esta e as futuras" (recorrencia inativada). Perfil B (novo
+// gerador), em 2029; roda depois dos cenarios de 2027 deste arquivo. FIN-FIDELIDADE-DESPESAS-1: pelos modais originais.
+const escolaB = (page) => despesa(page, 'Escola B');
+
+async function abrirEdicaoEscola(page) {
+    await escolaB(page).locator('[data-on-click^="editarDespesa"]').click();
+    await expect(page.locator('#modal-despesa')).toBeVisible();
 }
 
-const escolaB = (page) => page.locator('#lista-despesas .conta', { has: page.locator('.conta-nome', { hasText: 'Escola B' }) });
-
-test('recorrencia pela tela: cadastrar, gerar, editar, excluir conta (dispensada) e inativar', async ({ page }) => {
+test('recorrencia pela tela original: cadastrar, gerar, editar a conta, excluir so esta e esta e as futuras', async ({ page }) => {
+    const dialogos = registrarDialogos(page);
     await entrar(page, B);
     await abrirMes(page, '2029-03');
-    await page.click('#nova-despesa');
-    await page.selectOption('#despesa-tipo', 'mensal');
-    await expect(page.locator('#despesa-competencia')).toBeHidden();  // na recorrencia, o mes de cada vencimento
-    await page.fill('#despesa-nome', 'Escola B');
-    await page.fill('#despesa-valor', '500,00');
-    await escolherCategoria(page, 'Moradia');
-    await page.fill('#despesa-vencimento', '2029-03-31');
-    await page.locator('#despesa-painel').getByRole('button', { name: 'Salvar' }).click();
-    await expect(page.locator('#acao-resultado'))
-        .toHaveText('Recorrência cadastrada. As contas são geradas pela ação "Gerar contas".');
+    await page.click('.btn-nova-despesa');
+    await preencherDespesa(page, { nome: 'Escola B', valor: '500', categoria: 'Moradia', vencimento: '2029-03-31',
+        recorrente: true, tipo: 'mensal' });
+    await salvarDespesa(page);
+    await expect.poll(() => dialogos.at(-1)).toBe('Recorrência cadastrada. As contas são geradas pela ação "Gerar contas".');
     await expect(escolaB(page)).toHaveCount(0);  // nenhum segundo gerador: ainda nao ha conta
 
     await page.click('#gerar-contas');
@@ -204,39 +203,51 @@ test('recorrencia pela tela: cadastrar, gerar, editar, excluir conta (dispensada
         .toEqual(['03/2029 · Escola B · Conta · 31/03/2029 · R$ 500,00', '04/2029 · Escola B · Conta · 30/04/2029 · R$ 500,00']);
     await painel.getByRole('button', { name: 'Confirmar' }).click();
     await expect(page.locator('#geracao-resultado')).toContainText('Geração concluída');
-    await expect(escolaB(page).locator('.conta-vencimento')).toHaveText('Vence 31/03/2029');
+    await expect(escolaB(page).locator('.despesa-cell-vencimento')).toHaveText('31/03/2029');
+    await expect(escolaB(page).locator('.despesa-cell-detalhe')).toHaveText('Recorrencia');
 
-    await escolaB(page).locator('summary').click();
-    await expect(escolaB(page).locator('.despesa-acoes button'))
-        .toHaveText(['Editar', 'Excluir', 'Editar recorrência', 'Inativar recorrência']);
-    await escolaB(page).getByRole('button', { name: 'Editar recorrência' }).click();
-    await page.fill('#despesa-valor', '550,00');
-    await page.locator('#despesa-painel').getByRole('button', { name: 'Salvar' }).click();
-    await expect(page.locator('#acao-resultado'))
-        .toHaveText('Recorrência atualizada. Vale para as próximas contas; as já existentes não mudam.');
-    await expect(escolaB(page).locator('.conta-valor')).toHaveText(/500,00/);  // conta existente nao muda
+    // Editar a conta (so esta): o valor muda; mudar a recorrencia pelo formulario fica para a tela Recorrencias.
+    await abrirEdicaoEscola(page);
+    await expect(page.locator('#recorrente')).toBeChecked();
+    await page.fill('#valor', '550');
+    await salvarDespesa(page);
+    await expect.poll(() => dialogos.at(-1)).toBe('Despesa atualizada com sucesso');
+    await expect(escolaB(page).locator('.despesa-cell-valor')).toHaveText('R$ 550,00');
+    await abrirEdicaoEscola(page);
+    await page.selectOption('#tipo_recorrencia', 'anual');
+    await salvarDespesa(page);
+    await expect.poll(() => dialogos.at(-1)).toBe('Erro: Alterar a recorrência: em migração para o novo aplicativo (tela Recorrências).');
+    await page.locator('#modal-despesa [data-on-click="fecharModal()"]').first().click();
 
-    await escolaB(page).locator('summary').click();
-    await escolaB(page).getByRole('button', { name: 'Excluir' }).click();
-    await expect(escolaB(page).locator('.despesa-pergunta'))
-        .toHaveText('Excluir esta conta? A competência fica dispensada e não volta a ser gerada.');
-    await escolaB(page).getByRole('button', { name: 'Confirmar exclusão' }).click();
-    await expect(page.locator('#acao-resultado')).toHaveText('Despesa excluída.');
+    // Excluir so esta: o modal de tipo de exclusao do original; a competencia fica dispensada.
+    await abrirEdicaoEscola(page);
+    await page.click('#btn-deletar-modal');
+    await expect(page.locator('#modal-tipo-exclusao')).toBeVisible();
+    await expect(page.locator('#modal-exclusao-titulo')).toHaveText('Excluir Despesa Recorrente');
+    await page.locator('#modal-tipo-exclusao button', { hasText: 'apenas esta' }).click();
+    await expect.poll(() => dialogos.at(-1)).toBe('Despesa excluída com sucesso!');
     await expect(escolaB(page)).toHaveCount(0);
     await abrirMes(page, '2029-03');
     await expect(escolaB(page)).toHaveCount(0);           // nao volta
     await expect(page.locator('#gerar-contas')).toHaveCount(0);  // e nao e oferecida de novo
 
+    // Esta e as futuras (abril): a recorrencia e inativada e a conta excluida; nada novo e gerado.
     await abrirMes(page, '2029-04');
-    await escolaB(page).locator('summary').click();
-    await escolaB(page).getByRole('button', { name: 'Inativar recorrência' }).click();
-    await escolaB(page).getByRole('button', { name: 'Confirmar inativação' }).click();
-    await expect(page.locator('#acao-resultado')).toHaveText('Recorrência inativada.');
-    await expect(escolaB(page).locator('.conta-valor')).toHaveText(/500,00/);  // historico fica
-    await escolaB(page).locator('summary').click();
-    await expect(escolaB(page).getByRole('button', { name: 'Inativar recorrência' })).toHaveCount(0);
-
-    await abrirMes(page, '2029-06');
-    await page.click('#gerar-contas');
-    await expect(page.locator('#geracao-confirmacao .geracao-lista li', { hasText: 'Escola B' })).toHaveCount(0);
+    await abrirEdicaoEscola(page);
+    await page.click('#btn-deletar-modal');
+    await page.locator('#modal-tipo-exclusao button', { hasText: 'futuras' }).click();
+    await expect.poll(() => dialogos.at(-1)).toBe('Despesa e todas as futuras foram excluídas com sucesso!');
+    await expect(escolaB(page)).toHaveCount(0);
+    const plano = await page.evaluate(async () => {
+        const token = JSON.parse(localStorage.getItem('cf-financeiro-auth')).access_token;
+        const r = await fetch(`${window.CF_CONFIG.supabaseUrl}/rest/v1/rpc/previa_geracao`, {
+            method: 'POST',
+            headers: { apikey: window.CF_CONFIG.supabasePublishableKey, Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json', 'Content-Profile': 'financeiro' },
+            body: JSON.stringify({ p_perfil_id: Number(document.getElementById('perfil-financeiro-switcher').dataset.perfilAtivoId),
+                p_mes: '2029-06-01' }),
+        });
+        return (await r.json()).itens.map((i) => i.nome);
+    });
+    expect(plano).not.toContain('Escola B');  // recorrencia inativada
 });

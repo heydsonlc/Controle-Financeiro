@@ -22,9 +22,15 @@ const RAIZ = path.resolve(WEB, '..');
 export const PROJETOS_PROIBIDOS = new Set(['dshqjhyymtpxpxuntzbz']);
 // FIN-MIGRACAO-FIDELIDADE-FASE-1: CSS da moldura e das telas do Flask, sem alteracao.
 const CSS_COMPARTILHADO = ['style.css', 'theme-light.css', 'layout.css', 'instituicoes.css', 'formas_pagamento.css',
-    'configuracoes.css', 'ajuda.css'];
-// JS do Flask reaproveitado sem alteracao (sem API, sem estilo inline): vai para js/original/.
-const JS_ORIGINAL = ['ajuda.js'];
+    'configuracoes.css', 'ajuda.css', 'despesas.css'];
+// JS do Flask reaproveitado: vai para js/original/ so com a conversao de adaptarParaCsp (o arquivo do Flask nao muda).
+const JS_ORIGINAL = ['ajuda.js', 'utils.js', 'icons.js', 'instituicoes.js', 'formas_pagamento.js', 'despesas.js'];
+// Imagens que os componentes do Flask (formas_pagamento.js, instituicoes.js) pedem em /static/...: so as que eles
+// citam pelo nome (versionadas), nunca a pasta inteira (frontend/static/img tem arquivos pessoais fora do Git).
+const IMAGENS_ORIGINAIS = {
+    'static/img': ['logo_pix.png', 'icone_dinheiro.jpg', 'logo_bandeira_cartao_visa.png', 'icone_boleto.jpg', 'trasnferencia_icone.jpg'],
+};
+const ORIGEM_IMAGENS_INSTITUICOES = 'static/assets/instituicoes';
 // Fontes da montagem: nao vao para o dist.
 const SO_FONTE = ['moldura', 'paginas'];
 const PADROES_PROIBIDOS = [
@@ -124,6 +130,25 @@ export async function verificarDist(destino) {
     if (problemas.length) throw new Error(`Conteudo sensivel em dist/: ${problemas.join(', ')}`);
 }
 
+// FIN-FIDELIDADE-DESPESAS-1: as telas do Flask usam onclick="f(...)" e style="..." no HTML e no JS. A CSP do novo
+// aplicativo (script-src e style-src 'self') bloqueia os dois. Sem afrouxar a CSP, o build troca os atributos por
+// data-on-<evento> e data-estilo, que js/ponte-csp.js aplica (chamada so de funcoes da lista gerada aqui, sem eval;
+// estilo por CSSOM). E a unica mudanca nas copias do HTML e do JS originais.
+const ATRIBUTO_EVENTO = /(\s)on(click|change|input|keyup|submit|error|load)=/g;
+const ATRIBUTO_ESTILO = /(\s)style=/g;
+export function adaptarParaCsp(texto) {
+    return texto.replace(ATRIBUTO_EVENTO, '$1data-on-$2=').replace(ATRIBUTO_ESTILO, '$1data-estilo=');
+}
+
+// Funcoes chamadas pelos data-on-* (as unicas que a ponte executa).
+export function funcoesDosEventos(texto) {
+    const nomes = new Set();
+    for (const [, duplas, simples] of texto.matchAll(/data-on-[a-z]+=(?:"([^"]*)"|'([^']*)')/g)) {
+        for (const [, nome] of String(duplas ?? simples).matchAll(/(?:^|;)\s*([A-Za-z_$][\w$]*)\s*\(/g)) nomes.add(nome);
+    }
+    return nomes;
+}
+
 const escapar = (texto) => String(texto).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // Pagina de src/paginas: comentario inicial com os metadados em JSON, depois "<!-- acao -->" (opcional,
@@ -172,10 +197,14 @@ export function montarPagina(base, pagina, emMigracao) {
         documento: escapar(pagina.documento || `${pagina.titulo} - Controle Financeiro`),
         titulo: escapar(pagina.titulo),
         css: (pagina.css || []).map((c) => `    <link rel="stylesheet" href="${c}">`).join('\n'),
-        acao: pagina.acao,
-        conteudo: pagina.conteudo,
-        scripts: (pagina.scripts || []).map((s) => (s.startsWith('js/original/')
-            ? `    <script src="${s}"></script>` : `    <script type="module" src="${s}"></script>`)).join('\n'),
+        acao: adaptarParaCsp(pagina.acao || ''),
+        conteudo: adaptarParaCsp(pagina.conteudo || ''),
+        // Classicos (na ordem do template do Flask) antes dos modulos do novo aplicativo.
+        scripts: [
+            ...(pagina.classicos || []).map((s) => `    <script src="${s}"></script>`),
+            ...(pagina.scripts || []).map((s) => (s.startsWith('js/original/')
+                ? `    <script src="${s}"></script>` : `    <script type="module" src="${s}"></script>`)),
+        ].join('\n'),
     };
     html = html.replace(/\{\{(documento|titulo|css|acao|conteudo|scripts)\}\}/g, (_t, chave) => trocas[chave]);
     if (/\{\{|\{%/.test(html)) throw new Error(`${pagina.arquivo}: marcador da moldura nao resolvido.`);
@@ -199,9 +228,13 @@ async function montarPaginas(destino) {
         }
     }
     const emMigracao = new Set(modulos.map((m) => m.ativo));
+    const montadas = [];
     for (const pagina of paginas) {
-        await writeFile(path.join(destino, pagina.arquivo), montarPagina(base, pagina, emMigracao));
+        const html = montarPagina(base, pagina, emMigracao);
+        montadas.push(html);
+        await writeFile(path.join(destino, pagina.arquivo), html);
     }
+    return montadas;
 }
 
 export async function construir({ url, chave, destino = path.join(WEB, 'dist'), permitirLocal = false }) {
@@ -211,16 +244,33 @@ export async function construir({ url, chave, destino = path.join(WEB, 'dist'), 
     await rm(destino, { recursive: true, force: true });
     await cp(path.join(WEB, 'src'), destino, { recursive: true });
     for (const pasta of SO_FONTE) await rm(path.join(destino, pasta), { recursive: true, force: true });
-    await montarPaginas(destino);
+    const montadas = await montarPaginas(destino);
 
     await mkdir(path.join(destino, 'css', 'shared'), { recursive: true });
     for (const nome of CSS_COMPARTILHADO) {
         await cp(path.join(RAIZ, 'frontend', 'static', 'css', nome), path.join(destino, 'css', 'shared', nome));
     }
     await mkdir(path.join(destino, 'js', 'original'), { recursive: true });
+    const permitidas = new Set();
+    for (const html of montadas) for (const nome of funcoesDosEventos(html)) permitidas.add(nome);
     for (const nome of JS_ORIGINAL) {
-        await cp(path.join(RAIZ, 'frontend', 'static', 'js', nome), path.join(destino, 'js', 'original', nome));
+        const adaptado = adaptarParaCsp(await readFile(path.join(RAIZ, 'frontend', 'static', 'js', nome), 'utf8'));
+        for (const funcao of funcoesDosEventos(adaptado)) permitidas.add(funcao);
+        await writeFile(path.join(destino, 'js', 'original', nome), adaptado);
     }
+    const imagens = { ...IMAGENS_ORIGINAIS };
+    const instituicoes = await readFile(path.join(RAIZ, 'frontend', 'static', 'js', 'instituicoes.js'), 'utf8');
+    imagens[ORIGEM_IMAGENS_INSTITUICOES] = [...new Set([...instituicoes.matchAll(/'([\w-]+\.(?:png|svg))'/g)].map((m) => m[1]))];
+    for (const [pasta, nomes] of Object.entries(imagens)) {
+        await mkdir(path.join(destino, ...pasta.split('/')), { recursive: true });
+        for (const nome of nomes) {
+            const origem = path.join(RAIZ, 'frontend', ...pasta.split('/'), nome);
+            await cp(origem, path.join(destino, ...pasta.split('/'), nome)).catch(() => {});  // logo ausente: o componente usa o padrao
+        }
+    }
+    await writeFile(path.join(destino, 'js', 'original', 'ponte-permitidas.js'),
+        '// Gerado por scripts/build.mjs: funcoes que os atributos data-on-* das telas originais podem chamar.\n'
+        + `window.CF_PONTE_PERMITIDAS = Object.freeze(${JSON.stringify([...permitidas].sort())});\n`);
 
     await mkdir(path.join(destino, 'vendor'), { recursive: true });
     await cp(

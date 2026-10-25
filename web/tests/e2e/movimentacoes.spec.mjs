@@ -4,6 +4,11 @@
 // saldo e operacao vigente sao conferidos no banco; aqui so a tela e o que ela mostra depois.
 import { expect, test } from '@playwright/test';
 
+import {
+    abrirDespesas, abrirPagamento, chamarRpc, despesa, estornar, pagar, perfilAtivoId, preencherDespesa, registrarDialogos,
+    salvarDespesa,
+} from './despesas.mjs';
+
 const B = { email: process.env.CF_EMAIL_B || 'usuario.b@teste.local', senha: process.env.CF_SENHA_B };
 
 test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
@@ -29,66 +34,62 @@ async function entrar(page, conta) {
     await page.waitForURL('**/contas.html');
 }
 
-const despesa = (page, nome) => page.locator('#lista-despesas .conta', { has: page.locator('.conta-nome', { hasText: nome }) });
 const previsao = (page, nome) => page.locator('#lista-receitas .conta[data-receita-id^="PREVISAO-"]',
     { has: page.locator('.conta-nome', { hasText: nome }) });
 
+// FIN-FIDELIDADE-DESPESAS-1: a despesa e paga e estornada pelos modais originais da tela de Despesas do Flask. Os
+// movimentos e o saldo (que a tela original nao lista; ficam em Contas Bancarias) sao conferidos pela funcao de leitura.
+async function movimentosDoMes(page, mes) {
+    return (await chamarRpc(page, 'movimentos_do_mes', { p_perfil_id: await perfilAtivoId(page), p_mes: `${mes}-01` })).corpo;
+}
+
+test.describe('tela original de Despesas (computador)', () => {
+    test.use({ viewport: { width: 1366, height: 900 }, isMobile: false, hasTouch: false });
+
 test('despesa: pagar com juros justificados, estornar; movimentos e saldo do mes', async ({ page }) => {
+    const dialogos = registrarDialogos(page);
     await entrar(page, B);
-    await page.goto('/contas.html?mes=2035-03');
-    await expect(page.locator('#totais')).toBeVisible();
-    await page.click('#nova-despesa');
-    await page.fill('#despesa-nome', 'Internet E2E');
-    await page.fill('#despesa-valor', '120,00');
-    const moradia = await page.locator('#despesa-categoria option', { hasText: 'Moradia' }).first().getAttribute('value');
-    await page.selectOption('#despesa-categoria', moradia);
-    await page.fill('#despesa-vencimento', '2035-03-10');
-    await page.locator('#despesa-vencimento').dispatchEvent('change');
-    await page.locator('#despesa-painel').getByRole('button', { name: 'Salvar' }).click();
-    await expect(page.locator('#acao-resultado')).toHaveText('Despesa salva na competência 03/2035.');
-    await expect(despesa(page, 'Internet E2E').locator('.situacao')).toHaveText('Pendente');
+    await abrirDespesas(page, '2035-03');
+    await page.click('.btn-nova-despesa');
+    await preencherDespesa(page, { nome: 'Internet E2E', valor: '120', categoria: 'Moradia', vencimento: '2035-03-10',
+        competencia: '2035-03' });
+    await salvarDespesa(page);
+    await expect.poll(() => dialogos.at(-1)).toBe('Despesa salva na competência 03/2035.');
+    await expect(despesa(page, 'Internet E2E').locator('.status-badge')).toHaveText('Pendente');
 
-    await despesa(page, 'Internet E2E').locator('summary').click();
-    await despesa(page, 'Internet E2E').getByRole('button', { name: 'Pagar' }).click();
-    await expect(page.locator('#pagamento-valor')).toHaveValue('120,00');  // o devido, vindo do banco
-    await expect(page.locator('#pagamento-conta option')).toHaveText([/^Conta Perfil B · saldo R\$\s0,00$/]);
-    await expect(page.locator('#despesa-painel .pagamento-ajuste')).toBeHidden();
-    await page.fill('#pagamento-data', '2035-03-12');
-    await page.fill('#pagamento-valor', '125,00');
-    await expect(page.locator('#despesa-painel .pagamento-ajuste')).toBeVisible();
-    await page.locator('#despesa-painel button[type=submit]').click();
-    await expect(page.locator('#despesa-painel .login-error')).toHaveText('Classifique a diferença e escreva a justificativa.');
-    await page.selectOption('#pagamento-tipo', 'JUROS');
-    await page.fill('#pagamento-justificativa', 'Multa por atraso');
-    await page.locator('#despesa-painel button[type=submit]').click();
-    await expect(page.locator('#acao-resultado'))
-        .toHaveText(/^Despesa paga: R\$\s125,00 debitados de Conta Perfil B\. Saldo da conta: -R\$\s125,00\.$/);
-    await expect(despesa(page, 'Internet E2E').locator('.situacao')).toHaveText('Paga');
+    await abrirPagamento(page, 'Internet E2E');
+    await expect(page.locator('#form-pagar label', { hasText: 'Valor Total' })).toContainText('R$ 120,00');  // rotulo que o original reescreve
+    await expect(page.locator('#pagar-conta-bancaria option')).toHaveText(['Selecione...', 'Conta Perfil B (Banco ficticio)']);
+    await expect(page.locator('#pagar-ajuste')).toBeHidden();
+    await page.locator('#modal-pagar [data-on-click="fecharModalPagar()"]').first().click();
+    await pagar(page, 'Internet E2E', { data: '2035-03-12', valor: '125' });  // diferenca sem classificar
+    await expect.poll(() => dialogos.at(-1)).toBe('Classifique a diferença e escreva a justificativa.');
+    await expect(page.locator('#pagar-ajuste')).toBeVisible();
+    await expect(page.locator('#pagar-ajuste-tipo option')).toHaveText(['Selecione...', 'Juros ou multa', 'Ajuste de quitação integral']);
+    await page.selectOption('#pagar-ajuste-tipo', 'JUROS');
+    await page.fill('#pagar-ajuste-justificativa', 'Multa por atraso');
+    await page.click('#form-pagar button[type=submit]');
+    await expect.poll(() => dialogos.at(-1))
+        .toMatch(/^Despesa paga: R\$\s125,00 debitados de Conta Perfil B\. Saldo da conta: -R\$\s125,00\.$/);
+    await expect(despesa(page, 'Internet E2E').locator('.status-badge')).toHaveText('Pago');
+    let mov = await movimentosDoMes(page, '2035-03');
+    expect(mov.movimentos.map((m) => [m.tipo, Number(m.valor), m.referencia])).toEqual([['DEBITO', 125, 'Internet E2E']]);
+    expect(Number(mov.contas.find((c) => c.nome === 'Conta Perfil B').saldo)).toBe(-125);
 
-    // Movimentos do mes: o debito, ligado a despesa, e o saldo da conta pelos movimentos.
-    const movimentos = page.locator('#lista-movimentos .movimento');
-    await expect(movimentos).toHaveCount(1);
-    await expect(movimentos.first()).toContainText('Internet E2E');
-    await expect(movimentos.first()).toContainText('Pagamento de despesa · Conta Perfil B');
-    await expect(movimentos.first().locator('.conta-valor')).toHaveText(/^−\sR\$\s125,00$/);
-    await expect(page.locator('#saldos-contas .saldo-conta', { hasText: 'Conta Perfil B' })).toContainText(/-R\$\s125,00/);
-
-    await despesa(page, 'Internet E2E').locator('summary').click();
-    await expect(despesa(page, 'Internet E2E').locator('.pagamento-linha'))
-        .toHaveText([/^Pago em 12\/03\/2035 · R\$\s125,00 · Conta Perfil B · Juros ou multa: Multa por atraso$/]);
-    await despesa(page, 'Internet E2E').getByRole('button', { name: 'Estornar pagamento' }).click();
-    await page.locator('#despesa-painel button[type=submit]').click();
-    await expect(page.locator('#despesa-painel .login-error')).toHaveText('Informe o motivo e a data do estorno.');
+    const antes = dialogos.length;
+    await estornar(page, 'Internet E2E', '');  // sem motivo: o campo obrigatorio do modal original impede o envio
+    await expect(page.locator('#modal-estorno')).toBeVisible();
+    expect(dialogos.length).toBe(antes);
+    await page.fill('#estorno-data', '2035-03-14');
     await page.fill('#estorno-motivo', 'Debito em duplicidade');
-    await page.fill('#estorno-data-estorno', '2035-03-14');
-    await page.locator('#despesa-painel button[type=submit]').click();
-    await expect(page.locator('#acao-resultado'))
-        .toHaveText(/^Pagamento estornado: R\$\s125,00 devolvidos a Conta Perfil B\. Saldo da conta: R\$\s0,00\.$/);
-    await expect(despesa(page, 'Internet E2E').locator('.situacao')).toHaveText('Pendente');
-    await expect(despesa(page, 'Internet E2E').locator('.conta-valor')).toHaveText(/120,00/);  // volta ao devido
-    await expect(movimentos).toHaveCount(2);
-    await expect(movimentos.nth(1)).toContainText('Estorno de despesa · Conta Perfil B');
-    await expect(movimentos.nth(1).locator('.conta-valor')).toHaveText(/^\+\sR\$\s125,00$/);
+    await page.click('#form-estorno button[type=submit]');
+    await expect.poll(() => dialogos.at(-1)).toBe('Pagamento estornado com sucesso.');
+    await expect(despesa(page, 'Internet E2E').locator('.status-badge')).toHaveText('Pendente');
+    await expect(despesa(page, 'Internet E2E').locator('.despesa-cell-valor')).toHaveText('R$ 120,00');  // volta ao devido
+    mov = await movimentosDoMes(page, '2035-03');
+    expect(mov.movimentos.map((m) => [m.tipo, Number(m.valor)])).toEqual([['DEBITO', 125], ['CREDITO', 125]]);
+    expect(Number(mov.contas.find((c) => c.nome === 'Conta Perfil B').saldo)).toBe(0);
+});
 });
 
 test('receita: receber parcial, receber acima do que falta com justificativa, estornar um recebimento', async ({ page }) => {
@@ -150,8 +151,8 @@ test('receita: receber parcial, receber acima do que falta com justificativa, es
         .toHaveText(/^Recebimento estornado: R\$\s700,00 debitados de Conta Perfil B\. Saldo da conta: R\$\s0,00\.$/);
     await expect(item().locator('.situacao')).toHaveText('Prevista');
 
-    await page.goto('/contas.html?mes=2035-03');
-    const movimentos = page.locator('#lista-movimentos .movimento');
-    await expect(movimentos.filter({ hasText: '· Recebimento ·' })).toHaveCount(2);
-    await expect(movimentos.filter({ hasText: 'Estorno de recebimento ·' })).toHaveCount(2);
+    const mov = await movimentosDoMes(page, '2035-03');
+    const daReceita = mov.movimentos.filter((m) => m.referencia === 'Freela E2E');
+    expect(daReceita.filter((m) => m.tipo === 'CREDITO' && !m.estorno_de)).toHaveLength(2);  // recebimentos
+    expect(daReceita.filter((m) => m.tipo === 'DEBITO' && m.estorno_de)).toHaveLength(2);    // estornos
 });

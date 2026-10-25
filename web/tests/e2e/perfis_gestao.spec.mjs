@@ -115,7 +115,7 @@ test('criar, editar, tornar padrao, usar, inativar e reativar; isolamento dos da
     await expect(page.locator('#perfil-financeiro-type')).toHaveText('Perfil financeiro');
     await page.goto('/contas.html?mes=2026-11');
     await expect(perfilAtivo(page)).toHaveText(EDITADO);
-    await expect(page.locator('#contas-vazio')).toBeVisible();
+    await expect(page.locator('#despesas-lista .empty-state')).toBeVisible();  // tela original de Despesas
     for (const nome of ['Aluguel 11/2026', 'Internet 11/2026', 'Contador 11/2026']) {
         await expect(page.getByText(nome)).toHaveCount(0);
     }

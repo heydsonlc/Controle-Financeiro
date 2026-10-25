@@ -2,6 +2,8 @@
 // itens "Em migracao", Alertas, Ajuda e saida. Dados FICTICIOS (tests/supabase_local.py). So leitura.
 import { expect, test } from '@playwright/test';
 
+import { esperarMes } from './despesas.mjs';
+
 import { itemDoMenu, perfilAtivo, trocarPerfil } from './moldura.mjs';
 
 const A = { email: process.env.CF_EMAIL_A || 'usuario.a@teste.local', senha: process.env.CF_SENHA_A };
@@ -118,7 +120,8 @@ test.describe('computador', () => {
         await entrar(page);
         await page.goto('/contas.html?mes=2026-11');
         await trocarPerfil(page, 'Empresa');
-        await expect(page.locator('#lista-despesas .conta-nome')).toHaveText(['Contador 11/2026']);
+        await esperarMes(page, '2026-11');
+        await expect(page.locator('#despesas-lista .despesa-cell-nome')).toHaveText(['Fatura Cartao Empresa - 11/2026', 'Contador 11/2026']);
         await itemDoMenu(page, 'receitas').click();
         await page.waitForURL(/receitas\.html\?mes=2026-11$/);  // competencia mantida
         await expect(perfilAtivo(page)).toHaveText('Empresa');
@@ -186,7 +189,7 @@ test.describe('celular', () => {
 
         await botao.click();
         await itemDoMenu(page, 'receitas').click();
-        await page.waitForURL('**/receitas.html');
+        await page.waitForURL(/receitas\.html(\?mes=\d{4}-\d{2})?$/);  // Despesas registra a competencia no endereco
         await expect(barra).toBeHidden();
         await expect(page.locator('.app-topbar-title')).toHaveText('Gerenciamento de Receitas');
         const larguras = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
@@ -198,7 +201,8 @@ test.describe('celular', () => {
         await page.goto('/contas.html?mes=2026-11');
         await expect(page.locator('#perfil-financeiro-avatar')).toBeVisible();
         await trocarPerfil(page, 'Empresa');
-        await expect(page.locator('#lista-despesas .conta-nome')).toHaveText(['Contador 11/2026']);
+        await esperarMes(page, '2026-11');
+        await expect(page.locator('#despesas-lista .despesa-cell-nome')).toHaveText(['Fatura Cartao Empresa - 11/2026', 'Contador 11/2026']);
         const larguras = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
         expect(larguras[0]).toBeLessThanOrEqual(larguras[1]);
     });

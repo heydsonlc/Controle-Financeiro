@@ -5,6 +5,8 @@
 // Pessoal fica no Flask (D5 do FIN-CARTOES-PAGAMENTO-1): nenhuma acao de pagamento na tela dele.
 import { expect, test } from '@playwright/test';
 
+import { esperarMes } from './despesas.mjs';
+
 import { irPeloMenu, itemDoMenu, trocarPerfil } from './moldura.mjs';
 
 const A = { email: process.env.CF_EMAIL_A || 'usuario.a@teste.local', senha: process.env.CF_SENHA_A };
@@ -50,7 +52,7 @@ const SEM_PAGAMENTO = /pagar|pagamento|baixa|estornar|conciliar/i;
 test('aba Cartoes a partir de Contas do mes: faturas como na tela de contas, sem pagamento', async ({ page }) => {
     await entrar(page, A);
     await page.goto('/contas.html?mes=2026-11');
-    await expect(page.locator('#totais')).toBeVisible();
+    await esperarMes(page, '2026-11');  // FIN-FIDELIDADE-DESPESAS-1: tela original de Despesas
     await irPeloMenu(page, 'cartoes');
     await page.waitForURL(/cartoes\.html\?mes=2026-11$/);
     await expect(itemDoMenu(page, 'cartoes')).toHaveAttribute('aria-current', 'page');
