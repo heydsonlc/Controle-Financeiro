@@ -42,7 +42,7 @@ function linhaStreaming(page) {
 
 async function ocorrencias(page) {
     return page.evaluate(async () => {
-        const perfil = Number(document.getElementById('perfil-ativo').value);
+        const perfil = Number(document.getElementById('perfil-financeiro-switcher').dataset.perfilAtivoId);
         const token = JSON.parse(localStorage.getItem('cf-financeiro-auth')).access_token;
         const resposta = await fetch(`${window.CF_CONFIG.supabaseUrl}/rest/v1/rpc/recorrencias_rejeitadas`, {
             method: 'POST',

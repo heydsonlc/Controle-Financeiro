@@ -4,6 +4,8 @@
 // O fluxo de recorrencia (gerada pelo FIN-RECORRENCIA-1) esta no fim de recorrencia.spec.mjs.
 import { expect, test } from '@playwright/test';
 
+import { trocarPerfil } from './moldura.mjs';
+
 const A = { email: process.env.CF_EMAIL_A || 'usuario.a@teste.local', senha: process.env.CF_SENHA_A };
 const ID_PERFIL_B = process.env.CF_ID_PERFIL_B || '103';
 
@@ -120,7 +122,7 @@ test('perfil so de leitura: sem "Nova despesa" e sem acoes; escrita direta receb
     await entrar(page, A);
     await abrirMes(page, '2026-11');
     await expect(page.locator('#nova-despesa')).toBeVisible();  // Pessoal: A gerencia
-    await page.selectOption('#perfil-ativo', { label: 'Empresa' });
+    await trocarPerfil(page, 'Empresa');
     await expect(page.locator('#lista-despesas .conta-nome')).toHaveText(['Contador 11/2026']);
     await expect(page.locator('#nova-despesa')).toHaveCount(0);
     await despesa(page, 'Contador 11/2026').locator('summary').click();
@@ -138,7 +140,7 @@ test('perfil so de leitura: sem "Nova despesa" e sem acoes; escrita direta receb
             },
             body: JSON.stringify(corpo),
         }).then((r) => r.status);
-        const empresa = Number(document.getElementById('perfil-ativo').value);
+        const empresa = Number(document.getElementById('perfil-financeiro-switcher').dataset.perfilAtivoId);
         const contaId = Number(document.querySelector('#lista-despesas .conta').dataset.contaId);
         const dados = { nome: 'Invasao', valor: '1.00', categoria_id: 1, data_vencimento: '2029-01-10' };
         return [

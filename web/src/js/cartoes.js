@@ -19,8 +19,7 @@ import {
 import {
     REGRAS_DIA_FECHAMENTO, confirmacoes, consolidadaDoErro, mesSemSugestao, textoConsolidada, textoRegra, textoSugestao,
 } from './fechamento.js';
-import { carregarPerfis, escolherPerfilAtivo, salvarPerfilAtivo } from './perfil.js';
-import { exigirUsuario, sair } from './sessao.js';
+import { iniciarMoldura } from './moldura.js';
 
 const SITUACAO = { ABERTA: 'Aberta', FECHADA: 'Fechada', PAGA: 'Paga', SEM_FATURA: 'Sem compras' };
 const BLOQUEIOS = {
@@ -775,39 +774,7 @@ const mes = MES_VALIDO.test(parametro || '') ? parametro : mesAtualBrasilia();
 document.getElementById('mes-titulo').textContent = tituloDoMes(mes);
 document.getElementById('mes-anterior').href = `cartoes.html?mes=${deslocarMes(mes, -1)}`;
 document.getElementById('mes-proximo').href = `cartoes.html?mes=${deslocarMes(mes, 1)}`;
-document.getElementById('aba-contas').href = `contas.html?mes=${mes}`;
-document.getElementById('aba-receitas').href = `receitas.html?mes=${mes}`;
-document.getElementById('aba-cartoes').href = `cartoes.html?mes=${mes}`;
-
-const usuario = await exigirUsuario();
-if (usuario) {
-    document.getElementById('usuario-email').textContent = usuario.email || '';
-    document.getElementById('sair').addEventListener('click', sair);
-    let perfis = [];
-    try {
-        perfis = await carregarPerfis();
-    } catch (_erro) {
-        const erro = document.getElementById('perfis-erro');
-        erro.textContent = 'Não foi possível carregar os perfis financeiros.';
-        erro.hidden = false;
-    }
-    if (!perfis.length) {
-        document.getElementById('perfis-vazio').hidden = !document.getElementById('perfis-erro').hidden;
-    } else {
-        const seletorPerfil = document.getElementById('perfil-ativo');
-        for (const perfil of perfis) {
-            const opcao = el('option', null, perfil.nome);
-            opcao.value = String(perfil.id);
-            seletorPerfil.append(opcao);
-        }
-        const ativo = escolherPerfilAtivo(perfis, usuario.id);
-        seletorPerfil.value = String(ativo.id);
-        document.getElementById('perfil-rotulo').hidden = false;
-        seletorPerfil.addEventListener('change', async () => {
-            salvarPerfilAtivo(usuario.id, seletorPerfil.value);
-            document.getElementById('acao-resultado').hidden = true;
-            await carregarMes(Number(seletorPerfil.value), mes);
-        });
-        await carregarMes(ativo.id, mes);
-    }
-}
+// FIN-MIGRACAO-FIDELIDADE-FASE-1: sessao, menu e perfil ficam na moldura do Flask. Trocar de perfil
+// recarrega a pagina (como no Flask): nada do perfil anterior permanece na tela.
+const contexto = await iniciarMoldura();
+if (contexto?.perfil) await carregarMes(contexto.perfil.id, mes);

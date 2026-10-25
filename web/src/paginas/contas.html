@@ -1,34 +1,9 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Contas do mês — Controle Financeiro</title>
-    <link rel="stylesheet" href="css/shared/style.css">
-    <link rel="stylesheet" href="css/shared/theme-light.css">
-    <link rel="stylesheet" href="css/app.css">
-</head>
+<!-- moldura {"ativo": "despesas", "titulo": "Gerenciamento de Despesas", "documento": "Despesas - Controle Financeiro", "css": [], "scripts": ["js/contas.js"]} -->
 <!-- MOBILE-CONTAS-1: tela inicial; conteudo oculto ate a sessao ser validada. Consulta nunca grava;
      FIN-RECORRENCIA-1: "Gerar contas" so grava depois da confirmacao do usuario.
      FIN-DESPESAS-1: "Nova despesa" e as acoes de cada despesa so aparecem para quem gerencia o perfil. -->
-<body class="app-body" data-protegido hidden>
-    <header class="app-header">
-        <span class="app-marca">Controle Financeiro</span>
-        <span class="app-usuario">
-            <label class="app-perfil" for="perfil-ativo" hidden id="perfil-rotulo">Perfil
-                <select id="perfil-ativo"></select>
-            </label>
-            <span id="usuario-email" class="app-email"></span>
-            <button type="button" class="app-sair" id="sair">Sair</button>
-        </span>
-    </header>
-
-    <main class="app-conteudo contas">
-        <nav class="abas" aria-label="Seções">
-            <a id="aba-contas" class="aba aba-ativa" href="contas.html" aria-current="page">Contas</a>
-            <a id="aba-receitas" class="aba" href="receitas.html">Receitas</a>
-            <a id="aba-cartoes" class="aba" href="cartoes.html">Cartões</a>
-        </nav>
+<!-- conteudo -->
+<div class="app-conteudo contas">
         <nav class="mes-nav" aria-label="Mês de competência">
             <a id="mes-anterior" class="mes-seta" href="#" aria-label="Mês anterior">◀</a>
             <h1 id="mes-titulo" class="mes-titulo"></h1>
@@ -70,10 +45,4 @@
             <div class="saldos-contas" id="saldos-contas"></div>
             <ul class="lista-contas" id="lista-movimentos"></ul>
         </section>
-    </main>
-
-    <script src="config.js"></script>
-    <script src="vendor/supabase.js"></script>
-    <script type="module" src="js/contas.js"></script>
-</body>
-</html>
+</div>

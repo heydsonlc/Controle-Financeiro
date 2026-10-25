@@ -5,6 +5,8 @@
 // Pessoal fica no Flask (D5 do FIN-CARTOES-PAGAMENTO-1): nenhuma acao de pagamento na tela dele.
 import { expect, test } from '@playwright/test';
 
+import { irPeloMenu, itemDoMenu, trocarPerfil } from './moldura.mjs';
+
 const A = { email: process.env.CF_EMAIL_A || 'usuario.a@teste.local', senha: process.env.CF_SENHA_A };
 const B = { email: process.env.CF_EMAIL_B || 'usuario.b@teste.local', senha: process.env.CF_SENHA_B };
 
@@ -49,9 +51,9 @@ test('aba Cartoes a partir de Contas do mes: faturas como na tela de contas, sem
     await entrar(page, A);
     await page.goto('/contas.html?mes=2026-11');
     await expect(page.locator('#totais')).toBeVisible();
-    await page.click('#aba-cartoes');
+    await irPeloMenu(page, 'cartoes');
     await page.waitForURL(/cartoes\.html\?mes=2026-11$/);
-    await expect(page.locator('#aba-cartoes')).toHaveAttribute('aria-current', 'page');
+    await expect(itemDoMenu(page, 'cartoes')).toHaveAttribute('aria-current', 'page');
     await expect(page.locator('#totais')).toBeVisible();
     expect(await textos(page.locator('#lista-faturas .conta-nome'))).toEqual(['Cartao Azul', 'Cartao Verde']);
     await expect(fatura(page, 'Cartao Azul').locator('.conta-valor')).toHaveText('R$ 1.320,00');  // = Contas do mes
@@ -149,7 +151,7 @@ test('cartao e compra parcelada: cadastro, previa, edicao, exclusao e inativacao
 test('LEITOR ve faturas e compras sem nenhuma acao', async ({ page }) => {
     await entrar(page, A);
     await abrirMes(page, '2026-11');
-    await page.selectOption('#perfil-ativo', { label: 'Empresa' });
+    await trocarPerfil(page, 'Empresa');
     await expect(fatura(page, 'Cartao Empresa').locator('.conta-valor')).toHaveText('R$ 250,00');
     await expect(page.locator('#nova-compra')).toHaveCount(0);
     await expect(page.locator('#novo-cartao')).toHaveCount(0);

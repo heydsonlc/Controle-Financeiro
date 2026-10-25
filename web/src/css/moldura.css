@@ -1,0 +1,138 @@
+/* FIN-MIGRACAO-FIDELIDADE-FASE-1 — so o que a moldura do Flask (layout.css) nao tinha.
+   Sem nova identidade visual: mesmas cores, raios e tipografia de layout.css. */
+
+/* Dashboard volta a ter o estilo que o Flask dava ao link "/" (aqui ele aponta para dashboard.html). */
+body.app-shell-body .app-nav-link[data-pagina="dashboard"] .app-nav-text {
+    font-size: 0.92rem;
+    font-weight: 520;
+}
+
+/* Itens ainda nao migrados: marcados com discricao, sem esconder nem desabilitar. */
+body.app-shell-body .app-nav-status {
+    margin-left: auto;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.05);
+    color: #86868b !important;  /* theme-light.css forca a cor de todo span; layout.css usa o mesmo recurso */
+    font-size: 0.6rem;
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+body.app-shell-body .app-nav-link.active .app-nav-status {
+    background: rgba(255, 255, 255, 0.16);
+    color: rgba(255, 255, 255, 0.82) !important;
+}
+
+/* Conta conectada no menu de perfis (usuario e perfil sao conceitos distintos). */
+body.app-shell-body .perfil-financeiro-usuario {
+    display: block;
+    margin-top: 8px;
+    padding: 0 4px;
+    color: #64748b !important;
+    font-size: 0.74rem;
+    overflow-wrap: anywhere;
+}
+
+body.app-shell-body .perfil-financeiro-usuario:empty {
+    display: none;
+}
+
+/* Alertas: estado informativo enquanto a funcao esta em migracao. */
+body.app-shell-body .app-topbar-actions {
+    position: relative;
+}
+
+body.app-shell-body .app-alertas-aviso {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 50;
+    width: 240px;
+    padding: 12px;
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 18px 45px rgba(15, 23, 42, 0.16);
+    color: #475569;
+    font-size: 0.82rem;
+}
+
+body.app-shell-body .app-topbar-button,
+body.app-shell-body .perfil-financeiro-trigger {
+    cursor: pointer;
+}
+
+/* Conteudo atual dentro do quadro da pagina do Flask (o quadro ja tem o espacamento). */
+body.app-shell-body .app-page-frame > .app-conteudo {
+    padding: 0;
+}
+
+/* Pagina de modulo em migracao: informativa, nunca uma tela quebrada. */
+body.app-shell-body .modulo-em-migracao {
+    max-width: 640px;
+    padding: 8px 4px;
+    color: #515154;
+    font-size: 0.92rem;
+    line-height: 1.5;
+}
+
+body.app-shell-body .modulo-em-migracao-selo {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.05);
+    color: #86868b !important;
+    font-size: 0.74rem;
+    font-weight: 650;
+}
+
+body.app-shell-body .modulo-em-migracao-titulo {
+    margin: 10px 0 6px;
+    color: #1d1d1f;
+    font-size: 1.35rem;
+    font-weight: 650;
+}
+
+body.app-shell-body .modulo-em-migracao-disponiveis a {
+    color: #1d1d1f;
+    font-weight: 600;
+}
+
+/* Fundo do menu no celular: so existe com o menu aberto. */
+body.app-shell-body .app-menu-fundo {
+    display: none;
+}
+
+/* Celular: o botao de menu abre a mesma barra lateral (no Flask ela so sumia, sem forma de abrir). */
+@media (max-width: 768px) {
+    body.app-shell-body .app-menu-button {
+        cursor: pointer;
+    }
+
+    body.app-shell-body.app-menu-aberto .app-sidebar {
+        display: flex;
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 70;
+        width: min(280px, 86vw);
+        height: 100%;
+        background: rgba(255, 255, 255, 0.98);
+        box-shadow: 0 18px 45px rgba(15, 23, 42, 0.22);
+    }
+
+    body.app-shell-body.app-menu-aberto .app-menu-fundo {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 65;
+        background: rgba(15, 23, 42, 0.32);
+    }
+
+    body.app-shell-body.app-menu-aberto {
+        overflow: hidden;
+    }
+}

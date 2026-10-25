@@ -1,28 +1,8 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Categorias — Controle Financeiro</title>
-    <link rel="stylesheet" href="css/shared/style.css">
-    <link rel="stylesheet" href="css/shared/theme-light.css">
-    <link rel="stylesheet" href="css/app.css">
-</head>
+<!-- moldura {"ativo": "categorias", "titulo": "Categorias", "documento": "Categorias - Controle Financeiro", "css": [], "scripts": ["js/categorias.js"]} -->
 <!-- Conteudo oculto ate a sessao ser validada no servidor do Supabase Auth.
      A protecao real dos dados e a RLS no banco; isto evita apenas o "flash". -->
-<body class="app-body" data-protegido hidden>
-    <header class="app-header">
-        <span class="app-marca">Controle Financeiro</span>
-        <span class="app-usuario">
-            <label class="app-perfil" for="perfil-ativo" hidden id="perfil-rotulo">Perfil
-                <select id="perfil-ativo"></select>
-            </label>
-            <span id="usuario-email"></span>
-            <button type="button" class="app-sair" id="sair">Sair</button>
-        </span>
-    </header>
-
-    <main class="app-conteudo">
+<!-- conteudo -->
+<div class="app-conteudo">
         <p class="app-aviso">Visualização somente leitura — nova arquitetura em construção.</p>
 
         <section class="app-secao" aria-labelledby="contas-titulo">
@@ -63,10 +43,4 @@
             <tbody id="categorias-corpo"></tbody>
         </table>
         </section>
-    </main>
-
-    <script src="config.js"></script>
-    <script src="vendor/supabase.js"></script>
-    <script type="module" src="js/categorias.js"></script>
-</body>
-</html>
+</div>

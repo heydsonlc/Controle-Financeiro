@@ -2,6 +2,8 @@
 // Dados FICTICIOS de tests/supabase_local.py (semear_contas). Valores esperados calculados a mao.
 import { expect, test } from '@playwright/test';
 
+import { perfilAtivo, trocarPerfil } from './moldura.mjs';
+
 const A = { email: process.env.CF_EMAIL_A || 'usuario.a@teste.local', senha: process.env.CF_SENHA_A };
 const B = { email: process.env.CF_EMAIL_B || 'usuario.b@teste.local', senha: process.env.CF_SENHA_B };
 const ID_PERFIL_B = process.env.CF_ID_PERFIL_B || '103';
@@ -122,7 +124,7 @@ test('mes sem contas mostra vazio e o aviso discreto quando ha indicio', async (
 test('perfil Empresa mostra so as contas da Empresa', async ({ page }) => {
     await entrar(page, A);
     await abrirMes(page, '2026-11');
-    await page.selectOption('#perfil-ativo', { label: 'Empresa' });
+    await trocarPerfil(page, 'Empresa');
     await expect(page.locator('#lista-despesas .conta-nome')).toHaveText(['Contador 11/2026']);
     await expect(page.locator('#lista-cartoes .cartao-nome')).toHaveText(['Cartao Empresa']);
     expect(await totais(page)).toEqual({ total: 'R$ 1.450,00', pago: 'R$ 0,00', aPagar: 'R$ 1.450,00' });
@@ -143,10 +145,10 @@ test('perfil ou fatura alterados no navegador nao dao acesso a contas de outro p
     await entrar(page, A);
     await page.evaluate((idB) => {
         const usuarioId = JSON.parse(localStorage.getItem('cf-financeiro-auth')).user.id;
-        sessionStorage.setItem(`cf-perfil-ativo:${usuarioId}`, idB);
+        localStorage.setItem(`cf-perfil-ativo:${usuarioId}`, idB);
     }, ID_PERFIL_B);
     await abrirMes(page, '2026-11');
-    await expect(page.locator('#perfil-ativo option:checked')).toHaveText('Pessoal');
+    await expect(perfilAtivo(page)).toHaveText('Pessoal');
     await expect(page.getByText('Aluguel B 11/2026')).toHaveCount(0);
 
     const status = await page.evaluate(async ({ idB, idFatura }) => {
@@ -161,7 +163,7 @@ test('perfil ou fatura alterados no navegador nao dao acesso a contas de outro p
             },
             body: JSON.stringify(corpo),
         }).then((r) => r.status);
-        const pessoal = Number(document.getElementById('perfil-ativo').value);
+        const pessoal = Number(document.getElementById('perfil-financeiro-switcher').dataset.perfilAtivoId);
         return [
             await chamar('contas_do_mes', { p_perfil_id: Number(idB), p_mes: '2026-11-01' }),
             await chamar('lancamentos_da_fatura', { p_perfil_id: pessoal, p_conta_id: Number(idFatura) }),
@@ -180,8 +182,8 @@ test('tela de celular: sem rolagem horizontal, setas tocaveis e escrita so pela 
         expect(caixa.width).toBeGreaterThanOrEqual(44);
         expect(caixa.height).toBeGreaterThanOrEqual(44);
     }
-    await expect(page.locator('form, input, textarea, select:not(#perfil-ativo)')).toHaveCount(0);
-    await expect(page.locator('button')).toHaveText(['Sair', 'Nova despesa']);  // FIN-DESPESAS-1 (formulario fechado)
+    await expect(page.locator('.app-content').locator('form, input, textarea, select')).toHaveCount(0);
+    await expect(page.locator('.app-content button')).toHaveText(['Nova despesa']);  // FIN-DESPESAS-1 (formulario fechado)
 });
 
 test('parametro de mes invalido volta para o mes atual', async ({ page }) => {

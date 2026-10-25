@@ -2,6 +2,8 @@
 // Dados FICTICIOS semeados por tests/supabase_local.py (ids fixos, sobrescreviveis por ambiente).
 import { expect, test } from '@playwright/test';
 
+import { nomesDosPerfis, perfilAtivo, trocarPerfil } from './moldura.mjs';
+
 const A = { email: process.env.CF_EMAIL_A || 'usuario.a@teste.local', senha: process.env.CF_SENHA_A };
 const B = { email: process.env.CF_EMAIL_B || 'usuario.b@teste.local', senha: process.env.CF_SENHA_B };
 const ID_PERFIL_B = process.env.CF_ID_PERFIL_B || '103';
@@ -35,24 +37,30 @@ async function entrar(page, conta) {
 }
 
 const contas = (page) => page.locator('#contas-corpo tr td:nth-child(2)');
-const opcoes = (page) => page.locator('#perfil-ativo option');
+const opcoes = nomesDosPerfis;
 
 test('usuario A ve so os proprios perfis ativos, com o padrao selecionado', async ({ page }) => {
     await entrar(page, A);
     await expect(opcoes(page)).toHaveText(['Pessoal', 'Empresa']);
-    await expect(page.locator('#perfil-ativo option:checked')).toHaveText('Pessoal');
+    await expect(perfilAtivo(page)).toHaveText('Pessoal');
     // Regra do Flask: o Pessoal inclui registros legados sem perfil.
     await expect(contas(page)).toHaveText(CONTAS.PESSOAL);
 });
 
-test('usuario A alterna entre os proprios perfis e a escolha persiste na sessao', async ({ page }) => {
+test('usuario A alterna entre os proprios perfis e a escolha persiste ao recarregar e em outra aba', async ({ page }) => {
     await entrar(page, A);
     await expect(contas(page)).toHaveText(CONTAS.PESSOAL);
-    await page.selectOption('#perfil-ativo', { label: 'Empresa' });
+    await trocarPerfil(page, 'Empresa');
     await expect(contas(page)).toHaveText(CONTAS.EMPRESA);
     await page.reload();
-    await expect(page.locator('#perfil-ativo option:checked')).toHaveText('Empresa');
+    await expect(perfilAtivo(page)).toHaveText('Empresa');
     await expect(contas(page)).toHaveText(CONTAS.EMPRESA);
+    // FIN-MIGRACAO-FIDELIDADE-FASE-1: como a sessao do Flask, vale tambem numa nova aba e nas outras paginas.
+    const outraAba = await page.context().newPage();
+    await outraAba.goto('/contas.html?mes=2026-11');
+    await expect(perfilAtivo(outraAba)).toHaveText('Empresa');
+    await expect(outraAba.locator('#lista-despesas .conta-nome')).toHaveText(['Contador 11/2026']);
+    await outraAba.close();
 });
 
 test('usuario B nao ve perfis nem contas de A', async ({ page }) => {
@@ -72,12 +80,12 @@ test('perfil alterado manualmente no navegador nao da acesso ao perfil de outro 
     const chaveAdulterada = await page.evaluate((idB) => {
         const usuarioId = JSON.parse(localStorage.getItem('cf-financeiro-auth')).user.id;
         const chave = `cf-perfil-ativo:${usuarioId}`;
-        sessionStorage.setItem(chave, idB);
+        localStorage.setItem(chave, idB);
         return chave;
     }, ID_PERFIL_B);
-    expect(await page.evaluate((k) => sessionStorage.getItem(k), chaveAdulterada)).toBe(ID_PERFIL_B);
+    expect(await page.evaluate((k) => localStorage.getItem(k), chaveAdulterada)).toBe(ID_PERFIL_B);
     await page.reload();
-    await expect(page.locator('#perfil-ativo option:checked')).toHaveText('Pessoal');
+    await expect(perfilAtivo(page)).toHaveText('Pessoal');
     await expect(page.getByText('Conta Perfil B', { exact: true })).toHaveCount(0);
 
     // 2) Chamada direta a funcao com o id do perfil de B: o banco recusa.

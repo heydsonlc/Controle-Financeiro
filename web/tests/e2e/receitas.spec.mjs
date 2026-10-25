@@ -3,6 +3,8 @@
 // Regra conferida: previsao nao e recebimento — nenhuma acao de receber existe na tela.
 import { expect, test } from '@playwright/test';
 
+import { irPeloMenu, itemDoMenu, trocarPerfil } from './moldura.mjs';
+
 const A = { email: process.env.CF_EMAIL_A || 'usuario.a@teste.local', senha: process.env.CF_SENHA_A };
 const ID_PERFIL_B = process.env.CF_ID_PERFIL_B || '103';
 
@@ -53,10 +55,10 @@ test('aba Receitas a partir de Contas do mes, no mesmo mes', async ({ page }) =>
     await entrar(page, A);
     await page.goto('/contas.html?mes=2026-11');
     await expect(page.locator('#totais')).toBeVisible();
-    await page.click('#aba-receitas');
+    await irPeloMenu(page, 'receitas');
     await page.waitForURL(/receitas\.html\?mes=2026-11$/);
     await expect(page.locator('#mes-titulo')).toHaveText('Novembro de 2026');
-    await expect(page.locator('#aba-receitas')).toHaveAttribute('aria-current', 'page');
+    await expect(itemDoMenu(page, 'receitas')).toHaveAttribute('aria-current', 'page');
 });
 
 test('situacoes reais, totais e nenhuma acao de recebimento', async ({ page }) => {
@@ -159,7 +161,7 @@ test('recorrente: 12 competencias a partir da escolhida', async ({ page }) => {
 test('perfil so de leitura: sem "Nova receita" e sem acoes; escrita direta recebe 403', async ({ page }) => {
     await entrar(page, A);
     await abrirMes(page, '2026-11');
-    await page.selectOption('#perfil-ativo', { label: 'Empresa' });
+    await trocarPerfil(page, 'Empresa');
     await expect(page.locator('#lista-receitas .conta-nome')).toHaveText(['Consultoria']);
     await expect(page.locator('#nova-receita')).toHaveCount(0);
     await receita(page, 'Consultoria').locator('summary').click();
@@ -176,7 +178,7 @@ test('perfil so de leitura: sem "Nova receita" e sem acoes; escrita direta receb
             },
             body: JSON.stringify(corpo),
         }).then((r) => r.status);
-        const empresa = Number(document.getElementById('perfil-ativo').value);
+        const empresa = Number(document.getElementById('perfil-financeiro-switcher').dataset.perfilAtivoId);
         const dados = { nome: 'Invasao', tipo: 'OUTROS', valor: '1.00', competencia: '2029-01-01' };
         return [
             await chamar('criar_receita', { p_perfil_id: empresa, p_dados: dados, p_chave: crypto.randomUUID() }),
@@ -193,8 +195,7 @@ test('formulario de receita cabe na tela do celular', async ({ page }) => {
     await page.click('#nova-receita');
     const larguras = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
     expect(larguras[0]).toBeLessThanOrEqual(larguras[1]);
-    for (const campo of ['#receita-fonte', '#receita-nome', '#receita-valor', '#receita-competencia', '#receita-data',
-        '#aba-contas']) {
+    for (const campo of ['#receita-fonte', '#receita-nome', '#receita-valor', '#receita-competencia', '#receita-data']) {
         expect((await page.locator(campo).boundingBox()).height).toBeGreaterThanOrEqual(44);
     }
     await page.selectOption('#receita-fonte', { label: 'Freelas' });

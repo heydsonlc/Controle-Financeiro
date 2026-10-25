@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
-import { construir, validarChavePublica, validarUrl, verificarDist } from '../../scripts/build.mjs';
+import { construir, montarPagina, validarChavePublica, validarUrl, verificarDist } from '../../scripts/build.mjs';
 
 const URL_OK = 'https://abcdefghijklmnopqrst.supabase.co';
 const jwt = (payload) => [
@@ -80,7 +80,8 @@ const RPCS_DE_LEITURA = new Set(['meus_perfis', 'contas_bancarias_do_perfil', 'c
     'recorrencias_rejeitadas',
     'sugerir_competencia',  // FIN-CARTOES-FECHAMENTO-1 (so leitura)
     'dados_pagamento_fatura',  // FIN-CARTOES-PAGAMENTO-1 (so leitura)
-    'dados_pagamento_despesa', 'dados_recebimento_receita', 'movimentos_do_mes']);  // FIN-MOVIMENTACOES-1 (so leitura)
+    'dados_pagamento_despesa', 'dados_recebimento_receita', 'movimentos_do_mes',  // FIN-MOVIMENTACOES-1 (so leitura)
+    'perfis_para_configuracao']);  // FIN-MIGRACAO-FIDELIDADE-FASE-1 (so leitura)
 // Escrita so por RPC transacional autorizada no banco, revisada uma a uma, e so na tela que a usa.
 const RPCS_DE_ESCRITA = new Map([
     ['gerar_mes', 'contas.js'],
@@ -113,6 +114,12 @@ const RPCS_DE_ESCRITA = new Map([
     ['estornar_pagamento_despesa', 'despesas.js'],
     ['receber_receita', 'receitas.js'],
     ['estornar_recebimento', 'receitas.js'],
+    // FIN-MIGRACAO-FIDELIDADE-FASE-1 (gestao de perfis; o banco exige pode_gerir do perfil). Camada unica: perfil.js
+    ['criar_perfil', 'perfil.js'],
+    ['atualizar_perfil', 'perfil.js'],
+    ['inativar_perfil', 'perfil.js'],
+    ['reativar_perfil', 'perfil.js'],
+    ['definir_perfil_padrao', 'perfil.js'],
 ]);
 
 test('codigo-fonte do frontend nao escreve em tabelas nem usa innerHTML', async () => {
@@ -132,4 +139,66 @@ test('codigo-fonte do frontend nao escreve em tabelas nem usa innerHTML', async 
         assert.doesNotMatch(fonte.replace(/\.rpc\s*\(\s*['"`][^'"`]+['"`]/g, ''), /\.rpc\s*\(/, `${nome} chama RPC com nome dinamico`);
         assert.doesNotMatch(fonte, /innerHTML|outerHTML|insertAdjacentHTML|document\.write/, `${nome} injeta HTML`);
     }
+});
+
+// FIN-MIGRACAO-FIDELIDADE-FASE-1: moldura do Flask montada no build.
+const MENU_DO_FLASK = [
+    ['Dashboard', ['Dashboard']],
+    ['Operação', ['Lançamentos', 'Despesas', 'Recorrencias']],
+    ['Gestão Financeira', ['Receitas', 'Cartões', 'Contas Bancárias', 'Financiamentos', 'Patrimônio', 'Documentos Fiscais']],
+    ['Cadastros', ['Categorias', 'Mobilidade']],
+    ['Ferramentas', ['Importar Cartão']],
+    ['Sistema', ['Configurações e Preferências', 'Ajuda e Manual']],
+];
+const MIGRADAS = { 'contas.html': 'Despesas', 'receitas.html': 'Receitas', 'cartoes.html': 'Cartões',
+    'categorias.html': 'Categorias', 'configuracoes.html': 'Configurações e Preferências', 'ajuda.html': 'Ajuda e Manual' };
+
+function menuDe(html) {
+    return [...html.matchAll(/<div class="app-nav-section-title">([^<]+)<\/div>([\s\S]*?)<\/div>\s*(?=<div class="app-nav-section">|<\/nav>)/g)]
+        .map(([, secao, corpo]) => [secao, [...corpo.matchAll(/<span class="app-nav-text">([^<]+)<\/span>/g)].map((m) => m[1])]);
+}
+
+test('todas as paginas usam a moldura do Flask com o mesmo menu, sem pagina quebrada', async () => {
+    const destino = await mkdtemp(path.join(os.tmpdir(), 'cf-web-moldura-'));
+    try {
+        await construir({ url: URL_OK, chave: 'sb_publishable_abc123', destino });
+        const arquivos = (await readdir(destino, { recursive: true })).map((a) => a.split(path.sep).join('/'));
+        assert.ok(!arquivos.some((a) => /^(moldura|paginas)(\/|$)/.test(a)), 'fontes da moldura fora do dist');
+        assert.ok(arquivos.includes('css/shared/layout.css') && arquivos.includes('js/original/ajuda.js'));
+        const paginas = arquivos.filter((a) => a.endsWith('.html') && a !== 'index.html');
+        assert.equal(paginas.length, 15);
+        for (const pagina of paginas) {
+            const html = await readFile(path.join(destino, pagina), 'utf8');
+            assert.doesNotMatch(html, /\{\{|\{%|url_for|<script>|\sstyle=|\son[a-z]+=/i, `${pagina}: marcador, script ou estilo inline`);
+            assert.deepEqual(menuDe(html), MENU_DO_FLASK, `${pagina}: menu igual ao do Flask`);
+            assert.match(html, /<body class="app-shell-body" data-protegido hidden>/);
+            for (const id of ['perfil-financeiro-trigger', 'perfil-financeiro-options', 'app-logout-button', 'app-alertas-button']) {
+                assert.match(html, new RegExp(`id="${id}"`), `${pagina}: ${id}`);
+            }
+            const ativos = [...html.matchAll(/class="app-nav-link active"/g)];
+            assert.equal(ativos.length, 1, `${pagina}: um item ativo`);
+            for (const [, href] of html.matchAll(/<a href="([^"#?]+)[^"]*" class="app-nav-link/g)) {
+                assert.ok(arquivos.includes(href), `${pagina}: link ${href} existe`);
+            }
+            const emMigracao = [...html.matchAll(/data-em-migracao[^>]*>[\s\S]*?<span class="app-nav-text">([^<]+)<\/span>\s*<span class="app-nav-status">Em migração<\/span>/g)].map((m) => m[1]);
+            assert.deepEqual(emMigracao.sort(), MENU_DO_FLASK.flatMap(([, itens]) => itens)
+                .filter((item) => !Object.values(MIGRADAS).includes(item)).sort(), `${pagina}: itens em migracao`);
+        }
+        const despesas = await readFile(path.join(destino, 'contas.html'), 'utf8');
+        assert.match(despesas, /<a href="contas.html" class="app-nav-link active" data-pagina="despesas" aria-current="page">/);
+        assert.match(despesas, /<span>Gerenciamento de Despesas<\/span>/);
+        const dashboard = await readFile(path.join(destino, 'dashboard.html'), 'utf8');
+        assert.match(dashboard, /class="modulo-em-migracao"/);
+        assert.match(dashboard, /<script type="module" src="js\/pagina.js"><\/script>/);
+    } finally {
+        await rm(destino, { recursive: true, force: true });
+    }
+});
+
+test('montagem escapa titulos e falha com marcador nao resolvido', () => {
+    const base = '<title>{{documento}}</title><span>{{titulo}}</span>{{css}}{{acao}}{{conteudo}}{{scripts}}';
+    const html = montarPagina(base, { arquivo: 'x.html', titulo: '<b>', conteudo: 'c', acao: '' }, new Set());
+    assert.match(html, /<span>&lt;b&gt;<\/span>/);
+    assert.throws(() => montarPagina(`${base}{{outro}}`, { arquivo: 'x.html', titulo: 't', conteudo: '' }, new Set()),
+        /nao resolvido/);
 });

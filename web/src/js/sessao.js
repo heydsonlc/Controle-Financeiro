@@ -7,15 +7,25 @@
 import { supabase } from './cliente.js';
 
 // MOBILE-CONTAS-1: a tela inicial e "Contas do mes"; categorias/contas bancarias segue acessivel.
-const PAGINAS_PERMITIDAS = new Set(['contas.html', 'categorias.html', 'receitas.html', 'cartoes.html']);
+// FIN-MIGRACAO-FIDELIDADE-FASE-1: todas as paginas do menu da moldura (inclusive "Em migracao").
+const PAGINAS_PERMITIDAS = new Set(['contas.html', 'categorias.html', 'receitas.html', 'cartoes.html',
+    'configuracoes.html', 'ajuda.html', 'dashboard.html', 'lancamentos.html', 'recorrencias.html',
+    'contas-bancarias.html', 'financiamentos.html', 'patrimonio.html', 'documentos-fiscais.html',
+    'mobilidade.html', 'importar-cartao.html']);
 const PAGINA_INICIAL = 'contas.html';
 
 export function destinoSeguro(next) {
     return PAGINAS_PERMITIDAS.has(next) ? next : PAGINA_INICIAL;
 }
 
+// O Cloudflare Pages tambem serve /contas (sem .html): o destino depois do login e o mesmo.
+export function paginaAtual(caminho) {
+    const nome = caminho.split('/').pop();
+    return nome && !nome.includes('.') ? `${nome}.html` : nome;
+}
+
 function irParaLogin() {
-    const atual = window.location.pathname.split('/').pop();
+    const atual = paginaAtual(window.location.pathname);
     const next = PAGINAS_PERMITIDAS.has(atual) ? `?next=${encodeURIComponent(atual)}` : '';
     window.location.replace(`index.html${next}`);
 }

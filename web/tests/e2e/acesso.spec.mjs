@@ -65,7 +65,7 @@ test('credenciais invalidas: mensagem generica e nenhuma sessao gravada', async 
 
 test('usuario A ve somente as proprias categorias', async ({ page }) => {
     await entrar(page, A);
-    await expect(page.locator('#usuario-email')).toHaveText(A.email);
+    await expect(page.locator('#usuario-email')).toHaveText(`Conectado como ${A.email}`);
     expect(await nomesNaTabela(page)).toEqual(CATEGORIAS_A);
     for (const nome of CATEGORIAS_B) await expect(page.getByText(nome)).toHaveCount(0);
 });
@@ -78,15 +78,15 @@ test('usuario B ve somente as proprias categorias', async ({ page }) => {
 
 test('pagina de categorias nao oferece nenhuma acao de escrita', async ({ page }) => {
     await entrar(page, A);
-    // O unico controle alem de "Sair" e o seletor de perfil (PERFIS-1), que so filtra a visualizacao.
-    await expect(page.locator('form, input, textarea, select:not(#perfil-ativo)')).toHaveCount(0);
-    await expect(page.locator('button')).toHaveCount(1);
-    await expect(page.locator('button')).toHaveText('Sair');
+    // FIN-MIGRACAO-FIDELIDADE-FASE-1: os botoes da moldura (menu, perfil, alertas, sair) nao gravam dados;
+    // o conteudo da pagina nao tem nenhum controle.
+    await expect(page.locator('.app-content').locator('form, input, textarea, select, button')).toHaveCount(0);
+    await expect(page.locator('.app-topbar button:not(.perfil-financeiro-option)')).toHaveCount(4);
 });
 
 test('sair encerra a sessao e a pagina volta a exigir login', async ({ page }) => {
     await entrar(page, A);
-    await page.click('#sair');
+    await page.click('#app-logout-button');
     await page.waitForURL('**/index.html');
     expect(await page.evaluate((k) => localStorage.getItem(k), CHAVE_SESSAO)).toBeNull();
     await page.goto('/categorias.html');

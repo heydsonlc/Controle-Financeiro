@@ -3,6 +3,8 @@
 // banco descartavel: usa so meses de 2027 e roda depois dos outros (workers: 1, ordem alfabetica).
 import { expect, test } from '@playwright/test';
 
+import { trocarPerfil } from './moldura.mjs';
+
 const A = { email: process.env.CF_EMAIL_A || 'usuario.a@teste.local', senha: process.env.CF_SENHA_A };
 const B = { email: process.env.CF_EMAIL_B || 'usuario.b@teste.local', senha: process.env.CF_SENHA_B };
 const ID_PERFIL_B = process.env.CF_ID_PERFIL_B || '103';
@@ -110,7 +112,7 @@ test('confirmacao mostra competencias e registros; dispensa fica registrada; dia
 test('quem so le o perfil ve o aviso, mas nao tem a acao de gerar', async ({ page }) => {
     await entrar(page, A);
     await abrirMes(page, '2027-05');
-    await page.selectOption('#perfil-ativo', { label: 'Empresa' });
+    await trocarPerfil(page, 'Empresa');
     await expect(page.locator('#aviso-texto')).toHaveText(/^2 lançamentos recorrentes ou faturas a gerar até 06\/2027/);
     await expect(page.locator('#geracao-acoes')).toContainText('Somente quem gerencia este perfil pode gerar.');
     await expect(page.locator('#gerar-contas')).toHaveCount(0);
@@ -132,7 +134,7 @@ test('perfil ainda gerado pelo sistema atual: aviso sem a acao de gerar (FIN-REC
                 'Content-Type': 'application/json',
                 'Content-Profile': 'financeiro',
             },
-            body: JSON.stringify({ p_perfil_id: Number(document.getElementById('perfil-ativo').value),
+            body: JSON.stringify({ p_perfil_id: Number(document.getElementById('perfil-financeiro-switcher').dataset.perfilAtivoId),
                 p_mes: '2028-01-01', p_total_previsto: 2 }),
         });
         return [resposta.status, (await resposta.json()).message];
@@ -145,7 +147,7 @@ test('perfil ainda gerado pelo sistema atual: aviso sem a acao de gerar (FIN-REC
 test('gerar por fora da tela: perfil de outro usuario e perfil so de leitura recebem 403', async ({ page }) => {
     await entrar(page, A);
     await abrirMes(page, '2027-05');
-    await page.selectOption('#perfil-ativo', { label: 'Empresa' });
+    await trocarPerfil(page, 'Empresa');
     await expect(page.locator('#aviso-texto')).toBeVisible();
     const status = await page.evaluate(async (idB) => {
         const token = JSON.parse(localStorage.getItem('cf-financeiro-auth')).access_token;
@@ -159,7 +161,7 @@ test('gerar por fora da tela: perfil de outro usuario e perfil so de leitura rec
             },
             body: JSON.stringify(corpo),
         }).then((r) => r.status);
-        const empresa = Number(document.getElementById('perfil-ativo').value);
+        const empresa = Number(document.getElementById('perfil-financeiro-switcher').dataset.perfilAtivoId);
         return [
             await chamar('gerar_mes', { p_perfil_id: Number(idB), p_mes: '2027-03-01', p_total_previsto: 0 }),
             await chamar('previa_geracao', { p_perfil_id: Number(idB), p_mes: '2027-03-01' }),

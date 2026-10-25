@@ -20,7 +20,13 @@ const RAIZ = path.resolve(WEB, '..');
 
 // Projeto Supabase da Calculadora Judicial / Portal Kortex: nunca compartilhar.
 export const PROJETOS_PROIBIDOS = new Set(['dshqjhyymtpxpxuntzbz']);
-const CSS_COMPARTILHADO = ['style.css', 'theme-light.css'];
+// FIN-MIGRACAO-FIDELIDADE-FASE-1: CSS da moldura e das telas do Flask, sem alteracao.
+const CSS_COMPARTILHADO = ['style.css', 'theme-light.css', 'layout.css', 'instituicoes.css', 'formas_pagamento.css',
+    'configuracoes.css', 'ajuda.css'];
+// JS do Flask reaproveitado sem alteracao (sem API, sem estilo inline): vai para js/original/.
+const JS_ORIGINAL = ['ajuda.js'];
+// Fontes da montagem: nao vao para o dist.
+const SO_FONTE = ['moldura', 'paginas'];
 const PADROES_PROIBIDOS = [
     /sb_secret_[A-Za-z0-9_-]+/,
     /service_role/i,
@@ -118,16 +124,102 @@ export async function verificarDist(destino) {
     if (problemas.length) throw new Error(`Conteudo sensivel em dist/: ${problemas.join(', ')}`);
 }
 
+const escapar = (texto) => String(texto).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// Pagina de src/paginas: comentario inicial com os metadados em JSON, depois "<!-- acao -->" (opcional,
+// barra de acoes do Flask) e "<!-- conteudo -->".
+export function lerPagina(nome, fonte) {
+    const meta = /^<!-- moldura (\{[\s\S]*?\}) -->\s*/.exec(fonte);
+    if (!meta) throw new Error(`${nome}: metadados da moldura ausentes.`);
+    const dados = JSON.parse(meta[1]);
+    const resto = fonte.slice(meta[0].length);
+    const corte = resto.indexOf('<!-- conteudo -->');
+    if (corte < 0) throw new Error(`${nome}: marcador <!-- conteudo --> ausente.`);
+    const antes = resto.slice(0, corte);
+    const marcaAcao = antes.indexOf('<!-- acao -->');
+    const acao = marcaAcao < 0 ? '' : antes.slice(marcaAcao + '<!-- acao -->'.length).trim();
+    return { ...dados, arquivo: nome, acao, conteudo: resto.slice(corte + '<!-- conteudo -->'.length).trim() };
+}
+
+export function paginaEmMigracao(modulo) {
+    return {
+        ...modulo,
+        css: [],
+        scripts: ['js/pagina.js'],
+        acao: '',
+        conteudo: `<section class="modulo-em-migracao" aria-labelledby="modulo-titulo">
+                        <span class="modulo-em-migracao-selo">Em migração</span>
+                        <h1 class="modulo-em-migracao-titulo" id="modulo-titulo">${escapar(modulo.titulo)}</h1>
+                        <p>${escapar(modulo.descricao)}</p>
+                        <p>Este módulo faz parte do plano de substituição e ainda está sendo migrado para o novo aplicativo. Nada foi removido: até a migração, ele continua no sistema atual.</p>
+                        <p class="modulo-em-migracao-disponiveis">Já disponíveis aqui: <a href="contas.html">Despesas</a>, <a href="receitas.html">Receitas</a>, <a href="cartoes.html">Cartões</a>, <a href="categorias.html">Categorias</a> e <a href="configuracoes.html">Configurações</a> (perfis financeiros).</p>
+                    </section>`,
+    };
+}
+
+// Moldura do Flask + pagina. Item ativo e itens "Em migracao" marcados aqui, como o active_page do Jinja.
+export function montarPagina(base, pagina, emMigracao) {
+    let html = base.replace(/<a href="([^"]+)" class="app-nav-link" data-pagina="(\w+)">([\s\S]*?)<\/a>/g,
+        (_todo, href, chave, miolo) => {
+            const ativo = chave === pagina.ativo;
+            const selo = emMigracao.has(chave)
+                ? '\n                        <span class="app-nav-status">Em migração</span>\n                    ' : '';
+            return `<a href="${href}" class="app-nav-link${ativo ? ' active' : ''}" data-pagina="${chave}"`
+                + `${emMigracao.has(chave) ? ' data-em-migracao' : ''}${ativo ? ' aria-current="page"' : ''}>`
+                + `${miolo.replace(/\s*$/, '')}${selo || '\n                    '}</a>`;
+        });
+    const trocas = {
+        documento: escapar(pagina.documento || `${pagina.titulo} - Controle Financeiro`),
+        titulo: escapar(pagina.titulo),
+        css: (pagina.css || []).map((c) => `    <link rel="stylesheet" href="${c}">`).join('\n'),
+        acao: pagina.acao,
+        conteudo: pagina.conteudo,
+        scripts: (pagina.scripts || []).map((s) => (s.startsWith('js/original/')
+            ? `    <script src="${s}"></script>` : `    <script type="module" src="${s}"></script>`)).join('\n'),
+    };
+    html = html.replace(/\{\{(documento|titulo|css|acao|conteudo|scripts)\}\}/g, (_t, chave) => trocas[chave]);
+    if (/\{\{|\{%/.test(html)) throw new Error(`${pagina.arquivo}: marcador da moldura nao resolvido.`);
+    return html;
+}
+
+async function montarPaginas(destino) {
+    const fonte = path.join(WEB, 'src');
+    const base = await readFile(path.join(fonte, 'moldura', 'base.html'), 'utf8');
+    const modulos = JSON.parse(await readFile(path.join(fonte, 'moldura', 'em-migracao.json'), 'utf8'));
+    const paginas = [];
+    for (const nome of (await readdir(path.join(fonte, 'paginas'))).filter((n) => n.endsWith('.html'))) {
+        paginas.push(lerPagina(nome, await readFile(path.join(fonte, 'paginas', nome), 'utf8')));
+    }
+    paginas.push(...modulos.map(paginaEmMigracao));
+    // Todo item do menu leva a uma pagina que existe (nunca a uma pagina quebrada).
+    const doMenu = [...base.matchAll(/href="([^"#]+)(?:#[^"]*)?" class="app-nav-link" data-pagina="(\w+)"/g)];
+    for (const [, href, chave] of doMenu) {
+        if (!paginas.some((p) => p.arquivo === href && p.ativo === chave)) {
+            throw new Error(`Item do menu sem pagina: ${chave} -> ${href}`);
+        }
+    }
+    const emMigracao = new Set(modulos.map((m) => m.ativo));
+    for (const pagina of paginas) {
+        await writeFile(path.join(destino, pagina.arquivo), montarPagina(base, pagina, emMigracao));
+    }
+}
+
 export async function construir({ url, chave, destino = path.join(WEB, 'dist'), permitirLocal = false }) {
     const origem = validarUrl(url, { permitirLocal });
     const chavePublica = validarChavePublica(chave);
 
     await rm(destino, { recursive: true, force: true });
     await cp(path.join(WEB, 'src'), destino, { recursive: true });
+    for (const pasta of SO_FONTE) await rm(path.join(destino, pasta), { recursive: true, force: true });
+    await montarPaginas(destino);
 
     await mkdir(path.join(destino, 'css', 'shared'), { recursive: true });
     for (const nome of CSS_COMPARTILHADO) {
         await cp(path.join(RAIZ, 'frontend', 'static', 'css', nome), path.join(destino, 'css', 'shared', nome));
+    }
+    await mkdir(path.join(destino, 'js', 'original'), { recursive: true });
+    for (const nome of JS_ORIGINAL) {
+        await cp(path.join(RAIZ, 'frontend', 'static', 'js', nome), path.join(destino, 'js', 'original', nome));
     }
 
     await mkdir(path.join(destino, 'vendor'), { recursive: true });

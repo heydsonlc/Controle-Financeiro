@@ -3,17 +3,15 @@
 // banco que revalidam a autorizacao a cada chamada; categorias, da RLS por usuario.
 
 import { supabase } from './cliente.js';
-import { carregarPerfis, escolherPerfilAtivo, salvarPerfilAtivo } from './perfil.js';
-import { exigirUsuario, sair } from './sessao.js';
+import { iniciarMoldura } from './moldura.js';
 
 const COR_VALIDA = /^#[0-9A-Fa-f]{6}$/;
 
-const usuario = await exigirUsuario();
+// FIN-MIGRACAO-FIDELIDADE-FASE-1: sessao, menu e perfil pela moldura; trocar de perfil recarrega a pagina.
+const contexto = await iniciarMoldura();
 
-if (usuario) {
-    document.getElementById('usuario-email').textContent = usuario.email || '';
-    document.getElementById('sair').addEventListener('click', sair);
-    await Promise.all([iniciarPerfis(usuario.id), carregarCategorias()]);
+if (contexto) {
+    await Promise.all([contexto.perfil ? carregarContas(contexto.perfil.id) : null, carregarCategorias()]);
 }
 
 function mostrar(id, texto) {
@@ -35,37 +33,6 @@ function celulaTexto(texto) {
     const celula = document.createElement('td');
     celula.textContent = texto || '';
     return celula;
-}
-
-async function iniciarPerfis(usuarioId) {
-    let perfis;
-    try {
-        perfis = await carregarPerfis();
-    } catch (_erro) {
-        mostrar('perfis-erro', 'Não foi possível carregar os perfis financeiros.');
-        return;
-    }
-    if (!perfis.length) {
-        mostrar('perfis-vazio');
-        return;
-    }
-
-    const seletor = document.getElementById('perfil-ativo');
-    for (const perfil of perfis) {
-        const opcao = document.createElement('option');
-        opcao.value = String(perfil.id);
-        opcao.textContent = perfil.nome;
-        seletor.append(opcao);
-    }
-    const ativo = escolherPerfilAtivo(perfis, usuarioId);
-    seletor.value = String(ativo.id);
-    document.getElementById('perfil-rotulo').hidden = false;
-
-    seletor.addEventListener('change', async () => {
-        salvarPerfilAtivo(usuarioId, seletor.value);
-        await carregarContas(Number(seletor.value));
-    });
-    await carregarContas(ativo.id);
 }
 
 async function carregarContas(perfilId) {
