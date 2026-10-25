@@ -132,19 +132,35 @@ Arquivos alterados, **sem commit**, aguardando autorização:
 |---|---|---|---|
 | P1 | **Movimentos do mês e saldos bancários** (a tela anterior do novo aplicativo os listava em Despesas) | **Ausência temporária, não exclusão.** Os dados continuam no banco (`movimentos_do_mes`); a mensagem do pagamento informa conta e saldo | **Obrigatória** quando Contas Bancárias for integrada ao Supabase |
 | P2 | Leitura da lista no formato do Flask numa função só | Uma chamada a `despesa_para_edicao` por despesa do mês | Função de leitura (migration a autorizar) |
-| P3 | Meio de pagamento (boleto, PIX, cartão) gravado no item | Aceito no formulário, não gravado; a mensagem avisa | Junto com a tela Recorrências |
+| P3 | Meio de pagamento (boleto, PIX, cartão) gravado no item | **Resolvido (boleto, PIX, débito)** no FIN-FIDELIDADE-RECORRENCIAS-1; cartão segue P5 | — |
 | P4 | Limites por categoria do cartão no detalhe da fatura | Detalhe mostra as compras, sem o bloco "por categoria" | Junto com a tela Cartões |
-| P5 | Recorrência semanal, recorrência no cartão e alteração de recorrência pelo formulário | Recusado com aviso, sem gravar | Tela Recorrências |
-| P6 | Débito automático no formulário (conta do débito) | Recusado com aviso | Recorrências / Contas Bancárias |
+| P5 | Recorrência semanal, recorrência no cartão e alteração de recorrência pelo formulário | Alteração: **na tela Recorrências** (FIN-FIDELIDADE-RECORRENCIAS-1). Semanal e cartão: recusados com aviso | Gerador (R1) e Cartões (R2) |
+| P6 | Débito automático no formulário (conta do débito) | **Resolvido:** cadastrado na tela Recorrências (com a conta). O "Débito" do formulário de Despesas é débito comum, gravado como informativo | — |
 | P7 | Consórcios ("É um Consórcio", edição de parcela) | Campos preservados, recusado com aviso | Módulo Consórcios |
 | P8 | "A partir de documento" | O seletor abre e informa | Documentos Fiscais |
 | P9 | Consolidar fatura pela tela de Despesas | Como no Flask (a lista não traz o status da fatura) | Tela Cartões |
 
-## G. Publicação
+## G. Publicação (25/10/2026)
 
-A página está **pronta para a prévia protegida**: não depende de migration nova, de segredo nem do Flask. Para publicar:
-1. gerar o `dist` com a URL e a chave pública do projeto de teste;
-2. conferir;
-3. enviar só para a branch `avaliacao` (`docs/FIN_PUBLICACAO_PREVIEW_2.md` §6).
+**Commit:** `352c4e6`, com os 25 arquivos do contrato e os documentos. Sem push.
 
-Cada etapa depende de autorização.
+**Build:** URL e chave **publicável** do Supabase de teste. 16 páginas, CSP inalterada, sem segredos e sem endereço do Flask (`localhost`, `:5000`, Render). O texto `/api/` aparece só nas rotas atendidas localmente pela ponte e pelo adaptador. Impressão do `dist`: `fe783b3226b2`.
+
+**Validação real** (o mesmo `dist`, servido com o `_headers` real, contra o Supabase de teste). Nenhum erro de CSP ou JS e nenhuma requisição a `/api/` nem fora do site ou do Supabase.
+
+| Verificação | Resultado |
+|---|---|
+| Perfil de demonstração, só leitura: 10/2026 com 6 despesas e a fatura, resumo, filtro, detalhe da fatura, modais de nova despesa e de pagamento (sem enviar), troca de competência | Aprovado |
+| Perfil temporário criado pelo aplicativo (gerador NOVO), com conta bancária de teste: criar, editar, pagar com juros justificados (mensagem com o saldo), estornar e excluir pelos modais originais | Aprovado |
+| Recorrência mensal cadastrada e gerada pela confirmação | Aprovado |
+| Conta B com vínculo só de leitura: vê a lista, sem ações de escrita | Aprovado |
+| Limpeza por identidade (perfil criado pelo aplicativo, vínculos e conta do teste; todas as tabelas com `perfil_financeiro_id` contadas; simulação e depois confirmação) | Contagem e md5 de todas as tabelas iguais ao retrato tirado antes |
+
+**Ressalva da validação:** duas execuções pararam por cancelamentos provocados pelo próprio roteiro de teste (navegação enquanto a página ainda carregava). Em cada caso, o perfil temporário foi limpo por identidade e a validação refeita do início.
+
+**Publicação:**
+- O Access protegia a prévia antes e depois do envio: 302 para o login do Access na prévia, em páginas internas, no `config.js` e no endereço da versão. O endereço principal continua sem deploy (404).
+- Enviado só para a branch `avaliacao`: implantação `d9f7a5b5` (Preview, versão `352c4e6`), endereço **https://avaliacao.controle-financeiro-jah.pages.dev**.
+- Nenhuma implantação de produção.
+
+**Próximo passo:** validação visual e funcional pelo titular na prévia. A produção continua dependendo de aprovação posterior.
