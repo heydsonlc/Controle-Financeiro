@@ -5,6 +5,7 @@ import { expect, test } from '@playwright/test';
 
 import { chamarRpc, perfilAtivoId, registrarDialogos } from './despesas.mjs';
 import { trocarPerfil } from './moldura.mjs';
+import { gerarXlsx } from '../xlsx-ficticio.mjs';
 
 const A = { email: process.env.CF_EMAIL_A || 'usuario.a@teste.local', senha: process.env.CF_SENHA_A };
 const B = { email: process.env.CF_EMAIL_B || 'usuario.b@teste.local', senha: process.env.CF_SENHA_B };
@@ -113,10 +114,24 @@ test('CSV: analise, duplicidade, conciliacao, credito, confirmacao e reimportaca
     await expect(page.locator('body')).toContainText('Duplicado na fatura');
     expect(await lancamentosDoMes(page, perfil, cartao)).toHaveLength(3);
 
-    // PDF/XLSX: leitura em migracao (no Flask, no servidor); nada e analisado nem gravado.
+    // XLSX (FIN-FIDELIDADE-CARTOES-2): lido no navegador; a compra ja importada pelo CSV e protegida, a nova entra.
+    await abrirImportacao(page);
+    const xlsx = gerarXlsx([{ nome: 'Fatura', linhas: [['date', 'title', 'amount'], [{ data: '2033-03-05' }, 'Padaria Central', 12.5],
+        [{ data: '2033-03-14' }, 'Farmacia Planilha', 45]] }]);
+    await page.locator('#csvFile').setInputFiles({ name: 'fatura-marco.xlsx', buffer: xlsx,
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    await expect(page.locator('#resumoConfiguracaoImportacao')).toContainText('XLSX analisado com sucesso.');
+    await expect(page.locator('#resumoConfiguracaoImportacao')).toContainText(/Total importável: R\$\s45,00/);
+    await page.click('#btnStep4');
+    await page.click('#btnImportar');
+    await expect(page.locator('#resultadoContainer')).toContainText(/Inseridos:\s*1\./);
+    expect(await lancamentosDoMes(page, perfil, cartao)).toContainEqual(['Farmacia Planilha', 45, 'xlsx']);
+    expect(await lancamentosDoMes(page, perfil, cartao)).toHaveLength(4);
+
+    // PDF: leitura em migracao (no Flask, pdfplumber no servidor); nada e analisado nem gravado.
     await abrirImportacao(page);
     await enviar(page, 'fatura.pdf', '%PDF-1.4 ficticio', 'application/pdf');
-    await expect(page.locator('#uploadResult')).toContainText('Leitura de PDF e XLSX: em migração');
+    await expect(page.locator('#uploadResult')).toContainText('Leitura de PDF: em migração');
 });
 
 test('mapeamento manual de CSV de outro banco (perfil generico): a tela pede a validacao do layout', async ({ page }) => {

@@ -95,7 +95,7 @@ test('cadastrar, recusas sem gravar, editar e gerar em Despesas com nome, valor,
     await page.selectOption('#frequencia', 'mensal');
     await page.selectOption('#meio-pagamento', 'cartao');
     await salvar(page);
-    await expect.poll(() => dialogos.at(-1)).toMatch(/^Recorrência no cartão de crédito: em migração/);
+    await expect.poll(() => dialogos.at(-1)).toBe('Selecione o cartão da recorrência.');  // FIN-FIDELIDADE-CARTOES-2: cartao obrigatorio
     await expect(page.locator('#recorrencias-lista .recorrencias-row')).toHaveCount(total);
 
     await preencher(page, { categoria: false, meio: 'boleto', observacoes: 'Fibra' });
@@ -225,4 +225,51 @@ test('perfil gerado pelo sistema atual: vencimento e frequencia nao mudam por aq
     await expect.poll(() => dialogos.at(-1)).toBe('Vencimento e frequência só mudam quando o novo aplicativo gera este perfil.');
     await abrirRecorrencias(page);
     await expect(linha(page, 'Seguro 2028')).toContainText('10/01/2028');
+});
+
+// FIN-FIDELIDADE-CARTOES-2 (R2) — recorrencia no cartao pela tela original: cadastrar, gerar a compra em Despesas (na
+// fatura do cartao), editar (vale para as proximas) e inativar. Perfil B, cartao criado aqui, em 2032; inativado no fim.
+test('recorrencia no cartao: cadastrar, gerar a compra na fatura, editar e inativar', async ({ page }) => {
+    const dialogos = registrarDialogos(page);
+    await entrar(page, B);
+    const perfil = await perfilAtivoId(page);
+    const criado = await chamarRpc(page, 'criar_cartao', { p_perfil_id: perfil, p_chave: crypto.randomUUID(),
+        p_dados: { nome: 'Cartao Recorrente (tela)', dia_fechamento: 3, dia_vencimento: 12 } });
+    expect(criado.status).toBe(200);
+    await abrirRecorrencias(page);
+    await preencher(page, { nome: 'Musica no cartao (tela)', valor: '21.90', vencimento: '2032-03-12', meio: 'cartao' });
+    await page.selectOption('#cartao-id', { label: 'Cartao Recorrente (tela)' });
+    await salvar(page);
+    await expect(page.locator('#recorrencias-resultado')).toContainText('Recorrência no cartão criada.');
+    await expect(linha(page, 'Musica no cartao (tela)')).toContainText('R$ 21,90');
+
+    await abrirDespesas(page, '2032-03');
+    await page.click('#gerar-contas');
+    const painel = page.locator('#geracao-confirmacao');
+    await expect(painel.locator('.geracao-lista li', { hasText: 'Musica no cartao (tela)' }).first()).toContainText('03/2032');
+    await painel.getByRole('button', { name: 'Confirmar' }).click();
+    await expect(page.locator('#geracao-resultado')).toContainText('Geração concluída');
+    await expect(despesa(page, 'Fatura Cartao Recorrente (tela) - 03/2032')).toBeVisible();
+    await expect(despesa(page, 'Musica no cartao (tela)')).toHaveCount(0);  // compra na fatura, nao conta avulsa
+
+    await abrirRecorrencias(page);
+    await linha(page, 'Musica no cartao (tela)').locator('[data-on-click^="editarRecorrencia"]').click();
+    await page.fill('#valor', '24.90');
+    await salvar(page);
+    await expect(page.locator('#recorrencias-resultado')).toContainText('Recorrência no cartão atualizada.');
+    await linha(page, 'Musica no cartao (tela)').locator('[data-on-click^="editarRecorrencia"]').click();
+    await page.selectOption('#meio-pagamento', 'boleto');
+    await salvar(page);
+    await expect.poll(() => dialogos.at(-1)).toMatch(/^Para trocar o cartão por outro meio de pagamento, inative/);
+    const lista = await chamarRpc(page, 'compras_da_fatura', { p_perfil_id: perfil, p_cartao_id: criado.corpo.cartao_id, p_mes: '2032-03-01' });
+    expect(lista.corpo.map((c) => [c.descricao, Number(c.valor), c.recorrente])).toEqual([['Musica no cartao (tela)', 21.9, true]]);
+
+    // Limpeza do cenario: inativa a recorrencia e o cartao (compras e faturas continuam registradas).
+    const recs = await chamarRpc(page, 'recorrencias_do_perfil', { p_perfil_id: perfil });
+    const rec = recs.corpo.find((r) => r.nome === 'Musica no cartao (tela)');
+    expect((await chamarRpc(page, 'definir_situacao_recorrencia_cartao', { p_perfil_id: perfil, p_item_id: rec.id, p_versao: rec.versao,
+        p_ativo: false })).status).toBe(200);
+    const cartoes = await chamarRpc(page, 'cartoes_do_perfil', { p_perfil_id: perfil });
+    const cartao = cartoes.corpo.find((c) => c.id === criado.corpo.cartao_id);
+    expect((await chamarRpc(page, 'inativar_cartao', { p_perfil_id: perfil, p_cartao_id: cartao.id, p_versao: cartao.versao })).status).toBe(200);
 });

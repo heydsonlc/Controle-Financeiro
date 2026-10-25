@@ -221,3 +221,123 @@ Para homologar Cartões e Importar Cartão com dados, em vez de telas vazias. Pr
   - CSV Caixa: crédito e débito;
   - CSV de layout genérico, para o mapeamento manual.
 - **Inserção:** por script auditável, com identidade registrada para a limpeza, como nas validações reais.
+
+---
+
+# FIN-FIDELIDADE-CARTOES-2 — homologação, PDF/XLSX e integrações (25/10/2026)
+
+**Situação:** implementado localmente. Nada commitado e nada publicado; a migration `20261106090000` não foi aplicada. O perfil de homologação foi criado no Supabase de teste (autorizado).
+
+## 11. Previsto, realizado e pago (regra do Flask, conferida)
+
+**Mesma fórmula do Flask** (`routes/despesas.py` `_calcular_totais_fatura_cartao_previsto` e `CartaoService.calcular_planejado`) em `contas_do_mes` e `planejado_fatura`. Nada foi redesenhado:
+
+| Conceito | Regra |
+|---|---|
+| Realizado | Soma das compras da fatura |
+| Previsto da fatura aberta | Realizado + o que falta de cada limite de categoria. Por categoria, vale o maior entre o limite e o gasto, sem somar duas vezes |
+| Valor da fatura paga | O realizado (o que foi pago) |
+| Planejado gravado na fatura | Soma dos limites; não muda com o consumo |
+
+Testes com os exemplos do titular (`tests/test_supabase_recorrencia_cartao.py`):
+- **Previsão de R$ 300 e compras de R$ 90:** projeção de R$ 300, realizado de R$ 90; paga, a fatura vale R$ 90.
+- **Previsão de R$ 600 e compras de R$ 620:** previsto da fatura de R$ 620, planejado e previsão da categoria continuam R$ 600 (disponível −R$ 20, "Estourado").
+
+## 12. Perfil de homologação (Supabase de teste)
+
+**Perfil "Homologacao Cartoes (ficticio)":**
+- separado da demonstração;
+- criado pelo próprio aplicativo (gerador NOVO), como titular a conta de avaliação, a mesma que é titular do perfil de demonstração;
+- **acesso:** entrar na prévia com essa conta e escolher o perfil no seletor do topo. Nenhuma senha registrada.
+
+**Dados, todos marcados "(homologacao)":**
+- **Cartões:**
+  - "Cartao Azul": fecha dia 3, vence dia 12, limite R$ 5.000, fechamento confirmado;
+  - "Cartao Verde": fecha dia 25, vence dia 5, sem confirmação.
+  - Nenhum número, validade ou CVV.
+- **Categorias do Cartão do perfil, com limites no Azul:**
+  - Mercado: R$ 800 (Alimentação);
+  - Combustível: R$ 600 (Combustível);
+  - Lazer: R$ 300 (Lazer);
+  - Casa: R$ 180 (Moradia).
+  - Saúde fica sem Categoria do Cartão, para mostrar "Revisar". As categorias de despesa usadas são as globais existentes; nenhuma foi criada.
+- **Faturas do Azul:**
+
+  | Fatura | Situação | Realizado | Previsto | Observação |
+  |---|---|---|---|---|
+  | 09/2026 | Paga, pela "Conta Corrente (homologacao)" | R$ 570 | R$ 1.880 | |
+  | 10/2026 | Aberta e vencida | R$ 1.370 | R$ 1.960 | Combustível R$ 620 / R$ 600 "Estourado"; Lazer R$ 90 / R$ 300; Casa 83% "Atenção"; Notebook 1/10 |
+  | 11/2026 | Aberta | R$ 189,90 | | Notebook 2/10 e assinatura |
+
+- **Fatura 10/2026 do Verde:** consolidada, como a consolidação do Flask: `FECHADA`, total consolidado de R$ 117,50.
+- **Arquivos de importação**, em `docs/homologacao/cartoes/`:
+  - `nubank_cartao_azul_2026-10.csv`: duplicata no banco e no próprio arquivo, conciliação com a compra manual, categoria pelo histórico, parcela 2/5, pagamento e estorno;
+  - `caixa_cartao_verde_2026-11.csv`: crédito e débito;
+  - `generico_outro_banco.csv`: mapeamento manual.
+  - Análise só de leitura do arquivo Nubank: 2 duplicadas, 1 conciliada, 1 válida, 3 para classificar e 2 créditos.
+
+**Identificação e remoção:**
+- o script `homologacao_cartoes.py` (scratchpad da sessão) registra cada id criado;
+- `remover` apaga só o perfil de homologação e o que é dele, conferindo a identidade, em simulação antes da confirmação;
+- os perfis 1, 2 e 31 e as categorias foram conferidos por impressão digital antes e depois: intactos.
+
+**O perfil fica preservado para a avaliação.** A prévia publicada (`ef6c0d8`) ainda não tem o XLSX nem a recorrência no cartão desta etapa.
+
+## 13. I1 — PDF e XLSX
+
+**No Flask:**
+- **XLSX:** `openpyxl`, planilha ativa, valores gravados, mesma conversão do CSV (só Nubank e Caixa; outro cabeçalho é recusado).
+- **PDF:** `pdfplumber`, só o layout da fatura Caixa, extraído por expressões sobre o texto de cada página. **PDF escaneado está fora do escopo no próprio Flask:** "OCR e PDF escaneado estão fora do escopo deste MVP".
+
+**XLSX — implementado sem biblioteca nova** (`web/src/js/importacao-xlsx.js`):
+- o arquivo XLSX é um ZIP de XML; o ZIP é lido no navegador e descompactado pela função nativa (`DecompressionStream`);
+- o XML é lido diretamente;
+- **regras:** planilha ativa, data pelo estilo da célula, texto compartilhado e inline, mensagens do Flask;
+- **conferido contra o `openpyxl`:** um arquivo gravado pelo `openpyxl` foi lido pelo parser do Flask e pelo novo leitor, com as mesmas linhas. A única diferença é o crédito negativo, já corrigido;
+- **testes:** unitários e E2E (planilha importada, duplicata protegida).
+- **Não precisa de SheetJS:** ele teria cerca de 400 KB a 900 KB, e a distribuição no npm está parada na 0.18.5.
+
+**PDF — recomendação** (instalação condicionada à sua autorização):
+
+| Opção | Avaliação |
+|---|---|
+| **`pdfjs-dist` 4.10.38 (Mozilla, Apache-2.0)** — recomendada | Extrai o texto no navegador, e o arquivo não sai do aparelho. É a biblioteca de PDF mais mantida. Cerca de 0,4 MB de módulo + 1 MB do worker, servidos do próprio site como o `supabase.js` (CSP sem mudança: `default-src 'self'` cobre o worker). Só extração de texto, com `isEvalSupported: false`. A 4.x evita o WebAssembly da 5.x (imagens JPX), desnecessário aqui |
+| Leitura no servidor (Edge Function com biblioteca de PDF) | Quebra o "processamento local" e exige infraestrutura nova. Não recomendada |
+| OCR (`tesseract.js`) | De 2 MB a 4 MB de código + cerca de 10 MB por idioma; exige `wasm-unsafe-eval` na CSP; e o Flask também não faz OCR. **Não recomendado.** PDF escaneado recebe a mesma mensagem do Flask |
+
+**Plano após a autorização:**
+1. Portar `importacao_pdf_caixa_parser.py` (374 linhas de regras sobre o texto: grupos, cartões detectados, compras internacionais, créditos "C", parcelas, total da fatura).
+2. Montar as linhas do texto pela posição (tolerâncias de `x` = 1 e `y` = 3, como o `extract_text` do Flask).
+3. Validar contra o `pdfplumber` com PDFs fictícios gerados no teste.
+4. Reaproveitar a análise e a conciliação já implementadas, porque o PDF entra como mais uma origem.
+
+## 14. R2, R4 e I2
+
+**R2 — recorrência no cartão: implementada localmente.**
+- **Banco:** migration `20261106090000_financeiro_recorrencia_cartao.sql`, não aplicada. Funções novas `criar_recorrencia_cartao`, `editar_recorrencia_cartao` e `definir_situacao_recorrencia_cartao`; nenhuma existente foi trocada.
+- **Mesmo modelo do Flask:** item recorrente com meio "cartão", o cartão e a Categoria do Cartão resolvida pela categoria de despesa.
+- **O gerador já existente** lança a compra na fatura da competência, com identidade por competência, sem duplicar.
+- **Edição:** vale para as próximas compras; as já geradas (inclusive em fatura paga) não mudam e ficam bloqueadas na edição como "Gerada por recorrência".
+- **Inativar e reativar.**
+- **Perfil gerado pelo Flask:** o dia e a frequência não mudam por aqui.
+- **Troca entre cartão e outro meio:** inativar e cadastrar de novo, para não misturar compras com contas.
+- **Tela Recorrências** (adaptador): o meio "Cartão" passa a funcionar, com a lista de Categorias do Cartão e a resolução da categoria.
+- **Testes:** 18 de banco e 1 E2E (cadastrar, gerar a compra na fatura em Despesas, editar, recusar a troca de meio).
+
+**R4 — gerador e o cartão marcado como recorrente: só diagnóstico e proposta.**
+- **Causa:** `plano_recorrencia` lê todo item recorrente, e o cartão é gravado como recorrente (como no Flask). Ele aparece como rejeitado ("Cartão marcado como recorrência") na prévia e no relatório da geração. Nada é gravado por causa disso, e a fatura é gerada pela parte de cartões.
+- **Proposta:** excluir o tipo `Agregador` na seleção de `plano_recorrencia` (uma condição). Isso exige substituir a função inteira (cerca de 250 linhas), central para Despesas.
+- **Efeito esperado:** some só essa rejeição; a geração das contas e das compras não muda.
+- **Antes de aplicar:** comparação das prévias antes e depois em todos os cenários de teste do gerador.
+- **Aguarda autorização.**
+
+**I2 — vincular uma linha importada a uma recorrência escolhida:** sem mudança. Depende do R2 publicado. A recorrência com o mesmo nome já é reconhecida na importação.
+
+## 15. Testes desta etapa
+
+| Conjunto | Resultado |
+|---|---|
+| `tests/test_supabase_recorrencia_cartao.py` (novo: R2 e previsto, realizado e pago) | 18/18 |
+| Unitários (build, CSV, XLSX novo, fechamento) | 26/26 |
+| E2E de Importação (com XLSX) e de Recorrências (com cartão) | 3/3 e 6/6 |
+| Suítes completas | Banco 652 aprovados, nenhuma falha; E2E 72/72 |

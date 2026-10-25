@@ -100,6 +100,10 @@ const RPCS_DE_ESCRITA = new Map([
     ['editar_recorrencia', 'recorrencias-adaptador.js'],
     ['reativar_recorrencia', 'recorrencias-adaptador.js'],
     ['definir_meio_pagamento_recorrencia', ['recorrencias-adaptador.js', 'despesas-adaptador.js']],
+    // FIN-FIDELIDADE-CARTOES-2 (R2: recorrencia no cartao; gestao, perfil, cartao e versao conferidos no banco)
+    ['criar_recorrencia_cartao', 'recorrencias-adaptador.js'],
+    ['editar_recorrencia_cartao', 'recorrencias-adaptador.js'],
+    ['definir_situacao_recorrencia_cartao', 'recorrencias-adaptador.js'],
     // FIN-RECEITAS-1 (so previsoes; nenhum recebimento)
     ['criar_receita', 'receitas.js'],
     ['editar_receita', 'receitas.js'],

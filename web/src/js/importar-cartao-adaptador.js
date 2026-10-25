@@ -4,7 +4,8 @@
 //   as linhas lidas (analisar_importacao_cartao, so leitura) e, depois da confirmacao do usuario na tela,
 //   importar_fatura_cartao grava tudo ou nada, com a analise refeita sob trava (duplicidade, conciliacao, fatura
 //   paga ou consolidada).
-// - PDF e XLSX: em migracao (a leitura no Flask e feita no servidor, em Python); aqui so CSV.
+// - XLSX (FIN-FIDELIDADE-CARTOES-2): lido aqui sem biblioteca nova (importacao-xlsx.js), como o openpyxl do Flask.
+// - PDF: em migracao (no Flask, pdfplumber no servidor); depende de biblioteca a autorizar (I1).
 // - Vincular uma linha a uma recorrencia escolhida: em migracao. Recorrencia no cartao com o mesmo nome e reconhecida
 //   na importacao (como reconhecer_despesa_fixa do Flask) e o gerador nao a lanca de novo.
 
@@ -12,6 +13,7 @@ import { supabase } from './cliente.js';
 import { criarChaves, falha, mensagemDeErro, ok } from './adaptador-comum.js';
 import { converterTabela, decodificar, detectarPerfilCsv, lerCsv, lerData, lerValor, normalizarClassificacao, normalizarDescricao,
     PERFIL_CAIXA, PERFIL_MANUAL, PERFIL_NUBANK } from './importacao-csv.js';
+import { lerPlanilha } from './importacao-xlsx.js';
 import { iniciarMoldura } from './moldura.js';
 
 const estado = { perfilId: null };
@@ -27,15 +29,23 @@ function competencia(valor) {
     return m ? `${m[2]}-${m[1]}-01` : null;
 }
 
-async function lerArquivo(formData) {
+async function lerArquivo(formData, somenteCsv = false) {
     const arquivo = formData && formData.get('arquivo');
     if (!arquivo || !arquivo.name) return { erro: 'Nenhum arquivo enviado' };
     const nome = arquivo.name.toLowerCase();
+    if (nome.endsWith('.xlsx')) {
+        if (somenteCsv) return { erro: 'Apenas arquivos CSV são permitidos' };  // /upload do Flask (mapeamento manual)
+        try {
+            return { arquivo, origem: 'xlsx', tabela: await lerPlanilha(await arquivo.arrayBuffer()) };
+        } catch (erro) {
+            return { erro: /^XLSX|^Arquivo XLSX|^Compress/.test(erro.message) ? erro.message : 'Não foi possível ler o arquivo XLSX.' };
+        }
+    }
     if (!nome.endsWith('.csv')) {
-        return { erro: 'Leitura de PDF e XLSX: em migração para o novo aplicativo. Exporte a fatura em CSV ou use o sistema atual.', status: 501 };
+        return { erro: 'Leitura de PDF: em migração para o novo aplicativo. Exporte a fatura em CSV ou XLSX, ou use o sistema atual.', status: 501 };
     }
     try {
-        return { arquivo, tabela: lerCsv(decodificar(new Uint8Array(await arquivo.arrayBuffer()))) };
+        return { arquivo, origem: 'csv', tabela: lerCsv(decodificar(new Uint8Array(await arquivo.arrayBuffer()))) };
     } catch (erro) {
         return { erro: erro.message === 'CSV vazio' ? 'CSV vazio' : 'Não foi possível ler o arquivo CSV.' };
     }
@@ -105,8 +115,12 @@ async function analisarArquivo(formData) {
     const mes = competencia(formData.get('competencia'));
     if (!cartaoId) return falha('cartao_id obrigatorio');
     if (!mes) return falha('competencia obrigatoria');
-    const conv = converterTabela(lido.tabela, 'csv');
-    const base = { origem: 'csv', arquivo_nome: lido.arquivo.name, cartao_id: Number(cartaoId), competencia: mes.slice(0, 7),
+    const conv = converterTabela(lido.tabela, lido.origem);
+    // XLSX sem cabecalho Nubank ou Caixa: o Flask recusa (nao ha mapeamento manual para XLSX).
+    if (lido.origem === 'xlsx' && conv.requer_mapeamento) {
+        return falha('XLSX sem cabecalhos reconheciveis. Use colunas equivalentes a CSV Nubank ou Caixa.');
+    }
+    const base = { origem: lido.origem, arquivo_nome: lido.arquivo.name, cartao_id: Number(cartaoId), competencia: mes.slice(0, 7),
         fatura: { emissor: null, vencimento: null, valor_total: null, cartoes_detectados: [], competencia: `${mes.slice(5, 7)}/${mes.slice(0, 4)}` },
         perfil_detectado: conv.perfil_detectado };
     if (conv.requer_mapeamento) {
@@ -123,7 +137,7 @@ async function analisarArquivo(formData) {
 
 // POST /upload (FormData): leitura e perfil, para o mapeamento manual (a tela mapeia as colunas).
 async function upload(formData) {
-    const lido = await lerArquivo(formData);
+    const lido = await lerArquivo(formData, true);
     if (lido.erro) return { status: lido.status || 400, corpo: { success: false, message: lido.erro } };
     const info = detectarPerfilCsv(lido.tabela.colunas);
     return ok({ ...lido.tabela, perfil_detectado: info.perfil, autodeteccao_confianca: info.confianca,

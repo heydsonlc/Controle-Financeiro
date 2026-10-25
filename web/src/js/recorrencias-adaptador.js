@@ -6,7 +6,9 @@
 // do perfil, versao contra edicao concorrente e trava de geracao. Diferencas assumidas em relacao ao Flask:
 // - salvar nao gera conta: a geracao e explicita, em Despesas ("Gerar contas"), como no FIN-RECORRENCIA-1;
 // - semanal / a cada 2 semanas: o gerador do novo aplicativo so gera mensal e anual (pendencia);
-// - recorrencia no cartao: cadastrada no modulo de cartoes (pendencia); aqui aparece, mas nao e alterada;
+// - recorrencia no cartao (FIN-FIDELIDADE-CARTOES-2, R2): cadastro, edicao, inativar e reativar por funcoes proprias
+//   (criar/editar_recorrencia_cartao, definir_situacao_recorrencia_cartao); trocar entre cartao e outro meio pede
+//   inativar e cadastrar de novo (as compras ja geradas ficam no cartao);
 // - consorcios: modulo em migracao (a lista avisa).
 
 import { supabase } from './cliente.js';
@@ -78,9 +80,7 @@ function recusa(corpo, tipoAtual) {
     } else if (!['mensal', 'anual'].includes(corpo.tipo_recorrencia)) {
         return 'Frequência inválida.';
     }
-    if (corpo.meio_pagamento === 'cartao') {
-        return 'Recorrência no cartão de crédito: em migração para o novo aplicativo (módulo de cartões).';
-    }
+    if (corpo.meio_pagamento === 'cartao' && !corpo.cartao_id) return 'Selecione o cartão da recorrência.';
     if (corpo.meio_pagamento === 'debito_automatico' && !corpo.conta_bancaria_id) {
         return 'Conta bancária é obrigatória para recorrência em débito automático.';
     }
@@ -112,9 +112,58 @@ async function definirAtivo(id, ativo) {
     return error;
 }
 
+const ehCartao = (meio) => meio === 'cartao';
+
+function dadosCartao(corpo) {
+    const dados = { nome: String(corpo.nome || '').trim(), valor: valorTexto(corpo.valor), categoria_id: Number(corpo.categoria_id),
+        data_vencimento: corpo.data_vencimento, cartao_id: Number(corpo.cartao_id), descricao: String(corpo.descricao || '').trim() };
+    if (corpo.tipo_recorrencia !== 'semanal') dados.tipo_recorrencia = corpo.tipo_recorrencia;
+    return dados;
+}
+
+async function situacaoCartao(id, ativo) {
+    const item = await atual(id);
+    if (item.ativo === ativo) return null;
+    const { error } = await supabase.rpc('definir_situacao_recorrencia_cartao', {
+        p_perfil_id: estado.perfilId, p_item_id: id, p_versao: item.versao, p_ativo: ativo,
+    });
+    return error;
+}
+
+async function criarNoCartao(corpo) {
+    const dados = { ...dadosCartao(corpo), tipo_recorrencia: corpo.tipo_recorrencia };
+    const operacao = `criar-cartao:${JSON.stringify(dados)}`;
+    const { data, error } = await supabase.rpc('criar_recorrencia_cartao', { p_perfil_id: estado.perfilId, p_dados: dados, p_chave: chaves.de(operacao) });
+    if (error) return falha(mensagemDeErro(error));
+    chaves.esquecer(operacao);
+    const pendente = corpo.ativo === false && await situacaoCartao(data.item_id, false);
+    avisar(`Recorrência no cartão criada. ${MENSAGEM_GERACAO} As compras entram na fatura do cartão.${pendente ? ' Não foi possível gravar a inativação; edite a recorrência.' : ''}`);
+    return { status: 201, corpo: { success: true, message: 'Recorrencia criada com sucesso' } };
+}
+
+async function atualizarNoCartao(id, item, corpo) {
+    if (!ehCartao(corpo.meio_pagamento)) {
+        return falha('Para trocar o cartão por outro meio de pagamento, inative esta recorrência e cadastre outra: as compras já geradas ficam no cartão.');
+    }
+    const { error } = await supabase.rpc('editar_recorrencia_cartao', {
+        p_perfil_id: estado.perfilId, p_item_id: id, p_versao: item.versao, p_dados: dadosCartao(corpo),
+    });
+    if (error) {
+        if (error.hint === 'GERADOR_FLASK') return falha('Vencimento e frequência só mudam quando o novo aplicativo gera este perfil.');
+        return falha(mensagemDeErro(error));
+    }
+    if (typeof corpo.ativo === 'boolean') {
+        const erroAtivo = await situacaoCartao(id, corpo.ativo);
+        if (erroAtivo) return falha(`Recorrência salva, mas a situação não: ${mensagemDeErro(erroAtivo)}`);
+    }
+    avisar(`Recorrência no cartão atualizada. Vale para as próximas compras; as já geradas não mudam. ${MENSAGEM_GERACAO}`);
+    return ok({ message: 'Recorrencia atualizada com sucesso' });
+}
+
 async function criar(corpo) {
     const motivo = recusa(corpo, null);
     if (motivo) return falha(motivo);
+    if (ehCartao(corpo.meio_pagamento)) return criarNoCartao(corpo);
     const debito = corpo.meio_pagamento === 'debito_automatico';
     const dados = {
         nome: String(corpo.nome).trim(),
@@ -142,8 +191,12 @@ async function criar(corpo) {
 async function atualizar(id, corpo) {
     const item = await atual(id);
     if (!item) return falha('Recorrencia nao encontrada', 404);
-    if (!item.gerenciavel) return falha('Recorrência de cartão ou de outro módulo: altere no módulo de origem.', 409);
     const motivo = recusa(corpo, item.tipo_recorrencia);
+    if (ehCartao(item.meio_pagamento)) return motivo ? falha(motivo) : atualizarNoCartao(id, item, corpo);
+    if (!item.gerenciavel) return falha('Recorrência de outro módulo: altere no módulo de origem.', 409);
+    if (ehCartao(corpo.meio_pagamento)) {
+        return falha('Para passar a recorrência para o cartão, inative esta e cadastre uma nova no cartão: as contas já geradas não viram compras.');
+    }
     if (motivo) return falha(motivo);
     const debito = corpo.meio_pagamento === 'debito_automatico';
     const dados = {
@@ -180,8 +233,8 @@ async function atualizar(id, corpo) {
 async function inativar(id) {
     const item = await atual(id);
     if (!item) return falha('Recorrencia nao encontrada', 404);
-    if (!item.gerenciavel) return falha('Recorrência de cartão ou de outro módulo: altere no módulo de origem.', 409);
-    const erro = await definirAtivo(id, false);
+    if (!item.gerenciavel && !ehCartao(item.meio_pagamento)) return falha('Recorrência de outro módulo: altere no módulo de origem.', 409);
+    const erro = ehCartao(item.meio_pagamento) ? await situacaoCartao(id, false) : await definirAtivo(id, false);
     if (erro) return falha(mensagemDeErro(erro));
     avisar('Recorrência inativada: nenhuma conta nova será gerada; as já geradas continuam.');
     return ok({ message: 'Recorrencia inativada com sucesso' });
@@ -211,6 +264,22 @@ async function contasBancarias() {
         .map((c) => ({ id: c.id, nome: c.nome, instituicao: c.instituicao })) });
 }
 
+// Apoio do formulario original (meio "cartao"): Categorias do Cartao vinculadas e a resolucao pela categoria.
+async function limitesDoCartao(cartaoId) {
+    const hoje = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+    const { data, error } = await supabase.rpc('limites_do_cartao', { p_perfil_id: estado.perfilId, p_cartao_id: cartaoId, p_mes: `${hoje.slice(0, 7)}-01` });
+    if (error) return falha(mensagemDeErro(error));
+    return ok({ data: (data || []).filter((l) => l.ativo).map((l) => ({ id: l.id, categoria_cartao_id: l.categoria_cartao_id,
+        categoria_cartao_nome: l.categoria_cartao_nome, limite_mensal: Number(l.limite_mensal), ativo: true })) });
+}
+
+async function resolverCategoriaCartao(parametros) {
+    const { data, error } = await supabase.rpc('resolver_categoria_cartao_tela', { p_perfil_id: estado.perfilId,
+        p_cartao_id: Number(parametros.get('cartao_id')), p_categoria_id: Number(parametros.get('categoria_id')) });
+    if (error) return falha(mensagemDeErro(error));
+    return ok({ data });
+}
+
 const ROTAS = [
     ['GET', /^\/api\/recorrencias\/?$/, () => listar()],
     ['POST', /^\/api\/recorrencias\/?$/, (m, corpo) => criar(corpo || {})],
@@ -222,16 +291,16 @@ const ROTAS = [
     // Consorcios: modulo em migracao; a lista avisa (recorrencias-aviso-consorcios) e nao mostra nenhum.
     ['GET', /^\/api\/consorcios\/?$/, async () => ok({ data: [] })],
     [null, /^\/api\/consorcios(\/|$)/, async () => emMigracao('Consórcios')],
-    ['GET', /^\/api\/cartoes\/\d+\/categorias-limite$/, async () => emMigracao('Categoria do cartão')],
-    ['GET', /^\/api\/categorias-cartao\/resolver$/, async () => emMigracao('Categoria do cartão')],
+    ['GET', /^\/api\/cartoes\/(\d+)\/categorias-limite$/, (m) => limitesDoCartao(Number(m[1]))],
+    ['GET', /^\/api\/categorias-cartao\/resolver$/, (m, c, p) => resolverCategoriaCartao(p)],
 ];
 
-async function adaptador({ metodo, caminho, corpo }) {
+async function adaptador({ metodo, caminho, parametros, corpo }) {
     for (const [verbo, padrao, executar] of ROTAS) {
         const m = padrao.exec(caminho);
         if (m && (!verbo || verbo === metodo)) {
             try {
-                return await executar(m, corpo);
+                return await executar(m, corpo, parametros);
             } catch (erro) {
                 return falha(mensagemDeErro(erro), 500);
             }
