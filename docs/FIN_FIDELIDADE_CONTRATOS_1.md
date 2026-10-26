@@ -82,6 +82,8 @@ Portar o motor exige comparar cada cálculo com o próprio Flask nos mesmos dado
 
 ## 6. Fase 2 (pagamento e estorno de parcela): bloqueio do escritor único
 
+**Atualização (26/10/2026):** desbloqueado e implementado no FIN-CONTRATOS-2 (`docs/FIN_CONTRATOS_2.md`): guarda do Flask, pagamento e estorno das parcelas pelas despesas, Defeitos A (D1) e B (D2) corrigidos. O rascunho do pagamento direto ficou em `supabase/rascunhos/` (P3: as 420 parcelas reais têm despesa).
+
 **O que a análise do Flask mostrou:**
 - Todo financiamento criado pelo Flask ganha um item de despesa e uma despesa (`Conta`) por parcela (`criar_financiamento`: "1 parcela = 1 Conta = 1 linha em DESPESAS").
   - Por isso a rota direta `/parcelas/<id>/pagar` recusa ("Use o fluxo de Despesas").

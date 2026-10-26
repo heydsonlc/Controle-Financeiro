@@ -8,6 +8,9 @@ import { falha, mensagemDeErro, ok } from './adaptador-comum.js';
 import { iniciarMoldura } from './moldura.js';
 
 const estado = { perfilId: null };
+const PARCELA_EM_DESPESAS = 'Esta parcela possui despesa vinculada. Use o fluxo de Despesas para registrar o pagamento ou o '
+    + 'estorno: a parcela e o saldo devedor são atualizados junto. (Parcela sem despesa, de contrato antigo: continua no '
+    + 'sistema atual.) Nada foi gravado.';
 const NA_FASE_1 = 'Financiamentos: nesta fase o novo aplicativo só consulta contratos, parcelas e saldos. Esta ação continua no sistema atual. Nada foi gravado.';
 
 async function rpc(funcao, args) {
@@ -37,6 +40,9 @@ const ROTAS = [
     ['GET', /^\/api\/financiamentos\/?$/, (m, c, p) => listar(p)],
     ['GET', /^\/api\/financiamentos\/(\d+)$/, (m) => detalhe(Number(m[1]))],
     ['GET', /^\/api\/contas\/?$/, () => contasBancarias()],
+    // FIN-CONTRATOS-2: como no Flask (CORE-SALDO-1C), a parcela com despesa e paga e estornada em Despesas, onde o novo
+    // aplicativo atualiza a parcela e o saldo devedor na mesma operacao. Parcela sem despesa (contrato antigo): pendente.
+    ['POST', /^\/api\/financiamentos\/parcelas\/(\d+)\/(pagar|estornar-pagamento)$/, async () => falha(PARCELA_EM_DESPESAS, 409)],
 ];
 
 async function adaptador({ metodo, caminho, parametros, corpo }) {

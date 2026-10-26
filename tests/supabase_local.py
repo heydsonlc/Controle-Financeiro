@@ -621,6 +621,22 @@ def semear_financiamento_e2e(cur):
                     "values (%s, %s, %s, %s, 1000, %s, 10, 0, 0, 0, 0, 0, 0, 0, %s, %s, 0, %s, %s)",
                     (perfil, financiamento, numero, f'2033-0{numero + 1}-10', 28.47 / numero, 1010 + 28.47 / numero,
                      1038.47 if status == 'pago' else 0, saldo, status))
+    # FIN-CONTRATOS-2 (contratos_pagamento.spec.mjs): como o Flask cria (1 parcela = 1 despesa do item 'Financiamento'),
+    # as despesas das parcelas, ligadas por financiamento_parcela_id; a da parcela 1 ja paga.
+    cur.execute("insert into public.item_despesa (perfil_financeiro_id, nome, tipo, ativo, recorrente, categoria_id) "
+                "values (%s, %s, 'Financiamento', true, false, 201) returning id", (perfil, FINANCIAMENTO_E2E_B))
+    item = cur.fetchone()[0]
+    cur.execute('update public.financiamento set item_despesa_id = %s where id = %s', (item, financiamento))
+    cur.execute('select id, numero_parcela, valor_previsto_total, data_vencimento, status from public.financiamento_parcela '
+                'where financiamento_id = %s order by numero_parcela', (financiamento,))
+    for pid, numero, valor, vencimento, status in cur.fetchall():
+        cur.execute("insert into public.conta (perfil_financeiro_id, item_despesa_id, mes_referencia, descricao, valor, "
+                    "data_vencimento, status_pagamento, debito_automatico, is_fatura_cartao, estouro_orcamento, status_fatura, "
+                    "financiamento_parcela_id) values (%s, %s, date_trunc('month', %s::date), %s, %s, %s, %s, false, false, false, "
+                    "'ABERTA', %s) returning id",
+                    (perfil, item, vencimento, f'{FINANCIAMENTO_E2E_B} - parcela {numero}/3', valor, vencimento,
+                     'Pago' if status == 'pago' else 'Pendente', pid))
+        cur.execute('update public.financiamento_parcela set conta_id = %s where id = %s', (cur.fetchone()[0], pid))
 
 
 

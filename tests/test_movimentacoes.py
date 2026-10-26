@@ -181,8 +181,9 @@ def test_pagar_estornar_pagar_estornar_despesa(pg):
     assert [p['estorno'] is not None for p in tela['pagamentos']] == [True, True] and tela['pode_pagar'] is True
 
 
-# Parcela de consorcio: nao e paga aqui; o Flask continua pagando mesmo com o perfil no novo aplicativo.
-def test_consorcio_fica_no_flask(pg):
+# FIN-CONTRATOS-2: parcela de consorcio (despesa do item 'Consorcio') e paga aqui pelo escritor do perfil; o Flask, com o
+# perfil no novo aplicativo, recusa (antes desta etapa era o contrario: o Flask pagava e o novo aplicativo recusava).
+def test_consorcio_pago_pelo_escritor_do_perfil(pg):
     d, banco = novo(pg)
     item = sql(d, "insert into public.item_despesa (perfil_financeiro_id, nome, tipo, ativo, categoria_id) "
                   "values (%s, 'Consorcio teste', 'Consorcio', true, 951) returning id", (PERFIL,))[0]['id']
@@ -190,10 +191,11 @@ def test_consorcio_fica_no_flask(pg):
                  "data_vencimento, status_pagamento, debito_automatico, is_fatura_cartao, estouro_orcamento, status_fatura) "
                  "values (%s, %s, '2027-05-01', 'Parcela consorcio', 200, '2027-05-10', 'Pendente', false, false, false, "
                  "'ABERTA') returning id", (PERFIL, item))[0]['id']
-    assert erro(lambda: pagar(d, cid, banco, valor='200.00', devido='200.00')).diag.message_hint == 'BLOQUEADA'
-    assert rpc(d, 'dados_pagamento_despesa', {'p_perfil_id': PERFIL, 'p_conta_id': cid})['pode_pagar'] is False
+    assert rpc(d, 'dados_pagamento_despesa', {'p_perfil_id': PERFIL, 'p_conta_id': cid})['pode_pagar'] is True
     r = http(d, pg['pasta'], 'cons', 'post', f'/api/despesas/{cid}/pagar', pagar_corpo(banco)).resultado()
-    assert r['status'] == 200 and conta(d, cid)['status_pagamento'] == 'Pago'
+    assert (r['status'], r['json']['codigo']) == (409, 'SISTEMA_NOVO') and conta(d, cid)['status_pagamento'] == 'Pendente'
+    pagar(d, cid, banco, valor='200.00', devido='200.00')
+    assert conta(d, cid)['status_pagamento'] == 'Pago'
 
 
 # 11. Falha no meio: nada fica (despesa e receita)
