@@ -107,6 +107,23 @@ def test_edicao_igual_ao_flask_e_renomeia_parcelas(cluster):  # noqa: F811
     nomes = [i['nome'] for i in estado(novo, 'Consorcio Casa (ficticio)%')['itens']]
     assert len(nomes) == 12 and all(n.startswith('Consorcio Casa (ficticio) - Parcela ') for n in nomes)
     assert estado(novo, 'Consorcio Imovel%')['itens'] == []
+    # Migration 20261122090000: a descricao das despesas pendentes tambem acompanha (a lista de Despesas mostra ela).
+    descricoes = [c['descricao'] for c in estado(novo, 'Consorcio Casa (ficticio)%')['contas']]
+    assert len(descricoes) == 12 and all(d.startswith('Consorcio Casa (ficticio) - Parcela ') for d in descricoes)
+
+
+def test_renomear_preserva_descricao_da_despesa_paga(cluster):  # noqa: F811
+    dsn = copiar(cluster)
+    atribuir(dsn, 'PESSOAL')
+    banco = banco_de(dsn)
+    cid = novo_cria(dsn, contratos(dsn, banco, categoria_de(dsn))[1])['data']['id']
+    _pagar(dsn, _contas(dsn, 'Consorcio Moto')[1]['id'], banco, '2031-03-05')
+    rpc(dsn, 'editar_consorcio', PESSOAL, cid, {'nome': 'Consorcio Bicicleta (ficticio)'})
+    contas = {r['numero_parcela']: r['descricao'] for r in sql(
+        dsn, "select c.numero_parcela, c.descricao from public.conta c join public.item_despesa d on d.id = c.item_despesa_id "
+             "where d.tipo = 'Consorcio' and d.nome like 'Consorcio Bicicleta%%'")}
+    assert contas[1] == 'Consorcio Moto (ficticio) - Parcela 1/6'  # paga: historico
+    assert all(contas[i] == f'Consorcio Bicicleta (ficticio) - Parcela {i}/6' for i in range(2, 7))
 
 
 def _pagar(dsn, conta, banco, data):

@@ -134,3 +134,73 @@ As parcelas de consórcio continuam pagas e estornadas pelo motor do FIN-CONTRAT
 - **Banco do Supabase e Flask** (todos os `test_supabase_*`, movimentações, consórcio/recorrências, consórcio/receita, trava de pagamento, faturas): **717 passaram, 0 falhas**, 18 pulados.
 - **E2E completo:** **90 passaram, 0 falhas.**
 - **Unitários do `web/`:** 30 passaram.
+
+## 8. Aplicação no Supabase de teste, validação real e prévia (26/10/2026)
+
+**Commit:** `bd28ebc`, só Consórcios, sem push.
+
+**Conferência antes de aplicar** (só leitura):
+- 15 funções novas, nenhuma existente no remoto;
+- todas as dependências presentes (`perfil_do_consorcio`, `consorcio_flask`, `hoje_brasilia`, `operacao_repetida`, `exigir_pagamento_novo`, `pertence_ao_perfil`, `pode_gerir_perfil`);
+- 4 funções expostas a `authenticated` e 11 internas revogadas; nada para `anon`/`public`; todas com `search_path` vazio;
+- colunas e tipos das tabelas iguais.
+
+**Aplicação:**
+- `20261121090000` aplicada sozinha, sem falha.
+- O conteúdo das 64 tabelas ficou idêntico; +15 funções, nenhuma alterada.
+
+**Validação real** (perfil temporário criado pelo aplicativo, **13 de 13**):
+- **Cadastro:**
+  - reenvio pela mesma chave = um contrato só;
+  - 6 parcelas com reajuste percentual (500 → 550);
+  - receita de contemplação = parcela 4 × 6 (3.180).
+- **Pagamentos:** a parcela 1 paga; a 2 paga e estornada.
+- **Regeneração segura** (valor 600, 4 parcelas):
+  - paga e estornada **intactas**;
+  - pendentes recalculadas (624, 636);
+  - 2 excedentes removidas;
+  - a receita não confirmada acompanhou o novo prêmio (2.544).
+- **Escritor único:** perfil trocado para o Flask: edição e regeneração recusadas (`SISTEMA_FLASK`); quem só lê recebe 403.
+- **Exclusão segura:** só as 2 pendentes sem movimento saíram; paga e estornada ficaram; a receita saiu; o contrato saiu da lista.
+- **Conta bancária:** saldo final 0, igual aos 4 movimentos.
+- **Telas** com o `dist` e a CSP reais, incluindo Recorrências: aprovado.
+- **Limpeza por identidade** (simulação, depois confirmação): banco idêntico ao retrato pós-aplicação.
+
+**Encontrado na validação:** renomear o contrato renomeava os itens, mas a lista de Despesas mostra a **descrição** da despesa, que só acompanhava na regeneração seguinte. Corrigido na migration local `20261122090000`:
+- substitui só `editar_consorcio`, com o texto anterior mais as linhas marcadas e a reversão em `supabase/reversao/`;
+- a descrição das pendentes acompanha; a da despesa paga guarda o histórico;
+- testes: 7 passaram.
+- **Não aplicada** (precisa de autorização).
+
+**Prévia protegida:**
+- versão `bd28ebc`: https://444ea3db.controle-financeiro-jah.pages.dev;
+- prévia: https://avaliacao.controle-financeiro-jah.pages.dev;
+- Access (302) antes e depois; o endereço principal continua 404.
+
+**Inalterados:** produção; Pessoal e Empresa, que continuam no Flask; `gastos.db`.
+
+**Nenhuma regeneração foi executada em contrato real.**
+
+## 9. Condição do titular para a fase B: mecanismos que podem recriar despesa paga ou alterar prestação efetivada
+
+**Resposta: sim, existem no Flask.** Lidos no código (`services/financiamento_service.py`) e medidos no `gastos.db` (só contagem):
+
+| # | Mecanismo do Flask | Risco |
+|---|---|---|
+| R1 | `_criar_conta_da_parcela` (chamada por `sincronizar_contas`, depois de `gerar_parcelas` e do pagamento direto) regrava `conta.valor` com o previsto e `data_vencimento` **também em despesa paga** | Altera o valor de prestação efetivada quando o pago difere do previsto (juros ou desconto) |
+| R2 | A mesma função faz o status da despesa **seguir a parcela**: parcela `pago` → despesa `Pago` com `data_pagamento = vencimento`, sem movimento; parcela `pendente` → despesa `Pendente`, mesmo se paga com débito | Recria despesa "paga" sem dinheiro (ex.: depois do Defeito A, parcela `pago` + despesa estornada) ou reabre despesa paga sem estorno |
+| R3 | Parcela sem despesa e com status `pago` ganha despesa nova já `Pago`, sem movimento | Despesa paga criada sem débito |
+| R4 | `_recalcular_reduzir_prazo` apaga as parcelas pendentes além do novo prazo **e as suas despesas**, sem olhar movimento | Apaga despesa com pagamento estornado (movimento órfão no SQLite) |
+| R5 | `sincronizar_contas` ainda tem um corpo antigo depois de um `continue` (código morto) | Sem efeito, mas confunde a leitura |
+
+**O que os dados reais mostram:**
+- As **22 despesas pagas** das parcelas reais **não têm movimento bancário**, e todas têm data de pagamento = vencimento. Foram marcadas pelo próprio motor (parcelas pagas antes do uso do sistema, registradas na criação do contrato), não por pagamento com débito.
+- Nenhuma tem valor divergente do previsto.
+- Não há movimento órfão.
+
+**Regras obrigatórias do porte (fase B)**, para nenhum desses mecanismos existir no novo aplicativo:
+1. Despesa paga ou com qualquer movimento é **imutável** para o motor: nem valor, nem data, nem status.
+2. O status da despesa **nunca** é derivado da parcela. Só pagamento e estorno (FIN-CONTRATOS-2) mudam ambos, juntos.
+3. Parcela histórica (paga antes do sistema) é registrada **explicitamente** como histórica: despesa marcada, sem movimento, identificável. Nunca é criada por sincronização.
+4. Recalcular, reduzir prazo e regenerar mexem só em parcelas pendentes **cuja despesa não tem movimento**; as demais são preservadas e informadas.
+5. Teste de banco obrigatório antes de qualquer mudança no gerador: as 22 parcelas do tipo real (pagas sem movimento) e uma paga com débito passam intactas por criação, edição, amortização, redução de prazo e regeneração.
