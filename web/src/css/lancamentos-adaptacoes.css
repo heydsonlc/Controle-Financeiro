@@ -1,0 +1,10 @@
+/* FIN-FIDELIDADE-MOVIMENTACOES-1 — so o que a tela original de Lancamentos (lancamentos.css) nao tinha. */
+
+/* Quem so le o perfil ve os lancamentos, sem as acoes de escrita (o banco recusaria de qualquer forma). */
+body.cf-somente-leitura #btn-novo-lancamento,
+body.cf-somente-leitura #btn-lanc-a-partir-doc,
+body.cf-somente-leitura [data-on-click^="editarLancamento("],
+body.cf-somente-leitura [data-on-click^="excluirLancamento("],
+body.cf-somente-leitura [data-on-click^="abrirModalConfirmarReceita("] {
+    display: none;
+}

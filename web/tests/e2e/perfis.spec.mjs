@@ -66,7 +66,11 @@ test('usuario A alterna entre os proprios perfis e a escolha persiste ao recarre
 test('usuario B nao ve perfis nem contas de A', async ({ page }) => {
     await entrar(page, B);
     await expect(opcoes(page)).toHaveText(['Perfil B']);
-    await expect(contas(page)).toHaveText(CONTAS.PERFIL_B);
+    // FIN-FIDELIDADE-MOVIMENTACOES-1: contas_bancarias_tela.spec cria (e inativa no fim) duas contas no Perfil B; a
+    // lista mostra as inativas. Fora essas, so as do cenario.
+    const criadasNoE2E = ['Conta E2E Destino', 'Conta E2E Origem'];
+    await expect(contas(page).filter({ hasText: CONTAS.PERFIL_B[0] })).toHaveCount(1);
+    expect((await contas(page).allTextContents()).filter((n) => !criadasNoE2E.includes(n))).toEqual(CONTAS.PERFIL_B);
     for (const nome of TODAS.filter((n) => !CONTAS.PERFIL_B.includes(n))) {
         await expect(page.getByText(nome, { exact: true })).toHaveCount(0);
     }

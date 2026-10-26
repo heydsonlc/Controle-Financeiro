@@ -3,7 +3,8 @@
 // O build troca onclick="f(...)" por data-on-click e style="..." por data-estilo (scripts/build.mjs, adaptarParaCsp).
 // Aqui:
 // - eventos: delegacao no documento; cada data-on-<evento> e lido como chamadas simples "f(arg, ...); g()" com
-//   argumentos literais (numero, texto entre aspas, this, this.value, event). Sem eval: so funcoes globais da lista
+//   argumentos literais (numero, texto entre aspas, this, this.value, event; objeto ou lista em JSON, como o
+//   editarLancamento({...}) de Lancamentos). Sem eval: so funcoes globais da lista
 //   gerada no build (window.CF_PONTE_PERMITIDAS) sao chamadas, com this = elemento, como no atributo original;
 // - estilos: data-estilo vira estilo pelo CSSOM (el.style.cssText), permitido pela CSP, inclusive no HTML que as telas
 //   inserem depois (MutationObserver).
@@ -15,19 +16,29 @@
     const BORBULHAM = ['click', 'change', 'input', 'keyup', 'submit'];
     const NAO_BORBULHAM = ['error', 'load'];
 
-    // Separa por um caractere fora de aspas.
+    // Separa por um caractere fora de aspas e fora de {} / [] (barra invertida escapa a aspa dentro do texto).
     function separar(texto, separador) {
         const partes = [];
         let atual = '';
         let aspas = null;
+        let escape = false;
+        let nivel = 0;
         for (const c of texto) {
             if (aspas) {
-                if (c === aspas) aspas = null;
+                if (escape) escape = false;
+                else if (c === '\\') escape = true;
+                else if (c === aspas) aspas = null;
                 atual += c;
             } else if (c === '"' || c === "'") {
                 aspas = c;
                 atual += c;
-            } else if (c === separador) {
+            } else if (c === '{' || c === '[') {
+                nivel += 1;
+                atual += c;
+            } else if ((c === '}' || c === ']') && nivel > 0) {
+                nivel -= 1;
+                atual += c;
+            } else if (c === separador && nivel === 0) {
                 partes.push(atual);
                 atual = '';
             } else {
@@ -46,6 +57,7 @@
         if (/^'[^']*'$/.test(texto) || /^"[^"]*"$/.test(texto)) return texto.slice(1, -1);
         if (texto === 'true' || texto === 'false') return texto === 'true';
         if (texto === 'null' || texto === 'undefined') return null;
+        if (/^[\[{][\s\S]*[\]}]$/.test(texto)) return JSON.parse(texto);  // dados, nunca codigo
         throw new Error(`argumento nao suportado: ${texto}`);
     }
 

@@ -1,0 +1,16 @@
+/* FIN-FIDELIDADE-MOVIMENTACOES-1 — so o que a tela original de Contas Bancarias (contas_bancarias.css) nao tinha. */
+
+/* Quem so le o perfil ve contas, saldos, extratos e conferencias, sem as acoes de escrita (o banco recusaria de
+   qualquer forma). */
+body.cf-somente-leitura #btn-nova-conta,
+body.cf-somente-leitura .contas-empty-state .contas-primary-btn,
+body.cf-somente-leitura [data-on-click^="editarConta("],
+body.cf-somente-leitura [data-on-click^="abrirTransferencia("],
+body.cf-somente-leitura [data-on-click^="abrirAjusteSaldoDireto("],
+body.cf-somente-leitura [data-on-click^="ativarConta("],
+body.cf-somente-leitura [data-on-click^="abrirModalInativar("],
+body.cf-somente-leitura [data-on-click^="abrirModalAjusteSaldo("],
+body.cf-somente-leitura .contas-movimento-actions,
+body.cf-somente-leitura #modal-detalhe .contas-primary-btn {
+    display: none;
+}
