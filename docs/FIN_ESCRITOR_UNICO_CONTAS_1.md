@@ -206,3 +206,82 @@ pendentes. O `supabase db push` aplica cada arquivo na sua transação: uma falh
 - **Não vem desta etapa:** falha igual com `backend/routes/contas_bancarias.py` original (conferido trocando o arquivo).
 - Passou na suíte completa da auditoria, às 19h40 de 25/10. Voltou a falhar depois da virada do dia em UTC (26/10).
 - Registrada como pendência do Flask (P2) para investigar. Não afeta o novo aplicativo.
+
+## 8. Aplicação no Supabase de teste (26/10/2026, 00:5x UTC)
+
+**Antes:**
+- commits `b518308`, `679cac3` e `7d48290`; árvore limpa, fora os arquivos pessoais;
+- `status`: 12 pendentes, sem divergência;
+- `simular`: exatamente as 12;
+- impressão digital do banco: 64 tabelas, 211 linhas, 144 funções do `financeiro`, 17 migrations.
+
+**Aplicação:**
+- `scripts/supabase_migrations.py aplicar --versoes` com as 12 versões;
+- as 12 aplicadas em ordem, **sem falha intermediária**: nada a avaliar, a reversão não foi usada.
+
+**Depois** (impressão digital, só leitura):
+
+| Item | Resultado |
+|---|---|
+| Conteúdo das 64 tabelas | **idêntico** ao de antes (nenhum dado alterado) |
+| Funções | +87 novas, 0 removidas, só as 2 substituídas previstas alteradas (`analisar_importacao_cartao`, `plano_recorrencia`) |
+| Migrations | 29/29 |
+| `gastos.db` | inalterado (1294336 bytes, mtime 1778600040) |
+
+## 9. Validação real (perfil temporário, dados fictícios)
+
+**Roteiro:** `lote_real.py`, no scratchpad da sessão, por etapas:
+1. build;
+2. criar;
+3. api;
+4. complemento;
+5. ui;
+6. limpar (simulação, depois confirmação);
+7. conferir.
+
+**Perfil:**
+- "Validacao Lote 1106-1118 (e2e-real)", criado **pelo aplicativo** (`criar_perfil`, usuário A), gerador NOVO pela criação;
+- mais o vínculo LEITOR do usuário B;
+- nenhuma gravação nos perfis 1, 2, 31 e 39.
+
+**Build:**
+- 16 páginas;
+- só a chave publicável;
+- nenhum segredo, conexão de banco ou endereço do Flask;
+- `/api/` só nas rotas locais da ponte e nos adaptadores, por nome.
+
+| Bloco | Resultado |
+|---|---|
+| Contas Bancárias pela Data API real: criar (reenvio com a mesma chave não duplica), ajuste pelo saldo desejado, editar e excluir ajuste, transferência (reenvio: um par só), extrato, conferência, editar cadastro | aprovado; saldos 900/250 pelos movimentos |
+| Escritor único: perfil temporário trocado para FLASK. Criar, inativar, ajustar e transferir pelo novo aplicativo | 4 × recusa `SISTEMA_FLASK`; contas, saldos e situação idênticos antes e depois; perfil devolvido ao NOVO |
+| Quem só lê (B) | lê; criar e ajustar recusados (403); não lê perfil alheio (31: 403) |
+| Anônimo | 401 |
+| D2: previsão de 1.000, recebimento parcial de 950 | Dashboard: previsto 1.000, recebido 950, diferença −50 (não 1.950) |
+| As 41 leituras novas do lote, no perfil temporário | 39 respondem 200, ou a recusa de negócio do Flask para um id inexistente. As 2 do perfil Empresa recusam em perfil pessoal ("disponível apenas no perfil Empresa", como no Flask); com o perfil temporário como Empresa (`atualizar_perfil`), taxonomia, resumo e saídas sem documento respondem 200 |
+| Telas, com o `dist` real e a CSP real: Contas Bancárias, Lançamentos, Financiamentos, Patrimônio, Documentos Fiscais, Dashboard, Mobilidade, Recorrências, Despesas, Cartões, Importar Cartão e Receitas, no perfil temporário | aprovado: nenhum erro de console, JS ou CSP e nenhuma requisição a `/api/` (na primeira rodada, um "Failed to fetch" de requisição interrompida pela troca de perfil; esperando a rede ociosa, nada) |
+
+**Limpeza por identidade:**
+- conferências: perfil único com o nome do teste e a criação pelo aplicativo no histórico, só os vínculos do teste, só contas e fonte com os nomes do teste, nenhum movimento de outro perfil;
+- simulação, depois confirmação;
+- **impressão digital final idêntica à de logo após a aplicação**: 64 tabelas, funções e migrations iguais.
+
+**Ressalva:** a validação percorreu as telas e as operações pela Data API. A homologação pelo navegador continua com o titular.
+
+## 10. Prévia protegida
+
+| Item | Valor |
+|---|---|
+| Envio | `npx wrangler pages deploy dist --project-name controle-financeiro --branch avaliacao` (o mesmo `dist` validado, impressão `215e6dace12c`, 149 arquivos), versão `7d48290` |
+| Endereço desta versão | https://feaa6454.controle-financeiro-jah.pages.dev |
+| Prévia | https://avaliacao.controle-financeiro-jah.pages.dev |
+| Access, antes e depois | 302 para o login do Access (prévia, versão, páginas internas, `config.js`) |
+| Endereço principal | continua 404 |
+| Push e produção | não feitos |
+
+## 11. Próxima análise (titular)
+
+1. **D3, prioridade alta**, depois da prévia. A projeção do Dashboard parte do saldo atual, que já contém o que foi recebido e pago no mês, e soma de novo receitas e despesas do mês inteiras.
+   - Exemplo do titular: 5.000 + 3.000 − 1.000 = 7.000 atuais; somar de novo leva a 9.000.
+   - **Não corrigir por suposição:** reconstruir como o Flask calcula as projeções (obrigações e receitas ainda não realizadas) antes de propor a regra.
+2. **Escrita de financiamentos e consórcios**, em especial pagamento e estorno de parcelas, pela ordem do escritor único: guarda no Flask, depois o rascunho de `supabase/rascunhos/`.
+3. **Cartões:** sem migrar CVV, validade nem número completo; nada excluído; saneamento (cópias, backups, OneDrive e histórico de versões) em procedimento próprio, com autorização específica.
