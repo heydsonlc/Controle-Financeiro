@@ -9,7 +9,8 @@
     "test:e2e": "playwright test -c playwright.config.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "2.118.0"
+    "@supabase/supabase-js": "2.118.0",
+    "pdfjs-dist": "6.4.299"
   },
   "devDependencies": {
     "wrangler": "4.129.0"

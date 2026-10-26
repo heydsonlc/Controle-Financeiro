@@ -341,3 +341,76 @@ Testes com os exemplos do titular (`tests/test_supabase_recorrencia_cartao.py`):
 | Unitários (build, CSV, XLSX novo, fechamento) | 26/26 |
 | E2E de Importação (com XLSX) e de Recorrências (com cartão) | 3/3 e 6/6 |
 | Suítes completas | Banco 652 aprovados, nenhuma falha; E2E 72/72 |
+
+---
+
+# FIN-FIDELIDADE-CARTOES-3 (MVP 1) — fidelidade da recorrência no cartão, PDF e R4 (25/10/2026)
+
+**Situação:** implementado e testado localmente. Sem commit, sem migration persistente e sem publicação.
+- O commit `b1c1ac6` (CARTOES-2) foi feito antes desta etapa, com autorização.
+- A migration `20261106090000` (R2) **não foi aplicada**: o titular pediu a conferência do modelo antes.
+- Três migrations locais aguardam autorização: `20261106090000`, `20261107090000` e `20261108090000`.
+
+## 17. Recorrência no cartão × previsão orçamentária (verificado no Flask)
+
+| Pergunta do titular | Como o Flask faz (`routes/despesas.py`, `importacao_cartao_service.py`) | Novo aplicativo |
+|---|---|---|
+| Ocorrências previstas | Recorrência no cartão = **uma compra efetiva por competência** (`gerar_lancamentos_cartao_recorrente`, identidade `uuid5(item-competência)`). Não existe ocorrência "prevista" separada | Igual (o gerador grava a compra com a mesma identidade) |
+| Previsão para gasto variável (combustível: 4 × R$ 150) | **Limite da Categoria do Cartão** (R$ 600). Previsto da fatura = realizado + o que falta da previsão (`_calcular_totais_fatura_cartao_previsto`) | Igual (`contas_do_mes`), com testes: 3 abastecimentos (R$ 145, R$ 160 e R$ 155) dão previsto R$ 600, realizado R$ 460 e devido R$ 460 depois do pagamento; o mês seguinte continua R$ 600 |
+| Associação da compra realizada à previsão | Pela Categoria do Cartão (mapa da categoria de despesa). Cada compra entra no realizado e reduz o "que falta" da previsão, sem duplicar | Igual, para compras manuais e importadas (teste com CSV importado e reimportação sem duplicar) |
+| Compra importada × recorrência | `vincular_linha_recorrencia`: a linha cria a ocorrência do mês se a recorrência ainda não tem compra; se já tem, é **duplicada** e a compra existente fica | **Corrigido**: antes, valor diferente gerava outra compra. Migration local `20261107090000` (troca só `analisar_importacao_cartao`); teste que falhava sem ela |
+| Ocorrência não realizada | Compra de recorrência: fica na fatura (efetiva). Limite: a parte não gasta aparece só como previsto, nunca como devido | Igual |
+| Faturas abertas e pagas | Aberta: previsto. Paga: realizado. Planejado gravado = soma dos limites | Igual (§ 11) |
+| Recorrência inativada | Para de gerar; o histórico fica | Igual (`definir_situacao_recorrencia_cartao`) |
+| Meses seguintes | Nem limite nem recorrência mudam com o consumo | Igual (teste "gasto acima não reprograma") |
+
+**Conclusão:** o exemplo do combustível, no modelo do Flask, é o **limite da Categoria do Cartão**. Ele já funciona no novo aplicativo e está no perfil de homologação (Combustível R$ 600). Cadastrá-lo como recorrência no cartão lançaria uma compra efetiva de R$ 600 todo mês, que se somaria aos abastecimentos reais. O R2 reproduz a recorrência do Flask, que serve a despesas fixas (assinaturas). **Decisão do titular:** confirmar essa leitura. Se quiser uma "recorrência prevista" que seja substituída pelas compras reais, isso é uma regra nova, que não existe no Flask.
+
+## 18. PDF (I1): implementado com o PDF.js 6.4.299
+
+**Compatibilidade, verificada antes da instalação:**
+- versão publicada em 03/10/2026, licença Apache-2.0;
+- exige Node 22.13 ou superior; o ambiente tem 24.22;
+- build `legacy` (navegadores um pouco mais antigos), servido do próprio site em `vendor/`, como o `supabase.js`;
+- CSP inalterada: o worker é do próprio site e o E2E não teve erro de CSP;
+- **instalado com versão exata** (`web/package.json`). O `@napi-rs/canvas` entrou como dependência opcional do pacote, usada só para desenhar páginas no Node; não vai para o navegador.
+
+**Uso restrito à extração de texto:**
+- sem desenhar páginas, sem `eval` (`isEvalSupported: false`), sem fontes do sistema, sem XFA, sem chamadas externas;
+- carregado só quando um PDF é escolhido.
+
+**Regras do Flask portadas** (`web/src/js/importacao-pdf.js`): texto por posição (tolerâncias de `x` = 1 e `y` = 3, como o `extract_text`), grupos, cartão, compras internacionais com cotação, créditos "C", parcelas, anuidade sem data, totais e vencimento.
+
+**Comparação com o `pdfplumber`, no mesmo PDF fictício:** texto, dados da fatura e as 7 linhas **idênticos**.
+
+**Testes:**
+- unitários: fatura válida, arquivo inválido e PDF sem texto (escaneado), com a mensagem do Flask;
+- E2E no navegador: análise da fatura, total de R$ 457,69, créditos retirados e PDF inválido.
+
+**OCR:** não implementado, como no Flask.
+
+## 19. R4: corrigido localmente (aplicação pendente de autorização)
+
+- **Migration local `20261108090000`:** troca só `plano_recorrencia`, com uma única condição a mais (`tipo is distinct from 'Agregador'`). A diferença foi conferida linha a linha.
+- **Definição anterior preservada** em `supabase/reversao/20261108090000_plano_recorrencia_anterior.sql`.
+- **Comparação com os mesmos dados** (`tests/test_supabase_gerador_sem_cartao.py`): duas cópias do banco, uma com a regra anterior restaurada pela reversão.
+  - Prévia (itens, a gerar, dispensados) e geração (contas e compras gravadas) **idênticas**, em dois perfis e quatro meses.
+  - A única diferença é que a rejeição "Cartão marcado como recorrência" some.
+  - Recorrências mensais, anuais e no cartão continuam; sem duplicidade; gerar de novo não cria nada.
+- **Spec de Recorrências:** passa a esperar que o cartão não apareça mais na prévia.
+
+## 20. Pendências e autorizações (MVP 1)
+
+1. Commit do MVP 1: XLSX/PDF, R2 revisado, correção da importação de recorrência, R4 e testes.
+2. Aplicação no Supabase de teste das migrations `20261106090000` (R2), `20261107090000` (importação × recorrência) e `20261108090000` (R4). A ferramenta aplica as pendentes juntas; cada uma está inspecionada e testada.
+3. Confirmar a leitura do § 17 (combustível = limite da categoria).
+4. Publicar na prévia: XLSX, PDF e R2.
+
+## 21. Regressão completa do MVP 1 (25/10/2026, local)
+
+- **Banco** (`pytest tests/`, clusters descartáveis): **701 passaram, nenhuma falha**.
+- **Unitários web:** 30 passaram.
+- **E2E local:** 67 passaram e 1 falhou na primeira rodada; 4 não rodaram, porque a spec é serial.
+  - A falha era da expectativa, não do código: a prévia do mês lista a **fatura** do cartão (parte de cartões), que é esperada.
+  - O teste passou a recusar só o cartão como recorrência (natureza diferente de FATURA).
+  - `recorrencias_tela.spec.mjs` rodou de novo: 6 passaram.

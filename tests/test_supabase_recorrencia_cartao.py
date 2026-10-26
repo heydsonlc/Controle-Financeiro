@@ -211,3 +211,85 @@ def test_consumo_acima_da_previsao_nao_muda_a_previsao(banco):
     assert (limite['limite_mensal'], limite['disponivel']) == (600, -20)
     status = rpc(banco, 'fatura_por_categoria', PESSOAL, CARTAO, '2029-05-01')['categorias'][0]['status']
     assert status == 'Estourado'
+
+
+# ---------------------------------------------------------------------------
+# Exemplo do titular: combustivel, 4 abastecimentos previstos de R$ 150 (previsao de R$ 600 na Categoria do Cartao).
+# No Flask, essa previsao e o limite da categoria; as compras realizadas (manuais ou importadas) compoem o realizado e
+# o previsto da fatura e realizado + o que falta da previsao. Nada duplica e o mes seguinte continua com R$ 600.
+# ---------------------------------------------------------------------------
+
+def _so_combustivel(dsn):
+    sql(dsn, "update public.cartao_categoria_limite set limite_mensal = 600 where id = 981")  # 961: "combustivel" do exemplo
+    sql(dsn, "update public.cartao_categoria_limite set ativo = false where id = 983")
+
+
+def _linha_importada(n, valor, data):
+    texto = f'POSTO {n}'
+    return {'linha_id': f'csv-{n}', 'linha_origem': n, 'data_compra': data, 'descricao_original': texto,
+            'descricao_normalizada': texto, 'descricao_exibida': texto, 'descricao_classificacao': texto.lower(),
+            'valor': valor, 'parcela_atual': 1, 'total_parcelas': 1, 'tipo_movimento': 'debito', 'categoria_id': ASSINATURAS}
+
+
+def _apuracao(dsn, mes):
+    f, linha = _fatura_na_tela(dsn, mes)
+    return Decimal(str(linha['valor_previsto'])), Decimal(str(linha['valor_executado'])), Decimal(str(linha['valor']))
+
+
+@pytest.mark.parametrize('origem', ['manual', 'importada'])
+def test_combustivel_previsto_realizado_devido_e_mes_seguinte(banco, origem):
+    _so_combustivel(banco)
+    abastecimentos = [('145.00', '2029-05-03'), ('160.00', '2029-05-10'), ('155.00', '2029-05-17')]  # o 4o nao acontece
+    if origem == 'manual':
+        for valor, data in abastecimentos:
+            comprar(banco, total_parcelas=1, valor=valor, data_compra=data)
+    else:
+        linhas = [_linha_importada(i + 1, v, d) for i, (v, d) in enumerate(abastecimentos)]
+        r = rpc(banco, 'importar_fatura_cartao', PESSOAL, CARTAO, '2029-05-01', linhas, str(uuid.uuid4()))
+        assert r['inseridos'] == 3
+        # Reimportar a mesma fatura nao duplica nada.
+        assert falha(banco, 'importar_fatura_cartao', PESSOAL, CARTAO, '2029-05-01', linhas, str(uuid.uuid4()))[1] == 'Nenhuma linha para importar'
+    # Previsao R$ 600 (realizado R$ 460 + R$ 140 que falta), realizado R$ 460; aberta, a tela mostra a previsao.
+    assert _apuracao(banco, date(2029, 5, 1)) == (Decimal('600.00'), Decimal('460.00'), Decimal('600.00'))
+    # O mes seguinte continua com a previsao de R$ 600 (nada foi reprogramado).
+    comprar(banco, total_parcelas=1, valor='10.00', data_compra='2029-06-02', mes_fatura='2029-06-01')
+    assert _apuracao(banco, date(2029, 6, 1)) == (Decimal('600.00'), Decimal('10.00'), Decimal('600.00'))
+    # Paga, a fatura de maio vale o realizado: o devido e R$ 460, sem a parte prevista e nao realizada.
+    pagar(banco, CARTAO, date(2029, 5, 1))
+    assert _apuracao(banco, date(2029, 5, 1))[2] == Decimal('460.00')
+    assert fatura(banco, CARTAO, date(2029, 5, 1))['valor_planejado'] == Decimal('600.00')
+
+
+def test_gasto_acima_da_previsao_nao_reprograma_o_mes_seguinte(banco):
+    _so_combustivel(banco)
+    for valor in ('300.00', '320.00'):
+        comprar(banco, total_parcelas=1, valor=valor)
+    assert _apuracao(banco, date(2029, 5, 1))[:2] == (Decimal('620.00'), Decimal('620.00'))
+    comprar(banco, total_parcelas=1, valor='1.00', data_compra='2029-06-02', mes_fatura='2029-06-01')
+    assert _apuracao(banco, date(2029, 6, 1))[0] == Decimal('600.00')
+
+
+def test_recorrencia_importada_com_valor_diferente_nao_duplica_a_ocorrencia(banco):
+    """Como vincular_linha_recorrencia do Flask: a ocorrencia do mes ja existe; a linha nao gera outra compra."""
+    item = criar(banco)['item_id']
+    gerar_mes(banco, '2029-05-01')
+    linha = {**_linha_importada(1, '49.90', '2029-05-20'), 'descricao_original': 'Streaming no cartao',
+             'descricao_normalizada': 'Streaming no cartao', 'descricao_exibida': 'Streaming no cartao',
+             'descricao_classificacao': 'streaming no cartao'}
+    analise = rpc(banco, 'analisar_importacao_cartao', PESSOAL, CARTAO, '2029-05-01', [linha])['linhas'][0]
+    assert (analise['status'], analise['ignorar'], analise['conciliacao']['valor']) == ('conciliado', True, 45.9)
+    assert 'Recorrencia ja lancada nesta fatura' in ' '.join(analise['mensagens'])
+    assert falha(banco, 'importar_fatura_cartao', PESSOAL, CARTAO, '2029-05-01', [linha], str(uuid.uuid4()))[1] == 'Nenhuma linha para importar'
+    assert [x['valor'] for x in compras_da_recorrencia(banco, item) if str(x['mes_fatura']) == '2029-05-01'] == [Decimal('45.90')]
+
+
+def test_recorrencia_importada_antes_da_geracao_e_reconhecida_pelo_gerador(banco):
+    """Sem compra no mes, a linha importada vira a ocorrencia da recorrencia; o gerador nao lanca outra."""
+    item = criar(banco)['item_id']
+    linha = {**_linha_importada(1, '45.90', '2029-05-20'), 'descricao_original': 'Streaming no cartao',
+             'descricao_normalizada': 'Streaming no cartao', 'descricao_exibida': 'Streaming no cartao',
+             'descricao_classificacao': 'streaming no cartao'}
+    rpc(banco, 'importar_fatura_cartao', PESSOAL, CARTAO, '2029-05-01', [linha], str(uuid.uuid4()))
+    gerar_mes(banco, '2029-05-01')
+    maio = [x for x in compras_da_recorrencia(banco, item) if str(x['mes_fatura']) == '2029-05-01']
+    assert [(x['valor'], x['is_importado']) for x in maio] == [(Decimal('45.90'), True)]

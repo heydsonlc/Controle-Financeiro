@@ -5,6 +5,7 @@ import { expect, test } from '@playwright/test';
 
 import { chamarRpc, perfilAtivoId, registrarDialogos } from './despesas.mjs';
 import { trocarPerfil } from './moldura.mjs';
+import { faturaCaixaFicticia } from '../pdf-ficticio.mjs';
 import { gerarXlsx } from '../xlsx-ficticio.mjs';
 
 const A = { email: process.env.CF_EMAIL_A || 'usuario.a@teste.local', senha: process.env.CF_SENHA_A };
@@ -62,11 +63,11 @@ async function lancamentosDoMes(page, perfil, cartao) {
     return r.corpo.lancamentos.map((l) => [l.descricao, Number(l.valor), l.origem]);
 }
 
-async function abrirImportacao(page) {
+async function abrirImportacao(page, competencia = '03/2033') {
     await page.goto('/importar-cartao.html');
     await expect(page.locator('#cartaoSelect option', { hasText: CARTAO })).toHaveCount(1);
     await page.selectOption('#cartaoSelect', { label: CARTAO });
-    await page.fill('#competenciaInput', '03/2033');
+    await page.fill('#competenciaInput', competencia);
     await page.locator('#competenciaInput').dispatchEvent('input');
 }
 
@@ -128,10 +129,18 @@ test('CSV: analise, duplicidade, conciliacao, credito, confirmacao e reimportaca
     expect(await lancamentosDoMes(page, perfil, cartao)).toContainEqual(['Farmacia Planilha', 45, 'xlsx']);
     expect(await lancamentosDoMes(page, perfil, cartao)).toHaveLength(4);
 
-    // PDF: leitura em migracao (no Flask, pdfplumber no servidor); nada e analisado nem gravado.
-    await abrirImportacao(page);
-    await enviar(page, 'fatura.pdf', '%PDF-1.4 ficticio', 'application/pdf');
-    await expect(page.locator('#uploadResult')).toContainText('Leitura de PDF: em migração');
+    // PDF da fatura Caixa (FIN-FIDELIDADE-CARTOES-2): texto pelo PDF.js do proprio site (worker incluso, CSP intacta),
+    // regras do Flask; creditos retirados; total da fatura e diferenca como no Flask.
+    await abrirImportacao(page, '11/2026');
+    await page.locator('#csvFile').setInputFiles({ name: 'fatura-caixa.pdf', mimeType: 'application/pdf', buffer: faturaCaixaFicticia() });
+    await expect(page.locator('#resumoConfiguracaoImportacao')).toContainText('PDF analisado com sucesso.');
+    await expect(page.locator('#resumoConfiguracaoImportacao')).toContainText('7 linhas normalizadas');
+    await expect(page.locator('#resumoConfiguracaoImportacao')).toContainText(/Total da fatura: R\$\s457,69/);
+    await expect(page.locator('#resumoConfiguracaoImportacao')).toContainText(/Cartões detectados: 1234/);
+    await expect(page.locator('body')).toContainText('Crédito/estorno');
+    await abrirImportacao(page, '11/2026');
+    await enviar(page, 'invalido.pdf', '%PDF-1.4 sem conteudo', 'application/pdf');
+    await expect(page.locator('#uploadResult')).toContainText('Arquivo PDF inválido');
 });
 
 test('mapeamento manual de CSV de outro banco (perfil generico): a tela pede a validacao do layout', async ({ page }) => {

@@ -5,7 +5,8 @@
 //   importar_fatura_cartao grava tudo ou nada, com a analise refeita sob trava (duplicidade, conciliacao, fatura
 //   paga ou consolidada).
 // - XLSX (FIN-FIDELIDADE-CARTOES-2): lido aqui sem biblioteca nova (importacao-xlsx.js), como o openpyxl do Flask.
-// - PDF: em migracao (no Flask, pdfplumber no servidor); depende de biblioteca a autorizar (I1).
+// - PDF da fatura Caixa (FIN-FIDELIDADE-CARTOES-2): texto extraido aqui pelo PDF.js (vendor/, sem envio a servico
+//   externo) e lido com as regras do Flask (importacao-pdf.js); PDF escaneado fica fora, como no Flask (sem OCR).
 // - Vincular uma linha a uma recorrencia escolhida: em migracao. Recorrencia no cartao com o mesmo nome e reconhecida
 //   na importacao (como reconhecer_despesa_fixa do Flask) e o gerador nao a lanca de novo.
 
@@ -14,6 +15,7 @@ import { criarChaves, falha, mensagemDeErro, ok } from './adaptador-comum.js';
 import { converterTabela, decodificar, detectarPerfilCsv, lerCsv, lerData, lerValor, normalizarClassificacao, normalizarDescricao,
     PERFIL_CAIXA, PERFIL_MANUAL, PERFIL_NUBANK } from './importacao-csv.js';
 import { lerPlanilha } from './importacao-xlsx.js';
+import { parseTextoCaixa, textoDoPdf } from './importacao-pdf.js';
 import { iniciarMoldura } from './moldura.js';
 
 const estado = { perfilId: null };
@@ -29,6 +31,16 @@ function competencia(valor) {
     return m ? `${m[2]}-${m[1]}-01` : null;
 }
 
+// PDF.js carregado so quando um PDF e escolhido (o worker tambem vem do proprio site).
+let pdfjsCarregado = null;
+async function pdfjs() {
+    if (!pdfjsCarregado) {
+        pdfjsCarregado = await import('../vendor/pdf.min.mjs');
+        pdfjsCarregado.GlobalWorkerOptions.workerSrc = new URL('../vendor/pdf.worker.min.mjs', import.meta.url).href;
+    }
+    return pdfjsCarregado;
+}
+
 async function lerArquivo(formData, somenteCsv = false) {
     const arquivo = formData && formData.get('arquivo');
     if (!arquivo || !arquivo.name) return { erro: 'Nenhum arquivo enviado' };
@@ -41,9 +53,15 @@ async function lerArquivo(formData, somenteCsv = false) {
             return { erro: /^XLSX|^Arquivo XLSX|^Compress/.test(erro.message) ? erro.message : 'Não foi possível ler o arquivo XLSX.' };
         }
     }
-    if (!nome.endsWith('.csv')) {
-        return { erro: 'Leitura de PDF: em migração para o novo aplicativo. Exporte a fatura em CSV ou XLSX, ou use o sistema atual.', status: 501 };
+    if (nome.endsWith('.pdf')) {
+        if (somenteCsv) return { erro: 'Apenas arquivos CSV são permitidos' };
+        try {
+            return { arquivo, origem: 'pdf', paginas: await textoDoPdf(await arquivo.arrayBuffer(), await pdfjs()) };
+        } catch (erro) {
+            return { erro: /^PDF sem texto|^Arquivo PDF/.test(erro.message) ? erro.message : 'Não foi possível ler o arquivo PDF.' };
+        }
     }
+    if (!nome.endsWith('.csv')) return { erro: 'Formato de arquivo nao suportado para importacao de cartao.' };
     try {
         return { arquivo, origem: 'csv', tabela: lerCsv(decodificar(new Uint8Array(await arquivo.arrayBuffer()))) };
     } catch (erro) {
@@ -115,6 +133,7 @@ async function analisarArquivo(formData) {
     const mes = competencia(formData.get('competencia'));
     if (!cartaoId) return falha('cartao_id obrigatorio');
     if (!mes) return falha('competencia obrigatoria');
+    if (lido.origem === 'pdf') return analisarPdf(lido, cartaoId, mes);
     const conv = converterTabela(lido.tabela, lido.origem);
     // XLSX sem cabecalho Nubank ou Caixa: o Flask recusa (nao ha mapeamento manual para XLSX).
     if (lido.origem === 'xlsx' && conv.requer_mapeamento) {
@@ -133,6 +152,22 @@ async function analisarArquivo(formData) {
     return ok({ data: { ...base, linhas: analise.linhas.map(linhaParaTela), requer_mapeamento: false, confronto_executado: true,
         situacao_fatura: analise.situacao_fatura,
         validacoes: { ...analise.validacoes, total_fatura: 0, diferenca: 0, revisar_totais: false } } });
+}
+
+// PDF: linhas e dados da fatura (vencimento, total, cartoes) pelas regras do Flask; a diferenca entre o total da fatura
+// e o importavel aparece como no Flask (calcular_validacoes).
+async function analisarPdf(lido, cartaoId, mes) {
+    const r = parseTextoCaixa(lido.paginas, mes.slice(0, 7));
+    if (!r.linhas.length) return falha('Nenhum lancamento reconhecido no PDF (o layout aceito e o da fatura Caixa).');
+    const linhas = r.linhas.map((l) => ({ ...l, valor: Number(l.valor).toFixed(2),
+        descricao_classificacao: normalizarClassificacao(l.descricao_normalizada) }));
+    const analise = await analisar(cartaoId, mes, linhas);
+    const total = r.fatura.valor_total || 0;
+    const diferenca = Math.round((total - Number(analise.validacoes.total_importavel || 0)) * 100) / 100;
+    return ok({ data: { origem: 'pdf', arquivo_nome: lido.arquivo.name, cartao_id: Number(cartaoId), competencia: mes.slice(0, 7),
+        fatura: { ...r.fatura, competencia: `${mes.slice(5, 7)}/${mes.slice(0, 4)}` }, perfil_detectado: r.perfil_detectado,
+        linhas: analise.linhas.map(linhaParaTela), requer_mapeamento: false, confronto_executado: true, situacao_fatura: analise.situacao_fatura,
+        validacoes: { ...analise.validacoes, total_fatura: total, diferenca, revisar_totais: Math.abs(diferenca) > 0.01 } } });
 }
 
 // POST /upload (FormData): leitura e perfil, para o mapeamento manual (a tela mapeia as colunas).
