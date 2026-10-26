@@ -144,3 +144,62 @@
   - `tests/test_supabase_contratos_pagamento.py`;
   - `tests/test_movimentacoes.py`;
   - `tests/supabase_local.py` (despesas das parcelas no cenário E2E).
+
+## 9. Aplicação no Supabase de teste, validação real e prévia (26/10/2026)
+
+**Commits** (autorizados, sem push):
+- `9b977a6`: Receitas e Categorias;
+- `43c76d0`: guarda do Flask;
+- `8c42925`: migration de pagamentos e testes.
+
+**Verificações antes de aplicar** (só leitura no remoto):
+
+| Verificação | Resultado |
+|---|---|
+| Definições atuais de `bloqueio_do_pagamento`, `pagar_despesa` e `estornar_pagamento_despesa` | Idênticas às de `20261101090000`: a reversão devolve exatamente o que estava lá |
+| Assinaturas, retorno, `security definer`, `search_path`, privilégios | Iguais; `create or replace` mantém os privilégios |
+| Funções novas das duas migrations (25) | Nenhuma existia no remoto |
+| Colunas e tipos das tabelas usadas | Iguais ao cluster de testes |
+| `status` e `simular` | Exatamente `20261119090000` e `20261120090000`, nessa ordem |
+
+**Aplicação:**
+- As duas foram aplicadas na ordem, sem falha intermediária.
+- O conteúdo das 64 tabelas ficou **idêntico** ao de antes.
+- Funções: +25; só as 3 previstas foram alteradas.
+- Migrations: 31 de 31.
+
+**Validação real** (perfil temporário criado pelo aplicativo, dados marcados "(e2e-real)", **21 de 21**):
+- **Despesa comum:** dois ciclos de pagar e estornar.
+- **Fatura de cartão:** pagar e estornar.
+- **Financiamento:**
+  - 3 parcelas, com as despesas ligadas como o Flask cria;
+  - pagar 1 e 2: parcela e saldo devedor corretos;
+  - estorno fora de ordem recusado;
+  - Defeito A: o estorno reabre a parcela;
+  - Defeito B: pagar e estornar de novo;
+  - tudo estornado: saldo devedor = valor financiado.
+- **Consórcio:** pagar e estornar.
+- **Receita:** previsão, recebimento parcial e estorno; o estornado aparece marcado.
+- **Categoria do Cartão:** criar, vincular, desvincular e desativar.
+- **Leituras novas:** todas responderam 200.
+- **Escritor único:** perfil trocado para Flask recusa parcela e Categoria do Cartão (`SISTEMA_FLASK`); quem só lê recebe 403.
+- **Conta bancária:** saldo final 0, igual aos 16 movimentos (débitos e créditos de 4.240,00).
+- **Telas:** 14 páginas no perfil temporário, com o `dist` e a CSP reais, incluindo Receitas, Categorias e Financiamentos. Nenhum erro de console ou CSP, nenhuma chamada ao Flask.
+- **Limpeza por identidade:** simulação, depois confirmação. O banco ficou idêntico ao retrato de logo após a aplicação.
+
+**Prévia protegida:**
+- O mesmo `dist` validado (impressão `6a36675ec250`, 155 arquivos), versão `8c42925`.
+- Endereço desta versão: https://8c30afd3.controle-financeiro-jah.pages.dev
+- Prévia: https://avaliacao.controle-financeiro-jah.pages.dev
+- O Access exigiu login antes e depois do envio (prévia, páginas internas, `config.js`). O endereço principal continua 404.
+
+**Inalterados:**
+- produção;
+- perfis Pessoal e Empresa, que continuam no Flask;
+- `gastos.db` (1294336 bytes, mtime 1778600040).
+
+**Registrado:** a falha E2E por esgotamento de sockets do Windows (`net::ERR_NO_BUFFER_SPACE`) foi de ambiente; a spec passou isolada.
+
+**Próximo contrato (titular): FIN-CONTRATOS-3.**
+- Motor de cálculo e manutenção de Financiamentos e Consórcios: cadastro e edição, geração de parcelas, SAC/PRICE e atualização, seguros DFI/MIP, amortizações (prazo ou prestação), ajustes de saldo, recálculo só das futuras, exclusão segura e quitação.
+- A regeneração do consórcio **não** reproduz a exclusão de despesas pagas do Flask. Não executar regeneração sobre contratos reais até a proteção estar comprovada.
