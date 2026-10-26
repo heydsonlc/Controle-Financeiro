@@ -1,0 +1,13 @@
+/* FIN-FIDELIDADE-PATRIMONIO-1 (Mobilidade, fase 1) — so o que a tela original de Mobilidade (veiculos.css) nao tinha. */
+
+/* Aviso da fase 1: o novo aplicativo so consulta; as acoes continuam no sistema atual. */
+.mobilidade-aviso-fase {
+    margin: 0 0 12px;
+    padding: 10px 14px;
+    border: 1px solid var(--cf-border, #d7dde5);
+    border-left: 4px solid var(--cf-warning, #d97706);
+    border-radius: 6px;
+    background: var(--cf-surface, #fff);
+    color: var(--cf-text-muted, #475569);
+    font-size: 0.875rem;
+}
