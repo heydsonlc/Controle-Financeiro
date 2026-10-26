@@ -74,7 +74,7 @@ test('tela original: menu, indicadores, lista, filtros e aviso de consorcios', a
     await expect(page.locator('.recorrencias-kpi-card')).toHaveCount(4);
     await expect(linha(page, 'Mensalidade B')).toContainText('Mensal');
     await expect(linha(page, 'Mensalidade B')).toContainText('R$ 120,00');
-    await expect(page.locator('#recorrencias-aviso-consorcios')).toContainText('Consórcios: só consulta');
+    await expect(page.locator('#recorrencias-aviso-consorcios')).toContainText('Parcelas pagas nunca são apagadas');
     await page.selectOption('#filtro-status', 'inativa');
     await expect(linha(page, 'Mensalidade B')).toHaveCount(0);
     await page.selectOption('#filtro-status', '');
@@ -274,4 +274,33 @@ test('recorrencia no cartao: cadastrar, gerar a compra na fatura, editar e inati
     const cartoes = await chamarRpc(page, 'cartoes_do_perfil', { p_perfil_id: perfil });
     const cartao = cartoes.corpo.find((c) => c.id === criado.corpo.cartao_id);
     expect((await chamarRpc(page, 'inativar_cartao', { p_perfil_id: perfil, p_cartao_id: cartao.id, p_versao: cartao.versao })).status).toBe(200);
+});
+
+// FIN-CONTRATOS-3: consorcio cadastrado pelo modal original (Perfil B, novo aplicativo), parcelas em Despesas e
+// inativacao (as despesas pendentes saem; nada pago e apagado). Em 2034, longe dos outros cenarios.
+test('consorcio: cadastrar pelo modal original, parcelas em Despesas e inativar', async ({ page }) => {
+    const dialogos = registrarDialogos(page);
+    await entrar(page, B);
+    await abrirRecorrencias(page);
+    await page.click('#btn-nova-recorrencia');
+    await page.selectOption('#tipo-cadastro', 'consorcio');
+    await expect(page.locator('#data-vencimento')).toBeVisible();  // Data inicial visivel no modo consorcio (defeito do Flask corrigido)
+    await preencher(page, { nome: 'Consorcio Tela E2E', valor: 200, vencimento: '2034-05-05' });
+    await page.fill('#numero-parcelas', '3');
+    await salvar(page);
+    await expect(linha(page, 'Consorcio Tela E2E')).toBeVisible();
+    const perfil = await perfilAtivoId(page);
+    const lista = (await chamarRpc(page, 'consorcios_tela', { p_perfil_id: perfil, p_id: null })).corpo;
+    const contrato = lista.find((c) => c.nome === 'Consorcio Tela E2E');
+    expect([contrato.numero_parcelas, contrato.valor_inicial, contrato.mes_inicio]).toEqual([3, 200, '2034-05-01']);
+
+    await abrirDespesas(page, '2034-06');
+    await expect(despesa(page, 'Consorcio Tela E2E - Parcela 2/3')).toBeVisible();
+
+    await abrirRecorrencias(page);
+    await linha(page, 'Consorcio Tela E2E').locator('[data-on-click^="inativarRecorrencia(\'consorcio\'"]').click();
+    await expect.poll(() => dialogos.some((m) => /Inativar consorcio\?/.test(m))).toBe(true);
+    await expect(linha(page, 'Consorcio Tela E2E')).toHaveCount(0);
+    await abrirDespesas(page, '2034-06');
+    await expect(despesa(page, 'Consorcio Tela E2E - Parcela 2/3')).toHaveCount(0);
 });

@@ -38,16 +38,17 @@ MES = HOJE.strftime('%Y-%m-01')
 
 # Script do Flask: login, perfil ativo e uma lista de requisicoes; '{nome}' no corpo/rota vem de respostas anteriores.
 _SCRIPT = """
-import json, sys
+import json, sys, uuid
 from backend.app import create_app
 from backend.models import Usuario, db
 app = create_app('local')
 with app.app_context():
-    u = Usuario(email='flask.rc@teste.local', nome='RC', ativo=True)
+    email = f'flask.rc.{uuid.uuid4().hex[:8]}@teste.local'  # uma conta por execucao
+    u = Usuario(email=email, nome='RC', ativo=True)
     u.definir_senha('Senha-ficticia-rc-2026')
     db.session.add(u); db.session.commit()
 c = app.test_client()
-assert c.post('/login', data={'email': 'flask.rc@teste.local', 'senha': 'Senha-ficticia-rc-2026'}).status_code == 302
+assert c.post('/login', data={'email': email, 'senha': 'Senha-ficticia-rc-2026'}).status_code == 302
 ids = {}
 def preencher(v):
     if isinstance(v, str):

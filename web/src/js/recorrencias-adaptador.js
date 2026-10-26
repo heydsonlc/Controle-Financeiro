@@ -9,7 +9,9 @@
 // - recorrencia no cartao (FIN-FIDELIDADE-CARTOES-2, R2): cadastro, edicao, inativar e reativar por funcoes proprias
 //   (criar/editar_recorrencia_cartao, definir_situacao_recorrencia_cartao); trocar entre cartao e outro meio pede
 //   inativar e cadastrar de novo (as compras ja geradas ficam no cartao);
-// - consorcios (FIN-FIDELIDADE-CONTRATOS-1, migration 20261116090000): so consulta (lista e detalhe, como o Flask);
+// - consorcios (FIN-FIDELIDADE-CONTRATOS-1, migration 20261116090000): lista e detalhe, como o Flask. FIN-CONTRATOS-3
+//   (migration 20261121090000): cadastro, edicao e inativacao pelo escritor do perfil; as parcelas efetivadas nunca
+//   sao apagadas (regeneracao e exclusao seguras no banco);
 //   cadastro, edicao e exclusao continuam no sistema atual (a lista avisa).
 
 import { supabase } from './cliente.js';
@@ -287,6 +289,38 @@ async function consorcios(id) {
     return ok({ data });
 }
 
+// FIN-CONTRATOS-3: escrita de consorcios (respostas no formato do Flask; perfil ainda no Flask e recusado pelo banco).
+function falhaConsorcio(error) {
+    if (error.hint === 'SISTEMA_FLASK') return falha('Os consórcios deste perfil ainda são administrados pelo sistema atual (Flask). Nada foi gravado.', 409);
+    if (error.hint === 'NAO_ENCONTRADO') return falha('Consórcio não encontrado', 404);
+    return falha(mensagemDeErro(error), error.code === '42501' ? 403 : 400);
+}
+
+async function criarConsorcio(corpo) {
+    const { data, error } = await supabase.rpc('criar_consorcio', { p_perfil_id: estado.perfilId, p_dados: corpo, p_chave: chaves.de('consorcio') });
+    if (error) return falhaConsorcio(error);
+    chaves.esquecer('consorcio');
+    return { status: 201, corpo: { success: true, message: 'Consórcio criado com sucesso', ...data } };
+}
+
+async function editarConsorcio(id, corpo) {
+    const { data, error } = await supabase.rpc('editar_consorcio', { p_perfil_id: estado.perfilId, p_id: id, p_dados: corpo });
+    if (error) return falhaConsorcio(error);
+    return ok({ message: 'Consórcio atualizado com sucesso', ...data });
+}
+
+async function excluirConsorcio(id) {
+    const { data, error } = await supabase.rpc('excluir_consorcio', { p_perfil_id: estado.perfilId, p_id: id });
+    if (error) return falhaConsorcio(error);
+    return ok({ message: data.message });
+}
+
+async function regenerarConsorcio(id, corpo) {
+    const { data, error } = await supabase.rpc('regenerar_parcelas_consorcio', { p_perfil_id: estado.perfilId, p_id: id, p_dados: corpo });
+    if (error) return falhaConsorcio(error);
+    return ok({ message: data.message, parcelas_geradas: data.parcelas_geradas, preservadas: data.preservadas });
+}
+
 const ROTAS = [
     ['GET', /^\/api\/recorrencias\/?$/, () => listar()],
     ['POST', /^\/api\/recorrencias\/?$/, (m, corpo) => criar(corpo || {})],
@@ -295,9 +329,13 @@ const ROTAS = [
     ['GET', /^\/api\/categorias\/?$/, () => categorias()],
     ['GET', /^\/api\/cartoes\/?$/, () => cartoes()],
     ['GET', /^\/api\/contas\/?$/, () => contasBancarias()],
-    // Consorcios: so consulta nesta fase; a lista avisa (recorrencias-aviso-consorcios) que o resto continua no Flask.
+    // Consorcios: leitura e (FIN-CONTRATOS-3) escrita; o resto das rotas de consorcio continua no Flask.
     ['GET', /^\/api\/consorcios\/?$/, () => consorcios(null)],
     ['GET', /^\/api\/consorcios\/(\d+)$/, (m) => consorcios(Number(m[1]))],
+    ['POST', /^\/api\/consorcios\/?$/, (m, corpo) => criarConsorcio(corpo || {})],
+    ['PUT', /^\/api\/consorcios\/(\d+)$/, (m, corpo) => editarConsorcio(Number(m[1]), corpo || {})],
+    ['DELETE', /^\/api\/consorcios\/(\d+)$/, (m) => excluirConsorcio(Number(m[1]))],
+    ['POST', /^\/api\/consorcios\/(\d+)\/regenerar-parcelas$/, (m, corpo) => regenerarConsorcio(Number(m[1]), corpo || {})],
     [null, /^\/api\/consorcios(\/|$)/, async () => emMigracao('Consórcios')],
     ['GET', /^\/api\/cartoes\/(\d+)\/categorias-limite$/, (m) => limitesDoCartao(Number(m[1]))],
     ['GET', /^\/api\/categorias-cartao\/resolver$/, (m, c, p) => resolverCategoriaCartao(p)],

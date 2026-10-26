@@ -174,6 +174,11 @@ const RPCS_DE_ESCRITA = new Map([
     ['desativar_categoria_cartao', 'categorias-adaptador.js'],
     ['vincular_despesa_categoria_cartao', 'categorias-adaptador.js'],
     ['desvincular_despesa_categoria_cartao', 'categorias-adaptador.js'],
+    // FIN-CONTRATOS-3 (consorcios: gestao, escritor unico, contrato travado; regeneracao e exclusao seguras no banco)
+    ['criar_consorcio', 'recorrencias-adaptador.js'],
+    ['editar_consorcio', 'recorrencias-adaptador.js'],
+    ['excluir_consorcio', 'recorrencias-adaptador.js'],
+    ['regenerar_parcelas_consorcio', 'recorrencias-adaptador.js'],
     // FIN-MIGRACAO-FIDELIDADE-FASE-1 (gestao de perfis; o banco exige pode_gerir do perfil). Camada unica: perfil.js
     ['criar_perfil', 'perfil.js'],
     ['atualizar_perfil', 'perfil.js'],

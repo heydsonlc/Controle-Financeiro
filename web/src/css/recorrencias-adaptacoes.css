@@ -24,3 +24,10 @@ body.cf-somente-leitura .recorrencias-actions {
     color: #64748b;
     font-size: 0.8rem;
 }
+
+/* FIN-CONTRATOS-3: no modo consorcio o Flask esconde a "Data inicial" (.recorrencia-campo[hidden]), mas o mes de inicio
+   do consorcio e "Calculado automaticamente pela Data inicial" (texto do proprio modal): sem ela o cadastro falha com
+   "Mes de inicio e obrigatorio". O campo continua visivel nos dois modos (o JS do Flask ja o le em salvarConsorcio). */
+.recorrencia-campo[hidden]:has(#data-vencimento) {
+    display: block !important;
+}
