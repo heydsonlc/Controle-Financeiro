@@ -74,7 +74,7 @@ test('tela original: menu, indicadores, lista, filtros e aviso de consorcios', a
     await expect(page.locator('.recorrencias-kpi-card')).toHaveCount(4);
     await expect(linha(page, 'Mensalidade B')).toContainText('Mensal');
     await expect(linha(page, 'Mensalidade B')).toContainText('R$ 120,00');
-    await expect(page.locator('#recorrencias-aviso-consorcios')).toContainText('Consórcios ainda não');
+    await expect(page.locator('#recorrencias-aviso-consorcios')).toContainText('Consórcios: só consulta');
     await page.selectOption('#filtro-status', 'inativa');
     await expect(linha(page, 'Mensalidade B')).toHaveCount(0);
     await page.selectOption('#filtro-status', '');
@@ -119,8 +119,8 @@ test('cadastrar, recusas sem gravar, editar e gerar em Despesas com nome, valor,
     await expect(linha(page, NOME)).toContainText('R$ 109,90');
     await expect(linha(page, NOME).locator('[title="pix"]')).toHaveCount(1);
 
-    // Aviso de "itens nao gerados": o cadastro de cartao marca o proprio cartao como recorrente; o gerador o rejeita,
-    // mas o aviso de Despesas nao o mostra (a fatura e gerada pela parte de cartoes).
+    // O cadastro de cartao marca o proprio cartao como recorrente (como no Flask). FIN-FIDELIDADE-CARTOES-2 (R4): o
+    // gerador nao o le mais como recorrencia (nem rejeitada); a fatura e gerada pela parte de cartoes.
     await page.goto('/cartoes.html');  // FIN-FIDELIDADE-CARTOES-1: tela original de Cartoes
     await page.click('#btn-novo-cartao');
     await page.fill('#cartao-nome', 'Cartao Rec (tela)');
@@ -129,7 +129,9 @@ test('cadastrar, recusas sem gravar, editar e gerar em Despesas com nome, valor,
     await page.click('#form-cartao button[type=submit]');
     await expect(page.locator('#lista-cartoes .cartao-list-item', { hasText: 'Cartao Rec (tela)' })).toBeVisible();
     const bruta = await chamarRpc(page, 'previa_geracao', { p_perfil_id: await perfilAtivoId(page), p_mes: '2031-01-01' });
-    expect(bruta.corpo.rejeitados.filter((r) => r.nome === 'Cartao Rec (tela)').map((r) => r.motivo)).toEqual(['Cartao marcado como recorrencia']);
+    expect(bruta.corpo.rejeitados.filter((r) => r.nome === 'Cartao Rec (tela)')).toEqual([]);
+    // So a fatura do cartao (parte de cartoes); o cartao nunca como recorrencia que gera conta.
+    expect(bruta.corpo.itens.filter((r) => r.nome === 'Cartao Rec (tela)' && r.natureza !== 'FATURA')).toEqual([]);
 
     // Integracao: a geracao e explicita, em Despesas.
     await abrirDespesas(page, '2031-01');

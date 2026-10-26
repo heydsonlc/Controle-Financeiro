@@ -9,7 +9,8 @@
 // - recorrencia no cartao (FIN-FIDELIDADE-CARTOES-2, R2): cadastro, edicao, inativar e reativar por funcoes proprias
 //   (criar/editar_recorrencia_cartao, definir_situacao_recorrencia_cartao); trocar entre cartao e outro meio pede
 //   inativar e cadastrar de novo (as compras ja geradas ficam no cartao);
-// - consorcios: modulo em migracao (a lista avisa).
+// - consorcios (FIN-FIDELIDADE-CONTRATOS-1, migration 20261116090000): so consulta (lista e detalhe, como o Flask);
+//   cadastro, edicao e exclusao continuam no sistema atual (a lista avisa).
 
 import { supabase } from './cliente.js';
 import { criarChaves, emMigracao, falha, mensagemDeErro, ok, valorTexto } from './adaptador-comum.js';
@@ -280,6 +281,12 @@ async function resolverCategoriaCartao(parametros) {
     return ok({ data });
 }
 
+async function consorcios(id) {
+    const { data, error } = await supabase.rpc('consorcios_tela', { p_perfil_id: estado.perfilId, p_id: id });
+    if (error) throw error;
+    return ok({ data });
+}
+
 const ROTAS = [
     ['GET', /^\/api\/recorrencias\/?$/, () => listar()],
     ['POST', /^\/api\/recorrencias\/?$/, (m, corpo) => criar(corpo || {})],
@@ -288,8 +295,9 @@ const ROTAS = [
     ['GET', /^\/api\/categorias\/?$/, () => categorias()],
     ['GET', /^\/api\/cartoes\/?$/, () => cartoes()],
     ['GET', /^\/api\/contas\/?$/, () => contasBancarias()],
-    // Consorcios: modulo em migracao; a lista avisa (recorrencias-aviso-consorcios) e nao mostra nenhum.
-    ['GET', /^\/api\/consorcios\/?$/, async () => ok({ data: [] })],
+    // Consorcios: so consulta nesta fase; a lista avisa (recorrencias-aviso-consorcios) que o resto continua no Flask.
+    ['GET', /^\/api\/consorcios\/?$/, () => consorcios(null)],
+    ['GET', /^\/api\/consorcios\/(\d+)$/, (m) => consorcios(Number(m[1]))],
     [null, /^\/api\/consorcios(\/|$)/, async () => emMigracao('Consórcios')],
     ['GET', /^\/api\/cartoes\/(\d+)\/categorias-limite$/, (m) => limitesDoCartao(Number(m[1]))],
     ['GET', /^\/api\/categorias-cartao\/resolver$/, (m, c, p) => resolverCategoriaCartao(p)],
