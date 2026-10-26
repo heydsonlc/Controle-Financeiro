@@ -22,18 +22,18 @@ const MIGRADAS = [
     ['receitas', 'receitas.html', 'Gerenciamento de Receitas'],
     ['cartoes', 'cartoes.html', 'Cartões'],
     ['importar_cartao', 'importar-cartao.html', 'Importar Cartão'],  // FIN-FIDELIDADE-CARTOES-1
+    ['contas_bancarias', 'contas-bancarias.html', 'Contas Bancárias'],  // FIN-FIDELIDADE-MOVIMENTACOES-1
+    ['lancamentos', 'lancamentos.html', 'Lançamentos'],  // FIN-FIDELIDADE-MOVIMENTACOES-1
+    ['financiamentos', 'financiamentos.html', 'Financiamentos'],  // FIN-FIDELIDADE-CONTRATOS-1 (fase 1)
+    ['patrimonio', 'patrimonio.html', 'Patrimônio'],  // FIN-FIDELIDADE-PATRIMONIO-1 (fase 1)
+    ['imposto_renda', 'documentos-fiscais.html', 'Imposto de Renda'],  // FIN-FIDELIDADE-DOCUMENTOS-1 (fase 1, IRPF)
+    ['dashboard', 'dashboard.html', 'Dashboard Financeiro'],  // FIN-FIDELIDADE-CONSOLIDACAO-1
+    ['veiculos', 'mobilidade.html', 'Mobilidade'],  // FIN-FIDELIDADE-PATRIMONIO-1 (Mobilidade, fase 1)
     ['categorias', 'categorias.html', 'Categorias'],
     ['configuracoes', 'configuracoes.html', 'Configurações e Preferências'],
     ['ajuda', 'ajuda.html', 'Central de Ajuda e Manual de Uso'],
 ];
-const EM_MIGRACAO = [
-    ['dashboard', 'dashboard.html', 'Dashboard Financeiro'],
-    ['lancamentos', 'lancamentos.html', 'Lançamentos'],
-    ['contas_bancarias', 'contas-bancarias.html', 'Contas Bancárias'],
-    ['financiamentos', 'financiamentos.html', 'Financiamentos'],
-    ['patrimonio', 'patrimonio.html', 'Patrimônio'],
-    ['imposto_renda', 'documentos-fiscais.html', 'Imposto de Renda'],
-    ['veiculos', 'mobilidade.html', 'Mobilidade'],
+const EM_MIGRACAO = [  // vazio: todos os modulos do menu ja migrados
 ];
 
 test.beforeEach(async ({ page }, testInfo) => {

@@ -22,14 +22,27 @@ const RAIZ = path.resolve(WEB, '..');
 export const PROJETOS_PROIBIDOS = new Set(['dshqjhyymtpxpxuntzbz']);
 // FIN-MIGRACAO-FIDELIDADE-FASE-1: CSS da moldura e das telas do Flask, sem alteracao.
 const CSS_COMPARTILHADO = ['style.css', 'theme-light.css', 'layout.css', 'instituicoes.css', 'formas_pagamento.css',
-    'configuracoes.css', 'ajuda.css', 'despesas.css', 'recorrencias.css', 'cartoes.css', 'importar_cartao.css'];
+    'configuracoes.css', 'ajuda.css', 'despesas.css', 'recorrencias.css', 'cartoes.css', 'importar_cartao.css',
+    'contas_bancarias.css', 'lancamentos.css', 'financiamentos.css', 'patrimonio.css',
+    'imposto_renda.css', 'dashboard.css', 'veiculos.css'];
 // JS do Flask reaproveitado: vai para js/original/ so com a conversao de adaptarParaCsp (o arquivo do Flask nao muda).
 const JS_ORIGINAL = ['ajuda.js', 'utils.js', 'icons.js', 'instituicoes.js', 'formas_pagamento.js', 'despesas.js', 'recorrencias.js',
-    'cartoes.js', 'importar_cartao.js'];
+    'cartoes.js', 'importar_cartao.js', 'contas_bancarias.js',
+    'lancamentos.js', 'financiamentos.js', 'patrimonio.js', 'imposto_renda.js',
+    'categoria_cartao_icones.js', 'dashboard.js', 'veiculos.js'];
 // Imagens que os componentes do Flask (formas_pagamento.js, instituicoes.js) pedem em /static/...: so as que eles
 // citam pelo nome (versionadas), nunca a pasta inteira (frontend/static/img tem arquivos pessoais fora do Git).
 const IMAGENS_ORIGINAIS = {
-    'static/img': ['logo_pix.png', 'icone_dinheiro.jpg', 'logo_bandeira_cartao_visa.png', 'icone_boleto.jpg', 'trasnferencia_icone.jpg'],
+    'static/img': ['logo_pix.png', 'icone_dinheiro.jpg', 'logo_bandeira_cartao_visa.png', 'icone_boleto.jpg', 'trasnferencia_icone.jpg',
+        // FIN-FIDELIDADE-PATRIMONIO-1: icones da barra de bens e as imagens de bens do sistema (financeiro.imagens_patrimonio).
+        'icone_filtro.png', 'documento_xlsx.png', 'documento_relatorio.png', 'Patrimonio_cadeira_ergonomica.jpg',
+        'Patrimonio_notebook.jpg', 'patrimonio_ar_condicionado.png', 'patrimonio_impressora.png', 'patrimonio_monitor.png',
+        'patrimonio_placa_de_video.png', 'patrimonio_webcam.png',
+        'documento_pdf.png', 'documento_zip.webp',  // FIN-FIDELIDADE-DOCUMENTOS-1: icones de acoes do Imposto de Renda
+        'logo_marterCard.png', 'elo.png',  // FIN-FIDELIDADE-CONSOLIDACAO-1: bandeiras do Dashboard
+        // FIN-FIDELIDADE-PATRIMONIO-1 (Mobilidade): ilustracoes das modalidades (veiculos.js)
+        'Transporte_por_App.png', 'Veiculo_pessoal_1.png', 'Veiculo_pessoal_2.png', 'Veiculo_pessoal_3.png',
+        'transporte_por_assinatura.png'],
 };
 const ORIGEM_IMAGENS_INSTITUICOES = 'static/assets/instituicoes';
 // Fontes da montagem: nao vao para o dist.
@@ -262,6 +275,10 @@ export async function construir({ url, chave, destino = path.join(WEB, 'dist'), 
     const imagens = { ...IMAGENS_ORIGINAIS };
     const instituicoes = await readFile(path.join(RAIZ, 'frontend', 'static', 'js', 'instituicoes.js'), 'utf8');
     imagens[ORIGEM_IMAGENS_INSTITUICOES] = [...new Set([...instituicoes.matchAll(/'([\w-]+\.(?:png|svg))'/g)].map((m) => m[1]))];
+    // FIN-FIDELIDADE-CONSOLIDACAO-1: icones de categoria de cartao (categoria_cartao_icones.js, versionados) do Dashboard.
+    const iconesCategoria = await readFile(path.join(RAIZ, 'frontend', 'static', 'js', 'categoria_cartao_icones.js'), 'utf8');
+    imagens['static/img'] = [...new Set([...imagens['static/img'],
+        ...[...iconesCategoria.matchAll(/\$\{BASE_PATH\}([^`'"]+\.(?:png|jpg|webp))/g)].map((m) => m[1])])];
     for (const [pasta, nomes] of Object.entries(imagens)) {
         await mkdir(path.join(destino, ...pasta.split('/')), { recursive: true });
         for (const nome of nomes) {
@@ -278,6 +295,13 @@ export async function construir({ url, chave, destino = path.join(WEB, 'dist'), 
         path.join(WEB, 'node_modules', '@supabase', 'supabase-js', 'dist', 'umd', 'supabase.js'),
         path.join(destino, 'vendor', 'supabase.js'),
     );
+    // FIN-FIDELIDADE-CARTOES-2: PDF.js (so extracao de texto do PDF da fatura, no navegador), servido do proprio site
+    // (CSP inalterada). Build "legacy": navegadores um pouco mais antigos tambem leem.
+    for (const nome of ['pdf.min.mjs', 'pdf.worker.min.mjs']) {
+        await cp(path.join(WEB, 'node_modules', 'pdfjs-dist', 'legacy', 'build', nome), path.join(destino, 'vendor', nome));
+    }
+    // FIN-FIDELIDADE-CONSOLIDACAO-1: Chart.js do proprio Flask (frontend/static/vendor, versionado), para o Dashboard.
+    await cp(path.join(RAIZ, 'frontend', 'static', 'vendor', 'chart.umd.min.js'), path.join(destino, 'vendor', 'chart.umd.min.js'));
 
     const config = { supabaseUrl: origem, supabasePublishableKey: chavePublica };
     await writeFile(

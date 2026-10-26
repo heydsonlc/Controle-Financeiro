@@ -93,8 +93,9 @@ def test_selecao_backend_sql_e_remotos(ti):
 def test_selecao_web_por_importacao_e_tela(ti):
     sel = ti.selecionar({'web/src/js/fechamento.js': None}, 2)
     e2e = set(sel['e2e'])
-    # fechamento.js e importado por cartoes.js, que e carregado por cartoes.html
-    assert {'web/tests/e2e/cartoes.spec.mjs', 'web/tests/e2e/fechamento.spec.mjs'} <= e2e
+    # fechamento.js e importado por compra-cartao.js e lancamentos-adaptador.js, carregados pelas paginas da moldura
+    # (web/src/paginas/cartoes.html e lancamentos.html); cartoes.spec/fechamento.spec sairam no FIN-FIDELIDADE-CARTOES-1.
+    assert {'web/tests/e2e/cartoes_tela.spec.mjs', 'web/tests/e2e/lancamentos_tela.spec.mjs'} <= e2e
     assert 'web/tests/e2e/receitas.spec.mjs' not in e2e
     assert sel['unit_web'] == ['web/src/js/fechamento.js']
     sel = ti.selecionar({'web/tests/e2e/run_e2e.py': {1}}, 2)
@@ -106,9 +107,11 @@ def test_e2e_por_dados_da_tabela_alterada(ti):
     # (contas_do_mes le essas tabelas) sem importar o JS de cartoes.
     sel = ti.selecionar({'supabase/migrations/20261030090000_financeiro_cartoes_fechamento.sql': None}, 2)
     e2e = {s.rsplit('/', 1)[-1] for s in sel['e2e']}
-    assert {'contas.spec.mjs', 'despesas.spec.mjs', 'recorrencia.spec.mjs', 'cartoes.spec.mjs', 'fechamento.spec.mjs'} <= e2e
-    # so esperar cair em contas.html depois do login nao e testar a tela
-    assert not {'acesso.spec.mjs', 'perfis.spec.mjs'} & e2e
+    assert {'contas.spec.mjs', 'despesas.spec.mjs', 'recorrencia.spec.mjs', 'cartoes_tela.spec.mjs'} <= e2e
+    # so esperar cair em contas.html depois do login nao e testar a tela (perfis.spec abre contas.html?mes=... de fato:
+    # entra desde que a pagina da moldura web/src/paginas/contas.html passou a ser lida)
+    assert 'acesso.spec.mjs' not in e2e
+    assert 'perfis.spec.mjs' in e2e
 
 
 def test_regra_financeira_amplia_na_duvida(ti):
@@ -123,3 +126,12 @@ def test_regra_financeira_amplia_na_duvida(ti):
     assert sel['e2e'] == {}  # so o Flask mudou: o novo aplicativo nao e afetado
     sel = ti.selecionar({servico: {neutra}}, 2)
     assert not any(m.startswith('regra financeira') for motivos in sel['py'].values() for m in motivos)
+
+
+def test_arquivo_do_flask_reaproveitado_seleciona_a_tela_que_o_usa(ti):
+    # FIN-MIGRACAO-FIDELIDADE: o build copia o JS do Flask para js/original/ e a pagina da moldura o declara.
+    e2e = set(ti.selecionar({'frontend/static/js/patrimonio.js': None}, 2)['e2e'])
+    assert 'web/tests/e2e/patrimonio_tela.spec.mjs' in e2e
+    assert 'web/tests/e2e/receitas.spec.mjs' not in e2e
+    e2e = set(ti.selecionar({'frontend/templates/veiculos.html': None}, 2)['e2e'])
+    assert 'web/tests/e2e/mobilidade_tela.spec.mjs' in e2e

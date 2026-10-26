@@ -1,9 +1,2 @@
 [
-    {"ativo": "dashboard", "arquivo": "dashboard.html", "titulo": "Dashboard Financeiro", "documento": "Dashboard Financeiro - Controle Financeiro", "descricao": "Visão geral do perfil: indicadores do mês, gráficos, compromissos e alertas."},
-    {"ativo": "lancamentos", "arquivo": "lancamentos.html", "titulo": "Lançamentos", "documento": "Lançamentos - Controle Financeiro", "descricao": "Lançamentos e compras de cartão, com filtros, edição e conferência por fatura."},
-    {"ativo": "contas_bancarias", "arquivo": "contas-bancarias.html", "titulo": "Contas Bancárias", "documento": "Contas Bancárias", "descricao": "Cadastro das contas, saldos, ajustes, transferências e extrato."},
-    {"ativo": "financiamentos", "arquivo": "financiamentos.html", "titulo": "Financiamentos", "documento": "Financiamentos", "descricao": "Contratos, parcelas, amortizações, indexadores e seguros habitacionais."},
-    {"ativo": "patrimonio", "arquivo": "patrimonio.html", "titulo": "Patrimônio", "documento": "Patrimônio - Controle Financeiro", "descricao": "Bens, aplicações e a evolução do patrimônio do perfil."},
-    {"ativo": "imposto_renda", "arquivo": "documentos-fiscais.html", "titulo": "Imposto de Renda", "documento": "Imposto de Renda", "descricao": "Documentos fiscais, comprovantes, leitura de documentos (OCR) e lastro empresarial."},
-    {"ativo": "veiculos", "arquivo": "mobilidade.html", "titulo": "Mobilidade", "documento": "Mobilidade - Controle Financeiro", "descricao": "Veículos, abastecimentos, manutenções e as despesas de mobilidade."}
 ]

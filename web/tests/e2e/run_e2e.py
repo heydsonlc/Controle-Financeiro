@@ -53,6 +53,10 @@ from tests.supabase_local import (  # noqa: E402
     encontrar_postgrest,
     porta_livre,
     semear_cartoes_e2e,
+    semear_financiamento_e2e,
+    semear_mobilidade_e2e,
+    semear_documentos_fiscais_e2e,
+    semear_patrimonio_e2e,
     semear_pendencia_e2e,
     semear_receitas_e2e,
     semear_recorrencia_e2e,
@@ -293,6 +297,10 @@ def main():
                 semear_receitas_e2e(cur)  # FIN-RECEITAS-1 (receitas.spec.mjs)
                 semear_cartoes_e2e(cur)  # FIN-CARTOES-1 e FIN-FIDELIDADE-CARTOES-1 (cartoes_tela.spec.mjs)
                 semear_pendencia_e2e(cur)  # FIN-CARTOES-RECORRENCIA-PENDENCIA-1 (pendencia.spec.mjs)
+                semear_financiamento_e2e(cur)  # FIN-FIDELIDADE-CONTRATOS-1 (financiamentos_tela.spec.mjs)
+                semear_patrimonio_e2e(cur)  # FIN-FIDELIDADE-PATRIMONIO-1 (patrimonio_tela.spec.mjs)
+                semear_documentos_fiscais_e2e(cur)  # FIN-FIDELIDADE-DOCUMENTOS-1 (documentos_fiscais_tela.spec.mjs)
+                semear_mobilidade_e2e(cur)  # FIN-FIDELIDADE-PATRIMONIO-1 (mobilidade_tela.spec.mjs)
             conn.close()
 
             def consolidar(cartao, competencia, criar_se_faltar=False):

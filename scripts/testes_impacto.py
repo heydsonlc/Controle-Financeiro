@@ -323,6 +323,12 @@ def modulos_js_dependentes(modulos):
 # Selecao
 # ---------------------------------------------------------------------------
 
+def paginas_web():
+    """Paginas do novo aplicativo: as soltas em web/src e as da moldura (web/src/paginas/<pagina>.html vira <pagina>.html
+    no build, com os scripts e estilos declarados no comentario <!-- moldura {...} -->)."""
+    return sorted((RAIZ / 'web/src').glob('*.html')) + sorted((RAIZ / 'web/src/paginas').glob('*.html'))
+
+
 def selecionar(mudancas, profundidade):
     testes_py = sorted(p.relative_to(RAIZ).as_posix() for p in (RAIZ / 'tests').glob('test_*.py'))
     texto_teste = {t: ler(t) for t in testes_py}
@@ -429,6 +435,16 @@ def selecionar(mudancas, profundidade):
             elif arquivo in especs:
                 sel_e2e[arquivo].append('spec alterado')
             coberto = True
+        # 6b. Arquivos do Flask que o novo aplicativo reaproveita (FIN-MIGRACAO-FIDELIDADE): JS e CSS copiados pelo build
+        # (js/original/, css/shared/) e templates de onde as paginas da moldura foram geradas.
+        reaproveitado = {'frontend/static/js/': f'js/original/{base}', 'frontend/static/css/': f'css/shared/{base}',
+                         'frontend/templates/': f'frontend/templates/{base}'}
+        for prefixo, marca in reaproveitado.items():
+            if arquivo.startswith(prefixo):
+                for pagina in paginas_web():
+                    if marca in pagina.read_text(encoding='utf-8', errors='replace'):
+                        citar(sel_e2e, texto_spec, re.escape(pagina.name), f'abre {pagina.name} (usa {marca} do Flask)')
+                        coberto = True
         if casa(arquivo, INFRA_E2E):
             for spec in especs:
                 sel_e2e[spec].append(f'infraestrutura do E2E alterada ({base})')
@@ -472,7 +488,7 @@ def selecionar(mudancas, profundidade):
         alcance = {r: modulos_js_dependentes({r})[0] for r in raizes}
         # Todo spec espera cair em contas.html depois do login (waitForURL): isso nao e testar a tela.
         navegacao = {s: re.sub(r'waitForURL\([^)]*\)', '', tx) for s, tx in texto_spec.items()}
-        for pagina in sorted((RAIZ / 'web/src').glob('*.html')):
+        for pagina in paginas_web():
             html = pagina.read_text(encoding='utf-8', errors='replace')
             motivos = [f'{r} ({raizes[r]})' for r in sorted(raizes) if any(f'js/{m}' in html for m in alcance[r])]
             if motivos:

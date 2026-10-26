@@ -86,15 +86,32 @@ const RPCS_DE_LEITURA = new Set(['meus_perfis', 'contas_bancarias_do_perfil', 'c
     // FIN-FIDELIDADE-CARTOES-1 (so leitura)
     'cartoes_da_tela', 'categorias_cartao_do_perfil', 'limites_do_cartao', 'fatura_por_categoria',
     'lancamentos_fatura_por_categoria', 'parcelamento_da_compra',
-    'analisar_importacao_cartao', 'sugerir_categorias_importacao', 'resolver_categoria_cartao_tela']);
+    'analisar_importacao_cartao', 'sugerir_categorias_importacao', 'resolver_categoria_cartao_tela',
+    // FIN-FIDELIDADE-MOVIMENTACOES-1 (so leitura; a conferencia de saldo nao altera nada)
+    'contas_bancarias_tela', 'conta_bancaria_tela', 'extrato_conta_bancaria', 'conferir_saldo_conta',
+    'compras_do_cartao_tela', 'despesas_diretas_tela', 'receitas_lancamentos_tela',
+    'financiamentos_tela', 'financiamento_tela',  // FIN-FIDELIDADE-CONTRATOS-1 (fase 1, so leitura)
+    // FIN-FIDELIDADE-PATRIMONIO-1 (fase 1, so leitura)
+    'patrimonio_contas_tela', 'patrimonio_conta_tela', 'patrimonio_transferencias_tela', 'patrimonio_bens_tela',
+    'patrimonio_resumo_tela', 'imagens_patrimonio',
+    // FIN-FIDELIDADE-DOCUMENTOS-1 (fase 1, so leitura, modo IRPF)
+    'ir_contexto_tela', 'ir_categorias_tela', 'ir_categorias_despesa_tela', 'ir_comprovantes_tela',
+    'ir_documentos_empresa_tela', 'lastro_saidas_tela',  // Documentos da Empresa (so leitura)
+    'arquivo_comprovante_tela',  // "Abrir arquivo" (so leitura)
+    'dashboard_resumo_tela',  // FIN-FIDELIDADE-CONSOLIDACAO-1 (so leitura)
+    // FIN-FIDELIDADE-PATRIMONIO-1 (Mobilidade, fase 1, so leitura)
+    'mobilidade_categorias_tela', 'veiculos_tela', 'projecoes_mobilidade_tela', 'veiculo_uso_tela', 'veiculo_regras_km_tela',
+    'veiculo_manutencoes_km_tela', 'veiculo_financiamento_tela', 'mobilidade_ativa_tela', 'mobilidade_assinaturas_tela',
+    'transporte_app_tela',
+    'consorcios_tela']);  // FIN-FIDELIDADE-CONTRATOS-1 (Consorcios, so leitura)
 // Escrita so por RPC transacional autorizada no banco, revisada uma a uma, e so na tela que a usa.
 const RPCS_DE_ESCRITA = new Map([
     ['gerar_mes', 'despesas-recorrencias.js'],  // FIN-FIDELIDADE-DESPESAS-1: extraido de contas.js
     // FIN-DESPESAS-1
     // FIN-FIDELIDADE-DESPESAS-1: a tela original de Despesas chama pelo adaptador (despesas-adaptador.js)
-    ['criar_despesa', ['despesas-adaptador.js', 'recorrencias-adaptador.js']],
-    ['editar_despesa', 'despesas-adaptador.js'],
-    ['excluir_despesa', 'despesas-adaptador.js'],
+    ['criar_despesa', ['despesas-adaptador.js', 'recorrencias-adaptador.js', 'lancamentos-adaptador.js']],
+    ['editar_despesa', ['despesas-adaptador.js', 'lancamentos-adaptador.js']],
+    ['excluir_despesa', ['despesas-adaptador.js', 'lancamentos-adaptador.js']],
     ['inativar_recorrencia', ['despesas-adaptador.js', 'recorrencias-adaptador.js']],
     // FIN-FIDELIDADE-RECORRENCIAS-1 (tela de Recorrencias; o banco exige gestao do perfil e a versao)
     ['editar_recorrencia', 'recorrencias-adaptador.js'],
@@ -113,8 +130,8 @@ const RPCS_DE_ESCRITA = new Map([
     // FIN-CARTOES-1 (compras e cartoes). FIN-FIDELIDADE-CARTOES-1: tela original de Cartoes pelo adaptador; a compra
     // nova continua com o formulario do novo aplicativo (compra-cartao.js); editar_compra fica sem tela (a do Flask edita
     // um lancamento por editar_lancamento_cartao).
-    ['criar_compra', 'compra-cartao.js'],
-    ['excluir_compra', 'cartoes-adaptador.js'],
+    ['criar_compra', ['compra-cartao.js', 'lancamentos-adaptador.js']],  // FIN-FIDELIDADE-MOVIMENTACOES-1: Lancamentos
+    ['excluir_compra', ['cartoes-adaptador.js', 'lancamentos-adaptador.js']],
     ['criar_cartao', 'cartoes-adaptador.js'],
     ['editar_cartao', 'cartoes-adaptador.js'],
     ['inativar_cartao', 'cartoes-adaptador.js'],
@@ -133,6 +150,14 @@ const RPCS_DE_ESCRITA = new Map([
     // FIN-FIDELIDADE-CARTOES-1: so em Despesas, como no Flask (a tela original de Cartoes nao paga fatura).
     ['pagar_fatura', 'despesas-adaptador.js'],
     ['estornar_pagamento_fatura', 'despesas-adaptador.js'],
+    // FIN-FIDELIDADE-MOVIMENTACOES-1 (Contas Bancarias: cadastro com versao; ajuste e transferencia pelo escritor unico,
+    // com chave; so AJUSTE editavel; saldo pelos movimentos, decidido no banco)
+    ['criar_conta_bancaria', 'contas-bancarias-adaptador.js'],
+    ['editar_conta_bancaria', 'contas-bancarias-adaptador.js'],
+    ['ajustar_saldo_conta', 'contas-bancarias-adaptador.js'],
+    ['editar_ajuste_conta', 'contas-bancarias-adaptador.js'],
+    ['excluir_ajuste_conta', 'contas-bancarias-adaptador.js'],
+    ['transferir_entre_contas', 'contas-bancarias-adaptador.js'],
     // FIN-MOVIMENTACOES-1 (pagamento/estorno de despesa comum, recebimento/estorno de receita; saldo no banco)
     ['pagar_despesa', 'despesas-adaptador.js'],
     ['estornar_pagamento_despesa', 'despesas-adaptador.js'],
@@ -176,7 +201,10 @@ const MENU_DO_FLASK = [
 ];
 const MIGRADAS = { 'contas.html': 'Despesas', 'recorrencias.html': 'Recorrencias', 'receitas.html': 'Receitas', 'cartoes.html': 'Cartões',
     'categorias.html': 'Categorias', 'configuracoes.html': 'Configurações e Preferências', 'ajuda.html': 'Ajuda e Manual',
-    'importar-cartao.html': 'Importar Cartão' };
+    'importar-cartao.html': 'Importar Cartão', 'contas-bancarias.html': 'Contas Bancárias',
+    'lancamentos.html': 'Lançamentos', 'financiamentos.html': 'Financiamentos', 'patrimonio.html': 'Patrimônio',
+    'documentos-fiscais.html': 'Documentos Fiscais', 'dashboard.html': 'Dashboard',
+    'mobilidade.html': 'Mobilidade' };
 
 function menuDe(html) {
     return [...html.matchAll(/<div class="app-nav-section-title">([^<]+)<\/div>([\s\S]*?)<\/div>\s*(?=<div class="app-nav-section">|<\/nav>)/g)]
@@ -212,9 +240,10 @@ test('todas as paginas usam a moldura do Flask com o mesmo menu, sem pagina queb
         const despesas = await readFile(path.join(destino, 'contas.html'), 'utf8');
         assert.match(despesas, /<a href="contas.html" class="app-nav-link active" data-pagina="despesas" aria-current="page">/);
         assert.match(despesas, /<span>Gerenciamento de Despesas<\/span>/);
-        const dashboard = await readFile(path.join(destino, 'dashboard.html'), 'utf8');
-        assert.match(dashboard, /class="modulo-em-migracao"/);
-        assert.match(dashboard, /<script type="module" src="js\/pagina.js"><\/script>/);
+        // Todos os modulos do menu migrados (Mobilidade foi o ultimo): nenhuma pagina "em migracao" no build.
+        const mobilidade = await readFile(path.join(destino, 'mobilidade.html'), 'utf8');
+        assert.doesNotMatch(mobilidade, /class="modulo-em-migracao"/);
+        assert.match(mobilidade, /class="mobilidade-aviso-fase"/);
     } finally {
         await rm(destino, { recursive: true, force: true });
     }

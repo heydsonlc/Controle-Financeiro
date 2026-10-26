@@ -599,3 +599,119 @@ def semear_cartoes_e2e(cur, categoria_id=203):
     # Importar Cartao: palavras-chave de categoria (globais, como no Flask) para a sugestao das linhas do arquivo.
     cur.execute("insert into public.categoria_palavra_chave (categoria_id, palavra, ativo) values (201, 'padaria', true), "
                 "(202, 'farmacia', true)")
+
+
+# FIN-FIDELIDADE-CONTRATOS-1 (E2E, so leitura): financiamento FICTICIO do "Perfil B" com 3 parcelas (1 paga).
+FINANCIAMENTO_E2E_B = 'Financiamento E2E (ficticio)'
+
+
+def semear_financiamento_e2e(cur):
+    perfil = PERFIS['PERFIL_B']['id']
+    cur.execute("insert into public.financiamento (perfil_financeiro_id, nome, produto, sistema_amortizacao, valor_financiado, "
+                "prazo_total_meses, prazo_remanescente_meses, taxa_juros_nominal_anual, taxa_juros_mensal, data_contrato, "
+                "data_primeira_parcela, seguro_tipo, valor_seguro_mensal, ativo) values (%s, %s, 'Imovel ficticio', 'SAC', "
+                "3000, 3, 2, 12, 0.009489, '2033-01-10', '2033-02-10', 'fixo', 10, true) returning id",
+                (perfil, FINANCIAMENTO_E2E_B))
+    financiamento = cur.fetchone()[0]
+    for numero, status, saldo in ((1, 'pago', 2000), (2, 'pendente', 1000), (3, 'pendente', 0)):
+        cur.execute("insert into public.financiamento_parcela (perfil_financeiro_id, financiamento_id, numero_parcela, "
+                    "data_vencimento, valor_amortizacao, valor_juros, valor_seguro, valor_taxa_adm, valor_subsidio, "
+                    "valor_fgts_utilizado, valor_juros_mora, valor_multa, valor_atualizacao_monetaria, valor_iof_complementar, "
+                    "valor_previsto_total, valor_pago, dif_apurada, saldo_devedor_apos_pagamento, status) "
+                    "values (%s, %s, %s, %s, 1000, %s, 10, 0, 0, 0, 0, 0, 0, 0, %s, %s, 0, %s, %s)",
+                    (perfil, financiamento, numero, f'2033-0{numero + 1}-10', 28.47 / numero, 1010 + 28.47 / numero,
+                     1038.47 if status == 'pago' else 0, saldo, status))
+
+
+
+# FIN-FIDELIDADE-PATRIMONIO-1 (patrimonio_tela.spec.mjs): caixinhas e transferencia FICTICIAS do Perfil B e bens
+# FICTICIOS do perfil Empresa (o usuario A e LEITOR nele). So leitura na tela.
+PATRIMONIO_E2E_B = ('Reserva E2E (ficticia)', 'Viagem E2E (ficticia)')
+BENS_E2E_EMPRESA = ('Notebook E2E (ficticio)', 'Cadeira E2E (ficticia)')
+
+
+def semear_patrimonio_e2e(cur):
+    perfil = PERFIS['PERFIL_B']['id']
+    ids = []
+    for nome, saldo in zip(PATRIMONIO_E2E_B, (1500, 300)):
+        cur.execute("insert into public.conta_patrimonio (perfil_financeiro_id, nome, tipo, saldo_inicial, saldo_atual, meta, cor, "
+                    "ativo, criado_em) values (%s, %s, 'Reserva', %s, %s, 5000, '#28a745', true, now()) returning id",
+                    (perfil, nome, saldo, saldo))
+        ids.append(cur.fetchone()[0])
+    cur.execute("insert into public.transferencia (perfil_financeiro_id, conta_origem_id, conta_destino_id, valor, "
+                "data_transferencia, descricao, criado_em) values (%s, %s, %s, 200, '2033-01-15', 'Transferencia E2E (ficticia)', now())",
+                (perfil, ids[0], ids[1]))
+    for nome, valor, status_doc, imagem in ((BENS_E2E_EMPRESA[0], 4200, 'PENDENTE', 'Patrimonio_notebook.jpg'),
+                                            (BENS_E2E_EMPRESA[1], 900, 'NAO_APLICAVEL', None)):
+        cur.execute("insert into public.bem_patrimonial (perfil_financeiro_id, nome, categoria, valor_aquisicao, data_aquisicao, "
+                    "status, status_documental, imagem_arquivo, created_at, updated_at) "
+                    "values (%s, %s, 'Equipamentos', %s, '2033-02-01', 'ATIVO', %s, %s, now(), now())",
+                    (PERFIS['EMPRESA']['id'], nome, valor, status_doc, imagem))
+
+
+# FIN-FIDELIDADE-DOCUMENTOS-1 (documentos_fiscais_tela.spec.mjs): categoria IR e comprovantes FICTICIOS do Perfil B.
+# As categorias IR iniciais o Flask cria na leitura; o novo aplicativo so le, entao o cluster local recebe uma.
+COMPROVANTES_E2E_B = ('Clinica E2E (ficticia)', 'Escola E2E (ficticia)')
+DOCUMENTO_EMPRESA_E2E = 'Junta Comercial E2E (ficticia)'
+ARQUIVO_E2E_B = 'Recibo E2E (ficticio) - conteudo de teste'.encode()
+
+
+def semear_documentos_fiscais_e2e(cur):
+    perfil = PERFIS['PERFIL_B']['id']
+    cur.execute("insert into public.ir_categoria (nome, descricao, dedutivel, ativo, ordem, tipo_contexto, natureza, created_at, "
+                "updated_at) values ('Saude E2E (ficticia)', 'Categoria ficticia', true, true, 10, 'PESSOAL', 'DEDUCAO_IRPF', now(), now()) "
+                "returning id")
+    categoria_ir = cur.fetchone()[0]
+    for n, (nome, valor, status) in enumerate(zip(COMPROVANTES_E2E_B, (450.3, 980), ('PENDENTE_REVISAO', 'VALIDADO')), start=1):
+        cur.execute("insert into public.ir_comprovante (perfil_financeiro_id, ano_calendario, data_documento, prestador_nome, valor, "
+                    "categoria_ir_id, dedutivel, status, hash_arquivo, created_at, updated_at) "
+                    "values (%s, extract(year from current_date)::int, current_date - %s, %s, %s, %s, true, %s, %s, now(), now()) "
+                    "returning id", (perfil, n, nome, valor, categoria_ir, status, f'{n:064d}'))
+        if n == 1:  # "Abrir arquivo" (documentos_fiscais_tela.spec.mjs): texto ficticio, aberto como blob numa nova aba
+            cur.execute("insert into public.ir_comprovante_arquivo (comprovante_id, nome_arquivo, mime_type, tamanho_bytes, "
+                        "hash_arquivo, conteudo, created_at) values (%s, 'recibo-ficticio.txt', 'text/plain', %s, %s, %s, now())",
+                        (cur.fetchone()[0], len(ARQUIVO_E2E_B), 'c' * 64, ARQUIVO_E2E_B))
+    # Documentos da Empresa: um documento FICTICIO do perfil Empresa com metadados empresariais (usuario A e LEITOR nele).
+    cur.execute("insert into public.ir_comprovante (perfil_financeiro_id, ano_calendario, data_documento, prestador_nome, valor, "
+                "status, hash_arquivo, created_at, updated_at) values (%s, extract(year from current_date)::int, current_date, "
+                "%s, 0, 'VALIDADO', %s, now(), now()) returning id", (PERFIS['EMPRESA']['id'], DOCUMENTO_EMPRESA_E2E, 'e' * 64))
+    documento = cur.fetchone()[0]
+    cur.execute("insert into public.documento_empresarial_metadata (comprovante_id, perfil_financeiro_id, tipo_documental, "
+                "categoria_documental, data_validade, status_documental, obrigatorio, renovavel, created_at, updated_at) values "
+                "(%s, %s, 'DOCUMENTO_SOCIETARIO', 'CONTRATO_SOCIAL', null, 'ATIVO', true, false, now(), now())",
+                (documento, PERFIS['EMPRESA']['id']))
+
+
+# FIN-FIDELIDADE-PATRIMONIO-1 (mobilidade_tela.spec.mjs): veiculo, projecoes, regra de manutencao, assinatura e caminho
+# de transporte por app FICTICIOS do Perfil B. So leitura na tela.
+VEICULO_E2E_B = 'Carro E2E (ficticio)'
+CAMINHO_APP_E2E_B = 'App E2E (ficticio)'
+
+
+def semear_mobilidade_e2e(cur):
+    perfil = PERFIS['PERFIL_B']['id']
+    cur.execute("select id from public.categoria order by id limit 1")
+    categoria = cur.fetchone()[0]
+    cur.execute("insert into public.veiculo (perfil_financeiro_id, nome, tipo, combustivel, autonomia_km_l, status, data_inicio, "
+                "combustivel_valor_mensal, preco_medio_combustivel, ipva_mes, ipva_valor, km_estimado_acumulado, criado_em, "
+                "atualizado_em) values (%s, %s, 'Carro', 'Gasolina', 12, 'ATIVO', current_date, 480, 6, 3, 1200, 5000, now(), now()) "
+                "returning id", (perfil, VEICULO_E2E_B))
+    veiculo = cur.fetchone()[0]
+    for meses, evento, valor in ((0, 'COMBUSTIVEL', 480), (1, 'COMBUSTIVEL', 480), (2, 'IPVA', 1200)):
+        cur.execute("insert into public.despesa_prevista (perfil_financeiro_id, origem_tipo, origem_id, categoria_id, data_prevista, "
+                    "data_original_prevista, data_atual_prevista, valor_previsto, status, metadata, criado_em, atualizado_em) "
+                    "select %s, 'VEICULO', %s, %s, d, d, d, %s, 'PREVISTA', %s, now(), now() "
+                    "from (select (date_trunc('month', current_date) + make_interval(months => %s))::date d) x",
+                    (perfil, veiculo, categoria, valor, json.dumps({'tipo_evento': evento}), meses))
+    cur.execute("insert into public.veiculo_regra_manutencao_km (perfil_financeiro_id, veiculo_id, tipo_evento, intervalo_km, "
+                "custo_estimado, categoria_id, ativo, criado_em, atualizado_em) values (%s, %s, 'TROCA_OLEO', 10000, 300, %s, true, "
+                "now(), now())", (perfil, veiculo, categoria))
+    cur.execute("insert into public.mobilidade_assinatura (perfil_financeiro_id, nome, valor_mensal, status, created_at, updated_at) "
+                "values (%s, 'Assinatura E2E (ficticia)', 1300, 'ATIVO', now(), now())", (perfil,))
+    cur.execute("insert into public.despesa_prevista (perfil_financeiro_id, origem_tipo, origem_id, categoria_id, data_prevista, "
+                "data_original_prevista, data_atual_prevista, valor_previsto, status, metadata, criado_em, atualizado_em) "
+                "select %s, 'TRANSPORTE_APP', 1, %s, d, d, d, 750, 'PREVISTA', %s, now(), now() "
+                "from (select date_trunc('month', current_date)::date d) x",
+                (perfil, categoria, json.dumps({'tipo_evento': 'TRANSPORTE_APP', 'caminho': {
+                    'nome': CAMINHO_APP_E2E_B, 'km_mensal_estimado': 300, 'preco_medio_por_km': 2.5},
+                    'calculo': {'valor_mensal': 750}})))
