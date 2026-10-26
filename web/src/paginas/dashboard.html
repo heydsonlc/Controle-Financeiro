@@ -1,7 +1,9 @@
-<!-- moldura {"ativo": "dashboard", "titulo": "Dashboard Financeiro", "documento": "Dashboard Financeiro - Controle Financeiro", "css": ["css/shared/dashboard.css"], "classicos": ["js/original/ponte-permitidas.js", "js/ponte-csp.js", "js/ponte-api.js", "js/original/utils.js", "js/original/icons.js", "vendor/chart.umd.min.js", "js/original/categoria_cartao_icones.js", "js/original/dashboard.js", "js/dashboard-adaptacoes.js"], "scripts": ["js/dashboard-adaptador.js"]} -->
+<!-- moldura {"ativo": "dashboard", "titulo": "Dashboard Financeiro", "documento": "Dashboard Financeiro - Controle Financeiro", "css": ["css/shared/dashboard.css", "css/dashboard-adaptacoes.css"], "classicos": ["js/original/ponte-permitidas.js", "js/ponte-csp.js", "js/ponte-api.js", "js/original/utils.js", "js/original/icons.js", "vendor/chart.umd.min.js", "js/original/categoria_cartao_icones.js", "js/original/dashboard.js", "js/dashboard-adaptacoes.js"], "scripts": ["js/dashboard-adaptador.js"]} -->
 <!-- FIN-FIDELIDADE-CONSOLIDACAO-1: frontend/templates/index.html (barra de acoes e conteudo) sem alteracao,
      exceto os links do Flask (/despesas, /veiculos, /cartoes) apontando para as paginas daqui. Atributos onclick/style
-     convertidos no build. O Dashboard e so leitura (nao ha acao a migrar). -->
+     convertidos no build. O Dashboard e so leitura (nao ha acao a migrar).
+     D2 (FIN-AUDITORIA-GERAL-1, decisao do titular): sob "Receitas previstas", o recebido do mes e a diferenca da execucao
+     (preenchidos por js/dashboard-adaptador.js); a previsao recebida nao e somada de novo. -->
 <!-- acao -->
     <header class="module-actionbar dashboard-action-strip" aria-label="A&ccedil;&otilde;es do dashboard">
         <div class="dashboard-context">
@@ -181,6 +183,8 @@
                     <span class="summary-icon green" aria-hidden="true"></span>
                     <p>Receitas previstas</p>
                     <strong id="flow-receitas">R$ 0,00</strong>
+                    <small class="flow-execucao" id="flow-receitas-execucao" hidden>Recebido <span id="flow-receitas-recebidas">R$ 0,00</span>
+                        &middot; Diferen&ccedil;a <span id="flow-receitas-diferenca">R$ 0,00</span></small>
                 </div>
                 <div>
                     <span class="summary-icon red" aria-hidden="true"></span>

@@ -38,6 +38,12 @@ test('KPIs do resumo, grafico e acoes rapidas para as paginas daqui', async ({ p
     const saldo = resumo.kpis.saldo_consolidado.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     await expect(page.locator('#kpi-saldo')).toContainText(saldo);
     await expect(page.locator('#kpi-recorrencias')).toContainText(String(resumo.kpis.recorrencias_ativas.quantidade));
+    // D2: previsto, recebido e diferenca da execucao, sem somar a previsao recebida de novo.
+    const real = (v) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const fluxo = resumo.fluxo_caixa.resumo;
+    await expect(page.locator('#flow-receitas')).toContainText(real(fluxo.receitas_previstas));
+    await expect(page.locator('#flow-receitas-recebidas')).toContainText(real(fluxo.receitas_recebidas));
+    await expect(page.locator('#flow-receitas-diferenca')).toContainText(real(Math.abs(fluxo.diferenca_receitas)));
     expect(await page.locator('#fluxo-caixa-chart').evaluate((c) => c.width > 0)).toBe(true);
     expect(await page.evaluate(() => typeof window.Chart)).toBe('function');
 

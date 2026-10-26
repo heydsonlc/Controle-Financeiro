@@ -1,0 +1,12 @@
+/* FIN-AUDITORIA-GERAL-1 (D2) — linha do recebido e da diferenca sob "Receitas previstas" no resumo do fluxo do
+   Dashboard original (css/shared/dashboard.css nao muda). */
+.flow-summary div .flow-execucao {
+    grid-column: 2;
+    color: #64748b;
+    font-size: 0.78rem;
+    margin-top: 2px;
+}
+
+.flow-summary div .flow-execucao .negativa {
+    color: #dc2626;
+}

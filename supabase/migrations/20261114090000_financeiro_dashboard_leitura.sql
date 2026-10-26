@@ -9,8 +9,12 @@
 -- projetado simplificado, faturas em aberto, recorrencias, contas a vencer em 7 dias, categorias e limites dos cartoes,
 -- alertas (vencimentos, limites, previstas atrasadas, documentos empresariais) e mobilidade. "Hoje" = data de Brasilia.
 -- Correcao classificada (docs §3, D1): o Flask soma despesas_previstas_mes (valor, pendentes, confirmadas) de TODOS os
--- perfis (a consulta nao filtra o perfil); aqui so o perfil pedido. Mantido como no Flask, para decisao do titular (D2):
--- receitas previstas = recebido + orcado do mes.
+-- perfis (a consulta nao filtra o perfil); aqui so o perfil pedido.
+-- Correcao D2 (decisao do titular, FIN-AUDITORIA-GERAL-1): o Flask soma recebido + orcado do mes como "receitas
+-- previstas", e a previsao ja recebida conta duas vezes (previsto 10.000 + recebido 9.500 = 19.500). Aqui a previsao e
+-- a do proprio Flask na tela de Receitas (ReceitaService.get_resumo_receitas_por_mes): orcado do mes + recebimentos sem
+-- previsao (orcamento_id nulo). O recebido e a realizacao dessa previsao: vai a parte, em receitas_recebidas, com a
+-- diferenca da execucao (recebido - previsto). Nenhum registro e alterado.
 -- Nenhuma tabela nova. Nenhum dado existente e alterado.
 
 -- round(float(x), 1) / percentual do Flask (_percentual): 0 sem limite positivo. Interna.
@@ -50,6 +54,7 @@ declare
     v_dias        integer;
     v_saldo       numeric;
     v_receitas    numeric;
+    v_recebidas   numeric;
     v_despesas    numeric;
     v_fat_total   numeric;
     v_fat_qtd     integer;
@@ -91,12 +96,16 @@ begin
 
     select coalesce(sum(cb.saldo_atual), 0) into v_saldo from public.conta_bancaria cb
      where financeiro.pertence_ao_perfil(cb.perfil_financeiro_id, p_perfil_id) and cb.status = 'ATIVO';
-    v_receitas := coalesce((select sum(r.valor_recebido) from public.receita_realizada r
-                             where financeiro.pertence_ao_perfil(r.perfil_financeiro_id, p_perfil_id)
-                               and date_trunc('month', r.mes_referencia) = v_inicio), 0)
-                + coalesce((select sum(o.valor_esperado) from public.receita_orcamento o
+    -- D2: previsto = orcado + recebido sem previsao; o recebido de uma previsao nao soma de novo.
+    v_receitas := coalesce((select sum(o.valor_esperado) from public.receita_orcamento o
                              where financeiro.pertence_ao_perfil(o.perfil_financeiro_id, p_perfil_id)
-                               and date_trunc('month', o.mes_referencia) = v_inicio), 0);
+                               and date_trunc('month', o.mes_referencia) = v_inicio), 0)
+                + coalesce((select sum(r.valor_recebido) from public.receita_realizada r
+                             where financeiro.pertence_ao_perfil(r.perfil_financeiro_id, p_perfil_id)
+                               and date_trunc('month', r.mes_referencia) = v_inicio and r.orcamento_id is null), 0);
+    v_recebidas := coalesce((select sum(r.valor_recebido) from public.receita_realizada r
+                              where financeiro.pertence_ao_perfil(r.perfil_financeiro_id, p_perfil_id)
+                                and date_trunc('month', r.mes_referencia) = v_inicio), 0);
     v_despesas := coalesce((select sum(c.valor) from public.conta c
                              where financeiro.pertence_ao_perfil(c.perfil_financeiro_id, p_perfil_id)
                                and date_trunc('month', c.mes_referencia) = v_inicio and c.is_fatura_cartao is not true), 0)
@@ -112,7 +121,9 @@ begin
                'saidas', jsonb_agg(round(v_despesas * p.ponto / 5, 2) order by p.ponto),
                'saldo_projetado', jsonb_agg(round(v_saldo + v_receitas * p.ponto / 5 - v_despesas * p.ponto / 5, 2) order by p.ponto),
                'resumo', jsonb_build_object('receitas_previstas', round(v_receitas, 2), 'despesas_previstas', round(v_despesas, 2),
-                                            'saldo_final_projetado', round(v_saldo + v_receitas - v_despesas, 2)),
+                                            'saldo_final_projetado', round(v_saldo + v_receitas - v_despesas, 2),
+                                            'receitas_recebidas', round(v_recebidas, 2),
+                                            'diferenca_receitas', round(v_recebidas - v_receitas, 2)),
                'tipo', 'projecao_simplificada')
       into v_fluxo
       from (select g ponto, least(v_dias, 1 + (g - 1) * greatest(1, v_dias / 5)) dia from generate_series(1, 5) g) p;

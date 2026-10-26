@@ -5,7 +5,10 @@ Fidelidade: sobre os dados FICTICIOS do cluster descartavel (contas, faturas, ca
 FICTICIAS que acionam todos os blocos (despesas previstas atrasadas, conta vencendo hoje, cenario de mobilidade,
 assinaturas, documentos empresariais vencidos e vencendo), o PROPRIO Flask responde GET /api/dashboard/resumo para
 3 perfis e varios meses; o resultado e comparado campo a campo com dashboard_resumo_tela.
-Unica diferenca aceita: D1 (o Flask soma as despesas previstas do mes de todos os perfis).
+Diferencas aceitas: D1 (o Flask soma as despesas previstas do mes de todos os perfis) e D2 (corrigida por decisao do
+titular: o Flask soma recebido + orcado como receitas previstas). Para D2 o Flask responde de novo com a previsao da
+propria tela de Receitas (orcado + recebido sem previsao) no lugar de _receitas_previstas, e a comparacao e com essa
+resposta; a resposta original mostra a duplicidade.
 """
 import json
 import os
@@ -50,7 +53,23 @@ saida = {}
 for chave, perfil in perfis.items():
     assert c.post('/api/perfis-financeiros/ativo', json={'perfil_id': perfil}).status_code == 200
     saida[chave] = {m: c.get('/api/dashboard/resumo?mes_referencia=' + m).get_json() for m in meses}
-print('FLASK_JSON ' + json.dumps(saida))
+# D2: a mesma resposta com a previsao de ReceitaService.get_resumo_receitas_por_mes (orcado + recebido sem previsao).
+import backend.services.dashboard_service as ds
+from backend.models import ReceitaOrcamento, ReceitaRealizada
+def previsao_de_receitas(periodo):
+    orcado = db.session.query(ds.func.coalesce(ds.func.sum(ReceitaOrcamento.valor_esperado), 0)).filter(
+        ds._perfil_cond(ReceitaOrcamento), ds.extract('month', ReceitaOrcamento.mes_referencia) == periodo.month,
+        ds.extract('year', ReceitaOrcamento.mes_referencia) == periodo.year).scalar()
+    sem_previsao = db.session.query(ds.func.coalesce(ds.func.sum(ReceitaRealizada.valor_recebido), 0)).filter(
+        ds._perfil_cond(ReceitaRealizada), ds.extract('month', ReceitaRealizada.mes_referencia) == periodo.month,
+        ds.extract('year', ReceitaRealizada.mes_referencia) == periodo.year, ReceitaRealizada.orcamento_id.is_(None)).scalar()
+    return ds._decimal(orcado) + ds._decimal(sem_previsao)
+ds._receitas_previstas = previsao_de_receitas
+corrigida = {}
+for chave, perfil in perfis.items():
+    assert c.post('/api/perfis-financeiros/ativo', json={'perfil_id': perfil}).status_code == 200
+    corrigida[chave] = {m: c.get('/api/dashboard/resumo?mes_referencia=' + m).get_json() for m in meses}
+print('FLASK_JSON ' + json.dumps({'original': saida, 'd2': corrigida}))
 """
 
 
@@ -94,6 +113,15 @@ def cenario(cluster):  # noqa: F811
                  "categoria_documental, data_validade, status_documental, obrigatorio, renovavel, created_at, updated_at) "
                  "values (%s, %s, 'CERTIDAO', 'FISCAL', %s, 'VALIDO', true, true, now(), now())",
             (comprovante, empresa, HOJE + timedelta(days=dias)))
+    # D2: previsao de 10.000 recebida por 9.500 (diferenca -500) e um recebimento sem previsao de 300, no mes atual.
+    fonte = sql(dsn, "insert into public.item_receita (perfil_financeiro_id, nome, tipo, valor_base_mensal, ativo) "
+                     "values (%s, 'Salario D2 (ficticio)', 'SALARIO_FIXO', 10000, true) returning id", (pessoal,))[0]['id']
+    orcamento = sql(dsn, "insert into public.receita_orcamento (perfil_financeiro_id, item_receita_id, mes_referencia, "
+                         "valor_esperado) values (%s, %s, %s, 10000) returning id", (pessoal, fonte, HOJE.replace(day=1)))[0]['id']
+    for item_receita, orc, valor in ((fonte, orcamento, 9500), (None, None, 300)):
+        sql(dsn, "insert into public.receita_realizada (perfil_financeiro_id, item_receita_id, orcamento_id, data_recebimento, "
+                 "valor_recebido, mes_referencia, descricao) values (%s, %s, %s, %s, %s, %s, 'D2 (ficticia)')",
+            (pessoal, item_receita, orc, HOJE.replace(day=1), valor, HOJE.replace(day=1)))
     return dsn, flask(dsn)
 
 
@@ -109,7 +137,7 @@ def test_privilegios(cenario):
 @pytest.mark.parametrize('perfil', PERFIS)
 def test_resumo_igual_ao_flask(cenario, perfil):
     dsn, saida = cenario
-    for mes, resposta in saida[perfil].items():
+    for mes, resposta in saida['d2'][perfil].items():
         assert resposta['success'], resposta
         esperado = resposta['data']
         novo = rpc(dsn, 'dashboard_resumo_tela', ID[perfil], mes, **({'usuario': USUARIO_B} if perfil == 'PERFIL_B' else {}))
@@ -118,8 +146,31 @@ def test_resumo_igual_ao_flask(cenario, perfil):
         igual(esperado, novo, f'{perfil} {mes!r}')
 
 
+def test_d2_previsao_recebido_e_diferenca_sem_duplicar(cenario):
+    """Previsto 10.000 e recebido 9.500 nao viram 19.500: previsto = 10.000 + 300 (sem previsao), recebido = 9.800."""
+    dsn, saida = cenario
+    mes = HOJE.strftime('%Y-%m')
+    base = sql(dsn, "select coalesce((select sum(valor_esperado) from public.receita_orcamento where perfil_financeiro_id = %s "
+                    "and date_trunc('month', mes_referencia) = %s and item_receita_id not in (select id from public.item_receita "
+                    "where nome = 'Salario D2 (ficticio)')), 0) o, coalesce((select sum(valor_recebido) from public.receita_realizada "
+                    "where perfil_financeiro_id = %s and date_trunc('month', mes_referencia) = %s and descricao is distinct from "
+                    "'D2 (ficticia)'), 0) r, coalesce((select sum(valor_recebido) from public.receita_realizada "
+                    "where perfil_financeiro_id = %s and date_trunc('month', mes_referencia) = %s and orcamento_id is null "
+                    "and descricao is distinct from 'D2 (ficticia)'), 0) s",
+               (ID['PESSOAL'], HOJE.replace(day=1)) * 3)[0]
+    resumo = rpc(dsn, 'dashboard_resumo_tela', ID['PESSOAL'], mes)['fluxo_caixa']['resumo']
+    previsto = float(base['o'] + base['s']) + 10000 + 300
+    recebido = float(base['r']) + 9500 + 300
+    assert (resumo['receitas_previstas'], resumo['receitas_recebidas']) == (previsto, recebido)
+    assert resumo['diferenca_receitas'] == round(recebido - previsto, 2)
+    # A duplicidade do Flask original: a previsao recebida soma de novo (+9.500).
+    original = saida['original']['PESSOAL'][mes]['data']['fluxo_caixa']['resumo']['receitas_previstas']
+    assert round(original - resumo['receitas_previstas'], 2) == round(float(base['r'] - base['s']) + 9500, 2)
+
+
 def test_cenario_aciona_todos_os_blocos(cenario):
     dsn, saida = cenario
+    saida = saida['original']
     pessoal = rpc(dsn, 'dashboard_resumo_tela', ID['PESSOAL'], '')
     tipos = {a['tipo'] for a in pessoal['alertas']}
     assert {'vencimento', 'prevista'} <= tipos
