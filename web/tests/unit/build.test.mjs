@@ -103,7 +103,10 @@ const RPCS_DE_LEITURA = new Set(['meus_perfis', 'contas_bancarias_do_perfil', 'c
     'mobilidade_categorias_tela', 'veiculos_tela', 'projecoes_mobilidade_tela', 'veiculo_uso_tela', 'veiculo_regras_km_tela',
     'veiculo_manutencoes_km_tela', 'veiculo_financiamento_tela', 'mobilidade_ativa_tela', 'mobilidade_assinaturas_tela',
     'transporte_app_tela',
-    'consorcios_tela']);  // FIN-FIDELIDADE-CONTRATOS-1 (Consorcios, so leitura)
+    'consorcios_tela',  // FIN-FIDELIDADE-CONTRATOS-1 (Consorcios, so leitura)
+    // FIN-FIDELIDADE-RECEITAS-CATEGORIAS-1 (so leitura)
+    'receitas_fontes_tela', 'receitas_orcamentos_tela', 'receitas_realizadas_tela', 'categorias_tela', 'palavras_chave_tela',
+    'categorias_cartao_tela', 'categoria_cartao_despesas_tela']);
 // Escrita so por RPC transacional autorizada no banco, revisada uma a uma, e so na tela que a usa.
 const RPCS_DE_ESCRITA = new Map([
     ['gerar_mes', 'despesas-recorrencias.js'],  // FIN-FIDELIDADE-DESPESAS-1: extraido de contas.js
@@ -121,12 +124,13 @@ const RPCS_DE_ESCRITA = new Map([
     ['criar_recorrencia_cartao', 'recorrencias-adaptador.js'],
     ['editar_recorrencia_cartao', 'recorrencias-adaptador.js'],
     ['definir_situacao_recorrencia_cartao', 'recorrencias-adaptador.js'],
-    // FIN-RECEITAS-1 (so previsoes; nenhum recebimento)
-    ['criar_receita', 'receitas.js'],
-    ['editar_receita', 'receitas.js'],
-    ['excluir_receita', 'receitas.js'],
-    ['editar_fonte_receita', 'receitas.js'],
-    ['inativar_fonte_receita', 'receitas.js'],
+    // FIN-RECEITAS-1 (so previsoes; nenhum recebimento). FIN-FIDELIDADE-RECEITAS-CATEGORIAS-1: tela original de Receitas
+    // pelo adaptador (receitas-adaptador.js)
+    ['criar_receita', 'receitas-adaptador.js'],
+    ['editar_receita', 'receitas-adaptador.js'],
+    ['excluir_receita', 'receitas-adaptador.js'],
+    ['editar_fonte_receita', 'receitas-adaptador.js'],
+    ['inativar_fonte_receita', 'receitas-adaptador.js'],
     // FIN-CARTOES-1 (compras e cartoes). FIN-FIDELIDADE-CARTOES-1: tela original de Cartoes pelo adaptador; a compra
     // nova continua com o formulario do novo aplicativo (compra-cartao.js); editar_compra fica sem tela (a do Flask edita
     // um lancamento por editar_lancamento_cartao).
@@ -161,8 +165,15 @@ const RPCS_DE_ESCRITA = new Map([
     // FIN-MOVIMENTACOES-1 (pagamento/estorno de despesa comum, recebimento/estorno de receita; saldo no banco)
     ['pagar_despesa', 'despesas-adaptador.js'],
     ['estornar_pagamento_despesa', 'despesas-adaptador.js'],
-    ['receber_receita', 'receitas.js'],
-    ['estornar_recebimento', 'receitas.js'],
+    ['receber_receita', 'receitas-adaptador.js'],
+    ['estornar_recebimento', 'receitas-adaptador.js'],
+    // FIN-FIDELIDADE-RECEITAS-CATEGORIAS-1 (Categorias do Cartao, por perfil: gestao e escritor unico no banco; as
+    // categorias de despesa, globais, nao tem escrita no novo aplicativo)
+    ['criar_categoria_cartao', 'categorias-adaptador.js'],
+    ['editar_categoria_cartao', 'categorias-adaptador.js'],
+    ['desativar_categoria_cartao', 'categorias-adaptador.js'],
+    ['vincular_despesa_categoria_cartao', 'categorias-adaptador.js'],
+    ['desvincular_despesa_categoria_cartao', 'categorias-adaptador.js'],
     // FIN-MIGRACAO-FIDELIDADE-FASE-1 (gestao de perfis; o banco exige pode_gerir do perfil). Camada unica: perfil.js
     ['criar_perfil', 'perfil.js'],
     ['atualizar_perfil', 'perfil.js'],

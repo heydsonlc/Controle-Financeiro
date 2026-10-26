@@ -1,0 +1,20 @@
+/* FIN-FIDELIDADE-RECEITAS-CATEGORIAS-1 — so acrescimos a tela original de Receitas (css/shared/receitas.css nao muda):
+   aviso de fase e acoes de escrita escondidas para quem so le o perfil (o banco recusa de qualquer forma). */
+.receitas-aviso-fase {
+    margin: 0 0 12px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: #eff6ff;
+    color: #1e3a8a;
+    font-size: 0.85rem;
+}
+
+body.cf-somente-leitura #btn-nova-receita,
+body.cf-somente-leitura .receitas-link-btn[data-on-click^="abrirModalFonte("],
+body.cf-somente-leitura [data-on-click^="editarReceitaLinha("],
+body.cf-somente-leitura [data-on-click^="realizarReceitaLinha("],
+body.cf-somente-leitura [data-on-click^="abrirModalEstornoReceita("],
+body.cf-somente-leitura [data-on-click^="cancelarReceitaLinha("],
+body.cf-somente-leitura #btn-inativar-fonte {
+    display: none !important;
+}

@@ -33,10 +33,13 @@ async function entrar(page, conta) {
     await page.fill('#senha', conta.senha);
     await page.click('#login-enviar');
     await page.waitForURL('**/contas.html');
-    await page.goto('/categorias.html');
+    // FIN-FIDELIDADE-RECEITAS-CATEGORIAS-1: a pagina provisoria de categorias (que listava as contas) virou a tela
+    // original de Categorias; as contas do perfil sao conferidas na tela original de Contas Bancarias (ativas).
+    await page.goto('/contas-bancarias.html');
+    await expect(page.locator('#contas-lista .contas-loading, #contas-lista .loading')).toHaveCount(0);
 }
 
-const contas = (page) => page.locator('#contas-corpo tr td:nth-child(2)');
+const contas = (page) => page.locator('#contas-lista .conta-row .conta-title h3');
 const opcoes = nomesDosPerfis;
 
 test('usuario A ve so os proprios perfis ativos, com o padrao selecionado', async ({ page }) => {

@@ -119,8 +119,9 @@ test('criar, editar, tornar padrao, usar, inativar e reativar; isolamento dos da
     for (const nome of ['Aluguel 11/2026', 'Internet 11/2026', 'Contador 11/2026']) {
         await expect(page.getByText(nome)).toHaveCount(0);
     }
-    await page.goto('/categorias.html');
-    await expect(page.locator('#contas-vazio')).toBeVisible();  // nem a "Carteira legado sem perfil" do Pessoal
+    await page.goto('/contas-bancarias.html');  // FIN-FIDELIDADE-RECEITAS-CATEGORIAS-1: contas na tela original
+    await expect(page.locator('#contas-lista .contas-empty-state')).toBeVisible();  // nem a "Carteira legado sem perfil" do Pessoal
+    await expect(page.locator('#contas-lista .conta-row')).toHaveCount(0);
 
     // Nao inativa o perfil em uso
     await page.goto('/configuracoes.html');

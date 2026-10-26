@@ -1,5 +1,5 @@
-// FIN-MOVIMENTACOES-1 — pagar e estornar despesa comum, receber (parcial e acima do previsto) e estornar receita, e
-// os movimentos do mes, em tela de celular. Dados FICTICIOS: toda escrita com o usuario B no "Perfil B" temporario
+// FIN-MOVIMENTACOES-1 — pagar e estornar despesa comum e os movimentos do mes. (Receber e estornar receita:
+// FIN-FIDELIDADE-RECEITAS-CATEGORIAS-1 levou para a tela original de Receitas, receitas_tela.spec.mjs.) Dados FICTICIOS: toda escrita com o usuario B no "Perfil B" temporario
 // (atribuido ao novo aplicativo; "Conta Perfil B", saldo inicial 0), so em 03/2035. Valor devido, o que falta,
 // saldo e operacao vigente sao conferidos no banco; aqui so a tela e o que ela mostra depois.
 import { expect, test } from '@playwright/test';
@@ -34,8 +34,6 @@ async function entrar(page, conta) {
     await page.waitForURL('**/contas.html');
 }
 
-const previsao = (page, nome) => page.locator('#lista-receitas .conta[data-receita-id^="PREVISAO-"]',
-    { has: page.locator('.conta-nome', { hasText: nome }) });
 
 // FIN-FIDELIDADE-DESPESAS-1: a despesa e paga e estornada pelos modais originais da tela de Despesas do Flask. Os
 // movimentos e o saldo (que a tela original nao lista; ficam em Contas Bancarias) sao conferidos pela funcao de leitura.
@@ -90,69 +88,4 @@ test('despesa: pagar com juros justificados, estornar; movimentos e saldo do mes
     expect(mov.movimentos.map((m) => [m.tipo, Number(m.valor)])).toEqual([['DEBITO', 125], ['CREDITO', 125]]);
     expect(Number(mov.contas.find((c) => c.nome === 'Conta Perfil B').saldo)).toBe(0);
 });
-});
-
-test('receita: receber parcial, receber acima do que falta com justificativa, estornar um recebimento', async ({ page }) => {
-    await entrar(page, B);
-    await page.goto('/receitas.html?mes=2035-03');
-    await page.click('#nova-receita');
-    await page.fill('#receita-nome', 'Freela E2E');
-    await page.selectOption('#receita-tipo', 'RENDA_EXTRA');
-    await page.fill('#receita-data', '2035-03-15');
-    await page.fill('#receita-valor', '1.000,00');
-    await page.locator('#receita-painel').getByRole('button', { name: 'Salvar' }).click();
-    const item = () => previsao(page, 'Freela E2E');
-    await expect(item().locator('.situacao')).toHaveText('Prevista');
-
-    await item().locator('summary').click();
-    await item().getByRole('button', { name: 'Receber' }).click();
-    await expect(page.locator('#recebimento-valor')).toHaveValue('1000,00');  // o que falta, vindo do banco
-    await page.fill('#recebimento-data', '2035-03-15');
-    await page.fill('#recebimento-valor', '400,00');
-    await expect(page.locator('#receita-painel .pagamento-ajuste')).toBeHidden();  // menor: parcial, sem justificativa
-    await expect(page.locator('#receita-painel')).toContainText('recebimento parcial');
-    await page.locator('#receita-painel button[type=submit]').click();
-    await expect(page.locator('#acao-resultado'))
-        .toHaveText(/^Recebido: R\$\s400,00 creditados em Conta Perfil B\. Saldo da conta: R\$\s400,00\.$/);
-    await expect(item().locator('.situacao')).toHaveText('Parcial');
-
-    await item().locator('summary').click();
-    await item().getByRole('button', { name: 'Receber' }).click();
-    await expect(page.locator('#recebimento-valor')).toHaveValue('600,00');
-    await page.fill('#recebimento-data', '2035-03-20');
-    await page.fill('#recebimento-valor', '700,00');
-    await page.locator('#receita-painel button[type=submit]').click();
-    await expect(page.locator('#receita-painel .login-error')).toHaveText('Escreva a justificativa.');
-    await page.fill('#recebimento-justificativa', 'Bonus junto com o pagamento');
-    await page.locator('#receita-painel button[type=submit]').click();
-    await expect(page.locator('#acao-resultado'))
-        .toHaveText(/^Recebido: R\$\s700,00 creditados em Conta Perfil B\. Saldo da conta: R\$\s1\.100,00\.$/);
-    await expect(item().locator('.situacao')).toHaveText('Recebida');
-
-    await item().locator('summary').click();
-    await expect(item().locator('.pagamento-linha')).toHaveCount(2);
-    await item().getByRole('button', { name: 'Estornar recebimento' }).first().click();
-    await page.fill('#estorno-motivo', 'Credito devolvido');
-    await page.fill('#estorno-data-estorno', '2035-03-21');
-    await page.locator('#receita-painel button[type=submit]').click();
-    await expect(page.locator('#acao-resultado'))
-        .toHaveText(/^Recebimento estornado: R\$\s400,00 debitados de Conta Perfil B\. Saldo da conta: R\$\s700,00\.$/);
-    await expect(item().locator('.situacao')).toHaveText('Parcial');  // 700 de 1.000 (o estornado nao conta)
-
-    // Estorna tambem o outro: cada recebimento tem o seu estorno, e a conta volta ao saldo de partida (os specs
-    // seguintes usam a mesma conta).
-    await item().locator('summary').click();
-    await expect(item().getByRole('button', { name: 'Estornar recebimento' })).toHaveCount(1);
-    await item().getByRole('button', { name: 'Estornar recebimento' }).click();
-    await page.fill('#estorno-motivo', 'Valor recebido por engano');
-    await page.fill('#estorno-data-estorno', '2035-03-22');
-    await page.locator('#receita-painel button[type=submit]').click();
-    await expect(page.locator('#acao-resultado'))
-        .toHaveText(/^Recebimento estornado: R\$\s700,00 debitados de Conta Perfil B\. Saldo da conta: R\$\s0,00\.$/);
-    await expect(item().locator('.situacao')).toHaveText('Prevista');
-
-    const mov = await movimentosDoMes(page, '2035-03');
-    const daReceita = mov.movimentos.filter((m) => m.referencia === 'Freela E2E');
-    expect(daReceita.filter((m) => m.tipo === 'CREDITO' && !m.estorno_de)).toHaveLength(2);  // recebimentos
-    expect(daReceita.filter((m) => m.tipo === 'DEBITO' && m.estorno_de)).toHaveLength(2);    // estornos
 });

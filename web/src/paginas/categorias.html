@@ -1,46 +1,226 @@
-<!-- moldura {"ativo": "categorias", "titulo": "Categorias", "documento": "Categorias - Controle Financeiro", "css": [], "scripts": ["js/categorias.js"]} -->
-<!-- Conteudo oculto ate a sessao ser validada no servidor do Supabase Auth.
-     A protecao real dos dados e a RLS no banco; isto evita apenas o "flash". -->
+<!-- moldura {"ativo": "categorias", "titulo": "Categorias", "documento": "Categorias - Controle Financeiro", "css": ["css/shared/categorias.css", "css/categorias-adaptacoes.css"], "classicos": ["js/original/ponte-permitidas.js", "js/ponte-csp.js", "js/ponte-api.js", "js/original/utils.js", "js/original/icons.js", "js/original/categoria_cartao_icones.js", "js/original/categorias.js"], "scripts": ["js/categorias-adaptador.js"]} -->
+<!-- FIN-FIDELIDADE-RECEITAS-CATEGORIAS-1: frontend/templates/categorias.html (barra de acoes e conteudo) sem
+     alteracao, exceto o aviso acrescentado. onclick/style convertidos no build. -->
+<!-- acao -->
+    <section class="module-actionbar categorias-toolbar" aria-label="A&ccedil;&otilde;es de categorias">
+        <button class="cf-button cf-button-primary" id="btn-nova-categoria-despesa" type="button">
+            <span aria-hidden="true">+</span>
+            <span>Nova categoria de despesa</span>
+        </button>
+        <button class="cf-button cf-button-primary" id="btn-nova-categoria-cartao" type="button">
+            <span aria-hidden="true">+</span>
+            <span>Nova categoria do cart&atilde;o</span>
+        </button>
+        <label class="toolbar-search" for="categorias-pesquisa">
+            <span aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false">
+                    <circle cx="11" cy="11" r="7"/>
+                    <path d="m20 20-3.5-3.5"/>
+                </svg>
+            </span>
+            <input type="search" id="categorias-pesquisa" placeholder="Pesquisar">
+        </label>
+        <label class="toolbar-status" for="categorias-status">
+            <span>Status:</span>
+            <select id="categorias-status">
+                <option value="ativas">Ativas</option>
+                <option value="inativas">Inativas</option>
+                <option value="todas">Todas</option>
+            </select>
+        </label>
+    </section>
 <!-- conteudo -->
-<div class="app-conteudo">
-        <p class="app-aviso">Visualização somente leitura — nova arquitetura em construção.</p>
+<!-- FIN-FIDELIDADE-RECEITAS-CATEGORIAS-1 (acrescimo): o que esta tela grava no novo aplicativo. -->
+<p class="categorias-aviso-fase" role="note">Categorias do Cartão: cadastro, edição, desativação e vínculos pelo novo aplicativo. Categorias de despesa, palavras-chave e logos são comuns a todos os perfis e continuam no sistema atual.</p>
+    <div class="container app-content-fluid">
+        <main class="categorias-page">
 
-        <section class="app-secao" aria-labelledby="contas-titulo">
-            <h1 class="app-titulo" id="contas-titulo">Contas bancárias do perfil</h1>
-            <div class="login-error" id="perfis-erro" role="alert" hidden></div>
-            <p class="app-vazio" id="perfis-vazio" hidden>Nenhum perfil financeiro autorizado para esta conta.</p>
-            <div class="login-error" id="contas-erro" role="alert" hidden></div>
-            <p class="app-vazio" id="contas-vazio" hidden>Nenhuma conta bancária neste perfil.</p>
-            <table class="app-tabela" id="contas-tabela" hidden>
-                <thead>
-                    <tr>
-                        <th scope="col">Cor</th>
-                        <th scope="col">Conta</th>
-                        <th scope="col">Instituição</th>
-                        <th scope="col">Tipo</th>
-                    </tr>
-                </thead>
-                <tbody id="contas-corpo"></tbody>
-            </table>
-        </section>
+            <!-- Coluna principal: tabs + conteúdo -->
+            <section class="categorias-shell" aria-label="Administra&ccedil;&atilde;o de categorias">
+                <div class="categorias-tabs" role="tablist" aria-label="Tipos de categoria">
+                    <button class="categorias-tab active" id="tab-despesas" type="button" role="tab" aria-controls="panel-despesas" aria-selected="true" data-tab="despesas">
+                        Categorias de Despesa
+                    </button>
+                    <button class="categorias-tab" id="tab-cartao" type="button" role="tab" aria-controls="panel-cartao" aria-selected="false" data-tab="cartao">
+                        Categorias do Cart&atilde;o
+                    </button>
+                </div>
 
-        <section class="app-secao" aria-labelledby="categorias-titulo">
-        <h2 class="app-titulo" id="categorias-titulo">Categorias</h2>
-        <p class="app-aviso">Comuns a todos os perfis, como no sistema atual.</p>
+                <section class="categorias-panel" id="panel-despesas" role="tabpanel" aria-labelledby="tab-despesas">
+                    <p class="categorias-scope-notice categorias-scope-global">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 3a14 14 0 0 0 0 18M12 3a14 14 0 0 1 0 18M3 12h18"/></svg>
+                        Categorias de Despesa s&atilde;o compartilhadas entre os perfis financeiros.
+                    </p>
+                    <div class="despesa-workspace">
+                        <aside class="despesa-sidebar" aria-label="Categorias de Despesa">
+                            <label class="workspace-search" for="busca-categoria-despesa">
+                                <span aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" focusable="false">
+                                        <circle cx="11" cy="11" r="7"/>
+                                        <path d="m20 20-3.5-3.5"/>
+                                    </svg>
+                                </span>
+                                <input id="busca-categoria-despesa" type="search" placeholder="Buscar categoria...">
+                            </label>
+                            <div class="despesa-list" id="categorias-lista">
+                                <p class="loading">Carregando categorias...</p>
+                            </div>
+                            <p class="workspace-count" id="categorias-despesa-contagem">0 categorias</p>
+                        </aside>
 
-        <div class="login-error" id="categorias-erro" role="alert" hidden></div>
-        <p class="app-vazio" id="categorias-vazio" hidden>Nenhuma categoria cadastrada.</p>
+                        <section class="despesa-detail" id="categoria-despesa-detalhe" aria-live="polite">
+                            <div class="detail-empty">
+                                <h2>Selecione uma Categoria de Despesa</h2>
+                                <p>Confira dados, v&iacute;nculo operacional e Palavras-chave de classifica&ccedil;&atilde;o.</p>
+                            </div>
+                        </section>
+                    </div>
+                </section>
 
-        <table class="app-tabela" id="categorias-tabela" hidden>
-            <thead>
-                <tr>
-                    <th scope="col">Cor</th>
-                    <th scope="col">Nome</th>
-                    <th scope="col">Descrição</th>
-                    <th scope="col">Situação</th>
-                </tr>
-            </thead>
-            <tbody id="categorias-corpo"></tbody>
-        </table>
-        </section>
-</div>
+                <section class="categorias-panel hidden" id="panel-cartao" role="tabpanel" aria-labelledby="tab-cartao">
+                    <p class="categorias-scope-notice categorias-scope-perfil">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        Categorias do Cart&atilde;o s&atilde;o espec&iacute;ficas do perfil financeiro ativo.
+                    </p>
+                    <div class="cartao-workspace">
+                        <aside class="cartao-sidebar" aria-label="Categorias do Cart&atilde;o">
+                            <label class="workspace-search" for="busca-categoria-cartao">
+                                <span aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" focusable="false">
+                                        <circle cx="11" cy="11" r="7"/>
+                                        <path d="m20 20-3.5-3.5"/>
+                                    </svg>
+                                </span>
+                                <input id="busca-categoria-cartao" type="search" placeholder="Buscar categoria do cart&atilde;o...">
+                            </label>
+                            <div class="cartao-list" id="categorias-cartao-lista">
+                                <p class="loading">Carregando categorias do cart&atilde;o...</p>
+                            </div>
+                        </aside>
+
+                        <section class="cartao-detail" id="categoria-cartao-detalhe" aria-live="polite">
+                            <div class="detail-empty">
+                                <h2>Selecione uma Categoria do Cart&atilde;o</h2>
+                                <p>Crie ou escolha uma categoria global para editar seus dados e vincular Categorias de Despesa.</p>
+                            </div>
+                        </section>
+                    </div>
+                </section>
+            </section><!-- /.categorias-shell -->
+
+            <!-- Sidebar direita: cards de resumo -->
+            <aside class="categorias-summary-sidebar" aria-label="Resumo das categorias">
+                <section class="categorias-summary" aria-label="Resumo das categorias">
+                    <article class="summary-item summary-item-card">
+                        <span class="summary-icon summary-icon-card" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false">
+                                <rect x="3" y="6" width="18" height="12" rx="2"/>
+                                <path d="M3 10h18"/>
+                            </svg>
+                        </span>
+                        <strong id="summary-cartao">0</strong>
+                        <span class="summary-label" id="summary-cartao-label">Categorias do Cart&atilde;o</span>
+                        <small id="summary-cartao-desc">Total de categorias de cart&atilde;o cadastradas no sistema.</small>
+                        <span class="summary-link" id="summary-cartao-link">Ver detalhes &rarr;</span>
+                    </article>
+                    <article class="summary-item summary-item-keywords">
+                        <span class="summary-icon summary-icon-link" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false">
+                                <path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/>
+                                <path d="M14 11a5 5 0 0 0-7.1 0l-2 2a5 5 0 0 0 7.1 7.1l1.1-1.1"/>
+                            </svg>
+                        </span>
+                        <strong id="summary-vinculadas">0</strong>
+                        <span class="summary-label" id="summary-vinculadas-label">Categorias com palavras-chave</span>
+                        <small id="summary-vinculadas-desc">Categorias de despesa com regras de classifica&ccedil;&atilde;o ativas.</small>
+                        <span class="summary-link" id="summary-vinculadas-link">Ver detalhes &rarr;</span>
+                    </article>
+                    <article class="summary-item summary-item-alert">
+                        <span class="summary-icon summary-icon-alert" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false">
+                                <circle cx="12" cy="12" r="9"/>
+                                <path d="M8 8l8 8M16 8l-8 8"/>
+                            </svg>
+                        </span>
+                        <strong id="summary-sem-vinculo">0</strong>
+                        <span class="summary-label" id="summary-sem-vinculo-label">Categorias sem v&iacute;nculo</span>
+                        <small id="summary-sem-vinculo-desc">Categorias de despesa ainda n&atilde;o associadas ao cart&atilde;o.</small>
+                        <span class="summary-link" id="summary-sem-vinculo-link">Ver detalhes &rarr;</span>
+                    </article>
+                </section>
+            </aside>
+
+        </main>
+    </div>
+
+    <div id="modal-categoria" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-titulo">Nova Categoria de Despesa</h2>
+                <button class="modal-close" type="button" id="modal-categoria-fechar" aria-label="Fechar">&times;</button>
+            </div>
+
+            <form id="form-categoria">
+                <input type="hidden" id="categoria-id">
+
+                <div class="form-group">
+                    <label for="nome">Nome *</label>
+                    <input type="text" id="nome" name="nome" required placeholder="Ex: Moradia, Transporte, Alimenta&ccedil;&atilde;o">
+                </div>
+
+                <div class="form-group">
+                    <label for="descricao">Descri&ccedil;&atilde;o</label>
+                    <textarea id="descricao" name="descricao" rows="3" placeholder="Descri&ccedil;&atilde;o opcional da categoria"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="cor">Cor</label>
+                    <div class="color-picker">
+                        <input type="color" id="cor" name="cor" value="#6c757d">
+                        <span id="cor-valor">#6c757d</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="icone">&Iacute;cone</label>
+                    <div class="icone-picker-preview-row">
+                        <div id="icone-preview" class="icone-preview" aria-hidden="true"></div>
+                        <input type="text" id="icone" name="icone" maxlength="50" class="icone-picker-input" placeholder="Sem icone selecionado">
+                    </div>
+                    <small class="form-hint">Escolha um icone do catalogo interno ou mantenha vazio.</small>
+                    <div class="icone-picker" aria-label="Seletor de icones da categoria">
+                        <button type="button" class="icone-picker-empty" id="icone-limpar">Sem icone</button>
+                        <div id="icone-picker-grid" class="icone-picker-grid"></div>
+                    </div>
+                </div>
+
+                <div class="form-group logo-upload-panel" id="logo-upload-panel">
+                    <label for="logo-upload-input">Logo personalizado</label>
+                    <div class="logo-preview-row">
+                        <div id="logo-preview" class="logo-preview" aria-hidden="true"></div>
+                        <div class="logo-upload-fields">
+                            <input type="file" id="logo-upload-input" accept="image/png,image/jpeg,image/webp">
+                            <small class="form-hint">Logo personalizado tem prioridade sobre o &iacute;cone do cat&aacute;logo. Formatos aceitos: PNG, JPG, WebP.</small>
+                            <small class="form-hint logo-upload-status" id="logo-upload-status">Salve a categoria antes de enviar logo.</small>
+                        </div>
+                    </div>
+                    <div class="logo-upload-actions">
+                        <button type="button" class="cf-button cf-button-secondary" id="logo-enviar">Enviar logo</button>
+                        <button type="button" class="cf-button cf-button-secondary" id="logo-remover">Remover logo</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="ativo" name="ativo" checked>
+                        <span>Categoria ativa</span>
+                    </label>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="cf-button cf-button-secondary" id="modal-categoria-cancelar">Cancelar</button>
+                    <button type="submit" class="cf-button cf-button-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>

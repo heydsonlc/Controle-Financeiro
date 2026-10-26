@@ -1,0 +1,21 @@
+/* FIN-FIDELIDADE-RECEITAS-CATEGORIAS-1 — so acrescimos a tela original de Categorias (css/shared/categorias.css nao
+   muda): aviso de fase e, para quem so le o perfil, as acoes das Categorias do Cartao escondidas (o banco recusa de
+   qualquer forma). As acoes das categorias de despesa ficam visiveis, como no Flask: o adaptador responde que continuam
+   no sistema atual. */
+.categorias-aviso-fase {
+    margin: 0 0 12px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: #eff6ff;
+    color: #1e3a8a;
+    font-size: 0.85rem;
+}
+
+body.cf-somente-leitura #btn-nova-categoria-cartao,
+body.cf-somente-leitura [data-action="toggle-status"],
+body.cf-somente-leitura button[form="form-categoria-cartao"],
+body.cf-somente-leitura [data-action="nova-vinculacao"],
+body.cf-somente-leitura [data-action="vincular"],
+body.cf-somente-leitura [data-action="desvincular"] {
+    display: none !important;
+}

@@ -1,31 +1,558 @@
-<!-- moldura {"ativo": "receitas", "titulo": "Gerenciamento de Receitas", "documento": "Gerenciamento de Receitas", "css": [], "scripts": ["js/receitas.js"]} -->
-<!-- FIN-RECEITAS-1: receitas PREVISTAS por competencia. Previsao nao e dinheiro recebido: nada aqui
-     registra recebimento nem movimenta conta bancaria. Escritas so para quem gerencia o perfil. -->
+<!-- moldura {"ativo": "receitas", "titulo": "Gerenciamento de Receitas", "documento": "Gerenciamento de Receitas", "css": ["css/shared/receitas.css", "css/receitas-adaptacoes.css"], "classicos": ["js/original/ponte-permitidas.js", "js/ponte-csp.js", "js/ponte-api.js", "js/original/utils.js", "js/original/icons.js", "js/original/receitas.js", "js/receitas-adaptacoes.js"], "scripts": ["js/receitas-adaptador.js"]} -->
+<!-- FIN-FIDELIDADE-RECEITAS-CATEGORIAS-1: frontend/templates/receitas.html (barra de acoes e conteudo) sem
+     alteracao, exceto o laco do dia previsto (Jinja) expandido e o aviso acrescentado. onclick/style convertidos
+     no build. -->
+<!-- acao -->
+
+    <section class="module-actionbar receitas-toolbar" aria-label="Filtros e ações de receitas">
+        <label class="receitas-filter compact">
+            <span>Ano</span>
+            <select id="filtro-ano" onchange="atualizarDados()"></select>
+        </label>
+        <label class="receitas-filter compact">
+            <span>Mês</span>
+            <select id="filtro-mes" onchange="atualizarDados()">
+                <option value="">Todos</option>
+                <option value="01">Janeiro</option>
+                <option value="02">Fevereiro</option>
+                <option value="03">Março</option>
+                <option value="04">Abril</option>
+                <option value="05">Maio</option>
+                <option value="06">Junho</option>
+                <option value="07">Julho</option>
+                <option value="08">Agosto</option>
+                <option value="09">Setembro</option>
+                <option value="10">Outubro</option>
+                <option value="11">Novembro</option>
+                <option value="12">Dezembro</option>
+            </select>
+        </label>
+        <label class="receitas-filter">
+            <span>Tipo</span>
+            <select id="filtro-tipo" onchange="atualizarDados()">
+                <option value="">Todos</option>
+                <option value="SALARIO_FIXO">Salário Fixo</option>
+                <option value="GRATIFICACAO">Gratificação</option>
+                <option value="RENDA_EXTRA">Renda Extra</option>
+                <option value="ALUGUEL">Aluguel</option>
+                <option value="RENDIMENTO_FINANCEIRO">Rendimento Financeiro</option>
+                <option value="OUTROS">Outros</option>
+            </select>
+        </label>
+        <label class="receitas-search">
+            <span class="sr-only">Buscar receitas</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.3-4.3M10.8 18a7.2 7.2 0 1 1 0-14.4 7.2 7.2 0 0 1 0 14.4Z"/></svg>
+            <input id="receitas-busca" type="search" placeholder="Buscar receita, fonte ou descrição...">
+        </label>
+        <button type="button" class="receitas-secondary-btn" onclick="atualizarDados()">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v6h-6"/></svg>
+            Atualizar
+        </button>
+        <button type="button" id="btn-nova-receita" class="receitas-primary-btn" onclick="abrirModalFonte()">
+            <span aria-hidden="true">+</span>
+            Nova receita
+        </button>
+    </section>
 <!-- conteudo -->
-<div class="app-conteudo contas">
-        <nav class="mes-nav" aria-label="Mês de competência">
-            <a id="mes-anterior" class="mes-seta" href="#" aria-label="Mês anterior">◀</a>
-            <h1 id="mes-titulo" class="mes-titulo"></h1>
-            <a id="mes-proximo" class="mes-seta" href="#" aria-label="Próximo mês">▶</a>
-        </nav>
+<!-- FIN-FIDELIDADE-RECEITAS-CATEGORIAS-1 (acrescimo): o que esta tela grava no novo aplicativo. -->
+<p class="receitas-aviso-fase" role="note">Fontes, previsões, recebimentos e estornos vêm do Supabase. Recebimento sem previsão, edição e exclusão de recebimento continuam no sistema atual.</p>
+<div class="receitas-ux-page">
+    <section class="receitas-kpi-grid" aria-label="Resumo mensal de receitas">
+        <article class="receitas-kpi-card blue">
+            <span class="receitas-kpi-accent" aria-hidden="true"></span>
+            <div>
+                <div class="receitas-kpi-title">Previsto aberto <span title="Total previsto no período">i</span></div>
+                <strong id="total-previsto">R$ 0,00</strong>
+                <small id="previsto-indicador">Período selecionado</small>
+            </div>
+            <span class="receitas-kpi-icon" aria-hidden="true"></span>
+        </article>
+        <article class="receitas-kpi-card green">
+            <span class="receitas-kpi-accent" aria-hidden="true"></span>
+            <div>
+                <div class="receitas-kpi-title">Realizado no período <span title="Total recebido no período">i</span></div>
+                <strong id="total-realizado">R$ 0,00</strong>
+                <small id="realizado-indicador">Recebimentos registrados</small>
+            </div>
+            <span class="receitas-kpi-icon" aria-hidden="true"></span>
+        </article>
+        <article class="receitas-kpi-card red">
+            <span class="receitas-kpi-accent" aria-hidden="true"></span>
+            <div>
+                <div class="receitas-kpi-title">Diferença <span title="Realizado menos previsto">i</span></div>
+                <strong id="diferenca">R$ 0,00</strong>
+                <small id="diferenca-indicador">Sem variação</small>
+            </div>
+            <span class="receitas-kpi-icon" aria-hidden="true"></span>
+        </article>
+        <article class="receitas-kpi-card purple">
+            <span class="receitas-kpi-accent" aria-hidden="true"></span>
+            <div>
+                <div class="receitas-kpi-title">Confiabilidade <span title="Realizado dividido pelo previsto">i</span></div>
+                <strong id="confiabilidade">0%</strong>
+                <small id="confiabilidade-indicador">Meta: ≥ 80%</small>
+            </div>
+            <span class="receitas-kpi-icon" aria-hidden="true"></span>
+        </article>
+    </section>
 
-        <p class="totais" id="totais" hidden>
-            <span>Previsto <strong id="total-previsto"></strong></span>
-            <span>Recebido <strong id="total-recebido"></strong></span>
-            <span>A receber <strong id="total-a-receber"></strong></span>
-        </p>
-        <p class="receitas-nota" id="receitas-nota" hidden>Previsão não altera saldo. Recebimentos continuam sendo registrados no sistema atual.</p>
-
-        <div class="acoes-mes" id="acoes-mes"></div>
-        <div class="despesa-painel" id="receita-painel" hidden></div>
-        <p class="geracao-resultado" id="acao-resultado" role="status" hidden></p>
-        <div class="login-error" id="perfis-erro" role="alert" hidden></div>
-        <p class="app-vazio" id="perfis-vazio" hidden>Nenhum perfil financeiro autorizado para esta conta.</p>
-        <div class="login-error" id="receitas-erro" role="alert" hidden></div>
-        <p class="app-vazio" id="receitas-vazio" hidden>Nenhuma receita nesta competência.</p>
-
-        <section class="grupo" id="secao-receitas" aria-labelledby="titulo-receitas" hidden>
-            <h2 class="grupo-titulo" id="titulo-receitas">Receitas</h2>
-            <ul class="lista-contas" id="lista-receitas"></ul>
+    <div class="receitas-workspace">
+        <div class="receitas-main-col">
+        <section class="receitas-panel receitas-main-panel" aria-label="Receitas do mês">
+            <div class="receitas-panel-header">
+                <div>
+                    <h2>Receitas do mês</h2>
+                    <p>Previsto, realizado e pendente na competência selecionada.</p>
+                </div>
+            </div>
+            <div class="receitas-table-head" aria-hidden="true">
+                <span>Fonte de Receita</span>
+                <span>Competência</span>
+                <span>Tipo</span>
+                <span>Status</span>
+                <span>Conta Bancária</span>
+                <span>Valor Previsto</span>
+                <span>Valor Realizado</span>
+                <span>Diferença</span>
+                <span>Ações</span>
+            </div>
+            <div id="mes-lista" class="receitas-lista">
+                <div class="receitas-loading">Carregando receitas e pendências...</div>
+            </div>
+            <footer class="receitas-panel-footer" id="receitas-total-encontradas"></footer>
         </section>
+
+        <section class="receitas-panel receitas-main-panel receitas-atrasadas-panel" id="section-atrasadas" aria-label="Receitas atrasadas" hidden>
+            <div class="receitas-panel-header receitas-panel-header--atrasadas">
+                <div>
+                    <h2>Receitas atrasadas</h2>
+                    <p>Previstas em meses anteriores e ainda não recebidas.</p>
+                </div>
+            </div>
+            <div class="receitas-table-head" aria-hidden="true">
+                <span>Fonte de Receita</span>
+                <span>Competência</span>
+                <span>Tipo</span>
+                <span>Status</span>
+                <span>Conta Bancária</span>
+                <span>Valor Previsto</span>
+                <span>Valor Realizado</span>
+                <span>Diferença</span>
+                <span>Ações</span>
+            </div>
+            <div id="atrasadas-lista" class="receitas-lista"></div>
+            <footer class="receitas-panel-footer" id="atrasadas-total-encontradas"></footer>
+        </section>
+        </div>
+
+        <aside class="receitas-side">
+            <section class="receitas-panel receitas-side-panel" aria-label="Fontes de receita">
+                <div class="receitas-side-header">
+                    <h2>Fontes de receita</h2>
+                    <span title="Distribuição por tipo">i</span>
+                </div>
+                <div id="fontes-resumo" class="receitas-fontes-resumo">
+                    <div class="receitas-loading small">Carregando fontes...</div>
+                </div>
+                <button type="button" class="receitas-link-btn" onclick="abrirModalFonte()">Ver todas as fontes</button>
+            </section>
+
+            <section class="receitas-panel receitas-side-panel" aria-label="Recebimentos pendentes">
+                <div class="receitas-side-header">
+                    <h2>Recebimentos pendentes</h2>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v4M17 3v4M4 9h16M5 5h14v15H5V5Z"/></svg>
+                </div>
+                <div id="proximos-recebimentos" class="receitas-proximos">
+                    <div class="receitas-loading small">Carregando recebimentos pendentes...</div>
+                </div>
+                <button type="button" class="receitas-link-btn" onclick="mostrarProximosRecebimentos()">Ver todos os pendentes</button>
+            </section>
+        </aside>
+    </div>
+</div>
+
+
+<div id="modal-fonte" class="receitas-modal" aria-hidden="true">
+    <div class="receitas-modal-box receitas-source-modal" role="dialog" aria-modal="true" aria-labelledby="modal-fonte-titulo">
+        <div class="receitas-modal-header">
+            <div>
+                <h2 id="modal-fonte-titulo">Nova Fonte de Receita</h2>
+                <p id="modal-fonte-subtitulo">Crie uma nova fonte de receita para organizar e prever seus recebimentos.</p>
+            </div>
+            <button type="button" onclick="fecharModal('modal-fonte')" aria-label="Fechar">×</button>
+        </div>
+
+        <form id="form-fonte" onsubmit="salvarFonte(event)">
+            <input type="hidden" id="fonte-id">
+
+            <div class="receitas-modal-layout">
+                <div class="receitas-form-card">
+                    <section class="receitas-form-section">
+                        <div class="receitas-section-heading">
+                            <span>1</span>
+                            <div>
+                                <h3>Dados principais</h3>
+                                <p>Identificação e valor base da fonte.</p>
+                            </div>
+                        </div>
+                        <div class="receitas-form-grid">
+                            <label class="receitas-field">
+                                <span>Nome <em>*</em></span>
+                                <input id="fonte-nome" type="text" required placeholder="Ex: Salário PMGO, Gratificação">
+                            </label>
+                            <label class="receitas-field">
+                                <span>Tipo <em>*</em></span>
+                                <select id="fonte-tipo" required>
+                                    <option value="">Selecione...</option>
+                                    <option value="SALARIO_FIXO">Salário Fixo</option>
+                                    <option value="GRATIFICACAO">Gratificação</option>
+                                    <option value="RENDA_EXTRA">Renda Extra</option>
+                                    <option value="ALUGUEL">Aluguel</option>
+                                    <option value="RENDIMENTO_FINANCEIRO">Rendimento Financeiro</option>
+                                    <option value="OUTROS">Outros</option>
+                                </select>
+                            </label>
+                            <label class="receitas-field full">
+                                <span>Descrição</span>
+                                <textarea id="fonte-descricao" maxlength="200" placeholder="Descrição opcional"></textarea>
+                                <small><span id="fonte-descricao-count">0</span>/200</small>
+                            </label>
+                            <label class="receitas-field full">
+                                <span>Valor Base Mensal <em>*</em></span>
+                                <div class="receitas-money-input">
+                                    <span>R$</span>
+                                    <input id="fonte-valor-base" type="text" inputmode="decimal" required placeholder="0,00">
+                                </div>
+                                <small>Informe o valor bruto esperado por mês.</small>
+                            </label>
+                        </div>
+                    </section>
+
+                    <section class="receitas-form-section">
+                        <div class="receitas-section-heading">
+                            <span>2</span>
+                            <div>
+                                <h3>Recorrência e previsão</h3>
+                                <p>Defina como esta receita entra no planejamento.</p>
+                            </div>
+                        </div>
+                        <div class="receitas-toggle-row">
+                            <div>
+                                <strong>Receita Recorrente</strong>
+                                <small>Marque se esta receita se repete mensalmente.</small>
+                            </div>
+                            <label class="receitas-switch">
+                                <input type="checkbox" id="fonte-recorrente" checked>
+                                <span></span>
+                            </label>
+                        </div>
+                        <div class="receitas-form-grid">
+                            <label class="receitas-field">
+                                <span>Dia Previsto de Pagamento <em>*</em></span>
+                                <select id="fonte-dia-pagamento">
+                                    <option value="">Selecione o dia</option>
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                    <option value="4">4</option>
+                                    <option value="5">5</option>
+                                    <option value="6">6</option>
+                                    <option value="7">7</option>
+                                    <option value="8">8</option>
+                                    <option value="9">9</option>
+                                    <option value="10">10</option>
+                                    <option value="11">11</option>
+                                    <option value="12">12</option>
+                                    <option value="13">13</option>
+                                    <option value="14">14</option>
+                                    <option value="15">15</option>
+                                    <option value="16">16</option>
+                                    <option value="17">17</option>
+                                    <option value="18">18</option>
+                                    <option value="19">19</option>
+                                    <option value="20">20</option>
+                                    <option value="21">21</option>
+                                    <option value="22">22</option>
+                                    <option value="23">23</option>
+                                    <option value="24">24</option>
+                                    <option value="25">25</option>
+                                    <option value="26">26</option>
+                                    <option value="27">27</option>
+                                    <option value="28">28</option>
+                                    <option value="29">29</option>
+                                    <option value="30">30</option>
+                                    <option value="31">31</option>
+                                </select>
+                                <small>Dia do mês em que o valor costuma ser recebido.</small>
+                            </label>
+                            <div class="receitas-field">
+                                <span>Recorrência</span>
+                                <div class="receitas-static-pill">Mensal</div>
+                                <small>A recorrência segue a regra atual do módulo.</small>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="receitas-form-section">
+                        <div class="receitas-section-heading">
+                            <span>3</span>
+                            <div>
+                                <h3>Conta bancária e observações</h3>
+                                <p>Conta padrão para consolidação e anotações operacionais.</p>
+                            </div>
+                        </div>
+                        <div class="receitas-form-grid">
+                            <label class="receitas-field">
+                                <span>Conta bancária</span>
+                                <select id="fonte-conta-bancaria">
+                                    <option value="">Selecione...</option>
+                                </select>
+                                <small>Usada como padrão ao consolidar receitas.</small>
+                            </label>
+                            <label class="receitas-field">
+                                <span>Observações</span>
+                                <textarea id="fonte-observacoes" maxlength="200" placeholder="Informações adicionais sobre esta receita..."></textarea>
+                                <small><span id="fonte-observacoes-count">0</span>/200</small>
+                            </label>
+                        </div>
+                        <div class="receitas-toggle-row bottom">
+                            <div>
+                                <strong>Fonte ativa</strong>
+                                <small>Somente fontes ativas serão consideradas nos cálculos e previsões.</small>
+                            </div>
+                            <label class="receitas-switch">
+                                <input type="checkbox" id="fonte-ativo" checked>
+                                <span></span>
+                            </label>
+                        </div>
+                    </section>
+                </div>
+
+                <aside class="receitas-preview-card" aria-label="Pré-visualização da fonte de receita">
+                    <h3>Pré-visualização</h3>
+                    <p>Veja como esta fonte aparecerá no sistema.</p>
+                    <div class="receitas-preview-body">
+                        <span class="receitas-preview-icon" aria-hidden="true"></span>
+                        <strong id="preview-fonte-nome">Nome da Fonte</strong>
+                        <span id="preview-fonte-tipo" class="receitas-type-badge">TIPO</span>
+                        <dl>
+                            <div><dt>Valor estimado mensal</dt><dd id="preview-fonte-valor">R$ 0,00</dd></div>
+                            <div><dt>Recorrência</dt><dd id="preview-fonte-recorrencia">Mensal</dd></div>
+                            <div><dt>Dia previsto</dt><dd id="preview-fonte-dia">—</dd></div>
+                            <div><dt>Conta padrão</dt><dd id="preview-fonte-conta">—</dd></div>
+                            <div><dt>Status</dt><dd><span id="preview-fonte-status" class="receitas-status-pill active">Ativa</span></dd></div>
+                        </dl>
+                        <div class="receitas-preview-note">A pré-visualização será atualizada automaticamente conforme os dados forem preenchidos.</div>
+                    </div>
+                </aside>
+            </div>
+
+            <div class="receitas-modal-footer">
+                <button type="button" class="receitas-secondary-btn" onclick="fecharModal('modal-fonte')">Cancelar</button>
+                <button type="button" id="btn-inativar-fonte" class="receitas-danger-btn" onclick="inativarFonteAtual()">Inativar</button>
+                <button type="submit" class="receitas-primary-btn">Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="modal-detalhe-receita" class="receitas-modal" aria-hidden="true">
+    <div class="receitas-modal-box" role="dialog" aria-modal="true" aria-labelledby="detalhe-receita-titulo">
+        <div class="receitas-modal-header">
+            <div>
+                <h2 id="detalhe-receita-titulo">Detalhe da receita</h2>
+                <p id="detalhe-receita-subtitulo">Dados principais da fonte e do período.</p>
+            </div>
+            <button type="button" onclick="fecharModal('modal-detalhe-receita')" aria-label="Fechar">×</button>
+        </div>
+        <div id="detalhe-receita-conteudo" class="receitas-detail-content"></div>
+    </div>
+</div>
+
+<div id="modal-realizada" class="receitas-modal" aria-hidden="true">
+    <div class="receitas-modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-realizada-titulo">
+        <div class="receitas-modal-header">
+            <div>
+                <h2 id="modal-realizada-titulo">Registrar recebimento</h2>
+                <p>Confirme o valor recebido e a conta bancária, se aplicável.</p>
+            </div>
+            <button type="button" onclick="fecharModal('modal-realizada')" aria-label="Fechar">×</button>
+        </div>
+        <form id="form-realizada" onsubmit="salvarRealizada(event)">
+            <input type="hidden" id="realizada-id">
+            <div class="receitas-form-grid one">
+                <label class="receitas-field">
+                    <span>Fonte de Receita <em>*</em></span>
+                    <select id="real-fonte" required>
+                        <option value="">Selecione...</option>
+                    </select>
+                </label>
+                <label class="receitas-field">
+                    <span>Data de Recebimento <em>*</em></span>
+                    <input type="date" id="real-data-recebimento" required>
+                </label>
+                <label class="receitas-field">
+                    <span>Valor Recebido <em>*</em></span>
+                    <input type="text" id="real-valor" required inputmode="decimal" placeholder="R$ 0,00">
+                </label>
+                <label class="receitas-field">
+                    <span>Competência <em>*</em></span>
+                    <input type="month" id="real-competencia" required>
+                </label>
+                <label class="receitas-field">
+                    <span>Conta bancária</span>
+                    <select id="real-conta-bancaria">
+                        <option value="">Selecione...</option>
+                    </select>
+                    <small>Se informada, gera movimento de crédito na conta pela regra existente.</small>
+                </label>
+                <label class="receitas-field">
+                    <span>Descrição</span>
+                    <input type="text" id="real-descricao" placeholder="Ex: Salário Maio/2026">
+                </label>
+                <label class="receitas-field full">
+                    <span>Observações</span>
+                    <textarea id="real-observacoes"></textarea>
+                </label>
+            </div>
+            <div class="receitas-modal-footer">
+                <button type="button" class="receitas-secondary-btn" onclick="fecharModal('modal-realizada')">Cancelar</button>
+                <button type="submit" class="receitas-primary-btn">Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="modal-orcamento" class="receitas-modal" aria-hidden="true">
+    <div class="receitas-modal-box" role="dialog" aria-modal="true" aria-labelledby="orcamento-titulo">
+        <div class="receitas-modal-header">
+            <div>
+                <h2 id="orcamento-titulo">Planejar receita</h2>
+                <p>Ajuste a previsão da fonte no período selecionado.</p>
+            </div>
+            <button type="button" onclick="fecharModal('modal-orcamento')" aria-label="Fechar">×</button>
+        </div>
+        <form id="form-orcamento" onsubmit="salvarOrcamento(event)">
+            <div class="receitas-form-grid one">
+                <label class="receitas-field">
+                    <span>Fonte de Receita <em>*</em></span>
+                    <select id="orc-fonte" required>
+                        <option value="">Selecione...</option>
+                    </select>
+                </label>
+                <label class="receitas-field">
+                    <span>Mês/Ano <em>*</em></span>
+                    <input type="month" id="orc-ano-mes" required>
+                </label>
+                <label class="receitas-field">
+                    <span>Valor Previsto <em>*</em></span>
+                    <input type="text" id="orc-valor" required inputmode="decimal" placeholder="R$ 0,00">
+                </label>
+                <label class="receitas-field">
+                    <span>Periodicidade</span>
+                    <select id="orc-periodicidade">
+                        <option value="MENSAL_FIXA">Mensal Fixa</option>
+                        <option value="EVENTUAL">Eventual</option>
+                        <option value="UNICA">Única</option>
+                    </select>
+                </label>
+                <label class="receitas-field full">
+                    <span>Observações</span>
+                    <textarea id="orc-observacoes"></textarea>
+                </label>
+            </div>
+            <div class="receitas-modal-footer">
+                <button type="button" class="receitas-secondary-btn" onclick="fecharModal('modal-orcamento')">Cancelar</button>
+                <button type="submit" class="receitas-primary-btn">Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="modal-consolidar-conta" class="receitas-modal" aria-hidden="true">
+    <div class="receitas-modal-box receitas-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="consolidar-titulo">
+        <div class="receitas-modal-header">
+            <div>
+                <h2 id="consolidar-titulo">Consolidar Receita</h2>
+                <p>Escolha a conta bancária para registrar o crédito pela regra existente.</p>
+            </div>
+            <button type="button" onclick="fecharModal('modal-consolidar-conta')" aria-label="Fechar">×</button>
+        </div>
+        <form id="form-consolidar-conta" onsubmit="confirmarConsolidacaoComConta(event)">
+            <input type="hidden" id="consolidar-item-receita-id">
+            <input type="hidden" id="consolidar-valor-previsto">
+            <input type="hidden" id="consolidar-receita-uid">
+            <input type="hidden" id="consolidar-realizada-id">
+            <input type="hidden" id="consolidar-competencia">
+            <div class="receitas-form-grid one">
+                <label class="receitas-field">
+                    <span>Conta bancária <em>*</em></span>
+                    <select id="consolidar-conta-bancaria" required>
+                        <option value="">Selecione...</option>
+                    </select>
+                    <small>Isso criará um crédito no extrato da conta.</small>
+                </label>
+                <!-- FIN-FIDELIDADE-RECEITAS-CATEGORIAS-1 (acrescimo, melhoria preservada): valor, data e justificativa
+                     do recebimento (parcial, em outra data ou acima do que falta). -->
+                <label class="receitas-field">
+                    <span>Valor recebido <em>*</em></span>
+                    <input type="text" id="consolidar-valor-recebido" inputmode="decimal" autocomplete="off">
+                    <small>Abaixo do que falta: recebimento parcial (a previsão continua aberta).</small>
+                </label>
+                <label class="receitas-field">
+                    <span>Data do recebimento <em>*</em></span>
+                    <input type="date" id="consolidar-data-recebimento">
+                </label>
+                <label class="receitas-field">
+                    <span>Justificativa</span>
+                    <textarea id="consolidar-justificativa" rows="2" maxlength="500"></textarea>
+                    <small>Obrigatória quando o valor passa do que falta receber.</small>
+                </label>
+            </div>
+            <div class="receitas-modal-footer">
+                <button type="button" class="receitas-secondary-btn" onclick="fecharModal('modal-consolidar-conta')">Cancelar</button>
+                <button type="submit" class="receitas-primary-btn">Consolidar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Estornar Recebimento (CORE-ESTORNO-2) -->
+<div id="modal-estornar-receita" class="receitas-modal" aria-hidden="true">
+    <div class="receitas-modal-box" role="dialog" aria-modal="true" aria-labelledby="estornar-receita-titulo">
+        <div class="receitas-modal-header">
+            <div>
+                <h2 id="estornar-receita-titulo">Estornar recebimento</h2>
+            </div>
+            <button type="button" onclick="fecharModal('modal-estornar-receita')" aria-label="Fechar">×</button>
+        </div>
+        <form id="form-estornar-receita" onsubmit="confirmarEstornoReceita(event)">
+            <input type="hidden" id="estornar-receita-id">
+            <div class="receitas-aviso">
+                O estorno <strong>não apaga</strong> o recebimento original. O sistema criará um débito compensatório e preservará o histórico financeiro.
+            </div>
+            <div class="receitas-form-grid one">
+                <label class="receitas-field">
+                    <span>Receita</span>
+                    <p id="estornar-receita-nome" class="receitas-aviso-nome"></p>
+                </label>
+                <label class="receitas-field">
+                    <span>Valor recebido</span>
+                    <p id="estornar-receita-valor" class="receitas-aviso-nome"></p>
+                </label>
+                <label class="receitas-field">
+                    <span>Data do estorno <em>*</em></span>
+                    <input type="date" id="estornar-receita-data" required>
+                </label>
+                <label class="receitas-field full">
+                    <span>Motivo do estorno <em>*</em></span>
+                    <textarea id="estornar-receita-motivo" rows="3" placeholder="Ex: Recebimento lançado por engano" required></textarea>
+                </label>
+            </div>
+            <div class="receitas-modal-footer">
+                <button type="button" class="receitas-secondary-btn" onclick="fecharModal('modal-estornar-receita')">Cancelar</button>
+                <button type="submit" class="receitas-danger-btn">Estornar</button>
+            </div>
+        </form>
+    </div>
 </div>

@@ -24,12 +24,12 @@ export const PROJETOS_PROIBIDOS = new Set(['dshqjhyymtpxpxuntzbz']);
 const CSS_COMPARTILHADO = ['style.css', 'theme-light.css', 'layout.css', 'instituicoes.css', 'formas_pagamento.css',
     'configuracoes.css', 'ajuda.css', 'despesas.css', 'recorrencias.css', 'cartoes.css', 'importar_cartao.css',
     'contas_bancarias.css', 'lancamentos.css', 'financiamentos.css', 'patrimonio.css',
-    'imposto_renda.css', 'dashboard.css', 'veiculos.css'];
+    'imposto_renda.css', 'dashboard.css', 'veiculos.css', 'receitas.css', 'categorias.css'];
 // JS do Flask reaproveitado: vai para js/original/ so com a conversao de adaptarParaCsp (o arquivo do Flask nao muda).
 const JS_ORIGINAL = ['ajuda.js', 'utils.js', 'icons.js', 'instituicoes.js', 'formas_pagamento.js', 'despesas.js', 'recorrencias.js',
     'cartoes.js', 'importar_cartao.js', 'contas_bancarias.js',
     'lancamentos.js', 'financiamentos.js', 'patrimonio.js', 'imposto_renda.js',
-    'categoria_cartao_icones.js', 'dashboard.js', 'veiculos.js'];
+    'categoria_cartao_icones.js', 'dashboard.js', 'veiculos.js', 'receitas.js', 'categorias.js'];
 // Imagens que os componentes do Flask (formas_pagamento.js, instituicoes.js) pedem em /static/...: so as que eles
 // citam pelo nome (versionadas), nunca a pasta inteira (frontend/static/img tem arquivos pessoais fora do Git).
 const IMAGENS_ORIGINAIS = {

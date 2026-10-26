@@ -127,7 +127,9 @@ test.describe('computador', () => {
         await expect(perfilAtivo(page)).toHaveText('Empresa');
         await itemDoMenu(page, 'categorias').click();
         await expect(perfilAtivo(page)).toHaveText('Empresa');
-        await expect(page.locator('#contas-corpo tr td:nth-child(2)')).toHaveText(['Conta Empresa (A)']);
+        await itemDoMenu(page, 'contas_bancarias').click();  // FIN-FIDELIDADE-RECEITAS-CATEGORIAS-1: contas na tela original
+        await expect(perfilAtivo(page)).toHaveText('Empresa');
+        await expect(page.locator('#contas-lista .conta-row .conta-title h3')).toHaveText(['Conta Empresa (A)']);
         await itemDoMenu(page, 'dashboard').click();
         await expect(perfilAtivo(page)).toHaveText('Empresa');
         await page.click('#perfil-financeiro-trigger');

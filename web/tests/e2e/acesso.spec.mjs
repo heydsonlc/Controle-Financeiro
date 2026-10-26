@@ -1,5 +1,8 @@
 // Controle de acesso do primeiro modulo (categorias somente leitura).
 // Dados e contas ficticios do ambiente isolado de run_e2e.py.
+// FIN-FIDELIDADE-RECEITAS-CATEGORIAS-1: categorias.html virou a tela original de Categorias do Flask (categorias globais
+// e Categorias do Cartao, tests/e2e/categorias_tela.spec.mjs). A tabela por usuario do MVP (financeiro.categorias), que
+// a pagina provisoria listava, continua protegida: o isolamento e conferido pela API, com a sessao da pagina.
 import { expect, test } from '@playwright/test';
 
 // Contas ficticias: as do ambiente isolado (run_e2e.py) ou as contas de teste do
@@ -36,11 +39,18 @@ async function entrar(page, conta) {
     // MOBILE-CONTAS-1: o login leva a "Contas do mes"; estes testes seguem na tela de categorias.
     await page.waitForURL('**/contas.html');
     await page.goto('/categorias.html');
-    await expect(page.locator('#categorias-tabela')).toBeVisible();
+    await expect(page.locator('#categorias-lista .despesa-list-item').first()).toBeVisible();
 }
 
+// financeiro.categorias (MVP, por usuario) lida pela API com o token da sessao da pagina.
 async function nomesNaTabela(page) {
-    return page.locator('#categorias-corpo tr td:nth-child(2)').allTextContents();
+    return page.evaluate(async (k) => {
+        const token = JSON.parse(localStorage.getItem(k)).access_token;
+        const r = await fetch(`${window.CF_CONFIG.supabaseUrl}/rest/v1/categorias?select=nome&order=nome`, {
+            headers: { apikey: window.CF_CONFIG.supabasePublishableKey, Authorization: `Bearer ${token}`, 'Accept-Profile': 'financeiro' },
+        });
+        return (await r.json()).map((c) => c.nome);
+    }, CHAVE_SESSAO);
 }
 
 test('sem sessao: pagina protegida redireciona e nada e consultado', async ({ page }) => {
@@ -76,11 +86,10 @@ test('usuario B ve somente as proprias categorias', async ({ page }) => {
     for (const nome of CATEGORIAS_A) await expect(page.getByText(nome)).toHaveCount(0);
 });
 
-test('pagina de categorias nao oferece nenhuma acao de escrita', async ({ page }) => {
+test('barra superior da moldura: so menu, perfil, alertas e sair', async ({ page }) => {
     await entrar(page, A);
-    // FIN-MIGRACAO-FIDELIDADE-FASE-1: os botoes da moldura (menu, perfil, alertas, sair) nao gravam dados;
-    // o conteudo da pagina nao tem nenhum controle.
-    await expect(page.locator('.app-content').locator('form, input, textarea, select, button')).toHaveCount(0);
+    // FIN-MIGRACAO-FIDELIDADE-FASE-1: os botoes da moldura nao gravam dados. As acoes da tela original de Categorias
+    // (e o que o novo aplicativo grava ou recusa) ficam em categorias_tela.spec.mjs.
     await expect(page.locator('.app-topbar button:not(.perfil-financeiro-option)')).toHaveCount(4);
 });
 
@@ -139,8 +148,7 @@ test('API REST direta pelo navegador: sem token nao le, com token de A nao escre
     for (const status of escrita) expect([401, 403]).toContain(status);
 
     // Depois das tentativas de escrita, os dados de A continuam intactos.
-    await page.reload();
-    await expect(page.locator('#categorias-corpo tr td:nth-child(2)')).toHaveText(CATEGORIAS_A);
+    expect(await nomesNaTabela(page)).toEqual(CATEGORIAS_A);
 });
 
 test('parametro next nao permite redirecionamento para fora', async ({ page }) => {
