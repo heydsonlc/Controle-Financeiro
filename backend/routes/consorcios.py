@@ -19,6 +19,7 @@ try:
         _remover_marcador,
     )
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
+    from backend.services.gerador_recorrencia_service import flask_pode_gerar
 except ImportError:
     from models import db, ContratoConsorcio, ItemDespesa, Categoria, Conta
     from services.consorcio_receita_service import (
@@ -30,8 +31,35 @@ except ImportError:
         _remover_marcador,
     )
     from services.perfil_financeiro_service import PerfilFinanceiroService
+    from services.gerador_recorrencia_service import flask_pode_gerar
 
 consorcios_bp = Blueprint('consorcios', __name__, url_prefix='/api/consorcios')
+
+
+# FIN-CONTRATOS-2: escritor unico. Perfil atribuido ao novo aplicativo (financeiro.gerador_recorrencia = NOVO) tem os
+# consorcios gravados so la; aqui toda escrita do modulo e recusada (409 SISTEMA_NOVO, nada gravado). Consultas continuam.
+# Mesma verificacao de Despesas, Receitas e Contas Bancarias (flask_pode_gerar): sem a configuracao, comportamento legado;
+# erro na verificacao, escrita bloqueada.
+_ESCRITAS_LIVRES = set()
+
+
+@consorcios_bp.before_request
+def _escritor_unico_consorcios():
+    if request.method not in ('POST', 'PUT', 'PATCH', 'DELETE') or request.endpoint in _ESCRITAS_LIVRES:
+        return None
+    args = request.view_args or {}
+    if 'id' in args:
+        registro = db.session.get(ContratoConsorcio, args['id'])
+        if registro is None:
+            return None  # inexistente: a rota responde 404
+        perfil = registro.perfil_financeiro_id
+    else:
+        perfil = PerfilFinanceiroService.obter_perfil_ativo_id()  # cadastro: perfil ativo
+    if flask_pode_gerar(perfil, f'escrita {request.endpoint}'):
+        return None
+    db.session.rollback()
+    return jsonify({'success': False, 'codigo': 'SISTEMA_NOVO',
+                    'error': 'Os consorcios deste perfil sao administrados pelo novo aplicativo. Nada foi gravado.'}), 409
 
 MOEDA_QUANT = Decimal('0.01')
 

@@ -17,14 +17,52 @@ try:
     from backend.services.financiamento_service import FinanciamentoService
     from backend.services.financiamento_conferencia_service import FinanciamentoConferenciaService
     from backend.services.financiamento_documento_service import FinanciamentoDocumentoService
+    from backend.services.gerador_recorrencia_service import flask_pode_gerar
+    from backend.services.perfil_financeiro_service import PerfilFinanceiroService as _PerfilFinanceiro
 except ImportError:
     from models import db, Financiamento, FinanciamentoParcela, IndexadorMensal, FinanciamentoSeguroVigencia, FinanciamentoAmortizacaoExtra
     from services.financiamento_service import FinanciamentoService
     from services.financiamento_conferencia_service import FinanciamentoConferenciaService
     from services.financiamento_documento_service import FinanciamentoDocumentoService
+    from services.gerador_recorrencia_service import flask_pode_gerar
+    from services.perfil_financeiro_service import PerfilFinanceiroService as _PerfilFinanceiro
 
 # Criar blueprint
 financiamentos_bp = Blueprint('financiamentos', __name__)
+
+
+def _perfil_ativo_id():
+    return _PerfilFinanceiro.obter_perfil_ativo_id()
+
+
+# FIN-CONTRATOS-2: escritor unico. Perfil atribuido ao novo aplicativo (financeiro.gerador_recorrencia = NOVO) tem os
+# financiamentos gravados so la; aqui toda escrita do modulo e recusada (409 SISTEMA_NOVO, nada gravado). Consultas continuam.
+# Mesma verificacao de Despesas, Receitas e Contas Bancarias (flask_pode_gerar): sem a configuracao, comportamento legado;
+# erro na verificacao, escrita bloqueada.
+# Fora da guarda: simular quitacao (so calcula) e indexadores (tabela global, sem perfil).
+_ESCRITAS_LIVRES = {'financiamentos.simular_quitacao', 'financiamentos.criar_indexador'}
+
+
+@financiamentos_bp.before_request
+def _escritor_unico_financiamentos():
+    if request.method not in ('POST', 'PUT', 'PATCH', 'DELETE') or request.endpoint in _ESCRITAS_LIVRES:
+        return None
+    args = request.view_args or {}
+    if 'parcela_id' in args:
+        parcela = db.session.get(FinanciamentoParcela, args['parcela_id'])
+        registro = db.session.get(Financiamento, parcela.financiamento_id) if parcela else None
+    elif 'id' in args:
+        registro = db.session.get(Financiamento, args['id'])
+    else:
+        registro = False  # cadastro: perfil ativo
+    if registro is None:
+        return None  # inexistente: a rota responde 404
+    perfil = _perfil_ativo_id() if registro is False else registro.perfil_financeiro_id
+    if flask_pode_gerar(perfil, f'escrita {request.endpoint}'):
+        return None
+    db.session.rollback()
+    return jsonify({'success': False, 'codigo': 'SISTEMA_NOVO',
+                    'error': 'Os financiamentos deste perfil sao administrados pelo novo aplicativo. Nada foi gravado.'}), 409
 logger = logging.getLogger(__name__)
 
 

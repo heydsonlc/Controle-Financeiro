@@ -38,16 +38,8 @@ def _conflito_concorrente():
 
 def _paga_pelo_novo_aplicativo(conta, contexto):
     """FIN-CARTOES-PAGAMENTO-1 (D5) / FIN-MOVIMENTACOES-1 (D6): perfil atribuido ao novo aplicativo
-    (financeiro.gerador_recorrencia = NOVO) paga e estorna la faturas e despesas comuns. Parcelas de consorcio e de
-    financiamento continuam aqui (os modulos delas sincronizam o proprio estado)."""
-    if not conta.is_fatura_cartao:
-        try:
-            from backend.models import FinanciamentoParcela
-        except ImportError:
-            from models import FinanciamentoParcela
-        item = ItemDespesa.query.get(conta.item_despesa_id) if conta.item_despesa_id else None
-        if (item is not None and item.tipo in ('Consorcio', 'Financiamento')) or conta.financiamento_parcela_id                 or FinanciamentoParcela.query.filter_by(conta_id=conta.id).first() is not None:
-            return False
+    (financeiro.gerador_recorrencia = NOVO) paga e estorna la faturas e despesas comuns. FIN-CONTRATOS-2: tambem as
+    parcelas de consorcio e de financiamento (o novo aplicativo sincroniza a parcela na mesma transacao)."""
     return not flask_pode_gerar(conta.perfil_financeiro_id, f'{contexto} da conta {conta.id}')
 
 
