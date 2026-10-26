@@ -1,0 +1,752 @@
+<!-- moldura {"ativo": "imposto_renda", "titulo": "Imposto de Renda", "documento": "Imposto de Renda", "css": ["css/shared/imposto_renda.css", "css/documentos-fiscais-adaptacoes.css"], "classicos": ["js/original/ponte-permitidas.js", "js/ponte-csp.js", "js/ponte-api.js", "js/original/utils.js", "js/original/icons.js", "js/original/imposto_renda.js"], "scripts": ["js/documentos-fiscais-adaptador.js"]} -->
+<!-- FIN-FIDELIDADE-DOCUMENTOS-1: frontend/templates/imposto_renda.html (barra de acoes e conteudo) sem alteracao,
+     exceto url_for das imagens (caminho /static/img/) e o aviso acrescentado. onclick/style convertidos no build. -->
+<!-- acao -->
+<section class="module-actionbar ir-actionbar" aria-label="Filtros e acoes do Imposto de Renda">
+    <div class="module-actionbar-inner">
+        <div class="module-actionbar-filters ir-actionbar-filters">
+            <label class="module-filter-group ir-filter">
+                <span class="module-filter-label">Ano-calendario</span>
+                <select class="module-filter-control" id="ir-filtro-ano">
+                    <option value="2026">2026</option>
+                    <option value="2025">2025</option>
+                    <option value="2024">2024</option>
+                    <option value="2023">2023</option>
+                </select>
+            </label>
+            <label class="module-filter-group ir-filter">
+                <span class="module-filter-label">Status</span>
+                <select class="module-filter-control" id="ir-filtro-status">
+                    <option value="TODOS">Todos</option>
+                    <option value="CLASSIFICADO">Classificados</option>
+                    <option value="PENDENTE_REVISAO">Pendentes</option>
+                    <option value="VALIDADO">Validados</option>
+                    <option value="ERRO_LEITURA">Erro de leitura</option>
+                </select>
+            </label>
+            <label class="module-filter-group ir-filter ir-empresa-only" id="ir-filtro-tipo-wrap" hidden>
+                <span class="module-filter-label">Tipo de documento</span>
+                <select class="module-filter-control" id="ir-filtro-tipo-documental">
+                    <option value="">Todos</option>
+                </select>
+            </label>
+            <label class="module-filter-group ir-filter ir-empresa-only" id="ir-filtro-categoria-documental-wrap" hidden>
+                <span class="module-filter-label">Categoria</span>
+                <select class="module-filter-control" id="ir-filtro-categoria-documental">
+                    <option value="">Todas</option>
+                </select>
+            </label>
+            <label class="module-filter-group ir-filter" id="ir-filtro-categoria-wrap">
+                <span class="module-filter-label" id="ir-filtro-categoria-label">Categoria IR</span>
+                <select class="module-filter-control" id="ir-filtro-categoria">
+                    <option value="">Todas</option>
+                </select>
+            </label>
+            <label class="module-filter-group ir-search">
+                <span class="sr-only">Buscar comprovantes</span>
+                <input class="module-filter-control" id="ir-filtro-busca" type="search" placeholder="Buscar comprovantes...">
+            </label>
+        </div>
+        <div class="module-actionbar-actions ir-actionbar-actions">
+            <button type="button" class="ir-secondary-btn" id="ir-btn-atualizar">Atualizar</button>
+            <button type="button" class="ir-primary-btn" id="ir-btn-importar">Importar comprovantes</button>
+            <button type="button" class="ir-secondary-btn" id="ir-btn-exportar">Exportar</button>
+        </div>
+    </div>
+</section>
+<!-- conteudo -->
+<!-- FIN-FIDELIDADE-DOCUMENTOS-1 (acrescimo): aviso da fase 1 (so leitura). -->
+<p class="ir-aviso-fase" role="note">Consulta: comprovantes, documentos da empresa, categorias, resumos e saídas sem documento vêm do Supabase. Envio e leitura de arquivos, edição, validação, vínculos, marcação de status e relatórios continuam no sistema atual nesta fase.</p>
+<div class="ir-page" data-ir-page>
+    <section id="ir-main-view" class="ir-view active" aria-label="Imposto de Renda">
+        <div class="ir-kpi-grid">
+            <article class="ir-kpi-card blue">
+                <span class="ir-kpi-icon" aria-hidden="true">Doc</span>
+                <div>
+                    <span id="ir-kpi-total-label">Comprovantes</span>
+                    <strong id="ir-kpi-total">0</strong>
+                    <small id="ir-kpi-total-sub">documentos cadastrados</small>
+                </div>
+            </article>
+            <article class="ir-kpi-card green">
+                <span class="ir-kpi-icon" aria-hidden="true">$</span>
+                <div>
+                    <span id="ir-kpi-valor-label">Valor potencialmente dedutivel</span>
+                    <strong id="ir-kpi-valor">R$ 0,00</strong>
+                    <small id="ir-kpi-valor-sub">sujeito a revisao</small>
+                </div>
+            </article>
+            <article class="ir-kpi-card yellow">
+                <span class="ir-kpi-icon" aria-hidden="true">!</span>
+                <div>
+                    <span id="ir-kpi-pendentes-label">Pendentes de revisao</span>
+                    <strong id="ir-kpi-pendentes">0</strong>
+                    <small id="ir-kpi-pendentes-sub">aguardando validacao</small>
+                </div>
+            </article>
+            <article class="ir-kpi-card purple">
+                <span class="ir-kpi-icon" aria-hidden="true">#</span>
+                <div>
+                    <span id="ir-kpi-categorias-label">Categorias IR usadas</span>
+                    <strong id="ir-kpi-categorias">0</strong>
+                    <small id="ir-kpi-categorias-sub">classificacao potencial</small>
+                </div>
+            </article>
+            <article class="ir-kpi-card orange ir-empresa-only" id="ir-kpi-extra-card" hidden>
+                <span class="ir-kpi-icon" aria-hidden="true">!</span>
+                <div>
+                    <span id="ir-kpi-extra-label">Aguardando contador</span>
+                    <strong id="ir-kpi-extra">0</strong>
+                    <small id="ir-kpi-extra-sub">classificacao contabil</small>
+                </div>
+            </article>
+        </div>
+
+        <div class="ir-layout">
+            <div class="ir-main-column">
+            <section class="ir-panel ir-saidas-panel" id="ir-saidas-sem-documento-panel" hidden>
+                <div class="ir-panel-header">
+                    <div>
+                        <h2>Lastro financeiro: saidas sem documento</h2>
+                        <p id="ir-saidas-subtitulo">Nenhuma saida sem lastro carregada</p>
+                    </div>
+                    <div class="ir-panel-actions ir-saidas-report-actions">
+                        <button type="button" class="ir-secondary-btn ir-advanced-filter-trigger" id="ir-saidas-filtros-toggle" aria-expanded="false" aria-controls="ir-saidas-filtros-panel" data-ir-icon="filter">Filtros avancados</button>
+                        <button type="button" class="ir-secondary-btn ir-report-btn" id="ir-saidas-btn-excel" title="Exportar Excel" aria-label="Exportar Excel" data-ir-icon="file-spreadsheet">Excel</button>
+                        <button type="button" class="ir-secondary-btn ir-report-btn" id="ir-saidas-btn-pdf" title="Gerar relat&oacute;rio em PDF" aria-label="Gerar relat&oacute;rio em PDF" data-ir-icon="report-pdf">PDF</button>
+                        <button type="button" class="ir-secondary-btn ir-report-btn" id="ir-saidas-btn-zip" title="ZIP para contador ainda nao implementado" aria-label="ZIP para contador ainda nao implementado" data-ir-icon="archive" disabled>ZIP</button>
+                    </div>
+                </div>
+                <div class="ir-lastro-filtros" id="ir-saidas-filtros-panel" hidden>
+                    <label class="ir-filter">
+                        <span>Ano</span>
+                        <select id="ir-saidas-filtro-ano">
+                            <option value="2026">2026</option>
+                            <option value="2025">2025</option>
+                            <option value="2024">2024</option>
+                            <option value="2023">2023</option>
+                        </select>
+                    </label>
+                    <label class="ir-filter">
+                        <span>Mes</span>
+                        <select id="ir-saidas-filtro-mes">
+                            <option value="">Todos</option>
+                            <option value="1">Janeiro</option>
+                            <option value="2">Fevereiro</option>
+                            <option value="3">Marco</option>
+                            <option value="4">Abril</option>
+                            <option value="5">Maio</option>
+                            <option value="6">Junho</option>
+                            <option value="7">Julho</option>
+                            <option value="8">Agosto</option>
+                            <option value="9">Setembro</option>
+                            <option value="10">Outubro</option>
+                            <option value="11">Novembro</option>
+                            <option value="12">Dezembro</option>
+                        </select>
+                    </label>
+                    <label class="ir-filter">
+                        <span>Origem</span>
+                        <select id="ir-saidas-filtro-origem">
+                            <option value="">Todas</option>
+                            <option value="DESPESA_PREVISTA">Despesa prevista</option>
+                            <option value="CONTA">Conta a pagar</option>
+                            <option value="LANCAMENTO">Lancamento no cartao</option>
+                            <option value="MOVIMENTO_FINANCEIRO">Movimento financeiro</option>
+                        </select>
+                    </label>
+                    <label class="ir-filter">
+                        <span>Status</span>
+                        <select id="ir-saidas-filtro-status">
+                            <option value="PENDENTES">Pendentes</option>
+                            <option value="SEM_DOCUMENTO">Sem documento</option>
+                            <option value="AGUARDANDO_CONTADOR">Aguardando contador</option>
+                            <option value="NAO_APLICAVEL">Nao aplicavel</option>
+                            <option value="TODOS">Todos sem documento</option>
+                        </select>
+                    </label>
+                    <label class="ir-filter">
+                        <span>Natureza</span>
+                        <select id="ir-saidas-filtro-natureza">
+                            <option value="">Todas</option>
+                            <option value="DESPESA_OPERACIONAL">Despesa operacional</option>
+                            <option value="PATRIMONIO_IMOBILIZADO">Patrimonio / Imobilizado</option>
+                            <option value="SOFTWARE_ASSINATURA">Software / Assinatura</option>
+                            <option value="IMPOSTO_TAXA">Imposto / taxa</option>
+                            <option value="PRO_LABORE">Pro-labore</option>
+                            <option value="DISTRIBUICAO_LUCROS">Distribuicao de lucros</option>
+                            <option value="REEMBOLSO">Reembolso</option>
+                            <option value="EMPRESTIMO">Emprestimo</option>
+                            <option value="ADIANTAMENTO">Adiantamento</option>
+                            <option value="OUTRO">Outro</option>
+                        </select>
+                    </label>
+                    <label class="ir-filter ir-filter-sm">
+                        <span>Valor minimo</span>
+                        <input id="ir-saidas-filtro-valor" type="number" min="0" step="0.01" placeholder="0,00">
+                    </label>
+                    <label class="ir-search">
+                        <span class="sr-only">Buscar saidas sem documento</span>
+                        <input id="ir-saidas-filtro-busca" type="search" placeholder="Buscar saidas...">
+                    </label>
+                </div>
+                <div class="ir-table-wrap ir-fixed-table-wrap">
+                    <table class="ir-table ir-saidas-table">
+                        <thead>
+                            <tr>
+                                <th>Descricao</th>
+                                <th>Categoria</th>
+                                <th>Data</th>
+                                <th>Status</th>
+                                <th>Origem</th>
+                                <th>Valor</th>
+                                <th>Natureza sugerida</th>
+                                <th>Acoes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ir-saidas-tbody">
+                            <tr>
+                                <td colspan="8" class="ir-empty">Nenhuma saida sem documento no periodo.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="ir-table-pagination" id="ir-saidas-pagination" hidden></div>
+            </section>
+
+            <section class="ir-panel ir-table-panel">
+                <nav class="ir-doc-tabs ir-empresa-only" id="ir-doc-tabs" aria-label="Tipos de documentos da empresa" hidden>
+                    <button type="button" class="active" data-tipo="">Todos</button>
+                    <button type="button" data-tipo="PAGAMENTO_REALIZADO">Pagamentos realizados</button>
+                    <button type="button" data-tipo="NOTA_FISCAL_RECEBIDA">Notas fiscais recebidas</button>
+                    <button type="button" data-tipo="NOTA_FISCAL_EMITIDA">Notas fiscais emitidas</button>
+                    <button type="button" data-tipo="DOCUMENTO_OBRIGATORIO">Documentos obrigatorios</button>
+                    <button type="button" data-tipo="DOCUMENTO_SOCIETARIO">Societarios</button>
+                    <button type="button" data-tipo="CERTIDAO_LICENCA">Certidoes e licencas</button>
+                    <button type="button" data-tipo="PATRIMONIO_IMOBILIZADO">Patrimonio</button>
+                </nav>
+                <div class="ir-panel-header">
+                    <div>
+                        <h2 id="ir-lista-titulo">Comprovantes</h2>
+                        <p id="ir-lista-subtitulo">Nenhum comprovante carregado</p>
+                    </div>
+                    <div class="ir-panel-actions ir-empresa-only" id="ir-filtros-avancados-shell" hidden>
+                        <div class="ir-advanced-filter-shell">
+                            <button type="button" class="ir-secondary-btn ir-advanced-filter-trigger" id="ir-filtros-avancados-toggle" aria-expanded="false" aria-controls="ir-filtros-avancados-panel" data-ir-icon="filter">Filtros avancados</button>
+                        </div>
+                        <button type="button" class="ir-secondary-btn ir-report-btn" id="ir-btn-excel" title="Gerar Excel" aria-label="Gerar Excel" data-ir-icon="file-spreadsheet">Excel</button>
+                        <button type="button" class="ir-secondary-btn ir-report-btn" id="ir-btn-pdf" title="Gerar relat&oacute;rio em PDF" aria-label="Gerar relat&oacute;rio em PDF" data-ir-icon="report-pdf">PDF</button>
+                        <button type="button" class="ir-secondary-btn ir-report-btn" id="ir-doc-btn-zip" title="Gerar pacote ZIP para contador com documentos filtrados e planilha indice" aria-label="Gerar pacote ZIP para contador" data-ir-icon="archive">ZIP</button>
+                    </div>
+                </div>
+                <div class="ir-advanced-filter-panel" id="ir-filtros-avancados-panel" hidden>
+                    <label class="ir-filter">
+                        <span>Categoria fiscal</span>
+                        <select id="ir-filtro-categoria-fiscal-avancada">
+                            <option value="">Todas</option>
+                        </select>
+                    </label>
+                    <label class="ir-filter">
+                        <span>Validade</span>
+                        <select id="ir-filtro-validade">
+                            <option value="">Todas</option>
+                            <option value="VENCENDO">Vencendo em 30 dias</option>
+                            <option value="VENCIDOS">Vencidos</option>
+                            <option value="SEM_VALIDADE">Sem validade</option>
+                        </select>
+                    </label>
+                    <label class="ir-filter">
+                        <span>Obrigatoriedade</span>
+                        <select id="ir-filtro-obrigatorio">
+                            <option value="">Todos</option>
+                            <option value="true">Obrigatorios</option>
+                            <option value="false">Nao obrigatorios</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="ir-table-wrap ir-fixed-table-wrap">
+                    <table class="ir-table">
+                        <thead id="ir-comprovantes-head">
+                            <tr>
+                                <th>Data</th>
+                                <th>Prestador</th>
+                                <th>Categoria IR</th>
+                                <th>Categoria de Despesa</th>
+                                <th>Valor</th>
+                                <th>Ano</th>
+                                <th>Natureza</th>
+                                <th>Lastro</th>
+                                <th>Status</th>
+                                <th>Acoes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ir-comprovantes-tbody">
+                            <tr>
+                                <td colspan="10" class="ir-empty">Nenhum comprovante cadastrado para este ano.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="ir-table-pagination" id="ir-comprovantes-pagination" hidden></div>
+            </section>
+
+            </div>
+
+            <aside class="ir-side">
+                <section class="ir-panel ir-irpf-side">
+                    <div class="ir-panel-header compact">
+                        <h2>Totais por Categoria IR</h2>
+                    </div>
+                    <div id="ir-totais-categorias" class="ir-side-list">
+                        <p class="ir-empty">Nenhuma categoria consolidada.</p>
+                    </div>
+                </section>
+                <section class="ir-panel ir-irpf-side">
+                    <div class="ir-panel-header compact">
+                        <h2 id="ir-pendencias-titulo">Pendencias</h2>
+                    </div>
+                    <div id="ir-pendencias" class="ir-pendencias">
+                        <span>0 documentos pendentes</span>
+                    </div>
+                </section>
+                <section class="ir-panel ir-empresa-only" id="ir-tipos-documentos-panel" hidden>
+                    <div class="ir-panel-header compact">
+                        <h2>Tipos de documento</h2>
+                    </div>
+                    <div id="ir-tipos-documentos" class="ir-side-list">
+                        <p class="ir-empty">Nenhum tipo consolidado.</p>
+                    </div>
+                </section>
+                <section class="ir-panel ir-empresa-only" id="ir-checklist-panel" hidden>
+                    <div class="ir-panel-header compact">
+                        <h2>Checklist empresarial</h2>
+                    </div>
+                    <div id="ir-checklist-empresarial" class="ir-side-list">
+                        <p class="ir-empty">Checklist ainda sem documentos.</p>
+                    </div>
+                </section>
+            </aside>
+        </div>
+    </section>
+
+    <section id="ir-import-view" class="ir-view" aria-label="Importar comprovantes">
+        <div class="ir-import-layout">
+            <main class="ir-import-main">
+                <section class="ir-panel ir-import-toolbar">
+                    <label class="ir-filter">
+                        <span>Ano-calendario</span>
+                        <select id="ir-upload-ano">
+                            <option value="2026">2026</option>
+                            <option value="2025">2025</option>
+                            <option value="2024">2024</option>
+                        </select>
+                    </label>
+                    <div class="ir-import-actions">
+                        <button type="button" class="ir-secondary-btn" id="ir-btn-voltar">Voltar</button>
+                        <button type="button" class="ir-primary-btn" id="ir-upload-submit">Iniciar analise</button>
+                    </div>
+                </section>
+
+                <section class="ir-dropzone" id="ir-dropzone">
+                    <input id="ir-file-input" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp">
+                    <div class="ir-dropzone-content">
+                        <span class="ir-drop-icon" aria-hidden="true">&uarr;</span>
+                        <strong>Arraste arquivos aqui</strong>
+                        <button type="button" id="ir-select-files">selecione no computador</button>
+                        <small>Formatos aceitos: PDF, JPG, PNG e WEBP. OCR local sera usado quando o documento nao tiver texto pesquisavel.</small>
+                    </div>
+                </section>
+
+                <section class="ir-panel">
+                    <div class="ir-panel-header">
+                        <div>
+                            <h2>Arquivos importados</h2>
+                            <p id="ir-upload-count">Nenhum arquivo selecionado</p>
+                        </div>
+                    </div>
+                    <div id="ir-upload-results" class="ir-upload-list">
+                        <p class="ir-empty">Selecione arquivos para iniciar a importacao.</p>
+                    </div>
+                </section>
+            </main>
+
+            <aside class="ir-side">
+                <section class="ir-panel">
+                    <div class="ir-panel-header compact"><h2>Resumo da importacao</h2></div>
+                    <div class="ir-import-summary">
+                        <span><strong id="ir-import-enviados">0</strong> Enviados</span>
+                        <span><strong id="ir-import-lidos">0</strong> Lidos</span>
+                        <span><strong id="ir-import-pendentes">0</strong> Pendentes</span>
+                        <span><strong id="ir-import-erros">0</strong> Erros</span>
+                    </div>
+                </section>
+                <section class="ir-panel">
+                    <div class="ir-panel-header compact"><h2>Proximos passos</h2></div>
+                    <ol class="ir-steps">
+                        <li>Enviar comprovantes para analise</li>
+                        <li>Revisar documentos pendentes</li>
+                        <li>Validar categorias sugeridas</li>
+                        <li>Gerar relatorio em etapa futura</li>
+                    </ol>
+                </section>
+            </aside>
+        </div>
+    </section>
+
+    <div id="ir-saida-link-modal" class="ir-modal" aria-hidden="true">
+        <div class="ir-modal-dialog ir-link-dialog" role="dialog" aria-modal="true" aria-labelledby="ir-saida-link-title">
+            <div class="ir-modal-header">
+                <div>
+                    <h2 id="ir-saida-link-title">Vincular documento fiscal</h2>
+                    <p>Selecione um documento existente do perfil Empresa para lastrear a saida.</p>
+                </div>
+                <button type="button" class="ir-modal-close" id="ir-saida-link-close" aria-label="Fechar">&times;</button>
+            </div>
+            <form id="ir-saida-link-form" class="ir-review-form">
+                <input type="hidden" id="ir-saida-link-tipo-entidade">
+                <input type="hidden" id="ir-saida-link-entidade-id">
+                <div class="ir-saida-modal-summary" id="ir-saida-link-resumo"></div>
+                <label>Documento fiscal existente
+                    <select id="ir-saida-link-comprovante"></select>
+                </label>
+                <label>Tipo de vinculo
+                    <select id="ir-saida-link-tipo-vinculo">
+                        <option value="NOTA_FISCAL">Nota fiscal</option>
+                        <option value="COMPROVANTE">Comprovante</option>
+                        <option value="RECIBO">Recibo</option>
+                        <option value="CONTRATO">Contrato</option>
+                        <option value="GUIA">Guia</option>
+                        <option value="DOCUMENTO_CONTABIL">Documento contabil</option>
+                        <option value="OUTRO">Outro</option>
+                    </select>
+                </label>
+                <label>Natureza
+                    <select id="ir-saida-link-natureza"></select>
+                </label>
+                <label>Status
+                    <select id="ir-saida-link-status">
+                        <option value="VALIDADO">Validado</option>
+                        <option value="COM_DOCUMENTO">Com documento</option>
+                        <option value="PENDENTE">Pendente</option>
+                        <option value="AGUARDANDO_CONTADOR">Aguardando contador</option>
+                        <option value="DIVERGENTE">Divergente</option>
+                    </select>
+                </label>
+                <label>Observacoes<textarea id="ir-saida-link-observacoes" rows="3"></textarea></label>
+                <small class="ir-field-warning">A classificacao e sugestiva e deve ser revisada pelo contador.</small>
+            </form>
+            <div class="ir-modal-footer">
+                <button type="button" class="ir-secondary-btn" id="ir-saida-link-cancel">Cancelar</button>
+                <button type="button" class="ir-primary-btn" id="ir-saida-link-save">Vincular documento</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="ir-saida-status-modal" class="ir-modal" aria-hidden="true">
+        <div class="ir-modal-dialog ir-link-dialog" role="dialog" aria-modal="true" aria-labelledby="ir-saida-status-title">
+            <div class="ir-modal-header">
+                <div>
+                    <h2 id="ir-saida-status-title">Marcar status de lastro</h2>
+                    <p>Registre a tratativa da saida sem criar documento fiscal.</p>
+                </div>
+                <button type="button" class="ir-modal-close" id="ir-saida-status-close" aria-label="Fechar">&times;</button>
+            </div>
+            <form id="ir-saida-status-form" class="ir-review-form">
+                <input type="hidden" id="ir-saida-status-tipo-entidade">
+                <input type="hidden" id="ir-saida-status-entidade-id">
+                <div class="ir-saida-modal-summary" id="ir-saida-status-resumo"></div>
+                <label>Status
+                    <select id="ir-saida-status-valor">
+                        <option value="AGUARDANDO_CONTADOR">Aguardando contador</option>
+                        <option value="NAO_APLICAVEL">Nao aplicavel</option>
+                        <option value="PENDENTE">Pendente</option>
+                    </select>
+                </label>
+                <label>Natureza
+                    <select id="ir-saida-status-natureza"></select>
+                </label>
+                <label>Observacoes<textarea id="ir-saida-status-observacoes" rows="3"></textarea></label>
+                <small class="ir-field-warning">Para Nao aplicavel, registre o motivo para revisao futura.</small>
+            </form>
+            <div class="ir-modal-footer">
+                <button type="button" class="ir-secondary-btn" id="ir-saida-status-cancel">Cancelar</button>
+                <button type="button" class="ir-primary-btn" id="ir-saida-status-save">Salvar status</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="ir-review-modal" class="ir-modal" aria-hidden="true">
+        <div class="ir-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="ir-review-title">
+            <div class="ir-modal-header">
+                <div>
+                    <h2 id="ir-review-title">Revisao do comprovante</h2>
+                    <p>Revise os dados extraidos e confirme a classificacao.</p>
+                </div>
+                <button type="button" class="ir-modal-close" id="ir-review-close" aria-label="Fechar">&times;</button>
+            </div>
+            <div class="ir-review-grid">
+                <section class="ir-document-preview">
+                    <div class="ir-preview-header">
+                        <strong id="ir-review-file-name">Arquivo</strong>
+                        <a id="ir-review-file-link" href="#" target="_blank" rel="noopener">Abrir arquivo</a>
+                    </div>
+                    <div id="ir-review-ocr-alert" class="ir-ocr-alert" hidden></div>
+                    <div id="ir-cupom-fiscal-bloco" class="ir-cupom-fiscal-bloco" hidden>
+                        <div class="ir-cupom-fiscal-header">
+                            <span class="ir-cupom-fiscal-badge" aria-hidden="true">&#x1F9FE;</span>
+                            <strong>Cupom fiscal detectado</strong>
+                            <span id="ir-cupom-tipo-badge" class="ir-cupom-tipo-badge"></span>
+                        </div>
+                        <dl class="ir-cupom-dados">
+                            <div class="ir-cupom-linha" id="ir-cupom-estabelecimento-row">
+                                <dt>Estabelecimento</dt>
+                                <dd id="ir-cupom-estabelecimento"></dd>
+                            </div>
+                            <div class="ir-cupom-linha" id="ir-cupom-cnpj-row">
+                                <dt>CNPJ</dt>
+                                <dd id="ir-cupom-cnpj"></dd>
+                            </div>
+                            <div class="ir-cupom-linha" id="ir-cupom-data-row">
+                                <dt>Data</dt>
+                                <dd id="ir-cupom-data"></dd>
+                            </div>
+                            <div class="ir-cupom-linha" id="ir-cupom-valor-row">
+                                <dt>Valor total</dt>
+                                <dd id="ir-cupom-valor"></dd>
+                            </div>
+                            <div class="ir-cupom-linha" id="ir-cupom-chave-row">
+                                <dt>Chave de acesso</dt>
+                                <dd id="ir-cupom-chave" class="ir-cupom-chave-acesso"></dd>
+                            </div>
+                        </dl>
+                        <div id="ir-cupom-avisos" class="ir-cupom-avisos" hidden></div>
+                    </div>
+                    <pre id="ir-review-texto">Texto extraido indisponivel.</pre>
+                </section>
+                <form id="ir-review-form" class="ir-review-form">
+                    <input type="hidden" id="ir-review-id">
+                    <label>Data do documento<input id="ir-review-data" type="date"></label>
+                    <label>Prestador<input id="ir-review-prestador" type="text"></label>
+                    <label>CPF/CNPJ<input id="ir-review-doc" type="text"></label>
+                    <label>Valor<input id="ir-review-valor" type="number" step="0.01"></label>
+                    <label>Ano-calendario<input id="ir-review-ano" type="number" min="2000" max="2100"></label>
+                    <label>
+                        Categoria de Despesa
+                        <select id="ir-review-categoria"></select>
+                        <small id="ir-review-categoria-aviso" class="ir-field-warning" hidden></small>
+                    </label>
+                    <label><span id="ir-review-categoria-ir-label">Categoria IR</span><select id="ir-review-categoria-ir"></select></label>
+                    <div class="ir-form-row-wide ir-metadata-block ir-empresa-only" id="ir-review-metadata-block" hidden>
+                        <h3>Metadados empresariais</h3>
+                        <p>A obrigatoriedade e o prazo de guarda dos documentos devem ser validados com o contador ou orgao competente, conforme atividade, municipio e regime da empresa.</p>
+                        <div class="ir-metadata-grid">
+                            <label>Tipo de documento
+                                <select id="ir-review-tipo-documental"></select>
+                            </label>
+                            <label>Categoria documental
+                                <select id="ir-review-categoria-documental"></select>
+                            </label>
+                            <label>Numero/protocolo
+                                <input id="ir-review-numero-documento" type="text" maxlength="120">
+                            </label>
+                            <label>Orgao emissor
+                                <input id="ir-review-orgao-emissor" type="text" maxlength="160">
+                            </label>
+                            <label>Data de emissao
+                                <input id="ir-review-data-emissao" type="date">
+                            </label>
+                            <label>Validade
+                                <input id="ir-review-data-validade" type="date">
+                            </label>
+                            <label>Status documental
+                                <select id="ir-review-status-documental"></select>
+                            </label>
+                            <label>Responsavel interno
+                                <input id="ir-review-responsavel-interno" type="text" maxlength="120">
+                            </label>
+                            <label class="ir-checkbox-label">
+                                <input id="ir-review-obrigatorio" type="checkbox">
+                                Documento obrigatorio gerencial
+                            </label>
+                            <label class="ir-checkbox-label">
+                                <input id="ir-review-renovavel" type="checkbox">
+                                Renovavel
+                            </label>
+                            <label>Alerta dias antes
+                                <input id="ir-review-alerta-dias" type="number" min="0" step="1" placeholder="30">
+                            </label>
+                        </div>
+                    </div>
+                    <label>Observacoes<textarea id="ir-review-observacoes" rows="4"></textarea></label>
+                </form>
+            </div>
+            <div class="ir-modal-footer">
+                <button type="button" class="ir-secondary-btn" id="ir-review-ocr-reprocess">Reprocessar OCR</button>
+                <button type="button" class="ir-secondary-btn" id="ir-review-financeiro">Gerar sugestao financeira</button>
+                <button type="button" class="ir-secondary-btn" id="ir-review-patrimonio">Sugerir bem patrimonial</button>
+                <button type="button" class="ir-secondary-btn" id="ir-review-save">Salvar revisao</button>
+                <button type="button" class="ir-primary-btn" id="ir-review-validar">Validar comprovante</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="ir-sugestao-financeira-modal" class="ir-modal" aria-hidden="true">
+        <div class="ir-modal-dialog ir-sugestao-dialog" role="dialog" aria-modal="true" aria-labelledby="ir-sugestao-title">
+            <div class="ir-modal-header">
+                <div>
+                    <h2 id="ir-sugestao-title">Sugestao financeira</h2>
+                    <p>Revise os campos antes de criar a despesa ou o lancamento.</p>
+                </div>
+                <button type="button" class="ir-modal-close" id="ir-sugestao-close" aria-label="Fechar">&times;</button>
+            </div>
+            <form id="ir-sugestao-form" class="ir-review-form ir-sugestao-form">
+                <input type="hidden" id="ir-sugestao-comprovante-id">
+                <div class="ir-form-row-wide ir-sugestao-documento" id="ir-sugestao-documento"></div>
+                <label>Criar como
+                    <select id="ir-sugestao-tipo-destino">
+                        <option value="DESPESA">Despesa prevista</option>
+                        <option value="LANCAMENTO">Lancamento realizado</option>
+                    </select>
+                </label>
+                <label>Forma de pagamento
+                    <select id="ir-sugestao-forma-pagamento">
+                        <option value="pix">Pix</option>
+                        <option value="dinheiro">Dinheiro</option>
+                        <option value="cartao">Cartao</option>
+                        <option value="boleto">Boleto</option>
+                        <option value="transferencia">Transferencia</option>
+                        <option value="debito_automatico">Debito automatico</option>
+                        <option value="outros">Outros / Nao informado</option>
+                    </select>
+                </label>
+                <label class="ir-form-row-wide">Descricao<input id="ir-sugestao-descricao" type="text" maxlength="200"></label>
+                <label>Valor<input id="ir-sugestao-valor" type="number" step="0.01" min="0"></label>
+                <label>Data<input id="ir-sugestao-data" type="date"></label>
+                <label>Competencia<input id="ir-sugestao-competencia" type="month"></label>
+                <label>Categoria de Despesa
+                    <select id="ir-sugestao-categoria"></select>
+                    <small id="ir-sugestao-categoria-aviso" class="ir-field-warning" hidden></small>
+                </label>
+                <label>Categoria IR/Fiscal<input id="ir-sugestao-categoria-ir" type="text" readonly></label>
+                <label id="ir-sugestao-cartao-wrap">Cartao
+                    <select id="ir-sugestao-cartao"></select>
+                    <small id="ir-sugestao-categoria-cartao-info" class="ir-field-warning" hidden></small>
+                </label>
+                <label id="ir-sugestao-conta-wrap">Conta bancaria
+                    <select id="ir-sugestao-conta-bancaria"></select>
+                </label>
+                <label class="ir-form-row-wide">Observacoes<textarea id="ir-sugestao-observacoes" rows="4"></textarea></label>
+                <div class="ir-form-row-wide ir-sugestao-alertas" id="ir-sugestao-alertas" hidden></div>
+            </form>
+            <div class="ir-modal-footer">
+                <button type="button" class="ir-secondary-btn" id="ir-sugestao-cancel">Cancelar</button>
+                <button type="button" class="ir-primary-btn" id="ir-sugestao-confirmar">Criar despesa</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="ir-sugestao-patrimonio-modal" class="ir-modal" aria-hidden="true">
+        <div class="ir-modal-dialog ir-sugestao-dialog" role="dialog" aria-modal="true" aria-labelledby="ir-sugestao-patrimonio-title">
+            <div class="ir-modal-header">
+                <div>
+                    <h2 id="ir-sugestao-patrimonio-title">Sugestao de bem patrimonial</h2>
+                    <p>Revise os campos antes de criar o bem empresarial e vincular o documento fiscal.</p>
+                </div>
+                <button type="button" class="ir-modal-close" id="ir-sugestao-patrimonio-close" aria-label="Fechar">&times;</button>
+            </div>
+            <form id="ir-sugestao-patrimonio-form" class="ir-review-form ir-sugestao-form">
+                <input type="hidden" id="ir-patrimonio-comprovante-id">
+                <input type="hidden" id="ir-patrimonio-imagem-arquivo">
+                <div class="ir-form-row-wide ir-sugestao-documento" id="ir-patrimonio-documento"></div>
+                <label class="ir-form-row-wide">Nome do bem<input id="ir-patrimonio-nome" type="text" maxlength="160" required></label>
+                <label>Categoria
+                    <select id="ir-patrimonio-categoria">
+                        <option value="Informatica">Informatica</option>
+                        <option value="Moveis">Moveis</option>
+                        <option value="Equipamentos">Equipamentos</option>
+                        <option value="Estrutura">Estrutura</option>
+                        <option value="Veiculos">Veiculos</option>
+                        <option value="Ferramentas">Ferramentas</option>
+                        <option value="Outros">Outros</option>
+                    </select>
+                </label>
+                <label>Fornecedor<input id="ir-patrimonio-fornecedor" type="text" maxlength="255"></label>
+                <label>Numero da nota<input id="ir-patrimonio-documento-numero" type="text" maxlength="80"></label>
+                <label>Data de aquisicao<input id="ir-patrimonio-data" type="date"></label>
+                <label>Valor de aquisicao<input id="ir-patrimonio-valor" type="number" step="0.01" min="0"></label>
+                <label>Vida util (meses)<input id="ir-patrimonio-vida-util" type="number" min="1"></label>
+                <label>Depreciacao mensal<input id="ir-patrimonio-depreciacao" type="text" readonly></label>
+                <label>Centro de custo<input id="ir-patrimonio-centro-custo" type="text" maxlength="120"></label>
+                <label>Localizacao<input id="ir-patrimonio-localizacao" type="text" maxlength="120"></label>
+                <label>Responsavel<input id="ir-patrimonio-responsavel" type="text" maxlength="120"></label>
+                <label class="ir-form-row-wide">Descricao<textarea id="ir-patrimonio-descricao" rows="3"></textarea></label>
+                <label class="ir-form-row-wide">Observacoes<textarea id="ir-patrimonio-observacoes" rows="4"></textarea></label>
+                <div class="ir-form-row-wide ir-sugestao-alertas" id="ir-patrimonio-alertas" hidden></div>
+                <small class="ir-form-row-wide ir-field-warning">Vida util e depreciacao sao informativas. A validacao contabil deve ser feita pelo contador.</small>
+            </form>
+            <div class="ir-modal-footer">
+                <button type="button" class="ir-secondary-btn" id="ir-sugestao-patrimonio-cancel">Cancelar</button>
+                <button type="button" class="ir-primary-btn" id="ir-sugestao-patrimonio-confirmar">Criar bem patrimonial</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="ir-link-modal" class="ir-modal" aria-hidden="true">
+        <div class="ir-modal-dialog ir-link-dialog" role="dialog" aria-modal="true" aria-labelledby="ir-link-title">
+            <div class="ir-modal-header">
+                <div>
+                    <h2 id="ir-link-title">Vincular documento</h2>
+                    <p>Classifique a natureza e vincule o documento a uma entidade do perfil ativo.</p>
+                </div>
+                <button type="button" class="ir-modal-close" id="ir-link-close" aria-label="Fechar">&times;</button>
+            </div>
+            <form id="ir-link-form" class="ir-review-form">
+                <input type="hidden" id="ir-link-comprovante-id">
+                <label>Tipo de entidade
+                    <select id="ir-link-tipo-entidade">
+                        <option value="DESPESA_PREVISTA">Despesa prevista</option>
+                        <option value="LANCAMENTO">Lancamento de cartao</option>
+                        <option value="MOVIMENTO_FINANCEIRO">Movimento financeiro</option>
+                        <option value="PATRIMONIO">Patrimonio</option>
+                        <option value="FINANCIAMENTO">Financiamento</option>
+                        <option value="CONTA">Conta bancaria</option>
+                        <option value="OUTRO">Outro</option>
+                    </select>
+                </label>
+                <label>Entidade
+                    <select id="ir-link-entidade"></select>
+                </label>
+                <label>Natureza
+                    <select id="ir-link-natureza">
+                        <option value="DESPESA_OPERACIONAL">Despesa operacional</option>
+                        <option value="PATRIMONIO_IMOBILIZADO">Patrimonio / Imobilizado</option>
+                        <option value="SOFTWARE_ASSINATURA">Software / Assinatura</option>
+                        <option value="IMPOSTO_TAXA">Imposto / taxa</option>
+                        <option value="PRO_LABORE">Pro-labore</option>
+                        <option value="DISTRIBUICAO_LUCROS">Distribuicao de lucros</option>
+                        <option value="REEMBOLSO">Reembolso</option>
+                        <option value="EMPRESTIMO">Emprestimo</option>
+                        <option value="ADIANTAMENTO">Adiantamento</option>
+                        <option value="OUTRO">Outro</option>
+                    </select>
+                </label>
+                <label>Status do lastro
+                    <select id="ir-link-status">
+                        <option value="PENDENTE">Pendente</option>
+                        <option value="COM_DOCUMENTO">Com documento</option>
+                        <option value="VALIDADO">Validado</option>
+                        <option value="AGUARDANDO_CONTADOR">Aguardando contador</option>
+                        <option value="DIVERGENTE">Divergente</option>
+                        <option value="NAO_APLICAVEL">Nao aplicavel</option>
+                    </select>
+                </label>
+                <label>Observacoes<textarea id="ir-link-observacoes" rows="3"></textarea></label>
+                <small class="ir-field-warning">Classificacao sujeita a validacao contabil.</small>
+            </form>
+            <div class="ir-modal-footer">
+                <button type="button" class="ir-secondary-btn" id="ir-link-cancel">Cancelar</button>
+                <button type="button" class="ir-primary-btn" id="ir-link-save">Salvar vinculo</button>
+            </div>
+        </div>
+    </div>
+</div>
