@@ -6,9 +6,11 @@ Cenario FICTICIO do FIN-RECORRENCIA-1: Cartao Teste (910, Pessoal, vence dia 31)
 mapeada a categoria 952; Cartao Sem Config (911); Cartao B (930, Perfil B).
 """
 import json
+import re
 import uuid
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 
@@ -157,12 +159,17 @@ def test_isolamento_leitor_versao_e_outro_modulo(banco):
     assert 'outro modulo' in falha(banco, 'editar_recorrencia', PESSOAL, item, versao(banco, item), {'valor': '1'})[1]
 
 
-def test_perfil_gerado_pelo_flask_nao_muda_dia_nem_frequencia(banco):
+def test_perfil_gerado_pelo_flask_nao_grava_recorrencia_no_cartao(banco):
+    # FIN-ESCRITOR-UNICO-CONTAS-1: perfil de volta ao Flask = nenhuma escrita (cadastro, edicao, inativacao), nada muda.
     item = criar(banco)['item_id']
     atribuir(banco, 'PESSOAL', 'FLASK')
-    codigo, _ = falha(banco, 'editar_recorrencia_cartao', PESSOAL, item, versao(banco, item), {'data_vencimento': '2029-05-25'})
-    assert codigo == 'P0001'
-    rpc(banco, 'editar_recorrencia_cartao', PESSOAL, item, versao(banco, item), {'valor': '48.00'})  # o resto muda
+    antes = sql(banco, 'select * from public.item_despesa where id = %s', (item,))
+    for funcao, args in (('editar_recorrencia_cartao', (PESSOAL, item, versao(banco, item), {'data_vencimento': '2029-05-25'})),
+                         ('editar_recorrencia_cartao', (PESSOAL, item, versao(banco, item), {'valor': '48.00'})),
+                         ('definir_situacao_recorrencia_cartao', (PESSOAL, item, versao(banco, item), False)),
+                         ('criar_recorrencia_cartao', (PESSOAL, DADOS, str(uuid.uuid4())))):
+        assert falha(banco, funcao, *args) == ('P0001', 'A geracao deste perfil ainda e feita pelo sistema atual (Flask)')
+    assert sql(banco, 'select * from public.item_despesa where id = %s', (item,)) == antes
 
 
 def test_mesma_chave_nao_duplica(banco):
@@ -293,3 +300,40 @@ def test_recorrencia_importada_antes_da_geracao_e_reconhecida_pelo_gerador(banco
     gerar_mes(banco, '2029-05-01')
     maio = [x for x in compras_da_recorrencia(banco, item) if str(x['mes_fatura']) == '2029-05-01']
     assert [(x['valor'], x['is_importado']) for x in maio] == [(Decimal('45.90'), True)]
+
+
+RAIZ_SUPABASE = Path(__file__).resolve().parent.parent / 'supabase'
+ANALISAR = 'financeiro.analisar_importacao_cartao(integer, integer, date, jsonb)'
+
+
+def _corpo_analisar(arquivo):
+    """Corpo ($$ ... $$) de analisar_importacao_cartao no arquivo, como o pg_proc.prosrc guarda."""
+    texto = arquivo.read_text(encoding='utf-8')
+    ini = texto.index('$$', re.search(r'function financeiro\.analisar_importacao_cartao\(', texto).start()) + 2
+    return texto[ini:texto.index('$$', ini)]
+
+
+def _aplicar(dsn, arquivo):
+    conn = psycopg2.connect(dsn)
+    try:
+        with conn, conn.cursor() as cur:
+            cur.execute(arquivo.read_text(encoding='utf-8'))  # sem parametros: o corpo da funcao tem '%'
+    finally:
+        conn.close()
+
+
+def test_reversao_20261107_restaura_a_definicao_anterior_e_volta(banco):
+    """supabase/reversao/20261107090000_*.sql devolve exatamente a definicao de 20261105090000 (com os mesmos
+    privilegios); reaplicar 20261107090000 depois devolve a regra nova."""
+    reversao = RAIZ_SUPABASE / 'reversao' / '20261107090000_analisar_importacao_cartao_anterior.sql'
+    anterior = RAIZ_SUPABASE / 'migrations' / '20261105090000_financeiro_importacao_cartao.sql'
+    nova = RAIZ_SUPABASE / 'migrations' / '20261107090000_financeiro_importacao_recorrencia.sql'
+    atual = "select p.prosrc from pg_proc p where p.oid = %s::regprocedure"
+    privilegios = (f"select has_function_privilege('authenticated', '{ANALISAR}', 'execute') a, "
+                   f"has_function_privilege('anon', '{ANALISAR}', 'execute') n")
+    assert sql(banco, atual, (ANALISAR,))[0]['prosrc'] == _corpo_analisar(nova)
+    _aplicar(banco, reversao)
+    assert sql(banco, atual, (ANALISAR,))[0]['prosrc'] == _corpo_analisar(anterior)
+    assert (lambda r: (r['a'], r['n']))(sql(banco, privilegios)[0]) == (True, False)
+    _aplicar(banco, nova)
+    assert sql(banco, atual, (ANALISAR,))[0]['prosrc'] == _corpo_analisar(nova)

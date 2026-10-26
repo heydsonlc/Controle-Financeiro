@@ -13,6 +13,8 @@
 -- - so mensal e anual (R1); trocar entre cartao e outro meio nao e feito por edicao (inativar e cadastrar de novo),
 --   para nao misturar compras ja geradas no cartao com contas;
 -- - compras ja geradas (inclusive em fatura paga) nao mudam: a edicao vale para as proximas competencias.
+-- - so no perfil atribuido ao novo aplicativo (financeiro.exigir_gerador_novo): perfil ainda no Flask = recusa, nada
+--   gravado (a existencia da funcao nao libera a escrita; FIN-ESCRITOR-UNICO-CONTAS-1).
 
 -- Dados validados de uma recorrencia no cartao. Interna.
 create function financeiro.ler_dados_recorrencia_cartao(p_perfil_id integer, p_dados jsonb, p_parcial boolean)
@@ -118,6 +120,7 @@ begin
     if not financeiro.pode_gerir_perfil(p_perfil_id) then
         raise exception 'Perfil financeiro nao autorizado' using errcode = '42501';
     end if;
+    perform financeiro.exigir_gerador_novo(p_perfil_id);  -- FIN-ESCRITOR-UNICO: perfil do Flask = recusa
     if p_chave is null then
         raise exception 'Chave da operacao obrigatoria' using errcode = '22023';
     end if;
@@ -163,6 +166,7 @@ begin
     if not financeiro.pode_gerir_perfil(p_perfil_id) then
         raise exception 'Perfil financeiro nao autorizado' using errcode = '42501';
     end if;
+    perform financeiro.exigir_gerador_novo(p_perfil_id);  -- FIN-ESCRITOR-UNICO: perfil do Flask = recusa
     select * into v_item from public.item_despesa where id = p_item_id for update;
     if not found or not financeiro.pertence_ao_perfil(v_item.perfil_financeiro_id, p_perfil_id) then
         raise exception 'Recorrencia nao encontrada neste perfil' using errcode = '42501';

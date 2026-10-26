@@ -6,6 +6,10 @@ conta "Conta Pessoal (A)" e a legada sem perfil), Empresa (102, A so leitor), Pe
 o navegador (authenticated). Regras do Flask: saldo pelos movimentos, saldo inicial so sem movimentos, so AJUSTE
 editavel, transferencia = debito + credito com o mesmo transferencia_id, conferencia so leitura.
 """
+import json
+import os
+import subprocess
+import sys
 import uuid
 from decimal import Decimal
 
@@ -16,6 +20,7 @@ from tests.test_supabase_fatura_unica import em_thread
 from tests.test_supabase_recorrencia import (
     ID,
     PG_BIN,
+    ROOT,
     USUARIO_A,
     USUARIO_B,
     atribuir,
@@ -213,16 +218,112 @@ def test_ajuste_pela_diferenca_e_pelo_valor_idempotente(banco):
                  str(uuid.uuid4()))[1].startswith('Formato de data invalido')
 
 
-def test_movimento_so_pelo_escritor_unico_do_perfil(cluster):  # noqa: F811
+def test_cadastro_e_movimento_so_pelo_escritor_unico_do_perfil(cluster):  # noqa: F811
+    """FIN-ESCRITOR-UNICO-CONTAS-1: perfil ainda no Flask = o novo aplicativo nao grava nada, nem cadastro."""
     dsn = copiar(cluster)  # Pessoal ainda no Flask
     conta = conta_id(dsn, 'Conta Pessoal (A)')
-    antes = movimentos(dsn, conta)
-    codigo, msg = falha(dsn, 'ajustar_saldo_conta', PESSOAL, conta, {'valor_do_ajuste': 10}, str(uuid.uuid4()))
-    assert (codigo, msg) == ('P0001', 'Os pagamentos deste perfil ainda sao feitos pelo sistema atual (Flask)')
-    outra = criar(dsn)  # cadastro nao e movimento: permitido
-    assert falha(dsn, 'transferir_entre_contas', PESSOAL, {'conta_origem_id': conta, 'conta_destino_id': outra['id'],
+    legada = sql(dsn, "select id from public.conta_bancaria where perfil_financeiro_id is null")[0]['id']
+    antes = estado_das_contas(dsn)
+    flask = ('P0001', 'Os pagamentos deste perfil ainda sao feitos pelo sistema atual (Flask)')
+    assert falha(dsn, 'ajustar_saldo_conta', PESSOAL, conta, {'valor_do_ajuste': 10}, str(uuid.uuid4())) == flask
+    assert falha(dsn, 'criar_conta_bancaria', PESSOAL, NOVA, str(uuid.uuid4())) == flask
+    for dados in ({'nome': 'Outro nome'}, {'status': 'INATIVO'}):
+        assert falha(dsn, 'editar_conta_bancaria', PESSOAL, conta, None, dados) == flask
+    assert falha(dsn, 'transferir_entre_contas', PESSOAL, {'conta_origem_id': conta, 'conta_destino_id': legada,
                                                           'valor': 1}, str(uuid.uuid4()))[0] == 'P0001'
-    assert movimentos(dsn, conta) == antes
+    assert estado_das_contas(dsn) == antes
+
+
+def estado_das_contas(dsn):
+    return (sql(dsn, 'select * from public.conta_bancaria order by id'),
+            sql(dsn, 'select * from public.movimento_financeiro order by id'))
+
+
+# FIN-ESCRITOR-UNICO-CONTAS-1: o lado do Flask. O proprio Flask (processo real, cluster descartavel) tenta as 8 escritas
+# de Contas Bancarias; ids entre chaves vem do cenario ou da resposta anterior (perfil no Flask: ele mesmo cria).
+_ESCRITAS = [
+    ('post', '/api/contas', {'nome': 'Conta Flask (teste)', 'instituicao': 'Banco ficticio', 'tipo': 'Corrente',
+                             'saldo_inicial': 500}),
+    ('put', '/api/contas/{c}', {'nome': 'Conta Flask (editada)'}),
+    ('post', '/api/contas/{c}/ajuste-saldo', {'valor_do_ajuste': 30, 'data_movimento': '2027-05-12'}),
+    ('put', '/api/contas/{c}/movimentos/{m}', {'valor': 20}),
+    ('delete', '/api/contas/{c}/movimentos/{m}', None),
+    ('post', '/api/contas/transferir', {'conta_origem_id': '{c}', 'conta_destino_id': '{d}', 'valor': 15,
+                                        'data_movimento': '2027-05-13'}),
+    ('delete', '/api/contas/{c}', None),
+    ('put', '/api/contas/{c}/ativar', None),
+]
+_SCRIPT_FLASK = """
+import json, sys
+from backend.app import create_app
+from backend.models import Usuario, db
+app = create_app('local')
+with app.app_context():
+    u = Usuario(email='flask.contas@teste.local', nome='Contas', ativo=True)
+    u.definir_senha('Senha-ficticia-contas-2026')
+    db.session.add(u); db.session.commit()
+c = app.test_client()
+assert c.post('/login', data={'email': 'flask.contas@teste.local', 'senha': 'Senha-ficticia-contas-2026'}).status_code == 302
+assert c.post('/api/perfis-financeiros/ativo', json={'perfil_id': int(sys.argv[1])}).status_code == 200
+ids = json.loads(sys.argv[3])
+def preencher(v):
+    if isinstance(v, str) and v.startswith('{') and v.endswith('}') and v[1:-1] in ids:
+        return ids[v[1:-1]]
+    if isinstance(v, dict):
+        return {k: preencher(x) for k, x in v.items()}
+    return v
+saida = []
+for metodo, rota, corpo in json.loads(sys.argv[2]):
+    chamada = getattr(c, metodo)
+    r = chamada(rota.format(**ids), json=preencher(corpo)) if corpo is not None else chamada(rota.format(**ids))
+    j = r.get_json() or {}
+    saida.append([metodo, rota, r.status_code, j.get('codigo'), j.get('error')])
+    dados = j.get('data') or {}
+    if rota == '/api/contas' and r.status_code == 201:
+        ids['c'] = dados['id']
+    if rota.endswith('/ajuste-saldo') and r.status_code == 201:
+        ids['m'] = dados['movimento']['id']
+conta = '/api/contas/' + str(ids['c'])
+leituras = [c.get('/api/contas').status_code, c.get(conta).status_code, c.get(conta + '/conferir-saldo').status_code]
+print('FLASK_JSON ' + json.dumps({'escritas': saida, 'leituras': leituras}))
+"""
+
+
+def flask_escreve(dsn, ids):
+    env = {**os.environ, 'APP_ENV': 'local', 'FLASK_DEBUG': '0', 'DATABASE_URL': dsn}
+    env.pop('FLASK_ENV', None)
+    r = subprocess.run([sys.executable, '-c', _SCRIPT_FLASK, str(PESSOAL), json.dumps(_ESCRITAS), json.dumps(ids)],
+                       cwd=ROOT, env=env, capture_output=True, text=True, timeout=300)
+    linha = next((l for l in r.stdout.splitlines() if l.startswith('FLASK_JSON ')), None)
+    assert r.returncode == 0 and linha, r.stderr[-3000:]
+    return json.loads(linha[len('FLASK_JSON '):])
+
+
+def test_flask_recusa_as_8_escritas_de_contas_em_perfil_do_novo_aplicativo(banco):
+    """Perfil NOVO: cada escrita do Flask responde 409 SISTEMA_NOVO e nada muda (contas, movimentos, saldos).
+    Consultas continuam."""
+    c = criar(banco)['id']  # pelo escritor do perfil (novo aplicativo)
+    m = ajustar(banco, c, valor_do_ajuste=30)['movimento']['id']
+    d = conta_id(banco, 'Conta Pessoal (A)')
+    antes = estado_das_contas(banco)
+    r = flask_escreve(banco, {'c': c, 'm': m, 'd': d})
+    assert [(e[2], e[3]) for e in r['escritas']] == [(409, 'SISTEMA_NOVO')] * len(_ESCRITAS), r['escritas']
+    assert all('Nada foi gravado' in e[4] for e in r['escritas'])
+    assert r['leituras'] == [200, 200, 200]
+    assert estado_das_contas(banco) == antes
+
+
+def test_flask_continua_gravando_contas_em_perfil_do_flask(cluster):  # noqa: F811
+    """Perfil sem atribuicao (Flask): comportamento legado, as 8 escritas gravam; o novo aplicativo recusa."""
+    dsn = copiar(cluster)
+    d = conta_id(dsn, 'Conta Pessoal (A)')
+    r = flask_escreve(dsn, {'d': d})
+    assert [e[2] for e in r['escritas']] == [201, 200, 201, 200, 200, 201, 200, 200], r['escritas']
+    nova = conta_id(dsn, 'Conta Flask (editada)')
+    assert sql(dsn, 'select status from public.conta_bancaria where id = %s', (nova,))[0]['status'] == 'ATIVO'
+    assert [(x['tipo'], x['valor'], x['origem']) for x in movimentos(dsn, nova)] == [
+        ('DEBITO', Decimal('15.00'), 'TRANSFERENCIA')]
+    assert falha(dsn, 'editar_conta_bancaria', PESSOAL, nova, None, {'nome': 'X'})[0] == 'P0001'
 
 
 def test_editar_e_excluir_so_ajuste(banco):

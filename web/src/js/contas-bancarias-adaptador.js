@@ -129,9 +129,9 @@ const ROTAS = [
 ];
 
 function mensagem(erro) {
-    // Escritor unico (D5): o perfil ainda movimenta pelo Flask.
+    // Escritor unico (D5; FIN-ESCRITOR-UNICO-CONTAS-1: cadastro e movimento): o perfil ainda e do Flask.
     if (erro && erro.hint === 'SISTEMA_FLASK') {
-        return 'As movimentações deste perfil ainda são feitas pelo sistema atual (Flask). Nada foi gravado.';
+        return 'As contas bancárias deste perfil ainda são administradas pelo sistema atual (Flask). Nada foi gravado.';
     }
     return mensagemDeErro(erro);
 }

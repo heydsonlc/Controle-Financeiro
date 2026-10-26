@@ -15,8 +15,10 @@
 --   receita nem despesa), as duas contas do perfil e ativas, travadas em ordem de id;
 -- - conferencia de saldo: so leitura.
 -- Correcoes em relacao ao Flask (classificadas em docs):
--- - movimento (ajuste e transferencia) so pelo escritor unico do perfil (financeiro.exigir_pagamento_novo) e com chave de
---   idempotencia (o reenvio nao duplica); o Flask nao tem chave;
+-- - cadastro (criar, editar, inativar, reativar) e movimento (ajuste e transferencia) so pelo escritor unico do perfil
+--   (financeiro.exigir_pagamento_novo: perfil ainda no Flask = recusa, nada gravado; FIN-ESCRITOR-UNICO-CONTAS-1, com a
+--   guarda espelhada em backend/routes/contas_bancarias.py) e com chave de idempotencia (o reenvio nao duplica); o
+--   Flask nao tem chave;
 -- - edicao do cadastro com versao (cadastro alterado por outra operacao e recusado, nada e gravado);
 -- - excluir ajuste estornado (referenciado por movimento_original_id) e recusado;
 -- - valores com ate 2 casas, data valida, descricao ate 200 caracteres (o Flask grava o que vier).
@@ -398,6 +400,7 @@ begin
         return v_repetida;
     end if;
     v_d := financeiro.ler_dados_conta_bancaria(p_dados, false);
+    perform financeiro.exigir_pagamento_novo(p_perfil_id);
     insert into public.conta_bancaria (perfil_financeiro_id, nome, instituicao, tipo, agencia, numero_conta, digito_conta,
                                        saldo_inicial, saldo_atual, cor_display, icone, status, data_criacao, data_atualizacao)
     values (p_perfil_id, v_d ->> 'nome', v_d ->> 'instituicao', v_d ->> 'tipo', v_d ->> 'agencia', v_d ->> 'numero_conta',
@@ -428,6 +431,7 @@ begin
         raise exception 'Perfil financeiro nao autorizado' using errcode = '42501';
     end if;
     v_d := financeiro.ler_dados_conta_bancaria(p_dados, true);
+    perform financeiro.exigir_pagamento_novo(p_perfil_id);
     v_conta := financeiro.travar_conta_do_perfil(p_perfil_id, p_conta_bancaria_id);
     if p_versao is not null and p_versao is distinct from financeiro.versao_conta_bancaria(v_conta) then
         raise exception 'Conta bancaria alterada por outra operacao' using errcode = '40001';

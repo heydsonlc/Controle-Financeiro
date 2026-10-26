@@ -133,7 +133,7 @@ test('cadastro, transferencia, ajuste, extrato e conferencia como no Flask', asy
     await expect(toast(page)).toContainText('Conta inativada com sucesso');
 });
 
-test('perfil ainda no Flask: movimento recusado sem gravar; leitor sem acoes de escrita', async ({ page }) => {
+test('perfil ainda no Flask: movimento e cadastro recusados sem gravar; leitor sem acoes de escrita', async ({ page }) => {
     await entrar(page, A);
     await abrirTela(page);
     const conta = linha(page, 'Conta Pessoal (A)');
@@ -141,10 +141,17 @@ test('perfil ainda no Flask: movimento recusado sem gravar; leitor sem acoes de 
     await conta.locator('[title="Ajustar saldo"]').click();
     await page.fill('#ajuste-novo-saldo', '12.345,00');
     await page.click('#form-ajuste button[type=submit]');
-    await expect(toast(page)).toContainText('ainda são feitas pelo sistema atual (Flask)');
+    await expect(toast(page)).toContainText('ainda são administradas pelo sistema atual (Flask)');
     await page.locator('#modal-ajuste').getByRole('button', { name: 'Fechar' }).first().click();
+    // FIN-ESCRITOR-UNICO-CONTAS-1: o cadastro tambem e do escritor do perfil (editar e criar recusados, nada gravado).
+    await conta.locator('[title="Editar"]').click();
+    await page.fill('#conta-nome', 'Nome que nao pode gravar');
+    await page.click('#form-conta button[type=submit]');
+    await expect(toast(page)).toContainText('ainda são administradas pelo sistema atual (Flask)');
+    await page.locator('#modal-conta').getByRole('button', { name: /Cancelar/ }).first().click();
     await page.reload();
     await expect(linha(page, 'Conta Pessoal (A)')).toHaveText(antes);
+    await expect(linha(page, 'Nome que nao pode gravar')).toHaveCount(0);
 
     await trocarPerfil(page, 'Empresa');
     await abrirTela(page);

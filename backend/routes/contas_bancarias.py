@@ -17,10 +17,12 @@ try:
     from backend.models import db, ContaBancaria, MovimentoFinanceiro
     from backend.services.conta_bancaria_service import ContaBancariaService
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
+    from backend.services.gerador_recorrencia_service import flask_pode_gerar
 except ImportError:
     from models import db, ContaBancaria, MovimentoFinanceiro
     from services.conta_bancaria_service import ContaBancariaService
     from services.perfil_financeiro_service import PerfilFinanceiroService
+    from services.gerador_recorrencia_service import flask_pode_gerar
 
 # Criar blueprint
 contas_bancarias_bp = Blueprint('contas_bancarias', __name__)
@@ -45,6 +47,18 @@ def _get_json_payload():
 
 def _perfil_id():
     return PerfilFinanceiroService.obter_perfil_ativo_id()
+
+
+def _escrita_do_novo_aplicativo(perfil_id, contexto):
+    """FIN-ESCRITOR-UNICO-CONTAS-1: perfil atribuido ao novo aplicativo (financeiro.gerador_recorrencia = NOVO) tem as
+    contas bancarias, ajustes e transferencias gravados so la (financeiro.exigir_pagamento_novo, migration
+    20261109090000). Mesma regra de flask_pode_gerar: sem a configuracao, comportamento legado; erro na verificacao,
+    escrita bloqueada. Devolve a resposta de recusa (nada gravado) ou None quando o Flask pode gravar."""
+    if flask_pode_gerar(perfil_id, contexto):
+        return None
+    db.session.rollback()
+    return jsonify({'success': False, 'codigo': 'SISTEMA_NOVO',
+                    'error': 'As contas bancarias deste perfil sao administradas pelo novo aplicativo. Nada foi gravado.'}), 409
 
 
 def _query_contas():
@@ -138,6 +152,9 @@ def criar_conta():
         JSON com dados da conta criada
     """
     try:
+        recusa = _escrita_do_novo_aplicativo(_perfil_id(), 'cadastro de conta bancaria')
+        if recusa:
+            return recusa
         data, error = _get_json_payload()
         if error:
             return error
@@ -217,6 +234,9 @@ def atualizar_conta(id):
 
         if not conta:
             return _json_error('Conta nao encontrada', 404)
+        recusa = _escrita_do_novo_aplicativo(conta.perfil_financeiro_id, f'atualizacao da conta {conta.id}')
+        if recusa:
+            return recusa
 
         data, error = _get_json_payload()
         if error:
@@ -291,6 +311,9 @@ def inativar_conta(id):
 
         if not conta:
             return _json_error('Conta nao encontrada', 404)
+        recusa = _escrita_do_novo_aplicativo(conta.perfil_financeiro_id, f'inativacao da conta {conta.id}')
+        if recusa:
+            return recusa
 
         # Inativar ao invés de deletar
         conta.status = 'INATIVO'
@@ -324,6 +347,9 @@ def ativar_conta(id):
 
         if not conta:
             return _json_error('Conta nao encontrada', 404)
+        recusa = _escrita_do_novo_aplicativo(conta.perfil_financeiro_id, f'reativacao da conta {conta.id}')
+        if recusa:
+            return recusa
 
         conta.status = 'ATIVO'
         conta.data_atualizacao = datetime.utcnow()
@@ -443,6 +469,9 @@ def ajuste_saldo(id):
         conta = _obter_conta_no_perfil(id)
         if not conta:
             return _json_error('Conta nao encontrada', 404)
+        recusa = _escrita_do_novo_aplicativo(conta.perfil_financeiro_id, f'ajuste de saldo da conta {conta.id}')
+        if recusa:
+            return recusa
 
         data, error = _get_json_payload()
         if error:
@@ -513,6 +542,9 @@ def editar_movimento(conta_id, mov_id):
 
         if not mov.ajustavel:
             return _json_error('Apenas movimentos de AJUSTE podem ser editados', 400)
+        recusa = _escrita_do_novo_aplicativo(mov.perfil_financeiro_id, f'ajuste {mov.id} editado')
+        if recusa:
+            return recusa
 
         data, error = _get_json_payload()
         if error:
@@ -557,6 +589,9 @@ def deletar_movimento(conta_id, mov_id):
 
         if not mov.ajustavel:
             return _json_error('Apenas movimentos de AJUSTE podem ser excluidos', 400)
+        recusa = _escrita_do_novo_aplicativo(mov.perfil_financeiro_id, f'ajuste {mov.id} excluido')
+        if recusa:
+            return recusa
 
         db.session.delete(mov)
         ContaBancariaService.recalcular_saldo_conta(conta_id)
@@ -573,6 +608,9 @@ def transferir():
     Transferência entre contas bancárias (débito + crédito atômicos).
     """
     try:
+        recusa = _escrita_do_novo_aplicativo(_perfil_id(), 'transferencia entre contas')
+        if recusa:
+            return recusa
         data, error = _get_json_payload()
         if error:
             return error
