@@ -156,7 +156,7 @@ O que o teste novo cobre:
 | Falha preexistente `test_categorias_sistemicas_mobilidade` (projeção de IPVA) | É de Mobilidade (FIN-MOBILIDADE-2), não do catálogo |
 | `FIN_FIDELIDADE_RECORRENCIAS_1.md` | R1 resolvido aqui. R4 já estava resolvido pela `20261108` (o documento antigo não foi atualizado) |
 
-## 5. Migration (não aplicada)
+## 5. Migration (aplicada depois no Supabase de teste, §9)
 
 `20261125090000_financeiro_categorias_recorrencias.sql`:
 - **Tabelas novas, vazias, com RLS forçado e sem acesso direto:** `recorrencia_ocorrencia`, `catalogo_categorias`, `gestor_catalogo`, `operacao_catalogo`.
@@ -202,3 +202,47 @@ Compartilhados com o FIN-ESCRITOR-UNICO-FINAL-1 (trechos separados, cada um com 
 - `web/tests/e2e/despesas.spec.mjs` e `recorrencias_tela.spec.mjs`;
 - `web/tests/unit/build.test.mjs`;
 - `docs/ROADMAP.md`: uma linha por MVP.
+
+## 9. Aplicação no Supabase de teste (27/10/2026)
+
+**Commit:** `053abc9` (só este MVP, sem push). Nos arquivos compartilhados com o FIN-PATRIMONIO-2 (`build.test.mjs` e `ROADMAP.md`) entraram só os trechos deste MVP. Na árvore exata do commit:
+- 30 unitários e 93 E2E passaram;
+- Python, pasta `tests/` inteira: 1932 aprovados, 18 pulados, 5 falhas. As 5 falham igualmente no HEAD anterior (`a3d35b2`), conferido numa cópia limpa: são as preexistentes do §6 (`test_receitas_ux`, `test_categorias_sistemicas_mobilidade`, `test_ocr_tools` (2), `test_veiculos_mobilidade_2b`).
+
+**Inspeção antes de aplicar** (só leitura, todas aprovadas):
+- as 6 funções substituídas existem no remoto com o texto que a reversão devolve (fim de linha normalizado), e a reversão devolve a última definição local anterior (inclusive a da `20261124`);
+- toda diferença entre a definição nova e a anterior está num trecho marcado. O critério automático aceita o `end if;` isolado que fecha um bloco marcado; os trechos sem a marca por perto (continuação de condição, `end if;`) foram conferidos à mão no diff completo de `gerar_mes_interno` e `excluir_despesa`: todos são parte dos blocos da semanal; o caminho mensal e anual não muda;
+- a guarda do escritor único continua onde estava (`excluir_despesa`);
+- as 21 funções e as 4 tabelas novas não existiam; as 18 funções de que a migration depende existem;
+- nenhum comando de dados, `drop` ou alteração de coluna fora dos corpos de função;
+- no remoto, nenhuma recorrência semanal ativa (nada passa a ser gerado só pela aplicação); catálogo com 14 categorias e nenhuma palavra-chave.
+
+**Aplicação:**
+- só a `20261125090000`, com a `20261126090000` fora da pasta durante o envio (voltou idêntica, md5);
+- as 65 tabelas existentes ficaram com o conteúdo idêntico (211 linhas); +4 tabelas vazias; +21 funções; só as 6 previstas substituídas; nenhuma removida.
+
+**Validação real** (perfil temporário criado pelo aplicativo; 29 verificações: **26 aprovadas automaticamente**, 2 conferidas no resultado e 1 refeita, abaixo):
+- **Semanal (quarta) e a cada 2 semanas (segunda):** uma conta por ocorrência, nas datas do Flask, com a descrição `<nome> - dd/mm`; identidade registrada por ocorrência; geração repetida não cria nem altera nada.
+- **Dispensa:** excluir a conta de 11/11 dispensa só essa ocorrência; ela não volta nas gerações seguintes.
+- **Conta paga:** paga a 1ª semanal (com movimento); depois da alteração do valor da recorrência e de duas novas gerações, a conta paga continua idêntica (mesmo md5). As contas já geradas mantêm o valor; só as novas vêm com o valor alterado.
+- **Todas as previstas, sem duplicar:** a semanal tem uma conta por quarta de 04/11/2026 a 31/03/2027, exceto a dispensada; nenhuma conta repetida (item + data) no perfil; prévia repetida com 0 a gerar.
+- **Conta existente no ciclo:** conta gravada fora do novo motor em 10/03/2027, no ciclo de 08/03 da quinzenal: reconhecida; nada criado em 08/03; 22/03 criada.
+  - Na primeira montagem, a conta foi inserida em 13/01, mas a ocorrência de 11/01 já tinha sido gerada pela geração de dezembro (janela dez–jan). As duas ficaram. Isso mostra que o motor não apaga nem funde o que já gerou: a proteção contra escrita do Flask depois da geração é o escritor único (o Flask recusa perfil do novo aplicativo), não o gerador.
+- **Cartão:** recorrência semanal no cartão recusada ("o novo aplicativo gera mensal e anual"), nada gravado.
+- **Receitas:**
+  - valor base: cria só as previsões que faltam nos 12 meses a partir do mês atual (out/2026: faltavam ago e set/2027), as gravadas não mudam, e a repetição não cria nada;
+  - recebimento sem previsão: uma realizada sem previsão, um crédito de 320 no extrato, e o reenvio pela mesma chave não duplica.
+- **Catálogo global:** continua com o Flask (`escritor FLASK`, conta sem gestão). Criar, editar e excluir categoria e criar palavra-chave são recusados (`CATALOGO_FLASK`) para o titular e para o leitor. Categorias, palavras-chave e as tabelas de controle ficaram idênticas.
+- **Perfil passado ao Flask:** valor base, recebimento sem previsão, cadastro de semanal e exclusão de conta recusados (`SISTEMA_FLASK`); a geração, recusada com o código próprio do gerador (`GERADOR_FLASK`). Nenhuma tabela do perfil mudou, nem as ocorrências.
+- **Quem só lê:** 403 no valor base e no recebimento sem previsão.
+- **Leitura:** `recorrencias_do_perfil` traz a semanal com o próximo vencimento.
+- **Telas:** as 14 da árvore commitada, com o `dist` e a CSP reais, no perfil temporário: sem erro de console nem chamada ao Flask; as recorrências e a fonte de receita aparecem.
+
+Três verificações da primeira rodada falharam por expectativa errada no roteiro, não por defeito. Duas foram conferidas no resultado gravado: o código da recusa da geração (`GERADOR_FLASK`, com as outras 4 recusas em `SISTEMA_FLASK`) e o mês atual (outubro, não novembro: as 2 previsões criadas são exatamente as que faltavam). A terceira, a ordem do cenário da conta existente, foi refeita no ciclo de março (acima).
+
+**Limpeza por identidade** (simulação, depois confirmação):
+- só o perfil temporário, criado pelo aplicativo, com os vínculos do teste e itens marcados;
+- removidos também as ocorrências e a configuração do cartão (`config_agregador`), ligadas aos itens do perfil;
+- banco idêntico ao retrato pós-aplicação (tabelas e funções). A linha a mais no histórico do gerador vem do gatilho de auditoria, removida na mesma transação.
+
+**Inalterados:** produção; Pessoal e Empresa, que continuam no Flask; o catálogo global (segue com o Flask); os perfis fictícios 31 e 39; `gastos.db`. **Pendente no remoto:** `20261126090000`.
