@@ -4,11 +4,24 @@
 // - "Consolidar Receita": o Flask registra so o que falta, com a data de hoje. Os campos acrescentados ao modal
 //   (valor, data e justificativa) mantem o recebimento parcial, em outra data ou acima do previsto do novo aplicativo.
 //   O valor visivel alimenta o campo oculto que o JS do Flask envia; data e justificativa sao lidas pelo adaptador.
+// - FIN-CATEGORIAS-RECORRENCIAS-2: "Proximos recebimentos" usa a data prevista gravada na previsao (FIN-RECEITAS-DATA-
+//   REAL-1: pode cair em outro mes, ex.: competencia 10 recebida em 05/11); sem ela, o dia previsto da fonte, como o
+//   Flask. A linha leva a data inteira no lugar do dia, e montarDataPrevista a devolve como esta.
 (function () {
     const original = window.montarReceitasMes;
     if (typeof original === 'function') {
         window.montarReceitasMes = function (...args) {
-            return original.apply(this, args).filter((linha) => linha.origem !== 'fonte_base');
+            const linhas = original.apply(this, args).filter((linha) => linha.origem !== 'fonte_base');
+            // estado: global de js/original/receitas.js (script classico carregado antes deste)
+            const orcamentos = (typeof estado !== 'undefined' && estado && estado.orcamentos) || [];
+            const datas = new Map(orcamentos.filter((o) => o.data_prevista).map((o) => [o.id, o.data_prevista]));
+            return linhas.map((l) => (datas.has(l.orcamento_id) ? { ...l, dia_previsto_pagamento: datas.get(l.orcamento_id) } : l));
+        };
+    }
+    const montarData = window.montarDataPrevista;
+    if (typeof montarData === 'function') {
+        window.montarDataPrevista = function (anoMes, dia) {
+            return /^\d{4}-\d{2}-\d{2}$/.test(String(dia || '')) ? dia : montarData(anoMes, dia);
         };
     }
 

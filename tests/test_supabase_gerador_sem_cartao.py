@@ -67,6 +67,15 @@ def sem_cartao(lista):
     return [x for x in lista if x.get('motivo') != MOTIVO]
 
 
+# FIN-CATEGORIAS-RECORRENCIAS-2: a semanal do cenario (908) passou a ser gerada (regra posterior ao R4, com testes
+# proprios em test_supabase_categorias_recorrencias.py). Aqui, onde so a regra do R4 e comparada, ela fica de fora.
+SEMANAL = 908
+
+
+def sem_semanal(lista):
+    return [x for x in lista if x.get('item_id') != SEMANAL]
+
+
 def test_regra_anterior_restaurada_de_fato_e_a_nova_so_acrescenta_a_condicao(bancos):
     definicao = "select pg_get_functiondef('financeiro.plano_recorrencia(integer, date)'::regprocedure) as d"
     novo, antigo = bancos
@@ -80,10 +89,10 @@ def test_regra_anterior_restaurada_de_fato_e_a_nova_so_acrescenta_a_condicao(ban
 def test_previa_igual_exceto_a_rejeicao_do_cartao(bancos, perfil, usuario, mes):
     novo, antigo = bancos
     a, n = previa(antigo, perfil, usuario, mes), previa(novo, perfil, usuario, mes)
-    assert n['itens'] == a['itens']                       # nenhuma conta ou compra valida omitida ou acrescentada
-    assert n['a_gerar'] == a['a_gerar']
+    assert sem_semanal(n['itens']) == a['itens']          # nenhuma conta ou compra valida omitida ou acrescentada
+    assert n['a_gerar'] - (len(n['itens']) - len(sem_semanal(n['itens']))) == a['a_gerar']
     assert n['dispensados'] == a['dispensados']
-    assert n['rejeitados'] == sem_cartao(a['rejeitados'])  # so a rejeicao do cartao sai
+    assert n['rejeitados'] == sem_semanal(sem_cartao(a['rejeitados']))  # so a rejeicao do cartao sai (e a da semanal)
     assert not [x for x in n['rejeitados'] if x.get('motivo') == MOTIVO]
     assert {k: v for k, v in n.items() if k not in ('itens', 'rejeitados', 'dispensados')} == \
         {k: v for k, v in a.items() if k not in ('itens', 'rejeitados', 'dispensados')} or True
@@ -109,7 +118,8 @@ def test_mensal_anual_e_compra_recorrente_do_cartao_continuam(bancos):
 
 def _gerado(dsn):
     contas = sql(dsn, """select item_despesa_id, mes_referencia, descricao, valor, data_vencimento, is_fatura_cartao,
-                                cartao_competencia from public.conta order by 1, 2, 3""")
+                                cartao_competencia from public.conta where item_despesa_id is distinct from %s
+                          order by 1, 2, 3""", (SEMANAL,))
     compras = sql(dsn, """select item_despesa_id, cartao_id, mes_fatura, valor, descricao, compra_id, is_recorrente
                             from public.lancamento_agregado order by 1, 3, 6""")
     return contas, compras

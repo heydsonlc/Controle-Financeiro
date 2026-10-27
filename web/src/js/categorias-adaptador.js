@@ -4,16 +4,22 @@
 //   pede palavras-chave e vinculos uma vez por categoria; aqui cada lista vem do banco uma vez por carga da tela.
 // - Escrita so das Categorias do Cartao (por perfil): criar, editar, desativar/reativar, vincular e desvincular, pelo
 //   escritor do perfil (o banco recusa perfil ainda no Flask).
-// - Categorias de despesa, palavras-chave e logos sao comuns a todos os perfis (inclusive os ainda no Flask): ficam no
-//   sistema atual. Logos: os arquivos estao no servidor do Flask; aqui a tela mostra o icone.
+// - Categorias de despesa e palavras-chave sao comuns a todos os perfis (inclusive os ainda no Flask). FIN-CATEGORIAS-
+//   RECORRENCIAS-2 (migration 20261125090000): cadastro, edicao, exclusao segura e palavras-chave pelas funcoes do
+//   catalogo, que so gravam com o catalogo passado ao novo aplicativo (escritor proprio, padrao Flask) e por conta
+//   gestora; ate la o banco recusa e nada e gravado. Logos: os arquivos estao no servidor do Flask; aqui a tela mostra
+//   o icone e o envio fica para o armazenamento de arquivos (FIN-DOCUMENTOS-2).
 
 import { supabase } from './cliente.js';
-import { falha, mensagemDeErro, ok } from './adaptador-comum.js';
+import { criarChaves, falha, mensagemDeErro, ok } from './adaptador-comum.js';
 import { iniciarMoldura } from './moldura.js';
 
 const estado = { perfilId: null, palavras: null, vinculos: null };
 const GLOBAIS = 'Categorias de despesa são comuns a todos os perfis, inclusive os ainda no sistema atual: cadastro, edição, '
-    + 'exclusão, palavras-chave e logo continuam no sistema atual nesta fase. Nada foi gravado.';
+    + 'exclusão e palavras-chave continuam no sistema atual (Flask) até o catálogo passar ao novo aplicativo. Nada foi gravado.';
+const LOGOS = 'Logo de categoria: os arquivos ficam no servidor do sistema atual; o envio pelo novo aplicativo depende do '
+    + 'armazenamento de arquivos (FIN-DOCUMENTOS-2). Nada foi gravado.';
+const chaves = criarChaves();
 
 async function rpc(funcao, args) {
     const { data, error } = await funcao(args);
@@ -69,6 +75,39 @@ async function escrever(chamada, args) {
     return ok({ data: await rpc(chamada, { p_perfil_id: estado.perfilId, ...args }) });
 }
 
+// Catalogo global (sem perfil): respostas no formato do Flask; palavras-chave relidas na proxima consulta.
+async function criarCategoria(corpo) {
+    const operacao = `categoria:${JSON.stringify(corpo)}`;
+    const r = await rpc((a) => supabase.rpc('criar_categoria', a), { p_dados: corpo, p_chave: chaves.de(operacao) });
+    chaves.esquecer(operacao);
+    const { corpo: lida } = await categoria(r.categoria_id);
+    return { status: 201, corpo: { success: true, message: 'Categoria criada com sucesso', data: lida.data } };
+}
+
+async function editarCategoria(id, corpo) {
+    await rpc((a) => supabase.rpc('editar_categoria', a), { p_categoria_id: id, p_dados: corpo });
+    const { corpo: lida } = await categoria(id);
+    return ok({ message: 'Categoria atualizada com sucesso', data: lida.data });
+}
+
+async function excluirCategoria(id) {
+    await rpc((a) => supabase.rpc('excluir_categoria', a), { p_categoria_id: id });
+    estado.palavras = null;
+    return ok({ message: 'Categoria deletada com sucesso' });
+}
+
+async function criarPalavra(id, corpo) {
+    const r = await rpc((a) => supabase.rpc('criar_palavra_chave', a), { p_categoria_id: id, p_palavra: (corpo || {}).palavra ?? '' });
+    estado.palavras = null;
+    return { status: r.created ? 201 : 200, corpo: { success: true, data: r, created: r.created } };
+}
+
+async function removerPalavra(id, palavraId) {
+    const r = await rpc((a) => supabase.rpc('remover_palavra_chave', a), { p_categoria_id: id, p_palavra_id: palavraId });
+    estado.palavras = null;
+    return ok({ data: r });
+}
+
 const ROTAS = [
     ['GET', /^\/api\/categorias\/?$/, (m, c, p) => categorias(p)],
     ['GET', /^\/api\/categorias\/(\d+)$/, (m) => categoria(Number(m[1]))],
@@ -85,15 +124,30 @@ const ROTAS = [
     ['DELETE', /^\/api\/categorias-cartao\/(\d+)\/despesas\/(\d+)$/, (m) => escrever((a) => supabase.rpc('desvincular_despesa_categoria_cartao', a), {
         p_categoria_cartao_id: Number(m[1]), p_categoria_id: Number(m[2]),
     })],
-    // Categorias de despesa (globais): cadastro, edicao, exclusao, palavras-chave e logo ficam no sistema atual.
-    [null, /^\/api\/categorias(\/\d+(\/(palavras-chave(\/\d+)?|logo))?)?\/?$/, async () => falha(GLOBAIS)],
+    // Categorias de despesa (catalogo global): o banco grava so com o catalogo no novo aplicativo (FIN-CATEGORIAS-RECORRENCIAS-2).
+    ['POST', /^\/api\/categorias\/?$/, (m, corpo) => criarCategoria(corpo || {})],
+    ['PUT', /^\/api\/categorias\/(\d+)$/, (m, corpo) => editarCategoria(Number(m[1]), corpo || {})],
+    ['DELETE', /^\/api\/categorias\/(\d+)$/, (m) => excluirCategoria(Number(m[1]))],
+    ['POST', /^\/api\/categorias\/(\d+)\/palavras-chave$/, (m, corpo) => criarPalavra(Number(m[1]), corpo)],
+    ['DELETE', /^\/api\/categorias\/(\d+)\/palavras-chave\/(\d+)$/, (m) => removerPalavra(Number(m[1]), Number(m[2]))],
+    [null, /^\/api\/categorias\/\d+\/logo$/, async () => falha(LOGOS)],
 ];
 
 function mensagem(erro) {
     if (erro && erro.hint === 'SISTEMA_FLASK') {
         return 'As Categorias do Cartão deste perfil ainda são administradas pelo sistema atual (Flask). Nada foi gravado.';
     }
+    if (erro && erro.hint === 'CATALOGO_FLASK') return GLOBAIS;
+    if (erro && erro.code === '42501' && /catalogo/i.test(erro.message || '')) {
+        return 'Esta conta não administra o catálogo de categorias. Nada foi gravado.';
+    }
     return mensagemDeErro(erro);
+}
+
+function statusDoErro(erro) {
+    if (erro && erro.code === '42501') return 403;
+    if (erro && erro.hint === 'NAO_ENCONTRADA') return 404;
+    return 400;
 }
 
 async function adaptador({ metodo, caminho, parametros, corpo }) {
@@ -103,7 +157,7 @@ async function adaptador({ metodo, caminho, parametros, corpo }) {
             try {
                 return await executar(m, corpo, parametros);
             } catch (erro) {
-                return falha(mensagem(erro), erro && erro.code === '42501' ? 403 : 400);
+                return falha(mensagem(erro), statusDoErro(erro));
             }
         }
     }

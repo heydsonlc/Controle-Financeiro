@@ -141,7 +141,9 @@ function abrirConfirmacao(previa, perfilId, mes, aoCancelar, contexto) {
         cancelar.disabled = true;
         erro.hidden = true;
         const dispensar = marcadores.filter((m) => !m.caixa.checked)
-            .map(({ item }) => ({ natureza: item.natureza, item_id: item.item_id, competencia: item.competencia }));
+            // data_vencimento: na recorrencia semanal a dispensa e da ocorrencia (FIN-CATEGORIAS-RECORRENCIAS-2).
+            .map(({ item }) => ({ natureza: item.natureza, item_id: item.item_id, competencia: item.competencia,
+                data_vencimento: item.data_vencimento }));
         const { data, error } = await supabase.rpc('gerar_mes', {
             p_perfil_id: perfilId, p_mes: `${mes}-01`, p_total_previsto: previa.a_gerar, p_dispensar: dispensar,
         });

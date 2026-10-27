@@ -39,6 +39,14 @@ except ImportError:
     from services.gerador_recorrencia_service import registrar_guarda_escritor_unico
 registrar_guarda_escritor_unico(categorias_cartao_bp, 'Categorias do Cartao')
 
+# FIN-CATEGORIAS-RECORRENCIAS-2: catalogo global (categorias de despesa, palavras-chave, logos) com escritor proprio.
+# Enquanto for o Flask (padrao), nada muda; passado ao novo aplicativo, as escritas daqui sao recusadas (409).
+try:
+    from backend.services.catalogo_categorias_service import registrar_guarda_catalogo
+except ImportError:
+    from services.catalogo_categorias_service import registrar_guarda_catalogo
+registrar_guarda_catalogo(categorias_bp)
+
 ALLOWED_LOGO_EXTENSIONS = {'png', 'webp', 'jpg', 'jpeg'}
 ALLOWED_LOGO_MIME_TYPES = {
     'png': 'image/png',

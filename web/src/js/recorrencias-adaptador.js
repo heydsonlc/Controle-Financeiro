@@ -5,7 +5,9 @@
 // inativar_recorrencia, reativar_recorrencia, definir_meio_pagamento_recorrencia e recorrencias_do_perfil, com gestao
 // do perfil, versao contra edicao concorrente e trava de geracao. Diferencas assumidas em relacao ao Flask:
 // - salvar nao gera conta: a geracao e explicita, em Despesas ("Gerar contas"), como no FIN-RECORRENCIA-1;
-// - semanal / a cada 2 semanas: o gerador do novo aplicativo so gera mensal e anual (pendencia);
+// - semanal / a cada 2 semanas (FIN-CATEGORIAS-RECORRENCIAS-2, migration 20261125090000): gravadas como o Flask
+//   (semanal_N_D: a cada N semanas no dia D, 0 = domingo) e geradas em Despesas, uma conta por ocorrencia. No cartao
+//   continuam recusadas: o Flask so lanca compra recorrente mensal ou anual;
 // - recorrencia no cartao (FIN-FIDELIDADE-CARTOES-2, R2): cadastro, edicao, inativar e reativar por funcoes proprias
 //   (criar/editar_recorrencia_cartao, definir_situacao_recorrencia_cartao); trocar entre cartao e outro meio pede
 //   inativar e cadastrar de novo (as compras ja geradas ficam no cartao);
@@ -74,12 +76,21 @@ function avisar(texto) {
     aviso.hidden = false;
 }
 
-// Pedidos do formulario que o novo aplicativo ainda nao atende (sem gravar registro incompleto).
-function recusa(corpo, tipoAtual) {
+// tipo_recorrencia que o banco grava, como _normalizar_tipo_recorrencia do Flask: o formulario manda "semanal" com
+// frequencia_semanas (1 ou 2) e dia_semana (0 = domingo).
+function tipoGravado(corpo) {
+    if (corpo.tipo_recorrencia !== 'semanal') return corpo.tipo_recorrencia;
+    return `semanal_${Number(corpo.frequencia_semanas) === 2 ? 2 : 1}_${Number(corpo.dia_semana)}`;
+}
+
+// Pedidos do formulario que o novo aplicativo nao atende (sem gravar registro incompleto).
+function recusa(corpo) {
     if (corpo.tipo_recorrencia === 'semanal') {
-        if (!tipoAtual || !TIPO_FREQUENCIA.test(tipoAtual)) {
-            return 'Semanal e a cada 2 semanas: o novo aplicativo ainda não gera essa frequência (pendência). Use mensal ou anual.';
+        if (corpo.meio_pagamento === 'cartao') {
+            return 'Semanal e a cada 2 semanas não valem no cartão: o sistema original só lança compra recorrente mensal ou anual.';
         }
+        const dia = String(corpo.dia_semana ?? '');
+        if (!/^[0-6]$/.test(dia)) return 'Informe o dia da semana da recorrência semanal ou a cada 2 semanas.';
     } else if (!['mensal', 'anual'].includes(corpo.tipo_recorrencia)) {
         return 'Frequência inválida.';
     }
@@ -118,10 +129,9 @@ async function definirAtivo(id, ativo) {
 const ehCartao = (meio) => meio === 'cartao';
 
 function dadosCartao(corpo) {
-    const dados = { nome: String(corpo.nome || '').trim(), valor: valorTexto(corpo.valor), categoria_id: Number(corpo.categoria_id),
-        data_vencimento: corpo.data_vencimento, cartao_id: Number(corpo.cartao_id), descricao: String(corpo.descricao || '').trim() };
-    if (corpo.tipo_recorrencia !== 'semanal') dados.tipo_recorrencia = corpo.tipo_recorrencia;
-    return dados;
+    return { nome: String(corpo.nome || '').trim(), valor: valorTexto(corpo.valor), categoria_id: Number(corpo.categoria_id),
+        data_vencimento: corpo.data_vencimento, cartao_id: Number(corpo.cartao_id), descricao: String(corpo.descricao || '').trim(),
+        tipo_recorrencia: corpo.tipo_recorrencia };
 }
 
 async function situacaoCartao(id, ativo) {
@@ -134,7 +144,7 @@ async function situacaoCartao(id, ativo) {
 }
 
 async function criarNoCartao(corpo) {
-    const dados = { ...dadosCartao(corpo), tipo_recorrencia: corpo.tipo_recorrencia };
+    const dados = dadosCartao(corpo);
     const operacao = `criar-cartao:${JSON.stringify(dados)}`;
     const { data, error } = await supabase.rpc('criar_recorrencia_cartao', { p_perfil_id: estado.perfilId, p_dados: dados, p_chave: chaves.de(operacao) });
     if (error) return falha(mensagemDeErro(error));
@@ -164,7 +174,7 @@ async function atualizarNoCartao(id, item, corpo) {
 }
 
 async function criar(corpo) {
-    const motivo = recusa(corpo, null);
+    const motivo = recusa(corpo);
     if (motivo) return falha(motivo);
     if (ehCartao(corpo.meio_pagamento)) return criarNoCartao(corpo);
     const debito = corpo.meio_pagamento === 'debito_automatico';
@@ -175,7 +185,7 @@ async function criar(corpo) {
         data_vencimento: corpo.data_vencimento,
         descricao: String(corpo.descricao || '').trim(),
         recorrente: true,
-        tipo_recorrencia: corpo.tipo_recorrencia,
+        tipo_recorrencia: tipoGravado(corpo),
         debito_automatico: debito,
         conta_bancaria_id: debito ? Number(corpo.conta_bancaria_id) : null,
     };
@@ -194,7 +204,7 @@ async function criar(corpo) {
 async function atualizar(id, corpo) {
     const item = await atual(id);
     if (!item) return falha('Recorrencia nao encontrada', 404);
-    const motivo = recusa(corpo, item.tipo_recorrencia);
+    const motivo = recusa(corpo);
     if (ehCartao(item.meio_pagamento)) return motivo ? falha(motivo) : atualizarNoCartao(id, item, corpo);
     if (!item.gerenciavel) return falha('Recorrência de outro módulo: altere no módulo de origem.', 409);
     if (ehCartao(corpo.meio_pagamento)) {
@@ -208,9 +218,8 @@ async function atualizar(id, corpo) {
         categoria_id: Number(corpo.categoria_id),
         data_vencimento: corpo.data_vencimento,
         descricao: String(corpo.descricao || '').trim(),
+        tipo_recorrencia: tipoGravado(corpo),
     };
-    // Semanal existente: a frequencia fica como esta (o formulario manda "semanal"; o banco guarda semanal_N_D).
-    if (corpo.tipo_recorrencia !== 'semanal') dados.tipo_recorrencia = corpo.tipo_recorrencia;
     if (debito) Object.assign(dados, { debito_automatico: true, conta_bancaria_id: Number(corpo.conta_bancaria_id) });
     else if (item.meio_pagamento === 'debito_automatico') Object.assign(dados, { debito_automatico: false, conta_bancaria_id: null });
     const { error } = await supabase.rpc('editar_recorrencia', {

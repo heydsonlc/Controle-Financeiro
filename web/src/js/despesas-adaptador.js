@@ -5,7 +5,7 @@
 // (contas_do_mes, despesa_para_edicao, criar/editar/excluir_despesa, dados_pagamento_*, pagar_*, estornar_*).
 // Aqui so ha traducao de formato e as somas de apresentacao da barra lateral (o Flask tambem as fazia na rota).
 // O que a tela original oferece e o banco ainda nao atende responde "em migracao" (consorcios, documentos fiscais,
-// recorrencia semanal ou no cartao, consolidacao de fatura).
+// recorrencia no cartao, consolidacao de fatura). Recorrencia semanal e a cada 2 semanas: FIN-CATEGORIAS-RECORRENCIAS-2.
 
 import { supabase } from './cliente.js';
 import {
@@ -235,10 +235,9 @@ function recusaDoFormulario(corpo) {
     if (corpo.pago) {
         return 'Use a ação de pagamento para marcar a despesa como paga: ela escolhe a conta bancária e registra o movimento.';
     }
-    if (corpo.recorrente && /^semanal/.test(String(corpo.tipo_recorrencia || ''))) {
-        return 'Semanal e a cada 2 semanas: o novo aplicativo ainda não gera essa frequência (pendência). Use mensal ou anual.';
-    }
-    if (corpo.recorrente && !['mensal', 'anual'].includes(corpo.tipo_recorrencia)) return 'Tipo de recorrência inválido.';
+    // Semanal e a cada 2 semanas: o formulario original ja manda semanal_N_D (N = 1 ou 2; D = 0 domingo a 6 sabado).
+    const tipo = String(corpo.tipo_recorrencia || '');
+    if (corpo.recorrente && !['mensal', 'anual'].includes(tipo) && !/^semanal_[12]_[0-6]$/.test(tipo)) return 'Tipo de recorrência inválido.';
     if (corpo.meio_pagamento === 'cartao') return 'Recorrência no cartão de crédito: em migração para o novo aplicativo (módulo de cartões).';
     if (!corpo.data_vencimento) return 'Informe a data de vencimento.';
     if (!(Number(corpo.valor) > 0)) return 'Informe um valor válido.';

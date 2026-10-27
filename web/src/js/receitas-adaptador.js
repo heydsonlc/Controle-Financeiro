@@ -6,7 +6,11 @@
 //   fonte nova = criar_receita (recorrente: 12 previsoes a partir da competencia escolhida), editar/inativar fonte,
 //   "remover previsao" = excluir_receita (recorrente zera como o Flask), consolidar = receber_receita (valor, data e
 //   justificativa dos campos acrescentados ao modal) e estornar = estornar_recebimento.
-// - Recebimento sem previsao, edicao e exclusao de recebimento e reativacao de fonte continuam no sistema atual.
+// - FIN-CATEGORIAS-RECORRENCIAS-2 (migration 20261125090000): valor base, recorrencia e reativacao da fonte
+//   (redefinir_fonte_receita: como o Flask, cria so as previsoes que faltam nos 12 meses a partir do mes atual; as
+//   gravadas nao mudam) e recebimento sem previsao (receber_sem_previsao: credito no extrato, sem duplicar a receita).
+//   A data prevista de cada previsao aparece em "Proximos recebimentos" (receitas-adaptacoes.js).
+// - Edicao e exclusao de recebimento continuam no sistema atual (corrigir = estornar e receber de novo).
 
 import { supabase } from './cliente.js';
 import { criarChaves, falha, hojeBrasilia, mensagemDeErro, ok } from './adaptador-comum.js';
@@ -69,24 +73,32 @@ async function criarFonte(corpo) {
     return ok({ message: 'Fonte de receita criada com sucesso', data: await fonte(r.item_receita_id) });
 }
 
+// PUT da fonte como o Flask: dados da fonte; inativar quando pedido; depois valor base, recorrencia e reativacao, que
+// completam as previsoes que faltam (fonte ativa e recorrente com valor base) sem mudar as gravadas.
 async function editarFonte(id, corpo) {
     const atual = await fonte(id);
-    const base = (v) => Number(v) || 0;
-    if (base(corpo.valor_base_mensal) !== base(atual.valor_base_mensal) || (corpo.recorrente ?? atual.recorrente) !== atual.recorrente) {
-        return falha('Valor base e recorrência não mudam por aqui: as previsões já gravadas ficam como estão. '
-            + 'Ajuste a previsão de cada competência. Nada foi gravado.');
-    }
-    if (corpo.ativo === true && !atual.ativo) return falha(`Reativar uma fonte ${NO_SISTEMA_ATUAL}`);
-    const editada = await rpc((a) => supabase.rpc('editar_fonte_receita', a), {
+    let { versao } = await rpc((a) => supabase.rpc('editar_fonte_receita', a), {
         p_perfil_id: estado.perfilId, p_item_id: id, p_versao: atual.versao, p_dados: {
             nome: corpo.nome, tipo: corpo.tipo, descricao: corpo.descricao ?? null,
             dia_previsto: corpo.dia_previsto_pagamento || null, conta_bancaria_id: corpo.conta_bancaria_id || null,
         },
     });
     if (corpo.ativo === false && atual.ativo) {
-        await rpc((a) => supabase.rpc('inativar_fonte_receita', a), { p_perfil_id: estado.perfilId, p_item_id: id, p_versao: editada.versao });
+        await rpc((a) => supabase.rpc('inativar_fonte_receita', a), { p_perfil_id: estado.perfilId, p_item_id: id, p_versao: versao });
+        ({ versao } = await fonte(id));
     }
-    return ok({ message: 'Fonte de receita atualizada com sucesso', data: await fonte(id) });
+    const dados = { recorrente: corpo.recorrente ?? atual.recorrente };
+    if ('valor_base_mensal' in corpo) {
+        const base = corpo.valor_base_mensal === null || corpo.valor_base_mensal === '' ? null : Number(corpo.valor_base_mensal);
+        dados.valor_base_mensal = base === null || Number.isNaN(base) ? null : base.toFixed(2);
+    }
+    if (corpo.ativo === true && !atual.ativo) dados.ativo = true;
+    const r = await rpc((a) => supabase.rpc('redefinir_fonte_receita', a), {
+        p_perfil_id: estado.perfilId, p_item_id: id, p_versao: versao, p_dados: dados,
+    });
+    const criadas = (r.previsoes_criadas || []).length;
+    const extra = criadas ? ` ${criadas === 1 ? '1 previsão criada' : `${criadas} previsões criadas`} nos próximos meses; as já gravadas não mudam.` : '';
+    return ok({ message: `Fonte de receita atualizada com sucesso.${extra}`, data: await fonte(id) });
 }
 
 async function inativarFonte(id) {
@@ -128,15 +140,32 @@ async function salvarPrevisao(corpo) {
     return ok({ message: 'Orçamento criado/atualizado com sucesso' });
 }
 
-// POST /api/receitas/realizadas ("Consolidar"): recebimento da previsao da fonte na competencia, pelo motor do novo
-// aplicativo (escritor unico do perfil). Valor, data e justificativa vem dos campos acrescentados ao modal.
+// Sem previsao gravada na competencia (Flask: POST /api/receitas/realizadas sem orcamento): recebimento da fonte com
+// credito no extrato. Havendo previsao, o banco recusa e o recebimento vai pela previsao (nao conta duas vezes).
+async function receberSemPrevisao(corpo, data) {
+    const dados = {
+        item_receita_id: Number(corpo.item_receita_id), data_recebimento: data,
+        valor_recebido: (Number(corpo.valor_recebido) || 0).toFixed(2), competencia: corpo.competencia || null,
+        conta_bancaria_id: corpo.conta_bancaria_id || null, descricao: corpo.descricao || '', observacoes: corpo.observacoes || '',
+    };
+    const operacao = `sem-previsao:${JSON.stringify(dados)}`;
+    const r = await rpc((a) => supabase.rpc('receber_sem_previsao', a), {
+        p_perfil_id: estado.perfilId, p_dados: dados, p_chave: chaves.de(operacao),
+    });
+    chaves.esquecer(operacao);
+    return { status: 201, corpo: { success: true, message: 'Receita registrada com sucesso', data: r } };
+}
+
+// POST /api/receitas/realizadas: "Consolidar" (modal com valor, data e justificativa acrescentados) ou "Registrar
+// recebimento". Com previsao na competencia, recebimento dela pelo motor do novo aplicativo (escritor unico do perfil).
 async function receber(corpo) {
     if (!corpo.item_receita_id) return falha(`Recebimento sem fonte ${NO_SISTEMA_ATUAL}`);
-    const previsao = await previsaoDe(Number(corpo.item_receita_id), corpo.competencia);
-    if (!previsao) return falha(`Sem previsão gravada nesta competência: recebimento sem previsão ${NO_SISTEMA_ATUAL}`);
+    const consolidando = document.getElementById('modal-consolidar-conta')?.getAttribute('aria-hidden') === 'false';
+    const data = (consolidando && document.getElementById('consolidar-data-recebimento')?.value) || corpo.data_recebimento;
+    const justificativa = (consolidando && document.getElementById('consolidar-justificativa')?.value.trim()) || null;
+    const previsao = await previsaoDe(Number(corpo.item_receita_id), corpo.competencia || corpo.data_recebimento);
+    if (!previsao) return receberSemPrevisao(corpo, data);
     const dados = await rpc((a) => supabase.rpc('dados_recebimento_receita', a), { p_perfil_id: estado.perfilId, p_orcamento_id: previsao.id });
-    const data = document.getElementById('consolidar-data-recebimento')?.value || corpo.data_recebimento;
-    const justificativa = document.getElementById('consolidar-justificativa')?.value.trim() || null;
     const r = await rpc((a) => supabase.rpc('receber_receita', a), {
         p_perfil_id: estado.perfilId, p_orcamento_id: previsao.id, p_chave: chaves.de(`receber-${previsao.id}`), p_dados: {
             conta_bancaria_id: corpo.conta_bancaria_id, data_recebimento: data,

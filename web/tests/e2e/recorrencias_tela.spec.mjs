@@ -88,12 +88,12 @@ test('cadastrar, recusas sem gravar, editar e gerar em Despesas com nome, valor,
     await abrirRecorrencias(page);
     const total = await page.locator('#recorrencias-lista .recorrencias-row').count();
 
-    // Pedidos que o novo aplicativo ainda nao atende: recusados, nada e gravado.
-    await preencher(page, { nome: NOME, valor: '99.90', vencimento: '2031-01-10', frequencia: 'semanal', dia: 1 });
+    // Pedidos que o novo aplicativo nao atende: recusados, nada e gravado. Semanal no cartao: o Flask so lanca compra
+    // recorrente mensal ou anual (FIN-CATEGORIAS-RECORRENCIAS-2).
+    await preencher(page, { nome: NOME, valor: '99.90', vencimento: '2031-01-10', frequencia: 'semanal', dia: 1, meio: 'cartao' });
     await salvar(page);
-    await expect.poll(() => dialogos.at(-1)).toMatch(/^Semanal e a cada 2 semanas: o novo aplicativo ainda não gera/);
+    await expect.poll(() => dialogos.at(-1)).toMatch(/^Semanal e a cada 2 semanas não valem no cartão/);
     await page.selectOption('#frequencia', 'mensal');
-    await page.selectOption('#meio-pagamento', 'cartao');
     await salvar(page);
     await expect.poll(() => dialogos.at(-1)).toBe('Selecione o cartão da recorrência.');  // FIN-FIDELIDADE-CARTOES-2: cartao obrigatorio
     await expect(page.locator('#recorrencias-lista .recorrencias-row')).toHaveCount(total);
@@ -275,6 +275,50 @@ test('recorrencia no cartao: cadastrar, gerar a compra na fatura, editar e inati
     const cartoes = await chamarRpc(page, 'cartoes_do_perfil', { p_perfil_id: perfil });
     const cartao = cartoes.corpo.find((c) => c.id === criado.corpo.cartao_id);
     expect((await chamarRpc(page, 'inativar_cartao', { p_perfil_id: perfil, p_cartao_id: cartao.id, p_versao: cartao.versao })).status).toBe(200);
+});
+
+// FIN-CATEGORIAS-RECORRENCIAS-2 (R1): a cada 2 semanas pela tela original (Perfil B, 04/2032, depois do cenario do
+// cartao): uma conta por ocorrencia, na segunda-feira, com a descricao do Flask; sem duplicar ao reabrir; inativada no fim.
+test('a cada 2 semanas: cadastrar, gerar uma conta por ocorrencia em Despesas e inativar', async ({ page }) => {
+    const dialogos = registrarDialogos(page);
+    const nome = 'Diarista B (tela)';
+    await entrar(page, B);
+    await abrirRecorrencias(page);
+    await preencher(page, { nome, valor: '80', vencimento: '2032-04-01', frequencia: 'quinzenal', dia: 1, meio: 'pix' });
+    await salvar(page);
+    await expect(page.locator('#recorrencias-resultado')).toContainText('Recorrência criada.');
+    await expect(linha(page, nome)).toContainText('A cada 2 semanas');
+    await expect(linha(page, nome)).toContainText('05/04/2032');  // primeira segunda-feira a partir de 01/04
+    await linha(page, nome).locator('[data-on-click^="editarRecorrencia"]').click();
+    await expect(page.locator('#frequencia')).toHaveValue('quinzenal');
+    await expect(page.locator('#dia-semana')).toHaveValue('1');
+
+    await abrirDespesas(page, '2032-04');
+    await page.click('#gerar-contas');
+    const painel = page.locator('#geracao-confirmacao');
+    await expect(painel.locator('.geracao-lista li', { hasText: `${nome} - 05/04` })).toContainText('04/2032 · Diarista B (tela) - 05/04 · Conta · 05/04/2032 · R$ 80,00');
+    await expect(painel.locator('.geracao-lista li', { hasText: `${nome} - 19/04` })).toContainText('19/04/2032');
+    await expect(painel.locator('.geracao-lista li', { hasText: `${nome} - 12/04` })).toHaveCount(0);  // a cada 2 semanas
+    await painel.getByRole('button', { name: 'Confirmar' }).click();
+    await expect(page.locator('#geracao-resultado')).toContainText('Geração concluída');
+    // Como no Flask, as semanais aparecem agrupadas (um cartao com as ocorrencias do mes).
+    await expect(despesa(page, `${nome} - 05/04`)).toHaveCount(1);
+    const grupo = despesa(page, `${nome} - 19/04`);
+    await expect(grupo.locator('.despesa-cell-vencimento', { hasText: '19/04/2032' })).toHaveCount(1);
+    await expect(grupo.locator('.despesa-cell-vencimento', { hasText: '05/04/2032' })).toHaveCount(1);
+    await expect(grupo.locator('.despesa-cell-vencimento', { hasText: '12/04/2032' })).toHaveCount(0);
+    // Reabrir o mes nao oferece de novo as mesmas ocorrencias.
+    await abrirDespesas(page, '2032-04');
+    await expect(despesa(page, `${nome} - 05/04`)).toHaveCount(1);
+    if (await page.locator('#gerar-contas').count()) {
+        await page.click('#gerar-contas');
+        await expect(page.locator('#geracao-confirmacao .geracao-lista li', { hasText: `${nome} - 05/04` })).toHaveCount(0);
+    }
+
+    await abrirRecorrencias(page);
+    await linha(page, nome).locator('[data-on-click^="inativarRecorrencia"]').click();
+    await expect.poll(() => dialogos.at(-1)).toBe('Inativar recorrencia?');
+    await expect(linha(page, nome)).toContainText('Inativa');
 });
 
 // FIN-CONTRATOS-3: consorcio cadastrado pelo modal original (Perfil B, novo aplicativo), parcelas em Despesas e

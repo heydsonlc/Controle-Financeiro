@@ -188,6 +188,15 @@ const RPCS_DE_ESCRITA = new Map([
     ['atualizar_financiamento', 'financiamentos-adaptador.js'],
     ['adicionar_vigencia_seguro', 'financiamentos-adaptador.js'],
     ['ajustar_saldo_devedor', 'financiamentos-adaptador.js'],
+    // FIN-CATEGORIAS-RECORRENCIAS-2 (fonte: valor base, recorrencia e reativacao; recebimento sem previsao; catalogo
+    // global de categorias, gravado so com escritor NOVO do catalogo e conta gestora)
+    ['redefinir_fonte_receita', 'receitas-adaptador.js'],
+    ['receber_sem_previsao', 'receitas-adaptador.js'],
+    ['criar_categoria', 'categorias-adaptador.js'],
+    ['editar_categoria', 'categorias-adaptador.js'],
+    ['excluir_categoria', 'categorias-adaptador.js'],
+    ['criar_palavra_chave', 'categorias-adaptador.js'],
+    ['remover_palavra_chave', 'categorias-adaptador.js'],
     // FIN-MIGRACAO-FIDELIDADE-FASE-1 (gestao de perfis; o banco exige pode_gerir do perfil). Camada unica: perfil.js
     ['criar_perfil', 'perfil.js'],
     ['atualizar_perfil', 'perfil.js'],

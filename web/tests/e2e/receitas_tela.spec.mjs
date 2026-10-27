@@ -107,6 +107,17 @@ test('Perfil B: fonte nova, recebimento parcial, acima do que falta com justific
     const item = () => linha(page, 'Freela Tela E2E');
     await expect(item().locator('.receita-status-badge')).toHaveText('Prevista');
 
+    // FIN-CATEGORIAS-RECORRENCIAS-2: "Proximos recebimentos" mostra a data prevista gravada, mesmo em outro mes.
+    const perfilB = await perfilAtivoId(page);
+    const fonteNova = (await chamarRpc(page, 'receitas_fontes_tela', { p_perfil_id: perfilB })).corpo.find((f) => f.nome === 'Freela Tela E2E');
+    const prevista = (await chamarRpc(page, 'receitas_orcamentos_tela', { p_perfil_id: perfilB, p_ano: 2028 })).corpo
+        .find((o) => o.item_receita_id === fonteNova.id);
+    expect((await chamarRpc(page, 'editar_receita', { p_perfil_id: perfilB, p_orcamento_id: prevista.id, p_versao: prevista.versao,
+        p_dados: { data_prevista: '2028-04-05' } })).status).toBe(200);
+    await abrir(page, 2028, '03');
+    await expect(page.locator('#proximos-recebimentos .receitas-proximo-item', { hasText: 'Freela Tela E2E' }))
+        .toContainText('Vencimento: 05/04/2028');
+
     await consolidar(page, 'Freela Tela E2E', { valor: '400,00', data: '2028-03-15' });
     await expect(toast(page)).toContainText('Receita registrada com sucesso');
     await expect(item().locator('.receita-status-badge')).toHaveText('Parcial');
@@ -128,7 +139,7 @@ test('Perfil B: fonte nova, recebimento parcial, acima do que falta com justific
     expect(dados.filter((r) => r.item_receita?.nome === 'Freela Tela E2E').map((r) => [r.valor_recebido, r.data_recebimento]).sort())
         .toEqual([[400, '2028-03-15'], [700, '2028-03-20']]);
 
-    // Editar a fonte (nome e descricao); mudar o valor base nao e feito por aqui.
+    // Editar a fonte (nome e descricao) e o valor base (FIN-CATEGORIAS-RECORRENCIAS-2): a previsao gravada nao muda.
     await item().locator('[title="Editar"]').click();
     await page.fill('#fonte-descricao', 'Projetos avulsos');
     await page.locator('#form-fonte button[type=submit]').click();
@@ -136,8 +147,12 @@ test('Perfil B: fonte nova, recebimento parcial, acima do que falta com justific
     await item().locator('[title="Editar"]').click();
     await page.fill('#fonte-valor-base', '2.000,00');
     await page.locator('#form-fonte button[type=submit]').click();
-    await expect(toast(page)).toContainText('Valor base e recorrência não mudam por aqui');
-    await page.locator('#modal-fonte [aria-label="Fechar"]').click();
+    await expect(toast(page)).toContainText('Fonte de receita atualizada com sucesso');
+    const fonteB = (await chamarRpc(page, 'receitas_fontes_tela', { p_perfil_id: perfil })).corpo.find((f) => f.nome === 'Freela Tela E2E');
+    expect(Number(fonteB.valor_base_mensal)).toBe(2000);
+    const previsaoB = (await chamarRpc(page, 'receitas_orcamentos_tela', { p_perfil_id: perfil, p_ano: 2028 })).corpo
+        .filter((o) => o.item_receita_id === fonteB.id);
+    expect(previsaoB.map((o) => [o.mes_referencia, Number(o.valor_esperado)])).toEqual([['2028-03-01', 1000]]);
 
     // "Cancelar/ignorar" de recebimento: o Flask recusa excluir recebimento com movimento; aqui tambem.
     // Estorno: dois recebimentos, um estorno por vez (a linha mostra o botao quando ha um so).

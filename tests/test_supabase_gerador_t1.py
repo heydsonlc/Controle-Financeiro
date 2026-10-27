@@ -167,12 +167,12 @@ def test_3_perfil_migrado_gera_pelo_novo_aplicativo(banco):
     atribuir(banco, 'PESSOAL')
     p = previa(banco)
     assert (p['gerador'], p['pode_gerir'], p['pode_gerar']) == ('NOVO', True, True)
-    assert gerar(banco, p['a_gerar'])['criadas']['total'] == 17
+    assert gerar(banco, p['a_gerar'])['criadas']['total'] == 34  # 17 + 17 semanais (908, FIN-CATEGORIAS-RECORRENCIAS-2)
 
 
 def test_4_perfil_nao_migrado_nao_gera_pelo_novo_aplicativo(banco):
     p = previa(banco)
-    assert (p['gerador'], p['pode_gerir'], p['pode_gerar'], p['a_gerar']) == ('FLASK', True, False, 17)
+    assert (p['gerador'], p['pode_gerir'], p['pode_gerar'], p['a_gerar']) == ('FLASK', True, False, 34)  # + 17 semanais (908)
     antes = snapshot(banco)
     with pytest.raises(errors.RaiseException, match='ainda e feita pelo sistema atual'):
         gerar(banco, p['a_gerar'])

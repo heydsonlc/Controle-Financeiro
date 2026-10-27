@@ -72,8 +72,7 @@ DIVERGENCIAS_INTENCIONAIS = {
        for m in _meses((2027, 3), (2027, 4))},
     **{('FATURA', 930, m): 'CORRECAO D7: falha isolada por item (Flask desfaz o perfil inteiro)'
        for m in _meses((2027, 3), (2027, 4))},
-    **{('CONTA', 908, m): 'FORA DO ESCOPO D3: recorrencia semanal'
-       for m in _meses((2027, 1), (2027, 2), (2027, 3), (2027, 4))},
+    # ('CONTA', 908, *): deixou de divergir — FIN-CATEGORIAS-RECORRENCIAS-2 gera a semanal como o Flask (D3 superada).
 }
 
 _SCRIPT_FLASK = """
@@ -284,7 +283,10 @@ def test_registros_iguais_ao_flask_onde_nao_ha_correcao(comparacao):
                  ('LANCAMENTO_CARTAO', 906, D(2027, 2, 1)),
                  ('CONTA', 909, D(2027, 2, 1)), ('CONTA', 909, D(2027, 3, 1)), ('CONTA', 909, D(2027, 4, 1)),
                  ('FATURA', 910, D(2027, 3, 1)), ('FATURA', 910, D(2027, 4, 1)),  # abril: FIN-CARTOES-FECHAMENTO-1
-                 ('CONTA', 940, D(2027, 3, 1)), ('CONTA', 940, D(2027, 4, 1))}
+                 ('CONTA', 940, D(2027, 3, 1)), ('CONTA', 940, D(2027, 4, 1)),
+                 # FIN-CATEGORIAS-RECORRENCIAS-2: semanal (datas, descricao "nome - dd/mm" e demais campos iguais)
+                 ('CONTA', 908, D(2027, 1, 1)), ('CONTA', 908, D(2027, 2, 1)), ('CONTA', 908, D(2027, 3, 1)),
+                 ('CONTA', 908, D(2027, 4, 1))}
     assert iguais == esperadas  # todos os campos, inclusive perfil NULL, debito, conta bancaria, compra_id
 
 
@@ -336,10 +338,12 @@ def test_previa_e_somente_leitura_e_informa_competencias_e_registros(banco):
     p = previa(banco)
     assert (contagens(banco), digital(banco), preexistentes(banco)) == antes
     assert p['pode_gerar'] is True
-    assert (p['a_gerar'], p['existentes'], p['rejeitadas'], p['inativas'], p['dispensadas']) == (17, 3, 3, 1, 0)
+    # FIN-CATEGORIAS-RECORRENCIAS-2: + 17 ocorrencias semanais do item 908 (segundas de 04/01 a 26/04/2027), que deixou
+    # de ser rejeitada.
+    assert (p['a_gerar'], p['existentes'], p['rejeitadas'], p['inativas'], p['dispensadas']) == (34, 3, 2, 1, 0)
     assert p['competencias'] == ['2026-03-01', '2026-12-01', '2027-01-01', '2027-02-01', '2027-03-01', '2027-04-01']
     assert p['retroativo'] is True and p['extenso'] is True
-    assert len(p['itens']) == 17
+    assert len(p['itens']) == 34
 
 
 def test_mes_sem_lacunas_nao_e_extenso(banco):
@@ -469,7 +473,7 @@ def test_itens_invalidos_sao_rejeitados_com_motivo_sem_impedir_os_validos(banco)
 def test_competencia_dispensada_permanece_dispensada(banco):
     dispensa = {'natureza': 'CONTA', 'item_id': 902, 'competencia': MES, 'motivo': 'Ferias escolares'}
     r = gerar_confirmado(banco, dispensar=[dispensa])
-    assert (r['criadas']['total'], r['dispensadas_agora']) == (16, 1)
+    assert (r['criadas']['total'], r['dispensadas_agora']) == (33, 1)  # 16 + 17 semanais (908)
     marco = [c for c in contas_do_item(banco, 902) if c['mes_referencia'] == D(2027, 3, 1)]
     assert marco == []
     for mes in (MES, '2027-05-01', '2027-08-01'):
@@ -514,7 +518,7 @@ def test_executar_duas_vezes_nao_duplica(banco):
     primeira = gerar(banco, total)
     depois = contagens(banco)
     segunda = gerar(banco, total)
-    assert primeira['criadas']['total'] == 17
+    assert primeira['criadas']['total'] == 34  # 17 + 17 semanais (908)
     assert segunda['criadas']['total'] == 0 and segunda['execucao_id'] is None
     assert contagens(banco) == depois
 
@@ -537,10 +541,14 @@ def test_duas_solicitacoes_concorrentes_nao_duplicam(banco):
     for t in tarefas:
         t.join(timeout=60)
     assert falhas == []
-    assert sorted(r['criadas']['total'] for r in resultados) == [0, 17]
+    assert sorted(r['criadas']['total'] for r in resultados) == [0, 34]  # 17 + 17 semanais (908)
     duplicadas = sql(banco, """select item_despesa_id, mes_referencia, count(*) from public.conta
-                                where not coalesce(is_fatura_cartao, false) group by 1, 2 having count(*) > 1""")
+                                where not coalesce(is_fatura_cartao, false) and item_despesa_id <> 908
+                                group by 1, 2 having count(*) > 1""")
     assert duplicadas == []
+    # Semanal (908): varias por mes, uma por ocorrencia.
+    assert sql(banco, 'select count(*) as n, count(distinct data_vencimento) as d from public.conta '
+                      'where item_despesa_id = 908')[0] == {'n': 17, 'd': 17}
     assert sql(banco, 'select count(*) as n from public.lancamento_agregado')[0]['n'] == 4
 
 
@@ -560,14 +568,16 @@ def test_relatorio_verificavel(banco):
     gravado = sql(banco, 'select * from financeiro.geracao_execucao where id = %s', (r['execucao_id'],))[0]
     assert gravado['resumo'] == r and gravado['perfil_financeiro_id'] == ID['PESSOAL']
     assert str(gravado['user_id']) == USUARIO_A['id'] and gravado['mes'] == D(2027, 3, 1)
-    assert r['criadas'] == {'contas': 11, 'lancamentos': 3, 'faturas': 2, 'total': 16}
-    assert (r['existentes'], r['dispensadas'], r['rejeitadas']) == (3, 1, 3)
+    assert r['criadas'] == {'contas': 28, 'lancamentos': 3, 'faturas': 2, 'total': 33}  # + 17 semanais (908)
+    assert (r['existentes'], r['dispensadas'], r['rejeitadas']) == (3, 1, 2)  # a semanal deixou de ser rejeitada
     for registro in r['registros']:
         tabela = 'lancamento_agregado' if registro['natureza'] == 'LANCAMENTO_CARTAO' else 'conta'
         linha = sql(banco, f'select * from public.{tabela} where id = %s', (registro['registro_id'],))[0]
         assert linha['item_despesa_id'] == registro['item_id']
     identidade = sql(banco, 'select situacao, count(*) as n from financeiro.recorrencia_competencia group by 1 order by 1')
     assert identidade == [{'situacao': 'DISPENSADA', 'n': 1}, {'situacao': 'GERADA', 'n': 14}]
+    semanais = sql(banco, 'select situacao, count(*) as n from financeiro.recorrencia_ocorrencia group by 1 order by 1')
+    assert semanais == [{'situacao': 'GERADA', 'n': 17}]  # identidade por ocorrencia (FIN-CATEGORIAS-RECORRENCIAS-2)
 
 
 # ---------------------------------------------------------------------------

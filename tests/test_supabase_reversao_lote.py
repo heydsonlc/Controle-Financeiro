@@ -25,6 +25,8 @@ SUPABASE = Path(__file__).resolve().parent.parent / 'supabase'
 REVERSAO = SUPABASE / 'reversao' / 'lote_20261106_20261118.sql'
 LOTE = [p for p in sorted((SUPABASE / 'migrations').glob('*.sql')) if '20261106' <= p.name[:8] <= '20261118']
 VERSOES = [p.name.split('_', 1)[0] for p in LOTE]
+POSTERIORES = {m.group(1) for p in sorted((SUPABASE / 'migrations').glob('*.sql')) if p.name[:8] > '20261118'
+               for m in re.finditer(r'create or replace function financeiro\.(\w+)\(', p.read_text(encoding='utf-8'))}
 SUBSTITUIDAS = {'financeiro.analisar_importacao_cartao(integer,integer,date,jsonb)': 'analisar_importacao_cartao',
                 'financeiro.plano_recorrencia(integer,date)': 'plano_recorrencia'}  # como regprocedure::text
 
@@ -92,4 +94,13 @@ def test_reversao_do_lote_volta_ao_estado_anterior_e_permite_reaplicar(cluster):
 
     for migration in LOTE:  # reaplicar o lote depois da recuperacao
         executar(dsn, migration)
-    assert estado(dsn) == com_lote
+    reaplicado = estado(dsn)
+    assert set(reaplicado) == set(com_lote)
+    # Funcao do lote redefinida por migration posterior (ex.: plano_recorrencia na 20261125): reaplicar so o lote volta a
+    # definicao do lote; na recuperacao real as migrations seguintes sao reaplicadas depois. As demais voltam iguais.
+    for assinatura, linha in com_lote.items():
+        if assinatura.split('(')[0].split('.')[1] in POSTERIORES and linha['corpo'] != reaplicado[assinatura]['corpo']:
+            assert {k: reaplicado[assinatura][k] for k in ('acl', 'prosecdef', 'config')} == \
+                   {k: linha[k] for k in ('acl', 'prosecdef', 'config')}, assinatura
+            continue
+        assert reaplicado[assinatura] == linha, assinatura
