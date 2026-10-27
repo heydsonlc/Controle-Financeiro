@@ -94,7 +94,8 @@ test('criar, editar, tornar padrao, usar, inativar e reativar; isolamento dos da
     await salvar(page, 'Ja existe perfil financeiro com este nome');
     await cartao(page, 'Pessoal').click();
     await page.fill('#config-profile-nome', 'Minhas contas');
-    await salvar(page, 'O perfil Pessoal nao pode ser renomeado: ele guarda os registros sem perfil');
+    // Pessoal segue no Flask (FIN-ESCRITOR-UNICO-FINAL-1): a gestao dele e recusada pelo escritor unico, antes da regra do nome.
+    await salvar(page, 'Este perfil ainda é administrado pelo sistema atual (Flask). Nada foi gravado.');
     await expect(page.locator('#config-profile-nome')).toHaveValue('Pessoal');
 
     // Editar nome, tipo, apelido e tornar padrao

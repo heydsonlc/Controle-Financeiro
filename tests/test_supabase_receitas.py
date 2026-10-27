@@ -22,6 +22,7 @@ import pytest
 
 from tests.supabase_local import claims_usuario
 from tests.test_supabase_recorrencia import (
+    atribuir,
     ID,
     PG_BIN,
     ROOT,
@@ -104,6 +105,9 @@ def semear(dsn):
 def banco(cluster):  # noqa: F811
     dsn = copiar(cluster)
     dsn_ids = semear(dsn)
+    # FIN-ESCRITOR-UNICO-FINAL-1: as escritas do novo aplicativo exigem o perfil atribuido a ele.
+    atribuir(dsn, 'PESSOAL')
+    atribuir(dsn, 'PERFIL_B')
     return dsn, dsn_ids
 
 
@@ -375,6 +379,7 @@ def test_empresa_com_gestor_cadastra_so_na_empresa(banco):
     dsn, _ = banco
     sql(dsn, "update financeiro.perfil_acesso set papel = 'TITULAR', pode_gerir = true where perfil_financeiro_id = %s",
         (ID['EMPRESA'],))
+    atribuir(dsn, 'EMPRESA')  # FIN-ESCRITOR-UNICO-FINAL-1: cada aplicativo grava no perfil atribuido a ele
     criar(dsn, {**NOVA, 'nome': 'Contrato empresa'}, perfil='EMPRESA')
     assert 'Contrato empresa' in por_nome(receitas(dsn, 'EMPRESA', '2027-06-01'))
     assert 'Contrato empresa' not in por_nome(receitas(dsn, 'PESSOAL', '2027-06-01'))
@@ -610,6 +615,7 @@ def _sem_ids(linha, extras=()):
 
 def test_equivalencia_com_o_flask_no_cadastro_de_fonte_recorrente(cluster):  # noqa: F811
     dsn_flask, dsn_novo = copiar(cluster), copiar(cluster)
+    atribuir(dsn_novo, 'PESSOAL')  # FIN-ESCRITOR-UNICO-FINAL-1: cada aplicativo grava no perfil atribuido a ele
     hoje = date.today().replace(day=1)
     conta_f, conta_n = conta_bancaria(dsn_flask, 'Conta Pessoal (A)'), conta_bancaria(dsn_novo, 'Conta Pessoal (A)')
     flask(dsn_flask, [['post', '/api/receitas/itens', {'nome': 'Salario Z', 'tipo': 'SALARIO_FIXO', 'valor_base_mensal': 4321.5,
@@ -629,6 +635,7 @@ def test_equivalencia_com_o_flask_no_cadastro_de_fonte_recorrente(cluster):  # n
 def test_equivalencia_com_o_flask_previsao_exclusao_e_inativacao(cluster):  # noqa: F811
     dsn_flask, dsn_novo = copiar(cluster), copiar(cluster)
     ids_f, ids_n = semear(dsn_flask), semear(dsn_novo)
+    atribuir(dsn_novo, 'PESSOAL')  # FIN-ESCRITOR-UNICO-FINAL-1: cada aplicativo grava no perfil atribuido a ele
     # Previsao avulsa de fonte existente (UNICA) e "excluir" previsao recorrente (zera com a marca do Flask).
     flask(dsn_flask, [['post', '/api/receitas/orcamento', {'item_receita_id': ids_f['aula'], 'ano_mes': '2027-04-01',
                                                             'valor_previsto': 650, 'periodicidade': 'UNICA'}],
@@ -641,6 +648,7 @@ def test_equivalencia_com_o_flask_previsao_exclusao_e_inativacao(cluster):  # no
     excluir(dsn_novo, ids_n['prev_salario_abril'])
     sql(dsn_novo, "update financeiro.perfil_acesso set papel = 'TITULAR', pode_gerir = true where perfil_financeiro_id = %s",
         (ID['EMPRESA'],))
+    atribuir(dsn_novo, 'EMPRESA')
     e = rpc(dsn_novo, 'receita_para_edicao', ID['EMPRESA'], ids_n['prev_consultoria'])
     rpc(dsn_novo, 'inativar_fonte_receita', ID['EMPRESA'], ids_n['consultoria'], e['versao_fonte'])
     consulta = 'select * from public.receita_orcamento order by item_receita_id, mes_referencia'

@@ -43,6 +43,9 @@ def banco(cluster):  # noqa: F811
     dsn = copiar(cluster)
     sql(dsn, "insert into public.categoria_palavra_chave (categoria_id, palavra, ativo) values (%s, 'netflix', true), "
              "(%s, 'aluguel', true)", (ASSINATURAS, MORADIA))
+    # FIN-ESCRITOR-UNICO-FINAL-1: as escritas do novo aplicativo exigem o perfil atribuido a ele.
+    atribuir(dsn, 'PESSOAL')
+    atribuir(dsn, 'PERFIL_B')
     return dsn
 
 

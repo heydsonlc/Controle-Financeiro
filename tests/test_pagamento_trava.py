@@ -381,12 +381,11 @@ def test_compra_do_novo_aplicativo_espera_o_pagamento_do_flask(pg):
     pagamento.liberar()
     assert pagamento.resultado()['status'] == 200
     tarefa.join(60)
-    # FIN-CARTOES-PAGAMENTO-1: o pagamento de fatura do Flask passou a conferir o sistema do perfil (D5) com a trava
-    # consultiva do perfil, que criar_compra tambem toma. A compra espera ANTES de planejar e, ja com a fatura paga,
-    # vai para a seguinte (desvio registrado), em vez de ser recusada. A fatura paga nao muda.
-    assert resposta['valor']['faturas'] == ['2027-07-01']
-    assert sql(d, "select mes_fatura, mes_fatura_original from public.lancamento_agregado where descricao = 'Compra nova'") == \
-        [{'mes_fatura': date(2027, 7, 1), 'mes_fatura_original': date(2027, 6, 1)}]
+    # FIN-CARTOES-PAGAMENTO-1: o pagamento de fatura do Flask confere o sistema do perfil (D5) com a trava consultiva do
+    # perfil, que o novo aplicativo tambem toma: a compra espera. FIN-ESCRITOR-UNICO-FINAL-1: o perfil e do Flask, entao,
+    # liberada a trava, a compra do novo aplicativo e recusada (antes: ia para a fatura seguinte). A fatura paga nao muda.
+    assert 'valor' not in resposta and 'SISTEMA_FLASK' in str(resposta.get('erro'))
+    assert sql(d, "select count(*) as n from public.lancamento_agregado where descricao = 'Compra nova'")[0]['n'] == 0
     assert conta(d, fatura)['valor'] == Decimal('250.00') and coerente(d, fatura)
 
 

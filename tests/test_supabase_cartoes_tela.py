@@ -24,6 +24,7 @@ from tests.test_supabase_cartoes import (
     tabela,
 )
 from tests.test_supabase_recorrencia import (
+    atribuir,
     ID,
     PG_BIN,
     USUARIO_A,
@@ -61,7 +62,11 @@ INTERNAS = [
 
 @pytest.fixture
 def banco(cluster):  # noqa: F811
-    return copiar(cluster)
+    dsn = copiar(cluster)
+    # FIN-ESCRITOR-UNICO-FINAL-1: as escritas do novo aplicativo exigem o perfil atribuido a ele.
+    atribuir(dsn, 'PESSOAL')
+    atribuir(dsn, 'PERFIL_B')
+    return dsn
 
 
 def falha(dsn, funcao, *args, usuario=USUARIO_A):

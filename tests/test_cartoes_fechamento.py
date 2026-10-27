@@ -22,10 +22,20 @@ import pytest
 
 from backend.services.cartao_service import CartaoService
 from tests.test_supabase_cartoes import MORADIA, banco, cartoes, edicao, fatura, pagar, parcelas, rpc  # noqa: F401
-from tests.test_supabase_despesas import flask
+from tests.test_supabase_despesas import flask as _flask_rotas
 from tests.test_supabase_recorrencia import (  # noqa: F401
-    ID, PG_BIN, ROOT, USUARIO_A, USUARIO_B, chamar, cluster, copiar, sql,
+    ID, PG_BIN, ROOT, USUARIO_A, USUARIO_B, atribuir, chamar, cluster, copiar, sql,
 )
+
+
+def flask(dsn, passos, *args, **kwargs):
+    """FIN-ESCRITOR-UNICO-FINAL-1: o Flask so grava no perfil dele. O Pessoal passa ao Flask durante a chamada e volta
+    ao novo aplicativo depois (como numa transferencia do escritor), para as regras de fechamento seguirem testadas nos dois."""
+    atribuir(dsn, 'PESSOAL', 'FLASK')
+    try:
+        return _flask_rotas(dsn, passos, *args, **kwargs)
+    finally:
+        atribuir(dsn, 'PESSOAL')
 
 psycopg2 = pytest.importorskip('psycopg2')
 from psycopg2 import errors  # noqa: E402
@@ -250,6 +260,7 @@ def test_nova_configuracao_nao_mexe_em_compras_nem_faturas_antigas(banco):  # no
 def test_flask_e_novo_aplicativo_gravam_as_mesmas_parcelas(cluster):  # noqa: F811
     dsn_flask, dsn_novo = copiar(cluster), copiar(cluster)
     for dsn in (dsn_flask, dsn_novo):
+        atribuir(dsn, 'PESSOAL')  # FIN-ESCRITOR-UNICO-FINAL-1: cenario montado pelo novo aplicativo; flask() passa o perfil ao Flask
         c = novo_cartao(dsn)
         criar(dsn, compra(c, '2029-11-26', '10.00', mes='2030-01-01', descricao='Antes'))
         pagar(dsn, c, D(2030, 1, 1))

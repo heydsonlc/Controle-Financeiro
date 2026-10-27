@@ -31,6 +31,14 @@ except ImportError:
 categorias_bp = Blueprint('categorias', __name__)
 categorias_cartao_bp = Blueprint('categorias_cartao', __name__)
 
+# FIN-ESCRITOR-UNICO-FINAL-1: perfil atribuido ao novo aplicativo -> escritas das Categorias do Cartao (do perfil)
+# recusadas aqui (409 SISTEMA_NOVO, nada gravado). Consultas continuam.
+try:
+    from backend.services.gerador_recorrencia_service import registrar_guarda_escritor_unico
+except ImportError:
+    from services.gerador_recorrencia_service import registrar_guarda_escritor_unico
+registrar_guarda_escritor_unico(categorias_cartao_bp, 'Categorias do Cartao')
+
 ALLOWED_LOGO_EXTENSIONS = {'png', 'webp', 'jpg', 'jpeg'}
 ALLOWED_LOGO_MIME_TYPES = {
     'png': 'image/png',

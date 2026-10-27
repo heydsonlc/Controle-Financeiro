@@ -6,6 +6,16 @@ from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 
 perfis_bp = Blueprint('perfis_financeiros', __name__, url_prefix='/api/perfis-financeiros')
 
+# FIN-ESCRITOR-UNICO-FINAL-1: perfil atribuido ao novo aplicativo -> editar, inativar e reativar o perfil (criar, padrao e ativo sao do usuario): recusados aqui
+# (409 SISTEMA_NOVO, nada gravado). Consultas continuam.
+try:
+    from backend.services.gerador_recorrencia_service import registrar_guarda_escritor_unico
+except ImportError:
+    from services.gerador_recorrencia_service import registrar_guarda_escritor_unico
+registrar_guarda_escritor_unico(perfis_bp, 'Perfis financeiros', perfil_da_rota=lambda args: args.get('perfil_id'), isentos={
+    'perfis_financeiros.criar_perfil_financeiro', 'perfis_financeiros.definir_perfil_financeiro_padrao',
+    'perfis_financeiros.definir_perfil_financeiro_ativo'})
+
 
 @perfis_bp.route('', methods=['GET'])
 def listar_perfis_financeiros():

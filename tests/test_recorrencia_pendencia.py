@@ -209,6 +209,7 @@ def test_isolamento_entre_perfis_e_permissoes(pg):
         listar(d, usuario=USUARIO_B)  # outro usuario, outro perfil
     with pytest.raises(errors.InsufficientPrivilege):
         dispensar(d, usuario=USUARIO_B)
+    atribuir(d, 'PERFIL_B')  # FIN-ESCRITOR-UNICO-FINAL-1: Perfil B no novo aplicativo, para chegar a regra de isolamento
     with pytest.raises(errors.InsufficientPrivilege):
         dispensar(d, perfil=103, usuario=USUARIO_B)  # item do Pessoal pelo Perfil B
     sql(d, "update financeiro.perfil_acesso set pode_gerir = false, papel = 'LEITOR' where perfil_financeiro_id = %s", (PERFIL,))

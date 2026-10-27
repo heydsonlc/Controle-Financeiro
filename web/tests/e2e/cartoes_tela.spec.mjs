@@ -136,12 +136,13 @@ test('tela original pelo menu: cartoes, fatura por Categoria do Cartao e lancame
     await expect(page.locator('.fatura-lancamento-row')).toHaveCount(1);
     await expect(page.locator('.fatura-lancamentos-header h4')).toHaveText('Lançamentos da categoria selecionada');
 
-    // Fatura paga (Cartao Verde, 11/2026): o banco protege o lancamento; a tela original mostra o erro.
+    // Pessoal segue no Flask (FIN-ESCRITOR-UNICO-FINAL-1): a exclusao e recusada pelo escritor unico, antes da regra da
+    // fatura paga (que continua testada no Perfil B, na integracao com Despesas); a tela original mostra o erro.
     const dialogos = registrarDialogos(page);
     await selecionar(page, 'Cartao Verde');
     await mesDaFatura(page, '2026-11');
     await lancamento(page, 'Livraria').locator('[data-action="excluir-lancamento"]').click();
-    await expect(toast(page)).toHaveText('Erro ao excluir lançamento: Operação bloqueada: Fatura paga: para corrigir, estorne o pagamento da fatura.');
+    await expect(toast(page)).toHaveText('Erro ao excluir lançamento: Este perfil ainda é administrado pelo sistema atual (Flask). Nada foi gravado.');
     expect(dialogos.at(-1)).toMatch(/^Excluir o lançamento "Livraria"\?/);
     await expect(page.locator('.fatura-lancamento-row')).toHaveCount(2);
 });

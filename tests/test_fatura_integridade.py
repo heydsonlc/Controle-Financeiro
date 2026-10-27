@@ -324,6 +324,7 @@ def test_importacoes_simultaneas_do_mesmo_arquivo_nao_duplicam(pg):
 # 4. Compra parcelada atravessando fatura paga — Flask e novo aplicativo com o mesmo resultado
 def test_parcelada_atravessando_fatura_paga_igual_no_flask_e_no_novo(pg):
     d, p = pg
+    atribuir(d, 'PESSOAL')  # FIN-ESCRITOR-UNICO-FINAL-1: as escritas do novo aplicativo exigem o perfil atribuido a ele
     fatura(d, '2028-07-01', pagar=True)
     antes = md5_pagas(d)
     assert 'erro' not in Flask(d, p, 'f', acao='compra', dados=compra('Flask 3x', '2028-06-01', '90.00', 3)).resultado()
@@ -384,6 +385,7 @@ def test_importacao_e_geracao_simultaneas(pg):
 # 8 e 9. Operacoes com varias faturas em ordens opostas (ids x meses invertidos): sem deadlock
 def test_ordens_opostas_de_faturas_sem_deadlock(pg):
     d, p = pg
+    atribuir(d, 'PESSOAL')  # FIN-ESCRITOR-UNICO-FINAL-1: as escritas do novo aplicativo exigem o perfil atribuido a ele
     novembro = fatura(d, '2028-11-01')  # criada antes: id MENOR que a de outubro
     outubro = fatura(d, '2028-10-01')   # id MAIOR, mes anterior
     assert novembro < outubro
@@ -409,6 +411,7 @@ def test_ordens_opostas_de_faturas_sem_deadlock(pg):
 def test_recalculos_de_varias_faturas_simultaneos(pg):
     """Parcelas futuras (Flask, varias faturas) x edicao parcelada (novo aplicativo, varias faturas)."""
     d, p = pg
+    atribuir(d, 'PESSOAL')  # FIN-ESCRITOR-UNICO-FINAL-1: as escritas do novo aplicativo exigem o perfil atribuido a ele
     r = chamar(d, USUARIO_A, 'select financeiro.criar_compra(%s, %s::jsonb, gen_random_uuid())',
                (PERFIL, json.dumps(compra('Parcelada 4x', '2029-01-01', '400.00', 4))))
     outra = chamar(d, USUARIO_A, 'select financeiro.criar_compra(%s, %s::jsonb, gen_random_uuid())',

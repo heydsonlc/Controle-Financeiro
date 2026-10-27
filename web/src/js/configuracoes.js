@@ -185,6 +185,15 @@ function payloadPerfilBase() {
     };
 }
 
+// FIN-ESCRITOR-UNICO-FINAL-1: os dados do perfil so sao gravados se mudaram. Tornar padrao e preferencia do usuario
+// (definir_perfil_padrao) e vale tambem para perfil ainda administrado pelo Flask, cujos dados o novo aplicativo nao grava.
+function dadosDoPerfilMudaram(perfil, dados) {
+    const texto = (valor) => String(valor ?? '').trim();
+    return texto(perfil.nome) !== dados.nome || texto(perfil.tipo) !== dados.tipo
+        || texto(perfil.documento) !== dados.documento || texto(perfil.cor).toLowerCase() !== dados.cor.toLowerCase()
+        || texto(perfil.avatar).toUpperCase() !== dados.avatar.toUpperCase();
+}
+
 async function salvarPerfil() {
     mostrarMensagem('');
     const id = $('config-profile-id').value;
@@ -206,7 +215,8 @@ async function salvarPerfil() {
     try {
         let perfilSalvo;
         if (perfilAntes) {
-            perfilSalvo = await atualizarPerfil(perfilAntes.id, payloadPerfilBase());
+            perfilSalvo = dadosDoPerfilMudaram(perfilAntes, payloadPerfilBase())
+                ? await atualizarPerfil(perfilAntes.id, payloadPerfilBase()) : perfilAntes;
             if (perfilAntes.ativo && !desejaAtivo) {
                 perfilSalvo = await inativarPerfil(perfilAntes.id);
             } else if (!perfilAntes.ativo && desejaAtivo) {

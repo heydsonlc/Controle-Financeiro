@@ -54,6 +54,9 @@ def cluster(tmp_path_factory):
 def conn(cluster):
     c = cluster.conectar()
     c.autocommit = False
+    with c.cursor() as cur:  # FIN-ESCRITOR-UNICO-FINAL-1: a gestao do perfil e do aplicativo atribuido a ele
+        cur.execute("select financeiro.definir_gerador_recorrencia(p.id, 'NOVO', 'administrador de teste', 'cenario ficticio') "
+                    "from public.perfil_financeiro p")
     yield c
     c.rollback()
     c.close()

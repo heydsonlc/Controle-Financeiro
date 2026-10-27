@@ -9,6 +9,7 @@ import {
 import { trocarPerfil } from './moldura.mjs';
 
 const A = { email: process.env.CF_EMAIL_A || 'usuario.a@teste.local', senha: process.env.CF_SENHA_A };
+const B = { email: process.env.CF_EMAIL_B || 'usuario.b@teste.local', senha: process.env.CF_SENHA_B };
 const ID_PERFIL_B = process.env.CF_ID_PERFIL_B || '103';
 
 test.use({ viewport: { width: 1366, height: 900 } });
@@ -49,9 +50,23 @@ test('validacao do formulario original: nada e enviado sem os campos obrigatorio
     await expect(page.locator('#modal-despesa')).toBeHidden();
 });
 
-test('avulsa: cadastrar pelo modal original (competencia do Flask), editar e excluir', async ({ page }) => {
+// FIN-ESCRITOR-UNICO-FINAL-1: o Pessoal segue no Flask; o cadastro pelo novo aplicativo e recusado, sem gravar.
+test('perfil ainda no Flask: cadastro pelo modal original recusado sem gravar', async ({ page }) => {
     const dialogos = registrarDialogos(page);
     await entrar(page, A);
+    await abrirDespesas(page, '2029-06');
+    await page.click('.btn-nova-despesa');
+    await preencherDespesa(page, { nome: 'Conserto recusado', valor: '10', categoria: 'Moradia', vencimento: '2029-07-05' });
+    await salvarDespesa(page);
+    await expect.poll(() => dialogos.at(-1)).toBe('Erro: Este perfil ainda é administrado pelo sistema atual (Flask). Nada foi gravado.');
+    await abrirDespesas(page, '2029-06');
+    await expect(despesa(page, 'Conserto recusado')).toHaveCount(0);
+});
+
+// FIN-ESCRITOR-UNICO-FINAL-1: o cadastro completo e no Perfil B (novo aplicativo).
+test('avulsa: cadastrar pelo modal original (competencia do Flask), editar e excluir', async ({ page }) => {
+    const dialogos = registrarDialogos(page);
+    await entrar(page, B);
     await abrirDespesas(page, '2029-06');
     await page.click('.btn-nova-despesa');
     await preencherDespesa(page, { nome: 'Conserto geladeira', valor: '350.40', categoria: 'Moradia', vencimento: '2029-07-05',

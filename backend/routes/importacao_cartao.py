@@ -20,6 +20,16 @@ from backend.models import db, ItemDespesa, Categoria
 
 bp = Blueprint('importacao_cartao', __name__, url_prefix='/api/importacao-cartao')
 
+# FIN-ESCRITOR-UNICO-FINAL-1: perfil atribuido ao novo aplicativo -> processar, parcelamento, recorrencia e reconhecimento (analisar, ler, previsualizar e sugerir so leem): recusados aqui
+# (409 SISTEMA_NOVO, nada gravado). Consultas continuam.
+try:
+    from backend.services.gerador_recorrencia_service import registrar_guarda_escritor_unico
+except ImportError:
+    from services.gerador_recorrencia_service import registrar_guarda_escritor_unico
+registrar_guarda_escritor_unico(bp, 'Importacao de cartao', isentos={
+    'importacao_cartao.analisar_importacao_cartao', 'importacao_cartao.upload_csv',
+    'importacao_cartao.previsualizar_importacao', 'importacao_cartao.sugerir_categorias'})
+
 
 @bp.route('/analisar', methods=['POST'])
 def analisar_importacao_cartao():

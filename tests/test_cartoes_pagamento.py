@@ -205,9 +205,10 @@ def test_estorno_credita_e_reabre_preservando_o_fechamento(pg):
 
 # Fatura consolidada pelo Flask (rota real), paga e estornada: situacao financeira e consolidacao sao independentes.
 def test_fatura_consolidada_paga_e_estornada_mantem_a_consolidacao(pg):
-    d, fatura, banco = novo(pg)
-    r = http(d, pg['pasta'], 'cons', 'post', f'/api/cartoes/{CARTAO}/faturas/2027-06/consolidar').resultado()
+    # FIN-ESCRITOR-UNICO-FINAL-1: o Flask consolida enquanto o perfil e dele; depois o perfil passa ao novo aplicativo.
+    r = http(pg['dsn'], pg['pasta'], 'cons', 'post', f'/api/cartoes/{CARTAO}/faturas/2027-06/consolidar').resultado()
     assert r['status'] == 200
+    d, fatura, banco = novo(pg)
 
     def consolidacao():
         f = conta(d, fatura)
@@ -254,7 +255,8 @@ def test_pagar_estornar_pagar_estornar(pg):
     assert all(p['estornado_em'] is not None for p in registros(d, fatura))
 
 
-# 12. Compras durante o pagamento (novo aplicativo e Flask): esperam a trava e nao entram na fatura paga
+# 12. Compras durante o pagamento (novo aplicativo e Flask): esperam a trava e nao entram na fatura paga.
+# FIN-ESCRITOR-UNICO-FINAL-1: o perfil e do novo aplicativo; o Flask espera a mesma trava e entao recusa (409), sem gravar.
 def test_compras_esperam_o_pagamento_e_vao_para_a_proxima(pg):
     d, fatura, banco = novo(pg)
     antes = compras_md5(d)
@@ -277,10 +279,10 @@ def test_compras_esperam_o_pagamento_e_vao_para_a_proxima(pg):
     conn.close()
     tarefa.join(60)
     rf = flask.resultado()
-    assert 'valor' in resposta and rf['status'] == 201
+    assert 'valor' in resposta and rf['status'] == 409 and rf['json']['codigo'] == 'SISTEMA_NOVO'
     meses = sql(d, "select descricao, mes_fatura from public.lancamento_agregado where descricao like 'Compra no %%' "
                    'order by descricao')
-    assert [m['mes_fatura'] for m in meses] == [D(2027, 7, 1), D(2027, 7, 1)]  # as duas foram para a seguinte
+    assert [(m['descricao'], m['mes_fatura']) for m in meses] == [('Compra no novo durante o pagamento', D(2027, 7, 1))]
     assert compras_md5(d) == antes and conta(d, fatura)['valor_executado'] == Decimal('250.00')
     assert len(movimentos(d, fatura)) == 1
 

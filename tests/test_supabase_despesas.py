@@ -188,19 +188,20 @@ def test_excluir_conta_recorrente_dispensa_a_competencia_e_ela_nao_volta(banco):
 
 
 def test_perfil_no_flask_nao_exclui_nem_move_conta_recorrente(banco):
-    """T1: o Flask recriaria a conta excluida e duplicaria a de vencimento movido (identifica pela data)."""
+    """T1: o Flask recriaria a conta excluida e duplicaria a de vencimento movido (identifica pela data).
+    FIN-ESCRITOR-UNICO-FINAL-1: com o perfil no Flask, o novo aplicativo so consulta; nenhuma edicao (antes: valor podia)."""
     atribuir(banco, 'PESSOAL', 'FLASK')
     escola_marco = sql(banco, "insert into public.conta (item_despesa_id, perfil_financeiro_id, mes_referencia, descricao, "
                               "valor, data_vencimento, status_pagamento, is_fatura_cartao) values (902, 101, '2027-03-01', "
                               "'Escola', 800, '2027-03-10', 'Pendente', false) returning id")[0]['id']
     e = edicao(banco, escola_marco)
-    assert (e['pode_editar'], e['pode_mudar_vencimento'], e['pode_excluir'], e['gerador']) == (True, False, False, 'FLASK')
-    with pytest.raises(errors.RaiseException, match='Flask a recriaria'):
-        excluir(banco, escola_marco)
-    with pytest.raises(errors.RaiseException, match='nao pode mudar aqui'):
-        editar(banco, escola_marco, {'data_vencimento': '2027-03-12'})
-    editar(banco, escola_marco, {'valor': '820.00'})  # valor pode (nao muda a identidade no Flask)
-    assert conta(banco, escola_marco)['valor'] == Decimal('820.00')
+    assert (e['pode_mudar_vencimento'], e['pode_excluir'], e['gerador']) == (False, False, 'FLASK')
+    for acao in (lambda: excluir(banco, escola_marco), lambda: editar(banco, escola_marco, {'data_vencimento': '2027-03-12'}),
+                 lambda: editar(banco, escola_marco, {'valor': '820.00'})):
+        with pytest.raises(errors.RaiseException) as erro:
+            acao()
+        assert erro.value.diag.message_hint == 'SISTEMA_FLASK'
+    assert conta(banco, escola_marco)['valor'] == Decimal('800.00')
 
 
 def test_editar_recorrencia_vale_para_as_proximas_geracoes_sem_mudar_as_existentes(banco):
@@ -220,12 +221,14 @@ def test_editar_recorrencia_vale_para_as_proximas_geracoes_sem_mudar_as_existent
 
 
 def test_perfil_no_flask_nao_muda_o_calendario_da_recorrencia(banco):
+    """FIN-ESCRITOR-UNICO-FINAL-1: com o perfil no Flask, nem o calendario nem o valor mudam pelo novo aplicativo."""
     atribuir(banco, 'PESSOAL', 'FLASK')
     versao = sql(banco, 'select md5(t::text) as h from public.item_despesa t where id = 902')[0]['h']
-    with pytest.raises(errors.RaiseException, match='Dia e frequencia'):
-        rpc(banco, 'editar_recorrencia', ID['PESSOAL'], 902, versao, {'data_vencimento': '2026-12-15'})
-    r = rpc(banco, 'editar_recorrencia', ID['PESSOAL'], 902, versao, {'valor': '850.00'})
-    assert item(banco, 902)['valor'] == Decimal('850.00') and r['versao'] != versao
+    for dados in ({'data_vencimento': '2026-12-15'}, {'valor': '850.00'}):
+        with pytest.raises(errors.RaiseException) as erro:
+            rpc(banco, 'editar_recorrencia', ID['PESSOAL'], 902, versao, dados)
+        assert erro.value.diag.message_hint == 'SISTEMA_FLASK'
+    assert sql(banco, 'select md5(t::text) as h from public.item_despesa t where id = 902')[0]['h'] == versao
 
 
 # ---------------------------------------------------------------------------
@@ -546,7 +549,7 @@ def test_equivalencia_com_o_flask_no_cadastro(cluster):  # noqa: F811
               'descricao': 'Assistencia'}
     recorrente = {'nome': 'Plano celular', 'valor': '79.90', 'categoria_id': ASSINATURAS, 'data_vencimento': '2029-05-12',
                   'tipo_recorrencia': 'mensal', 'meio_pagamento': 'debito_automatico', 'conta_bancaria_id': conta_debito}
-    atribuir(dsn_flask, 'PESSOAL')  # o Flask nao gera no perfil migrado: compara so o cadastro
+    # FIN-ESCRITOR-UNICO-FINAL-1: o Flask so grava no perfil dele (antes: perfil migrado, so o cadastro).
     flask(dsn_flask, [['post', '/api/despesas/', avulsa], ['post', '/api/recorrencias', recorrente]])
     atribuir(dsn_novo, 'PESSOAL')
     criar(dsn_novo, avulsa)
@@ -567,6 +570,7 @@ def test_equivalencia_com_o_flask_na_edicao_e_exclusao_de_pendentes(cluster):  #
     for dsn in (dsn_flask, dsn_novo):
         atribuir(dsn, 'PESSOAL')
         resultados[dsn] = criar(dsn, AVULSA)
+    atribuir(dsn_flask, 'PESSOAL', 'FLASK')  # FIN-ESCRITOR-UNICO-FINAL-1: a copia do Flask volta a ele antes de ele editar
     ids = resultados[dsn_flask]
     alteracao = {'descricao': 'Conserto (corrigido)', 'valor': '399.99', 'data_vencimento': '2029-07-15',
                  'observacoes': 'Nova data'}
@@ -592,6 +596,7 @@ def test_conta_paga_nao_muda_de_valor_no_flask_nem_no_novo(cluster):  # noqa: F8
     versao = edicao(dsn, r['conta_id'])['versao']
     with pytest.raises(errors.RaiseException, match='paga'):
         editar(dsn, r['conta_id'], {'valor': '1.00'}, versao=versao)
+    atribuir(dsn, 'PESSOAL', 'FLASK')  # FIN-ESCRITOR-UNICO-FINAL-1: a recusa testada e a da conta paga, nao a do escritor
     saida = flask(dsn, [['put', f"/api/despesas/{r['conta_id']}", {'valor': '1.00'}],
                         ['put', f"/api/despesas/{r['conta_id']}", {'observacoes': 'nota'}]])
     # FIN-PAGAMENTO-TRAVA-1: o Flask tambem recusa mudar o valor de conta paga (antes: 200 e valor 1,00,

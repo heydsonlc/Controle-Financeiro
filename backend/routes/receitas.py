@@ -29,6 +29,14 @@ except ImportError:
 
 # Criar blueprint
 receitas_bp = Blueprint('receitas', __name__)
+
+# FIN-ESCRITOR-UNICO-FINAL-1: perfil atribuido ao novo aplicativo -> fontes, previsoes e recebimentos de receita: recusados aqui
+# (409 SISTEMA_NOVO, nada gravado). Consultas continuam.
+try:
+    from backend.services.gerador_recorrencia_service import registrar_guarda_escritor_unico
+except ImportError:
+    from services.gerador_recorrencia_service import registrar_guarda_escritor_unico
+registrar_guarda_escritor_unico(receitas_bp, 'Receitas')
 logger = logging.getLogger(__name__)
 
 

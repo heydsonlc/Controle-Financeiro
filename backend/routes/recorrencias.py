@@ -25,6 +25,14 @@ except ImportError:
 
 recorrencias_bp = Blueprint('recorrencias', __name__)
 
+# FIN-ESCRITOR-UNICO-FINAL-1: perfil atribuido ao novo aplicativo -> recorrencias (cadastro, edicao, inativacao, pendencias): recusados aqui
+# (409 SISTEMA_NOVO, nada gravado). Consultas continuam.
+try:
+    from backend.services.gerador_recorrencia_service import registrar_guarda_escritor_unico
+except ImportError:
+    from services.gerador_recorrencia_service import registrar_guarda_escritor_unico
+registrar_guarda_escritor_unico(recorrencias_bp, 'Recorrencias')
+
 
 def _to_int(value):
     try:

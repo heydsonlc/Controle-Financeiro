@@ -28,6 +28,14 @@ except ImportError:
     from routes.dashboard import _calcular_receitas_mes
 
 despesas_bp = Blueprint('despesas', __name__, url_prefix='/api/despesas')
+
+# FIN-ESCRITOR-UNICO-FINAL-1: perfil atribuido ao novo aplicativo -> cadastro, edicao e exclusao de despesas e itens: recusados aqui
+# (409 SISTEMA_NOVO, nada gravado). Consultas continuam.
+try:
+    from backend.services.gerador_recorrencia_service import registrar_guarda_escritor_unico
+except ImportError:
+    from services.gerador_recorrencia_service import registrar_guarda_escritor_unico
+registrar_guarda_escritor_unico(despesas_bp, 'Despesas')
 logger = logging.getLogger(__name__)
 
 

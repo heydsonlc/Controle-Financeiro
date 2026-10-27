@@ -146,8 +146,10 @@ def test_2_perfil_migrado_flask_cadastra_recorrencia_sem_gerar_contas(banco):
     resultado, _ = flask(banco, [{'tipo': 'criar_recorrencia', 'perfil': ID['PESSOAL'], 'dados': dados},
                                  {'tipo': 'criar_recorrencia', 'perfil': ID['EMPRESA'], 'dados': dados}])
     pessoal, empresa = resultado
-    assert pessoal['status'] == 201 and empresa['status'] == 201  # cadastro e operacao legitima
-    assert contas_do_item(banco, pessoal['id']) == []             # mas a geracao fica com o novo app
+    # FIN-ESCRITOR-UNICO-FINAL-1: no perfil migrado o Flask nao cadastra mais (antes: 201 sem gerar contas).
+    assert pessoal['status'] == 409 and empresa['status'] == 201
+    assert sql(banco, "select count(*) as n from public.item_despesa where nome = 'Nova recorrencia T1' "
+                      "and perfil_financeiro_id = %s", (ID['PESSOAL'],))[0]['n'] == 0
     assert len(contas_do_item(banco, empresa['id'])) == 1         # Empresa: Flask gera o primeiro mes
 
 

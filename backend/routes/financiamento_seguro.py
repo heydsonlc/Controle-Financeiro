@@ -17,6 +17,26 @@ from decimal import Decimal
 bp = Blueprint('financiamento_seguro', __name__)
 
 
+# FIN-ESCRITOR-UNICO-FINAL-1: vigencias de seguro de financiamento de perfil atribuido ao novo aplicativo sao gravadas la;
+# aqui sao recusadas (409 SISTEMA_NOVO, nada gravado). O perfil e o do contrato.
+def _perfil_do_contrato(args):
+    if 'financiamento_id' in args:
+        fin = db.session.get(Financiamento, args['financiamento_id'])
+    elif 'vigencia_id' in args:
+        vig = db.session.get(FinanciamentoSeguroVigencia, args['vigencia_id'])
+        fin = db.session.get(Financiamento, vig.financiamento_id) if vig else None
+    else:
+        fin = None
+    return fin.perfil_financeiro_id if fin else None
+
+
+try:
+    from backend.services.gerador_recorrencia_service import registrar_guarda_escritor_unico
+except ImportError:
+    from services.gerador_recorrencia_service import registrar_guarda_escritor_unico
+registrar_guarda_escritor_unico(bp, 'Seguro de financiamento', perfil_da_rota=_perfil_do_contrato)
+
+
 def _financiamento_no_perfil(financiamento_id):
     return PerfilFinanceiroService.aplicar_perfil_query(
         Financiamento.query, Financiamento

@@ -15,6 +15,14 @@ from sqlalchemy import func, and_
 import logging
 
 cartoes_bp = Blueprint('cartoes', __name__, url_prefix='/api/cartoes')
+
+# FIN-ESCRITOR-UNICO-FINAL-1: perfil atribuido ao novo aplicativo -> cartoes, limites, orcamentos, lancamentos, parcelas futuras e consolidacao (revelar o codigo so le): recusados aqui
+# (409 SISTEMA_NOVO, nada gravado). Consultas continuam.
+try:
+    from backend.services.gerador_recorrencia_service import registrar_guarda_escritor_unico
+except ImportError:
+    from services.gerador_recorrencia_service import registrar_guarda_escritor_unico
+registrar_guarda_escritor_unico(cartoes_bp, 'Cartoes', isentos={'cartoes.revelar_codigo_seguranca'})
 logger = logging.getLogger(__name__)
 
 

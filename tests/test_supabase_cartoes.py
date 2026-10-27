@@ -46,7 +46,11 @@ COMPRA = {'cartao_id': CARTAO, 'descricao': 'Notebook', 'valor': '100.00', 'tota
 
 @pytest.fixture
 def banco(cluster):  # noqa: F811
-    return copiar(cluster)
+    dsn = copiar(cluster)
+    # FIN-ESCRITOR-UNICO-FINAL-1: as escritas do novo aplicativo exigem o perfil atribuido a ele.
+    atribuir(dsn, 'PESSOAL')
+    atribuir(dsn, 'PERFIL_B')
+    return dsn
 
 
 def rpc(dsn, funcao, *args, usuario=USUARIO_A):
@@ -601,6 +605,7 @@ def _flask_pessoal(dsn):
 
 def test_equivalencia_com_o_flask_nas_compras(cluster):  # noqa: F811
     dsn_flask, dsn_novo = copiar(cluster), copiar(cluster)
+    atribuir(dsn_novo, 'PESSOAL')  # FIN-ESCRITOR-UNICO-FINAL-1: cada aplicativo grava no perfil atribuido a ele
     for dsn in (dsn_flask, dsn_novo):
         _flask_pessoal(dsn)
     compras = [{**COMPRA}, {**COMPRA, 'descricao': 'Cafe', 'valor': '0.05', 'total_parcelas': 1,
@@ -623,6 +628,7 @@ def test_equivalencia_com_o_flask_nas_compras(cluster):  # noqa: F811
 
 def test_equivalencia_com_o_flask_no_cadastro_do_cartao(cluster):  # noqa: F811
     dsn_flask, dsn_novo = copiar(cluster), copiar(cluster)
+    atribuir(dsn_novo, 'PESSOAL')  # FIN-ESCRITOR-UNICO-FINAL-1: cada aplicativo grava no perfil atribuido a ele
     dados = {'nome': 'Master Teste', 'dia_fechamento': 3, 'dia_vencimento': 10, 'limite_credito': '2500.00',
              'observacoes': 'ficticio'}
     assert flask(dsn_flask, [['post', '/api/cartoes', dados]])[0]['status'] == 201
@@ -636,11 +642,13 @@ def test_equivalencia_com_o_flask_no_cadastro_do_cartao(cluster):  # noqa: F811
 def test_compra_de_fatura_paga_nao_muda_no_flask_nem_no_novo(cluster):  # noqa: F811
     dsn = copiar(cluster)
     _flask_pessoal(dsn)
+    atribuir(dsn, 'PESSOAL')  # FIN-ESCRITOR-UNICO-FINAL-1: cada aplicativo grava no perfil atribuido a ele
     r = comprar(dsn, total_parcelas=1)
     pagar(dsn, CARTAO, D(2029, 5, 1))
     fatura_antes = fatura(dsn, CARTAO, D(2029, 5, 1))
     with pytest.raises(errors.RaiseException, match='Fatura paga'):
         editar(dsn, r['lancamentos'][0], {'descricao': 'X'})
+    atribuir(dsn, 'PESSOAL', 'FLASK')  # o perfil volta ao Flask: a recusa e a da fatura paga, nao a do escritor
     saida = flask(dsn, [['put', f"/api/cartoes/lancamentos/{r['lancamentos'][0]}", {'valor': '1.00'}],
                         ['delete', f"/api/cartoes/lancamentos/{r['lancamentos'][0]}", None]])
     # FIN-PAGAMENTO-TRAVA-1: o Flask tambem recusa (antes: 200 e compra alterada em fatura paga).

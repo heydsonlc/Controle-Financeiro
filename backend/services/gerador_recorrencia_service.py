@@ -79,3 +79,30 @@ def flask_pode_gerar(perfil_id, contexto=''):
     logger.error('FIN-RECORRENCIA-T1: gerador inesperado %r no perfil %s (%s); geracao bloqueada',
                  gerador, perfil, contexto)
     return False
+
+
+def registrar_guarda_escritor_unico(blueprint, modulo, isentos=(), perfil_da_rota=None):
+    """FIN-ESCRITOR-UNICO-FINAL-1: escritor unico num blueprint inteiro. Perfil atribuido ao novo aplicativo tem as
+    escritas do modulo recusadas aqui (409 SISTEMA_NOVO, nada gravado); consultas continuam. O perfil e o da rota
+    (perfil_da_rota(view_args), quando a rota age sobre um registro de perfil conhecido) ou o perfil ativo, que e o
+    escopo das consultas do Flask. Mesma verificacao de flask_pode_gerar: sem a configuracao, comportamento legado."""
+    from flask import jsonify, request
+
+    @blueprint.before_request
+    def _escritor_unico():
+        if request.method not in ('POST', 'PUT', 'PATCH', 'DELETE') or request.endpoint in isentos:
+            return None
+        perfil = perfil_da_rota(request.view_args or {}) if perfil_da_rota else None
+        if perfil is None:
+            try:
+                from backend.services.perfil_financeiro_service import PerfilFinanceiroService
+            except ImportError:
+                from services.perfil_financeiro_service import PerfilFinanceiroService
+            perfil = PerfilFinanceiroService.obter_perfil_ativo_id()
+        if flask_pode_gerar(perfil, f'escrita {request.endpoint}'):
+            return None
+        db.session.rollback()
+        return jsonify({'success': False, 'codigo': 'SISTEMA_NOVO',
+                        'error': f'{modulo}: este perfil e administrado pelo novo aplicativo. Nada foi gravado.'}), 409
+
+    return _escritor_unico

@@ -98,6 +98,7 @@ def compra_nova(descricao, mes, valor='10.00', **extra):
 def test_confirmacao_reutilizada_e_recusada_e_auditoria_fecha_a_conta(pg):
     d = pg['dsn']
     f = consolidar(d, FATURA_MES)  # 250,00 das compras do Flask
+    atribuir(d, 'PESSOAL')  # FIN-ESCRITOR-UNICO-FINAL-1: as escritas do novo aplicativo exigem o perfil atribuido a ele
     conf = [{'fatura_id': f['id'], 'total_consolidado': '250.00'}]
     criar_novo(d, compra_nova('Com confirmacao', FATURA_MES, '10.00', confirmar_consolidadas=conf))
     with pytest.raises(errors.RaiseException, match='consolidada') as erro:
@@ -115,6 +116,7 @@ def test_confirmacao_reutilizada_e_recusada_e_auditoria_fecha_a_conta(pg):
 def test_confirmacao_nao_abre_fatura_paga(pg):
     d = pg['dsn']
     f = consolidar(d, FATURA_MES)
+    atribuir(d, 'PESSOAL')  # FIN-ESCRITOR-UNICO-FINAL-1: as escritas do novo aplicativo exigem o perfil atribuido a ele
     sql(d, "update public.conta set status_pagamento = 'Pago' where id = %s", (f['id'],))
     antes = md5_fatura(d, f['id'])
     r = criar_novo(d, compra_nova('Paga', FATURA_MES, '10.00',
@@ -280,6 +282,7 @@ def test_flask_fatura_consolidada_nao_muda_de_valor_nem_e_excluida_pela_rota_de_
 def test_novo_aplicativo_tambem_bloqueia_compra_de_fatura_consolidada(pg):
     d = pg['dsn']
     f = consolidar(d, FATURA_MES)
+    atribuir(d, 'PESSOAL')  # FIN-ESCRITOR-UNICO-FINAL-1: as escritas do novo aplicativo exigem o perfil atribuido a ele
     lanc = compra_base(d)
     versao = chamar(d, USUARIO_A, 'select financeiro.compra_para_edicao(%s, %s)', (PERFIL, lanc['id']))['versao']
     for comando, params in (('select financeiro.editar_compra(%s, %s, %s, %s::jsonb)',
@@ -350,6 +353,7 @@ def test_isolamento_entre_perfis_e_funcoes_internas(pg):
 def test_inclusoes_simultaneas_com_a_mesma_confirmacao_uma_so_vale(pg):
     d = pg['dsn']
     f = consolidar(d, FATURA_MES)
+    atribuir(d, 'PESSOAL')  # FIN-ESCRITOR-UNICO-FINAL-1: as escritas do novo aplicativo exigem o perfil atribuido a ele
     conf = [{'fatura_id': f['id'], 'total_consolidado': '250.00'}]
     barreira = threading.Barrier(2)
 
