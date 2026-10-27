@@ -254,3 +254,46 @@ Reconciliação entre o relatório parcial (só SAC/TR) e o final (etapas A–E)
 
 **Fechamento:** o motor está completo conforme o relatório final. Arquivos do commit: os do §9 e `tests/test_supabase_contratos_pagamento.py` (reversão da 1120). `web/tests/unit/build.test.mjs` e `docs/ROADMAP.md` são compartilhados com outros MVPs: entram só as linhas do motor.
 
+## 11. Aplicação no Supabase de teste (26/10/2026)
+
+**Commit:** `4de6fb5` (só o motor, sem push). Autorização do titular: aplicar só no Supabase de teste, depois da inspeção, e validar com perfil temporário. Sem produção, sem push e sem transferir Pessoal ou Empresa.
+
+**Inspeção antes de aplicar** (só leitura, todas aprovadas):
+- nenhum número de parcela duplicado por contrato e nenhuma despesa duplicada por parcela. O Supabase de teste não tem contrato de financiamento: 0 contratos, 0 parcelas;
+- as 37 funções novas, a tabela e os 2 índices não existiam;
+- as 8 funções de que a migration depende estão presentes;
+- as colunas das 14 tabelas usadas (236) são iguais às do cluster local;
+- o dono das funções `SECURITY DEFINER` é `postgres`, **sem superusuário e com BYPASSRLS**: as funções passam pelo RLS forçado, e o gatilho vale para ele;
+- `saldo_devedor_pelas_parcelas` no remoto é igual ao texto que a reversão devolve. A única diferença é o fim de linha (o remoto guarda CRLF), que o PL/pgSQL ignora;
+- TR disponível de 2024-05 a 2026-05; última versão aplicada era a `20261122090000`;
+- migration e reversão iguais ao commit; a reversão remove as 37 funções, a tabela e os índices e devolve o saldo da 1120.
+
+**Aplicação:**
+- só a `20261123090000`. As migrations locais posteriores ficaram fora da pasta durante o envio e voltaram idênticas (md5), então a trava da ferramenta, que só aplica o conjunto pendente exato, ficou como estava;
+- as 64 tabelas existentes mantiveram o conteúdo idêntico (211 linhas); +1 tabela (`parcela_historica`); +37 funções; 1 alterada (`saldo_devedor_pelas_parcelas`); nenhuma removida.
+
+**Validação real** (perfil temporário criado pelo aplicativo, **17 de 17**):
+- **Cadastro SAC/TR fictício** (300 mil, 23 parcelas, seguro fixo por vigência, taxa administrativa): o reenvio pela mesma chave não duplicou; 23 parcelas e 23 despesas.
+- **Parcelas históricas 1 a 6:**
+  - pagas, sem movimento; saldo atual = saldo da 6ª;
+  - registrar de novo registra 0; a regeneração é recusada (`COM_EXECUCAO`); o histórico fica idêntico.
+- **Proteção sob os privilégios reais** (conexão como `postgres`, o dono das funções e das tabelas, numa transação desfeita): UPDATE, DELETE e TRUNCATE do registro recusados (`HISTORICO_PERMANENTE`); inserção incoerente recusada (`HISTORICO_INCOERENTE`); o navegador recebe 403 na tabela.
+- **Pagamento e amortização:**
+  - parcela 7 paga em Despesas, com movimento;
+  - amortização reduzir parcela: saldo = saldo da 7ª − 50 mil;
+  - reduzir prazo: as duas amortizações ficam, e o saldo segue a cadeia;
+  - amortização anterior a uma já registrada é recusada;
+  - em tudo isso, o histórico e a 7ª ficaram intactos.
+- **Simulação de quitação:** não grava nada. Na primeira tentativa, o roteiro mandou o campo com nome errado e recebeu 400. Refeita com `data_quitacao`, passou.
+- **Escritor e permissões:** com o perfil no Flask, amortização e cadastro são recusados (`SISTEMA_FLASK`); quem só lê recebe 403; a exclusão com execução é recusada.
+- **Contratos fora do perfil temporário:** nenhum foi tocado.
+- **Telas:** Despesas e Financiamentos com o `dist` e a CSP reais, sem erro de console nem chamada ao Flask: aprovadas.
+
+**Limpeza por identidade** (simulação, depois confirmação):
+- **Registro histórico:** é permanente. Para apagar as 6 linhas fictícias do perfil temporário, o gatilho de linha foi desligado **só dentro da transação da limpeza**, a exclusão ficou limitada ao perfil e o gatilho foi religado antes do commit (conferido: os dois gatilhos ativos, nenhum registro de outro perfil afetado). É o limite descrito no §10: só uma alteração deliberada de estrutura passa pela proteção.
+- **Resultado:** banco idêntico ao retrato pós-aplicação (tabelas, funções e histórico de migrations); `parcela_historica` vazia.
+
+**Inalterados:** produção; Pessoal e Empresa, que continuam no Flask; `gastos.db`; o cronograma real de 420 parcelas.
+
+**Pendentes no remoto:** `20261124090000`, `20261125090000`, `20261126090000` (sem autorização).
+
