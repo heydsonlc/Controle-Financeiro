@@ -136,3 +136,40 @@ Regressão completa ao fim (com as migrations `20261125` e `20261126` no cluster
   - `web/tests/e2e/patrimonio_tela.spec.mjs`;
   - `web/tests/unit/build.test.mjs`: linhas deste MVP, arquivo compartilhado.
 - **Docs:** `docs/FIN_PATRIMONIO_2.md`; `docs/ROADMAP.md` (uma linha).
+
+## 9. Aplicação no Supabase de teste (27/10/2026)
+
+**Commit:** `a3d8a3b` (só este MVP, sem push). Na árvore exata do commit:
+- 30 unitários e 93 E2E passaram;
+- Python, pasta `tests/` inteira: 1943 aprovados, 18 pulados, 5 falhas, as mesmas preexistentes de antes deste MVP (§6).
+
+**Inspeção antes de aplicar** (só leitura, todas aprovadas):
+- a migration não substitui nenhuma função existente: só cria;
+- as 32 funções novas e a tabela `operacao_patrimonio` não existiam no remoto;
+- a reversão remove exatamente as funções criadas e a tabela de controle, sem comando de dados;
+- as 6 funções e as 8 tabelas de que a migration depende existem;
+- nenhum comando de dados, `drop` ou alteração de tabela existente;
+- nenhum perfil do remoto tinha caixinha, transferência ou bem.
+
+**Aplicação:**
+- só a `20261126090000` (a última local);
+- as 69 tabelas existentes ficaram com o conteúdo idêntico (211 linhas); +1 tabela vazia; +32 funções; nenhuma alterada nem removida.
+
+**Validação real** (perfil temporário criado pelo aplicativo; 17 verificações: **15 aprovadas automaticamente**, 2 conferidas no banco):
+- **Caixinhas:** criar (o reenvio pela mesma chave devolve a mesma caixinha com `repetida: true`, sem duplicar), editar meta, cor e observações, nome repetido recusado, inativar e reativar.
+- **Transferências:** A→B 300 deixa 4700 / 1100 (reenvio não duplica); saldo insuficiente recusado sem gravar; exclusão que deixaria o destino negativo recusada (`SALDO_DESTINO`); excluir desfaz os saldos (5000 / 800 / 0).
+- **Bens:** no perfil Pessoal, recusados (`SO_EMPRESA`). Com o perfil passado a Empresa pelo próprio aplicativo e 3 documentos fiscais fictícios:
+  - bem com documento: `COM_LASTRO`, valor 7500,56 e depreciação 208,35 (a regra do Flask, meio para cima);
+  - documento já vinculado a outro bem: recusado;
+  - bem a partir de documento; troca de documento desativa o vínculo anterior, que fica no histórico;
+  - editar; com documento não exclui (`COM_DOCUMENTO`); sem documento exclui;
+  - documentos vinculáveis e dados para a sugestão.
+- **Perfil passado ao Flask:** as 8 escritas (caixinha, transferência e bem) recusadas (`SISTEMA_FLASK`), e nenhuma tabela do perfil mudou.
+- **Quem só lê:** 403 nas escritas; lê as caixinhas.
+- **Telas:** as 14 da árvore commitada, com o `dist` e a CSP reais, no perfil temporário (Empresa: a tela de Patrimônio é a de bens, como no Flask): sem erro de console nem chamada ao Flask; os bens gravados aparecem.
+
+As 2 verificações conferidas no banco compararam a resposta do reenvio com a primeira por igualdade exata. O reenvio devolve o mesmo id mais `repetida: true` (comportamento previsto). No banco: uma operação registrada por chave, uma transferência e um bem por envio, sem duplicata.
+
+**Limpeza por identidade** (simulação, depois confirmação): só o perfil temporário, criado pelo aplicativo, com os vínculos do teste e caixinhas, bens e documentos marcados. Banco idêntico ao retrato pós-aplicação (tabelas e funções).
+
+**Inalterados:** produção; Pessoal e Empresa, que continuam no Flask; os perfis fictícios 31 e 39; `gastos.db`. **Pendentes no remoto:** nenhuma migration.
