@@ -91,6 +91,7 @@ const RPCS_DE_LEITURA = new Set(['meus_perfis', 'contas_bancarias_do_perfil', 'c
     'contas_bancarias_tela', 'conta_bancaria_tela', 'extrato_conta_bancaria', 'conferir_saldo_conta',
     'compras_do_cartao_tela', 'despesas_diretas_tela', 'receitas_lancamentos_tela',
     'financiamentos_tela', 'financiamento_tela',  // FIN-FIDELIDADE-CONTRATOS-1 (fase 1, so leitura)
+    'simular_quitacao',  // FIN-FINANCIAMENTOS-MOTOR-1 (so calcula, como a rota do Flask fora da guarda)
     // FIN-FIDELIDADE-PATRIMONIO-1 (fase 1, so leitura)
     'patrimonio_contas_tela', 'patrimonio_conta_tela', 'patrimonio_transferencias_tela', 'patrimonio_bens_tela',
     'patrimonio_resumo_tela', 'imagens_patrimonio',
@@ -179,6 +180,14 @@ const RPCS_DE_ESCRITA = new Map([
     ['editar_consorcio', 'recorrencias-adaptador.js'],
     ['excluir_consorcio', 'recorrencias-adaptador.js'],
     ['regenerar_parcelas_consorcio', 'recorrencias-adaptador.js'],
+    // FIN-FINANCIAMENTOS-MOTOR-1 (motor SAC/TR: escritor unico, contrato travado, parcelas efetivadas e historicas intactas)
+    ['criar_financiamento', 'financiamentos-adaptador.js'],
+    ['registrar_amortizacao_extra', 'financiamentos-adaptador.js'],
+    ['regenerar_parcelas_financiamento', 'financiamentos-adaptador.js'],
+    ['excluir_financiamento', 'financiamentos-adaptador.js'],
+    ['atualizar_financiamento', 'financiamentos-adaptador.js'],
+    ['adicionar_vigencia_seguro', 'financiamentos-adaptador.js'],
+    ['ajustar_saldo_devedor', 'financiamentos-adaptador.js'],
     // FIN-MIGRACAO-FIDELIDADE-FASE-1 (gestao de perfis; o banco exige pode_gerir do perfil). Camada unica: perfil.js
     ['criar_perfil', 'perfil.js'],
     ['atualizar_perfil', 'perfil.js'],

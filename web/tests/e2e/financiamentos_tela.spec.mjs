@@ -1,6 +1,6 @@
 // FIN-FIDELIDADE-CONTRATOS-1 (fase 1) — tela original de Financiamentos do Flask (frontend/templates/financiamentos.html)
 // sobre o Supabase, SO CONSULTA. Financiamento FICTICIO do "Perfil B" (tests/supabase_local.py, semear_financiamento_e2e):
-// 3 parcelas, 1 paga. As acoes (amortizar, editar, pagar...) respondem que continuam no sistema atual, sem gravar.
+// 3 parcelas, 1 paga. As acoes fora da fase (documentos, conferencias da Caixa) respondem que continuam no sistema atual, sem gravar.
 import { expect, test } from '@playwright/test';
 
 import { chamarRpc, perfilAtivoId, registrarDialogos } from './despesas.mjs';
@@ -51,8 +51,8 @@ test('lista, detalhe e parcelas como no Flask; acoes ficam no sistema atual sem 
     // Acao fora da fase 1: mensagem clara e nada gravado.
     const perfil = await perfilAtivoId(page);
     const antes = (await chamarRpc(page, 'financiamentos_tela', { p_perfil_id: perfil, p_ativo: null })).corpo;
-    const r = await page.evaluate(async () => (await fetch('/api/financiamentos/1/amortizacao-extra', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ valor: 100 }),
+    const r = await page.evaluate(async () => (await fetch('/api/financiamentos/1/conferencias-caixa', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: 'mensal' }),
     })).json());
     expect(r).toEqual({ success: false, error: expect.stringContaining('continua no sistema atual') });
     expect((await chamarRpc(page, 'financiamentos_tela', { p_perfil_id: perfil, p_ativo: null })).corpo).toEqual(antes);

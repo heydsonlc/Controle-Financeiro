@@ -383,4 +383,7 @@ def test_reversao_devolve_as_definicoes_anteriores_e_volta(cluster):  # noqa: F8
     corpo = sql(dsn, "select prosrc from pg_proc where oid = 'financeiro.pagar_despesa(integer,integer,jsonb,uuid)'::regprocedure")[0]['prosrc']
     assert corpo in origem  # a definicao de 20261101090000, sem as linhas FIN-CONTRATOS-2
     executar(supabase / 'migrations' / '20261120090000_financeiro_contratos_pagamento.sql')
-    assert {r['s']: r for r in sql(dsn, estado_funcoes)} == com
+    # FIN-FINANCIAMENTOS-MOTOR-1 (20261123090000) redefine o saldo pela cadeia; reaplicar so a 1120 traz a versao dela.
+    redefinidas_depois = {'financeiro.saldo_devedor_pelas_parcelas(integer)'}
+    depois = {r['s']: r for r in sql(dsn, estado_funcoes)}
+    assert {s: r for s, r in depois.items() if s not in redefinidas_depois} ==         {s: r for s, r in com.items() if s not in redefinidas_depois}

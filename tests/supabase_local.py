@@ -637,6 +637,10 @@ def semear_financiamento_e2e(cur):
                     (perfil, item, vencimento, f'{FINANCIAMENTO_E2E_B} - parcela {numero}/3', valor, vencimento,
                      'Pago' if status == 'pago' else 'Pendente', pid))
         cur.execute('update public.financiamento_parcela set conta_id = %s where id = %s', (cur.fetchone()[0], pid))
+    # FIN-FINANCIAMENTOS-MOTOR-1 (financiamentos_motor.spec.mjs): TR ficticia de 2034-2035 para o motor SAC/TR.
+    cur.execute("insert into public.indice_tr_mensal (ano, mes, competencia, valor_decimal, fonte) "
+                "select extract(year from d)::int, extract(month from d)::int, to_char(d, 'YYYY-MM'), 0.0010, 'E2E' "
+                "from generate_series('2034-01-01'::date, '2035-12-01'::date, interval '1 month') d on conflict do nothing")
 
 
 
