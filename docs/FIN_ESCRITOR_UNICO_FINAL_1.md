@@ -158,3 +158,32 @@ Nestes módulos o novo aplicativo **só consulta**, então não há escrita conc
 **Separação por MVP (commits separados):**
 - Nenhum arquivo deste MVP coincide com os do FIN-FINANCIAMENTOS-MOTOR-1, exceto `docs/ROADMAP.md`, onde cada MVP tem a sua linha.
 - `tests/test_supabase_contratos_pagamento.py`, `tests/supabase_local.py`, `web/tests/unit/build.test.mjs` e `web/tests/e2e/financiamentos_*.spec.mjs` são só do motor.
+
+## 9. Aplicação no Supabase de teste (26/10/2026)
+
+**Commit:** `0af3128` (só este MVP, sem push). Nos arquivos compartilhados com o FIN-CATEGORIAS-RECORRENCIAS-2 entraram só os trechos deste MVP. Na árvore exata do commit: 578 testes Python das suítes afetadas, 30 unitários e 22 E2E passaram. Duas falhas iniciais vieram da ausência da pasta `data/` na árvore exportada; com a pasta, passaram.
+
+**Inspeção antes de aplicar** (só leitura, todas aprovadas):
+- as 29 funções existem no remoto com o texto que a reversão devolve (fim de linha normalizado);
+- em todas, a definição nova é a anterior mais só a linha marcada;
+- `exigir_escrita_novo` não existia; dependências presentes;
+- no remoto, só os perfis fictícios 31 e 39 estão no novo aplicativo;
+- a migration só cria e substitui funções e revoga privilégios: nenhum comando de dados.
+
+**Aplicação:**
+- só a `20261124090000`, com as migrations locais posteriores fora da pasta durante o envio (voltaram idênticas, md5);
+- as 65 tabelas ficaram com o conteúdo idêntico (211 linhas); +1 função (`exigir_escrita_novo`); 29 substituídas; nenhuma removida.
+
+**Validação real** (perfil temporário criado pelo aplicativo, **6 de 6**):
+- perfil no novo aplicativo: o cadastro grava, e o reenvio pela mesma chave não duplica; a edição grava;
+- perfil passado ao Flask: criar, editar e excluir despesa, criar receita, criar cartão, atualizar e inativar o perfil são **recusados** (`SISTEMA_FLASK`), e **nenhuma tabela do perfil muda**;
+- quem só lê recebe 403;
+- inativar e reativar o próprio perfil funciona (gestão com o perfil inativo).
+- **Telas:** as 14 da árvore commitada, com o `dist` e a CSP reais, no perfil temporário: sem erro de console nem chamada ao Flask.
+
+**Limpeza por identidade** (simulação, depois confirmação): banco idêntico ao retrato pós-aplicação. A linha a mais no histórico do gerador vem do gatilho de auditoria ao excluir o gerador, removida na mesma transação.
+
+**Efeito na prévia já publicada:** cadastros pelo novo aplicativo em perfil ainda no Flask (Pessoal e Empresa) passam a ser recusados sem gravar, que é o objetivo. Os perfis fictícios 31 e 39 seguem gravando.
+
+**Inalterados:** produção; Pessoal e Empresa, que continuam no Flask; `gastos.db`. **Pendentes no remoto:** `20261125090000` e `20261126090000`.
+
