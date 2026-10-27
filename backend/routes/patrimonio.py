@@ -32,6 +32,14 @@ except ImportError:
 # Criar blueprint
 patrimonio_bp = Blueprint('patrimonio', __name__)
 
+# FIN-PATRIMONIO-2: perfil atribuido ao novo aplicativo -> escritas de patrimonio (caixinhas, transferencias, bens,
+# vinculos de documento) recusadas aqui (409 SISTEMA_NOVO, nada gravado). Consultas e exportacoes continuam.
+try:
+    from backend.services.gerador_recorrencia_service import registrar_guarda_escritor_unico
+except ImportError:
+    from services.gerador_recorrencia_service import registrar_guarda_escritor_unico
+registrar_guarda_escritor_unico(patrimonio_bp, 'Patrimonio')
+
 
 def _perfil_id():
     return PerfilFinanceiroService.obter_perfil_ativo_id()

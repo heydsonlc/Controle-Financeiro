@@ -95,6 +95,8 @@ const RPCS_DE_LEITURA = new Set(['meus_perfis', 'contas_bancarias_do_perfil', 'c
     // FIN-FIDELIDADE-PATRIMONIO-1 (fase 1, so leitura)
     'patrimonio_contas_tela', 'patrimonio_conta_tela', 'patrimonio_transferencias_tela', 'patrimonio_bens_tela',
     'patrimonio_resumo_tela', 'imagens_patrimonio',
+    // FIN-PATRIMONIO-2: documentos vinculaveis e dados para a sugestao de bem a partir de documento
+    'patrimonio_documentos_vinculaveis_tela', 'patrimonio_documento_sugestao_tela',
     // FIN-FIDELIDADE-DOCUMENTOS-1 (fase 1, so leitura, modo IRPF)
     'ir_contexto_tela', 'ir_categorias_tela', 'ir_categorias_despesa_tela', 'ir_comprovantes_tela',
     'ir_documentos_empresa_tela', 'lastro_saidas_tela',  // Documentos da Empresa (so leitura)
@@ -197,6 +199,17 @@ const RPCS_DE_ESCRITA = new Map([
     ['excluir_categoria', 'categorias-adaptador.js'],
     ['criar_palavra_chave', 'categorias-adaptador.js'],
     ['remover_palavra_chave', 'categorias-adaptador.js'],
+    // FIN-PATRIMONIO-2 (caixinhas, transferencias e bens da Empresa; escritor unico do perfil no banco)
+    ['criar_caixinha', 'patrimonio-adaptador.js'],
+    ['editar_caixinha', 'patrimonio-adaptador.js'],
+    ['inativar_caixinha', 'patrimonio-adaptador.js'],
+    ['criar_transferencia_patrimonio', 'patrimonio-adaptador.js'],
+    ['excluir_transferencia_patrimonio', 'patrimonio-adaptador.js'],
+    ['criar_bem_patrimonial', 'patrimonio-adaptador.js'],
+    ['criar_bem_de_documento', 'patrimonio-adaptador.js'],
+    ['editar_bem_patrimonial', 'patrimonio-adaptador.js'],
+    ['vincular_documento_bem', 'patrimonio-adaptador.js'],
+    ['excluir_bem_patrimonial', 'patrimonio-adaptador.js'],
     // FIN-MIGRACAO-FIDELIDADE-FASE-1 (gestao de perfis; o banco exige pode_gerir do perfil). Camada unica: perfil.js
     ['criar_perfil', 'perfil.js'],
     ['atualizar_perfil', 'perfil.js'],

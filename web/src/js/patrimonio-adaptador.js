@@ -1,15 +1,21 @@
 // FIN-FIDELIDADE-PATRIMONIO-1 (fase 1) — adaptador da tela original de Patrimonio: responde as rotas /api/... que
-// js/original/patrimonio.js chama (ponte-api.js), no formato do Flask. So consulta (migration 20261112090000): caixinhas,
-// transferencias, bens do perfil Empresa (com documento e imagem) e o resumo. Cadastro, edicao, inativacao,
-// transferencias, exportacoes (Excel/PDF) e vinculos de documentos continuam no Flask (escritor unico) nesta fase.
+// js/original/patrimonio.js chama (ponte-api.js), no formato do Flask. Consulta (migration 20261112090000): caixinhas,
+// transferencias, bens do perfil Empresa (com documento e imagem) e o resumo.
+// FIN-PATRIMONIO-2 (migration 20261126090000): escrita pelas funcoes do banco, com o escritor unico do perfil (perfil
+// ainda no Flask e recusado sem gravar): caixinhas (criar, editar, inativar), transferencias (criar, excluir desfazendo
+// os saldos), bens (criar, editar, criar a partir de documento, vincular documento, excluir sem lastro), documentos
+// vinculaveis e a sugestao a partir de documento (heuristica do Flask em patrimonio-sugestao.js). Exportacoes Excel/PDF
+// continuam no sistema atual (FIN-RELATORIOS-CONFIG-1).
 
 import { supabase } from './cliente.js';
-import { falha, mensagemDeErro, ok } from './adaptador-comum.js';
+import { criarChaves, falha, mensagemDeErro, ok } from './adaptador-comum.js';
 import { instalarAberturaDeArquivos } from './arquivo-comprovante.js';
 import { iniciarMoldura } from './moldura.js';
+import { gerarSugestao } from './patrimonio-sugestao.js';
 
 const estado = { perfil: null };
-const NA_FASE_1 = 'Patrimônio: nesta fase o novo aplicativo só consulta caixinhas, transferências e bens. Esta ação continua no sistema atual. Nada foi gravado.';
+const chaves = criarChaves();
+const NO_SISTEMA_ATUAL = 'Patrimônio: esta ação continua no sistema atual. Nada foi gravado.';
 
 async function rpc(funcao, args) {
     const { data, error } = await funcao(args);
@@ -30,8 +36,10 @@ async function contas(parametros) {
     return ok(r);
 }
 
+const contaLida = (id) => rpc((a) => supabase.rpc('patrimonio_conta_tela', a), { p_perfil_id: estado.perfil.id, p_conta_id: id });
+
 async function conta(id) {
-    return ok({ data: await rpc((a) => supabase.rpc('patrimonio_conta_tela', a), { p_perfil_id: estado.perfil.id, p_conta_id: id }) });
+    return ok({ data: await contaLida(id) });
 }
 
 async function transferencias(parametros, id = null) {
@@ -41,6 +49,8 @@ async function transferencias(parametros, id = null) {
     });
     return id === null ? ok({ data: lista || [], total: (lista || []).length }) : ok({ data: lista[0] });
 }
+
+const bemLido = (id) => rpc((a) => supabase.rpc('patrimonio_bens_tela', a), { p_perfil_id: estado.perfil.id, p_filtros: {}, p_bem_id: id });
 
 async function bens(parametros, id = null) {
     const filtros = Object.fromEntries(parametros.entries());
@@ -57,19 +67,115 @@ async function imagens() {
     return ok({ data: lista || [], total: (lista || []).length });
 }
 
+async function documentosVinculaveis(parametros) {
+    const lista = await rpc((a) => supabase.rpc('patrimonio_documentos_vinculaveis_tela', a), {
+        p_perfil_id: estado.perfil.id, p_busca: texto(parametros, 'busca'),
+    });
+    return ok({ data: lista || [], total: (lista || []).length });
+}
+
+async function sugestao(comprovanteId) {
+    const dados = await rpc((a) => supabase.rpc('patrimonio_documento_sugestao_tela', a), {
+        p_perfil_id: estado.perfil.id, p_comprovante_id: comprovanteId,
+    });
+    return ok({ data: gerarSugestao(dados) });
+}
+
+// Cadastros com chave de repeticao (duplo clique ou reenvio nao duplicam); esquecida depois do sucesso.
+async function comChave(operacao, funcao, args) {
+    const r = await rpc(funcao, { ...args, p_chave: chaves.de(operacao) });
+    chaves.esquecer(operacao);
+    return r;
+}
+
+async function criarConta(corpo) {
+    const r = await comChave(`conta:${JSON.stringify(corpo)}`, (a) => supabase.rpc('criar_caixinha', a),
+        { p_perfil_id: estado.perfil.id, p_dados: corpo });
+    return { status: 201, corpo: { success: true, message: 'Conta criada com sucesso', data: await contaLida(r.conta_id) } };
+}
+
+async function editarConta(id, corpo) {
+    await rpc((a) => supabase.rpc('editar_caixinha', a), { p_perfil_id: estado.perfil.id, p_conta_id: id, p_dados: corpo });
+    return ok({ message: 'Conta atualizada com sucesso', data: await contaLida(id) });
+}
+
+async function inativarConta(id) {
+    await rpc((a) => supabase.rpc('inativar_caixinha', a), { p_perfil_id: estado.perfil.id, p_conta_id: id });
+    return ok({ message: 'Conta inativada com sucesso' });
+}
+
+async function criarTransferencia(corpo) {
+    const r = await comChave(`transferencia:${JSON.stringify(corpo)}`, (a) => supabase.rpc('criar_transferencia_patrimonio', a),
+        { p_perfil_id: estado.perfil.id, p_dados: corpo });
+    const { corpo: lida } = await transferencias(new URLSearchParams(), r.transferencia_id);
+    return { status: 201, corpo: { success: true, message: 'Transferência criada com sucesso', data: lida.data } };
+}
+
+async function excluirTransferencia(id) {
+    await rpc((a) => supabase.rpc('excluir_transferencia_patrimonio', a), { p_perfil_id: estado.perfil.id, p_transferencia_id: id });
+    return ok({ message: 'Transferência deletada e saldos revertidos' });
+}
+
+async function criarBem(corpo) {
+    const r = await comChave(`bem:${JSON.stringify(corpo)}`, (a) => supabase.rpc('criar_bem_patrimonial', a),
+        { p_perfil_id: estado.perfil.id, p_dados: corpo });
+    return { status: 201, corpo: { success: true, message: 'Bem patrimonial criado com sucesso', data: await bemLido(r.bem_id) } };
+}
+
+async function criarBemDeDocumento(corpo) {
+    const r = await comChave(`bem-doc:${JSON.stringify(corpo)}`, (a) => supabase.rpc('criar_bem_de_documento', a),
+        { p_perfil_id: estado.perfil.id, p_dados: corpo });
+    return { status: 201, corpo: { success: true, message: 'Bem criado a partir do documento fiscal', data: await bemLido(r.bem_id) } };
+}
+
+async function editarBem(id, corpo) {
+    await rpc((a) => supabase.rpc('editar_bem_patrimonial', a), { p_perfil_id: estado.perfil.id, p_bem_id: id, p_dados: corpo });
+    return ok({ message: 'Bem patrimonial atualizado com sucesso', data: await bemLido(id) });
+}
+
+async function vincularDocumento(id, corpo) {
+    await rpc((a) => supabase.rpc('vincular_documento_bem', a), { p_perfil_id: estado.perfil.id, p_bem_id: id, p_dados: corpo });
+    return ok({ message: 'Documento fiscal vinculado ao bem', data: await bemLido(id) });
+}
+
+async function excluirBem(id) {
+    await rpc((a) => supabase.rpc('excluir_bem_patrimonial', a), { p_perfil_id: estado.perfil.id, p_bem_id: id });
+    return ok({ message: 'Bem patrimonial excluido' });
+}
+
 const ROTAS = [
     ['GET', /^\/api\/perfis-financeiros\/ativo$/, () => ok({ perfil_ativo: estado.perfil })],
     ['GET', /^\/api\/patrimonio\/contas\/?$/, (m, c, p) => contas(p)],
     ['GET', /^\/api\/patrimonio\/contas\/(\d+)$/, (m) => conta(Number(m[1]))],
+    ['POST', /^\/api\/patrimonio\/contas\/?$/, (m, c) => criarConta(c || {})],
+    ['PUT', /^\/api\/patrimonio\/contas\/(\d+)$/, (m, c) => editarConta(Number(m[1]), c || {})],
+    ['DELETE', /^\/api\/patrimonio\/contas\/(\d+)$/, (m) => inativarConta(Number(m[1]))],
     ['GET', /^\/api\/patrimonio\/transferencias\/?$/, (m, c, p) => transferencias(p)],
     ['GET', /^\/api\/patrimonio\/transferencias\/(\d+)$/, (m, c, p) => transferencias(p, Number(m[1]))],
+    ['POST', /^\/api\/patrimonio\/transferencias\/?$/, (m, c) => criarTransferencia(c || {})],
+    ['DELETE', /^\/api\/patrimonio\/transferencias\/(\d+)$/, (m) => excluirTransferencia(Number(m[1]))],
     ['GET', /^\/api\/patrimonio\/bens\/?$/, (m, c, p) => bens(p)],
+    ['POST', /^\/api\/patrimonio\/bens\/?$/, (m, c) => criarBem(c || {})],
     ['GET', /^\/api\/patrimonio\/bens\/resumo$/, () => resumo()],
     ['GET', /^\/api\/patrimonio\/bens\/imagens$/, () => imagens()],
+    ['POST', /^\/api\/patrimonio\/bens\/criar-a-partir-documento$/, (m, c) => criarBemDeDocumento(c || {})],
+    ['GET', /^\/api\/patrimonio\/bens\/sugestao-a-partir-documento\/(\d+)$/, (m) => sugestao(Number(m[1]))],
     ['GET', /^\/api\/patrimonio\/bens\/(\d+)$/, (m) => bens(new URLSearchParams(), Number(m[1]))],
-    // So alimenta o seletor de "vincular documento", acao que continua no sistema atual nesta fase: lista vazia.
-    ['GET', /^\/api\/patrimonio\/documentos-vinculaveis$/, () => ok({ data: [], total: 0 })],
+    ['PUT', /^\/api\/patrimonio\/bens\/(\d+)$/, (m, c) => editarBem(Number(m[1]), c || {})],
+    ['DELETE', /^\/api\/patrimonio\/bens\/(\d+)$/, (m) => excluirBem(Number(m[1]))],
+    ['POST', /^\/api\/patrimonio\/bens\/(\d+)\/vincular-documento$/, (m, c) => vincularDocumento(Number(m[1]), c || {})],
+    ['GET', /^\/api\/patrimonio\/documentos-vinculaveis$/, (m, c, p) => documentosVinculaveis(p)],
 ];
+
+// Erros do banco no formato do Flask: 403 fora do perfil Empresa ou sem permissao, 404 nao encontrado, 409 escritor.
+function falhaDoBanco(erro) {
+    if (erro && erro.hint === 'SISTEMA_FLASK') {
+        return falha('O patrimônio deste perfil ainda é administrado pelo sistema atual (Flask). Nada foi gravado.', 409);
+    }
+    if (erro && erro.hint === 'SO_EMPRESA') return falha(erro.message, 403);
+    if (erro && erro.hint === 'NAO_ENCONTRADA') return falha(erro.message, 404);
+    return falha(mensagemDeErro(erro), erro && erro.code === '42501' ? 403 : 400);
+}
 
 async function adaptador({ metodo, caminho, parametros, corpo }) {
     for (const [verbo, padrao, executar] of ROTAS) {
@@ -78,11 +184,11 @@ async function adaptador({ metodo, caminho, parametros, corpo }) {
             try {
                 return await executar(m, corpo, parametros);
             } catch (erro) {
-                return falha(mensagemDeErro(erro), erro && erro.code === '42501' ? 403 : 400);
+                return falhaDoBanco(erro);
             }
         }
     }
-    return falha(NA_FASE_1, 501);
+    return falha(NO_SISTEMA_ATUAL, 501);
 }
 
 const contexto = await iniciarMoldura();
