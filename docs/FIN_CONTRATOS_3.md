@@ -170,7 +170,7 @@ As parcelas de consórcio continuam pagas e estornadas pelo motor do FIN-CONTRAT
 - substitui só `editar_consorcio`, com o texto anterior mais as linhas marcadas e a reversão em `supabase/reversao/`;
 - a descrição das pendentes acompanha; a da despesa paga guarda o histórico;
 - testes: 7 passaram.
-- **Não aplicada** (precisa de autorização).
+- aplicada depois, com autorização (§8.1).
 
 **Prévia protegida:**
 - versão `bd28ebc`: https://444ea3db.controle-financeiro-jah.pages.dev;
@@ -180,6 +180,33 @@ As parcelas de consórcio continuam pagas e estornadas pelo motor do FIN-CONTRAT
 **Inalterados:** produção; Pessoal e Empresa, que continuam no Flask; `gastos.db`.
 
 **Nenhuma regeneração foi executada em contrato real.**
+
+### 8.1 Aplicação da correção de renomear (`20261122090000`, 26/10/2026)
+
+**Commit:** `eaea85a`, sem push.
+
+**Conferência antes de aplicar** (só leitura):
+- único comando da migration: `create or replace function financeiro.editar_consorcio`; nenhum comando de dados, tabela ou privilégio;
+- assinatura `(integer, integer, jsonb)`, retorno `jsonb` e ACL (`authenticated`, sem `anon`/`public`) iguais;
+- corpo no remoto **idêntico** ao que a reversão devolve (texto de `20261121090000`);
+- diferença entre a definição nova e a anterior: **só as 9 linhas marcadas** (o `update` da descrição das despesas pendentes, limitado ao perfil, aos itens do consórcio, ao prefixo do nome anterior e a `not despesa_efetivada`);
+- retrato do banco antes da aplicação igual ao retrato pós-`20261121090000`; pendente só `20261122090000`.
+
+**Aplicação:**
+- `20261122090000` aplicada sozinha, sem falha.
+- O conteúdo das 64 tabelas ficou idêntico (211 linhas); só `editar_consorcio` mudou; nenhuma função nova.
+
+**Validação real** (perfil temporário criado pelo aplicativo, **14 de 14**): as 13 verificações do §8, com a de renomear reforçada, mais uma nova:
+- renomear com tudo pendente: as 6 despesas passam ao novo nome **na hora**;
+- renomear **depois** de pagar a 1 e pagar/estornar a 2: a 1 (paga) e a 2 (estornada, com movimento) **guardam o nome anterior**; as 3–6 passam ao novo; a 1 segue `Pago` com o valor original;
+- a regeneração seguinte manteve o nome histórico da paga.
+- Telas: aprovado. Limpeza por identidade (simulação, depois confirmação): banco idêntico ao retrato pós-aplicação. A linha a mais no histórico do gerador na limpeza vem do gatilho de auditoria (`gerador_recorrencia_auditoria`) ao excluir o gerador; é removida na mesma transação.
+
+**Prévia protegida:**
+- versão `eaea85a`: https://54a31813.controle-financeiro-jah.pages.dev (só a migration mudou; o `dist` é o mesmo);
+- Access (302) antes e depois; o endereço principal continua 404.
+
+**Inalterados:** produção; Pessoal e Empresa; `gastos.db`; contratos reais.
 
 ## 9. Condição do titular para a fase B: mecanismos que podem recriar despesa paga ou alterar prestação efetivada
 
