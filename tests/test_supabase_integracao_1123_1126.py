@@ -377,7 +377,10 @@ VALOR = {'integer': '0', 'bigint': '0', 'smallint': '0', 'numeric': '0', 'jsonb'
          'date': "'2030-01-01'::date", 'boolean': 'false', 'integer[]': "'{}'::integer[]", 'text[]': "'{}'::text[]",
          'jsonb[]': "'{}'::jsonb[]"}
 # Excecoes documentadas: gestao de perfil, fora da guarda nos dois aplicativos (docs/FIN_ESCRITOR_UNICO_FINAL_1.md §3).
-SEM_GUARDA_DOCUMENTADA = {'criar_perfil', 'definir_perfil_padrao'}
+SEM_GUARDA_DOCUMENTADA = {'criar_perfil', 'definir_perfil_padrao',
+                          # FIN-PRE-PRODUCAO-1: TR mensal, indice unico sem perfil (no Flask, /api/indexadores/tr
+                          # tambem fica fora da guarda); gravar exige gerir um perfil ativo e a TR usada nao muda.
+                          'criar_tr', 'editar_tr', 'importar_tr'}
 
 
 def funcoes_de_escrita(dsn):

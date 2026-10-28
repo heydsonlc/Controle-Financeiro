@@ -109,7 +109,8 @@ const RPCS_DE_LEITURA = new Set(['meus_perfis', 'contas_bancarias_do_perfil', 'c
     'consorcios_tela',  // FIN-FIDELIDADE-CONTRATOS-1 (Consorcios, so leitura)
     // FIN-FIDELIDADE-RECEITAS-CATEGORIAS-1 (so leitura)
     'receitas_fontes_tela', 'receitas_orcamentos_tela', 'receitas_realizadas_tela', 'categorias_tela', 'palavras_chave_tela',
-    'categorias_cartao_tela', 'categoria_cartao_despesas_tela']);
+    'categorias_cartao_tela', 'categoria_cartao_despesas_tela',
+    'tr_oficial_tela', 'tr_faltantes']);  // FIN-PRE-PRODUCAO-1: Indexadores (so leitura)
 // Escrita so por RPC transacional autorizada no banco, revisada uma a uma, e so na tela que a usa.
 const RPCS_DE_ESCRITA = new Map([
     ['gerar_mes', 'despesas-recorrencias.js'],  // FIN-FIDELIDADE-DESPESAS-1: extraido de contas.js
@@ -239,6 +240,10 @@ const RPCS_DE_ESCRITA = new Map([
     ['atualizar_vinculo_documento', 'documentos-fiscais-adaptador.js'],
     ['remover_vinculo_documento', 'documentos-fiscais-adaptador.js'],
     ['criar_financeiro_documento', 'documentos-fiscais-adaptador.js'],
+    // FIN-PRE-PRODUCAO-1: TR mensal (indice unico; gravar exige gerir um perfil ativo; TR usada nao muda)
+    ['criar_tr', 'indexadores-adaptador.js'],
+    ['editar_tr', 'indexadores-adaptador.js'],
+    ['importar_tr', 'indexadores-adaptador.js'],
     // FIN-MIGRACAO-FIDELIDADE-FASE-1 (gestao de perfis; o banco exige pode_gerir do perfil). Camada unica: perfil.js
     ['criar_perfil', 'perfil.js'],
     ['atualizar_perfil', 'perfil.js'],
@@ -295,7 +300,7 @@ test('todas as paginas usam a moldura do Flask com o mesmo menu, sem pagina queb
         assert.ok(!arquivos.some((a) => /^(moldura|paginas)(\/|$)/.test(a)), 'fontes da moldura fora do dist');
         assert.ok(arquivos.includes('css/shared/layout.css') && arquivos.includes('js/original/ajuda.js'));
         const paginas = arquivos.filter((a) => a.endsWith('.html') && a !== 'index.html');
-        assert.equal(paginas.length, 15);
+        assert.equal(paginas.length, 16);  // + indexadores.html (FIN-PRE-PRODUCAO-1)
         for (const pagina of paginas) {
             const html = await readFile(path.join(destino, pagina), 'utf8');
             assert.doesNotMatch(html, /\{\{|\{%|url_for|<script>|\sstyle=|\son[a-z]+=/i, `${pagina}: marcador, script ou estilo inline`);

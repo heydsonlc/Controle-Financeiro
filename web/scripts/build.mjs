@@ -29,7 +29,8 @@ const CSS_COMPARTILHADO = ['style.css', 'theme-light.css', 'layout.css', 'instit
 const JS_ORIGINAL = ['ajuda.js', 'utils.js', 'icons.js', 'instituicoes.js', 'formas_pagamento.js', 'despesas.js', 'recorrencias.js',
     'cartoes.js', 'importar_cartao.js', 'contas_bancarias.js',
     'lancamentos.js', 'financiamentos.js', 'patrimonio.js', 'imposto_renda.js',
-    'categoria_cartao_icones.js', 'dashboard.js', 'veiculos.js', 'receitas.js', 'categorias.js'];
+    'categoria_cartao_icones.js', 'dashboard.js', 'veiculos.js', 'receitas.js', 'categorias.js',
+    'indexadores.js'];  // FIN-PRE-PRODUCAO-1: TR para financiamentos SAC/TR
 // Imagens que os componentes do Flask (formas_pagamento.js, instituicoes.js) pedem em /static/...: so as que eles
 // citam pelo nome (versionadas), nunca a pasta inteira (frontend/static/img tem arquivos pessoais fora do Git).
 const IMAGENS_ORIGINAIS = {

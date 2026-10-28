@@ -1,7 +1,8 @@
 /* FIN-FIDELIDADE-CONTRATOS-1 (fase 1) — so o que a tela original de Financiamentos (financiamentos.css) nao tinha. */
 
 /* Aviso da fase 1: o novo aplicativo so consulta; as acoes continuam no sistema atual. */
-.fin-aviso-fase {
+.fin-aviso-fase,
+.fin-atalho-indexadores {  /* FIN-PRE-PRODUCAO-1: atalho para a TR */
     margin: 0 0 12px;
     padding: 10px 14px;
     border: 1px solid var(--cf-border, #d7dde5);

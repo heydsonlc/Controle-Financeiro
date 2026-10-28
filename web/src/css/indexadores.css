@@ -1,0 +1,158 @@
+/* FIN-PRE-PRODUCAO-1 (2.1): o <style> de frontend/templates/indexadores.html (CSP sem estilo inline), so as regras da
+   secao de TR, limitadas ao conteudo da pagina para nao alterar a moldura. */
+.indexadores-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.indexadores-container .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+}
+
+.indexadores-container .form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.indexadores-container .form-group label {
+    margin-bottom: 5px;
+    font-weight: 600;
+}
+
+.indexadores-container .form-group input,
+.indexadores-container .form-group select {
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.indexadores-container .btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.indexadores-container .btn-primary {
+    background-color: #007bff;
+    color: white;
+}
+
+.indexadores-container .btn-primary:hover {
+    background-color: #0056b3;
+}
+
+.indexadores-container .btn-secondary {
+    background-color: #6c757d;
+    color: white;
+}
+
+.indexadores-container .table-container {
+    overflow-x: auto;
+    margin-top: 20px;
+}
+
+.indexadores-container table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.indexadores-container thead {
+    background-color: #f8f9fa;
+}
+
+.indexadores-container th {
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.indexadores-container td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.indexadores-container tr:hover {
+    background-color: #f8f9fa;
+}
+
+.indexadores-container .alert {
+    padding: 12px 20px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+}
+
+.indexadores-container .alert-success {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.indexadores-container .alert-error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.indexadores-container .tr-section {
+    margin-bottom: 30px;
+    border: 1px solid #dbe4f0;
+    border-radius: 6px;
+    padding: 18px;
+    background: #f8fbff;
+}
+
+.indexadores-container .tr-section p {
+    margin-top: 0;
+    color: #475569;
+}
+
+.indexadores-container .tr-grid {
+    display: grid;
+    grid-template-columns: 160px 160px 160px auto;
+    gap: 10px;
+    align-items: end;
+    margin: 16px 0;
+}
+
+.indexadores-container .tr-import-grid {
+    display: grid;
+    grid-template-columns: minmax(280px, 1fr) 180px auto;
+    gap: 10px;
+    align-items: end;
+    margin-top: 16px;
+}
+
+.indexadores-container .tr-import-grid textarea {
+    min-height: 96px;
+    resize: vertical;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-family: Consolas, monospace;
+}
+
+.indexadores-container .tr-tools {
+    display: flex;
+    gap: 10px;
+    align-items: end;
+    margin: 16px 0;
+}
+
+@media (max-width: 720px) {
+    .indexadores-container .tr-grid,
+    .indexadores-container .tr-import-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .indexadores-container .tr-tools {
+        flex-wrap: wrap;
+    }
+}
