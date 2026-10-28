@@ -8,34 +8,29 @@ try:
     from backend.services.documento_financeiro_sugestao_service import DocumentoFinanceiroSugestaoService
     from backend.services.documento_fiscal_service import DocumentoFiscalService
     from backend.services.documento_zip_service import DocumentoZipService
-    from backend.services.gerador_recorrencia_service import recusa_escritor_unico
+    from backend.services.gerador_recorrencia_service import registrar_guarda_escritor_unico
     from backend.services.ir_documento_service import IrDocumentoService
     from backend.services.ir_relatorio_service import IrRelatorioService
     from backend.services.lastro_financeiro_service import LastroFinanceiroService
     from backend.services.lastro_relatorio_service import LastroRelatorioService
-    from backend.services.perfil_financeiro_service import PerfilFinanceiroService
 except ImportError:
     from models import db
     from services.documento_empresarial_service import DocumentoEmpresarialService
     from services.documento_financeiro_sugestao_service import DocumentoFinanceiroSugestaoService
     from services.documento_fiscal_service import DocumentoFiscalService
     from services.documento_zip_service import DocumentoZipService
-    from services.gerador_recorrencia_service import recusa_escritor_unico
+    from services.gerador_recorrencia_service import registrar_guarda_escritor_unico
     from services.ir_documento_service import IrDocumentoService
     from services.ir_relatorio_service import IrRelatorioService
     from services.lastro_financeiro_service import LastroFinanceiroService
     from services.lastro_relatorio_service import LastroRelatorioService
-    from services.perfil_financeiro_service import PerfilFinanceiroService
 
 
 ir_bp = Blueprint('ir', __name__)
-
-
-def _recusa_vinculo_patrimonial(patrimonial, contexto):
-    """FIN-ESCRITOR-UNICO-GUARDAS-1 (G3): vinculo PATRIMONIO de perfil do novo aplicativo nao e escrito pelo Flask."""
-    if not patrimonial:
-        return None
-    return recusa_escritor_unico(PerfilFinanceiroService.obter_perfil_ativo_id(), 'Vinculos patrimoniais', contexto)
+# FIN-DOCUMENTOS-2: o novo aplicativo grava documentos, vinculos e despesas a partir de documento; perfil atribuido a
+# ele tem todas as escritas de Documentos/IR recusadas aqui (409 SISTEMA_NOVO, nada gravado). Substitui as guardas
+# pontuais G1 e G3 do FIN-ESCRITOR-UNICO-GUARDAS-1.
+registrar_guarda_escritor_unico(ir_bp, 'Documentos')
 
 
 def _json_error(message, status_code=400):
@@ -289,11 +284,6 @@ def gerar_sugestao_financeira(comprovante_id):
 @ir_bp.route('/comprovantes/<int:comprovante_id>/criar-financeiro', methods=['POST'])
 def criar_financeiro_comprovante(comprovante_id):
     try:
-        # FIN-ESCRITOR-UNICO-GUARDAS-1 (G1): cria despesa/lancamento no perfil ativo; perfil do novo aplicativo recusa.
-        recusa = recusa_escritor_unico(PerfilFinanceiroService.obter_perfil_ativo_id(), 'Documentos',
-                                       f'financeiro a partir do comprovante {comprovante_id}')
-        if recusa:
-            return recusa
         resultado = DocumentoFinanceiroSugestaoService.criar_financeiro(
             comprovante_id,
             request.get_json(silent=True) or {},
@@ -332,12 +322,7 @@ def listar_vinculos_comprovante(comprovante_id):
 @ir_bp.route('/comprovantes/<int:comprovante_id>/vinculos', methods=['POST'])
 def criar_vinculo_comprovante(comprovante_id):
     try:
-        dados = request.get_json(silent=True) or {}
-        recusa = _recusa_vinculo_patrimonial(DocumentoFiscalService.eh_vinculo_patrimonial(comprovante_id, dados=dados),
-                                             f'vinculo do comprovante {comprovante_id}')
-        if recusa:
-            return recusa
-        vinculo = DocumentoFiscalService.criar_vinculo(comprovante_id, dados)
+        vinculo = DocumentoFiscalService.criar_vinculo(comprovante_id, request.get_json(silent=True) or {})
         db.session.commit()
         return _json_success(vinculo.to_dict(), 201)
     except ValueError as exc:
@@ -348,11 +333,6 @@ def criar_vinculo_comprovante(comprovante_id):
 @ir_bp.route('/comprovantes/<int:comprovante_id>/vinculos/<int:vinculo_id>', methods=['PUT'])
 def atualizar_vinculo_comprovante(comprovante_id, vinculo_id):
     try:
-        recusa = _recusa_vinculo_patrimonial(
-            DocumentoFiscalService.eh_vinculo_patrimonial(comprovante_id, vinculo_id=vinculo_id),
-            f'vinculo {vinculo_id} do comprovante {comprovante_id}')
-        if recusa:
-            return recusa
         vinculo = DocumentoFiscalService.atualizar_vinculo(comprovante_id, vinculo_id, request.get_json(silent=True) or {})
         db.session.commit()
         return _json_success(vinculo.to_dict())
@@ -364,11 +344,6 @@ def atualizar_vinculo_comprovante(comprovante_id, vinculo_id):
 @ir_bp.route('/comprovantes/<int:comprovante_id>/vinculos/<int:vinculo_id>', methods=['DELETE'])
 def remover_vinculo_comprovante(comprovante_id, vinculo_id):
     try:
-        recusa = _recusa_vinculo_patrimonial(
-            DocumentoFiscalService.eh_vinculo_patrimonial(comprovante_id, vinculo_id=vinculo_id),
-            f'vinculo {vinculo_id} do comprovante {comprovante_id}')
-        if recusa:
-            return recusa
         vinculo = DocumentoFiscalService.remover_vinculo(comprovante_id, vinculo_id)
         db.session.commit()
         return _json_success(vinculo.to_dict())

@@ -230,6 +230,15 @@ const RPCS_DE_ESCRITA = new Map([
     ['confirmar_despesa_prevista', 'mobilidade-adaptador.js'],
     ['adiar_despesa_prevista', 'mobilidade-adaptador.js'],
     ['ignorar_despesa_prevista', 'mobilidade-adaptador.js'],
+    // FIN-DOCUMENTOS-2 (envio e guarda do arquivo no banco, revisao, vinculos e despesa a partir do documento)
+    ['enviar_comprovante', 'documentos-fiscais-adaptador.js'],
+    ['atualizar_comprovante', 'documentos-fiscais-adaptador.js'],
+    ['validar_comprovante', 'documentos-fiscais-adaptador.js'],
+    ['excluir_comprovante', 'documentos-fiscais-adaptador.js'],
+    ['criar_vinculo_documento', 'documentos-fiscais-adaptador.js'],
+    ['atualizar_vinculo_documento', 'documentos-fiscais-adaptador.js'],
+    ['remover_vinculo_documento', 'documentos-fiscais-adaptador.js'],
+    ['criar_financeiro_documento', 'documentos-fiscais-adaptador.js'],
     // FIN-MIGRACAO-FIDELIDADE-FASE-1 (gestao de perfis; o banco exige pode_gerir do perfil). Camada unica: perfil.js
     ['criar_perfil', 'perfil.js'],
     ['atualizar_perfil', 'perfil.js'],

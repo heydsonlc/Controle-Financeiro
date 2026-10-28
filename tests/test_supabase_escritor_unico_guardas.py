@@ -83,21 +83,21 @@ def test_g3_no_perfil_do_flask_o_flask_cria_edita_e_remove_vinculo_patrimonial(c
     assert md5_de(dsn, 'public.bem_patrimonial', bem) == bem_antes and md5_de(dsn, 'public.ir_comprovante', doc) == doc_antes
 
 
-def test_fora_da_guarda_continuam_como_antes(cluster):  # noqa: F811
-    """Sem escrita compartilhada com o novo aplicativo: vinculo de documento que nao e PATRIMONIO (Documentos,
-    FIN-DOCUMENTOS-2) continua no Flask. A confirmacao sem meio de pagamento, que so troca o status da prevista, ficava
-    fora da G2; com FIN-MOBILIDADE-2 o novo aplicativo grava despesas previstas e o blueprint inteiro e guardado."""
+def test_blueprints_inteiros_guardados_depois_de_mobilidade_e_documentos(cluster):  # noqa: F811
+    """As guardas pontuais (G1-G3) foram substituidas pela guarda do blueprint quando o novo aplicativo passou a gravar
+    nessas tabelas: despesas previstas (FIN-MOBILIDADE-2) e Documentos/IR (FIN-DOCUMENTOS-2). Confirmar sem meio de
+    pagamento e vinculo que nao e PATRIMONIO, antes fora da guarda, agora tambem sao recusados sem gravar."""
     dsn = copiar(cluster)
     prevista = despesa_prevista(dsn, PESSOAL)
     doc = comprovante(dsn, PESSOAL)
     atribuir(dsn, 'PESSOAL')
     antes = resumo_tabelas(dsn)
     r = flask(dsn, [('perfil', PESSOAL), ('confirmar', 'post', f'/api/despesas-previstas/{prevista}/confirmar', {}),
-                    ('vinculo', 'post', f'/api/ir/comprovantes/{doc}/vinculos', {'tipo_entidade': 'OUTRO'})])
-    assert r['confirmar'][0] == 409 and r['confirmar'][1]['codigo'] == 'SISTEMA_NOVO', r['confirmar']
-    assert r['vinculo'][0] == 201, r['vinculo']
-    assert set(tabelas_alteradas(antes, resumo_tabelas(dsn))) <= {'public.ir_comprovante_vinculo', 'public.perfil_financeiro'}
-    assert sql(dsn, 'select status from public.despesa_prevista where id = %s', (prevista,)) == [{'status': 'PREVISTA'}]
+                    ('vinculo', 'post', f'/api/ir/comprovantes/{doc}/vinculos', {'tipo_entidade': 'OUTRO'}),
+                    ('revisar', 'put', f'/api/ir/comprovantes/{doc}', {'prestador_nome': 'x'})])
+    for nome, (status, corpo) in r.items():
+        assert status == 409 and corpo['codigo'] == 'SISTEMA_NOVO', (nome, status, corpo)
+    assert set(tabelas_alteradas(antes, resumo_tabelas(dsn))) <= {'public.perfil_financeiro'}
 
 
 def aguardar(condicao, segundos):
