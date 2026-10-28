@@ -1,10 +1,13 @@
 {
- "_comentario": "FIN-PRE-PRODUCAO-1: mapa da carga do controle_financeiro_dev. Perfil 1 (todos os dados) -> Pessoal do destino; 2 (sem dados) -> Empresa; 3 e 4 sem nenhum registro -> ignorados. titular_user_id: id do Auth do titular no projeto de destino (o ensaio usa um id ficticio).",
+ "_comentario": "FIN-PRE-PRODUCAO-1: mapa da carga do controle_financeiro_dev. Perfil 1 (todos os dados) -> Pessoal do destino; 2 (sem dados) -> Empresa; 3 e 4 sem nenhum registro -> ignorados. titular_user_id: id do Auth do titular no projeto de destino (o ensaio usa um id ficticio). FIN-BLOCO-D-1: a fonte de receita 1 da origem ja esta no Pessoal do projeto (copiada em 20/08/2026, mesmo nome): reaproveitada, nao duplicada.",
  "titular_user_id": "PREENCHER-COM-O-ID-DO-AUTH-DO-TITULAR",
  "perfis": {
   "1": {"destino_id": 1},
   "2": {"destino_id": 2},
   "3": "ignorar",
   "4": "ignorar"
+ },
+ "preexistentes": {
+  "item_receita": {"1": 1}
  }
 }

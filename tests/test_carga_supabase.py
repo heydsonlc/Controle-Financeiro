@@ -164,6 +164,48 @@ def test_segunda_carga_recusada_sem_duplicar(par):
     assert resumo_tabelas(d) == depois
 
 
+def test_referencia_sem_fk_no_destino_real_e_traduzida(par):
+    """FIN-BLOCO-D-1: no Supabase (esquema do Alembic) lancamento_agregado.categoria_cartao_id nao tem FK."""
+    o, d = par
+    for r in sql(d, "select conname from pg_constraint where contype = 'f' and conrelid = 'public.lancamento_agregado'::regclass "
+                    "and conkey = array[(select attnum from pg_attribute where attrelid = 'public.lancamento_agregado'::regclass "
+                    "and attname = 'categoria_cartao_id')]"):
+        sql(d, f'alter table public.lancamento_agregado drop constraint "{r["conname"]}"')
+    origem = sql(o, 'select l.descricao, c.nome from public.lancamento_agregado l join public.categoria_cartao c on c.id = l.categoria_cartao_id '
+                    'order by 1, 2')
+    assert origem, 'cenario sem compra com categoria do cartao'
+    relatorio = carga.executar(o, d, MAPA, confirmar=True)
+    assert relatorio['conferencia'].startswith('OK')
+    destino = sql(d, 'select l.descricao, c.nome from public.lancamento_agregado l join public.categoria_cartao c on c.id = l.categoria_cartao_id '
+                     'where l.perfil_financeiro_id is distinct from %s order by 1, 2', (PERFIL_OUTRO,))
+    assert destino == origem
+
+
+def test_registro_preexistente_reaproveitado_por_identidade(par):
+    """FIN-BLOCO-D-1: a fonte de receita da origem ja copiada para o Pessoal do destino e reaproveitada, nao duplicada."""
+    o, d = par
+    fonte = sql(o, 'select id, nome from public.item_receita where perfil_financeiro_id = %s or perfil_financeiro_id is null '
+                   'order by id limit 1', (ORIGEM['PESSOAL'],))[0]
+    previsoes = sql(o, 'select count(*) n from public.receita_orcamento where item_receita_id = %s', (fonte['id'],))[0]['n']
+    did = sql(d, "insert into public.item_receita (perfil_financeiro_id, nome, tipo, ativo, recorrente) values (%s, %s, 'OUTROS', false, false) "
+                 'returning id', (PESSOAL_DESTINO, fonte['nome']))[0]['id']
+    antes = resumo_tabelas(d)
+    with pytest.raises(carga.CargaRecusada, match=r'"Pessoal" ja tem dados \(item_receita\)'):
+        carga.executar(o, d, MAPA, confirmar=True)
+    with pytest.raises(carga.CargaRecusada, match='registro inexistente'):
+        carga.executar(o, d, {**MAPA, 'preexistentes': {'item_receita': {str(fonte['id']): did + 1000}}}, confirmar=True)
+    sql(d, "update public.item_receita set nome = nome || ' (outro)' where id = %s", (did,))
+    with pytest.raises(carga.CargaRecusada, match='nao e o mesmo registro'):
+        carga.executar(o, d, {**MAPA, 'preexistentes': {'item_receita': {str(fonte['id']): did}}}, confirmar=True)
+    sql(d, 'update public.item_receita set nome = %s where id = %s', (fonte['nome'], did))
+    assert resumo_tabelas(d) == antes
+    relatorio = carga.executar(o, d, {**MAPA, 'preexistentes': {'item_receita': {str(fonte['id']): did}}}, confirmar=True)
+    assert relatorio['resultado'] == 'GRAVADO' and relatorio['conferencia'].startswith('OK')
+    assert relatorio['preexistentes']['item_receita'][str(fonte['id'])]['destino_id'] == did
+    assert sql(d, 'select count(*) n from public.item_receita where nome = %s', (fonte['nome'],))[0]['n'] == 1
+    assert sql(d, 'select count(*) n from public.receita_orcamento where item_receita_id = %s', (did,))[0]['n'] == previsoes
+
+
 def test_recusas_quando_falta_regra(par):
     o, d = par
     antes = resumo_tabelas(d)

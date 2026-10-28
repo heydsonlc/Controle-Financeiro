@@ -17,6 +17,8 @@ Mapa (JSON):
 - destino_id: perfil ja existente no destino, do qual o titular e gestor (pode_gerir) e que nao tem nenhum dado;
 - criar: perfil novo (nome unico no destino), com o titular como gestor;
 - ignorar: so para perfil da origem sem nenhum registro.
+Opcional: "preexistentes": {"item_receita": {"1": 1}} — registro da origem que ja esta no destino (mesmo nome, no perfil
+correspondente): e reaproveitado em vez de duplicado e nao impede a carga no perfil (FIN-BLOCO-D-1).
 
 Regras:
 - origem so lida (transacao read only) e conferida por hash antes e depois;
@@ -52,6 +54,9 @@ NATURAIS = {'categoria', 'ir_categoria', 'indice_tr_mensal', 'categoria_palavra_
 POLIMORFICAS = {('item_despesa', 'origem_id'): ('origem_tipo', {'FINANCIAMENTO': 'financiamento', 'CONSORCIO': 'contrato_consorcio',
                                                                 'VEICULO': 'veiculo', 'ASSINATURA': 'mobilidade_assinatura'})}
 SEM_REFERENCIA = {('lancamento_agregado', 'compra_id')}  # identificador da compra (texto), igual nas parcelas
+# Referencias que o destino real nao declara como chave estrangeira (o esquema do Supabase veio do Alembic, que nao criou
+# esta FK; os models do Flask criam). Sao traduzidas como as demais (FIN-BLOCO-D-1).
+REFERENCIAS_SEM_FK = {('lancamento_agregado', 'categoria_cartao_id'): 'categoria_cartao'}
 MASCARA = '••••'
 CAMPOS_PREF_USUARIO = ['nome_usuario', 'tema_sistema', 'cor_principal', 'mostrar_icones_coloridos', 'abreviar_valores',
                        'solicitar_confirmacao_exclusao', 'graficos_visiveis', 'insights_inteligentes_ativo',
@@ -111,6 +116,9 @@ class Carga:
                                        where k.contype = 'f' and k.connamespace = 'public'::regnamespace and cardinality(k.conkey) = 1
                                          and k.confrelid::regclass::text not like '%.%'"""):
             self.fks[r['filho'].strip('"')][r['coluna']] = r['pai'].strip('"')
+        for (t, c), pai in REFERENCIAS_SEM_FK.items():
+            if c in self.col_destino.get(t, {}) and pai in self.col_destino:
+                self.fks[t].setdefault(c, pai)
         self.com_perfil = {t for t, cols in self.col_destino.items() if 'perfil_financeiro_id' in cols}
         self.linhas = {}
         for t in sorted(self.tab_origem):
@@ -174,15 +182,42 @@ class Carga:
                 destinos.append((pid, None, nome, {**perfil, **regra['criar']}))
             else:
                 raise CargaRecusada(f'Regra invalida para o perfil {pid}')
+        self.validar_preexistentes(destinos)
         for pid, did, nome, _perfil in destinos:
             if did is None:
                 continue
             for t in sorted(self.com_perfil):
-                if consultar(self.d, f'select 1 from public."{t}" where perfil_financeiro_id = %s limit 1', (did,)):
+                ja_conhecidos = list(self.preexistentes.get(t, {}).values())
+                if consultar(self.d, f'select 1 from public."{t}" where perfil_financeiro_id = %s and id <> all(%s::integer[]) limit 1',
+                             (did, ja_conhecidos)):
                     raise CargaRecusada(f'O perfil de destino "{nome}" ja tem dados ({t}): carga recusada (sem duplicar)')
         if usados.get(None) and not any(nome == 'Pessoal' for _p, _d, nome, _x in destinos):
             raise CargaRecusada('Ha registros sem perfil (do "Pessoal" no Flask) e nenhum perfil de destino se chama "Pessoal"')
         self.destinos = destinos
+
+    def validar_preexistentes(self, destinos):
+        """mapa["preexistentes"] = {tabela: {id origem: id destino}}: registro da origem que JA esta no destino (copiado
+        antes). So e aceito se for o mesmo registro: mesmo nome e no perfil de destino correspondente (sem perfil na origem
+        = "Pessoal"). E reaproveitado (nao duplicado) e nao conta como "perfil com dados"."""
+        self.preexistentes = {}
+        perfil_destino = {pid: did for pid, did, _n, _x in destinos}
+        pessoal = next((did for _p, did, nome, _x in destinos if nome == 'Pessoal'), None)
+        for t, pares in (self.mapa.get('preexistentes') or {}).items():
+            if t not in self.linhas or 'perfil_financeiro_id' not in self.col_destino.get(t, {}) or 'nome' not in self.col_destino[t]:
+                raise CargaRecusada(f'Preexistente sem regra para a tabela {t}')
+            for oid, did in pares.items():
+                origem = next((l for l in self.linhas[t] if str(l['id']) == str(oid)), None)
+                destino = consultar(self.d, f'select * from public."{t}" where id = %s', (did,))
+                if origem is None or not destino:
+                    raise CargaRecusada(f'Preexistente {t} {oid} -> {did}: registro inexistente')
+                esperado = pessoal if origem['perfil_financeiro_id'] is None else perfil_destino.get(origem['perfil_financeiro_id'])
+                if destino[0]['perfil_financeiro_id'] != esperado or destino[0]['nome'] != origem['nome']:
+                    raise CargaRecusada(f'Preexistente {t} {oid} -> {did}: nao e o mesmo registro (perfil ou nome diferente)')
+                self.preexistentes.setdefault(t, {})[origem['id']] = did
+                diferentes = sorted(c for c, v in origem.items() if c not in ('id', 'perfil_financeiro_id') and c in destino[0]
+                                    and destino[0][c] != v)
+                self.relatorio.setdefault('preexistentes', {}).setdefault(t, {})[str(oid)] = {
+                    'destino_id': did, 'colunas_diferentes_mantidas_do_destino': diferentes}
 
     # ---- gravacao ---------------------------------------------------------------------------------------------------
     def criar_perfis(self):
@@ -248,6 +283,10 @@ class Carga:
             inseridos = reaproveitados = 0
             for linha in self.linhas[t]:
                 nova = self.transformar(t, linha)
+                if linha['id'] in self.preexistentes.get(t, {}):
+                    self.ids[t][linha['id']] = self.preexistentes[t][linha['id']]
+                    reaproveitados += 1
+                    continue
                 if t in NATURAIS:
                     natural = self.chave_natural(t, nova)
                     if natural:

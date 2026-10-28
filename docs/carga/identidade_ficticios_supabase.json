@@ -1,0 +1,26 @@
+{
+ "descricao": "FIN-BLOCO-D-1: identidade dos dados ficticios do projeto Supabase Controle-Financeiro (entrada de scripts/limpeza_ficticios_supabase.py)",
+ "projeto_ref_prefixo": "fzjmge",
+ "perfis_ficticios": {
+  "31": "Demonstracao (ficticio)",
+  "39": "Homologacao Cartoes (ficticio)"
+ },
+ "perfis_preservados": {
+  "1": "Pessoal",
+  "2": "Empresa"
+ },
+ "usuarios_teste": [
+  "d9c71371-23f8-4c9b-aab8-614de9d1a378",
+  "4e7a9b60-d147-4a4b-920e-5e17e4f8f678"
+ ],
+ "globais_ficticios": {
+  "public.categoria": {"ids": [47, 48, 49, 50], "marcador": "(demonstracao)"}
+ },
+ "evidencias": {
+  "31": "Criado por scripts/supabase_demo_preview_seed.py (FIN-PUBLICACAO-PREVIEW-2); estado em data/demo_preview_2.json: perfil 31, usuario de avaliacao (conta A), categorias 47-50, contas bancarias 74-75, cartao 230.",
+  "39": "Criado pelo proprio aplicativo por scripts/homologacao_cartoes.py (FIN-FIDELIDADE-CARTOES-1, perfil 'Homologacao Cartoes (ficticio)'), titular a conta de avaliacao A.",
+  "usuarios_teste": "Contas de avaliacao A e B do .env.e2e-real (FIN-PUBLICACAO-PREVIEW-2 / E2E real); unicos usuarios do Auth.",
+  "categorias_47_50": "Categorias globais (sem perfil) com o sufixo '(demonstracao)', listadas no estado da demonstracao; sem perfil, no Flask aparecem no 'Pessoal'.",
+  "preservados": "Perfis 1 e 2 (Pessoal e Empresa) recebem a carga; a fonte de receita 1 do Pessoal e copia da fonte 1 do controle_financeiro_dev (real). Globais preservados: 10 categorias de sistema (MOB_*), 25 TR, 19 categorias de IR, public.usuario (login do titular no Flask), alembic_version."
+ }
+}
