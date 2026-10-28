@@ -302,3 +302,18 @@ def test_reversao_remove_as_funcoes_e_preserva_os_dados(banco):
         cur.execute(MIGRATION.read_text(encoding='utf-8'))
     conn.close()
     assert enviar(banco, PDF, 'depois.pdf')['duplicado'] is False
+
+
+def test_documento_vinculado_a_financiamento_do_perfil(banco):
+    """Documentos x Financiamentos: vinculo ao contrato do perfil (resumo = nome); contrato de outro perfil e recusado."""
+    from tests.test_supabase_integracao_1123_1126 import novo_financiamento
+    fid = novo_financiamento(banco)
+    fid_b = novo_financiamento(banco, perfil=PERFIL_B, usuario=USUARIO_B, nome='Contrato do perfil B (ficticio)')
+    doc = enviar(banco, PNG)['comprovante_id']
+    v = rpc(banco, 'criar_vinculo_documento', PESSOAL, doc, {'tipo_entidade': 'FINANCIAMENTO', 'entidade_id': fid, 'tipo_vinculo': 'CONTRATO'})
+    assert sql(banco, 'select tipo_entidade, entidade_id, resumo_entidade, tipo_vinculo from public.ir_comprovante_vinculo where id = %s',
+               (v['vinculo_id'],)) == [{'tipo_entidade': 'FINANCIAMENTO', 'entidade_id': fid, 'resumo_entidade': 'SAC integracao (ficticio)',
+                                        'tipo_vinculo': 'CONTRATO'}]
+    antes = resumo_tabelas(banco)
+    assert 'perfil' in str(erro(rpc, banco, 'criar_vinculo_documento', PESSOAL, doc, {'tipo_entidade': 'FINANCIAMENTO', 'entidade_id': fid_b}))
+    assert resumo_tabelas(banco) == antes

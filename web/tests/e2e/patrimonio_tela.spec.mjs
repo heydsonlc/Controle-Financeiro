@@ -109,4 +109,14 @@ test('perfil Empresa mostra os bens, o resumo e a imagem do sistema; outro titul
     await expect(page.locator('#bens-pendencias')).toContainText('Notebook E2E (ficticio)');
     const imagem = page.locator('#bens-tabela-corpo img[src$="Patrimonio_notebook.jpg"]');
     if (await imagem.count()) expect(await imagem.first().evaluate((img) => img.complete && img.naturalWidth > 0)).toBe(true);
+
+    // FIN-RELATORIOS-CONFIG-1: Excel e PDF dos bens gerados no navegador (conteudo conferido com o Flask nos testes Python).
+    for (const [botao, extensao, assinatura] of [['#btn-exportar-bens-excel', 'xlsx', 'PK'], ['#btn-exportar-bens-pdf', 'pdf', '%PDF']]) {
+        const [download] = await Promise.all([page.waitForEvent('download'), page.click(botao)]);
+        expect(download.suggestedFilename()).toBe(`Bens_Patrimoniais_Empresa_${new Date().getFullYear()}.${extensao}`);
+        const fluxo = await download.createReadStream();
+        const partes = [];
+        for await (const parte of fluxo) partes.push(parte);
+        expect(Buffer.concat(partes).subarray(0, assinatura.length).toString('latin1')).toBe(assinatura);
+    }
 });

@@ -34,6 +34,13 @@
             const adaptador = await adaptadorPronto;
             try {
                 const r = await adaptador({ metodo, caminho: endereco.pathname, parametros: endereco.searchParams, corpo });
+                // FIN-RELATORIOS-CONFIG-1: arquivo gerado no navegador (relatorio), como o send_file do Flask.
+                if (r.arquivo) {
+                    return new Response(new Blob([r.arquivo.conteudo], { type: r.arquivo.mime }), {
+                        status: r.status || 200,
+                        headers: { 'Content-Type': r.arquivo.mime, 'Content-Disposition': `attachment; filename=${r.arquivo.nome}` },
+                    });
+                }
                 return resposta(r.status || 200, r.corpo);
             } catch (erro) {
                 console.error('Adaptador:', metodo, endereco.pathname, erro);

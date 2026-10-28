@@ -4,14 +4,17 @@
 // FIN-PATRIMONIO-2 (migration 20261126090000): escrita pelas funcoes do banco, com o escritor unico do perfil (perfil
 // ainda no Flask e recusado sem gravar): caixinhas (criar, editar, inativar), transferencias (criar, excluir desfazendo
 // os saldos), bens (criar, editar, criar a partir de documento, vincular documento, excluir sem lastro), documentos
-// vinculaveis e a sugestao a partir de documento (heuristica do Flask em patrimonio-sugestao.js). Exportacoes Excel/PDF
-// continuam no sistema atual (FIN-RELATORIOS-CONFIG-1).
+// vinculaveis e a sugestao a partir de documento (heuristica do Flask em patrimonio-sugestao.js).
+// FIN-RELATORIOS-CONFIG-1: exportacao dos bens em Excel e PDF gerada no navegador, igual a do Flask
+// (relatorio-patrimonio.js, sem biblioteca; conferida com o Flask em tests/test_relatorios_patrimonio.py).
 
 import { supabase } from './cliente.js';
 import { criarChaves, falha, mensagemDeErro, ok } from './adaptador-comum.js';
 import { instalarAberturaDeArquivos } from './arquivo-comprovante.js';
 import { iniciarMoldura } from './moldura.js';
 import { gerarSugestao } from './patrimonio-sugestao.js';
+import { excelDeBens, pdfDeBens } from './relatorio-patrimonio.js';
+import { MIME_XLSX } from './exportacao-xlsx.js';
 
 const estado = { perfil: null };
 const chaves = criarChaves();
@@ -143,6 +146,19 @@ async function excluirBem(id) {
     return ok({ message: 'Bem patrimonial excluido' });
 }
 
+// GET /api/patrimonio/bens/exportar-excel|pdf: so no perfil Empresa (PermissionError 403 do Flask).
+async function exportarBens(tipo, parametros) {
+    if (estado.perfil.tipo !== 'EMPRESA') return falha('Relatorio patrimonial disponivel apenas no perfil Empresa.', 403);
+    const filtros = Object.fromEntries(parametros.entries());
+    const bensLidos = await rpc((a) => supabase.rpc('patrimonio_bens_tela', a), { p_perfil_id: estado.perfil.id, p_filtros: filtros, p_bem_id: null });
+    const d = new Date();
+    const dois = (n) => String(n).padStart(2, '0');
+    const entrada = { perfilNome: estado.perfil.nome, bens: bensLidos || [], filtros, anoAtual: d.getFullYear(),
+                      agora: `${dois(d.getDate())}/${dois(d.getMonth() + 1)}/${d.getFullYear()} ${dois(d.getHours())}:${dois(d.getMinutes())}` };
+    const r = tipo === 'pdf' ? pdfDeBens(entrada) : excelDeBens(entrada);
+    return { status: 200, arquivo: { conteudo: r.conteudo, nome: r.nome, mime: tipo === 'pdf' ? 'application/pdf' : MIME_XLSX } };
+}
+
 const ROTAS = [
     ['GET', /^\/api\/perfis-financeiros\/ativo$/, () => ok({ perfil_ativo: estado.perfil })],
     ['GET', /^\/api\/patrimonio\/contas\/?$/, (m, c, p) => contas(p)],
@@ -158,6 +174,8 @@ const ROTAS = [
     ['POST', /^\/api\/patrimonio\/bens\/?$/, (m, c) => criarBem(c || {})],
     ['GET', /^\/api\/patrimonio\/bens\/resumo$/, () => resumo()],
     ['GET', /^\/api\/patrimonio\/bens\/imagens$/, () => imagens()],
+    ['GET', /^\/api\/patrimonio\/bens\/exportar-excel$/, (m, c, p) => exportarBens('excel', p)],
+    ['GET', /^\/api\/patrimonio\/bens\/exportar-pdf$/, (m, c, p) => exportarBens('pdf', p)],
     ['POST', /^\/api\/patrimonio\/bens\/criar-a-partir-documento$/, (m, c) => criarBemDeDocumento(c || {})],
     ['GET', /^\/api\/patrimonio\/bens\/sugestao-a-partir-documento\/(\d+)$/, (m) => sugestao(Number(m[1]))],
     ['GET', /^\/api\/patrimonio\/bens\/(\d+)$/, (m) => bens(new URLSearchParams(), Number(m[1]))],
