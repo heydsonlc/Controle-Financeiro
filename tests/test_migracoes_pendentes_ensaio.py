@@ -1,6 +1,7 @@
 """
-FIN-BLOCO-C-1 (C6) — ensaio das migrations ainda nao aplicadas no Supabase remoto (20261127 Mobilidade e 20261128
-Documentos) num cluster PostgreSQL descartavel no MESMO estado do remoto (migrations ate 20261126) e com dados
+FIN-BLOCO-C-1 (C6) / FIN-PRE-PRODUCAO-1 (3.3) — ensaio das migrations ainda nao aplicadas no Supabase remoto (20261127
+Mobilidade, 20261128 Documentos, 20261129 Indexadores, 20261130 Documentos na tela e 20261201 Preferencias) num cluster
+PostgreSQL descartavel no MESMO estado do remoto (migrations ate 20261126) e com dados
 ficticios representativos de todos os modulos (os cenarios do E2E). Prova: aplicar as pendentes nao altera nenhum
 dado existente (so cria as duas tabelas de idempotencia, vazias); as funcoes novas operam sobre os dados que ja
 existiam; reverter (ordem inversa) tambem nao altera dado algum e a reaplicacao funciona.
@@ -23,8 +24,9 @@ pytestmark = pytest.mark.skipif(PG_BIN is None, reason='binarios do PostgreSQL (
 RAIZ = Path(__file__).resolve().parent.parent
 MIGRATIONS = RAIZ / 'supabase' / 'migrations'
 REVERSAO = RAIZ / 'supabase' / 'reversao'
-PENDENTES = ('20261127090000', '20261128090000')  # pendentes no remoto (scripts/supabase_migrations.py status)
-NOVAS_TABELAS = {'financeiro.operacao_mobilidade', 'financeiro.operacao_documento'}
+PENDENTES = ('20261127090000', '20261128090000', '20261129090000', '20261130090000', '20261201090000')  # pendentes no remoto
+NOVAS_TABELAS = {'financeiro.operacao_mobilidade', 'financeiro.operacao_documento', 'financeiro.operacao_indexador',
+                 'financeiro.indice_tr_historico', 'financeiro.preferencia_usuario', 'financeiro.preferencia_perfil'}
 PERFIL_B = L.PERFIS['PERFIL_B']['id']
 
 
@@ -82,6 +84,11 @@ def test_aplicar_as_pendentes_nao_altera_dados_e_as_funcoes_operam_sobre_eles(re
                  (PERFIL_B, json.dumps({'nome_arquivo': 'ensaio.png', 'ano_calendario': 2027}),
                   base64.b64encode(b'\x89PNG\r\n\x1a\nensaio ficticio').decode(), str(uuid.uuid4())))
     assert doc['duplicado'] is False
+    # FIN-PRE-PRODUCAO-1: TR, sugestao financeira do documento e preferencias sobre os dados existentes.
+    assert any(i['competencia'] == '2034-01' for i in chamar(dsn, USUARIO_B, 'select financeiro.tr_oficial_tela(2034)', ()))
+    sugestao = chamar(dsn, USUARIO_B, 'select financeiro.sugestao_financeira_documento_tela(%s, %s)', (PERFIL_B, doc['comprovante_id']))
+    assert sugestao['comprovante_id'] == doc['comprovante_id']
+    assert chamar(dsn, USUARIO_B, 'select financeiro.preferencias_tela(%s)', (PERFIL_B,))['data']['tema_sistema'] == 'escuro'
 
 
 def test_reverter_em_ordem_inversa_nao_altera_dados_e_reaplica(remoto_simulado):

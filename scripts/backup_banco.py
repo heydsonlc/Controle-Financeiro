@@ -10,6 +10,9 @@ Supabase), sem dependencia nova (pg_dump/pg_restore do PostgreSQL instalado).
   restaurar --manifesto ARQ --dsn-env VAR restaura SO num banco vazio (sem tabelas em public/financeiro; recusa um banco
                                           existente) e confere as linhas por tabela com o manifesto.
 
+Ferramentas: CF_PG_BIN_BACKUP (pasta bin do PostgreSQL) escolhe pg_dump/pg_restore; sem ela, PATH e depois a instalacao
+local. FIN-PRE-PRODUCAO-1: para o Supabase (PostgreSQL 17), usar as ferramentas 17 (ensaiado em tests/test_backup_banco.py).
+
 A conexao vem sempre de uma variavel de ambiente (--dsn-env) e nunca e impressa. Restauracao sobre banco existente e
 recusada; restaurar no Supabase de teste ou de producao exige autorizacao especifica (FIN-BLOCO-C-1, C4).
 """
@@ -28,6 +31,12 @@ TABELA_DOCUMENTOS = 'public.ir_comprovante_arquivo'
 
 
 def _ferramenta(nome):
+    pasta_escolhida = os.environ.get('CF_PG_BIN_BACKUP')
+    if pasta_escolhida:
+        caminho = str(Path(pasta_escolhida) / (nome + ('.exe' if os.name == 'nt' else '')))
+        if not Path(caminho).exists():
+            raise SystemExit(f'{nome} nao encontrado em CF_PG_BIN_BACKUP.')
+        return caminho
     caminho = shutil.which(nome)
     if not caminho:
         sys.path.insert(0, str(Path(__file__).resolve().parents[1]))

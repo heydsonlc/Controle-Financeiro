@@ -5,6 +5,7 @@ integridade e conferida por SHA-256 (arquivo alterado e recusado); restaurar sob
 conexao nunca aparece na saida.
 """
 import base64
+import os
 import json
 import sys
 import uuid
@@ -79,3 +80,49 @@ def test_conexao_so_por_variavel_de_ambiente(monkeypatch):
     with pytest.raises(SystemExit) as e:
         B.main(['exportar', '--dsn-env', 'CF_BACKUP_VAZIA', '--saida', 'x'])
     assert 'vazia' in str(e.value)
+
+
+# FIN-PRE-PRODUCAO-1 (3.2): o Supabase usa PostgreSQL 17. Com CF_PG17_BIN (pasta bin do PostgreSQL 17), o backup e a
+# restauracao sao ensaiados em servidores 17 descartaveis: com as ferramentas 17 (procedimento recomendado,
+# CF_PG_BIN_BACKUP) e com as ferramentas da maquina (18) extraindo de um 17 e restaurando noutro 17.
+PG17_BIN = os.environ.get('CF_PG17_BIN')
+
+
+def _origem_17(cluster17):
+    from tests.supabase_local import semear_recorrencias
+    cluster17.preparar(contas=False)  # o mesmo cenario do cluster de 18 (test_supabase_recorrencia)
+    conn = cluster17.conectar()
+    with conn.cursor() as cur:
+        semear_recorrencias(cur)
+    conn.close()
+    dsn = cluster17.dsn()
+    atribuir(dsn, 'PESSOAL')
+    chamar(dsn, USUARIO_A, 'select financeiro.enviar_comprovante(%s, %s::jsonb, %s, %s)',
+           (ID['PESSOAL'], json.dumps({'nome_arquivo': 'backup17.png', 'ano_calendario': 2027}), base64.b64encode(PNG).decode(),
+            str(uuid.uuid4())))
+    rpc(dsn, 'criar_despesa', ID['PESSOAL'], {'nome': 'Despesa backup 17 (ficticia)', 'valor': 10, 'categoria_id': 951,
+                                              'data_vencimento': '2027-03-10', 'recorrente': False}, str(uuid.uuid4()))
+    return dsn
+
+
+@pytest.mark.skipif(not PG17_BIN, reason='CF_PG17_BIN (binarios do PostgreSQL 17) nao definida')
+@pytest.mark.parametrize('ferramentas', ['17', 'maquina'])
+def test_pg17_backup_restaura_igual_e_recusa_banco_existente(ferramentas, tmp_path, monkeypatch):
+    if ferramentas == '17':
+        monkeypatch.setenv('CF_PG_BIN_BACKUP', PG17_BIN)
+    else:
+        monkeypatch.delenv('CF_PG_BIN_BACKUP', raising=False)
+    with ClusterLocal(PG17_BIN, tmp_path / 'origem17') as c17:
+        origem = _origem_17(c17)
+        assert psycopg2.connect(origem).server_version // 10000 == 17
+        monkeypatch.setenv('CF_BACKUP_ORIGEM', origem)
+        manifesto = B.main(['exportar', '--dsn-env', 'CF_BACKUP_ORIGEM', '--saida', str(tmp_path / 'bk')])
+        B.main(['verificar', '--manifesto', str(manifesto)])
+        with ClusterLocal(PG17_BIN, tmp_path / 'destino17') as destino:
+            destino.aplicar_shim()
+            monkeypatch.setenv('CF_BACKUP_DESTINO', destino.dsn())
+            B.main(['restaurar', '--manifesto', str(manifesto), '--dsn-env', 'CF_BACKUP_DESTINO'])
+            assert resumo_tabelas(destino.dsn()) == resumo_tabelas(origem)
+            with pytest.raises(SystemExit) as e:
+                B.main(['restaurar', '--manifesto', str(manifesto), '--dsn-env', 'CF_BACKUP_DESTINO'])
+            assert 'nao esta vazio' in str(e.value)
