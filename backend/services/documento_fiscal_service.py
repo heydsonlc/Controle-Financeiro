@@ -99,6 +99,14 @@ class DocumentoFiscalService:
         return vinculo
 
     @classmethod
+    def eh_vinculo_patrimonial(cls, comprovante_id, dados=None, vinculo_id=None):
+        """FIN-ESCRITOR-UNICO-GUARDAS-1 (G3): a escrita cria (dados) ou altera (vinculo_id) um vinculo PATRIMONIO? So
+        esses o novo aplicativo tambem grava (FIN-PATRIMONIO-2). So le; vinculo inexistente: ValueError, como antes."""
+        if vinculo_id is None:
+            return cls._normalizar_opcao((dados or {}).get('tipo_entidade'), cls.TIPOS_ENTIDADE, 'OUTRO') == 'PATRIMONIO'
+        return cls._obter_vinculo(comprovante_id, vinculo_id).tipo_entidade == 'PATRIMONIO'
+
+    @classmethod
     def atualizar_vinculo(cls, comprovante_id, vinculo_id, dados):
         vinculo = cls._obter_vinculo(comprovante_id, vinculo_id)
         dados = dados or {}

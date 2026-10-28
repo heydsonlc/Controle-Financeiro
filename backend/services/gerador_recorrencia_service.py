@@ -81,12 +81,25 @@ def flask_pode_gerar(perfil_id, contexto=''):
     return False
 
 
+def recusa_escritor_unico(perfil_id, modulo, contexto=''):
+    """Escritor unico numa escrita do Flask: None se o Flask escreve no perfil; senao a resposta 409 SISTEMA_NOVO, com a
+    transacao desfeita. Chamar antes de gravar e na mesma transacao: a trava compartilhada do perfil (flask_pode_gerar)
+    fica ate o commit, e a troca de escritor espera. FIN-ESCRITOR-UNICO-GUARDAS-1: tambem para rotas avulsas."""
+    from flask import jsonify
+
+    if flask_pode_gerar(perfil_id, contexto):
+        return None
+    db.session.rollback()
+    return jsonify({'success': False, 'codigo': 'SISTEMA_NOVO',
+                    'error': f'{modulo}: este perfil e administrado pelo novo aplicativo. Nada foi gravado.'}), 409
+
+
 def registrar_guarda_escritor_unico(blueprint, modulo, isentos=(), perfil_da_rota=None):
     """FIN-ESCRITOR-UNICO-FINAL-1: escritor unico num blueprint inteiro. Perfil atribuido ao novo aplicativo tem as
     escritas do modulo recusadas aqui (409 SISTEMA_NOVO, nada gravado); consultas continuam. O perfil e o da rota
     (perfil_da_rota(view_args), quando a rota age sobre um registro de perfil conhecido) ou o perfil ativo, que e o
     escopo das consultas do Flask. Mesma verificacao de flask_pode_gerar: sem a configuracao, comportamento legado."""
-    from flask import jsonify, request
+    from flask import request
 
     @blueprint.before_request
     def _escritor_unico():
@@ -99,10 +112,6 @@ def registrar_guarda_escritor_unico(blueprint, modulo, isentos=(), perfil_da_rot
             except ImportError:
                 from services.perfil_financeiro_service import PerfilFinanceiroService
             perfil = PerfilFinanceiroService.obter_perfil_ativo_id()
-        if flask_pode_gerar(perfil, f'escrita {request.endpoint}'):
-            return None
-        db.session.rollback()
-        return jsonify({'success': False, 'codigo': 'SISTEMA_NOVO',
-                        'error': f'{modulo}: este perfil e administrado pelo novo aplicativo. Nada foi gravado.'}), 409
+        return recusa_escritor_unico(perfil, modulo, f'escrita {request.endpoint}')
 
     return _escritor_unico

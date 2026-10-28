@@ -5,8 +5,8 @@ ficticios (o Flask, quando entra, roda em subprocesso contra a copia do cluster)
 
 I1 ciclo financeiro integrado no mesmo perfil; I2 estorno x amortizacao (regra atual do motor); I3 guarda de escritor
 percorrendo o esquema e as rotas do Flask; I4 alternancia de escritor; I5 isolamento entre tres perfis; I6
-concorrencia entre modulos; I7 reversoes em ordem inversa e reaplicacao; I8 as tres escritas do Flask ainda sem guarda
-(xfail estrito: os testes exigem o comportamento correto e servem de regressao depois da correcao).
+concorrencia entre modulos; I7 reversoes em ordem inversa e reaplicacao; I8 as tres escritas do Flask que ficavam sem
+guarda (xfail estrito na homologacao; corrigidas em FIN-ESCRITOR-UNICO-GUARDAS-1, agora regressao).
 
 Integridade: resumos (md5) das tabelas antes e depois de cada cenario relevante; operacao recusada nao muda nada.
 """
@@ -787,12 +787,8 @@ def test_i7_reversoes_em_ordem_inversa_e_reaplicacao(cluster, base_1122):  # noq
 
 
 # =====================================================================================================================
-# I8 — As tres escritas do Flask ainda sem guarda de escritor (pendencias bloqueadoras da transferencia de perfis reais)
+# I8 — As tres escritas do Flask que ficavam sem guarda de escritor (FIN-ESCRITOR-UNICO-GUARDAS-1, G1-G3)
 # =====================================================================================================================
-
-PENDENCIA = ('Pendencia FIN-INTEGRACAO-1123-1126-1 (risco 1): rota do Flask sem guarda de escritor unico; '
-             'bloqueia a transferencia de perfis reais. Remover o xfail no contrato de correcao.')
-
 
 def comprovante(dsn, perfil):
     return sql(dsn, "insert into public.ir_comprovante (perfil_financeiro_id, ano_calendario, data_documento, prestador_nome, "
@@ -839,7 +835,7 @@ CASOS_I8 = ['criar_financeiro_comprovante', 'despesas_previstas_confirmar', 'vin
 
 @pytest.mark.parametrize('caso', CASOS_I8)
 def test_i8_controle_com_perfil_no_flask_a_mesma_escrita_grava(cluster, caso):  # noqa: F811
-    """Controle (nao e xfail): a requisicao do I8 e valida e grava quando o perfil esta no Flask."""
+    """Controle: a requisicao do I8 e valida e grava quando o perfil esta no Flask."""
     dsn = copiar(cluster)
     perfil, passo = escrita_flask(caso, dsn)
     antes = resumo_tabelas(dsn)
@@ -848,8 +844,7 @@ def test_i8_controle_com_perfil_no_flask_a_mesma_escrita_grava(cluster, caso):  
     assert tabelas_alteradas(antes, resumo_tabelas(dsn))
 
 
-@pytest.mark.parametrize('caso', [pytest.param(c, marks=pytest.mark.xfail(strict=True, raises=AssertionError, reason=PENDENCIA))
-                                  for c in CASOS_I8])
+@pytest.mark.parametrize('caso', CASOS_I8)
 def test_i8_flask_recusa_sem_gravar_em_perfil_do_novo_aplicativo(cluster, caso):  # noqa: F811
     """Comportamento exigido: com o perfil no novo aplicativo, o Flask recusa (409 SISTEMA_NOVO) e nada e gravado."""
     dsn = copiar(cluster)
