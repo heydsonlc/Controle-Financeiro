@@ -696,6 +696,17 @@ class ItemDespesa(db.Model):
         return result
 
 
+def mascarar_numero_cartao(numero):
+    """FIN-PRE-PRODUCAO-1: o numero do cartao so sai mascarado (os 4 ultimos digitos); o valor guardado nao muda."""
+    digitos = ''.join(c for c in str(numero or '') if c.isdigit())
+    return f'•••• {digitos[-4:]}' if len(digitos) >= 4 else None
+
+
+def numero_cartao_mascarado(numero):
+    """True para o texto que a API devolve (com o marcador), que nunca substitui o numero guardado."""
+    return '•' in str(numero or '') or '*' in str(numero or '')
+
+
 class ConfigAgregador(db.Model):
     """
     Configuração específica para itens do tipo 'Agregador' (Cartão de Crédito)
@@ -731,20 +742,20 @@ class ConfigAgregador(db.Model):
         return f'<ConfigAgregador Item:{self.item_despesa_id} Fecha:{self.dia_fechamento} Vence:{self.dia_vencimento}>'
 
     def to_dict(self):
-        # CARD-CVV-LOCK-1: codigo_seguranca (CVV) nunca sai daqui. 'possui_cvv'
-        # informa a UI se ha um codigo cadastrado (para exibir o botao de
-        # revelar) sem expor o valor — a revelacao exige senha em endpoint
-        # proprio (POST /cartoes/<id>/codigo-seguranca).
+        # CARD-CVV-LOCK-1: codigo_seguranca (CVV) nunca sai daqui.
+        # FIN-PRE-PRODUCAO-1: a consulta do CVV foi desativada (o endpoint de revelar responde 410), entao
+        # 'possui_cvv' e sempre False (a tela nao oferece revelar); o numero sai mascarado (so o final). Os valores
+        # antigos guardados nao sao alterados.
         return {
             'id': self.id,
             'item_despesa_id': self.item_despesa_id,
             'dia_fechamento': self.dia_fechamento,
             'dia_vencimento': self.dia_vencimento,
             'limite_credito': float(self.limite_credito) if self.limite_credito else None,
-            'numero_cartao': self.numero_cartao,  # Número completo
+            'numero_cartao': mascarar_numero_cartao(self.numero_cartao),  # so os 4 ultimos digitos
             'data_validade': self.data_validade,  # MM/AAAA
             'tem_codigo': self.tem_codigo if self.tem_codigo is not None else True,  # Se o cartão possui código de segurança
-            'possui_cvv': bool(self.codigo_seguranca),
+            'possui_cvv': False,
             'observacoes': self.observacoes,
             **self.dados_fechamento(),
         }

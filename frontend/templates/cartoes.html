@@ -224,7 +224,9 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label for="cartao-cvv">C&oacute;digo de Seguran&ccedil;a</label>
-                        <input type="password" id="cartao-cvv" maxlength="4" placeholder="***">
+                        <!-- FIN-PRE-PRODUCAO-1: o CVV nao e mais cadastrado (o servidor recusa); os valores antigos nao mudam. -->
+                        <input type="password" id="cartao-cvv" maxlength="4" placeholder="N&atilde;o armazenado" disabled aria-describedby="cartao-cvv-aviso">
+                        <small id="cartao-cvv-aviso">O c&oacute;digo de seguran&ccedil;a n&atilde;o &eacute; mais armazenado.</small>
                     </div>
 
                     <div class="form-group checkbox-field">

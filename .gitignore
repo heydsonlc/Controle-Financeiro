@@ -68,10 +68,16 @@ playwright-report/
 test-results/
 
 # Ferramentas locais (Claude Code / Playwright MCP)
-# settings.local.json ja e versionado deliberadamente (config de projeto);
-# apenas settings.json (cache/estado local da maquina) fica de fora.
+# FIN-PRE-PRODUCAO-1: settings.local.json (permissoes desta maquina) saiu do Git; o arquivo continua na maquina.
 .claude/settings.json
+.claude/settings.local.json
 .playwright-mcp/
+
+# FIN-PRE-PRODUCAO-1: documentos pessoais (comprovantes, notas fiscais, CNPJ, demonstrativos) e scripts locais com
+# credenciais. Nunca versionar; o build do web so copia imagens citadas pelo nome (scripts/build.mjs).
+/*.pdf
+frontend/static/img/*.pdf
+/redefinir_senha_db.ps1
 
 # Temporary files
 *.tmp

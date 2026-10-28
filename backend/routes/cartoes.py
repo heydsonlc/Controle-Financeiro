@@ -1,8 +1,8 @@
 ﻿"""
 Rotas para gerenciamento de CartÃµes de CrÃ©dito
 """
-from flask import Blueprint, request, jsonify, current_app
-from backend.models import (db, Conta, ItemDespesa, ConfigAgregador, ItemAgregado, OrcamentoAgregado,
+from flask import Blueprint, request, jsonify
+from backend.models import (db, Conta, ItemDespesa, ConfigAgregador, ItemAgregado, OrcamentoAgregado, numero_cartao_mascarado,
                             LancamentoAgregado, Categoria)
 from backend.services.cartao_service import REGRAS_DIA_FECHAMENTO, CartaoService, ConfirmacaoConsolidadaNecessaria
 from backend.services.categoria_cartao_service import CategoriaCartaoService
@@ -29,6 +29,15 @@ logger = logging.getLogger(__name__)
 def _internal_error(contexto='cartoes'):
     logger.exception('Erro interno em %s', contexto)
     return jsonify({'success': False, 'error': 'Erro interno ao processar requisicao'}), 500
+
+
+# FIN-PRE-PRODUCAO-1: o CVV nao e mais cadastrado nem consultado (os valores antigos guardados nao mudam).
+MENSAGEM_CVV_RECUSADO = 'O codigo de seguranca (CVV) nao e mais armazenado. Deixe o campo em branco. Nada foi gravado.'
+MENSAGEM_CVV_DESATIVADO = 'A consulta do codigo de seguranca (CVV) foi desativada: o CVV nao e mais exibido nem cadastrado.'
+
+
+def _cvv_informado(dados):
+    return bool(str((dados or {}).get('codigo_seguranca') or '').strip())
 
 
 def _business_error(message, status=400):
@@ -145,6 +154,8 @@ def criar_cartao():
     """Cria um novo cartÃ£o de crÃ©dito"""
     try:
         dados = request.json
+        if _cvv_informado(dados):
+            return _business_error(MENSAGEM_CVV_RECUSADO, 400)
         # FIN-CARTOES-FECHAMENTO-1 (D4): fechamento e vencimento independentes e validados.
         try:
             dia_fechamento, dia_vencimento = _dia(dados, 'dia_fechamento'), _dia(dados, 'dia_vencimento')
@@ -180,9 +191,9 @@ def criar_cartao():
             dia_fechamento=dia_fechamento,
             dia_vencimento=dia_vencimento,
             limite_credito=dados.get('limite_credito'),
-            numero_cartao=dados.get('numero_cartao'),
+            numero_cartao=None if numero_cartao_mascarado(dados.get('numero_cartao')) else dados.get('numero_cartao'),
             data_validade=dados.get('data_validade'),
-            codigo_seguranca=dados.get('codigo_seguranca'),
+            codigo_seguranca=None,  # FIN-PRE-PRODUCAO-1: nunca cadastrado
             tem_codigo=dados.get('tem_codigo', True),
             observacoes=dados.get('observacoes', '')
         )
@@ -210,6 +221,8 @@ def atualizar_cartao(id):
             return _business_error('Recurso nao encontrado', 404)
 
         dados = request.json
+        if _cvv_informado(dados):
+            return _business_error(MENSAGEM_CVV_RECUSADO, 400)
 
         # Atualizar ItemDespesa
         cartao.categoria_id = dados.get('categoria_id', cartao.categoria_id)
@@ -240,9 +253,11 @@ def atualizar_cartao(id):
             cfg.dia_fechamento = novo_fechamento
             cfg.dia_vencimento = novo_vencimento
             cartao.config_agregador.limite_credito = dados.get('limite_credito', cartao.config_agregador.limite_credito)
-            cartao.config_agregador.numero_cartao = dados.get('numero_cartao', cartao.config_agregador.numero_cartao)
+            # FIN-PRE-PRODUCAO-1: o numero mascarado que a API devolve nunca substitui o guardado; o CVV guardado
+            # nao e alterado (nem apagado) pela edicao.
+            if not numero_cartao_mascarado(dados.get('numero_cartao')):
+                cartao.config_agregador.numero_cartao = dados.get('numero_cartao', cartao.config_agregador.numero_cartao)
             cartao.config_agregador.data_validade = dados.get('data_validade', cartao.config_agregador.data_validade)
-            cartao.config_agregador.codigo_seguranca = dados.get('codigo_seguranca', cartao.config_agregador.codigo_seguranca)
             cartao.config_agregador.tem_codigo = dados.get('tem_codigo', cartao.config_agregador.tem_codigo)
             cartao.config_agregador.observacoes = dados.get('observacoes', cartao.config_agregador.observacoes)
 
@@ -259,48 +274,10 @@ def atualizar_cartao(id):
 
 @cartoes_bp.route('/<int:id>/codigo-seguranca', methods=['POST'])
 def revelar_codigo_seguranca(id):
-    """CARD-CVV-LOCK-1: revela o codigo de seguranca (CVV) mediante senha de
-    desbloqueio, exigida por CARTOES_CVV_MASTER_PASSWORD.
-
-    Mecanismo transitorio ate SEG-1 (autenticacao global): nao ha usuario/senha
-    de sessao ainda, entao a senha de desbloqueio e uma configuracao local
-    (env var), nunca com fallback para SECRET_KEY (que serve a outro proposito
-    e nao deve dobrar como segredo de CVV). Falha fechada se nao configurada:
-    nunca revela o CVV sem senha mestre definida.
+    """CARD-CVV-LOCK-1 revelava o CVV mediante senha de desbloqueio (CARTOES_CVV_MASTER_PASSWORD).
+    FIN-PRE-PRODUCAO-1: consulta desativada (410), com ou sem senha configurada; o CVV guardado nunca sai.
     """
-    try:
-        senha_mestre = current_app.config.get('CARTOES_CVV_MASTER_PASSWORD')
-        if not senha_mestre:
-            logger.error('Desbloqueio de CVV nao configurado (CARTOES_CVV_MASTER_PASSWORD ausente)')
-            return _business_error('Desbloqueio de CVV nao configurado.', 503)
-
-        dados = request.get_json(silent=True) or {}
-        senha = (dados.get('senha') or '').strip()
-        if not senha:
-            return _business_error('Senha e obrigatoria.', 400)
-
-        if senha != senha_mestre:
-            return _business_error('Senha incorreta.', 401)
-
-        cartao = _obter_cartao(id)
-        if not cartao or not cartao.config_agregador:
-            return _business_error('Cartao nao encontrado', 404)
-
-        if not cartao.config_agregador.codigo_seguranca:
-            return _business_error('Este cartao nao possui codigo de seguranca cadastrado.', 404)
-
-        resposta = jsonify({
-            'success': True,
-            'data': {
-                'codigo_seguranca': cartao.config_agregador.codigo_seguranca,
-                'expires_in_seconds': 30,
-            },
-        })
-        resposta.headers['Cache-Control'] = 'no-store'
-        return resposta, 200
-
-    except Exception:
-        return _internal_error('revelar_codigo_seguranca')
+    return _business_error(MENSAGEM_CVV_DESATIVADO, 410)
 
 
 @cartoes_bp.route('/<int:id>', methods=['DELETE'])
