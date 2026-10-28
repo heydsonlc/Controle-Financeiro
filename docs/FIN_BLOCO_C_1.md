@@ -69,7 +69,7 @@ Pela primeira vez a suíte completa não tem nenhuma falha.
 1. **Origem dos dados reais:** o banco oficial do Flask é o PostgreSQL local `controle_financeiro_dev`, e o `gastos.db` é legado. É preciso confirmar de qual dos dois parte a carga.
 2. **Saneamento de cartões:** não levar CVV, número completo nem validade. O tratamento dos dados antigos é destrutivo e precisa de autorização.
 3. **Autorizações:**
-   - push dos 57 commits;
+   - push dos 56 commits;
    - aplicação da 1127 e da 1128 no teste;
    - homologação real;
    - `exportar` contra o Supabase;
@@ -95,7 +95,7 @@ Pela primeira vez a suíte completa não tem nenhuma falha.
 - `15bc1d8`: correções de teste e ensaio das migrations;
 - este: documentação.
 
-São **57 commits** à frente do GitHub.
+São **56 commits** à frente do GitHub.
 
 **Migrations só locais**, pendentes no remoto: `20261127090000` (Mobilidade) e `20261128090000` (Documentos), ambas com reversão e ensaiadas.
 
