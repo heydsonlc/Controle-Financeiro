@@ -131,7 +131,9 @@ def test_funcoes_internas_sem_execute(conn, funcao):
 
 def test_nenhuma_tabela_nova(conn):
     cur = conn.cursor()
-    cur.execute("select count(*) from information_schema.tables where table_schema = 'financeiro' and table_name like '%perfil%'")
+    # FIN-PRE-PRODUCAO-1: preferencia_perfil (Preferencias, migration 20261201090000) nao e da gestao de perfis.
+    cur.execute("select count(*) from information_schema.tables where table_schema = 'financeiro' and table_name like '%perfil%' "
+                "and table_name <> 'preferencia_perfil'")
     assert cur.fetchone()[0] == 1  # so perfil_acesso
 
 

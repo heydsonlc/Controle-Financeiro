@@ -143,6 +143,8 @@ Ponto de atenção: o banco de teste tem 19 MB. Com muitos documentos, avaliar o
 
 ## 9. Itens necessários para produção
 
+> **Atualização (FIN-PRE-PRODUCAO-1, 28/10/2026):** origem definida (`controle_financeiro_dev`); cartões, Preferências, regra dos documentos em vários bens e `.claude/settings.local.json` resolvidos; carga, backup em PostgreSQL 17 e migrations pendentes ensaiados. Situação atual e pendências em `docs/FIN_PRE_PRODUCAO_1.md`.
+
 **Autorizações:**
 - push dos commits;
 - aplicação da 1127 e da 1128 no teste e depois na produção;
