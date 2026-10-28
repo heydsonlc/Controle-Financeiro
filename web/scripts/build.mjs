@@ -155,13 +155,20 @@ export function adaptarParaCsp(texto) {
     return texto.replace(ATRIBUTO_EVENTO, '$1data-on-$2=').replace(ATRIBUTO_ESTILO, '$1data-estilo=');
 }
 
-// Funcoes chamadas pelos data-on-* (as unicas que a ponte executa).
+// Funcoes chamadas pelos data-on-* (as unicas que a ponte executa). FIN-PRE-PRODUCAO-1: tambem metodos com caminho,
+// como window.IRDoc.abrirVinculo(...) das linhas de Documentos Fiscais (o nome completo entra na lista).
 export function funcoesDosEventos(texto) {
     const nomes = new Set();
     for (const [, duplas, simples] of texto.matchAll(/data-on-[a-z]+=(?:"([^"]*)"|'([^']*)')/g)) {
-        for (const [, nome] of String(duplas ?? simples).matchAll(/(?:^|;)\s*([A-Za-z_$][\w$]*)\s*\(/g)) nomes.add(nome);
+        for (const [, nome] of String(duplas ?? simples).matchAll(/(?:^|;)\s*([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\(/g)) nomes.add(nome);
     }
     return nomes;
+}
+
+// FIN-PRE-PRODUCAO-1: metodos passados em texto para um ajudante que monta o onclick, como
+// renderBotaoAcaoLinha('eye', 'Revisar', `window.IRDoc.abrirRevisao(${item.id})`) em imposto_renda.js.
+export function metodosEmTexto(texto) {
+    return new Set([...texto.matchAll(/`(window\.[A-Za-z_$][\w$]*\.[A-Za-z_$][\w$]*)\(/g)].map((m) => m[1]));
 }
 
 const escapar = (texto) => String(texto).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -271,6 +278,7 @@ export async function construir({ url, chave, destino = path.join(WEB, 'dist'), 
     for (const nome of JS_ORIGINAL) {
         const adaptado = adaptarParaCsp(await readFile(path.join(RAIZ, 'frontend', 'static', 'js', nome), 'utf8'));
         for (const funcao of funcoesDosEventos(adaptado)) permitidas.add(funcao);
+        for (const metodo of metodosEmTexto(adaptado)) permitidas.add(metodo);
         await writeFile(path.join(destino, 'js', 'original', nome), adaptado);
     }
     const imagens = { ...IMAGENS_ORIGINAIS };

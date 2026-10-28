@@ -6,12 +6,14 @@
 // Aqui so ha traducao de formato e as somas de apresentacao da barra lateral (o Flask tambem as fazia na rota).
 // O que a tela original oferece e o banco ainda nao atende responde "em migracao" (consorcios, documentos fiscais,
 // recorrencia no cartao, consolidacao de fatura). Recorrencia semanal e a cada 2 semanas: FIN-CATEGORIAS-RECORRENCIAS-2.
+// FIN-PRE-PRODUCAO-1: "A partir de documento" (lista, sugestao e criacao da despesa) por js/documento-financeiro.js.
 
 import { supabase } from './cliente.js';
 import {
     criarChaves, emMigracao, falha, hojeBrasilia, mensagemDeErro, ok, textoBloqueio, valorTexto,
 } from './adaptador-comum.js';
 import { centavos, deslocarMes, mesAtualBrasilia, reais } from './comum.js';
+import { responderDocumentoFinanceiro } from './documento-financeiro.js';
 import { mostrarGeracao } from './despesas-recorrencias.js';
 import { definirCompetencia, iniciarMoldura } from './moldura.js';
 
@@ -457,6 +459,8 @@ const ROTAS = [
 ];
 
 async function adaptador({ metodo, caminho, parametros, corpo }) {
+    const documento = await responderDocumentoFinanceiro({ metodo, caminho, parametros, corpo }, estado.perfilId, chaves);
+    if (documento) return documento;
     for (const [verbo, padrao, executar] of ROTAS) {
         const m = padrao.exec(caminho);
         if (m && (!verbo || verbo === metodo)) return executar(m, parametros, corpo);

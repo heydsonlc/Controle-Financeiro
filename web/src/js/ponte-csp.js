@@ -6,6 +6,8 @@
 //   argumentos literais (numero, texto entre aspas, this, this.value, event; objeto ou lista em JSON, como o
 //   editarLancamento({...}) de Lancamentos). Sem eval: so funcoes globais da lista
 //   gerada no build (window.CF_PONTE_PERMITIDAS) sao chamadas, com this = elemento, como no atributo original;
+//   FIN-PRE-PRODUCAO-1: tambem metodos com caminho da lista (window.IRDoc.abrirVinculo(4)), com this = o objeto,
+//   como no atributo original;
 // - estilos: data-estilo vira estilo pelo CSSOM (el.style.cssText), permitido pela CSP, inclusive no HTML que as telas
 //   inserem depois (MutationObserver).
 // Script classico (sem modulo): roda antes dos scripts originais, como o Flask carregava os seus.
@@ -61,17 +63,30 @@
         throw new Error(`argumento nao suportado: ${texto}`);
     }
 
+    // Nome simples (funcao global, this = elemento) ou caminho (window.Obj.metodo, this = Obj), so se estiver na lista.
+    function resolver(nome, elemento) {
+        if (!permitidas.has(nome)) return null;
+        const caminho = nome.split('.');
+        if (caminho.length === 1) return { funcao: window[nome], alvo: elemento };
+        let alvo = window;
+        for (const parte of (caminho[0] === 'window' ? caminho.slice(1, -1) : caminho.slice(0, -1))) {
+            alvo = alvo && Object.prototype.hasOwnProperty.call(alvo, parte) ? alvo[parte] : null;
+        }
+        const metodo = caminho[caminho.length - 1];
+        return alvo && Object.prototype.hasOwnProperty.call(alvo, metodo) ? { funcao: alvo[metodo], alvo } : null;
+    }
+
     function executar(expressao, elemento, evento) {
         for (const chamada of separar(expressao, ';')) {
-            const partes = /^([A-Za-z_$][\w$]*)\s*\(([\s\S]*)\)$/.exec(chamada);
-            const funcao = partes && window[partes[1]];
-            if (!partes || !permitidas.has(partes[1]) || typeof funcao !== 'function') {
+            const partes = /^([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\(([\s\S]*)\)$/.exec(chamada);
+            const alvo = partes && resolver(partes[1], elemento);
+            if (!alvo || typeof alvo.funcao !== 'function') {
                 console.warn('Ponte CSP: chamada recusada:', chamada);
                 continue;
             }
             try {
                 const args = separar(partes[2], ',').map((a) => argumento(a, elemento, evento));
-                funcao.apply(elemento, args);
+                alvo.funcao.apply(alvo.alvo, args);
             } catch (erro) {
                 console.error('Ponte CSP:', chamada, erro);
             }

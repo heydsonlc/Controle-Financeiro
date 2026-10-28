@@ -110,7 +110,9 @@ const RPCS_DE_LEITURA = new Set(['meus_perfis', 'contas_bancarias_do_perfil', 'c
     // FIN-FIDELIDADE-RECEITAS-CATEGORIAS-1 (so leitura)
     'receitas_fontes_tela', 'receitas_orcamentos_tela', 'receitas_realizadas_tela', 'categorias_tela', 'palavras_chave_tela',
     'categorias_cartao_tela', 'categoria_cartao_despesas_tela',
-    'tr_oficial_tela', 'tr_faltantes']);  // FIN-PRE-PRODUCAO-1: Indexadores (so leitura)
+    'tr_oficial_tela', 'tr_faltantes',  // FIN-PRE-PRODUCAO-1: Indexadores (so leitura)
+    // FIN-PRE-PRODUCAO-1: Documentos (so leitura): vincular, desvincular, lastro e sugestao financeira
+    'entidades_vinculaveis_tela', 'vinculos_documento_tela', 'lastro_resumo_tela', 'sugestao_financeira_documento_tela']);
 // Escrita so por RPC transacional autorizada no banco, revisada uma a uma, e so na tela que a usa.
 const RPCS_DE_ESCRITA = new Map([
     ['gerar_mes', 'despesas-recorrencias.js'],  // FIN-FIDELIDADE-DESPESAS-1: extraido de contas.js
@@ -239,7 +241,8 @@ const RPCS_DE_ESCRITA = new Map([
     ['criar_vinculo_documento', 'documentos-fiscais-adaptador.js'],
     ['atualizar_vinculo_documento', 'documentos-fiscais-adaptador.js'],
     ['remover_vinculo_documento', 'documentos-fiscais-adaptador.js'],
-    ['criar_financeiro_documento', 'documentos-fiscais-adaptador.js'],
+    // FIN-PRE-PRODUCAO-1: modulo comum a Documentos, Despesas e Lancamentos ("Gerar financeiro" / "A partir de documento")
+    ['criar_financeiro_documento', 'documento-financeiro.js'],
     // FIN-PRE-PRODUCAO-1: TR mensal (indice unico; gravar exige gerir um perfil ativo; TR usada nao muda)
     ['criar_tr', 'indexadores-adaptador.js'],
     ['editar_tr', 'indexadores-adaptador.js'],

@@ -11,3 +11,35 @@
     color: var(--cf-text-muted, #475569);
     font-size: 0.875rem;
 }
+
+/* FIN-PRE-PRODUCAO-1: vinculos ativos com "Desvincular" no modal "Vincular documento" (acrescimo ao Flask). */
+.cf-vinculos-ativos {
+    margin: 12px 20px 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--cf-border, #d7dde5);
+}
+
+.cf-vinculos-ativos h3 {
+    margin: 0 0 8px;
+    font-size: 0.95rem;
+}
+
+.cf-vinculos-ativos ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 6px;
+}
+
+.cf-vinculos-ativos li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 0.875rem;
+}
+
+.cf-vinculos-ativos .cf-vinculos-vazio {
+    color: var(--cf-text-muted, #475569);
+}

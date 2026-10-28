@@ -123,8 +123,9 @@ test('pedidos do formulario que o novo aplicativo ainda nao atende: recusados co
         .toBe('Erro: Use a ação de pagamento para marcar a despesa como paga: ela escolhe a conta bancária e registra o movimento.');
     // Semanal e a cada 2 semanas deixaram de ser recusadas (FIN-CATEGORIAS-RECORRENCIAS-2; ver recorrencias_tela.spec).
     await page.locator('#modal-despesa [data-on-click="fecharModal()"]').first().click();
+    // FIN-PRE-PRODUCAO-1: "A partir de documento" lista os documentos do perfil (o Pessoal de A nao tem nenhum).
     await page.click('.btn-doc-atalho-despesa');
-    await expect(page.locator('#doc-desp-lista')).toHaveText(/Documentos fiscais: em migração/);
+    await expect(page.locator('#doc-desp-lista')).toHaveText('Nenhum documento encontrado.');
     await abrirDespesas(page, '2029-08');
     expect(await nomes(page)).toEqual([]);
     expect(await resumo(page)).toEqual({ total: 'R$ 0,00', pendentes: 'R$ 0,00', pagas: 'R$ 0,00' });

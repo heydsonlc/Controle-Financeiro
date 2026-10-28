@@ -7,11 +7,16 @@
 // escritor unico do perfil. O texto de PDF textual e extraido aqui (pdf.js, sem servico externo); sem ele, revisao
 // manual. Continuam no sistema atual: OCR de imagem, metadados empresariais, saidas sem documento, categorias IR e
 // relatorios (Excel/PDF/ZIP).
+// FIN-PRE-PRODUCAO-1 (migration 20261130090000): entidades vinculaveis, vinculos ativos e resumo de lastro, e "Gerar
+// financeiro" (sugestao + criacao, js/documento-financeiro.js, comum com Despesas e Lancamentos). Um documento pode ser
+// vinculado a varios bens (regra do titular). Acrescimo ao Flask (que nao tinha "desvincular" na tela): o modal
+// "Vincular documento" lista os vinculos ativos com "Desvincular" (o vinculo fica inativo, historico preservado).
 
 import { supabase } from './cliente.js';
 import { criarChaves, falha, mensagemDeErro, ok } from './adaptador-comum.js';
 import { textoDoPdf } from './importacao-pdf.js';
 import { instalarAberturaDeArquivos, recusarNavegacao } from './arquivo-comprovante.js';
+import { comprovanteDoPerfil, erroDeDocumento, responderDocumentoFinanceiro } from './documento-financeiro.js';
 import { iniciarMoldura } from './moldura.js';
 
 const estado = { perfilId: null };
@@ -77,9 +82,7 @@ async function textoExtraido(arquivo, bytes) {
     }
 }
 
-const comprovanteLido = (id) => rpc((a) => supabase.rpc('ir_comprovantes_tela', a), {
-    p_perfil_id: estado.perfilId, p_filtros: {}, p_id: id,
-});
+const comprovanteLido = (id) => comprovanteDoPerfil(estado.perfilId, id);
 
 // POST /api/ir/comprovantes/upload: cada arquivo e uma chamada (o Flask devolve 207 se algum falha).
 async function enviar(formData) {
@@ -141,13 +144,27 @@ async function removerVinculo(id, vinculo) {
     return ok({ data: { id: vinculo, ativo: false } });
 }
 
-async function criarFinanceiro(id, corpo) {
-    const operacao = `financeiro:${id}:${JSON.stringify(corpo || {})}`;
-    const r = await rpc((a) => supabase.rpc('criar_financeiro_documento', a), {
-        p_perfil_id: estado.perfilId, p_comprovante_id: id, p_dados: corpo || {}, p_chave: chaves.de(operacao),
-    });
-    chaves.esquecer(operacao);
-    return { status: 201, corpo: { success: true, data: { ...r, comprovante: await comprovanteLido(id) } } };
+async function entidadesVinculaveis(parametros) {
+    return lista(await rpc((a) => supabase.rpc('entidades_vinculaveis_tela', a), {
+        p_perfil_id: estado.perfilId, p_tipo: parametros.get('tipo'), p_busca: parametros.get('busca'),
+    }));
+}
+
+const vinculosAtivos = (id) => rpc((a) => supabase.rpc('vinculos_documento_tela', a), { p_perfil_id: estado.perfilId, p_comprovante_id: id });
+
+// Cartoes e contas do perfil para o modal "Sugestao financeira" (carregarRecursosFinanceirosSugestao), como Lancamentos.
+async function cartoes() {
+    const todos = await rpc((a) => supabase.rpc('cartoes_do_perfil', a), { p_perfil_id: estado.perfilId });
+    return { status: 200, corpo: (todos || []).filter((c) => c.ativo).map((c) => ({ id: c.id, nome: c.nome, tipo: 'Agregador', ativo: true })) };
+}
+
+async function contasBancarias() {
+    const contas = await rpc((a) => supabase.rpc('contas_bancarias_tela', a), { p_perfil_id: estado.perfilId, p_status: 'ATIVO' });
+    return lista(contas || []);
+}
+
+async function resumoLastro(parametros) {
+    return ok({ data: await rpc((a) => supabase.rpc('lastro_resumo_tela', a), { p_perfil_id: estado.perfilId, p_ano: parametros.get('ano') }) });
 }
 
 async function saidas(parametros, resumo) {
@@ -176,25 +193,89 @@ const ROTAS = [
     ['POST', /^\/api\/ir\/comprovantes\/(\d+)\/vinculos$/, (m, c) => vincular(Number(m[1]), c)],
     ['PUT', /^\/api\/ir\/comprovantes\/(\d+)\/vinculos\/(\d+)$/, (m, c) => editarVinculo(Number(m[1]), Number(m[2]), c)],
     ['DELETE', /^\/api\/ir\/comprovantes\/(\d+)\/vinculos\/(\d+)$/, (m) => removerVinculo(Number(m[1]), Number(m[2]))],
-    ['POST', /^\/api\/ir\/comprovantes\/(\d+)\/criar-financeiro$/, (m, c) => criarFinanceiro(Number(m[1]), c)],
+    ['GET', /^\/api\/ir\/entidades-vinculaveis$/, (m, c, p) => entidadesVinculaveis(p)],
+    ['GET', /^\/api\/ir\/comprovantes\/(\d+)\/vinculos$/, async (m) => lista(await vinculosAtivos(Number(m[1])))],
+    ['GET', /^\/api\/ir\/lastro\/resumo$/, (m, c, p) => resumoLastro(p)],
+    ['GET', /^\/api\/cartoes\/?$/, () => cartoes()],
+    ['GET', /^\/api\/contas\/?$/, () => contasBancarias()],
 ];
 
 async function adaptador({ metodo, caminho, parametros, corpo }) {
+    const documentoFinanceiro = await responderDocumentoFinanceiro({ metodo, caminho, parametros, corpo }, estado.perfilId, chaves);
+    if (documentoFinanceiro) return documentoFinanceiro;
     for (const [verbo, padrao, executar] of ROTAS) {
         const m = padrao.exec(caminho);
         if (m && verbo === metodo) {
             try {
                 return await executar(m, corpo, parametros);
             } catch (erro) {
-                if (erro && erro.hint === 'SISTEMA_FLASK') {
-                    return falha('Os documentos deste perfil ainda são administrados pelo sistema atual (Flask). Nada foi gravado.', 409);
-                }
-                if (erro && erro.hint === 'NAO_ENCONTRADA') return falha(mensagemDeErro(erro), 404);
-                return falha(mensagemDeErro(erro), erro && erro.code === '42501' ? 403 : 400);
+                return erroDeDocumento(erro);
             }
         }
     }
     return falha(NA_FASE_1, 501);
+}
+
+// Acrescimo FIN-PRE-PRODUCAO-1: vinculos ativos com "Desvincular" no modal "Vincular documento" (a tela do Flask so
+// criava). Desvincular passa pela mesma rota DELETE (ponte-api): o vinculo fica inativo e a lista e recarregada.
+function instalarDesvinculo() {
+    const modal = document.getElementById('ir-link-modal');
+    const form = document.getElementById('ir-link-form');
+    if (!modal || !form) return;
+    const secao = document.createElement('section');
+    secao.className = 'cf-vinculos-ativos';
+    secao.setAttribute('aria-label', 'Vínculos ativos do documento');
+    const titulo = document.createElement('h3');
+    titulo.textContent = 'Vínculos ativos';
+    const listaVinculos = document.createElement('ul');
+    secao.append(titulo, listaVinculos);
+    form.after(secao);
+
+    async function desvincular(comprovante, vinculo) {
+        if (!window.confirm('Desvincular este documento? O vínculo fica inativo e o histórico é preservado.')) return;
+        const r = await (await fetch(`/api/ir/comprovantes/${comprovante}/vinculos/${vinculo}`, { method: 'DELETE' })).json();
+        if (!r.success) {
+            window.alert(r.error || 'Não foi possível desvincular o documento.');
+            return;
+        }
+        await mostrar();
+        document.getElementById('ir-btn-atualizar')?.click();
+    }
+
+    async function mostrar() {
+        const comprovante = Number(document.getElementById('ir-link-comprovante-id')?.value);
+        listaVinculos.replaceChildren();
+        if (!comprovante) return;
+        let vinculos = [];
+        try {
+            vinculos = await vinculosAtivos(comprovante);
+        } catch (_erro) {
+            vinculos = [];
+        }
+        if (!vinculos.length) {
+            const vazio = document.createElement('li');
+            vazio.className = 'cf-vinculos-vazio';
+            vazio.textContent = 'Nenhum vínculo ativo.';
+            listaVinculos.append(vazio);
+            return;
+        }
+        for (const v of vinculos) {
+            const item = document.createElement('li');
+            const texto = document.createElement('span');
+            texto.textContent = `${v.tipo_entidade}${v.resumo_entidade ? ` - ${v.resumo_entidade}` : ''} (${v.status_lastro})`;
+            const botao = document.createElement('button');
+            botao.type = 'button';
+            botao.className = 'ir-secondary-btn cf-desvincular';
+            botao.textContent = 'Desvincular';
+            botao.addEventListener('click', () => desvincular(comprovante, v.id));
+            item.append(texto, botao);
+            listaVinculos.append(item);
+        }
+    }
+
+    new MutationObserver(() => {
+        if (modal.classList.contains('open')) mostrar();
+    }).observe(modal, { attributes: true, attributeFilter: ['class'] });
 }
 
 const contextoMoldura = await iniciarMoldura();
@@ -202,6 +283,7 @@ if (contextoMoldura && contextoMoldura.perfil) {
     estado.perfilId = contextoMoldura.perfil.id;
     window.CF_REGISTRAR_ADAPTADOR(adaptador);
     instalarAberturaDeArquivos(estado.perfilId);  // "Abrir arquivo" (link /api/ir/comprovantes/<id>/arquivo)
+    instalarDesvinculo();
     recusarNavegacao(['#ir-btn-exportar', '#ir-btn-excel', '#ir-btn-pdf'],
         'Relatório de documentos fiscais (Excel/PDF): continua no sistema atual nesta fase. Nada foi gravado.');
 } else if (contextoMoldura) {

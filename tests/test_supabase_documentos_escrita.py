@@ -262,15 +262,18 @@ def test_documento_nao_gera_duas_despesas_e_lancamentos_pagos(banco):
         assert sql(banco, 'select valor from public.lancamento_agregado where id = %s', (c['entidade_id'],)) == [{'valor': Decimal('25.00')}]
 
 
-def test_vinculo_patrimonial_um_documento_um_bem(banco):
+def test_vinculo_patrimonial_um_documento_em_varios_bens(banco):
+    # FIN-PRE-PRODUCAO-1 (regra do titular, migration 20261130090000): um documento pode ser vinculado a varios bens.
     sql(banco, "update financeiro.perfil_acesso set papel = 'TITULAR', pode_gerir = true where perfil_financeiro_id = %s", (EMPRESA,))
     atribuir(banco, 'EMPRESA')
     bens = [rpc(banco, 'criar_bem_patrimonial', EMPRESA, {'nome': f'Bem {i} (ficticio)', 'valor_aquisicao': 100}, chave())['bem_id']
             for i in range(2)]
     doc = enviar(banco, PNG, perfil=EMPRESA)['comprovante_id']
-    rpc(banco, 'criar_vinculo_documento', EMPRESA, doc, {'tipo_entidade': 'PATRIMONIO', 'entidade_id': bens[0]})
-    e = erro(rpc, banco, 'criar_vinculo_documento', EMPRESA, doc, {'tipo_entidade': 'PATRIMONIO', 'entidade_id': bens[1]})
-    assert 'ja esta vinculado a um bem' in str(e)
+    for bem in bens:
+        rpc(banco, 'criar_vinculo_documento', EMPRESA, doc, {'tipo_entidade': 'PATRIMONIO', 'entidade_id': bem})
+    ativos = sql(banco, "select entidade_id from public.ir_comprovante_vinculo where comprovante_id = %s and tipo_entidade = 'PATRIMONIO' "
+                        "and ativo order by entidade_id", (doc,))
+    assert [a['entidade_id'] for a in ativos] == sorted(bens)
 
 
 def test_privilegios(banco):

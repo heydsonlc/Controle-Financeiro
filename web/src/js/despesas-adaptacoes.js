@@ -30,19 +30,8 @@
         document.getElementById('despesas-lista').dataset.competenciaCarregada = competencia;
     };
 
-    // 3. "A partir de documento" depende de Documentos Fiscais (OCR), ainda em migracao: o seletor original abre e
-    //    informa, em vez de mostrar uma lista vazia.
-    window.abrirSeletorDocumentoDespesa = function abrirSeletorDocumentoDespesa() {
-        const modal = document.getElementById('doc-desp-seletor-modal');
-        if (!modal) return;
-        modal.style.display = 'flex';
-        modal.setAttribute('aria-hidden', 'false');
-        const aviso = document.createElement('p');
-        aviso.className = 'doc-atalho-vazio';
-        aviso.textContent = 'Documentos fiscais: em migração para o novo aplicativo. Até lá, o lançamento a partir de '
-            + 'documento continua no sistema atual.';
-        document.getElementById('doc-desp-lista').replaceChildren(aviso);
-    };
+    // 3. "A partir de documento": o seletor original (despesas.js) lista os documentos do perfil (FIN-PRE-PRODUCAO-1,
+    //    js/documento-financeiro.js); nada a adaptar aqui.
 
     // 2. Pagamento (FIN-MOVIMENTACOES-1): o pagamento da despesa e integral. "Pagar outro Valor" continua, mas a
     //    diferenca para o devido exige classificacao (juros, desconto ou ajuste de quitacao) e justificativa.

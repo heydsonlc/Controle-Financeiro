@@ -741,3 +741,34 @@ def semear_mobilidade_e2e(cur):
                 (perfil, categoria, json.dumps({'tipo_evento': 'TRANSPORTE_APP', 'caminho': {
                     'nome': CAMINHO_APP_E2E_B, 'km_mensal_estimado': 300, 'preco_medio_por_km': 2.5},
                     'calculo': {'valor_mensal': 750}})))
+
+
+# FIN-PRE-PRODUCAO-1 (documentos_financeiro_tela.spec.mjs): usuario C, titular de uma Empresa FICTICIA ja administrada pelo novo
+# aplicativo (escritor NOVO), com dois bens e documentos fiscais ficticios, para vincular e desvincular (um documento em
+# varios bens), "Gerar financeiro" e "A partir de documento" (Despesas e Lancamentos) pela tela. A e B nao mudam.
+USUARIO_C = {'id': str(uuid.UUID('cccccccc-0000-4000-8000-00000000000c')), 'email': 'usuario.c@teste.local'}
+EMPRESA_C = {'id': 110, 'nome': 'Empresa C (ficticia)'}
+BENS_E2E_C = ('Notebook C (ficticio)', 'Monitor C (ficticio)')
+DOCUMENTOS_E2E_C = ('Nota de itens C (ficticia)', 'Servico C (ficticio)', 'Despesa C (ficticia)', 'Lancamento C (ficticio)')
+
+
+def semear_empresa_c_e2e(cur):
+    cur.execute('insert into auth.users (id, email) values (%s, %s)', (USUARIO_C['id'], USUARIO_C['email']))
+    cur.execute("insert into public.perfil_financeiro (id, nome, tipo, cor, ativo, padrao) values (%s, %s, 'EMPRESA', '#0f766e', true, false)",
+                (EMPRESA_C['id'], EMPRESA_C['nome']))
+    cur.execute("insert into financeiro.perfil_acesso (user_id, perfil_financeiro_id, papel, pode_gerir) values (%s, %s, 'TITULAR', true)",
+                (USUARIO_C['id'], EMPRESA_C['id']))
+    cur.execute('select financeiro.definir_gerador_recorrencia(%s, %s, %s, %s)',
+                (EMPRESA_C['id'], 'NOVO', 'administrador de teste', 'cenario ficticio E2E'))
+    # Categoria de Despesa da Empresa C (as categorias do perfil sao as que a sugestao financeira oferece, como no Flask).
+    cur.execute("insert into public.categoria (nome, cor, ativo, sistemica, bloquear_edicao, bloquear_exclusao, perfil_financeiro_id) "
+                "values ('Servicos C (ficticia)', '#0f766e', true, false, false, false, %s)", (EMPRESA_C['id'],))
+    for nome, valor in zip(BENS_E2E_C, (4200, 1300)):
+        cur.execute("insert into public.bem_patrimonial (perfil_financeiro_id, nome, categoria, valor_aquisicao, data_aquisicao, status, "
+                    "status_documental, created_at, updated_at) values (%s, %s, 'Equipamentos', %s, current_date, 'ATIVO', 'SEM_LASTRO', "
+                    "now(), now())", (EMPRESA_C['id'], nome, valor))
+    for n, (nome, valor) in enumerate(zip(DOCUMENTOS_E2E_C, (5500, 300, 120, 45)), start=1):
+        cur.execute("insert into public.ir_comprovante (perfil_financeiro_id, ano_calendario, data_documento, prestador_nome, valor, "
+                    "dedutivel, status, hash_arquivo, created_at, updated_at) values (%s, extract(year from current_date)::int, "
+                    "current_date - %s, %s, %s, false, 'PENDENTE_REVISAO', %s, now(), now())",
+                    (EMPRESA_C['id'], n, nome, valor, f'c{n:063d}'))

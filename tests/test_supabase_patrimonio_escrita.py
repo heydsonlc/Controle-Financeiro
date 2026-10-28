@@ -185,9 +185,15 @@ def test_leituras_da_tela_iguais_depois_da_escrita(comparacao):
 def test_documentos_vinculaveis_iguais_ao_flask(comparacao):
     r = flask(comparacao['flask'], [('perfil', EMPRESA), ('docs', 'get', '/api/patrimonio/documentos-vinculaveis', None),
                                     ('busca', 'get', '/api/patrimonio/documentos-vinculaveis?busca=INFO', None)])
+    # FIN-PRE-PRODUCAO-1 (regra do titular): um documento ja ligado a um bem continua vinculavel a outro. Fora esses
+    # (o Flask os esconde), a lista e a do Flask.
+    ligados = {x['comprovante_id'] for x in sql(comparacao['novo'], "select comprovante_id from public.ir_comprovante_vinculo "
+                                                                   "where tipo_entidade = 'PATRIMONIO' and ativo")}
     for nome, busca in (('docs', None), ('busca', 'INFO')):
         novo = rpc(comparacao['novo'], 'patrimonio_documentos_vinculaveis_tela', EMPRESA, busca)
-        assert json.loads(json.dumps(novo, default=str)) == json.loads(json.dumps(r[nome][1]['data'])), nome
+        sem_ligados = [d for d in json.loads(json.dumps(novo, default=str)) if d['id'] not in ligados]
+        assert sem_ligados == json.loads(json.dumps(r[nome][1]['data'])), nome
+    assert ligados  # o cenario tem documento ligado a um bem
 
 
 def sugestao_no_navegador(dados):
@@ -315,11 +321,13 @@ def test_bens_so_na_empresa_e_exclusao_so_sem_documento(banco):
                   str(uuid.uuid4()))['bem_id']
     assert sql(dsn, 'select status_documental, valor_aquisicao from public.bem_patrimonial where id = %s', (com_doc,))[0] == \
         {'status_documental': 'COM_LASTRO', 'valor_aquisicao': Decimal('7500.55')}
-    # Documento ja vinculado a outro bem: recusado (um documento, um bem).
-    e = erro(rpc, dsn, 'vincular_documento_bem', EMPRESA, livre, {'comprovante_id': docs[0]})
-    assert 'ja esta vinculado' in str(e)
-    e = erro(rpc, dsn, 'criar_bem_de_documento', EMPRESA, {'comprovante_id': docs[0]}, str(uuid.uuid4()))
-    assert 'ja esta vinculado' in str(e)
+    # FIN-PRE-PRODUCAO-1 (regra do titular, migration 20261130090000): o mesmo documento pode estar em varios bens,
+    # vinculado a outro bem ou originando um bem novo (nota com varios itens).
+    outro = rpc(dsn, 'criar_bem_patrimonial', EMPRESA, {'nome': 'Outro com o mesmo documento'}, str(uuid.uuid4()))['bem_id']
+    rpc(dsn, 'vincular_documento_bem', EMPRESA, outro, {'comprovante_id': docs[0]})
+    rpc(dsn, 'criar_bem_de_documento', EMPRESA, {'comprovante_id': docs[0]}, str(uuid.uuid4()))
+    assert sql(dsn, "select count(distinct entidade_id) as n from public.ir_comprovante_vinculo where comprovante_id = %s "
+                    "and tipo_entidade = 'PATRIMONIO' and ativo", (docs[0],))[0]['n'] == 3
     # Com documento (mesmo trocado: o vinculo anterior fica inativo), nao exclui; sem documento, exclui.
     rpc(dsn, 'vincular_documento_bem', EMPRESA, com_doc, {'comprovante_id': docs[1]})
     assert erro(rpc, dsn, 'excluir_bem_patrimonial', EMPRESA, com_doc).diag.message_hint == 'COM_DOCUMENTO'

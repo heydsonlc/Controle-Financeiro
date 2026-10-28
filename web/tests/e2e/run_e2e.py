@@ -45,6 +45,7 @@ from tests.supabase_local import (  # noqa: E402
     PERFIS,
     USUARIO_A,
     USUARIO_B,
+    USUARIO_C,
     ClusterLocal,
     PostgrestLocal,
     assinar_jwt,
@@ -56,6 +57,7 @@ from tests.supabase_local import (  # noqa: E402
     semear_financiamento_e2e,
     semear_mobilidade_e2e,
     semear_documentos_fiscais_e2e,
+    semear_empresa_c_e2e,
     semear_patrimonio_e2e,
     semear_pendencia_e2e,
     semear_receitas_e2e,
@@ -67,6 +69,7 @@ CHAVE_PUBLICAVEL = 'sb_publishable_harness_local_somente_teste'
 CONTAS = {
     USUARIO_A['email']: {**USUARIO_A, 'senha': 'Senha-ficticia-A-2026'},
     USUARIO_B['email']: {**USUARIO_B, 'senha': 'Senha-ficticia-B-2026'},
+    USUARIO_C['email']: {**USUARIO_C, 'senha': 'Senha-ficticia-C-2026'},  # FIN-PRE-PRODUCAO-1 (Empresa C)
 }
 HOP_BY_HOP = {'connection', 'keep-alive', 'transfer-encoding', 'content-length', 'server', 'date'}
 
@@ -301,6 +304,7 @@ def main():
                 semear_patrimonio_e2e(cur)  # FIN-FIDELIDADE-PATRIMONIO-1 (patrimonio_tela.spec.mjs)
                 semear_documentos_fiscais_e2e(cur)  # FIN-FIDELIDADE-DOCUMENTOS-1 (documentos_fiscais_tela.spec.mjs)
                 semear_mobilidade_e2e(cur)  # FIN-FIDELIDADE-PATRIMONIO-1 (mobilidade_tela.spec.mjs)
+                semear_empresa_c_e2e(cur)  # FIN-PRE-PRODUCAO-1 (documentos_financeiro_tela.spec.mjs)
             conn.close()
 
             def consolidar(cartao, competencia, criar_se_faltar=False):
@@ -351,7 +355,8 @@ def main():
                     npx = shutil.which('npx') or 'npx'
                     env = {**os.environ, 'CF_WEB_BASE_URL': origem, 'CF_E2E_LOCAL': '1',
                            'CF_SENHA_A': CONTAS[USUARIO_A['email']]['senha'],
-                           'CF_SENHA_B': CONTAS[USUARIO_B['email']]['senha']}
+                           'CF_SENHA_B': CONTAS[USUARIO_B['email']]['senha'],
+                           'CF_EMAIL_C': USUARIO_C['email'], 'CF_SENHA_C': CONTAS[USUARIO_C['email']]['senha']}
                     return subprocess.run([npx, 'playwright', 'test', '-c', 'playwright.config.mjs', *extras],
                                           cwd=WEB, env=env).returncode
                 except KeyboardInterrupt:

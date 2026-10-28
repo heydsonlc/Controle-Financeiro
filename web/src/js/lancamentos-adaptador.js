@@ -5,11 +5,12 @@
 // - despesa direta "paga" na criacao e recusada: o pagamento escolhe a conta bancaria e registra o movimento (Despesas);
 // - confirmar recebimento e entrada pontual sem conta bancaria: recusados (a receita e recebida em Receitas, com conta);
 // - editar compra de cartao aqui gravaria uma compra nova (o Flask duplica): recusado, a correcao fica na tela de Cartoes;
-// - "A partir de documento" (Imposto de Renda): em migracao (MVP 5).
+// - "A partir de documento" (FIN-PRE-PRODUCAO-1): lista, sugestao e criacao do lancamento por js/documento-financeiro.js.
 
 import { supabase } from './cliente.js';
 import { criarChaves, emMigracao, falha, mensagemDeErro, ok, textoBloqueio, valorTexto } from './adaptador-comum.js';
 import { confirmacoes, consolidadaDoErro } from './fechamento.js';
+import { responderDocumentoFinanceiro } from './documento-financeiro.js';
 import { iniciarMoldura } from './moldura.js';
 
 const estado = { perfilId: null };
@@ -225,6 +226,8 @@ const ROTAS = [
 ];
 
 async function adaptador({ metodo, caminho, parametros, corpo }) {
+    const documento = await responderDocumentoFinanceiro({ metodo, caminho, parametros, corpo }, estado.perfilId, chaves);
+    if (documento) return documento;
     for (const [verbo, padrao, executar] of ROTAS) {
         const m = padrao.exec(caminho);
         if (m && verbo === metodo) {
