@@ -13,16 +13,17 @@ from flask import Blueprint, jsonify, request
 try:
     from backend.models import db
     from backend.services.despesa_prevista_service import confirmar, adiar, ignorar
-    from backend.services.gerador_recorrencia_service import recusa_escritor_unico
-    from backend.services.perfil_financeiro_service import PerfilFinanceiroService
+    from backend.services.gerador_recorrencia_service import registrar_guarda_escritor_unico
 except ImportError:
     from models import db
     from services.despesa_prevista_service import confirmar, adiar, ignorar
-    from services.gerador_recorrencia_service import recusa_escritor_unico
-    from services.perfil_financeiro_service import PerfilFinanceiroService
+    from services.gerador_recorrencia_service import registrar_guarda_escritor_unico
 
 
 despesas_previstas_bp = Blueprint('despesas_previstas', __name__)
+# FIN-MOBILIDADE-2: o novo aplicativo grava despesas previstas; perfil atribuido a ele tem confirmar, adiar e ignorar
+# recusados aqui (409 SISTEMA_NOVO, nada gravado). Substitui a guarda so do confirmar com meio de pagamento (G2).
+registrar_guarda_escritor_unico(despesas_previstas_bp, 'Despesas previstas')
 
 
 def _ler_payload_request():
@@ -36,13 +37,6 @@ def _ler_payload_request():
 def confirmar_despesa_prevista(despesa_id):
     try:
         payload = _ler_payload_request()
-        # FIN-ESCRITOR-UNICO-GUARDAS-1 (G2): com meio_pagamento, a confirmacao cria Conta ou lancamento de cartao no
-        # perfil ativo; perfil do novo aplicativo recusa. So a troca de status (dado de Mobilidade) segue como antes.
-        if payload.get('meio_pagamento'):
-            recusa = recusa_escritor_unico(PerfilFinanceiroService.obter_perfil_ativo_id(), 'Despesas previstas',
-                                           f'confirmacao da despesa prevista {despesa_id}')
-            if recusa:
-                return recusa
         desp, entidade_criada = confirmar(despesa_id, payload or None)
         db.session.commit()
         resp_data = {

@@ -104,6 +104,8 @@ As reversões só podem ser aplicadas nesta ordem:
 
 **1126 → 1125 → 1124 → 1123**
 
+**Atualização (FIN-MOBILIDADE-2):** a `20261127090000` (escrita de Mobilidade) usa `exigir_escrita_novo`, da 1124, e por isso é revertida **antes** de todas: **1127 → 1126 → 1125 → 1124 → 1123**. O cenário I7 cobre a cadeia completa.
+
 Os arquivos ficam em `supabase/reversao/`. A reaplicação é em ordem crescente: 1123 → 1124 → 1125 → 1126.
 
 A reversão da 1124 **não confere a ordem**. Se for aplicada com a 1125 ou a 1126 ainda presentes:

@@ -15,6 +15,7 @@ from dateutil.relativedelta import relativedelta
 try:
     from backend.models import db, DespesaPrevista
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
+    from backend.services.gerador_recorrencia_service import registrar_guarda_escritor_unico
     from backend.services.transporte_app_service import (
         ORIGEM_TIPO_TRANSPORTE_APP,
         listar_caminhos_transporte_app,
@@ -25,6 +26,7 @@ try:
 except ImportError:
     from models import db, DespesaPrevista
     from services.perfil_financeiro_service import PerfilFinanceiroService
+    from services.gerador_recorrencia_service import registrar_guarda_escritor_unico
     from services.transporte_app_service import (
         ORIGEM_TIPO_TRANSPORTE_APP,
         listar_caminhos_transporte_app,
@@ -35,6 +37,8 @@ except ImportError:
 
 
 mobilidade_app_bp = Blueprint('mobilidade_app', __name__)
+# FIN-MOBILIDADE-2: escritor unico (perfil do novo aplicativo: 409 SISTEMA_NOVO, nada gravado).
+registrar_guarda_escritor_unico(mobilidade_app_bp, 'Transporte por app')
 
 
 def _ler_payload_request():

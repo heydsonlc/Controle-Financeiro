@@ -9,6 +9,7 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+from dateutil.relativedelta import relativedelta
 from flask import Flask
 
 from backend.models import (
@@ -223,7 +224,9 @@ def test_criar_recorrencia_assinatura_sem_valor_falha(app_context):
 def test_suprimir_despesas_previstas_futuras(app_context):
     hoje = date.today().replace(day=1)
     d1 = _despesa_prevista_app(origem_id=5, data_prevista=hoje, status='PREVISTA')
-    d2 = _despesa_prevista_app(origem_id=5, data_prevista=date(2026, 8, 1), status='PREVISTA')
+    # Futura em qualquer data de execucao (a supressao so alcanca previstas a partir do mes atual); antes era 01/08/2026,
+    # que deixou de ser futura e fazia o teste falhar (1 == 2).
+    d2 = _despesa_prevista_app(origem_id=5, data_prevista=hoje + relativedelta(months=2), status='PREVISTA')
     db.session.commit()
     n = suprimir_despesas_previstas_por_recorrencia('TRANSPORTE_APP', 5, 'TRANSPORTE_APP')
     db.session.commit()

@@ -710,6 +710,12 @@ CAMINHO_APP_E2E_B = 'App E2E (ficticio)'
 
 def semear_mobilidade_e2e(cur):
     perfil = PERFIS['PERFIL_B']['id']
+    # FIN-MOBILIDADE-2: as categorias sistemicas MOB_* como o Flask as cria (o novo aplicativo so as procura).
+    from backend.services.categoria_default import CATEGORIAS_SISTEMICAS_MOBILIDADE
+    for codigo, d in CATEGORIAS_SISTEMICAS_MOBILIDADE.items():
+        cur.execute("insert into public.categoria (nome, descricao, cor, icone, ativo, sistemica, codigo_sistema, modulo_origem, "
+                    "bloquear_edicao, bloquear_exclusao) values (%s, %s, %s, %s, true, true, %s, 'mobilidade', true, true)",
+                    (d['nome'], d.get('descricao'), d.get('cor'), d.get('icone'), codigo))
     cur.execute("select id from public.categoria order by id limit 1")
     categoria = cur.fetchone()[0]
     cur.execute("insert into public.veiculo (perfil_financeiro_id, nome, tipo, combustivel, autonomia_km_l, status, data_inicio, "

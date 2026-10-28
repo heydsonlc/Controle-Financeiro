@@ -36,6 +36,7 @@ try:
         atualizar_assinatura,
     )
     from backend.services.perfil_financeiro_service import PerfilFinanceiroService
+    from backend.services.gerador_recorrencia_service import registrar_guarda_escritor_unico
 except ImportError:
     from models import db, Veiculo, DespesaPrevista, VeiculoRegraManutencaoKm
     from services.veiculo_service import (
@@ -57,9 +58,13 @@ except ImportError:
         atualizar_assinatura,
     )
     from services.perfil_financeiro_service import PerfilFinanceiroService
+    from services.gerador_recorrencia_service import registrar_guarda_escritor_unico
 
 
 veiculos_bp = Blueprint('veiculos', __name__)
+# FIN-MOBILIDADE-2: escritor unico. Perfil atribuido ao novo aplicativo tem as escritas de Mobilidade recusadas aqui
+# (409 SISTEMA_NOVO, nada gravado); consultas continuam.
+registrar_guarda_escritor_unico(veiculos_bp, 'Mobilidade')
 
 
 def _ler_payload_request():

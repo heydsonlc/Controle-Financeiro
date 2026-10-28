@@ -98,6 +98,9 @@ def test_categoria_sistemica_bloqueia_edicao_inativacao_e_exclusao(client, app_c
 
 
 def test_projecoes_veiculo_usam_categorias_sistemicas_granulares(app_context):
+    # gerar_projecoes_mvp projeta a partir do mes atual (meses_futuros=2): os eventos anuais ficam no mes corrente para
+    # cair na janela em qualquer data. Antes o mes fixo (6) so caia na janela em maio/junho (KeyError 'IPVA').
+    mes_atual = date.today().month
     veiculo = Veiculo(
         nome='Honda City',
         tipo='carro',
@@ -106,11 +109,11 @@ def test_projecoes_veiculo_usam_categorias_sistemicas_granulares(app_context):
         status='ATIVO',
         data_inicio=date(2026, 6, 1),
         combustivel_valor_mensal=Decimal('600.00'),
-        ipva_mes=6,
+        ipva_mes=mes_atual,
         ipva_valor=Decimal('1600.00'),
-        seguro_mes=6,
+        seguro_mes=mes_atual,
         seguro_valor=Decimal('2200.00'),
-        licenciamento_mes=6,
+        licenciamento_mes=mes_atual,
         licenciamento_valor=Decimal('180.00'),
     )
     db.session.add(veiculo)

@@ -105,7 +105,7 @@ const RPCS_DE_LEITURA = new Set(['meus_perfis', 'contas_bancarias_do_perfil', 'c
     // FIN-FIDELIDADE-PATRIMONIO-1 (Mobilidade, fase 1, so leitura)
     'mobilidade_categorias_tela', 'veiculos_tela', 'projecoes_mobilidade_tela', 'veiculo_uso_tela', 'veiculo_regras_km_tela',
     'veiculo_manutencoes_km_tela', 'veiculo_financiamento_tela', 'mobilidade_ativa_tela', 'mobilidade_assinaturas_tela',
-    'transporte_app_tela',
+    'transporte_app_tela', 'previa_mobilidade',  // FIN-MOBILIDADE-2: previa da ativacao (so le)
     'consorcios_tela',  // FIN-FIDELIDADE-CONTRATOS-1 (Consorcios, so leitura)
     // FIN-FIDELIDADE-RECEITAS-CATEGORIAS-1 (so leitura)
     'receitas_fontes_tela', 'receitas_orcamentos_tela', 'receitas_realizadas_tela', 'categorias_tela', 'palavras_chave_tela',
@@ -210,6 +210,26 @@ const RPCS_DE_ESCRITA = new Map([
     ['editar_bem_patrimonial', 'patrimonio-adaptador.js'],
     ['vincular_documento_bem', 'patrimonio-adaptador.js'],
     ['excluir_bem_patrimonial', 'patrimonio-adaptador.js'],
+    // FIN-MOBILIDADE-2 (veiculos, modalidade ativa, assinaturas, transporte por app e despesas previstas; escritor unico)
+    ['criar_veiculo', 'mobilidade-adaptador.js'],
+    ['editar_veiculo', 'mobilidade-adaptador.js'],
+    ['converter_veiculo', 'mobilidade-adaptador.js'],
+    ['gerar_projecoes_veiculo', 'mobilidade-adaptador.js'],
+    ['excluir_veiculo', 'mobilidade-adaptador.js'],
+    ['criar_regra_km_veiculo', 'mobilidade-adaptador.js'],
+    ['excluir_regra_km_veiculo', 'mobilidade-adaptador.js'],
+    ['gerar_manutencao_km_veiculo', 'mobilidade-adaptador.js'],
+    ['salvar_financiamento_veiculo', 'mobilidade-adaptador.js'],
+    ['excluir_financiamento_veiculo', 'mobilidade-adaptador.js'],
+    ['ativar_mobilidade', 'mobilidade-adaptador.js'],
+    ['criar_assinatura_mobilidade', 'mobilidade-adaptador.js'],
+    ['editar_assinatura_mobilidade', 'mobilidade-adaptador.js'],
+    ['criar_caminho_app', 'mobilidade-adaptador.js'],
+    ['editar_caminho_app', 'mobilidade-adaptador.js'],
+    ['excluir_caminho_app', 'mobilidade-adaptador.js'],
+    ['confirmar_despesa_prevista', 'mobilidade-adaptador.js'],
+    ['adiar_despesa_prevista', 'mobilidade-adaptador.js'],
+    ['ignorar_despesa_prevista', 'mobilidade-adaptador.js'],
     // FIN-MIGRACAO-FIDELIDADE-FASE-1 (gestao de perfis; o banco exige pode_gerir do perfil). Camada unica: perfil.js
     ['criar_perfil', 'perfil.js'],
     ['atualizar_perfil', 'perfil.js'],

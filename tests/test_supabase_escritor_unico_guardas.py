@@ -84,8 +84,9 @@ def test_g3_no_perfil_do_flask_o_flask_cria_edita_e_remove_vinculo_patrimonial(c
 
 
 def test_fora_da_guarda_continuam_como_antes(cluster):  # noqa: F811
-    """Sem escrita compartilhada com o novo aplicativo: confirmar sem meio de pagamento (so o status, dado de Mobilidade,
-    FIN-MOBILIDADE-2) e vinculo de documento que nao e PATRIMONIO (Documentos, FIN-DOCUMENTOS-2)."""
+    """Sem escrita compartilhada com o novo aplicativo: vinculo de documento que nao e PATRIMONIO (Documentos,
+    FIN-DOCUMENTOS-2) continua no Flask. A confirmacao sem meio de pagamento, que so troca o status da prevista, ficava
+    fora da G2; com FIN-MOBILIDADE-2 o novo aplicativo grava despesas previstas e o blueprint inteiro e guardado."""
     dsn = copiar(cluster)
     prevista = despesa_prevista(dsn, PESSOAL)
     doc = comprovante(dsn, PESSOAL)
@@ -93,11 +94,10 @@ def test_fora_da_guarda_continuam_como_antes(cluster):  # noqa: F811
     antes = resumo_tabelas(dsn)
     r = flask(dsn, [('perfil', PESSOAL), ('confirmar', 'post', f'/api/despesas-previstas/{prevista}/confirmar', {}),
                     ('vinculo', 'post', f'/api/ir/comprovantes/{doc}/vinculos', {'tipo_entidade': 'OUTRO'})])
-    assert r['confirmar'][0] == 200 and r['confirmar'][1]['data']['entidade_criada'] is None, r['confirmar']
+    assert r['confirmar'][0] == 409 and r['confirmar'][1]['codigo'] == 'SISTEMA_NOVO', r['confirmar']
     assert r['vinculo'][0] == 201, r['vinculo']
-    assert set(tabelas_alteradas(antes, resumo_tabelas(dsn))) <= {'public.despesa_prevista', 'public.ir_comprovante_vinculo',
-                                                                  'public.perfil_financeiro'}
-    assert sql(dsn, "select count(*) n from public.item_despesa where nome like '%%Fornecedor ficticio integ%%'")[0]['n'] == 0
+    assert set(tabelas_alteradas(antes, resumo_tabelas(dsn))) <= {'public.ir_comprovante_vinculo', 'public.perfil_financeiro'}
+    assert sql(dsn, 'select status from public.despesa_prevista where id = %s', (prevista,)) == [{'status': 'PREVISTA'}]
 
 
 def aguardar(condicao, segundos):

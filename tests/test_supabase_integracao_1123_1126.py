@@ -50,7 +50,8 @@ PESSOAL, EMPRESA, PERFIL_B = ID['PESSOAL'], ID['EMPRESA'], ID['PERFIL_B']
 CATEGORIA = 951  # 'Moradia R' (cenario ficticio de semear_recorrencias)
 MIGRATIONS = ROOT / 'supabase' / 'migrations'
 REVERSAO = ROOT / 'supabase' / 'reversao'
-VERSOES = ('20261123090000', '20261124090000', '20261125090000', '20261126090000')
+# 1123 a 1126 e as posteriores (FIN-MOBILIDADE-2: 20261127): todas revertem em ordem inversa e reaplicam em ordem.
+VERSOES = tuple(sorted(m.name[:14] for m in MIGRATIONS.glob('*.sql') if m.name[:14] >= '20261123090000'))
 
 FIN = {  # SAC sem indexador (nao depende de TR), 24 parcelas a partir de 05/03/2027
     'nome': 'SAC integracao (ficticio)', 'produto': 'SFH', 'sistema_amortizacao': 'SAC', 'indexador_saldo': None,
@@ -771,10 +772,10 @@ def test_i7_reversoes_em_ordem_inversa_e_reaplicacao(cluster, base_1122):  # noq
     dsn = copiar(cluster)
     completo = esquema(dsn)
     reversoes = {v: next(REVERSAO.glob(f'{v}_*.sql')) for v in VERSOES}
-    for versao in reversed(VERSOES):  # 1126, 1125, 1124, 1123
+    for versao in reversed(VERSOES):  # 1127, 1126, 1125, 1124, 1123
         executar_arquivo(dsn, reversoes[versao])
     assert diferenca_esquema(esquema(dsn), base_1122) == {'funcoes': [], 'colunas': [], 'privilegios': []}
-    for versao in VERSOES:  # 1123, 1124, 1125, 1126
+    for versao in VERSOES:  # 1123 ... 1127
         executar_arquivo(dsn, next(MIGRATIONS.glob(f'{versao}_*.sql')))
     assert diferenca_esquema(esquema(dsn), completo) == {'funcoes': [], 'colunas': [], 'privilegios': []}
     # Funciona depois da reaplicacao: recorrencia semanal, financiamento e caixinha num perfil do novo aplicativo.
