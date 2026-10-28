@@ -112,7 +112,8 @@ const RPCS_DE_LEITURA = new Set(['meus_perfis', 'contas_bancarias_do_perfil', 'c
     'categorias_cartao_tela', 'categoria_cartao_despesas_tela',
     'tr_oficial_tela', 'tr_faltantes',  // FIN-PRE-PRODUCAO-1: Indexadores (so leitura)
     // FIN-PRE-PRODUCAO-1: Documentos (so leitura): vincular, desvincular, lastro e sugestao financeira
-    'entidades_vinculaveis_tela', 'vinculos_documento_tela', 'lastro_resumo_tela', 'sugestao_financeira_documento_tela']);
+    'entidades_vinculaveis_tela', 'vinculos_documento_tela', 'lastro_resumo_tela', 'sugestao_financeira_documento_tela',
+    'preferencias_tela']);  // FIN-PRE-PRODUCAO-1: Preferencias (so leitura)
 // Escrita so por RPC transacional autorizada no banco, revisada uma a uma, e so na tela que a usa.
 const RPCS_DE_ESCRITA = new Map([
     ['gerar_mes', 'despesas-recorrencias.js'],  // FIN-FIDELIDADE-DESPESAS-1: extraido de contas.js
@@ -247,6 +248,8 @@ const RPCS_DE_ESCRITA = new Map([
     ['criar_tr', 'indexadores-adaptador.js'],
     ['editar_tr', 'indexadores-adaptador.js'],
     ['importar_tr', 'indexadores-adaptador.js'],
+    // FIN-PRE-PRODUCAO-1: preferencias (interface do usuario; as do perfil exigem gerir o perfil)
+    ['salvar_preferencias', 'configuracoes.js'],
     // FIN-MIGRACAO-FIDELIDADE-FASE-1 (gestao de perfis; o banco exige pode_gerir do perfil). Camada unica: perfil.js
     ['criar_perfil', 'perfil.js'],
     ['atualizar_perfil', 'perfil.js'],

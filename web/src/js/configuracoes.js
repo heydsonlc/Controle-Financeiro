@@ -3,9 +3,12 @@
 // Porta frontend/static/js/configuracoes.js (perfis, troca de secao e ajuda contextual) sobre as
 // funcoes do banco de perfil.js. Mesmo fluxo do Flask ao salvar: dados do perfil, depois ativar ou
 // inativar, depois padrao. O banco exige gestao explicita do perfil (pode_gerir) em cada chamada;
-// perfis "somente leitura" aparecem, mas o formulario fica bloqueado. As demais secoes estao
-// "Em migracao" (so titulo e aviso). Elementos criados por DOM, sem innerHTML.
+// perfis "somente leitura" aparecem, mas o formulario fica bloqueado. Elementos criados por DOM, sem innerHTML.
+// FIN-PRE-PRODUCAO-1: Preferencias Gerais, Aparencia, Comportamento e IA (migration 20261201090000): as financeiras e
+// operacionais sao do perfil em uso (so quem o gere altera), as de interface sao da conta do usuario (todos os perfis).
+// Cada secao salva os seus campos, como o Flask. Backup e OCR continuam fora (avisos na propria secao).
 
+import { supabase } from './cliente.js';
 import { atualizarPerfis, definirCor, iniciarMoldura, usarPerfil } from './moldura.js';
 import {
     atualizarPerfil, criarPerfil, definirPerfilPadrao, inativarPerfil, perfisParaConfiguracao, reativarPerfil,
@@ -25,16 +28,22 @@ const ajuda = {
         ],
     },
     'preferencias-gerais': {
-        titulo: 'Preferências globais',
-        itens: [['Em migração', 'As preferências gerais continuam no sistema atual até a migração desta seção.']],
+        titulo: 'Preferências gerais',
+        itens: [
+            ['Da sua conta', 'O nome vale em todos os seus perfis.'],
+            ['Deste perfil', 'Renda, início do planejamento e fechamento são de cada perfil; só quem gere o perfil altera.'],
+        ],
     },
     aparencia: {
         titulo: 'Aparência',
-        itens: [['Em migração', 'Os ajustes visuais continuam no sistema atual até a migração desta seção.']],
+        itens: [['Da sua conta', 'Tema, cor, ícones e abreviação valem em todos os seus perfis.']],
     },
     comportamento: {
         titulo: 'Comportamento',
-        itens: [['Em migração', 'As preferências operacionais continuam no sistema atual até a migração desta seção.']],
+        itens: [
+            ['Deste perfil', 'Competência automática, aviso de vencida e vínculo do pagamento de cartão.'],
+            ['Da sua conta', 'A confirmação de exclusões.'],
+        ],
     },
     backup: {
         titulo: 'Backup',
@@ -42,7 +51,11 @@ const ajuda = {
     },
     'ia-automacao': {
         titulo: 'IA e Automação',
-        itens: [['Em migração', 'OCR e automações continuam no sistema atual até a migração desta seção.']],
+        itens: [
+            ['Da sua conta', 'Modo inteligente e sugestões de economia.'],
+            ['Deste perfil', 'Classificação automática e correção de categorias.'],
+            ['OCR', 'A leitura de imagens continua no sistema atual.'],
+        ],
     },
     'documentos-fiscais': {
         titulo: 'Documentos fiscais por perfil',
@@ -247,6 +260,7 @@ function definirPerfilAtivo(perfil) {
     renderPerfis();
     preencherFormularioPerfil(perfil);
     mostrarMensagem(`Perfil em uso alterado para ${perfil.nome}.`, 'success');
+    carregarPreferencias().catch(() => avisarPreferencias('Não foi possível carregar as preferências.', 'error'));
 }
 
 function renderAjuda() {
@@ -284,6 +298,86 @@ function avisarEmMigracao(funcao) {
     aviso.hidden = false;
 }
 
+// ---- Preferencias (FIN-PRE-PRODUCAO-1) ---------------------------------------------------------------------------
+const SECOES_PREFERENCIAS = {
+    gerais: ['nome_usuario', 'renda_principal', 'mes_inicio_planejamento', 'dia_fechamento_mes'],
+    aparencia: ['tema_sistema', 'cor_principal', 'mostrar_icones_coloridos', 'abreviar_valores'],
+    comportamento: ['ajustar_competencia_automatico', 'exibir_aviso_despesa_vencida', 'solicitar_confirmacao_exclusao',
+        'vincular_pagamento_cartao_auto'],
+    ia: ['modo_inteligente_ativo', 'sugestoes_economia', 'classificacao_automatica', 'correcao_categorias'],
+};
+const preferencias = { escopo: {}, podeGerir: false };
+
+function campoPreferencia(campo) {
+    return campo === 'tema_sistema' ? [...document.querySelectorAll('input[name="tema_sistema"]')] : [$(campo)].filter(Boolean);
+}
+
+function lerPreferencia(campo) {
+    const [primeiro] = campoPreferencia(campo);
+    if (campo === 'tema_sistema') return campoPreferencia(campo).find((radio) => radio.checked)?.value ?? null;
+    if (!primeiro) return undefined;
+    if (primeiro.type === 'checkbox') return primeiro.checked;
+    if (campo === 'mes_inicio_planejamento' || campo === 'dia_fechamento_mes') return primeiro.value === '' ? null : Number(primeiro.value);
+    return primeiro.value;
+}
+
+function escreverPreferencia(campo, valor) {
+    const elementos = campoPreferencia(campo);
+    for (const el of elementos) {
+        if (campo === 'tema_sistema') el.checked = el.value === valor;
+        else if (el.type === 'checkbox') el.checked = Boolean(valor);
+        else el.value = valor ?? '';
+        el.disabled = preferencias.escopo[campo] === 'PERFIL' && !preferencias.podeGerir;
+    }
+    if (campo === 'cor_principal' && $('cor_preview')) $('cor_preview').textContent = valor || '';
+}
+
+function avisarPreferencias(texto, tipo = 'info', secao = null) {
+    for (const aviso of document.querySelectorAll('[data-pref-aviso]')) {
+        const daSecao = !secao || aviso.closest('[data-config-section]')?.querySelector(`[data-preferences-save="${secao}"]`);
+        aviso.textContent = daSecao ? texto : '';
+        aviso.dataset.tipo = tipo;
+        aviso.hidden = !daSecao || !texto;
+    }
+}
+
+function preencherPreferencias(resposta) {
+    preferencias.escopo = resposta.escopo || {};
+    preferencias.podeGerir = Boolean(resposta.pode_gerir_perfil);
+    for (const campos of Object.values(SECOES_PREFERENCIAS)) {
+        for (const campo of campos) escreverPreferencia(campo, resposta.data?.[campo]);
+    }
+    avisarPreferencias(preferencias.podeGerir ? ''
+        : 'Você só lê este perfil: as preferências do perfil ficam bloqueadas; as da sua conta podem ser alteradas.');
+}
+
+async function carregarPreferencias() {
+    if (!state.ativo?.id) return;
+    const { data, error } = await supabase.rpc('preferencias_tela', { p_perfil_id: state.ativo.id });
+    if (error) throw error;
+    preencherPreferencias(data);
+}
+
+async function salvarPreferencias(secao, botao) {
+    const dados = {};
+    for (const campo of SECOES_PREFERENCIAS[secao] || []) {
+        if (preferencias.escopo[campo] === 'PERFIL' && !preferencias.podeGerir) continue;
+        const valor = lerPreferencia(campo);
+        if (valor !== undefined) dados[campo] = valor;
+    }
+    botao.disabled = true;
+    try {
+        const { data, error } = await supabase.rpc('salvar_preferencias', { p_perfil_id: state.ativo.id, p_dados: dados });
+        if (error) throw error;
+        preencherPreferencias(data);
+        avisarPreferencias('Preferências salvas.', 'success', secao);
+    } catch (erro) {
+        avisarPreferencias(erro?.message || 'Não foi possível salvar as preferências. Nada foi gravado.', 'error', secao);
+    } finally {
+        botao.disabled = false;
+    }
+}
+
 function ligar() {
     for (const botao of document.querySelectorAll('[data-config-section-target]')) {
         botao.addEventListener('click', () => trocarSecao(botao.dataset.configSectionTarget));
@@ -314,6 +408,13 @@ function ligar() {
     $('config-profile-tipo').addEventListener('change', atualizarChecksConceituais);
     $('config-profile-ativo').addEventListener('change', atualizarChecksConceituais);
     $('config-profile-form').addEventListener('submit', (evento) => evento.preventDefault());
+    for (const botao of document.querySelectorAll('[data-preferences-save]')) {
+        botao.addEventListener('click', () => salvarPreferencias(botao.dataset.preferencesSave, botao));
+    }
+    $('cor_principal')?.addEventListener('input', (evento) => { $('cor_preview').textContent = evento.target.value; });
+    for (const form of document.querySelectorAll('.config-preferences-form')) {
+        form.addEventListener('submit', (evento) => evento.preventDefault());
+    }
 }
 
 ligar();
@@ -326,5 +427,10 @@ if (contexto) {
     } catch (_erro) {
         $('config-profiles-list').replaceChildren(criarEl('div', 'config-empty-state',
             'Não foi possível carregar os perfis financeiros.'));
+    }
+    try {
+        await carregarPreferencias();
+    } catch (_erro) {
+        avisarPreferencias('Não foi possível carregar as preferências.', 'error');
     }
 }

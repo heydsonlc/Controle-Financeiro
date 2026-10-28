@@ -380,7 +380,10 @@ VALOR = {'integer': '0', 'bigint': '0', 'smallint': '0', 'numeric': '0', 'jsonb'
 SEM_GUARDA_DOCUMENTADA = {'criar_perfil', 'definir_perfil_padrao',
                           # FIN-PRE-PRODUCAO-1: TR mensal, indice unico sem perfil (no Flask, /api/indexadores/tr
                           # tambem fica fora da guarda); gravar exige gerir um perfil ativo e a TR usada nao muda.
-                          'criar_tr', 'editar_tr', 'importar_tr'}
+                          'criar_tr', 'editar_tr', 'importar_tr',
+                          # FIN-PRE-PRODUCAO-1: preferencias por perfil/usuario so existem no novo aplicativo (o
+                          # registro global do Flask e outra tabela); gravar as do perfil exige gerir o perfil.
+                          'salvar_preferencias'}
 
 
 def funcoes_de_escrita(dsn):

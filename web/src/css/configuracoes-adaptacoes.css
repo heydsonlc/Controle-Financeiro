@@ -1,0 +1,41 @@
+/* FIN-PRE-PRODUCAO-1 — so o que a tela original de Configuracoes (configuracoes.css) nao tinha: o escopo de cada
+   preferencia (da conta do usuario ou do perfil em uso) e o aviso de cada secao. */
+.config-pref-escopo {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    vertical-align: middle;
+}
+
+.config-pref-escopo[data-escopo="USUARIO"] {
+    background: rgba(59, 130, 246, 0.12);
+    color: #1d4ed8;
+}
+
+.config-pref-escopo[data-escopo="PERFIL"] {
+    background: rgba(16, 185, 129, 0.14);
+    color: #047857;
+}
+
+.config-pref-aviso {
+    margin: 0 0 12px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--cf-border, #d7dde5);
+    font-size: 0.875rem;
+}
+
+.config-pref-aviso[data-tipo="success"] {
+    border-color: #86efac;
+    background: #f0fdf4;
+    color: #166534;
+}
+
+.config-pref-aviso[data-tipo="error"] {
+    border-color: #fca5a5;
+    background: #fef2f2;
+    color: #991b1b;
+}

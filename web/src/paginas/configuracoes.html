@@ -1,5 +1,7 @@
-<!-- moldura {"ativo": "configuracoes", "titulo": "Configurações e Preferências", "documento": "Configurações e Preferências - Controle Financeiro", "css": ["css/shared/configuracoes.css"], "scripts": ["js/configuracoes.js"]} -->
-<!-- FIN-MIGRACAO-FIDELIDADE-FASE-1: frontend/templates/configuracoes.html. Perfis Financeiros e Documentos
+<!-- moldura {"ativo": "configuracoes", "titulo": "Configurações e Preferências", "documento": "Configurações e Preferências - Controle Financeiro", "css": ["css/shared/configuracoes.css", "css/configuracoes-adaptacoes.css"], "scripts": ["js/configuracoes.js"]} -->
+<!-- FIN-PRE-PRODUCAO-1: Preferencias Gerais, Aparencia, Comportamento e IA com os formularios do Flask (escopo por
+     perfil ou por usuario marcado em cada campo; js/configuracoes.js).
+     FIN-MIGRACAO-FIDELIDADE-FASE-1: frontend/templates/configuracoes.html. Perfis Financeiros e Documentos
      Fiscais (resumo estatico) sem alteracao; as demais secoes mantem o titulo e mostram "Em migracao".
      <main> interno vira <div> (a moldura ja tem a area principal) e ganha um aviso geral. -->
 <!-- acao -->
@@ -185,11 +187,48 @@
                 <header class="config-panel-header">
                     <div>
                         <h2>Preferências Gerais</h2>
-                        <p>Preferências globais preservadas da tela antiga. Elas ainda não são específicas por perfil.</p>
+                        <p>O nome é da sua conta; renda, início do planejamento e fechamento são de cada perfil.</p>
                     </div>
                 </header>
-                <div class="config-placeholder-grid">
-                    <article class="config-placeholder-card"><strong>Em migração</strong><span>Esta seção ainda está sendo migrada para o novo aplicativo. Até lá, as preferências continuam no sistema atual.</span></article>
+                <div class="config-form-card">
+                    <h3>Dados principais</h3>
+                    <p class="config-pref-aviso" data-pref-aviso hidden></p>
+                    <form class="config-preferences-form">
+                        <label>
+                            <span>Nome do usuário <small class="config-pref-escopo" data-escopo="USUARIO">da sua conta</small></span>
+                            <input type="text" id="nome_usuario" maxlength="100" placeholder="Digite seu nome">
+                        </label>
+                        <label>
+                            <span>Renda principal mensal <small class="config-pref-escopo" data-escopo="PERFIL">deste perfil</small></span>
+                            <input type="number" id="renda_principal" step="0.01" min="0" placeholder="0,00">
+                        </label>
+                        <label>
+                            <span>Mês de início do planejamento <small class="config-pref-escopo" data-escopo="PERFIL">deste perfil</small></span>
+                            <select id="mes_inicio_planejamento">
+                                <option value="1">Janeiro</option>
+                                <option value="2">Fevereiro</option>
+                                <option value="3">Março</option>
+                                <option value="4">Abril</option>
+                                <option value="5">Maio</option>
+                                <option value="6">Junho</option>
+                                <option value="7">Julho</option>
+                                <option value="8">Agosto</option>
+                                <option value="9">Setembro</option>
+                                <option value="10">Outubro</option>
+                                <option value="11">Novembro</option>
+                                <option value="12">Dezembro</option>
+                            </select>
+                        </label>
+                        <label>
+                            <span>Dia de fechamento do mês <small class="config-pref-escopo" data-escopo="PERFIL">deste perfil</small></span>
+                            <input type="number" id="dia_fechamento_mes" min="1" max="31" placeholder="1">
+                            <small>Dia usado para gerar relatórios mensais.</small>
+                        </label>
+                    </form>
+                    <div class="config-form-actions">
+                        <span class="config-form-spacer"></span>
+                        <button type="button" class="config-primary-action" id="config-preferences-save" data-preferences-save="gerais">Salvar preferências gerais</button>
+                    </div>
                 </div>
             </section>
 
@@ -198,11 +237,30 @@
                 <header class="config-panel-header">
                     <div>
                         <h2>Aparência</h2>
-                        <p>Ajustes visuais globais preservados da tela antiga.</p>
+                        <p>Ajustes visuais da sua conta (valem em todos os seus perfis).</p>
                     </div>
                 </header>
-                <div class="config-placeholder-grid">
-                    <article class="config-placeholder-card"><strong>Em migração</strong><span>Esta seção ainda está sendo migrada para o novo aplicativo. Até lá, os ajustes visuais continuam no sistema atual.</span></article>
+                <div class="config-form-card">
+                    <p class="config-pref-aviso" data-pref-aviso hidden></p>
+                    <form class="config-preferences-form">
+                        <fieldset class="config-radio-group">
+                            <legend>Tema do sistema <small class="config-pref-escopo" data-escopo="USUARIO">da sua conta</small></legend>
+                            <label><input type="radio" name="tema_sistema" value="claro"> Tema claro</label>
+                            <label><input type="radio" name="tema_sistema" value="escuro"> Tema escuro</label>
+                            <label><input type="radio" name="tema_sistema" value="auto"> Automático</label>
+                        </fieldset>
+                        <label>
+                            <span>Cor principal <small class="config-pref-escopo" data-escopo="USUARIO">da sua conta</small></span>
+                            <input type="color" id="cor_principal" value="#3b82f6">
+                            <small id="cor_preview">#3b82f6</small>
+                        </label>
+                        <label class="config-toggle-field"><input type="checkbox" id="mostrar_icones_coloridos"><span><strong>Ícones coloridos</strong><small>Usado em contas e categorias quando disponível. <small class="config-pref-escopo" data-escopo="USUARIO">da sua conta</small></small></span></label>
+                        <label class="config-toggle-field"><input type="checkbox" id="abreviar_valores"><span><strong>Abreviar valores grandes</strong><small>Exemplo: R$ 1,2k. <small class="config-pref-escopo" data-escopo="USUARIO">da sua conta</small></small></span></label>
+                    </form>
+                    <div class="config-form-actions">
+                        <span class="config-form-spacer"></span>
+                        <button type="button" class="config-primary-action" data-preferences-save="aparencia">Salvar aparência</button>
+                    </div>
                 </div>
             </section>
 
@@ -211,11 +269,21 @@
                 <header class="config-panel-header">
                     <div>
                         <h2>Comportamento</h2>
-                        <p>Preferências operacionais globais. O escopo por perfil fica para uma etapa futura.</p>
+                        <p>Preferências operacionais de cada perfil; a confirmação de exclusões é da sua conta.</p>
                     </div>
                 </header>
-                <div class="config-placeholder-grid">
-                    <article class="config-placeholder-card"><strong>Em migração</strong><span>Esta seção ainda está sendo migrada para o novo aplicativo. Até lá, as preferências operacionais continuam no sistema atual.</span></article>
+                <div class="config-form-card">
+                    <p class="config-pref-aviso" data-pref-aviso hidden></p>
+                    <div class="config-behavior-grid">
+                        <label class="config-check-card"><input type="checkbox" id="ajustar_competencia_automatico"><span><strong>Ajustar competência automaticamente</strong><small>Ao registrar pagamento. <small class="config-pref-escopo" data-escopo="PERFIL">deste perfil</small></small></span></label>
+                        <label class="config-check-card"><input type="checkbox" id="exibir_aviso_despesa_vencida"><span><strong>Aviso de despesa vencida</strong><small>Mostra confirmação ao pagar despesa vencida. <small class="config-pref-escopo" data-escopo="PERFIL">deste perfil</small></small></span></label>
+                        <label class="config-check-card"><input type="checkbox" id="solicitar_confirmacao_exclusao"><span><strong>Confirmar exclusões</strong><small>Solicita confirmação em ações sensíveis. <small class="config-pref-escopo" data-escopo="USUARIO">da sua conta</small></small></span></label>
+                        <label class="config-check-card"><input type="checkbox" id="vincular_pagamento_cartao_auto"><span><strong>Vincular pagamento de cartão</strong><small>Automação do perfil. <small class="config-pref-escopo" data-escopo="PERFIL">deste perfil</small></small></span></label>
+                    </div>
+                    <div class="config-form-actions">
+                        <span class="config-form-spacer"></span>
+                        <button type="button" class="config-primary-action" data-preferences-save="comportamento">Salvar comportamento</button>
+                    </div>
                 </div>
             </section>
 
@@ -243,8 +311,21 @@
                         <p>Centraliza as preferências de automação já existentes e futuras sugestões inteligentes.</p>
                     </div>
                 </header>
+                <div class="config-form-card">
+                    <p class="config-pref-aviso" data-pref-aviso hidden></p>
+                    <div class="config-behavior-grid">
+                        <label class="config-check-card"><input type="checkbox" id="modo_inteligente_ativo"><span><strong>Modo inteligente</strong><small>Base para recursos futuros. <small class="config-pref-escopo" data-escopo="USUARIO">da sua conta</small></small></span></label>
+                        <label class="config-check-card"><input type="checkbox" id="sugestoes_economia"><span><strong>Sugestões de economia</strong><small>Planejado. <small class="config-pref-escopo" data-escopo="USUARIO">da sua conta</small></small></span></label>
+                        <label class="config-check-card"><input type="checkbox" id="classificacao_automatica"><span><strong>Classificação automática</strong><small>Usa palavras-chave e regras existentes. <small class="config-pref-escopo" data-escopo="PERFIL">deste perfil</small></small></span></label>
+                        <label class="config-check-card"><input type="checkbox" id="correcao_categorias"><span><strong>Correção de categorias</strong><small>Planejado. <small class="config-pref-escopo" data-escopo="PERFIL">deste perfil</small></small></span></label>
+                    </div>
+                    <div class="config-form-actions">
+                        <span class="config-form-spacer"></span>
+                        <button type="button" class="config-primary-action" data-preferences-save="ia">Salvar IA e automação</button>
+                    </div>
+                </div>
                 <div class="config-placeholder-grid">
-                    <article class="config-placeholder-card"><strong>Em migração</strong><span>Esta seção ainda está sendo migrada para o novo aplicativo. Até lá, OCR e automações continuam no sistema atual.</span></article>
+                    <article class="config-placeholder-card"><strong>OCR local</strong><span>A leitura de imagens e PDFs escaneados (Tesseract/Poppler) continua no sistema atual; no novo aplicativo, o texto de PDF textual é lido no navegador.</span></article>
                 </div>
             </section>
 
