@@ -170,26 +170,29 @@ def test_inativacao_muda_status(client):
 
 
 def test_cards_resumo_calculam_previsto_realizado_diferenca_confiabilidade(client):
+    # A fonte orca os 12 meses a partir do mes atual (routes/receitas.py): o recebimento fica no mes corrente para o
+    # previsto existir em qualquer data. Antes o mes fixo (05/2026) so tinha orcamento ate maio (1500 == 3000).
+    hoje = date.today()
     conta = _criar_conta(saldo=0.0)
     fonte = _criar_fonte(client, valor=3000.0)
     client.post('/api/receitas/realizadas', json={
         'item_receita_id': fonte['id'],
-        'data_recebimento': '2026-05-05',
+        'data_recebimento': hoje.replace(day=5).isoformat(),
         'valor_recebido': 1500.0,
-        'competencia': '2026-05-01',
+        'competencia': hoje.replace(day=1).isoformat(),
         'conta_bancaria_id': conta.id,
         'descricao': 'Receita parcial',
     })
 
-    response = client.get('/api/receitas/resumo-mensal?ano=2026')
+    response = client.get(f'/api/receitas/resumo-mensal?ano={hoje.year}')
 
     assert response.status_code == 200
     body = response.get_json()
     assert body['success'] is True
-    maio = body['data']['5'] if '5' in body['data'] else body['data'][5]
-    assert maio['total_previsto'] == 3000.0
-    assert maio['total_realizado'] == 1500.0
-    confiabilidade = (maio['total_realizado'] / maio['total_previsto']) * 100
+    mes = body['data'][str(hoje.month)] if str(hoje.month) in body['data'] else body['data'][hoje.month]
+    assert mes['total_previsto'] == 3000.0
+    assert mes['total_realizado'] == 1500.0
+    confiabilidade = (mes['total_realizado'] / mes['total_previsto']) * 100
     assert confiabilidade == 50.0
 
 

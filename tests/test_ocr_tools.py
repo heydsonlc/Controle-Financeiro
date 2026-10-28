@@ -58,6 +58,9 @@ def _fake_run_tesseract_poppler(cmd, capture_output=True, text=True, timeout=10,
 
 def test_status_sem_ferramentas_retorna_estrutura_valida(client, monkeypatch):
     monkeypatch.setattr('backend.services.ocr_tools_service.shutil.which', lambda nome: None)
+    # Sem ferramentas de verdade: a variavel POPPLER_PATH da maquina (quando existe) tambem sai do teste.
+    monkeypatch.delenv('POPPLER_PATH', raising=False)
+    monkeypatch.delenv('TESSERACT_PATH', raising=False)
 
     response = client.get('/api/ocr/status')
     data = response.get_json()
@@ -122,6 +125,9 @@ def test_detecta_eng_e_ausencia_de_por(app, tmp_path, monkeypatch):
 
 def test_poppler_ausente_retorna_aviso(client, monkeypatch):
     monkeypatch.setattr('backend.services.ocr_tools_service.shutil.which', lambda nome: None)
+    # Sem ferramentas de verdade: a variavel POPPLER_PATH da maquina (quando existe) tambem sai do teste.
+    monkeypatch.delenv('POPPLER_PATH', raising=False)
+    monkeypatch.delenv('TESSERACT_PATH', raising=False)
 
     response = client.post('/api/ocr/validar', json={})
     data = response.get_json()
