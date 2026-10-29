@@ -13,6 +13,7 @@ dados do outro usuario intactos; isolamento entre usuarios; nada sensivel de car
 destino; preferencias copiadas; segunda carga recusada (sem duplicar); recusas quando falta regra (referencia sem
 regra, perfil ignorado com dados, registros sem perfil sem "Pessoal" no destino).
 """
+import datetime
 import importlib.util
 import uuid
 
@@ -139,6 +140,101 @@ def test_carga_gravada_igual_a_origem(par):
                                    and p['ajustar_competencia_automatico'] is False for p in prefs)
     # Login do Flask nao vai (no novo aplicativo o login e o Auth).
     assert not sql(d, "select 1 from public.usuario where email = 'flask.carga@teste.local'")
+
+
+MAIO = datetime.date(2026, 5, 1)
+
+
+def _compra_recorrente_na_origem(o):
+    """Cartao, assinatura recorrente no cartao e a compra dela ja gravada pelo Flask (compra_id deterministico do id
+    da origem, 9101), mais uma compra avulsa com compra_id qualquer."""
+    pessoal = ORIGEM['PESSOAL']
+    categoria = sql(o, 'select min(id) as id from public.categoria')[0]['id']
+    sql(o, "insert into public.item_despesa (id, nome, tipo, perfil_financeiro_id, categoria_id, ativo, recorrente) "
+           "values (9100, 'Cartao recorrencia (ficticio)', 'Agregador', %s, %s, true, false)", (pessoal, categoria))
+    sql(o, "insert into public.config_agregador (item_despesa_id, dia_fechamento, dia_vencimento, numero_cartao) "
+           "values (9100, 25, 5, '4111 1111 1111 4321')")
+    sql(o, "insert into public.item_despesa (id, nome, tipo, perfil_financeiro_id, categoria_id, ativo, recorrente, "
+           "tipo_recorrencia, meio_pagamento, cartao_id, valor, data_vencimento) values (9101, 'Assinatura (ficticia)', "
+           "'Simples', %s, %s, true, true, 'mensal', 'cartao', 9100, 39.90, '2026-05-01')", (pessoal, categoria))
+    sql(o, "insert into public.lancamento_agregado (item_despesa_id, cartao_id, perfil_financeiro_id, categoria_id, descricao, "
+           "valor, data_compra, mes_fatura, numero_parcela, total_parcelas, is_recorrente, compra_id) values "
+           "(9101, 9100, %s, %s, 'Assinatura (ficticia)', 39.90, '2026-05-01', '2026-05-01', 1, 1, true, %s), "
+           "(null, 9100, %s, %s, 'Compra avulsa (ficticia)', 10, '2026-05-02', '2026-05-01', 1, 1, false, 'compra-avulsa-ficticia')",
+        (pessoal, categoria, carga.compra_id_recorrente(9101, MAIO), pessoal, categoria))
+
+
+def _assinatura_no_destino(d):
+    item = sql(d, "select id from public.item_despesa where nome = 'Assinatura (ficticia)'")[0]['id']
+    gravados = {r['descricao']: r['compra_id'] for r in sql(
+        d, "select descricao, compra_id from public.lancamento_agregado where descricao in ('Assinatura (ficticia)', 'Compra avulsa (ficticia)')")}
+    plano = sql(d, 'select situacao from financeiro.plano_recorrencia(%s, %s) where item_despesa_id = %s and competencia = %s',
+                (PESSOAL_DESTINO, MAIO, item, MAIO))
+    return item, gravados, plano
+
+
+def test_compra_recorrente_no_cartao_reconhecida_pelo_motor(par):
+    """FIN-POS-MIGRACAO-DESPESAS-1: o compra_id deterministico (uuid5 de "<item>-<mes_fatura>") e recalculado com o id
+    novo do item; sem isso o plano do motor via a compra ja gravada pelo Flask como "a gerar" (duplicaria)."""
+    o, d = par
+    _compra_recorrente_na_origem(o)
+    relatorio = carga.executar(o, d, MAPA, confirmar=True)
+    assert relatorio['resultado'] == 'GRAVADO' and relatorio['conferencia'].startswith('OK')
+    assert relatorio['compras_recorrentes_recalculadas'] == 1
+    item, gravados, plano = _assinatura_no_destino(d)
+    assert item != 9101
+    assert gravados == {'Assinatura (ficticia)': carga.compra_id_recorrente(item, MAIO), 'Compra avulsa (ficticia)': 'compra-avulsa-ficticia'}
+    assert plano == [{'situacao': 'EXISTENTE'}]
+
+
+def test_correcao_da_carga_anterior(par, monkeypatch):
+    """scripts/corrigir_compra_id_recorrente.py sobre um destino carregado como no FIN-BLOCO-D-3 (compra_id copiado com
+    o id antigo): simular nao grava; corrigir recalcula so a compra recorrente, o plano passa a ve-la como EXISTENTE e a
+    segunda execucao nao tem o que corrigir."""
+    from scripts import corrigir_compra_id_recorrente as correcao
+    o, d = par
+    _compra_recorrente_na_origem(o)
+    with monkeypatch.context() as m:  # carga como era no FIN-BLOCO-D-3
+        m.setattr(carga.Carga, 'compra_id_destino', lambda self, linha: linha.get('compra_id'))
+        carga.executar(o, d, MAPA, confirmar=True)
+    item, gravados, plano = _assinatura_no_destino(d)
+    assert gravados['Assinatura (ficticia)'] == carga.compra_id_recorrente(9101, MAIO) and plano == [{'situacao': 'A_GERAR'}]
+
+    antes = resumo_tabelas(d)
+    simulacao = correcao.executar(d, o, PESSOAL_DESTINO, MAIO, confirmar=False)
+    assert simulacao['linhas'] == 1 and simulacao['resultado'].startswith('SIMULACAO') and resumo_tabelas(d) == antes
+    relatorio = correcao.executar(d, o, PESSOAL_DESTINO, MAIO, confirmar=True)
+    assert relatorio['resultado'] == 'CORRIGIDO' and relatorio['previa_depois'] == simulacao['previa_esperada_depois']
+    assert relatorio['registro'] == simulacao['registro'] and len(relatorio['registro']) == 1
+    assert relatorio['registro'][0]['compra_id_anterior'] == carga.compra_id_recorrente(9101, MAIO)
+    item, gravados, plano = _assinatura_no_destino(d)
+    assert gravados == {'Assinatura (ficticia)': carga.compra_id_recorrente(item, MAIO), 'Compra avulsa (ficticia)': 'compra-avulsa-ficticia'}
+    assert plano == [{'situacao': 'EXISTENTE'}]
+    with pytest.raises(correcao.CorrecaoRecusada, match='Nada a corrigir'):
+        correcao.executar(d, o, PESSOAL_DESTINO, MAIO, confirmar=True)
+
+
+def test_correcao_recusa_divergencia_e_colisao(par, monkeypatch):
+    """Sem identidade inequivoca com a origem, ou com o compra_id novo ja em uso, nada e gravado."""
+    from scripts import corrigir_compra_id_recorrente as correcao
+    o, d = par
+    _compra_recorrente_na_origem(o)
+    with monkeypatch.context() as m:
+        m.setattr(carga.Carga, 'compra_id_destino', lambda self, linha: linha.get('compra_id'))
+        carga.executar(o, d, MAPA, confirmar=True)
+    item = sql(d, "select id from public.item_despesa where nome = 'Assinatura (ficticia)'")[0]['id']
+    sql(d, "update public.lancamento_agregado set valor = 49.90 where descricao = 'Assinatura (ficticia)'")
+    antes = resumo_tabelas(d)
+    with pytest.raises(correcao.CorrecaoRecusada, match='diferentes da origem'):
+        correcao.executar(d, o, PESSOAL_DESTINO, MAIO, confirmar=True)
+    assert resumo_tabelas(d) == antes
+    sql(d, "update public.lancamento_agregado set valor = 39.90 where descricao = 'Assinatura (ficticia)'")
+    sql(d, "update public.lancamento_agregado set compra_id = %s where descricao = 'Compra avulsa (ficticia)'",
+        (carga.compra_id_recorrente(item, MAIO),))
+    antes = resumo_tabelas(d)
+    with pytest.raises(correcao.CorrecaoRecusada, match='ja existe no destino'):
+        correcao.executar(d, o, PESSOAL_DESTINO, MAIO, confirmar=True)
+    assert resumo_tabelas(d) == antes
 
 
 def test_isolamento_e_leitura_pelo_titular(par):

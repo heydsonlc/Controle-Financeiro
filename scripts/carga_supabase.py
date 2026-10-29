@@ -28,7 +28,8 @@ Regras:
 - origem so lida (transacao read only) e conferida por hash antes e depois;
 - ids novos no destino (o destino pode ja ter dados de outros perfis); chaves estrangeiras traduzidas pelo grafo do
   destino; ciclos (conta <-> parcela, item <-> financiamento) e autorreferencias gravados em duas etapas;
-  item_despesa.origem_id traduzido por origem_tipo; qualquer outra referencia sem regra (coluna *_id sem chave
+  item_despesa.origem_id traduzido por origem_tipo; compra_id deterministico da compra recorrente no cartao recalculado
+  com o id novo do item (FIN-POS-MIGRACAO-DESPESAS-1); qualquer outra referencia sem regra (coluna *_id sem chave
   estrangeira ou JSON preenchido) interrompe a carga;
 - tabelas globais por chave natural (reaproveita o que o destino ja tem): categoria (codigo_sistema; sem ele, o nome
   entre as globais), ir_categoria (nome + contexto), indice_tr_mensal (competencia; diferenca de valor vai para o
@@ -46,6 +47,7 @@ import hashlib
 import json
 import os
 import sys
+import uuid
 from collections import defaultdict
 from pathlib import Path
 
@@ -58,6 +60,14 @@ NATURAIS = {'categoria', 'ir_categoria', 'indice_tr_mensal', 'categoria_palavra_
 POLIMORFICAS = {('item_despesa', 'origem_id'): ('origem_tipo', {'FINANCIAMENTO': 'financiamento', 'CONSORCIO': 'contrato_consorcio',
                                                                 'VEICULO': 'veiculo', 'ASSINATURA': 'mobilidade_assinatura'})}
 SEM_REFERENCIA = {('lancamento_agregado', 'compra_id')}  # identificador da compra (texto), igual nas parcelas
+# FIN-POS-MIGRACAO-DESPESAS-1: a compra recorrente no cartao tem compra_id deterministico, uuid5(NS, "<item>-<mes_fatura>")
+# (Flask: gerar_lancamentos_cartao_recorrente; Supabase: plano_recorrencia), que depende do id do item_despesa. Como o
+# item ganha id novo, o compra_id e recalculado com ele; sem isso o motor nao reconhece a compra e a gera de novo.
+NS_COMPRA_RECORRENTE = uuid.UUID('7f3a1b2c-4d5e-6f7a-8b9c-0d1e2f3a4b5c')
+
+
+def compra_id_recorrente(item_despesa_id, mes_fatura):
+    return str(uuid.uuid5(NS_COMPRA_RECORRENTE, f'{item_despesa_id}-{mes_fatura.isoformat()}'))
 # Referencias que o destino real nao declara como chave estrangeira (o esquema do Supabase veio do Alembic, que nao criou
 # esta FK; os models do Flask criam). Sao traduzidas como as demais (FIN-BLOCO-D-1).
 REFERENCIAS_SEM_FK = {('lancamento_agregado', 'categoria_cartao_id'): 'categoria_cartao'}
@@ -273,6 +283,14 @@ class Carga:
             nova['data_validade'] = None
         return nova
 
+    def compra_id_destino(self, linha):
+        """compra_id do lancamento_agregado no destino: o deterministico da compra recorrente recalculado com o id novo
+        do item; qualquer outro (parcelas, importacao, compra avulsa) igual ao da origem."""
+        item, mes, compra = linha.get('item_despesa_id'), linha.get('mes_fatura'), linha.get('compra_id')
+        if linha.get('is_recorrente') and item is not None and mes is not None and compra == compra_id_recorrente(item, mes):
+            return compra_id_recorrente(self.ids['item_despesa'][item], mes)
+        return compra
+
     def chave_natural(self, t, linha):
         if t == 'categoria':
             if linha.get('codigo_sistema'):
@@ -327,6 +345,10 @@ class Carga:
                         valores[c] = self.ids[self.fks[t][c]][v]
                     else:
                         valores[c] = psycopg2.extras.Json(v) if self.col_destino[t][c] in ('json', 'jsonb') and v is not None else v
+                if t == 'lancamento_agregado' and 'compra_id' in valores:
+                    valores['compra_id'] = self.compra_id_destino(linha)
+                    if valores['compra_id'] != linha.get('compra_id'):
+                        self.relatorio['compras_recorrentes_recalculadas'] = self.relatorio.get('compras_recorrentes_recalculadas', 0) + 1
                 colunas = ', '.join(f'"{c}"' for c in valores)
                 self.d.execute(f'insert into public."{t}" ({colunas}) values ({", ".join(["%s"] * len(valores))}) returning id',
                                list(valores.values()))
@@ -399,6 +421,8 @@ class Carga:
                         gv = inversos[self.fks[t][c]].get(gv)
                     elif (t, c) in POLIMORFICAS and gv is not None:
                         gv = inversos[POLIMORFICAS[(t, c)][1][linha[POLIMORFICAS[(t, c)][0]]]].get(gv)
+                    elif (t, c) == ('lancamento_agregado', 'compra_id'):
+                        v = self.compra_id_destino(linha)
                     if gv != v:
                         diferencas.append(f'{t}.{c}')
         if diferencas:
