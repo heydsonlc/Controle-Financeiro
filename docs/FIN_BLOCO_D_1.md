@@ -181,7 +181,7 @@ Pelo contrato, a pendência fica registrada (§8). Sem arquivo, não há hash.
   - o ensaio sem gravar não mudou dados nem estrutura;
   - na retirada confirmada saíram 154 linhas (as 152 mais 2 linhas de auditoria que o gatilho do gerador grava durante a própria retirada), e o banco ficou com 95 linhas e só os perfis 1 e 2.
 - **Riscos:**
-  - O ensaio sem gravar avança a sequência do histórico do gerador; o rollback não a desfaz. Não há efeito em dados.
+  - O ensaio sem gravar avança a sequência do histórico do gerador; o rollback não a desfaz. Não há efeito em dados. **Corrigido no FIN-BLOCO-D-2:** a simulação passou a ser somente leitura, sem executar nenhum comando de escrita (`docs/FIN_BLOCO_D_2.md` §5).
   - Se alguém escrever nos perfis fictícios entre o inventário e a retirada, a retirada é recusada (relação diferente) e é preciso refazer o inventário.
   - Um conflito de transação serializable exige repetir o comando.
 
