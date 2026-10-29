@@ -19,6 +19,10 @@ Mapa (JSON):
 - ignorar: so para perfil da origem sem nenhum registro.
 Opcional: "preexistentes": {"item_receita": {"1": 1}} — registro da origem que ja esta no destino (mesmo nome, no perfil
 correspondente): e reaproveitado em vez de duplicado e nao impede a carga no perfil (FIN-BLOCO-D-1).
+Sem titular (FIN-BLOCO-D-3): "titular_user_id": null — a conta do titular ainda nao existe no Auth. So destino_id, cada
+um com "nome" (o nome do perfil de destino, conferido) e SEM NENHUM acesso de qualquer conta (ninguem enxerga os dados ate
+o vinculo da conta, scripts/vincular_titular_supabase.py); "criar" e recusado; as preferencias de interface (do usuario)
+ficam pendentes, as de cada perfil sao copiadas.
 
 Regras:
 - origem so lida (transacao read only) e conferida por hash antes e depois;
@@ -98,7 +102,8 @@ class Carga:
         self.ids = defaultdict(dict)  # tabela -> {id origem: id destino}
         self.inseridos = defaultdict(set)  # tabela -> ids gravados por esta carga (fora os reaproveitados)
         self.relatorio = {'tabelas': {}, 'perfis': {}, 'reaproveitados': {}, 'tr_divergentes': [], 'preferencias': {},
-                          'sensiveis': {}, 'avisos': []}
+                          'sensiveis': {}, 'avisos': [],
+                          'titular': 'sem titular: perfis de destino sem acesso' if self.titular is None else 'gestor dos perfis'}
 
     # ---- leitura de metadados -------------------------------------------------------------------------------------
     def ler_metadados(self):
@@ -168,13 +173,24 @@ class Carga:
                     raise CargaRecusada(f'Perfil {pid} da origem tem {usados[pid]} registro(s): nao pode ser ignorado')
                 self.relatorio['perfis'][str(pid)] = 'ignorado (sem registros)'
                 continue
-            if 'destino_id' in regra:
+            if 'destino_id' in regra and self.titular is None:
+                destino = consultar(self.d, 'select p.id, p.nome, (select count(*) from financeiro.perfil_acesso a '
+                                            'where a.perfil_financeiro_id = p.id) as acessos from public.perfil_financeiro p '
+                                            'where p.id = %s', (regra['destino_id'],))
+                if not destino or not regra.get('nome') or destino[0]['nome'] != regra['nome']:
+                    raise CargaRecusada(f'Perfil de destino {regra["destino_id"]} inexistente ou com nome diferente do mapa')
+                if destino[0]['acessos']:
+                    raise CargaRecusada(f'Carga sem titular: o perfil de destino "{destino[0]["nome"]}" ja tem acesso de alguma conta')
+                destinos.append((pid, destino[0]['id'], destino[0]['nome'], perfil))
+            elif 'destino_id' in regra:
                 destino = consultar(self.d, 'select p.id, p.nome from public.perfil_financeiro p join financeiro.perfil_acesso a '
                                             'on a.perfil_financeiro_id = p.id where p.id = %s and a.user_id = %s and a.pode_gerir',
                                     (regra['destino_id'], self.titular))
                 if not destino:
                     raise CargaRecusada(f'Perfil de destino {regra["destino_id"]} inexistente ou sem o titular como gestor')
                 destinos.append((pid, destino[0]['id'], destino[0]['nome'], perfil))
+            elif 'criar' in regra and self.titular is None:
+                raise CargaRecusada(f'Carga sem titular: perfil {pid} nao pode ser criado (ficaria sem gestor)')
             elif 'criar' in regra:
                 nome = regra['criar']['nome']
                 if consultar(self.d, 'select 1 from public.perfil_financeiro where nome = %s', (nome,)):
@@ -345,9 +361,12 @@ class Carga:
             usuario.pop('cor_principal')
         if usuario.get('tema_sistema') not in (None, 'claro', 'escuro', 'auto'):
             usuario.pop('tema_sistema')
-        self.d.execute(f'insert into financeiro.preferencia_usuario (user_id, {", ".join(usuario)}) values '
-                       f'(%s{", %s" * len(usuario)}) on conflict (user_id) do nothing', [self.titular, *usuario.values()])
-        self.relatorio['preferencias']['usuario'] = 'copiada' if self.d.rowcount else 'mantida (o destino ja tinha)'
+        if self.titular is None:
+            self.relatorio['preferencias']['usuario'] = 'pendente: sem conta do titular (a origem continua com o registro)'
+        else:
+            self.d.execute(f'insert into financeiro.preferencia_usuario (user_id, {", ".join(usuario)}) values '
+                           f'(%s{", %s" * len(usuario)}) on conflict (user_id) do nothing', [self.titular, *usuario.values()])
+            self.relatorio['preferencias']['usuario'] = 'copiada' if self.d.rowcount else 'mantida (o destino ja tinha)'
         perfil = {c: p.get(c) for c in CAMPOS_PREF_PERFIL if p.get(c) is not None}
         for pid, did in self.mapa_perfis.items():
             self.d.execute(f'insert into financeiro.preferencia_perfil (perfil_financeiro_id, {", ".join(perfil)}) values '
@@ -393,6 +412,9 @@ class Carga:
             if any(sensiveis.values()):
                 raise CargaRecusada('Dado sensivel de cartao no destino')
             self.relatorio['sensiveis'] = {'cartoes': len(novos), 'cvv': 0, 'validade': 0, 'numero_completo': 0}
+        if self.titular is None and consultar(self.d, 'select 1 from financeiro.perfil_acesso where perfil_financeiro_id = any(%s)',
+                                              (list(self.mapa_perfis.values()),)):
+            raise CargaRecusada('Carga sem titular: um perfil carregado passou a ter acesso de alguma conta')
         self.relatorio['conferencia'] = 'OK: todas as linhas gravadas iguais as da origem (referencias traduzidas)'
 
 

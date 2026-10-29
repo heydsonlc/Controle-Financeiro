@@ -12,7 +12,8 @@ O projeto remoto e a origem (controle_financeiro_dev) so sao LIDOS. Passos, todo
     retirada confirmada, com as conferencias do proprio script;
  4. migrations pendentes: aplicar, reverter em ordem inversa e reaplicar, sem alterar dados;
  5. titular ficticio com acesso aos perfis 1 e 2 e carga da origem (scripts/carga_supabase.py), com conferencia
-    linha a linha; uma segunda carga tem de ser recusada.
+    linha a linha; uma segunda carga tem de ser recusada. Com titular_user_id null no mapa (FIN-BLOCO-D-3), a carga
+    roda sem titular e o vinculo de uma conta ficticia (scripts/vincular_titular_supabase.py) vem depois.
 O relatorio so tem contagens, nomes de tabela e resultados (nenhum valor dos dados).
 
 Uso (conexoes so por variavel de ambiente, nunca impressas):
@@ -231,22 +232,26 @@ def main():
             'reaplicacao_igual_a_aplicacao': comparar(aplicado, reaplicado, ignorar_tabelas=('supabase_migrations.schema_migrations',)),
         }
 
-        # 5. Titular (ficticio) e carga.
+        # 5. Carga. Com titular_user_id null no mapa (FIN-BLOCO-D-3), como na execucao real: sem conta do titular, perfis
+        # sem acesso; o vinculo de uma conta ficticia vem depois, pelo script do vinculo. Senao, titular ficticio antes.
+        mapa = json.loads(Path(args.mapa).read_text(encoding='utf-8'))
+        sem_titular = mapa['titular_user_id'] is None
         c = conectar(cluster.dsn(), leitura=False)
         with c.cursor() as cur:
             cur.execute("insert into auth.users (id, email) values (%s, 'titular@ensaio.local')", (TITULAR_ENSAIO,))
-            for pid in (1, 2):
-                cur.execute("insert into financeiro.perfil_acesso (user_id, perfil_financeiro_id, papel, pode_gerir) "
-                            "values (%s, %s, 'TITULAR', true)", (TITULAR_ENSAIO, pid))
+            if not sem_titular:
+                for pid in (1, 2):
+                    cur.execute("insert into financeiro.perfil_acesso (user_id, perfil_financeiro_id, papel, pode_gerir) "
+                                "values (%s, %s, 'TITULAR', true)", (TITULAR_ENSAIO, pid))
         c.commit()
         c.close()
-        mapa = json.loads(Path(args.mapa).read_text(encoding='utf-8'))
-        mapa['titular_user_id'] = TITULAR_ENSAIO
+        if not sem_titular:
+            mapa['titular_user_id'] = TITULAR_ENSAIO
         antes_carga = retrato_dsn(cluster.dsn())
         try:
             carga = executar(origem_dsn, cluster.dsn(), mapa, confirmar=True)
-            rel['carga'] = {k: carga.get(k) for k in ('resultado', 'conferencia', 'origem_inalterada', 'sensiveis', 'preferencias',
-                                                       'tr_divergentes', 'preexistentes', 'avisos', 'perfis')}
+            rel['carga'] = {k: carga.get(k) for k in ('resultado', 'titular', 'conferencia', 'origem_inalterada', 'sensiveis',
+                                                       'preferencias', 'tr_divergentes', 'preexistentes', 'avisos', 'perfis')}
             rel['carga']['linhas_gravadas'] = sum(v['inseridos'] for v in carga['tabelas'].values())
             rel['carga']['linhas_da_origem'] = sum(v['origem'] for v in carga['tabelas'].values())
             rel['carga']['reaproveitadas_do_destino'] = {t: v['reaproveitados'] for t, v in carga['tabelas'].items() if v['reaproveitados']}
@@ -261,9 +266,35 @@ def main():
                 rel['carga']['segunda_carga'] = 'ACEITA (ERRO: duplicaria)'
             except CargaRecusada as erro:
                 rel['carga']['segunda_carga'] = f'recusada: {erro}'
+            if sem_titular:
+                rel['carga']['vinculo_posterior'] = vinculo_ficticio(cluster.dsn(), identidade)
         except CargaRecusada as erro:
             rel['carga'] = {'resultado': f'RECUSADA: {erro}'}
     return fechar(rel, args)
+
+
+def vinculo_ficticio(dsn, identidade):
+    """Depois da carga sem titular: os perfis estao sem acesso; o vinculo de uma conta ficticia (o mesmo script da
+    execucao real) da ao titular a leitura das contas do Pessoal, e so a ele."""
+    from scripts.vincular_titular_supabase import vincular
+    c = conectar(dsn)
+    cur = c.cursor()
+    cur.execute('select count(*) from financeiro.perfil_acesso where perfil_financeiro_id in (1, 2)')
+    saida = {'acessos_antes': cur.fetchone()[0]}
+    c.rollback()
+    c.close()
+    c = conectar(dsn, leitura=False)
+    saida['resultado'] = vincular(c, 'titular@ensaio.local', identidade, confirmar=True)['resultado']
+    cur = c.cursor()
+    cur.execute('set role authenticated')
+    cur.execute("select set_config('request.jwt.claims', %s, false)", (json.dumps({'sub': TITULAR_ENSAIO, 'role': 'authenticated'}),))
+    cur.execute("select financeiro.contas_bancarias_tela(1, 'ATIVO')")
+    tela = cur.fetchone()[0]
+    saida['contas_do_pessoal_vistas_pelo_titular'] = len(tela if isinstance(tela, list) else next(
+        (v for v in tela.values() if isinstance(v, list)), []))
+    c.rollback()
+    c.close()
+    return saida
 
 
 def fechar(rel, args):

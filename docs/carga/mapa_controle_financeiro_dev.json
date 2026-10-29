@@ -1,9 +1,9 @@
 {
- "_comentario": "FIN-PRE-PRODUCAO-1: mapa da carga do controle_financeiro_dev. Perfil 1 (todos os dados) -> Pessoal do destino; 2 (sem dados) -> Empresa; 3 e 4 sem nenhum registro -> ignorados. titular_user_id: id do Auth do titular no projeto de destino (o ensaio usa um id ficticio). FIN-BLOCO-D-1: a fonte de receita 1 da origem ja esta no Pessoal do projeto (copiada em 20/08/2026, mesmo nome): reaproveitada, nao duplicada.",
- "titular_user_id": "PREENCHER-COM-O-ID-DO-AUTH-DO-TITULAR",
+ "_comentario": "FIN-PRE-PRODUCAO-1: mapa da carga do controle_financeiro_dev. Perfil 1 (todos os dados) -> Pessoal do destino; 2 (sem dados) -> Empresa; 3 e 4 sem nenhum registro -> ignorados. FIN-BLOCO-D-1: a fonte de receita 1 da origem ja esta no Pessoal do projeto (copiada em 20/08/2026, mesmo nome): reaproveitada, nao duplicada. FIN-BLOCO-D-3: titular_user_id null = carga sem a conta do titular (ainda nao criada no Auth): Pessoal e Empresa conferidos pelo id e pelo nome e sem acesso de nenhuma conta; o vinculo vem depois (scripts/vincular_titular_supabase.py).",
+ "titular_user_id": null,
  "perfis": {
-  "1": {"destino_id": 1},
-  "2": {"destino_id": 2},
+  "1": {"destino_id": 1, "nome": "Pessoal"},
+  "2": {"destino_id": 2, "nome": "Empresa"},
   "3": "ignorar",
   "4": "ignorar"
  },

@@ -206,6 +206,73 @@ def test_registro_preexistente_reaproveitado_por_identidade(par):
     assert sql(d, 'select count(*) n from public.receita_orcamento where item_receita_id = %s', (did,))[0]['n'] == previsoes
 
 
+def _destino_sem_titular(d):
+    """Como o projeto real antes do vinculo da conta: Pessoal e Empresa sem acesso de nenhuma conta; mais dois perfis vazios
+    e sem acesso para os outros perfis da origem."""
+    sql(d, 'delete from financeiro.perfil_acesso where perfil_financeiro_id in (%s, %s)', (PESSOAL_DESTINO, EMPRESA_DESTINO))
+    for pid, nome in ((60, 'Perfil B destino'), (61, 'Inativo destino')):
+        sql(d, "insert into public.perfil_financeiro (id, nome, tipo, cor, ativo, padrao) values (%s, %s, 'PESSOAL', '#2563eb', true, false)",
+            (pid, nome))
+    return {'titular_user_id': None, 'perfis': {
+        str(ORIGEM['PESSOAL']): {'destino_id': PESSOAL_DESTINO, 'nome': 'Pessoal'},
+        str(ORIGEM['EMPRESA']): {'destino_id': EMPRESA_DESTINO, 'nome': 'Empresa'},
+        str(ORIGEM['PERFIL_B']): {'destino_id': 60, 'nome': 'Perfil B destino'},
+        str(ORIGEM['INATIVO_A']): {'destino_id': 61, 'nome': 'Inativo destino'}}}
+
+
+def test_carga_sem_titular_fica_sem_acesso_ate_o_vinculo(par):
+    """FIN-BLOCO-D-3: a conta do titular ainda nao existe; os perfis carregados ficam sem acesso de nenhuma conta."""
+    o, d = par
+    mapa = _destino_sem_titular(d)
+    antes_o, outro = resumo_tabelas(o), resumo_perfil(d, PERFIL_OUTRO)
+    relatorio = carga.executar(o, d, mapa, confirmar=True)
+    assert relatorio['resultado'] == 'GRAVADO' and relatorio['conferencia'].startswith('OK')
+    assert relatorio['titular'].startswith('sem titular')
+    assert resumo_tabelas(o) == antes_o and resumo_perfil(d, PERFIL_OUTRO) == outro
+    for t, n in relatorio['tabelas'].items():
+        assert n['inseridos'] + n['reaproveitados'] == n['origem'], t
+    perfis = [PESSOAL_DESTINO, EMPRESA_DESTINO, 60, 61]
+    assert sql(d, 'select count(*) n from financeiro.perfil_acesso where perfil_financeiro_id = any(%s)', (perfis,))[0]['n'] == 0
+    # Preferencias: as do usuario ficam pendentes (sem conta); as de cada perfil sao copiadas.
+    assert relatorio['preferencias']['usuario'].startswith('pendente')
+    assert sql(d, 'select count(*) n from financeiro.preferencia_usuario')[0]['n'] == 0
+    assert sql(d, 'select count(*) n from financeiro.preferencia_perfil where perfil_financeiro_id = any(%s)', (perfis,))[0]['n'] == 4
+    # Ninguem le os dados carregados; depois do vinculo, so o titular.
+    for usuario in (TITULAR, OUTRO):
+        with pytest.raises(psycopg2.Error) as e:
+            chamar(d, usuario, 'select financeiro.contas_bancarias_tela(%s, %s)', (PESSOAL_DESTINO, 'ATIVO'))
+        assert e.value.pgcode == '42501'
+    for pid in (PESSOAL_DESTINO, EMPRESA_DESTINO):
+        sql(d, "insert into financeiro.perfil_acesso (user_id, perfil_financeiro_id, papel, pode_gerir) values (%s, %s, 'TITULAR', true)",
+            (TITULAR['id'], pid))
+    nomes = {c['nome'] for c in chamar(d, TITULAR, 'select financeiro.contas_bancarias_tela(%s, %s)', (PESSOAL_DESTINO, 'ATIVO'))}
+    assert 'Conta Pessoal (A)' in nomes and 'Conta do outro (ficticia)' not in nomes
+    with pytest.raises(psycopg2.Error):
+        chamar(d, OUTRO, 'select financeiro.contas_bancarias_tela(%s, %s)', (PESSOAL_DESTINO, 'ATIVO'))
+
+
+def test_carga_sem_titular_recusas(par):
+    o, d = par
+    antes = resumo_tabelas(d)
+    # Perfis de destino ainda com acesso de uma conta (o destino do fixture: titular gestor de Pessoal e Empresa).
+    mapa_com_acesso = {'titular_user_id': None, 'perfis': {**MAPA['perfis'],
+                       str(ORIGEM['PESSOAL']): {'destino_id': PESSOAL_DESTINO, 'nome': 'Pessoal'},
+                       str(ORIGEM['EMPRESA']): {'destino_id': EMPRESA_DESTINO, 'nome': 'Empresa'}}}
+    with pytest.raises(carga.CargaRecusada, match='ja tem acesso de alguma conta'):
+        carga.executar(o, d, mapa_com_acesso, confirmar=True)
+    assert resumo_tabelas(d) == antes
+    mapa = _destino_sem_titular(d)
+    antes = resumo_tabelas(d)
+    # Nome diferente ou ausente: o id sozinho nao identifica o perfil.
+    for regra in ({'destino_id': PESSOAL_DESTINO, 'nome': 'Empresa'}, {'destino_id': PESSOAL_DESTINO}):
+        with pytest.raises(carga.CargaRecusada, match='nome diferente do mapa'):
+            carga.executar(o, d, {**mapa, 'perfis': {**mapa['perfis'], str(ORIGEM['PESSOAL']): regra}}, confirmar=True)
+    # Criar perfil sem titular: ficaria sem gestor.
+    with pytest.raises(carga.CargaRecusada, match='nao pode ser criado'):
+        carga.executar(o, d, {**mapa, 'perfis': {**mapa['perfis'], str(ORIGEM['PERFIL_B']): {'criar': {'nome': 'Novo'}}}}, confirmar=True)
+    assert resumo_tabelas(d) == antes
+
+
 def test_recusas_quando_falta_regra(par):
     o, d = par
     antes = resumo_tabelas(d)
