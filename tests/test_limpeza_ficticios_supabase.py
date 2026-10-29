@@ -6,7 +6,8 @@ O "Perfil B" (103, so do usuario B) faz o papel do perfil ficticio: financiament
 categorias de cartao, conta bancaria, gerador NOVO (com a auditoria que o gatilho grava) e uma categoria global
 "(demonstracao)" usada so por ele. Os demais perfis (101, 102, 104) sao os preservados.
 
-Prova: inventario sem gravar e sem ambiguidade; ensaio sem gravar; retirada so das linhas da relacao (perfis
+Prova: inventario sem gravar e sem ambiguidade; simulacao somente leitura sem nenhum efeito (dados, sequencias,
+auditoria, estrutura) e repetivel (FIN-BLOCO-D-2); retirada so das linhas da relacao (perfis
 preservados, globais, usuarios e estrutura identicos); recusas diante de registro ambiguo, perfil nao declarado,
 relacao desatualizada e projeto Supabase sem autorizacao expressa.
 """
@@ -98,13 +99,49 @@ def test_inventario_por_identidade_sem_gravar(cluster):
     assert rel['preservadas']['public.perfil_financeiro'] == len(PRESERVADOS)
 
 
-def test_ensaio_sem_confirmar_nao_grava(cluster):
+def estado_integral(dsn):
+    """Dados (md5 de todas as tabelas), TODAS as sequencias e a estrutura (migrations, politicas, funcoes, privilegios, RLS,
+    usuarios)."""
+    conn = psycopg2.connect(dsn)
+    try:
+        estrutura = limpeza.estrutura(conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor))[0]
+    finally:
+        conn.close()
+    sequencias = sql(dsn, "select schemaname || '.' || sequencename s, last_value v from pg_sequences order by 1")
+    return resumo_tabelas(dsn), sequencias, estrutura
+
+
+def test_simulacao_somente_leitura_sem_efeito_e_repetivel(cluster):
+    """FIN-BLOCO-D-2: a simulacao nao executa escrita: nem dados, nem sequencias (o gatilho de auditoria do gerador
+    consumia um id no ensaio antigo), nem auditoria, nem estrutura; repetir da o mesmo plano."""
     d = copiar(cluster)
     ident = identidade(d)
-    antes = resumo_tabelas(d)
-    rel = retirar(d, ident, inventario(d, ident), confirmar=False)
-    assert rel['resultado'] == 'ENSAIO (nada gravado)' and rel['conferencia'].startswith('OK')
-    assert resumo_tabelas(d) == antes
+    relacao = inventario(d, ident)
+    antes = estado_integral(d)
+    historico = sql(d, 'select count(*) n from financeiro.gerador_recorrencia_historico')[0]['n']
+    primeira = retirar(d, ident, relacao, confirmar=False)
+    segunda = retirar(d, ident, relacao, confirmar=False)
+    assert estado_integral(d) == antes
+    assert sql(d, 'select count(*) n from financeiro.gerador_recorrencia_historico')[0]['n'] == historico
+    assert primeira == segunda
+    assert primeira['resultado'].startswith('SIMULACAO')
+    assert primeira['removeria'] == relacao['quantidades']
+    assert primeira['auditoria_que_os_gatilhos_gravariam_e_seria_removida'] == {'financeiro.gerador_recorrencia_historico': 1}
+    # O plano previsto e exatamente o que a retirada real faz (numa copia descartavel).
+    real = retirar(d, ident, relacao, confirmar=True)
+    assert real['total_removido'] == primeira['total_previsto'] and real['ordem'] == primeira['ordem']
+
+
+def test_simulacao_recusa_relacao_desatualizada_sem_efeito(cluster):
+    d = copiar(cluster)
+    ident = identidade(d)
+    relacao = inventario(d, ident)
+    sql(d, "insert into public.conta_bancaria (perfil_financeiro_id, nome, instituicao, tipo, status, cor_display) "
+           "values (%s, 'Conta nova (ficticia)', 'Banco ficticio', 'Conta Corrente', 'ATIVO', '#3b82f6')", (FICTICIO,))
+    antes = estado_integral(d)
+    with pytest.raises(limpeza.LimpezaRecusada, match='relacao mudou'):
+        retirar(d, ident, relacao, confirmar=False)
+    assert estado_integral(d) == antes
 
 
 def test_retirada_so_da_relacao(cluster):

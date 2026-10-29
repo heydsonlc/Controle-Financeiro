@@ -63,6 +63,76 @@ def test_backup_restaura_igual_num_banco_novo_e_recusa_banco_existente(origem, t
     assert origem not in saida.out + saida.err
 
 
+def _como_supabase(dsn):
+    """FIN-BLOCO-D-2: o que o projeto real tem a mais que o shim: historico das migrations e auth.identities (com FK para
+    auth.users e coluna gerada), e o e-mail confirmado das contas."""
+    conn = psycopg2.connect(dsn)
+    conn.autocommit = True
+    with conn.cursor() as cur:
+        cur.execute('create schema supabase_migrations')
+        cur.execute('create table supabase_migrations.schema_migrations (version text primary key, statements text[], name text)')
+        cur.execute("insert into supabase_migrations.schema_migrations (version, name) values ('20261020120000', 'base'), "
+                    "('20261126090000', 'patrimonio')")
+        cur.execute('alter table auth.users add column email_confirmed_at timestamptz')
+        cur.execute('update auth.users set email_confirmed_at = now()')
+        cur.execute("create table auth.identities (id uuid primary key default gen_random_uuid(), provider text not null, "
+                    "user_id uuid not null references auth.users (id) on delete cascade, identity_data jsonb not null, "
+                    "email text generated always as (lower(identity_data ->> 'email')) stored)")
+        cur.execute("insert into auth.identities (provider, user_id, identity_data) "
+                    "select 'email', id, jsonb_build_object('email', email) from auth.users")
+    conn.close()
+
+
+def test_backup_completo_homologado_num_banco_sem_auth(origem, tmp_path, monkeypatch, capsys):
+    """FIN-BLOCO-D-2: backup com privilegios, historico das migrations e contas do Auth; restaurado num banco de
+    conferencia (sem o Auth do Supabase e com os privilegios padrao da plataforma para anon/authenticated) fica IGUAL."""
+    _como_supabase(origem)
+    monkeypatch.setenv('CF_BACKUP_ORIGEM', origem)
+    manifesto = B.main(['exportar', '--dsn-env', 'CF_BACKUP_ORIGEM', '--saida', str(tmp_path / 'bk')])
+    dados = json.loads(Path(manifesto).read_text(encoding='utf-8'))
+    assert dados['esquemas'] == ['public', 'financeiro', 'supabase_migrations'] and dados['snapshot_unico']
+    assert dados['auth'] == ['auth.users', 'auth.identities'] and dados['linhas_auth']['auth.identities'] >= 2
+    assert dados['retrato']['migrations'] == ['20261020120000', '20261126090000'] and dados['retrato']['privilegios']
+    assert origem not in Path(manifesto).read_text(encoding='utf-8')
+    with ClusterLocal(PG_BIN, tmp_path / 'destino') as destino:
+        destino.aplicar_shim()  # traz os privilegios padrao da plataforma (ALL para anon/authenticated no public)
+        conn = psycopg2.connect(destino.dsn())
+        conn.autocommit = True
+        with conn.cursor() as cur:
+            cur.execute('drop table auth.users')  # banco de conferencia: as contas vem do backup, com a estrutura
+        conn.close()
+        monkeypatch.setenv('CF_BACKUP_DESTINO', destino.dsn())
+        resultado = B.main(['restaurar', '--manifesto', str(manifesto), '--dsn-env', 'CF_BACKUP_DESTINO'])
+        assert resultado['homologacao'].startswith('HOMOLOGADO')
+        assert any('auth.identities' in r for r in resultado['restaurado']) and resultado['depende_do_supabase']
+        assert B.comparar(dados['retrato'], B.retrato_dsn(destino.dsn())) == []
+        assert resumo_tabelas(destino.dsn()) == resumo_tabelas(origem)
+        # Nenhum privilegio a mais para anon que na origem (a armadilha dos privilegios padrao).
+        anon = "select count(*) from pg_class c, aclexplode(c.relacl) a where c.relnamespace = 'public'::regnamespace " \
+               "and a.grantee = 'anon'::regrole"
+        for dsn in (origem, destino.dsn()):
+            c = psycopg2.connect(dsn)
+            with c.cursor() as cur:
+                cur.execute(anon)
+                n = cur.fetchone()[0]
+            c.close()
+            assert n == 0
+    assert origem not in capsys.readouterr().out
+
+
+def test_restauracao_divergente_nao_e_homologada(origem, tmp_path, monkeypatch):
+    monkeypatch.setenv('CF_BACKUP_ORIGEM', origem)
+    manifesto = B.main(['exportar', '--dsn-env', 'CF_BACKUP_ORIGEM', '--saida', str(tmp_path / 'bk')])
+    original = B.retrato_dsn
+    monkeypatch.setattr(B, 'retrato_dsn', lambda dsn, **kw: {**original(dsn, **kw), 'funcoes': {}})
+    with ClusterLocal(PG_BIN, tmp_path / 'destino') as destino:
+        destino.aplicar_shim()
+        monkeypatch.setenv('CF_BACKUP_DESTINO', destino.dsn())
+        with pytest.raises(SystemExit) as e:
+            B.main(['restaurar', '--manifesto', str(manifesto), '--dsn-env', 'CF_BACKUP_DESTINO'])
+        assert 'NAO HOMOLOGADO' in str(e.value)
+
+
 def test_arquivo_alterado_e_recusado(origem, tmp_path, monkeypatch):
     monkeypatch.setenv('CF_BACKUP_ORIGEM', origem)
     manifesto = Path(B.main(['exportar', '--dsn-env', 'CF_BACKUP_ORIGEM', '--saida', str(tmp_path)]))

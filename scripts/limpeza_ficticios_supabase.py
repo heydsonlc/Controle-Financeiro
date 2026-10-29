@@ -16,9 +16,11 @@ Uso (a conexao vem SO de variavel de ambiente e nunca e impressa):
         SOMENTE LEITURA: confere a identidade e grava a relacao (tabela -> chaves) a retirar.
     python scripts/limpeza_ficticios_supabase.py retirar --identidade ARQ --relacao REL [--dsn-env ...]
                                                          [--confirmar] [--projeto-autorizado REF] [--saida RELATORIO]
-        Uma transacao (serializable): refaz a relacao, que tem de ser IGUAL a salva; apaga so essas chaves, dos
-        dependentes para os principais; confere quantidades antes/depois, o md5 de cada linha preservada e a estrutura.
-        Sem --confirmar tudo e desfeito (ensaio). Num projeto Supabase exige --projeto-autorizado com o ref completo.
+        Sem --confirmar: SIMULACAO numa transacao somente leitura (FIN-BLOCO-D-2) — nenhum comando de escrita, gatilho,
+        sequencia ou auditoria; devolve so o plano (ordem, linhas a apagar, auditoria que os gatilhos gravariam).
+        Com --confirmar: uma transacao (serializable) refaz a relacao, que tem de ser IGUAL a salva; apaga so essas
+        chaves, dos dependentes para os principais; confere quantidades antes/depois, o md5 de cada linha preservada e
+        a estrutura antes do commit. Num projeto Supabase exige --projeto-autorizado com o ref completo.
 """
 import argparse
 import hashlib
@@ -38,9 +40,11 @@ REFERENCIAS_LOGICAS = {('public.lancamento_agregado', 'categoria_cartao_id'): 'p
 POLIMORFICAS = {('public.item_despesa', 'origem_id'): ('origem_tipo', {
     'FINANCIAMENTO': 'public.financiamento', 'CONSORCIO': 'public.contrato_consorcio', 'VEICULO': 'public.veiculo',
     'ASSINATURA': 'public.mobilidade_assinatura'})}
-# Linhas que gatilhos de auditoria criam durante a propria retirada (o historico do gerador ganha uma linha por perfil
-# removido). Sao do perfil ficticio e saem tambem; qualquer outra linha nova interrompe.
-GERADAS_POR_GATILHO = ('financeiro.gerador_recorrencia_historico',)
+# Linhas que gatilhos de auditoria criam durante a propria retirada: apagar uma linha da tabela de origem grava uma na
+# de destino (o historico do gerador ganha uma linha por perfil removido). Sao do perfil ficticio e saem tambem;
+# qualquer outra linha nova interrompe. A simulacao so as preve (nada executa).
+GATILHOS_DE_AUDITORIA = {'financeiro.gerador_recorrencia': 'financeiro.gerador_recorrencia_historico'}
+GERADAS_POR_GATILHO = tuple(GATILHOS_DE_AUDITORIA.values())
 
 
 class LimpezaRecusada(Exception):
@@ -304,30 +308,68 @@ def _chaves(chaves):
     return json.dumps([json.loads(k) for k in chaves])
 
 
+def _plano(cur, identidade, relacao_salva):
+    """Conferencias comuns a simulacao e a retirada (so leitura): relacao sem ambiguidade e igual a salva, ordem de
+    retirada e colunas de ciclo que aceitam nulo."""
+    relacao, g = montar_relacao(cur, identidade)
+    if relacao['ambiguos']:
+        raise LimpezaRecusada(f'Registros ambiguos: {relacao["ambiguos"][:20]}')
+    if relacao['tabelas'] != relacao_salva['tabelas']:
+        difs = sorted(set(relacao['tabelas']) ^ set(relacao_salva['tabelas'])
+                      | {t for t in relacao['tabelas'] if relacao['tabelas'][t] != relacao_salva['tabelas'].get(t)})
+        raise LimpezaRecusada(f'A relacao mudou desde o inventario (tabelas {difs}): refaca o inventario')
+    ordem, anular = ordem_de_retirada(g, relacao['tabelas'])
+    anular = [(t, c) for t, c in anular if t in relacao['tabelas']]
+    for t, c in anular:
+        if not g.colunas[t][c]:
+            raise LimpezaRecusada(f'{t}.{c} esta num ciclo e nao aceita nulo')
+    return relacao, g, ordem, anular
+
+
+def simular(conn, identidade, relacao_salva):
+    """Modo de simulacao: transacao SOMENTE LEITURA; nenhum comando de escrita e executado (nenhum gatilho dispara,
+    nenhuma sequencia avanca). Devolve so o plano: o que seria anulado e apagado, em que ordem, e as linhas de auditoria
+    que os gatilhos gravariam (e que a retirada apagaria em seguida). Deterministico: repetir da o mesmo resultado."""
+    conn.rollback()
+    conn.set_session(isolation_level=psycopg2.extensions.ISOLATION_LEVEL_REPEATABLE_READ, readonly=True, autocommit=False)
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        relacao, g, ordem, anular = _plano(cur, identidade, relacao_salva)
+        removeria = {t: len(relacao['tabelas'][t]) for t in ordem}
+        auditoria = {destino: len(relacao['tabelas'].get(origem, ())) for origem, destino in GATILHOS_DE_AUDITORIA.items()
+                     if relacao['tabelas'].get(origem)}
+        impressao, partes = estrutura(cur)
+        return {
+            'resultado': 'SIMULACAO (somente leitura: nada executado)', 'ordem': ordem,
+            'colunas_anuladas_antes': [f'{t}.{c}' for t, c in anular], 'removeria': removeria,
+            'auditoria_que_os_gatilhos_gravariam_e_seria_removida': auditoria,
+            'total_previsto': sum(removeria.values()) + sum(auditoria.values()),
+            'linhas_atuais': {t: len(l) for t, l in sorted(g.linhas.items()) if l},
+            'estrutura': {'impressao_digital': impressao, 'migrations': len(partes['migrations']),
+                          'usuarios_auth': partes['usuarios_auth'][0]['n']},
+        }
+    finally:
+        conn.rollback()
+
+
 def retirar(conn, identidade, relacao_salva, confirmar):
+    """Sem confirmar: simulacao somente leitura (simular). Com confirmar: retirada numa transacao serializable."""
+    if not confirmar:
+        return simular(conn, identidade, relacao_salva)
     conn.rollback()
     conn.set_session(isolation_level=psycopg2.extensions.ISOLATION_LEVEL_SERIALIZABLE, readonly=False, autocommit=False)
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     relatorio = {}
     try:
-        relacao, g = montar_relacao(cur, identidade)
-        if relacao['ambiguos']:
-            raise LimpezaRecusada(f'Registros ambiguos: {relacao["ambiguos"][:20]}')
-        if relacao['tabelas'] != relacao_salva['tabelas']:
-            difs = sorted(set(relacao['tabelas']) ^ set(relacao_salva['tabelas'])
-                          | {t for t in relacao['tabelas'] if relacao['tabelas'][t] != relacao_salva['tabelas'].get(t)})
-            raise LimpezaRecusada(f'A relacao mudou desde o inventario (tabelas {difs}): refaca o inventario')
+        relacao, g, ordem, anular = _plano(cur, identidade, relacao_salva)
         fict = [int(k) for k in identidade['perfis_ficticios']]
         antes = {t: len(l) for t, l in g.linhas.items()}
         hash_preservadas = {t: sorted(l[k]['_h'] for k in l if k not in relacao['tabelas'].get(t, ())) for t, l in g.linhas.items()}
         estrutura_antes, _ = estrutura(cur)
-        ordem, anular = ordem_de_retirada(g, relacao['tabelas'])
         relatorio['ordem'] = ordem
         relatorio['colunas_anuladas_antes'] = [f'{t}.{c}' for t, c in anular]
         for t, c in anular:
             if t in relacao['tabelas']:
-                if not g.colunas[t][c]:
-                    raise LimpezaRecusada(f'{t}.{c} esta num ciclo e nao aceita nulo')
                 esquema, nome = t.split('.')
                 cur.execute(f'update "{esquema}"."{nome}" set "{c}" = null where "{c}" is not null and ' + _onde(g, t),
                             (_chaves(relacao['tabelas'][t]),))
@@ -375,12 +417,8 @@ def retirar(conn, identidade, relacao_salva, confirmar):
                           'usuarios_auth': partes['usuarios_auth'][0]['n']},
             'conferencia': 'OK: so as linhas da relacao sairam; preservadas, estrutura e usuarios identicos',
         })
-        if confirmar:
-            conn.commit()
-            relatorio['resultado'] = 'RETIRADO'
-        else:
-            conn.rollback()
-            relatorio['resultado'] = 'ENSAIO (nada gravado)'
+        conn.commit()
+        relatorio['resultado'] = 'RETIRADO'
         return relatorio
     except Exception:
         conn.rollback()

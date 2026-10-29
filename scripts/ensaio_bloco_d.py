@@ -23,7 +23,6 @@ Uso (conexoes so por variavel de ambiente, nunca impressas):
 import argparse
 import json
 import os
-import re
 import subprocess
 import sys
 import tempfile
@@ -35,6 +34,7 @@ import psycopg2.extras
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ))
 
+from scripts.backup_banco import comparar, conectar, retrato, retrato_dsn  # noqa: E402
 from scripts.carga_supabase import CargaRecusada, executar  # noqa: E402
 from scripts.limpeza_ficticios_supabase import LimpezaRecusada, montar_relacao, ref_do_dsn, retirar  # noqa: E402
 from tests.supabase_local import ClusterLocal, encontrar_pg_bin  # noqa: E402
@@ -42,91 +42,8 @@ from tests.supabase_local import ClusterLocal, encontrar_pg_bin  # noqa: E402
 ESQUEMAS_COPIA = ('public', 'financeiro', 'supabase_migrations')
 SEM_DADOS = ('public.usuario',)
 TITULAR_ENSAIO = '00000000-0000-4000-8000-0000000000d1'
-FORMA_RESTRICAO = re.compile(r'::(character varying|text)(\[\])?|[()\s]')
 PAPEIS_SUPABASE = ('supabase_admin', 'supabase_auth_admin', 'supabase_storage_admin', 'supabase_realtime_admin',
                    'dashboard_user', 'pgbouncer', 'supabase_replication_admin', 'supabase_read_only_user')
-
-
-def conectar(dsn, leitura=True):
-    conn = psycopg2.connect(dsn, connect_timeout=20)
-    conn.set_session(readonly=leitura, autocommit=False)
-    with conn.cursor() as cur:
-        cur.execute("set timezone = 'UTC'; set datestyle = 'ISO, YMD'; set extra_float_digits = 1")
-    return conn
-
-
-def retrato(conn, com_dados=True):
-    """Impressao do banco: linhas e md5 por tabela, sequencias e estrutura (funcoes, politicas, RLS, FKs, gatilhos,
-    privilegios, migrations)."""
-    cur = conn.cursor()
-
-    def q(sql, p=None):
-        cur.execute(sql, p)
-        return cur.fetchall()
-
-    r = {'tabelas': {}, 'md5': {}}
-    for (t,) in q("select table_schema || '.' || table_name from information_schema.tables where table_type = 'BASE TABLE' "
-                  "and table_schema = any(%s) order by 1", (list(ESQUEMAS_COPIA),)):
-        esquema, nome = t.split('.')
-        r['tabelas'][t] = q(f'select count(*) from "{esquema}"."{nome}"')[0][0]
-        if com_dados:
-            r['md5'][t] = q(f'select md5(coalesce(string_agg(x::text, \'|\' order by x::text), \'\')) from "{esquema}"."{nome}" x')[0][0]
-    r['sequencias'] = dict(q("select schemaname || '.' || sequencename, coalesce(last_value, 0) from pg_sequences "
-                             "where schemaname in ('public', 'financeiro')"))
-    r['funcoes'] = dict(q("select p.oid::regprocedure::text, md5(p.prosrc || coalesce(array_to_string(p.proconfig, ','), '') "
-                          "|| p.prosecdef::text) from pg_proc p where p.pronamespace in ('public'::regnamespace, 'financeiro'::regnamespace)"))
-    r['execucao'] = sorted(f'{g}:{f}' for g, f in q(
-        "select g.rolname, p.oid::regprocedure::text from pg_proc p cross join (values ('anon'), ('authenticated'), ('service_role')) g(rolname) "
-        "where p.pronamespace in ('public'::regnamespace, 'financeiro'::regnamespace) and has_function_privilege(g.rolname, p.oid, 'execute')"))
-    r['politicas'] = sorted('|'.join(map(str, x)) for x in q(
-        "select schemaname, tablename, policyname, cmd, roles::text, coalesce(qual, ''), coalesce(with_check, '') from pg_policies "
-        "where schemaname in ('public', 'financeiro')"))
-    r['rls'] = sorted(f'{t}:{a}:{f}' for t, a, f in q(
-        "select c.oid::regclass::text, c.relrowsecurity, c.relforcerowsecurity from pg_class c "
-        "where c.relkind = 'r' and c.relnamespace in ('public'::regnamespace, 'financeiro'::regnamespace)"))
-    # Restricoes: a restauracao reescreve "x = ANY ((ARRAY['a'::varchar])::text[])" como
-    # "x = ANY (ARRAY[('a'::varchar)::text])" — mesma regra; a forma e normalizada antes de comparar.
-    r['fks'] = sorted(f'{t}:{n}:{FORMA_RESTRICAO.sub("", d)}' for t, n, d in q(
-        "select conrelid::regclass::text, conname, pg_get_constraintdef(oid) from pg_constraint "
-        "where contype in ('f', 'c', 'u', 'p') and connamespace in ('public'::regnamespace, 'financeiro'::regnamespace)"))
-    r['gatilhos'] = sorted(f'{t}:{n}' for t, n in q(
-        "select tgrelid::regclass::text, tgname from pg_trigger where not tgisinternal "
-        "and tgrelid in (select oid from pg_class where relnamespace in ('public'::regnamespace, 'financeiro'::regnamespace))"))
-    # Pelas ACLs (information_schema so mostra o que o usuario conectado enxerga; no Supabase ele nao e superusuario).
-    r['privilegios'] = sorted('|'.join(map(str, x)) for x in q(
-        "select coalesce(nullif(a.grantee, 0)::regrole::text, 'PUBLIC'), c.oid::regclass::text, a.privilege_type "
-        "from pg_class c cross join lateral aclexplode(c.relacl) a "
-        "where c.relnamespace in ('public'::regnamespace, 'financeiro'::regnamespace) and c.relkind in ('r', 'v', 'S') "
-        "and (a.grantee = 0 or a.grantee::regrole::text in ('anon', 'authenticated', 'service_role'))"))
-    r['migrations'] = [v for (v,) in q('select version from supabase_migrations.schema_migrations order by 1')]
-    conn.rollback()
-    return r
-
-
-def retrato_dsn(dsn):
-    conn = conectar(dsn)
-    try:
-        return retrato(conn)
-    finally:
-        conn.close()
-
-
-def comparar(a, b, ignorar_tabelas=()):
-    difs = []
-    for chave in ('tabelas', 'md5'):
-        for t in sorted(set(a[chave]) | set(b[chave])):
-            if t not in ignorar_tabelas and a[chave].get(t) != b[chave].get(t):
-                difs.append(f'{chave}:{t}')
-    for chave in ('sequencias', 'funcoes'):
-        for t in sorted(set(a[chave]) | set(b[chave])):
-            if a[chave].get(t) != b[chave].get(t):
-                difs.append(f'{chave}:{t}')
-    for chave in ('execucao', 'politicas', 'rls', 'fks', 'gatilhos', 'privilegios', 'migrations'):
-        so_a, so_b = set(a[chave]) - set(b[chave]), set(b[chave]) - set(a[chave])
-        if so_a or so_b:
-            difs.append(f'{chave}: {len(so_a)} so no primeiro, {len(so_b)} so no segundo; ex.: '
-                        f'{sorted(so_a)[:3]} / {sorted(so_b)[:3]}')
-    return difs
 
 
 def copiar_projeto(remoto_dsn, cluster, pg_bin):
@@ -265,12 +182,16 @@ def main():
         try:
             ensaio = retirar(conn, identidade, relacao_copia, confirmar=False)
             conn.close()
-            # Sequencias nao voltam no rollback (o gatilho de auditoria do gerador consome ids): unica diferenca aceita.
+            # FIN-BLOCO-D-2: a simulacao e somente leitura; o banco tem de ficar integralmente igual (dados, sequencias,
+            # estrutura), e repetir tem de dar o mesmo plano.
             difs_ensaio = comparar(retrato_copia, retrato_dsn(cluster.dsn()))
+            conn = conectar(cluster.dsn(), leitura=False)
+            repetida = retirar(conn, identidade, relacao_copia, confirmar=False)
+            conn.close()
             rel['limpeza']['ensaio_sem_gravar'] = {
-                'resultado': ensaio['resultado'], 'removeria': ensaio['total_removido'],
-                'dados_e_estrutura_inalterados': not [d for d in difs_ensaio if not d.startswith('sequencias:')],
-                'sequencias_avancadas': [d.split(':', 1)[1] for d in difs_ensaio if d.startswith('sequencias:')]}
+                'resultado': ensaio['resultado'], 'removeria': ensaio['total_previsto'],
+                'estado_integralmente_igual': not difs_ensaio, 'diferencas': difs_ensaio,
+                'repeticao_igual': repetida == ensaio}
             conn = conectar(cluster.dsn(), leitura=False)
             feito = retirar(conn, identidade, relacao_copia, confirmar=True)
             conn.close()
