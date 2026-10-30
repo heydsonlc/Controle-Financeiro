@@ -18,6 +18,12 @@ Uso:
     venv\\Scripts\\python.exe scripts\\supabase_mvp_seed_teste.py --email-a A --email-b B --confirmar
     venv\\Scripts\\python.exe scripts\\supabase_mvp_seed_teste.py --email-a A --email-b B --remover --confirmar
 """
+# FIN-PUBLICACAO-SEGURA-1: o projeto de teste virou a producao; recusa antes de ler credenciais ou conectar.
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parent))
+from guarda_producao import recusar_em_producao
+recusar_em_producao(__file__)
 import argparse
 import os
 import sys

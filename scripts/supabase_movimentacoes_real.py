@@ -15,6 +15,12 @@ supabase_cartoes_pagamento_real.py (pagamento de cartoes preservado). Limpeza: s
 (despesas, previsoes, recebimentos, movimentos, detalhes de pagamento, chaves e a conta inativa criados aqui). Nao
 imprime credenciais nem a URL do banco.
 """
+# FIN-PUBLICACAO-SEGURA-1: o projeto de teste virou a producao; recusa antes de ler credenciais ou conectar.
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parent))
+from guarda_producao import recusar_em_producao
+recusar_em_producao(__file__)
 import json
 import sys
 import urllib.error

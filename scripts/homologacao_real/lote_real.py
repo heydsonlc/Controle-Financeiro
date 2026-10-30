@@ -12,6 +12,12 @@ Etapas (cada uma auditavel):
 
 Nunca grava nos perfis 1 (Pessoal), 2 (Empresa), 31 e 39. Nao imprime e-mails, senhas, chaves nem URL do banco.
 """
+# FIN-PUBLICACAO-SEGURA-1: o projeto de teste virou a producao; recusa antes de ler credenciais ou conectar.
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parents[1]))
+from guarda_producao import recusar_em_producao
+recusar_em_producao(__file__)
 import json
 import os
 import re

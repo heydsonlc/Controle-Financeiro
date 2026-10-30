@@ -6,6 +6,12 @@ contas de teste em .env.e2e-real. O Flask (config staging) le o mesmo banco SEM 
 (sem geracao) e com a baixa de debito automatico neutralizada; a fachada e chamada por REST com o
 login real das contas de teste. Nao imprime dados nem credenciais. Exit 0 = nenhuma divergencia.
 """
+# FIN-PUBLICACAO-SEGURA-1: o projeto de teste virou a producao; recusa antes de ler credenciais ou conectar.
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parent))
+from guarda_producao import recusar_em_producao
+recusar_em_producao(__file__)
 import json
 import os
 import subprocess

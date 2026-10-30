@@ -1,5 +1,7 @@
 # Homologação real no Supabase de teste
 
+> **Bloqueado desde o FIN-PUBLICACAO-SEGURA-1 (30/10/2026).** O projeto `fzjmge…` passou a ser a produção, com os dados reais. Por isso os roteiros `*_real.py` recusam a execução logo no início (`scripts/guarda_producao.py`). Testes reais futuros vão num projeto de teste separado, com contrato próprio. O `digital_lote.py`, que só lê, continua liberado. Ver `docs/FIN_PUBLICACAO_SEGURA_1.md`.
+
 Roteiros usados para aplicar e validar as migrations `20261106`–`20261126` no Supabase **de teste** (`fzjmge…`). Eles gravam só dados fictícios num **perfil temporário** criado pelo próprio aplicativo e depois o removem, conferindo a identidade de cada registro.
 
 Nunca gravam nos perfis 1 (Pessoal), 2 (Empresa), 31 e 39. Não imprimem e-mails, senhas, chaves nem a URL do banco.
