@@ -534,8 +534,9 @@ def semear_recorrencia_e2e(cur, categoria_id=201):
 
 
 # FIN-CARTOES-RECORRENCIA-PENDENCIA-1 (E2E): compra recorrente FICTICIA no Cartao B do "Perfil B" (novo motor), a
-# partir de 2033 (nenhum outro cenario usa esses meses; antes da ancora ela nao entra no plano).
-PENDENCIA_E2E = (456, 'Streaming B', 'PERFIL_B', '2033-01-10', '25.00')
+# partir de 2041 (antes da ancora ela nao entra no plano). FIN-RECORRENCIAS-AUTOMATICAS-1: abrir Despesas gera as
+# lacunas ate o mes seguinte, entao a ancora fica depois de todos os meses que os specs anteriores abrem.
+PENDENCIA_E2E = (456, 'Streaming B', 'PERFIL_B', '2041-01-10', '25.00')
 
 
 def semear_pendencia_e2e(cur, categoria_id=201):

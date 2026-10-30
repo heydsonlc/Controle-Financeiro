@@ -4,7 +4,7 @@
 // Regras no banco (FIN-DESPESAS-1 + 20261103090000): criar_despesa (recorrente), editar_recorrencia,
 // inativar_recorrencia, reativar_recorrencia, definir_meio_pagamento_recorrencia e recorrencias_do_perfil, com gestao
 // do perfil, versao contra edicao concorrente e trava de geracao. Diferencas assumidas em relacao ao Flask:
-// - salvar nao gera conta: a geracao e explicita, em Despesas ("Gerar contas"), como no FIN-RECORRENCIA-1;
+// - salvar nao gera conta: a geracao e a de Despesas, automatica ao abrir a competencia (FIN-RECORRENCIAS-AUTOMATICAS-1);
 // - semanal / a cada 2 semanas (FIN-CATEGORIAS-RECORRENCIAS-2, migration 20261125090000): gravadas como o Flask
 //   (semanal_N_D: a cada N semanas no dia D, 0 = domingo) e geradas em Despesas, uma conta por ocorrencia. No cartao
 //   continuam recusadas: o Flask so lanca compra recorrente mensal ou anual;
@@ -105,7 +105,7 @@ function recusa(corpo) {
     return null;
 }
 
-const MENSAGEM_GERACAO = 'As contas são geradas em Despesas, pela ação "Gerar contas" (com confirmação).';
+const MENSAGEM_GERACAO = 'As contas são geradas automaticamente ao abrir a competência em Despesas.';
 
 async function definirMeio(id, meio) {
     const item = await atual(id);

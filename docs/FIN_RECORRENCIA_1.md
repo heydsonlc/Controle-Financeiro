@@ -1,5 +1,7 @@
 # FIN-RECORRENCIA-1 — Geração segura de contas recorrentes e faturas
 
+> **Atualização (FIN-RECORRENCIAS-AUTOMATICAS-1):** a geração das recorrências voltou a ser automática ao abrir Despesas ou trocar a competência, como no Flask; o botão "Gerar contas" e a confirmação saíram. Ver `docs/FIN_RECORRENCIAS_AUTOMATICAS_1.md`.
+
 **Data:** 2026-10-21.
 
 **Situação:** implementado e testado **localmente**. Os testes rodaram em cluster PostgreSQL descartável, PostgREST e Playwright, com dados fictícios.

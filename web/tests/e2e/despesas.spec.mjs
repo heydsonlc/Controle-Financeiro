@@ -68,6 +68,9 @@ test('avulsa: cadastrar pelo modal original (competencia do Flask), editar e exc
     const dialogos = registrarDialogos(page);
     await entrar(page, B);
     await abrirDespesas(page, '2029-06');
+    // FIN-RECORRENCIAS-AUTOMATICAS-1: o mes ja abre com as recorrencias do Perfil B geradas; a avulsa soma a elas.
+    const totalGeral = async () => Number((await page.locator('#total-geral').textContent()).replace(/[^\d,]/g, '').replace(',', '.'));
+    const antes = await totalGeral();
     await page.click('.btn-nova-despesa');
     await preencherDespesa(page, { nome: 'Conserto geladeira', valor: '350.40', categoria: 'Moradia', vencimento: '2029-07-05',
         observacoes: 'Assistencia tecnica' });
@@ -76,7 +79,7 @@ test('avulsa: cadastrar pelo modal original (competencia do Flask), editar e exc
     await expect.poll(() => dialogos.at(-1)).toBe('Despesa salva na competência 06/2029.');
     await expect(despesa(page, 'Conserto geladeira')).toBeVisible();
     await expect(despesa(page, 'Conserto geladeira').locator('.despesa-cell-detalhe')).toHaveText('Assistencia tecnica');
-    await expect(page.locator('#total-geral')).toHaveText('R$ 350,40');
+    await expect.poll(totalGeral).toBeCloseTo(antes + 350.40, 2);
 
     await trocarCompetencia(page, '2029-07');  // vence em julho, mas pertence a junho
     await expect(despesa(page, 'Conserto geladeira')).toHaveCount(0);
@@ -97,7 +100,8 @@ test('avulsa: cadastrar pelo modal original (competencia do Flask), editar e exc
     await page.click('#btn-deletar-modal');
     await expect.poll(() => dialogos.at(-1)).toBe('Despesa excluída com sucesso');
     expect(dialogos.at(-2)).toMatch(/^Tem certeza que deseja deletar a despesa "Conserto geladeira"\?/);
-    await expect(page.locator('#despesas-lista .empty-state')).toBeVisible();
+    await expect(despesa(page, 'Conserto geladeira')).toHaveCount(0);
+    await expect.poll(totalGeral).toBeCloseTo(antes, 2);
 });
 
 test('despesa paga nao abre edicao e fatura nao tem edicao', async ({ page }) => {

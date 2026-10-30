@@ -157,13 +157,12 @@
 
         <!-- Lista agrupada -->
             <div class="module-data-section despesas-data-section despesas-list-container">
-                <!-- FIN-FIDELIDADE-DESPESAS-1: geracao das recorrencias e EXPLICITA no novo aplicativo (FIN-RECORRENCIA-1, com
-                     previa e confirmacao); no Flask ela acontecia ao abrir a tela. Os avisos de recorrencia rejeitada tambem
-                     ficam aqui, no topo do painel da lista (fora da grade da pagina, que posiciona cada filho). -->
+                <!-- FIN-RECORRENCIAS-AUTOMATICAS-1: como no Flask, a geracao das recorrencias acontece ao abrir a competencia,
+                     sem confirmacao (despesas-recorrencias.js). Aqui ficam so os avisos (recorrencia rejeitada, perfil gerado
+                     pelo sistema atual, falha), no topo do painel da lista (fora da grade da pagina, que posiciona cada filho). -->
                 <section class="pendencias-recorrencia geracao" id="aviso-geracao" aria-label="Geração de contas recorrentes" hidden>
                     <p class="pendencias-recorrencia-titulo aviso-geracao" id="aviso-texto"></p>
                     <div class="geracao-acoes" id="geracao-acoes"></div>
-                    <div class="geracao-confirmacao" id="geracao-confirmacao" hidden></div>
                 </section>
                 <p class="geracao-resultado" id="geracao-resultado" role="status" hidden></p>
                 <div class="login-error" id="perfis-erro" role="alert" hidden></div>

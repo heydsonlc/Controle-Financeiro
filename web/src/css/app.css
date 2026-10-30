@@ -135,21 +135,13 @@ body.app-body { margin: 0; background: var(--cf-bg, #f4f6fa); }
 .totais span + span { border-left: 1px solid #f3f4f6; padding-left: 8px; }
 .totais strong { color: #111827; font-size: 0.9375rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .aviso-geracao { font-size: 0.8125rem; color: #92400e; margin: 0 0 8px; }
-/* FIN-RECORRENCIA-1: aviso discreto, acao "Gerar contas" e confirmacao antes de gravar. */
+/* FIN-RECORRENCIA-1: aviso discreto (FIN-RECORRENCIAS-AUTOMATICAS-1: a geracao e automatica, sem confirmacao). */
 .geracao { margin: 0 0 12px; }
 .geracao-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 0.8125rem; color: #6b7280; }
 .geracao-acoes details { width: 100%; }
 .geracao-acoes summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; }
 .geracao-lista { list-style: none; margin: 4px 0 0; padding: 0; font-size: 0.8125rem; color: #4b5563; }
 .geracao-lista li { padding: 6px 0; border-top: 1px dashed #e5e7eb; }
-.geracao-lista label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
-.geracao-lista input { width: 20px; height: 20px; margin: 0; flex: none; }
-.geracao-confirmacao {
-    margin-top: 8px; padding: 12px; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 0.875rem;
-}
-.geracao-titulo { font-size: 1rem; margin: 0 0 6px; }
-.geracao-confirmacao p { margin: 0 0 8px; }
-.geracao-alerta { color: #92400e; }
 .geracao-dica { font-size: 0.8125rem; color: #6b7280; }
 .geracao-botoes { display: flex; gap: 8px; margin-top: 10px; }
 .botao {

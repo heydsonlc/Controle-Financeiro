@@ -1,6 +1,6 @@
 // FIN-CARTOES-RECORRENCIA-PENDENCIA-1 — compra recorrente nao lancada porque a fatura de destino esta consolidada,
 // em tela de celular. Usuario B no "Perfil B" temporario (gerador novo), recorrencia ficticia "Streaming B" no
-// Cartao B a partir de 2033 (tests/supabase_local.py: PENDENCIA_E2E). A consolidacao usa o gancho do harness local,
+// Cartao B a partir de 2041 (tests/supabase_local.py: PENDENCIA_E2E). A consolidacao usa o gancho do harness local,
 // por isso o cenario so roda no banco descartavel (CF_E2E_LOCAL).
 import { expect, test } from '@playwright/test';
 
@@ -39,7 +39,7 @@ async function abrirMes(page, mes) {
 }
 
 function linhaStreaming(page) {
-    return page.locator('#geracao-acoes .geracao-lista li', { hasText: 'Streaming B · 02/2033' });
+    return page.locator('#geracao-acoes .geracao-lista li', { hasText: 'Streaming B · 02/2041' });
 }
 
 async function ocorrencias(page) {
@@ -64,17 +64,21 @@ test('recorrencia com destino consolidado: aviso, dispensa auditavel e ocorrenci
     test.skip(!process.env.CF_E2E_LOCAL, 'a consolidacao usa o gancho do harness local');
     await entrar(page, B);
     const consolidacao = await page.request.post('/__e2e__/consolidar', {
-        data: { cartao: 'Cartao B', competencia: '2033-02-01', criar_se_faltar: true },
+        data: { cartao: 'Cartao B', competencia: '2041-02-01', criar_se_faltar: true },
     });
     expect(consolidacao.status()).toBe(200);
 
-    await abrirMes(page, '2033-02');
+    await abrirMes(page, '2041-02');
     await expect(page.locator('#aviso-texto')).toContainText('1 item não pode ser gerado');
     await page.locator('#geracao-acoes details summary').click();
     const linha = linhaStreaming(page);
-    await expect(linha).toContainText('Fatura de 02/2033 consolidada');
+    await expect(linha).toContainText('Fatura de 02/2041 consolidada');
     await expect(linha.getByRole('button', { name: 'Dispensar aviso' })).toBeVisible();
-    expect(await ocorrencias(page)).toEqual([]);  // a previa nao grava
+    // FIN-RECORRENCIAS-AUTOMATICAS-1: abrir o mes e a tentativa de gerar (como no Flask), que registra a ocorrencia
+    // pendente; a compra nao e lancada e o aviso continua ativo.
+    const registradas = await ocorrencias(page);
+    expect(registradas.map((o) => [o.nome, o.competencia, o.situacao, Boolean(o.aviso_dispensado_em)]))
+        .toEqual([['Streaming B', '2041-02-01', 'PENDENTE', false]]);
 
     await linha.getByRole('button', { name: 'Dispensar aviso' }).click();
     await expect(page.locator('#geracao-resultado')).toHaveText('Aviso dispensado. A ocorrência continua registrada.');
@@ -82,12 +86,12 @@ test('recorrencia com destino consolidado: aviso, dispensa auditavel e ocorrenci
 
     // Persistencia depois de recarregar: aviso dispensado, ocorrencia pendente, nada lancado.
     await page.reload();
-    await esperarMes(page, '2033-02');
-    await page.locator('#geracao-acoes details summary').click();
-    await expect(linhaStreaming(page)).toContainText('aviso dispensado');
-    await expect(linhaStreaming(page).getByRole('button', { name: 'Dispensar aviso' })).toHaveCount(0);
+    await esperarMes(page, '2041-02');
+    // FIN-RECORRENCIAS-AUTOMATICAS-1: com o mes ja gerado, sem nada pendente e o unico aviso dispensado, o aviso some.
+    await expect(page.locator('#aviso-geracao')).toBeHidden();
+    await expect(page.locator('#aviso-texto')).toHaveText('');
     const [ocorrencia] = await ocorrencias(page);
     expect([ocorrencia.nome, ocorrencia.competencia, ocorrencia.situacao, ocorrencia.origem, Boolean(ocorrencia.aviso_dispensado_em)])
-        .toEqual(['Streaming B', '2033-02-01', 'PENDENTE', 'NOVO_APP', true]);
-    expect(normal(ocorrencia.motivo)).toContain('Fatura de 02/2033 consolidada');
+        .toEqual(['Streaming B', '2041-02-01', 'PENDENTE', 'NOVO_APP', true]);
+    expect(normal(ocorrencia.motivo)).toContain('Fatura de 02/2041 consolidada');
 });

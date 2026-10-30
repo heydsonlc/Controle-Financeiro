@@ -1,5 +1,7 @@
 # FIN-FIDELIDADE-DESPESAS-1 — Tela original de Despesas do Flask sobre o Supabase
 
+> **Atualização (FIN-RECORRENCIAS-AUTOMATICAS-1):** a geração das recorrências voltou a ser automática ao abrir Despesas ou trocar a competência, como no Flask; o botão "Gerar contas" e a confirmação saíram. Ver `docs/FIN_RECORRENCIAS_AUTOMATICAS_1.md`.
+
 **Situação:** implementada e testada **localmente**, com dados fictícios. Ainda não foi feito: commit, push, migration ou publicação.
 
 **Referência:** `frontend/templates/despesas.html`, `frontend/static/js/despesas.js` e `frontend/static/css/despesas.css`, além das rotas `/api/despesas*` do Flask. Os arquivos do Flask **não foram alterados**.

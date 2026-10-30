@@ -14,7 +14,7 @@ import {
 } from './adaptador-comum.js';
 import { centavos, deslocarMes, mesAtualBrasilia, reais } from './comum.js';
 import { responderDocumentoFinanceiro } from './documento-financeiro.js';
-import { mostrarGeracao } from './despesas-recorrencias.js';
+import { gerarRecorrencias, mostrarGeracao } from './despesas-recorrencias.js';
 import { definirCompetencia, iniciarMoldura } from './moldura.js';
 
 const MES = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -139,19 +139,22 @@ function semCartoesComoRecorrencia(previa) {
     return { ...previa, rejeitados, rejeitadas: rejeitados.length };
 }
 
-async function atualizarGeracao(mes) {
-    const [previaResp, pendenciasResp] = await Promise.all([
-        supabase.rpc('previa_geracao', { p_perfil_id: estado.perfilId, p_mes: `${mes}-01` }),
+// FIN-RECORRENCIAS-AUTOMATICAS-1: gera o que falta (despesas-recorrencias.js) antes de ler o mes, como o Flask.
+async function prepararGeracao(mes) {
+    const [geracao, pendenciasResp] = await Promise.all([
+        gerarRecorrencias(estado.perfilId, mes).catch(() => ({ previa: null, criadas: 0, falhou: true })),
         supabase.rpc('recorrencias_rejeitadas', { p_perfil_id: estado.perfilId, p_incluir_dispensadas: true }),
     ]);
-    const previa = semCartoesComoRecorrencia(previaResp.error ? null : previaResp.data);
-    // Quem so le o perfil nao ve as acoes de escrita da tela original (o banco recusaria de qualquer forma).
-    document.body.classList.toggle('cf-somente-leitura', !(previa && previa.pode_gerir));
     const dispensadas = new Set((pendenciasResp.error ? [] : pendenciasResp.data || [])
         .filter((p) => p.aviso_dispensado_em).map((p) => `${p.item_id}|${String(p.competencia).slice(0, 10)}`));
-    mostrarGeracao(previa, estado.perfilId, mes, {
+    return { geracao: { ...geracao, previa: semCartoesComoRecorrencia(geracao.previa) }, dispensadas };
+}
+
+function exibirGeracao(mes, { geracao, dispensadas }) {
+    // Quem so le o perfil nao ve as acoes de escrita da tela original (o banco recusaria de qualquer forma).
+    document.body.classList.toggle('cf-somente-leitura', !(geracao.previa && geracao.previa.pode_gerir));
+    mostrarGeracao(geracao, mes, {
         perfilId: estado.perfilId,
-        mes,
         dispensadas,
         recarregar: async (mensagem) => {
             if (mensagem) {
@@ -164,6 +167,8 @@ async function atualizarGeracao(mes) {
     });
 }
 
+// ponte-api.js atende uma consulta de cada vez, em ordem: a resposta de uma competencia anterior nunca chega depois da
+// selecionada (nem a geracao dela roda junto com a da selecionada).
 async function listar(parametros) {
     const mes = parametros.get('mes_referencia') || parametros.get('mes') || mesAtualBrasilia();
     if (!MES.test(mes)) return falha('Competência inválida. Use MM/AAAA.');
@@ -171,12 +176,15 @@ async function listar(parametros) {
     estado.mes = mes;
     definirCompetencia(mes);
     const doMes = (m) => supabase.rpc('contas_do_mes', { p_perfil_id: estado.perfilId, p_mes: `${m}-01` });
-    const [atual, anterior, seguinte, receitas, categorias, , , recorrentes] = await Promise.all([
-        doMes(mes), doMes(deslocarMes(mes, -1)), doMes(deslocarMes(mes, 1)),
+    // As contas sao lidas depois da geracao (lista, cards e barra lateral ja com o que foi gerado).
+    const [preparo, receitas, categorias, , recorrentes] = await Promise.all([
+        prepararGeracao(mes),
         supabase.rpc('receitas_do_mes', { p_perfil_id: estado.perfilId, p_mes: `${mes}-01` }),
-        categoriasDeDespesa(), contasBancariasAtivas(), atualizarGeracao(mes),
+        categoriasDeDespesa(), contasBancariasAtivas(),
         supabase.rpc('recorrencias_do_perfil', { p_perfil_id: estado.perfilId }),
     ]);
+    const [atual, anterior, seguinte] = await Promise.all([doMes(mes), doMes(deslocarMes(mes, -1)), doMes(deslocarMes(mes, 1))]);
+    exibirGeracao(mes, preparo);
     if (atual.error) return falha(mensagemDeErro(atual.error), 403);
     const categoriasPorNome = new Map(categorias.map((c) => [c.nome, c]));
     // Dados do item (recorrencia, categoria, observacoes, conta) que contas_do_mes nao traz: um por despesa do mes.
@@ -265,7 +273,7 @@ async function criar(corpo) {
     if (error) return falha(mensagemDeErro(error));
     chaves.esquecer(operacao);
     let message = data.recorrente
-        ? 'Recorrência cadastrada. As contas são geradas pela ação "Gerar contas".'
+        ? 'Recorrência cadastrada. As contas são geradas automaticamente ao abrir a competência.'
         : `Despesa salva na competência ${String(data.competencia).slice(5, 7)}/${String(data.competencia).slice(0, 4)}.`;
     // FIN-FIDELIDADE-RECORRENCIAS-1: o meio de pagamento (boleto, PIX ou debito) da recorrencia e gravado, so informativo.
     if (data.recorrente && ['boleto', 'pix', 'debito'].includes(corpo.meio_pagamento)) {

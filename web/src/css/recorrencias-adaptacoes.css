@@ -7,7 +7,7 @@ body.cf-somente-leitura .recorrencias-actions {
     display: none;
 }
 
-/* Resultado da ultima operacao (lembra que a geracao das contas e explicita, em Despesas). */
+/* Resultado da ultima operacao (lembra que as contas sao geradas ao abrir a competencia em Despesas). */
 .recorrencias-resultado {
     margin: 0 0 12px;
     padding: 10px 12px;

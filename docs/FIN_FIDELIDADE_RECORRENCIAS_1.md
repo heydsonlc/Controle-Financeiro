@@ -1,5 +1,7 @@
 # FIN-FIDELIDADE-RECORRENCIAS-1 — Tela original de Recorrências do Flask sobre o Supabase
 
+> **Atualização (FIN-RECORRENCIAS-AUTOMATICAS-1):** a geração das recorrências voltou a ser automática ao abrir Despesas ou trocar a competência, como no Flask; o botão "Gerar contas" e a confirmação saíram. Ver `docs/FIN_RECORRENCIAS_AUTOMATICAS_1.md`.
+
 **Situação:** concluída tecnicamente (25/10/2026).
 - Commit `728f234`.
 - Migration aplicada **só no Supabase de teste**.

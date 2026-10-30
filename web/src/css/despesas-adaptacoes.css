@@ -21,7 +21,7 @@ body.cf-somente-leitura .despesa-actions .row-action-button:not([data-on-click^=
     resize: vertical;
 }
 
-/* Geracao explicita das recorrencias: no topo do painel da lista (a grade da pagina posiciona cada filho dela). */
+/* Avisos da geracao automatica das recorrencias: no topo do painel da lista (a grade da pagina posiciona cada filho dela). */
 .despesas-list-container > .geracao {
     margin: 12px 16px;
 }

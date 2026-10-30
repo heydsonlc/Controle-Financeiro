@@ -1,10 +1,11 @@
-// FIN-RECORRENCIA-1 — gerar contas recorrentes e faturas, com confirmacao, em tela de celular.
+// FIN-RECORRENCIA-1 — contas recorrentes e faturas geradas ao abrir Despesas (FIN-RECORRENCIAS-AUTOMATICAS-1).
 // Dados FICTICIOS de tests/supabase_local.py (semear_recorrencia_e2e). Este arquivo GRAVA no
 // banco descartavel: usa so meses de 2027 e roda depois dos outros (workers: 1, ordem alfabetica).
 import { expect, test } from '@playwright/test';
 
 import {
-    despesa, esperarMes, nomes, preencherDespesa, registrarDialogos, salvarDespesa,
+    chamarRpc, despesa, esperarMes, estornar, nomes, pagar, perfilAtivoId, preencherDespesa, registrarDialogos, salvarDespesa,
+    trocarCompetencia,
 } from './despesas.mjs';
 import { trocarPerfil } from './moldura.mjs';
 
@@ -44,72 +45,144 @@ async function abrirMes(page, mes) {
     await esperarMes(page, mes);
 }
 
-const LINHAS_MARCO = [
-    '01/2027 · Mensalidade B · Conta · 31/01/2027 · R$ 120,00',
-    '02/2027 · Mensalidade B · Conta · 28/02/2027 · R$ 120,00',
-    '03/2027 · Mensalidade B · Conta · 31/03/2027 · R$ 120,00',
-    '03/2027 · Cartao B · Fatura · 31/03/2027 · R$ 0,00',
-    '04/2027 · Mensalidade B · Conta · 30/04/2027 · R$ 120,00',
-    '04/2027 · Cartao B · Fatura · 30/04/2027 · R$ 0,00',
-];
+// FIN-RECORRENCIAS-AUTOMATICAS-1: como no Flask, abrir a competencia gera, sem confirmacao, o que falta ate o mes
+// seguinte (lacunas incluidas), pelo motor do banco. Como abrir um mes distante completa todas as lacunas, o cenario
+// usa a propria recorrencia (Perfil B, gerador novo), em 2040, meses que nenhum outro spec abre.
+const AUTO = 'Academia Auto';  // nome que nenhum filtro dos outros specs alcanca
+const contasDoMes = async (page, mes) => (await chamarRpc(page, 'contas_do_mes', {
+    p_perfil_id: await perfilAtivoId(page), p_mes: `${mes}-01` })).corpo;
+const previaDoMes = async (page, mes) => (await chamarRpc(page, 'previa_geracao', {
+    p_perfil_id: await perfilAtivoId(page), p_mes: `${mes}-01` })).corpo;
+const resultado = (page) => page.locator('#geracao-resultado');
+const doItem = async (page, mes) => (await contasDoMes(page, mes)).filter((c) => c.nome.startsWith(AUTO));
+const faturasB = async (page, mes) => (await contasDoMes(page, mes)).filter((c) => c.grupo === 'FATURA' && c.cartao_nome === 'Cartao B');
+const brl = (v) => `R$ ${v.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
 
-test('consulta do mes nao grava: aviso discreto e acao "Gerar contas"; cancelar nao grava', async ({ page }) => {
+test('abrir Despesas gera ate o mes seguinte, sem botao; reabrir, recarregar e trocar a competencia nao duplicam', async ({ page }) => {
+    const dialogos = registrarDialogos(page);
     await entrar(page, B);
-    await abrirMes(page, '2027-03');
-    await expect(page.locator('#despesas-lista .empty-state')).toBeVisible();
-    await expect(page.locator('#aviso-texto')).toHaveText('6 lançamentos recorrentes ou faturas a gerar até 04/2027.');
-    await expect(page.locator('#geracao-confirmacao')).toBeHidden();
+    await abrirMes(page, '2040-03');  // as faturas de 03 e 04/2040 ja sao geradas aqui
+    await page.click('.btn-nova-despesa');
+    await preencherDespesa(page, { nome: AUTO, valor: '120', categoria: 'Moradia', vencimento: '2040-01-31',
+        recorrente: true, tipo: 'mensal' });
+    await salvarDespesa(page);
+    await expect.poll(() => dialogos.at(-1)).toBe('Recorrência cadastrada. As contas são geradas automaticamente ao abrir a competência.');
+    // A lista recarregada gera 01 a 04/2040 (lacunas ate o mes seguinte), sem confirmacao.
+    await expect(resultado(page)).toHaveText('4 lançamentos recorrentes ou faturas gerados automaticamente até 04/2040.');
+    await expect(page.locator('#gerar-contas')).toHaveCount(0);
+    await expect(page.locator('#aviso-geracao')).toBeHidden();
+    await expect(despesa(page, AUTO).locator('.despesa-cell-vencimento')).toHaveText('31/03/2040');
+    await expect(despesa(page, 'Cartao B').locator('.despesa-cell-vencimento')).toHaveText('31/03/2040');
+    for (const mes of ['2040-01', '2040-02', '2040-03', '2040-04']) expect(await doItem(page, mes), mes).toHaveLength(1);
+    for (const mes of ['2040-03', '2040-04']) expect(await faturasB(page, mes), mes).toHaveLength(1);
+    expect(await faturasB(page, '2040-02')).toHaveLength(0);  // fatura: so o mes e o seguinte, como no Flask
+    expect(await doItem(page, '2040-05')).toHaveLength(0);    // nada alem do mes seguinte
+    expect((await previaDoMes(page, '2040-03')).a_gerar).toBe(0);
+    // Cards ja com o que foi gerado.
+    const total = (await contasDoMes(page, '2040-03')).reduce((s, c) => s + Number(c.valor), 0);
+    await expect(page.locator('#total-geral')).toHaveText(brl(total));
 
-    await page.click('#gerar-contas');
-    await expect(page.locator('#geracao-confirmacao')).toBeVisible();
-    await page.locator('#geracao-confirmacao').getByRole('button', { name: 'Cancelar' }).click();
-    await expect(page.locator('#geracao-confirmacao')).toBeHidden();
-    await expect(page.locator('#gerar-contas')).toBeVisible();
+    // Recarregar a pagina: tudo reconhecido como existente.
+    await page.reload();
+    await esperarMes(page, '2040-03');
+    await expect(resultado(page)).toBeHidden();
+    await expect(despesa(page, AUTO)).toHaveCount(1);
+    await expect(despesa(page, 'Cartao B')).toHaveCount(1);
 
-    await abrirMes(page, '2027-03');
-    await expect(page.locator('#despesas-lista .empty-state')).toBeVisible();
-    await expect(page.locator('#aviso-texto')).toHaveText('6 lançamentos recorrentes ou faturas a gerar até 04/2027.');
+    // Abril (dia 31 vira 30): completa maio.
+    await abrirMes(page, '2040-04');
+    await expect(resultado(page)).toHaveText(/gerados automaticamente até 05\/2040\.$/);
+    await expect(despesa(page, AUTO).locator('.despesa-cell-vencimento')).toHaveText('30/04/2040');
+    await expect(despesa(page, AUTO).locator('.status-badge')).toHaveText('Pendente');
+
+    // Troca pelo filtro da propria tela (sem recarregar): maio completa junho.
+    await trocarCompetencia(page, '2040-05');
+    await expect(resultado(page)).toHaveText(/gerados automaticamente até 06\/2040\.$/);
+    await expect(despesa(page, AUTO).locator('.despesa-cell-vencimento')).toHaveText('31/05/2040');
+
+    // De volta a marco: nada novo, nada duplicado.
+    await trocarCompetencia(page, '2040-03');
+    await expect(resultado(page)).toBeHidden();
+    for (const mes of ['2040-01', '2040-02', '2040-03', '2040-04', '2040-05', '2040-06']) {
+        expect(await doItem(page, mes), mes).toHaveLength(1);
+    }
+    for (const mes of ['2040-03', '2040-04', '2040-05', '2040-06']) expect(await faturasB(page, mes), mes).toHaveLength(1);
 });
 
-test('confirmacao mostra competencias e registros; dispensa fica registrada; dia contratual preservado', async ({ page }) => {
+test('conta paga continua paga e conta excluida nao volta ao reabrir', async ({ page }) => {
+    const dialogos = registrarDialogos(page);
     await entrar(page, B);
-    await abrirMes(page, '2027-03');
-    await page.click('#gerar-contas');
-    const painel = page.locator('#geracao-confirmacao');
-    await expect(painel.locator('p').first()).toHaveText('6 registros em 4 competências: 01/2027, 02/2027, 03/2027, 04/2027.');
-    await expect(painel.locator('.geracao-alerta')).toHaveText(/anteriores ao mês exibido/);
-    const linhas = painel.locator('.geracao-lista li');
-    expect(await textos(linhas)).toEqual(LINHAS_MARCO);
-    await expect(painel.locator('input[type=checkbox]')).toHaveCount(4);  // fatura nao e dispensavel
+    await abrirMes(page, '2040-02');
+    await pagar(page, AUTO, { data: '2040-02-28' });
+    await expect.poll(() => dialogos.at(-1)).toMatch(/^Despesa paga: R\$\s120,00 debitados de Conta Perfil B\./);
+    await abrirMes(page, '2040-03');  // o plano de marco cobre fevereiro
+    await abrirMes(page, '2040-02');
+    await expect(despesa(page, AUTO)).toHaveCount(1);
+    await expect(despesa(page, AUTO).locator('.status-badge')).toHaveText('Pago');
+    await expect(despesa(page, AUTO).locator('.despesa-cell-valor')).toHaveText('R$ 120,00');
+    // Devolve a "Conta Perfil B" ao saldo de partida (os specs compartilham o banco descartavel).
+    await estornar(page, AUTO, 'Estorno do teste de geracao automatica', '2040-02-29');
+    await expect.poll(() => dialogos.at(-1)).toBe('Pagamento estornado com sucesso.');
 
-    await linhas.filter({ hasText: '02/2027 · Mensalidade B' }).locator('input').uncheck();
-    await painel.getByRole('button', { name: 'Confirmar' }).click();
-    await expect(page.locator('#geracao-resultado'))
-        .toHaveText('Geração concluída: 5 criadas, 0 já existentes, 1 dispensada, 0 rejeitadas.');
+    // Excluir so a de janeiro: a competencia fica dispensada e nenhuma abertura a recria.
+    await abrirMes(page, '2040-01');
+    await despesa(page, AUTO).locator('[data-on-click^="editarDespesa"]').click();
+    await page.click('#btn-deletar-modal');
+    await page.locator('#modal-tipo-exclusao button', { hasText: 'apenas esta' }).click();
+    await expect.poll(() => dialogos.at(-1)).toBe('Despesa excluída com sucesso!');
+    for (const mes of ['2040-01', '2040-02', '2040-01']) await abrirMes(page, mes);
+    await expect(despesa(page, AUTO)).toHaveCount(0);
+    await expect(resultado(page)).toBeHidden();
+    expect(await doItem(page, '2040-01')).toHaveLength(0);
+    expect((await previaDoMes(page, '2040-01')).dispensados.filter((d) => d.nome === AUTO)
+        .map((d) => [d.competencia, d.motivo])).toEqual([['2040-01-01', 'Conta excluida pelo usuario']]);
+});
 
-    // Lista recarregada: conta e fatura do mes, aviso some.
-    await expect(despesa(page, 'Mensalidade B').locator('.despesa-cell-vencimento')).toHaveText('31/03/2027');
-    await expect(despesa(page, 'Cartao B').locator('.despesa-cell-vencimento')).toHaveText('31/03/2027');
-    expect(await nomes(page)).toHaveLength(2);  // a conta e a fatura do mes
+test('falha na geracao: aviso objetivo, lista existente mantida; recarregar gera', async ({ page }) => {
+    await entrar(page, B);
+    await page.route('**/rest/v1/rpc/gerar_mes', (rota) => rota.abort('failed'));
+    await abrirMes(page, '2040-06');  // a conta e a fatura de 06 ja existem; faltam as de 07/2040
+    await expect(page.locator('#aviso-texto')).toHaveText(/^Não foi possível gerar as recorrências deste mês agora/);
+    await expect(page.locator('#geracao-acoes')).toContainText('Recarregue a página para tentar de novo.');
+    await expect(despesa(page, AUTO).locator('.despesa-cell-vencimento')).toHaveText('30/06/2040');
+    await expect(despesa(page, 'Cartao B')).toHaveCount(1);
+    expect((await previaDoMes(page, '2040-06')).a_gerar).toBeGreaterThan(0);  // nada gravado
+    expect(await doItem(page, '2040-07')).toHaveLength(0);
+
+    await page.unroute('**/rest/v1/rpc/gerar_mes');
+    await page.reload();
+    await esperarMes(page, '2040-06');
+    await expect(resultado(page)).toHaveText(/gerados automaticamente até 07\/2040\.$/);
     await expect(page.locator('#aviso-geracao')).toBeHidden();
+    expect(await doItem(page, '2040-07')).toHaveLength(1);
+});
 
-    // Repetir nao duplica: a mesma consulta nao tem mais nada a gerar.
-    await abrirMes(page, '2027-03');
-    await expect(despesa(page, 'Mensalidade B')).toHaveCount(1);
-    await expect(page.locator('#aviso-geracao')).toBeHidden();
+test('duas abas abrindo a mesma competencia ao mesmo tempo: uma geracao so', async ({ page }) => {
+    await entrar(page, B);
+    const outra = await page.context().newPage();
+    await Promise.all([abrirMes(page, '2040-10'), abrirMes(outra, '2040-10')]);
+    for (const mes of ['2040-08', '2040-09', '2040-10', '2040-11']) expect(await doItem(page, mes), mes).toHaveLength(1);
+    for (const mes of ['2040-10', '2040-11']) expect(await faturasB(page, mes), mes).toHaveLength(1);
+    expect((await previaDoMes(page, '2040-10')).a_gerar).toBe(0);
+    await outra.close();
+});
 
-    // Fevereiro: competencia dispensada nao aparece e nao volta a ser oferecida.
-    await abrirMes(page, '2027-02');
-    expect(await nomes(page)).toEqual([]);
-    await expect(page.locator('#aviso-texto')).toHaveText('1 lançamento recorrente ou fatura a gerar até 03/2027.');
-    await page.locator('#geracao-acoes summary').click();
-    expect(await textos(page.locator('#geracao-acoes .geracao-lista li')))
-        .toEqual(['Mensalidade B · 02/2027 — Dispensada pelo usuario']);
-
-    // Abril: dia 31 vira 30, sem deslocar os meses seguintes.
-    await abrirMes(page, '2027-04');
-    await expect(despesa(page, 'Mensalidade B').locator('.despesa-cell-vencimento')).toHaveText('30/04/2027');
-    await expect(despesa(page, 'Mensalidade B').locator('.status-badge')).toHaveText('Pendente');
+test('resposta atrasada de outra competencia nao substitui a selecionada', async ({ page }) => {
+    await entrar(page, B);
+    await abrirMes(page, '2040-03');
+    // A leitura de abril demora; o usuario ja escolheu maio.
+    await page.route('**/rest/v1/rpc/contas_do_mes', async (rota) => {
+        if ((rota.request().postData() || '').includes('2040-04-01')) await new Promise((r) => setTimeout(r, 1500));
+        await rota.continue();
+    });
+    await page.fill('#filtro-competencia', '04/2040');
+    await page.locator('#filtro-competencia').dispatchEvent('change');
+    await page.fill('#filtro-competencia', '05/2040');
+    await page.locator('#filtro-competencia').dispatchEvent('change');
+    await esperarMes(page, '2040-05');
+    await page.waitForTimeout(2000);
+    await expect(page.locator('#despesas-lista')).toHaveAttribute('data-competencia-carregada', '05/2040');
+    await expect(despesa(page, AUTO).locator('.despesa-cell-vencimento')).toHaveText('31/05/2040');
 });
 
 test('quem so le o perfil ve o aviso, mas nao tem a acao de gerar', async ({ page }) => {
@@ -194,15 +267,12 @@ test('recorrencia pela tela original: cadastrar, gerar, editar a conta, excluir 
     await preencherDespesa(page, { nome: 'Escola B', valor: '500', categoria: 'Moradia', vencimento: '2029-03-31',
         recorrente: true, tipo: 'mensal' });
     await salvarDespesa(page);
-    await expect.poll(() => dialogos.at(-1)).toBe('Recorrência cadastrada. As contas são geradas pela ação "Gerar contas".');
-    await expect(escolaB(page)).toHaveCount(0);  // nenhum segundo gerador: ainda nao ha conta
-
-    await page.click('#gerar-contas');
-    const painel = page.locator('#geracao-confirmacao');
-    expect(await textos(painel.locator('.geracao-lista li', { hasText: 'Escola B' })))
-        .toEqual(['03/2029 · Escola B · Conta · 31/03/2029 · R$ 500,00', '04/2029 · Escola B · Conta · 30/04/2029 · R$ 500,00']);
-    await painel.getByRole('button', { name: 'Confirmar' }).click();
-    await expect(page.locator('#geracao-resultado')).toContainText('Geração concluída');
+    await expect.poll(() => dialogos.at(-1)).toBe('Recorrência cadastrada. As contas são geradas automaticamente ao abrir a competência.');
+    // A tela recarrega a lista depois de salvar: a geracao automatica (o mesmo motor) cria marco e abril.
+    await expect(page.locator('#geracao-resultado')).toContainText('gerados automaticamente até 04/2029');
+    for (const mes of ['2029-03', '2029-04']) {
+        expect((await contasDoMes(page, mes)).filter((c) => c.nome.startsWith('Escola B')), mes).toHaveLength(1);
+    }
     await expect(escolaB(page).locator('.despesa-cell-vencimento')).toHaveText('31/03/2029');
     await expect(escolaB(page).locator('.despesa-cell-detalhe')).toHaveText('Recorrencia');
 
@@ -229,7 +299,7 @@ test('recorrencia pela tela original: cadastrar, gerar, editar a conta, excluir 
     await expect(escolaB(page)).toHaveCount(0);
     await abrirMes(page, '2029-03');
     await expect(escolaB(page)).toHaveCount(0);           // nao volta
-    await expect(page.locator('#gerar-contas')).toHaveCount(0);  // e nao e oferecida de novo
+    await expect(page.locator('#gerar-contas')).toHaveCount(0);
 
     // Esta e as futuras (abril): a recorrencia e inativada e a conta excluida; nada novo e gerado.
     await abrirMes(page, '2029-04');
