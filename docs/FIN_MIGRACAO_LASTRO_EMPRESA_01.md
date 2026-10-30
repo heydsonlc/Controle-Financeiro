@@ -1,9 +1,9 @@
 # FIN-MIGRACAO-LASTRO-EMPRESA-01 — Lastro e documentos da Empresa
 
-**Situação (30/10/2026): Etapa 2 autorizada; ensaio aprovado.**
-- Código, migration `20261202090000`, reversão e testes estão prontos.
-- Ensaio numa cópia fiel e descartável da produção aprovado (§6). Sequência: commit → push → migration → build → teste real pela tela.
-- O documento real id 4 não é alterado por nenhuma etapa automática.
+**Situação (30/10/2026): Etapa 2 em produção, com correção autorizada.**
+- Migration `20261202090000` aplicada e build publicado (§7).
+- Correção da inferência de "Documento contábil" (migration `20261203090000`) e "Excluir documento" na Revisar, autorizados depois do teste real (§8).
+- O documento real id 4 não é alterado por nenhuma etapa automática; o titular o revisa pela tela.
 
 ## 1. Conceitos (como o sistema funciona hoje)
 
@@ -95,3 +95,50 @@ Cópia por fluxo `pg_dump → pg_restore` (sem arquivo) num PostgreSQL 18 local,
 | Reversão e reaplicação | Estrutura e funções iguais ao estado anterior; reaplicação igual à aplicação; dados preservados |
 
 O ensaio aplica os arquivos byte a byte, como a CLI. A produção guarda o texto das funções com o fim de linha do arquivo aplicado (CRLF, salvo `excluir_comprovante`). Por isso as funções são comparadas sem o CR.
+
+## 7. Etapa 2 em produção
+
+- Commit `d5baca6`, push `c66db6e..d5baca6`.
+- Migration `20261202090000` aplicada pelo script de aplicação única: dry-run só com ela, nenhum dado existente alterado, segurança sem bloqueios.
+- Deploy `c5b6d2cd` (build de `git archive d5baca6`); os 165 arquivos servidos na URL de produção são iguais ao build.
+
+**Teste real do titular (30/10/2026, documento fictício id 5 "TESTE LASTRO EMPRESA"):**
+- Revisão e reclassificação gravadas (Certidão federal, `USUARIO`), com um evento por gravação.
+- O titular não encontrou a lixeira da lista. Localmente ela aparece de 1024 a 1920 px, e a causa em produção segue em análise.
+- O titular revisou o id 4 pela tela com a categoria de IR "Documento contábil" e o validou. A regra herdada do Flask (natureza `DOCUMENTO_CONTABIL` → Guia/taxa paga) voltou a sugerir pagamento: "sem lastro" voltou a 1 e o "Contrato Social" do checklist voltou a pendente.
+
+## 8. Correção autorizada (migration `20261203090000`)
+
+**Inferência** (só documento sem classificação gravada; a gravada prevalece sempre):
+1. O conteúdo decide primeiro: documento societário/cadastral, procuração, alvará ou certidão claramente identificados.
+2. Pagamento só com evidência de transação (comprovante, transação, Pix enviado/pago, linha digitável, boleto pago...). Se a categoria de IR for imposto/taxa, vira Guia/taxa paga.
+3. Sem nada disso, a categoria de IR:
+   - "Documento contábil" ou "Imposto/taxa" → **Contábil/fiscal / Não classificado**, fora do "sem lastro";
+   - patrimônio, despesa e nota fiscal seguem o Flask.
+4. Contrato genérico → Contrato/instrumento; sem evidência → Não classificado.
+
+Categoria inferida sem categoria aparece como "Não classificado" em qualquer tipo. Só redefine `inferir_documento_empresa` e `metadata_empresarial_flask`; nenhum dado é alterado. A reversão (`supabase/reversao/20261203090000_inferencia_documento_contabil_anterior.sql`) devolve o texto exato da `20261202090000`.
+
+**Tela:** botão **Excluir documento** também no rodapé da Revisar, à esquerda das ações. Usa a mesma rota oficial e a mesma confirmação da lixeira; a recusa mostra o motivo e mantém a revisão aberta, e a exclusão fecha a revisão e atualiza a lista.
+
+**Testes:** `tests/test_supabase_lastro_empresa.py` ganhou:
+- 8 casos de conteúdo × categoria de IR;
+- "sem lastro" sem contábil nem societário;
+- classificação gravada prevalece;
+- reversão da correção.
+
+`web/tests/e2e/lastro_empresa.spec.mjs` ganhou "excluir pela revisão" (cancelar, recusa com motivo, exclusão).
+
+**Regressão:** integração Python 442 aprovados (0 falhas), telas 113/113, unitários 30/30.
+
+**Ensaio numa cópia fiel e descartável da produção:**
+
+| Conferência | Resultado |
+|---|---|
+| Cópia × produção | Idêntica |
+| Dados e sequências | Nenhuma alteração; nenhuma tabela nova ou removida |
+| Funções | Só `inferir_documento_empresa` e `metadata_empresarial_flask` |
+| Id 4 (sem classificação gravada) | Antes "Contábil / fiscal / Guia/taxa paga"; depois "Documento societário / Contrato Social", ainda `INFERIDO`, sem metadados gravados |
+| Id 5 (classificação gravada) | Inalterado (Certidão federal, `USUARIO`) |
+| Resumo | "Sem lastro" 1 → 0; checklist "Contrato Social" pendente → ok |
+| Reversão / reaplicação | Volta exatamente ao estado anterior / igual à aplicação |

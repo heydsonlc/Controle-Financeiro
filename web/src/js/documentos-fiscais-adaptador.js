@@ -388,21 +388,49 @@ function iconeLixeira() {
     return svg;
 }
 
+async function excluirDocumento(id, nome) {
+    if (!window.confirm(`Excluir o documento "${nome}"?\nO arquivo e os dados dele saem do sistema. Esta ação não pode ser desfeita.`)) return false;
+    const r = await (await fetch(`/api/ir/comprovantes/${id}`, { method: 'DELETE' })).json();
+    if (!r.success) {
+        window.alert(r.error || 'Não foi possível excluir o documento. Nada foi excluído.');
+        return false;
+    }
+    await window.IRDoc?.carregarComprovantes?.();
+    return true;
+}
+
+// Correcao autorizada (30/10/2026): "Excluir documento" tambem no rodape da revisao, onde o titular ja trabalha com o
+// documento. Mesma rota e mesma confirmacao da lixeira da lista; fecha a revisao so quando a exclusao acontece.
+function instalarExclusaoNaRevisao() {
+    const rodape = document.querySelector('#ir-review-modal .ir-modal-footer');
+    if (!rodape || rodape.querySelector('.cf-revisao-excluir')) return;
+    const botao = document.createElement('button');
+    botao.type = 'button';
+    botao.id = 'cf-review-excluir';
+    botao.className = 'ir-secondary-btn cf-revisao-excluir';
+    const rotulo = document.createElement('span');
+    rotulo.textContent = 'Excluir documento';
+    botao.append(iconeLixeira(), rotulo);
+    botao.addEventListener('click', async () => {
+        const id = Number(document.getElementById('ir-review-id')?.value);
+        if (!id) return;
+        const nome = (document.getElementById('ir-review-file-name')?.textContent || `Documento #${id}`).trim();
+        botao.disabled = true;
+        try {
+            if (await excluirDocumento(id, nome)) document.getElementById('ir-review-close')?.click();
+        } finally {
+            botao.disabled = false;
+        }
+    });
+    rodape.prepend(botao);
+}
+
 async function instalarExclusao() {
     const corpo = document.getElementById('ir-comprovantes-tbody');
     if (!corpo) return;
     const { data: gere } = await supabase.rpc('pode_gerir_perfil', { p_perfil_id: estado.perfilId });
     if (gere !== true) return;
-
-    async function excluirDocumento(id, nome) {
-        if (!window.confirm(`Excluir o documento "${nome}"?\nO arquivo e os dados dele saem do sistema. Esta ação não pode ser desfeita.`)) return;
-        const r = await (await fetch(`/api/ir/comprovantes/${id}`, { method: 'DELETE' })).json();
-        if (!r.success) {
-            window.alert(r.error || 'Não foi possível excluir o documento. Nada foi excluído.');
-            return;
-        }
-        await window.IRDoc?.carregarComprovantes?.();
-    }
+    instalarExclusaoNaRevisao();
 
     function acrescentar() {
         for (const revisar of corpo.querySelectorAll('[data-on-click^="window.IRDoc.abrirRevisao("]')) {

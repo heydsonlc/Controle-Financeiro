@@ -76,3 +76,23 @@
 .cf-excluir-documento:hover {
     color: var(--cf-danger, #dc2626);
 }
+
+/* "Excluir documento" no rodape da revisao: a esquerda, separado das acoes de salvar/validar. */
+.cf-revisao-excluir {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: auto;
+    color: var(--cf-danger-text, #991b1b);
+}
+
+.cf-revisao-excluir .cf-icone-lixeira {
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+}
+
+.cf-revisao-excluir:hover:not(:disabled) {
+    color: var(--cf-danger, #dc2626);
+    border-color: var(--cf-danger, #dc2626);
+}

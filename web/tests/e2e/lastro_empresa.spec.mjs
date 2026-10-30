@@ -15,6 +15,7 @@ const ARQUIVOS = {
     contrato: ['contrato-lastro-e2e.pdf', pdf('CONTRATO SOCIAL DA EMPRESA C FICTICIA LTDA', 'Os socios podem pagar fornecedores via PIX.')],
     pix: ['pix-lastro-e2e.pdf', pdf('Comprovante de transferencia Pix', 'ID da transacao E2E0001 - Valor R$ 45,00 - Empresa C')],
     neutro: ['neutro-lastro-e2e.pdf', pdf('Documento interno ficticio da Empresa C', 'sem nenhuma palavra reconhecida pela regra.')],
+    revisao: ['revisao-lastro-e2e.pdf', pdf('TESTE LASTRO EMPRESA - documento ficticio da Empresa C', 'para excluir pela revisao.')],
 };
 const SAIDA = 'Saida lastro E2E (ficticia)';
 const SAIDA_CONTADOR = 'Saida contador E2E (ficticia)';
@@ -187,6 +188,43 @@ test('excluir pela lista: confirmacao, contadores e recusa com motivo', async ({
     await expect.poll(() => testInfo.avisos.at(-1)).toMatch(/^O documento tem vinculos/);
     await expect(linha(page, ARQUIVOS.pix[0])).toBeVisible();
     await expect(page.locator('#ir-kpi-total')).toHaveText(String(total - 1));
+});
+
+// Correcao autorizada (30/10/2026): "Excluir documento" tambem dentro da revisao, com a mesma rota e confirmacao. Cancelar
+// nao exclui nem fecha; a recusa mostra o motivo e mantem a revisao aberta; a exclusao fecha a revisao e atualiza a lista.
+test('excluir pela revisao: cancelar, recusa com motivo e exclusao', async ({ page }, testInfo) => {
+    await abrirDocumentos(page);
+    await enviar(page, 'revisao');
+    const { total } = await contadores(page);
+    const botao = page.locator('#ir-review-modal #cf-review-excluir');
+
+    // Recusa: o comprovante de Pix tem historico de vinculo.
+    await linha(page, ARQUIVOS.pix[0]).locator('button[title="Revisar"]').click();
+    await expect(page.locator('#ir-review-modal')).toHaveClass(/open/);
+    await expect(botao).toHaveText('Excluir documento');
+    await botao.click();
+    await expect.poll(() => testInfo.avisos.at(-1)).toMatch(/^O documento tem vinculos/);
+    await expect(page.locator('#ir-review-modal')).toHaveClass(/open/);
+    await page.click('#ir-review-close');
+
+    // Cancelar a confirmacao: nada muda.
+    page.removeAllListeners('dialog');
+    page.once('dialog', async (dialogo) => { testInfo.avisos.push(dialogo.message()); await dialogo.dismiss(); });
+    await linha(page, ARQUIVOS.revisao[0]).locator('button[title="Revisar"]').click();
+    await expect(page.locator('#ir-review-modal')).toHaveClass(/open/);
+    await botao.click();
+    await expect.poll(() => testInfo.avisos.at(-1)).toBe(
+        `Excluir o documento "${ARQUIVOS.revisao[0]}"?\nO arquivo e os dados dele saem do sistema. Esta ação não pode ser desfeita.`);
+    await expect(page.locator('#ir-review-modal')).toHaveClass(/open/);
+    expect(await documento(page, ARQUIVOS.revisao[0])).toBeDefined();
+
+    // Confirmar: exclui, fecha a revisao e atualiza lista e contadores.
+    page.once('dialog', async (dialogo) => { testInfo.avisos.push(dialogo.message()); await dialogo.accept(); });
+    await botao.click();
+    await expect(page.locator('#ir-review-modal')).not.toHaveClass(/open/);
+    await expect(linha(page, ARQUIVOS.revisao[0])).toHaveCount(0);
+    await expect(page.locator('#ir-kpi-total')).toHaveText(String(total - 1));
+    expect(await documento(page, ARQUIVOS.revisao[0])).toBeUndefined();
 });
 
 test('arquivo recusado continua com mensagem clara (nada gravado)', async ({ page }) => {

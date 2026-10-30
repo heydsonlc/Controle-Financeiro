@@ -4,6 +4,8 @@ Testes FIN-MIGRACAO-LASTRO-EMPRESA-01 (migration 20261202090000), em cluster Pos
 Empresa ficticia (usuario D, Empresa D) no novo aplicativo:
 - classificacao automatica segura: contrato social que cita Pix NAO vira pagamento; comprovante de Pix, boleto pago e
   procuracao reconhecidos; "pixel" nao e Pix; sem evidencia = "Nao classificado";
+- conteudo antes da categoria de IR (20261203090000): "Documento contabil" ou "Imposto/taxa" sem evidencia de pagamento =
+  Contabil / fiscal, "Nao classificado", fora do "sem lastro"; classificacao gravada prevalece; reversao da correcao;
 - "sem lastro" conta so o documento que comprova operacao financeira;
 - metadados empresariais (revisao da tela): reclassificacao, regras do Flask (categoria define o tipo, datas, situacao pela
   validade), campos ausentes preservados, evento antes -> depois, auditoria com conta e hora, repeticao pela chave,
@@ -124,6 +126,72 @@ def test_sem_lastro_so_para_documento_financeiro(banco):
     assert (r['documentos_cadastrados'], r['sem_lastro']) == (3, 1)
     assert metadata(banco, pix)['tipo_documental'] == 'PAGAMENTO_REALIZADO'
     assert [x for x in r['checklist_empresarial'] if x['label'] == 'Contrato Social'] == [{'label': 'Contrato Social', 'status': 'ok'}]
+
+
+# ---- Categoria de IR x conteudo (correcao 20261203090000) ----
+
+def com_categoria_ir(dsn, doc, natureza):
+    """Categoria de IR ficticia da Empresa com a natureza pedida, atribuida ao documento (como a revisao faria)."""
+    cat = sql(dsn, "insert into public.ir_categoria (nome, descricao, dedutivel, ativo, ordem, tipo_contexto, natureza, created_at, "
+                   "updated_at) values (%s, 'Categoria ficticia', false, true, 90, 'EMPRESA', %s, now(), now()) returning id",
+              (f'{natureza} (ficticia) {uuid.uuid4().hex[:6]}', natureza))[0]['id']
+    sql(dsn, 'update public.ir_comprovante set categoria_ir_id = %s where id = %s', (cat, doc))
+    return doc
+
+
+@pytest.mark.parametrize('chave, natureza, esperado', [
+    # "Documento contabil" sozinho nao e pagamento: Contabil / fiscal, "Nao classificado".
+    ('neutro', 'DOCUMENTO_CONTABIL', ('CONTABIL_FISCAL', 'SEM_CATEGORIA', 'Contabil / fiscal', 'Não classificado')),
+    ('neutro', 'IMPOSTO_TAXA', ('CONTABIL_FISCAL', 'SEM_CATEGORIA', 'Contabil / fiscal', 'Não classificado')),
+    # O conteudo decide primeiro (caso do id 4 real: contrato social com categoria de IR "Documento contabil").
+    ('contrato', 'DOCUMENTO_CONTABIL', ('DOCUMENTO_SOCIETARIO', 'CONTRATO_SOCIAL', 'Documento societario/cadastral', 'Contrato Social')),
+    ('procuracao', 'IMPOSTO_TAXA', ('PROCURACAO_REPRESENTACAO', 'REPRESENTACAO_LEGAL', 'Procuracao / representacao', 'Representacao Legal')),
+    # Pagamento so com evidencia de transacao; imposto/taxa com evidencia = guia/taxa paga.
+    ('pix', 'DOCUMENTO_CONTABIL', ('PAGAMENTO_REALIZADO', 'PIX_PAGO', 'Pagamento realizado', 'Pix pago')),
+    ('boleto', 'IMPOSTO_TAXA', ('CONTABIL_FISCAL', 'GUIA_TAXA_PAGA', 'Contabil / fiscal', 'Guia/taxa paga')),
+    # As demais naturezas seguem o Flask quando o texto nao reconhece nada.
+    ('neutro', 'DOCUMENTO_FISCAL', ('NOTA_FISCAL_RECEBIDA', 'DESPESA_OPERACIONAL', 'Nota fiscal recebida', 'Despesa operacional')),
+    ('neutro', 'PATRIMONIO_IMOBILIZADO', ('PATRIMONIO_IMOBILIZADO', 'NOTA_BEM_PATRIMONIAL', 'Patrimonio / imobilizado', 'Nota de bem patrimonial')),
+])
+def test_conteudo_antes_da_categoria_de_ir(banco, chave, natureza, esperado):
+    m = metadata(banco, com_categoria_ir(banco, enviar(banco, TEXTOS[chave]), natureza))
+    assert (m['tipo_documental'], m['categoria_documental'], m['tipo_documental_label'], m['categoria_documental_label']) == esperado
+    assert m['origem_documental'] == 'INFERIDO'
+    assert sql(banco, 'select count(*) as n from public.documento_empresarial_metadata')[0]['n'] == 0
+
+
+def test_sem_lastro_nao_conta_contabil_nem_societario(banco):
+    com_categoria_ir(banco, enviar(banco, TEXTOS['neutro']), 'DOCUMENTO_CONTABIL')
+    com_categoria_ir(banco, enviar(banco, TEXTOS['contrato']), 'DOCUMENTO_CONTABIL')
+    com_categoria_ir(banco, enviar(banco, TEXTOS['neutro']), 'IMPOSTO_TAXA')
+    assert resumo(banco)['sem_lastro'] == 0
+    com_categoria_ir(banco, enviar(banco, TEXTOS['boleto']), 'IMPOSTO_TAXA')  # guia paga: documento financeiro
+    r = resumo(banco)
+    assert (r['documentos_cadastrados'], r['sem_lastro']) == (4, 1)
+    assert [x for x in r['checklist_empresarial'] if x['label'] == 'Contrato Social'] == [{'label': 'Contrato Social', 'status': 'ok'}]
+
+
+def test_classificacao_gravada_prevalece_sobre_a_sugestao(banco):
+    doc = com_categoria_ir(banco, enviar(banco, TEXTOS['pix']), 'IMPOSTO_TAXA')
+    assert metadata(banco, doc)['categoria_documental'] == 'GUIA_TAXA_PAGA'
+    salvar(banco, doc, {'categoria_documental': 'CONTRATO_SOCIAL'})
+    com_categoria_ir(banco, doc, 'DOCUMENTO_CONTABIL')  # nova categoria de IR depois da revisao: nada muda
+    m = metadata(banco, doc)
+    assert (m['tipo_documental'], m['categoria_documental'], m['origem_documental']) == ('DOCUMENTO_SOCIETARIO', 'CONTRATO_SOCIAL', 'USUARIO')
+    assert resumo(banco)['sem_lastro'] == 0
+
+
+def test_reversao_da_correcao_devolve_a_regra_anterior(banco):
+    from pathlib import Path
+    neutro = com_categoria_ir(banco, enviar(banco, TEXTOS['neutro']), 'DOCUMENTO_CONTABIL')
+    contrato = enviar(banco, TEXTOS['contrato'])
+    conn = psycopg2.connect(banco)
+    with conn, conn.cursor() as cur:
+        cur.execute((Path(__file__).resolve().parent.parent / 'supabase' / 'reversao' /
+                     '20261203090000_inferencia_documento_contabil_anterior.sql').read_bytes().decode('utf-8'))
+    conn.close()
+    assert metadata(banco, neutro)['categoria_documental'] == 'GUIA_TAXA_PAGA'  # a regra de 20261202090000
+    assert metadata(banco, contrato)['categoria_documental'] == 'CONTRATO_SOCIAL'  # o resto da 20261202090000 continua
 
 
 # ---- Metadados (revisao) ----
