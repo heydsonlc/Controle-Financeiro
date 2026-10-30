@@ -245,16 +245,28 @@ def quebra(cluster):  # noqa: F811
     return dsn, doc, flask(dsn, _QUEBRA, EMPRESA)
 
 
+# FIN-MIGRACAO-LASTRO-EMPRESA-01 — divergencia intencional: "sem lastro" conta so o documento que comprova operacao
+# financeira (pagamento, nota fiscal, guia paga); o Flask conta todo documento sem vinculo, inclusive contrato social e
+# certidao. Neste cenario o unico financeiro sem vinculo e ids[3] (fornecedor "pago via PIX").
+def sem_lastro_novo(resposta, conta_o_pix):
+    resposta = json.loads(json.dumps(resposta))
+    alvo = resposta['resumo']['documentos_empresa'] if 'resumo' in resposta else resposta
+    alvo['sem_lastro'] = 1 if conta_o_pix else 0
+    return resposta
+
+
 def test_empresa_contexto_lista_filtros_e_detalhe_iguais_ao_flask(empresa):
     dsn, ids, s = empresa
     contexto = rpc(dsn, 'ir_contexto_tela', EMPRESA)
     igual(s['contexto']['data'], contexto, 'contexto')
     assert contexto['modo'] == 'DOCUMENTOS_FISCAIS_EMPRESA'
     igual(s['categorias']['data'], rpc(dsn, 'ir_categorias_tela', EMPRESA), 'categorias')
-    igual({k: s['lista'][k] for k in ('data', 'total', 'resumo')}, rpc(dsn, 'ir_comprovantes_tela', EMPRESA, {}, None), 'lista')
+    igual(sem_lastro_novo({k: s['lista'][k] for k in ('data', 'total', 'resumo')}, True),
+          rpc(dsn, 'ir_comprovantes_tela', EMPRESA, {}, None), 'lista')
     for consulta, resposta in s['filtros'].items():
         filtros = dict(p.split('=', 1) for p in consulta.split('&'))
-        igual({k: resposta[k] for k in ('data', 'total', 'resumo')}, rpc(dsn, 'ir_comprovantes_tela', EMPRESA, filtros, None), consulta)
+        esperado = sem_lastro_novo({k: resposta[k] for k in ('data', 'total', 'resumo')}, ids[3] in [d['id'] for d in resposta['data']])
+        igual(esperado, rpc(dsn, 'ir_comprovantes_tela', EMPRESA, filtros, None), consulta)
     for detalhe in s['detalhes']:
         igual(detalhe['data'], rpc(dsn, 'ir_comprovantes_tela', EMPRESA, {}, detalhe['data']['id']), 'detalhe')
     pix = next(d['data'] for d in s['detalhes'] if d['data']['id'] == ids[3])
@@ -267,7 +279,8 @@ def test_empresa_taxonomia_resumo_e_metadados_iguais_ao_flask(empresa):
     for consulta, (status, resposta) in s['resumo_empresa'].items():
         assert status == 200, consulta
         filtros = dict(p.split('=', 1) for p in consulta.split('&') if p)
-        igual(resposta['data'], rpc(dsn, 'ir_documentos_empresa_tela', EMPRESA, 'resumo', filtros, None), f'resumo {consulta!r}')
+        igual(sem_lastro_novo(resposta['data'], consulta in ('', 'ano=2031')),
+              rpc(dsn, 'ir_documentos_empresa_tela', EMPRESA, 'resumo', filtros, None), f'resumo {consulta!r}')
     resumo = rpc(dsn, 'ir_documentos_empresa_tela', EMPRESA, 'resumo', {'ano': '2031'}, None)
     assert [c['status'] for c in resumo['checklist_empresarial']] == ['ok', 'pendente', 'pendente', 'vencendo']
     for i, (status, resposta) in s['metadata'].items():

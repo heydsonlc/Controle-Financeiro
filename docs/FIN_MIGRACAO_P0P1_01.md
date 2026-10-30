@@ -1,10 +1,11 @@
 # FIN-MIGRACAO-P0P1-01 — Empresa, Documentos Fiscais e catálogo de categorias no novo aplicativo
 
-**Situação (30/10/2026): Etapa 2 executada e aprovada (§6).**
+**Situação (30/10/2026): `FIN_MIGRACAO_P0P1_01_CONCLUIDA`** (Etapa 2 em §6).
 - O build foi publicado antes da ativação.
 - A Empresa e o catálogo estão no novo aplicativo, e o titular é gestor do catálogo.
 - Os testes reais foram feitos pela tela.
-- Commits locais `646912c` (código) e o desta documentação; sem push.
+- Commits `646912c` (código) e `c66db6e` (documentação), enviados ao GitHub pelo push autorizado pelo titular: `origin/main` avançou de `34daa7c` para `c66db6e`, sem force.
+- Produção: deploy `ad78c215`.
 
 ## 1. Por que
 
@@ -76,7 +77,7 @@ O roteiro fica fora do Git, na pasta temporária da sessão: `scratchpad/p0p1/et
 
 | Passo | Resultado |
 |---|---|
-| Commit do código | `646912c` (46 arquivos), sem push |
+| Commit do código | `646912c` (46 arquivos); push depois, junto com `c66db6e` |
 | Publicação | Cloudflare Pages, deploy `ad78c215` (branch `producao`), em https://controle-financeiro-jah.pages.dev. Build de 166 arquivos, só com a URL do projeto e a chave publicável. O rótulo do commit no deploy ficou `646912c2` por erro de digitação (o conteúdo é o do `646912c`) |
 | Conferência antes de ativar (só leitura) | `PRE_CONDICOES_OK` às 17:01 UTC. Empresa em FLASK, com 1 acesso e 1 preferência; catálogo e gestor vazios; 10 sistêmicas intactas |
 | Ativação (`etapa2_ativar.py ativar --confirmar`, uma transação, executor `postgres`, 17:02:33 UTC) | COMMIT, com todas as verificações internas aprovadas. Empresa FLASK → NOVO (histórico 101); catálogo FLASK → NOVO; gestor = conta `51f5d1d1`. Responsável "Titular (conta 51f5d1d1)" |
@@ -95,4 +96,4 @@ O roteiro fica fora do Git, na pasta temporária da sessão: `scratchpad/p0p1/et
 3. **Texto "Sem descri&ccedil;&atilde;o cadastrada."** com os códigos HTML aparecendo literalmente na tela de Categorias.
    - Defeito do JS original (`frontend/static/js/categorias.js:396`, `escapeHtml` sobre texto já codificado); também acontece no Flask.
    - P3, cosmético.
-4. **Push** de `646912c` e do commit desta documentação: aguarda autorização.
+4. ~~Push~~ concluído: `34daa7c..c66db6e`. O documento real id 4 foi mantido por decisão do titular. Pendências 1 a 3 seguem para o FIN-MIGRACAO-LASTRO-EMPRESA-01.

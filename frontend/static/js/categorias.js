@@ -393,7 +393,7 @@ function renderizarDetalheCategoriaDespesa() {
                 <div><small>Cor</small><strong><span class="color-swatch" style="background:${escapeHtml(categoria.cor || '#2563eb')}"></span>${escapeHtml(categoria.cor || '#2563eb')}</strong></div>
                 <div><small>&Iacute;cone</small><span class="preview-icon" style="color:${escapeHtml(categoria.cor || '#2563eb')}">${renderizarIconeDespesa(categoria, '24px')}</span></div>
                 <div><small>Categoria ativa</small><strong>${categoria.ativo ? 'Sim' : 'N&atilde;o'}</strong></div>
-                <div class="wide"><small>Descri&ccedil;&atilde;o</small><p>${escapeHtml(categoria.descricao || 'Sem descri&ccedil;&atilde;o cadastrada.')}</p></div>
+                <div class="wide"><small>Descri&ccedil;&atilde;o</small><p>${escapeHtml(categoria.descricao || 'Sem descrição cadastrada.')}</p></div>
                 <div><small>Data de cria&ccedil;&atilde;o</small><strong>${formatarDataHora(categoria.criado_em)}</strong></div>
             </div>
         </section>
@@ -446,7 +446,7 @@ function renderizarVinculoOperacional(categoriaCartao) {
             <span class="cartao-list-icon" style="color:${escapeHtml(categoriaCartao.cor || '#2563eb')}">${renderizarIconeCartao(categoriaCartao, '22px')}</span>
             <span>
                 <strong>${escapeHtml(categoriaCartao.nome)}</strong>
-                <small>${escapeHtml(categoriaCartao.descricao || 'Categoria global do cart&atilde;o')}</small>
+                <small>${escapeHtml(categoriaCartao.descricao || 'Categoria global do cartão')}</small>
             </span>
             <span class="compact-pill vinculo-pill">${categoriaIcon('check')} Categoria do cart&atilde;o vinculada</span>
             <span class="cartao-list-chevron" aria-hidden="true">${categoriaIcon('chevron')}</span>

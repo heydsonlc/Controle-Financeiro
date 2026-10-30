@@ -63,3 +63,16 @@
     border-left-color: var(--cf-danger, #dc2626);
     color: var(--cf-danger-text, #991b1b);
 }
+
+/* FIN-MIGRACAO-LASTRO-EMPRESA-01: "Excluir documento" nas acoes da linha (mesmo botao de icone da tela original). */
+.cf-excluir-documento .cf-icone-lixeira {
+    width: 15px;
+    height: 15px;
+    display: inline-block;
+    vertical-align: -0.125em;
+    flex-shrink: 0;
+}
+
+.cf-excluir-documento:hover {
+    color: var(--cf-danger, #dc2626);
+}

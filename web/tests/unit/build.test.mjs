@@ -243,6 +243,10 @@ const RPCS_DE_ESCRITA = new Map([
     ['criar_vinculo_documento', 'documentos-fiscais-adaptador.js'],
     ['atualizar_vinculo_documento', 'documentos-fiscais-adaptador.js'],
     ['remover_vinculo_documento', 'documentos-fiscais-adaptador.js'],
+    // FIN-MIGRACAO-LASTRO-EMPRESA-01 (metadados empresariais e saidas sem documento; escritor unico e perfil Empresa no banco)
+    ['salvar_metadata_empresarial', 'documentos-fiscais-adaptador.js'],
+    ['vincular_saida_documento', 'documentos-fiscais-adaptador.js'],
+    ['marcar_status_saida', 'documentos-fiscais-adaptador.js'],
     // FIN-PRE-PRODUCAO-1: modulo comum a Documentos, Despesas e Lancamentos ("Gerar financeiro" / "A partir de documento")
     ['criar_financeiro_documento', 'documento-financeiro.js'],
     // FIN-PRE-PRODUCAO-1: TR mensal (indice unico; gravar exige gerir um perfil ativo; TR usada nao muda)

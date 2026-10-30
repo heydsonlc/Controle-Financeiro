@@ -57,6 +57,14 @@ test('tela original: categorias de despesa, palavras-chave, Categorias do Cartao
     await expect(page.locator('#categoria-cartao-detalhe .linked-chip', { hasText: 'Moradia' })).toBeVisible();
     // Isolamento: as Categorias do Cartao do Pessoal (usuario A) nao aparecem para B.
     await expect(cartao(page, 'Mercado RC')).toHaveCount(0);
+
+    // FIN-MIGRACAO-LASTRO-EMPRESA-01: categoria sem descricao mostra o texto, nao os codigos HTML (defeito do original).
+    await page.click('#tab-despesas');
+    const semDescricao = (await chamarRpc(page, 'categorias_tela', { p_perfil_id: await perfilAtivoId(page), p_ativo: true })).corpo
+        .find((c) => !c.descricao);
+    await despesa(page, semDescricao.nome).first().click();
+    await expect(page.locator('#categoria-despesa-detalhe')).toContainText('Sem descrição cadastrada.');
+    await expect(page.locator('#categoria-despesa-detalhe')).not.toContainText('&ccedil;');
 });
 
 test('Perfil B: criar, editar, vincular, desvincular, desativar e reativar Categoria do Cartao', async ({ page }) => {
