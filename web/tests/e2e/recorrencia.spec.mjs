@@ -198,7 +198,7 @@ test('perfil ainda gerado pelo sistema atual: aviso sem a acao de gerar (FIN-REC
     await entrar(page, A);
     await abrirMes(page, '2028-01');
     await expect(page.locator('#aviso-texto')).toHaveText(/^2 lançamentos recorrentes ou faturas a gerar até 02\/2028/);
-    await expect(page.locator('#geracao-acoes')).toContainText('A geração deste perfil ainda é feita pelo sistema atual.');
+    await expect(page.locator('#geracao-acoes')).toContainText('A geração de recorrências deste perfil ainda não está habilitada no novo aplicativo.');
     await expect(page.locator('#gerar-contas')).toHaveCount(0);
     const status = await page.evaluate(async () => {
         const token = JSON.parse(localStorage.getItem('cf-financeiro-auth')).access_token;

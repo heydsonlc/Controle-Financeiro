@@ -219,7 +219,7 @@ test('perfil gerado pelo sistema atual: vencimento e frequencia nao mudam por aq
     await page.fill('#data-vencimento', '2028-01-20');
     await salvar(page);
     // FIN-ESCRITOR-UNICO-FINAL-1: perfil no Flask nao muda nada por aqui (antes: so vencimento e frequencia).
-    await expect.poll(() => dialogos.at(-1)).toBe('Este perfil ainda é administrado pelo sistema atual (Flask). Nada foi gravado.');
+    await expect.poll(() => dialogos.at(-1)).toBe('Este perfil ainda não está habilitado para gravação no novo aplicativo. Nada foi gravado.');
     await abrirRecorrencias(page);
     await expect(linha(page, 'Seguro 2028')).toContainText('10/01/2028');
 });

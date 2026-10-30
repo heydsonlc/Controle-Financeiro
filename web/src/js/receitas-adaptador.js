@@ -10,15 +10,14 @@
 //   (redefinir_fonte_receita: como o Flask, cria so as previsoes que faltam nos 12 meses a partir do mes atual; as
 //   gravadas nao mudam) e recebimento sem previsao (receber_sem_previsao: credito no extrato, sem duplicar a receita).
 //   A data prevista de cada previsao aparece em "Proximos recebimentos" (receitas-adaptacoes.js).
-// - Edicao e exclusao de recebimento continuam no sistema atual (corrigir = estornar e receber de novo).
+// - Edicao de recebimento ainda nao esta disponivel (corrigir = estornar e receber de novo).
 
 import { supabase } from './cliente.js';
-import { criarChaves, falha, hojeBrasilia, mensagemDeErro, ok } from './adaptador-comum.js';
+import { criarChaves, falha, hojeBrasilia, mensagemDeErro, NAO_DISPONIVEL, ok, PERFIL_NAO_HABILITADO } from './adaptador-comum.js';
 import { iniciarMoldura } from './moldura.js';
 
 const estado = { perfilId: null };
 const chaves = criarChaves();
-const NO_SISTEMA_ATUAL = 'continua no sistema atual nesta fase. Nada foi gravado.';
 
 async function rpc(funcao, args) {
     const { data, error } = await funcao(args);
@@ -159,7 +158,7 @@ async function receberSemPrevisao(corpo, data) {
 // POST /api/receitas/realizadas: "Consolidar" (modal com valor, data e justificativa acrescentados) ou "Registrar
 // recebimento". Com previsao na competencia, recebimento dela pelo motor do novo aplicativo (escritor unico do perfil).
 async function receber(corpo) {
-    if (!corpo.item_receita_id) return falha(`Recebimento sem fonte ${NO_SISTEMA_ATUAL}`);
+    if (!corpo.item_receita_id) return falha(`Recebimento sem fonte ${NAO_DISPONIVEL}`);
     const consolidando = document.getElementById('modal-consolidar-conta')?.getAttribute('aria-hidden') === 'false';
     const data = (consolidando && document.getElementById('consolidar-data-recebimento')?.value) || corpo.data_recebimento;
     const justificativa = (consolidando && document.getElementById('consolidar-justificativa')?.value.trim()) || null;
@@ -192,7 +191,7 @@ async function excluirRecebimento(id) {
     if (recebimento && recebimento.conta_bancaria_id) {
         return falha('Receita realizada ou com movimento financeiro nao pode ser excluida.', 409);
     }
-    return falha(`Excluir este registro ${NO_SISTEMA_ATUAL}`);
+    return falha(`Excluir este registro ${NAO_DISPONIVEL}`);
 }
 
 const ROTAS = [
@@ -216,14 +215,14 @@ const ROTAS = [
     }],
     ['POST', /^\/api\/receitas\/realizadas\/?$/, (m, corpo) => receber(corpo || {})],
     ['POST', /^\/api\/receitas\/realizadas\/(\d+)\/estornar$/, (m, corpo) => estornar(Number(m[1]), corpo || {})],
-    ['PUT', /^\/api\/receitas\/realizadas\/(\d+)$/, async () => falha('Editar um recebimento continua no sistema atual. '
+    ['PUT', /^\/api\/receitas\/realizadas\/(\d+)$/, async () => falha('Editar um recebimento ainda não está disponível nesta versão do aplicativo. '
         + 'Para corrigir, estorne e registre de novo. Nada foi gravado.')],
     ['DELETE', /^\/api\/receitas\/realizadas\/(\d+)$/, (m) => excluirRecebimento(Number(m[1]))],
 ];
 
 function mensagem(erro) {
     if (erro && erro.hint === 'SISTEMA_FLASK') {
-        return 'Os recebimentos deste perfil ainda são feitos pelo sistema atual (Flask). Nada foi gravado.';
+        return PERFIL_NAO_HABILITADO;
     }
     return mensagemDeErro(erro);
 }
@@ -240,7 +239,7 @@ async function adaptador({ metodo, caminho, parametros, corpo }) {
             }
         }
     }
-    return falha(`${metodo} ${caminho}: ${NO_SISTEMA_ATUAL}`, 501);
+    return falha(`${metodo} ${caminho}: ${NAO_DISPONIVEL}`, 501);
 }
 
 const contexto = await iniciarMoldura();

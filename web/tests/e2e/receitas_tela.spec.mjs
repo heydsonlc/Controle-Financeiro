@@ -189,7 +189,7 @@ test('perfil ainda no Flask (Pessoal): consolidar e recusado sem gravar', async 
     await linha(page, 'Freelas').locator('[title="Confirmar/realizar"]').click();
     await escolherConta(page, '#consolidar-conta-bancaria', 'Conta Pessoal (A)');
     await page.locator('#form-consolidar-conta button[type=submit]').click();
-    await expect(toast(page)).toContainText('Os recebimentos deste perfil ainda são feitos pelo sistema atual (Flask)');
+    await expect(toast(page)).toContainText('Este perfil ainda não está habilitado para gravação no novo aplicativo. Nada foi gravado.');
     await page.locator('#modal-consolidar-conta [aria-label="Fechar"]').click();
     await expect(linha(page, 'Freelas').locator('.receita-status-badge')).toHaveText('Prevista');
 });

@@ -45,3 +45,24 @@ def test_saida_nao_contem_valores_dos_arquivos_locais():
     saida = r.stdout + r.stderr
     assert 'Resumo:' in saida
     assert not [v for v in valores if v in saida]
+
+
+# FIN-MIGRACAO-P0P1-01: o .env.e2e-real foi apagado de proposito (projeto Supabase em producao). Ausente = estado normal.
+def _configuracao_em(raiz, monkeypatch):
+    monkeypatch.setattr(V, 'RAIZ', raiz)
+    monkeypatch.setattr(V, 'RESULTADOS', [])
+    monkeypatch.setattr(V, 'ARQUIVOS_ENV', {'.env.e2e-real': V.ARQUIVOS_ENV['.env.e2e-real']})
+    V.verificar_configuracao()
+    return [(nivel, item) for nivel, item in V.RESULTADOS if '.env.e2e-real' in item]
+
+
+def test_env_e2e_real_ausente_e_ok(tmp_path, monkeypatch):
+    linhas = _configuracao_em(tmp_path, monkeypatch)
+    assert linhas == [('OK', '.env.e2e-real ausente: NAO_CONFIGURADO_INTENCIONALMENTE')]
+
+
+def test_env_e2e_real_presente_gera_aviso(tmp_path, monkeypatch):
+    (tmp_path / '.env.e2e-real').write_text('CF_EMAIL_A=ficticio\n', encoding='utf-8')  # valor ficticio, so no tmp
+    linhas = _configuracao_em(tmp_path, monkeypatch)
+    assert ('AVISO', '.env.e2e-real presente') in linhas
+    assert not any(nivel == 'OK' and 'ausente' in item for nivel, item in linhas)

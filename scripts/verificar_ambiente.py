@@ -30,6 +30,11 @@ ARQUIVOS_ENV = {
     '.env.staging': ['DATABASE_URL'],
     '.env.e2e-real': ['CF_EMAIL_A', 'CF_SENHA_A', 'CF_EMAIL_B', 'CF_SENHA_B'],
 }
+# FIN-MIGRACAO-P0P1-01: arquivos que podem faltar de proposito. O .env.e2e-real (contas reais de teste) foi apagado no
+# FIN-PUBLICACAO-SEGURA-1: o projeto Supabase virou producao e os roteiros reais recusam executar. Ausente = estado normal.
+OPCIONAIS = {
+    '.env.e2e-real': 'credenciais reais de teste removidas de proposito (projeto Supabase em producao)',
+}
 NODE_MINIMO = 22
 RESULTADOS = []
 
@@ -154,8 +159,13 @@ def verificar_configuracao():
     for arquivo, obrigatorias in ARQUIVOS_ENV.items():
         caminho = RAIZ / arquivo
         if not caminho.exists():
-            registrar('FALTA', f'{arquivo}', 'copiar da maquina anterior por meio seguro (fora do Git)')
+            if arquivo in OPCIONAIS:
+                registrar('OK', f'{arquivo} ausente: NAO_CONFIGURADO_INTENCIONALMENTE', OPCIONAIS[arquivo])
+            else:
+                registrar('FALTA', f'{arquivo}', 'copiar da maquina anterior por meio seguro (fora do Git)')
             continue
+        if arquivo in OPCIONAIS:
+            registrar('AVISO', f'{arquivo} presente', 'nao deveria existir: ' + OPCIONAIS[arquivo])
         ignorado = subprocess.run(['git', 'check-ignore', '-q', arquivo], cwd=RAIZ).returncode == 0
         registrar('OK' if ignorado else 'FALTA', f'{arquivo} ignorado pelo Git', '' if ignorado else 'NAO versionar este arquivo')
         faltam = [v for v in obrigatorias if v not in chaves_do_env(caminho)]

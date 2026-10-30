@@ -8,7 +8,7 @@
 // Devolve null quando a rota nao e uma destas (o adaptador da tela segue com as proprias).
 
 import { supabase } from './cliente.js';
-import { falha, mensagemDeErro, ok } from './adaptador-comum.js';
+import { falha, mensagemDeErro, ok, PERFIL_NAO_HABILITADO } from './adaptador-comum.js';
 
 async function rpc(funcao, args) {
     const { data, error } = await funcao(args);
@@ -18,7 +18,7 @@ async function rpc(funcao, args) {
 
 export function erroDeDocumento(erro) {
     if (erro && erro.hint === 'SISTEMA_FLASK') {
-        return falha('Os documentos deste perfil ainda são administrados pelo sistema atual (Flask). Nada foi gravado.', 409);
+        return falha(PERFIL_NAO_HABILITADO, 409);
     }
     if (erro && erro.hint === 'NAO_ENCONTRADA') return falha(mensagemDeErro(erro), 404);
     return falha(mensagemDeErro(erro), erro && erro.code === '42501' ? 403 : 400);

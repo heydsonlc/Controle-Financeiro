@@ -6,7 +6,7 @@
 // recebido e a diferenca da execucao aparecem logo abaixo (#flow-receitas-execucao), so leitura.
 
 import { supabase } from './cliente.js';
-import { falha, mensagemDeErro, ok } from './adaptador-comum.js';
+import { emMigracao, falha, mensagemDeErro, ok } from './adaptador-comum.js';
 import { iniciarMoldura } from './moldura.js';
 
 const estado = { perfilId: null };
@@ -41,7 +41,7 @@ async function adaptador({ metodo, caminho, parametros }) {
             return falha(mensagemDeErro(erro), erro && erro.code === '42501' ? 403 : 400);
         }
     }
-    return falha('Dashboard: esta consulta ainda não foi migrada. Continua no sistema atual.', 501);
+    return emMigracao('Dashboard: esta consulta');
 }
 
 const contexto = await iniciarMoldura();

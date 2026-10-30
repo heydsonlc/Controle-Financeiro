@@ -5,15 +5,15 @@
 // FIN-DOCUMENTOS-2 (migration 20261128090000): envio de arquivo (guardado no banco, privado do perfil, com as validacoes
 // do Flask e duplicidade por hash), revisao, validacao, vinculos e despesa/lancamento a partir do documento, com o
 // escritor unico do perfil. O texto de PDF textual e extraido aqui (pdf.js, sem servico externo); sem ele, revisao
-// manual. Continuam no sistema atual: OCR de imagem, metadados empresariais, saidas sem documento, categorias IR e
-// relatorios (Excel/PDF/ZIP).
+// manual. Ainda nao disponiveis nesta versao: OCR de imagem, metadados empresariais, saidas sem documento (vincular e
+// situacao), categorias IR e relatorios (Excel/PDF/ZIP).
 // FIN-PRE-PRODUCAO-1 (migration 20261130090000): entidades vinculaveis, vinculos ativos e resumo de lastro, e "Gerar
 // financeiro" (sugestao + criacao, js/documento-financeiro.js, comum com Despesas e Lancamentos). Um documento pode ser
 // vinculado a varios bens (regra do titular). Acrescimo ao Flask (que nao tinha "desvincular" na tela): o modal
 // "Vincular documento" lista os vinculos ativos com "Desvincular" (o vinculo fica inativo, historico preservado).
 
 import { supabase } from './cliente.js';
-import { criarChaves, falha, mensagemDeErro, ok } from './adaptador-comum.js';
+import { criarChaves, falha, mensagemDeErro, NAO_DISPONIVEL, ok } from './adaptador-comum.js';
 import { textoDoPdf } from './importacao-pdf.js';
 import { instalarAberturaDeArquivos, recusarNavegacao } from './arquivo-comprovante.js';
 import { comprovanteDoPerfil, erroDeDocumento, responderDocumentoFinanceiro } from './documento-financeiro.js';
@@ -21,7 +21,7 @@ import { iniciarMoldura } from './moldura.js';
 
 const estado = { perfilId: null };
 const chaves = criarChaves();
-const NA_FASE_1 = 'Documentos fiscais: esta ação (OCR de imagem, metadados da empresa, saídas sem documento, categorias IR ou relatórios) continua no sistema atual. Nada foi gravado.';
+const NA_FASE_1 = `Documentos fiscais: esta ação (OCR de imagem, metadados da empresa, saídas sem documento, categorias IR ou relatórios) ${NAO_DISPONIVEL}`;
 
 async function rpc(funcao, args) {
     const { data, error } = await funcao(args);
@@ -85,13 +85,23 @@ async function textoExtraido(arquivo, bytes) {
 const comprovanteLido = (id) => comprovanteDoPerfil(estado.perfilId, id);
 
 // POST /api/ir/comprovantes/upload: cada arquivo e uma chamada (o Flask devolve 207 se algum falha).
+// FIN-MIGRACAO-P0P1-01: a tela original so le `data` (renderResultadoUpload(json.data || [])) e apagava a lista sem aviso
+// quando o perfil era recusado (409 sem `data`). Agora toda falha volta por arquivo, com o motivo; recusa do perfil inteiro
+// (escritor ou permissao) interrompe o envio e vale para todos os arquivos. O painel mostra o retorno (retornoDoEnvio).
+const RECUSA_DO_PERFIL = (erro) => erro && (erro.hint === 'SISTEMA_FLASK' || erro.code === '42501');
+
 async function enviar(formData) {
     const arquivos = formData ? [...formData.getAll('arquivos'), ...formData.getAll('files'), ...formData.getAll('arquivo')]
         .filter((a) => a && a.name !== undefined) : [];
     if (!arquivos.length) return falha('Nenhum arquivo enviado', 400);
     const ano = formData.get('ano_calendario') || formData.get('ano') || null;
     const resultados = [];
+    let recusa = null;
     for (const arquivo of arquivos) {
+        if (recusa) {
+            resultados.push({ success: false, error: recusa, arquivo: arquivo.name });
+            continue;
+        }
         try {
             const bytes = new Uint8Array(await arquivo.arrayBuffer());
             const operacao = `upload:${arquivo.name}:${arquivo.size}:${arquivo.lastModified}`;
@@ -101,15 +111,66 @@ async function enviar(formData) {
                            texto_extraido: await textoExtraido(arquivo, bytes) },
             });
             chaves.esquecer(operacao);
-            resultados.push({ success: true, data: { duplicado: r.duplicado, mensagem: r.mensagem,
-                                                    comprovante: await comprovanteLido(r.comprovante_id) } });
+            // Gravado: uma falha so na releitura nao vira "nao enviado" (a lista do perfil, recarregada, mostra o documento).
+            const comprovante = await comprovanteLido(r.comprovante_id).catch(() => ({ id: r.comprovante_id }));
+            resultados.push({ success: true, data: { duplicado: r.duplicado, mensagem: r.mensagem, comprovante } });
         } catch (erro) {
-            if (erro && erro.hint === 'SISTEMA_FLASK') throw erro;
-            resultados.push({ success: false, error: mensagemDeErro(erro), arquivo: arquivo.name });
+            const motivo = erro && erro.code === '42501' ? 'Esta conta não pode gravar documentos neste perfil. Nada foi gravado.'
+                : mensagemDeErro(erro);
+            if (RECUSA_DO_PERFIL(erro)) recusa = motivo;
+            resultados.push({ success: false, error: motivo, arquivo: arquivo.name });
         }
     }
-    const status = resultados.some((r) => !r.success) ? 207 : 200;
+    const enviados = resultados.filter((r) => r.success).length;
+    retornoDoEnvio(enviados, resultados);
+    if (!enviados) {
+        return { status: recusa ? 409 : 400,
+                 corpo: { success: false, error: resultados[0].error, data: resultados, total: resultados.length } };
+    }
+    const status = enviados < resultados.length ? 207 : 200;
     return { status, corpo: { success: true, data: resultados, total: resultados.length } };
+}
+
+// Retorno do envio no painel "Arquivos importados" (acima da lista, que a tela original redesenha a cada envio).
+function retornoDoEnvio(enviados, resultados) {
+    const aviso = document.getElementById('cf-upload-retorno');
+    if (!aviso) return;
+    const falhas = resultados.filter((r) => !r.success);
+    let texto;
+    if (!falhas.length) {
+        texto = enviados === 1 ? 'Documento enviado.' : `${enviados} documentos enviados.`;
+    } else if (!enviados) {
+        const motivos = [...new Set(falhas.map((r) => r.error))];
+        texto = `Não foi possível enviar ${falhas.length === 1 ? 'o documento' : 'os documentos'}. `
+            + (motivos.length === 1 ? motivos[0] : 'Veja o motivo de cada arquivo abaixo.');
+    } else {
+        texto = `${enviados} de ${resultados.length} documentos enviados. Os demais não foram enviados; veja o motivo abaixo.`;
+    }
+    aviso.textContent = texto;
+    aviso.dataset.situacao = !falhas.length ? 'sucesso' : (enviados ? 'parcial' : 'erro');
+    aviso.setAttribute('role', falhas.length ? 'alert' : 'status');
+    aviso.hidden = false;
+}
+
+// A tela original marca o arquivo que falhou como "Erro de leitura"; aqui ele aparece como "Não enviado" (o motivo segue
+// embaixo do nome). So o cartao de falha tem o selo como neto do cartao (no de documento gravado ele fica em
+// .ir-upload-badges, e "Erro de leitura" ali e o status real do documento). Nova selecao esconde o retorno anterior.
+function instalarRetornoDoEnvio() {
+    const lista = document.getElementById('ir-upload-results');
+    if (!lista) return;
+    const aviso = document.createElement('p');
+    aviso.id = 'cf-upload-retorno';
+    aviso.className = 'cf-upload-retorno';
+    aviso.hidden = true;
+    lista.before(aviso);
+    new MutationObserver(() => {
+        for (const selo of lista.querySelectorAll('.ir-upload-card > div > .ir-status.erro')) {
+            if (selo.textContent !== 'Não enviado') selo.textContent = 'Não enviado';  // sem laco: so muda uma vez
+        }
+    }).observe(lista, { childList: true, subtree: true });
+    const esconder = () => { aviso.hidden = true; };
+    document.getElementById('ir-file-input')?.addEventListener('change', esconder);
+    document.getElementById('ir-dropzone')?.addEventListener('drop', esconder);
 }
 
 async function revisar(id, corpo) {
@@ -284,8 +345,8 @@ if (contextoMoldura && contextoMoldura.perfil) {
     window.CF_REGISTRAR_ADAPTADOR(adaptador);
     instalarAberturaDeArquivos(estado.perfilId);  // "Abrir arquivo" (link /api/ir/comprovantes/<id>/arquivo)
     instalarDesvinculo();
-    recusarNavegacao(['#ir-btn-exportar', '#ir-btn-excel', '#ir-btn-pdf'],
-        'Relatório de documentos fiscais (Excel/PDF): continua no sistema atual nesta fase. Nada foi gravado.');
+    instalarRetornoDoEnvio();
+    recusarNavegacao(['#ir-btn-exportar', '#ir-btn-excel', '#ir-btn-pdf'], `Relatório de documentos fiscais (Excel/PDF): ${NAO_DISPONIVEL}`);
 } else if (contextoMoldura) {
     window.CF_REGISTRAR_ADAPTADOR(async () => falha('Nenhum perfil financeiro autorizado para esta conta.', 403));
 }

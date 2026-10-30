@@ -9,12 +9,15 @@
 // Cada secao salva os seus campos, como o Flask. Backup e OCR continuam fora (avisos na propria secao).
 
 import { supabase } from './cliente.js';
+import { PERFIL_NAO_HABILITADO } from './adaptador-comum.js';
 import { atualizarPerfis, definirCor, iniciarMoldura, usarPerfil } from './moldura.js';
 import {
     atualizarPerfil, criarPerfil, definirPerfilPadrao, inativarPerfil, perfisParaConfiguracao, reativarPerfil,
 } from './perfil.js';
 
 const $ = (id) => document.getElementById(id);
+// FIN-MIGRACAO-P0P1-01: perfil sem escritor NOVO (hint do banco) com o texto unico; os demais motivos do banco como vem.
+const motivo = (erro, padrao) => (erro?.hint === 'SISTEMA_FLASK' ? PERFIL_NAO_HABILITADO : erro?.message || padrao);
 const state = { perfis: [], ativo: null, selecionado: null, secao: 'perfis-financeiros' };
 
 const ajuda = {
@@ -54,7 +57,7 @@ const ajuda = {
         itens: [
             ['Da sua conta', 'Modo inteligente e sugestões de economia.'],
             ['Deste perfil', 'Classificação automática e correção de categorias.'],
-            ['OCR', 'A leitura de imagens continua no sistema atual.'],
+            ['OCR', 'A leitura de imagens ainda não está disponível nesta versão do aplicativo.'],
         ],
     },
     'documentos-fiscais': {
@@ -247,7 +250,7 @@ async function salvarPerfil() {
         mostrarMensagem('Configurações do perfil salvas.', 'success');
     } catch (erro) {
         await carregarPerfis().catch(() => {});
-        mostrarMensagem(erro?.message || 'Falha na operação');
+        mostrarMensagem(motivo(erro, 'Falha na operação'));
     } finally {
         botao.disabled = Boolean(state.selecionado) && !state.selecionado.pode_gerir;
     }
@@ -294,7 +297,7 @@ function trocarSecao(secao) {
 
 function avisarEmMigracao(funcao) {
     const aviso = $('config-aviso-geral');
-    aviso.textContent = `${funcao}: em migração para o novo aplicativo. Até lá, continua no sistema atual.`;
+    aviso.textContent = `${funcao}: ainda não está disponível nesta versão do aplicativo.`;
     aviso.hidden = false;
 }
 
@@ -372,7 +375,7 @@ async function salvarPreferencias(secao, botao) {
         preencherPreferencias(data);
         avisarPreferencias('Preferências salvas.', 'success', secao);
     } catch (erro) {
-        avisarPreferencias(erro?.message || 'Não foi possível salvar as preferências. Nada foi gravado.', 'error', secao);
+        avisarPreferencias(motivo(erro, 'Não foi possível salvar as preferências. Nada foi gravado.'), 'error', secao);
     } finally {
         botao.disabled = false;
     }

@@ -141,13 +141,13 @@ test('perfil ainda no Flask: movimento e cadastro recusados sem gravar; leitor s
     await conta.locator('[title="Ajustar saldo"]').click();
     await page.fill('#ajuste-novo-saldo', '12.345,00');
     await page.click('#form-ajuste button[type=submit]');
-    await expect(toast(page)).toContainText('ainda são administradas pelo sistema atual (Flask)');
+    await expect(toast(page)).toContainText('ainda não está habilitado para gravação');
     await page.locator('#modal-ajuste').getByRole('button', { name: 'Fechar' }).first().click();
     // FIN-ESCRITOR-UNICO-CONTAS-1: o cadastro tambem e do escritor do perfil (editar e criar recusados, nada gravado).
     await conta.locator('[title="Editar"]').click();
     await page.fill('#conta-nome', 'Nome que nao pode gravar');
     await page.click('#form-conta button[type=submit]');
-    await expect(toast(page)).toContainText('ainda são administradas pelo sistema atual (Flask)');
+    await expect(toast(page)).toContainText('ainda não está habilitado para gravação');
     await page.locator('#modal-conta').getByRole('button', { name: /Cancelar/ }).first().click();
     await page.reload();
     await expect(linha(page, 'Conta Pessoal (A)')).toHaveText(antes);

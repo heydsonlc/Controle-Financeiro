@@ -1,8 +1,9 @@
 /* FIN-FIDELIDADE-RECEITAS-CATEGORIAS-1 — so acrescimos a tela original de Categorias (css/shared/categorias.css nao
    muda): aviso de fase e, para quem so le o perfil, as acoes das Categorias do Cartao escondidas (o banco recusa de
-   qualquer forma). As acoes das categorias de despesa ficam visiveis, como no Flask: o adaptador responde que continuam
-   no sistema atual. */
-.categorias-aviso-fase {
+   qualquer forma). FIN-MIGRACAO-P0P1-01: o mesmo para as acoes das categorias de despesa (catalogo global) quando o
+   catalogo nao esta no novo aplicativo ou a conta nao o administra (o aviso diz o motivo). */
+.categorias-aviso-fase,
+.categorias-aviso-catalogo {
     margin: 0 0 12px;
     padding: 8px 12px;
     border-radius: 8px;
@@ -17,5 +18,18 @@ body.cf-somente-leitura button[form="form-categoria-cartao"],
 body.cf-somente-leitura [data-action="nova-vinculacao"],
 body.cf-somente-leitura [data-action="vincular"],
 body.cf-somente-leitura [data-action="desvincular"] {
+    display: none !important;
+}
+
+.categorias-aviso-catalogo {
+    background: #fffbeb;
+    color: #92400e;
+}
+
+body.cf-catalogo-bloqueado #btn-nova-categoria-despesa,
+body.cf-catalogo-bloqueado [data-action="editar-despesa"],
+body.cf-catalogo-bloqueado [data-action="excluir-despesa"],
+body.cf-catalogo-bloqueado #form-palavra-chave,
+body.cf-catalogo-bloqueado [data-action="remover-palavra-chave"] {
     display: none !important;
 }

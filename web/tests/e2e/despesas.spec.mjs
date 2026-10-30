@@ -58,7 +58,7 @@ test('perfil ainda no Flask: cadastro pelo modal original recusado sem gravar', 
     await page.click('.btn-nova-despesa');
     await preencherDespesa(page, { nome: 'Conserto recusado', valor: '10', categoria: 'Moradia', vencimento: '2029-07-05' });
     await salvarDespesa(page);
-    await expect.poll(() => dialogos.at(-1)).toBe('Erro: Este perfil ainda é administrado pelo sistema atual (Flask). Nada foi gravado.');
+    await expect.poll(() => dialogos.at(-1)).toBe('Erro: Este perfil ainda não está habilitado para gravação no novo aplicativo. Nada foi gravado.');
     await abrirDespesas(page, '2029-06');
     await expect(despesa(page, 'Conserto recusado')).toHaveCount(0);
 });

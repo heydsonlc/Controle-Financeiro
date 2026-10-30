@@ -11,6 +11,8 @@ Sobe, so em 127.0.0.1 e com dados ficticios:
   4. gancho so de teste POST /__e2e__/consolidar (FIN-CARTOES-FECHAMENTO-1): consolida, como o Flask, uma
      fatura de cartao do Perfil B neste banco descartavel (o novo aplicativo nao consolida faturas).
      Os specs que o usam sao pulados fora deste ambiente (CF_E2E_LOCAL).
+  5. gancho so de teste POST /__e2e__/admin (FIN-MIGRACAO-P0P1-01): as operacoes de administrador da Etapa 2 (escritor
+     da Empresa D, escritor do catalogo, gestor do catalogo so para o usuario D) e o retrato do perfil da Empresa D.
 Depois roda `playwright test` e derruba tudo, mesmo em caso de falha.
 
 Uso (da raiz do repositorio):
@@ -46,6 +48,8 @@ from tests.supabase_local import (  # noqa: E402
     USUARIO_A,
     USUARIO_B,
     USUARIO_C,
+    USUARIO_D,
+    EMPRESA_D,
     ClusterLocal,
     PostgrestLocal,
     assinar_jwt,
@@ -58,6 +62,7 @@ from tests.supabase_local import (  # noqa: E402
     semear_mobilidade_e2e,
     semear_documentos_fiscais_e2e,
     semear_empresa_c_e2e,
+    semear_empresa_vazia,
     semear_patrimonio_e2e,
     semear_pendencia_e2e,
     semear_receitas_e2e,
@@ -70,6 +75,7 @@ CONTAS = {
     USUARIO_A['email']: {**USUARIO_A, 'senha': 'Senha-ficticia-A-2026'},
     USUARIO_B['email']: {**USUARIO_B, 'senha': 'Senha-ficticia-B-2026'},
     USUARIO_C['email']: {**USUARIO_C, 'senha': 'Senha-ficticia-C-2026'},  # FIN-PRE-PRODUCAO-1 (Empresa C)
+    USUARIO_D['email']: {**USUARIO_D, 'senha': 'Senha-ficticia-D-2026'},  # FIN-MIGRACAO-P0P1-01 (Empresa D vazia)
 }
 HOP_BY_HOP = {'connection', 'keep-alive', 'transfer-encoding', 'content-length', 'server', 'date'}
 
@@ -99,7 +105,7 @@ def verificar_jwt(token, segredo):
         return None
 
 
-def criar_handler(dist, postgrest_url, segredo, headers_seguranca, consolidar=None):
+def criar_handler(dist, postgrest_url, segredo, headers_seguranca, consolidar=None, administrar=None):
     refresh_tokens = {}
     trava = threading.Lock()
 
@@ -239,6 +245,13 @@ def criar_handler(dist, postgrest_url, segredo, headers_seguranca, consolidar=No
             except (KeyError, ValueError) as exc:
                 self._json(400, {'msg': str(exc)})
 
+        # ---- Gancho so de teste: operacoes de administrador da Etapa 2 sobre a Empresa D (FIN-MIGRACAO-P0P1-01) ----
+        def _administrar(self):
+            try:
+                self._json(200, administrar(json.loads(self._dados or b'{}')))
+            except (KeyError, ValueError) as exc:
+                self._json(400, {'msg': str(exc)})
+
         def _despachar(self, metodo):
             # Le o corpo inteiro ANTES de responder: com keep-alive, bytes nao lidos
             # contaminariam a proxima requisicao da mesma conexao.
@@ -250,6 +263,8 @@ def criar_handler(dist, postgrest_url, segredo, headers_seguranca, consolidar=No
                 return self._rest(metodo)
             if metodo == 'POST' and self.path == '/__e2e__/consolidar' and consolidar:
                 return self._consolidar()
+            if metodo == 'POST' and self.path == '/__e2e__/admin' and administrar:
+                return self._administrar()
             if metodo == 'GET':
                 return self._estatico()
             self._json(405, {'msg': 'metodo nao permitido'})
@@ -267,6 +282,27 @@ def criar_handler(dist, postgrest_url, segredo, headers_seguranca, consolidar=No
             self._despachar('DELETE')
 
     return Handler
+
+
+def retrato_empresa_d(cur):
+    """Linhas da Empresa D em cada tabela com perfil, execucoes de geracao, arquivos enviados e o catalogo."""
+    cur.execute("""select table_schema, table_name from information_schema.columns where column_name = 'perfil_financeiro_id'
+                     and table_schema in ('public', 'financeiro') and table_name in (select table_name from information_schema.tables
+                     where table_type = 'BASE TABLE' and table_schema in ('public', 'financeiro')) order by 1, 2""")
+    linhas = {}
+    for esquema, tabela in cur.fetchall():
+        cur.execute(f'select count(*) from "{esquema}"."{tabela}" where perfil_financeiro_id = %s', (EMPRESA_D['id'],))
+        linhas[f'{esquema}.{tabela}'] = cur.fetchone()[0]
+    cur.execute("""select a.nome_arquivo, a.mime_type, a.tamanho_bytes, md5(a.conteudo), c.perfil_financeiro_id
+                     from public.ir_comprovante_arquivo a join public.ir_comprovante c on c.id = a.comprovante_id
+                    where c.perfil_financeiro_id = %s order by a.id""", (EMPRESA_D['id'],))
+    arquivos = [dict(zip(('nome', 'mime', 'tamanho', 'md5', 'perfil'), linha)) for linha in cur.fetchall()]
+    cur.execute("""select (select count(*) from public.categoria), (select count(*) from public.categoria_palavra_chave),
+                            (select md5(string_agg(c::text, '|' order by c.id)) from public.categoria c where c.sistemica),
+                            (select count(*) from public.categoria where sistemica)""")
+    categorias, palavras, sistemicas, n_sistemicas = cur.fetchone()
+    return {'linhas': linhas, 'arquivos': arquivos,
+            'catalogo': {'categorias': categorias, 'palavras': palavras, 'sistemicas': sistemicas, 'n_sistemicas': n_sistemicas}}
 
 
 def construir_dist(origem):
@@ -305,6 +341,7 @@ def main():
                 semear_documentos_fiscais_e2e(cur)  # FIN-FIDELIDADE-DOCUMENTOS-1 (documentos_fiscais_tela.spec.mjs)
                 semear_mobilidade_e2e(cur)  # FIN-FIDELIDADE-PATRIMONIO-1 (mobilidade_tela.spec.mjs)
                 semear_empresa_c_e2e(cur)  # FIN-PRE-PRODUCAO-1 (documentos_financeiro_tela.spec.mjs)
+                semear_empresa_vazia(cur)  # FIN-MIGRACAO-P0P1-01 (migracao_p0p1.spec.mjs)
             conn.close()
 
             def consolidar(cartao, competencia, criar_se_faltar=False):
@@ -340,8 +377,31 @@ def main():
                     raise ValueError('fatura nao encontrada')
                 return {'fatura_id': linha[0], 'valor_consolidado': str(linha[1])}
 
+            def administrar(pedido):
+                """Como o administrador na Etapa 2, so sobre a Empresa D e o usuario D (ficticios), e o retrato do perfil."""
+                acao = pedido['acao']
+                motivo = ('administrador de teste', 'cenario E2E FIN-MIGRACAO-P0P1-01')
+                conn = cluster.conectar()
+                try:
+                    with conn.cursor() as cur:
+                        if acao == 'escritor':
+                            cur.execute('select financeiro.definir_gerador_recorrencia(%s, %s, %s, %s)',
+                                        (EMPRESA_D['id'], str(pedido['gerador']), *motivo))
+                        elif acao == 'catalogo':
+                            cur.execute('select financeiro.definir_escritor_catalogo(%s, %s, %s)', (str(pedido['escritor']), *motivo))
+                        elif acao == 'gestor':
+                            cur.execute('select financeiro.definir_gestor_catalogo(%s, %s, %s, %s)',
+                                        (USUARIO_D['id'], bool(pedido['gestor']), *motivo))
+                        elif acao == 'retrato':
+                            return retrato_empresa_d(cur)
+                        else:
+                            raise ValueError('acao desconhecida')
+                        return {'resultado': cur.fetchone()[0]}
+                finally:
+                    conn.close()
+
             with PostgrestLocal(postgrest_bin, cluster, segredo, tmp) as postgrest:
-                handler = criar_handler(dist, postgrest.url, segredo, ler_headers(dist), consolidar)
+                handler = criar_handler(dist, postgrest.url, segredo, ler_headers(dist), consolidar, administrar)
                 # Fila de conexoes maior que o padrao (5): o Chrome abre ~6 em paralelo.
                 ThreadingHTTPServer.request_queue_size = 64
                 ThreadingHTTPServer.daemon_threads = True
@@ -356,7 +416,8 @@ def main():
                     env = {**os.environ, 'CF_WEB_BASE_URL': origem, 'CF_E2E_LOCAL': '1',
                            'CF_SENHA_A': CONTAS[USUARIO_A['email']]['senha'],
                            'CF_SENHA_B': CONTAS[USUARIO_B['email']]['senha'],
-                           'CF_EMAIL_C': USUARIO_C['email'], 'CF_SENHA_C': CONTAS[USUARIO_C['email']]['senha']}
+                           'CF_EMAIL_C': USUARIO_C['email'], 'CF_SENHA_C': CONTAS[USUARIO_C['email']]['senha'],
+                           'CF_EMAIL_D': USUARIO_D['email'], 'CF_SENHA_D': CONTAS[USUARIO_D['email']]['senha']}
                     return subprocess.run([npx, 'playwright', 'test', '-c', 'playwright.config.mjs', *extras],
                                           cwd=WEB, env=env).returncode
                 except KeyboardInterrupt:

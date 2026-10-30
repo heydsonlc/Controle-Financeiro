@@ -773,3 +773,18 @@ def semear_empresa_c_e2e(cur):
                     "dedutivel, status, hash_arquivo, created_at, updated_at) values (%s, extract(year from current_date)::int, "
                     "current_date - %s, %s, %s, false, 'PENDENTE_REVISAO', %s, now(), now())",
                     (EMPRESA_C['id'], n, nome, valor, f'c{n:063d}'))
+
+
+# FIN-MIGRACAO-P0P1-01 (migracao_p0p1.spec.mjs e tests/test_migracao_p0p1.py): usuario D, titular de uma Empresa FICTICIA
+# VAZIA ainda sem escritor NOVO, como a Empresa real antes da Etapa 2: so o acesso de gestao, nenhum dado. Os testes trocam
+# o escritor do perfil e o do catalogo como o administrador faria (so neste banco descartavel). A, B e C nao mudam.
+USUARIO_D = {'id': str(uuid.UUID('dddddddd-0000-4000-8000-00000000000d')), 'email': 'usuario.d@teste.local'}
+EMPRESA_D = {'id': 120, 'nome': 'Empresa D (vazia)'}
+
+
+def semear_empresa_vazia(cur):
+    cur.execute('insert into auth.users (id, email) values (%s, %s)', (USUARIO_D['id'], USUARIO_D['email']))
+    cur.execute("insert into public.perfil_financeiro (id, nome, tipo, cor, ativo, padrao) values (%s, %s, 'EMPRESA', '#0f766e', true, false)",
+                (EMPRESA_D['id'], EMPRESA_D['nome']))
+    cur.execute("insert into financeiro.perfil_acesso (user_id, perfil_financeiro_id, papel, pode_gerir) values (%s, %s, 'TITULAR', true)",
+                (USUARIO_D['id'], EMPRESA_D['id']))

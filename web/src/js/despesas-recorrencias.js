@@ -104,9 +104,9 @@ export function mostrarGeracao(geracao, mes, contexto) {
     if (falhou) {
         acoes.append(el('span', 'geracao-nota', 'Recarregue a página para tentar de novo. Nada foi gravado pela tentativa que falhou.'));
     } else if (pendentes) {
-        // FIN-RECORRENCIA-T1: um unico gerador por perfil; o padrao continua sendo o sistema atual.
+        // FIN-RECORRENCIA-T1: um unico gerador por perfil (padrao: nenhum no novo aplicativo; FIN-MIGRACAO-P0P1-01).
         acoes.append(el('span', 'geracao-nota', previa.pode_gerir
-            ? 'A geração deste perfil ainda é feita pelo sistema atual.'
+            ? 'A geração de recorrências deste perfil ainda não está habilitada no novo aplicativo.'
             : 'Somente quem gerencia este perfil pode gerar.'));
     }
     if (previa && (previa.rejeitadas || previa.dispensadas)) acoes.append(listaNaoGerados(previa, contexto));

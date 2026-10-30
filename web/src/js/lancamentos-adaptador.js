@@ -238,7 +238,7 @@ async function adaptador({ metodo, caminho, parametros, corpo }) {
             }
         }
     }
-    return falha(`${metodo} ${caminho}: em migração para o novo aplicativo. Até lá, continua no sistema atual.`, 501);
+    return emMigracao(`${metodo} ${caminho}`);
 }
 
 const contexto = await iniciarMoldura();

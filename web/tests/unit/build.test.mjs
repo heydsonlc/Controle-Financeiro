@@ -110,6 +110,7 @@ const RPCS_DE_LEITURA = new Set(['meus_perfis', 'contas_bancarias_do_perfil', 'c
     // FIN-FIDELIDADE-RECEITAS-CATEGORIAS-1 (so leitura)
     'receitas_fontes_tela', 'receitas_orcamentos_tela', 'receitas_realizadas_tela', 'categorias_tela', 'palavras_chave_tela',
     'categorias_cartao_tela', 'categoria_cartao_despesas_tela',
+    'situacao_catalogo_categorias',  // FIN-MIGRACAO-P0P1-01: escritor do catalogo e se a conta e gestora (so leitura)
     'tr_oficial_tela', 'tr_faltantes',  // FIN-PRE-PRODUCAO-1: Indexadores (so leitura)
     // FIN-PRE-PRODUCAO-1: Documentos (so leitura): vincular, desvincular, lastro e sugestao financeira
     'entidades_vinculaveis_tela', 'vinculos_documento_tela', 'lastro_resumo_tela', 'sugestao_financeira_documento_tela',

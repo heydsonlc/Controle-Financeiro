@@ -2,7 +2,7 @@
 // Supabase, pelo adaptador. Dados FICTICIOS (tests/supabase_local.py): categorias de despesa globais (Moradia 201,
 // Saude 202...), palavra-chave "padaria" (201) e as Categorias do Cartao "Mercado B" (vinculada a 201) e "Viagem B" do
 // "Perfil B" (atribuido ao novo aplicativo). Escrita so com o usuario B no Perfil B, numa Categoria do Cartao criada
-// aqui e desativada no fim. Categorias de despesa (globais): nenhuma escrita.
+// aqui e desativada no fim. Categorias de despesa (globais): nenhuma escrita aqui (catalogo no padrao, nao habilitado).
 import { expect, test } from '@playwright/test';
 
 import { chamarRpc, perfilAtivoId, registrarDialogos } from './despesas.mjs';
@@ -112,23 +112,35 @@ test('Perfil B: criar, editar, vincular, desvincular, desativar e reativar Categ
     expect((await lida()).ativo).toBe(false);
 });
 
-test('categorias de despesa e palavras-chave (globais) nao sao gravadas pelo novo aplicativo', async ({ page }) => {
-    const dialogos = registrarDialogos(page);
+// FIN-MIGRACAO-P0P1-01: com o catalogo ainda nao habilitado (padrao, sem escritor), as acoes das categorias de despesa nem
+// aparecem e o aviso diz o motivo (antes o formulario era preenchido e so o salvar recusava, citando o Flask). Uma chamada
+// direta continua recusada pelo banco, sem gravar. O caminho do gestor esta em migracao_p0p1.spec.mjs.
+test('catalogo ainda nao habilitado: acoes das categorias de despesa escondidas, com o motivo, e nada gravado', async ({ page }) => {
     await entrar(page, B);
     await abrir(page);
-    const antes = (await chamarRpc(page, 'categorias_tela', { p_perfil_id: await perfilAtivoId(page), p_ativo: null })).corpo;
-    await page.click('#btn-nova-categoria-despesa');
-    await page.fill('#nome', 'Categoria Global E2E');
-    await page.locator('#form-categoria button[type=submit]').click();
-    await expect.poll(() => dialogos.filter((m) => /comuns a todos os perfis/.test(m)).length).toBe(1);
-    await page.click('#modal-categoria-cancelar');
+    await expect(page.locator('#cf-aviso-catalogo'))
+        .toHaveText(/^O catálogo de categorias de despesa ainda não está habilitado para gravação nesta versão/);
+    await expect(page.locator('#btn-nova-categoria-despesa')).toBeHidden();
     await despesa(page, 'Moradia').first().click();
-    await page.fill('#nova-palavra-chave', 'nao grava');
-    await page.locator('#form-palavra-chave button[type=submit]').click();
-    await expect.poll(() => dialogos.filter((m) => /comuns a todos os perfis/.test(m)).length).toBeGreaterThanOrEqual(2);
+    await expect(page.locator('#categoria-despesa-detalhe')).toContainText('padaria');
+    await expect(page.locator('#form-palavra-chave')).toBeHidden();
+    await expect(page.locator('[data-action="editar-despesa"]')).toBeHidden();
+    await expect(page.locator('[data-action="excluir-despesa"]')).toBeHidden();
+    await expect(page.locator('[data-action="remover-palavra-chave"]').first()).toBeHidden();
+    for (const aviso of ['.categorias-aviso-fase', '#cf-aviso-catalogo']) {
+        expect(await page.locator(aviso).innerText()).not.toMatch(/Flask|sistema atual/i);
+    }
+
+    const antes = (await chamarRpc(page, 'categorias_tela', { p_perfil_id: await perfilAtivoId(page), p_ativo: null })).corpo;
+    const r = await page.evaluate(async () => {
+        const resposta = await fetch('/api/categorias', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                          body: JSON.stringify({ nome: 'Categoria Global E2E' }) });
+        return { status: resposta.status, corpo: await resposta.json() };
+    });
+    expect(r).toEqual({ status: 400, corpo: { success: false,
+        error: 'O catálogo de categorias de despesa ainda não está habilitado para gravação no novo aplicativo. Nada foi gravado.' } });
     const depois = (await chamarRpc(page, 'categorias_tela', { p_perfil_id: await perfilAtivoId(page), p_ativo: null })).corpo;
     expect(depois).toEqual(antes);
-    await expect(page.locator('#categoria-despesa-detalhe')).not.toContainText('nao grava');
 });
 
 test('perfil ainda no Flask (Pessoal) nao grava Categoria do Cartao; quem so le (Empresa) nao ve acoes', async ({ page }) => {
@@ -138,7 +150,7 @@ test('perfil ainda no Flask (Pessoal) nao grava Categoria do Cartao; quem so le 
     await page.click('#btn-nova-categoria-cartao');
     await page.fill('#cartao-nome', 'Nao Grava Pessoal E2E');
     await page.locator('#categoria-cartao-detalhe button[type=submit][form="form-categoria-cartao"]').click();
-    await expect.poll(() => dialogos.some((m) => m.includes('ainda são administradas pelo sistema atual (Flask)'))).toBe(true);
+    await expect.poll(() => dialogos.some((m) => m.includes('Este perfil ainda não está habilitado para gravação no novo aplicativo.'))).toBe(true);
     await expect(cartao(page, 'Nao Grava Pessoal E2E')).toHaveCount(0);
 
     await trocarPerfil(page, 'Empresa');

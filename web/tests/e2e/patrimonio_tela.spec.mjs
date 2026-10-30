@@ -100,7 +100,7 @@ test('perfil Empresa mostra os bens, o resumo e a imagem do sistema; outro titul
     const r = await page.evaluate(async () => (await fetch('/api/patrimonio/contas', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: 'Nao grava', saldo_inicial: 1 }),
     })).json());
-    expect(r).toEqual({ success: false, error: expect.stringContaining('ainda é administrado pelo sistema atual (Flask)') });
+    expect(r).toEqual({ success: false, error: expect.stringContaining('ainda não está habilitado para gravação') });
     await trocarPerfil(page, 'Empresa');
     await page.goto('/patrimonio.html');
     await expect(page.locator('#patrimonio-empresarial')).toBeVisible();

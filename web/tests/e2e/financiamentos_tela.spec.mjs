@@ -1,6 +1,6 @@
 // FIN-FIDELIDADE-CONTRATOS-1 (fase 1) — tela original de Financiamentos do Flask (frontend/templates/financiamentos.html)
 // sobre o Supabase, SO CONSULTA. Financiamento FICTICIO do "Perfil B" (tests/supabase_local.py, semear_financiamento_e2e):
-// 3 parcelas, 1 paga. As acoes fora da fase (documentos, conferencias da Caixa) respondem que continuam no sistema atual, sem gravar.
+// 3 parcelas, 1 paga. As acoes fora da fase (documentos, conferencias da Caixa) respondem que ainda nao estao disponiveis, sem gravar.
 import { expect, test } from '@playwright/test';
 
 import { chamarRpc, perfilAtivoId, registrarDialogos } from './despesas.mjs';
@@ -35,11 +35,11 @@ async function entrar(page, conta) {
     await expect(page.locator('#perfil-financeiro-switcher')).toHaveAttribute('data-perfil-ativo-id', /^\d+$/);
 }
 
-test('lista, detalhe e parcelas como no Flask; acoes ficam no sistema atual sem gravar', async ({ page }) => {
+test('lista, detalhe e parcelas como no Flask; acoes fora da fase recusadas sem gravar', async ({ page }) => {
     registrarDialogos(page);
     await entrar(page, B);
     await page.goto('/financiamentos.html');
-    await expect(page.locator('.fin-aviso-fase')).toContainText('continuam no sistema atual');
+    await expect(page.locator('.fin-aviso-fase')).toContainText('ainda não estão disponíveis nesta versão');
     const linha = page.locator('#financiamentos-lista .fin-contract-row', { hasText: NOME });
     await expect(linha).toBeVisible();
     await expect(linha).toContainText('SAC');
@@ -54,7 +54,7 @@ test('lista, detalhe e parcelas como no Flask; acoes ficam no sistema atual sem 
     const r = await page.evaluate(async () => (await fetch('/api/financiamentos/1/conferencias-caixa', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: 'mensal' }),
     })).json());
-    expect(r).toEqual({ success: false, error: expect.stringContaining('continua no sistema atual') });
+    expect(r).toEqual({ success: false, error: expect.stringContaining('ainda não está disponível nesta versão') });
     expect((await chamarRpc(page, 'financiamentos_tela', { p_perfil_id: perfil, p_ativo: null })).corpo).toEqual(antes);
 });
 

@@ -5,15 +5,15 @@
 // simulacao de quitacao. Documentos e conferencias da Caixa continuam no Flask (escritor unico) nesta fase.
 
 import { supabase } from './cliente.js';
-import { criarChaves, falha, mensagemDeErro, ok } from './adaptador-comum.js';
+import { criarChaves, falha, mensagemDeErro, NAO_DISPONIVEL, ok, PERFIL_NAO_HABILITADO } from './adaptador-comum.js';
 import { iniciarMoldura } from './moldura.js';
 
 const estado = { perfilId: null };
 const chaves = criarChaves();
 const PARCELA_EM_DESPESAS = 'Esta parcela possui despesa vinculada. Use o fluxo de Despesas para registrar o pagamento ou o '
-    + 'estorno: a parcela e o saldo devedor são atualizados junto. (Parcela sem despesa, de contrato antigo: continua no '
-    + 'sistema atual.) Nada foi gravado.';
-const NA_FASE_1 = 'Financiamentos: documentos e conferências da Caixa ainda não estão no novo aplicativo; esta ação continua no sistema atual. Nada foi gravado.';
+    + 'estorno: a parcela e o saldo devedor são atualizados junto. (Parcela sem despesa, de contrato antigo: ainda não '
+    + 'disponível nesta versão do aplicativo.) Nada foi gravado.';
+const NA_FASE_1 = `Financiamentos: documentos e conferências da Caixa ${NAO_DISPONIVEL}`;
 
 async function rpc(funcao, args) {
     const { data, error } = await funcao(args);
@@ -39,7 +39,7 @@ async function contasBancarias() {
 }
 
 function falhaFinanciamento(error) {
-    if (error.hint === 'SISTEMA_FLASK') return falha('Os financiamentos deste perfil ainda são administrados pelo sistema atual (Flask). Nada foi gravado.', 409);
+    if (error.hint === 'SISTEMA_FLASK') return falha(PERFIL_NAO_HABILITADO, 409);
     if (error.hint === 'NAO_ENCONTRADO') return falha('Financiamento não encontrado', 404);
     return falha(mensagemDeErro(error), error.code === '42501' ? 403 : 400);
 }

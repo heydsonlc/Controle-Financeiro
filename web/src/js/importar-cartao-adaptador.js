@@ -11,7 +11,7 @@
 //   na importacao (como reconhecer_despesa_fixa do Flask) e o gerador nao a lanca de novo.
 
 import { supabase } from './cliente.js';
-import { criarChaves, falha, mensagemDeErro, ok } from './adaptador-comum.js';
+import { criarChaves, emMigracao, falha, mensagemDeErro, ok } from './adaptador-comum.js';
 import { converterTabela, decodificar, detectarPerfilCsv, lerCsv, lerData, lerValor, normalizarClassificacao, normalizarDescricao,
     PERFIL_CAIXA, PERFIL_MANUAL, PERFIL_NUBANK } from './importacao-csv.js';
 import { lerPlanilha } from './importacao-xlsx.js';
@@ -342,7 +342,7 @@ async function adaptador({ metodo, caminho, parametros, corpo }) {
             }
         }
     }
-    return falha(`${metodo} ${caminho}: em migração para o novo aplicativo. Até lá, continua no sistema atual.`, 501);
+    return emMigracao(`${metodo} ${caminho}`);
 }
 
 const contexto = await iniciarMoldura();

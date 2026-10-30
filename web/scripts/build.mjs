@@ -198,7 +198,7 @@ export function paginaEmMigracao(modulo) {
                         <span class="modulo-em-migracao-selo">Em migração</span>
                         <h1 class="modulo-em-migracao-titulo" id="modulo-titulo">${escapar(modulo.titulo)}</h1>
                         <p>${escapar(modulo.descricao)}</p>
-                        <p>Este módulo faz parte do plano de substituição e ainda está sendo migrado para o novo aplicativo. Nada foi removido: até a migração, ele continua no sistema atual.</p>
+                        <p>Este módulo ainda está sendo migrado e não está disponível nesta versão do aplicativo.</p>
                         <p class="modulo-em-migracao-disponiveis">Já disponíveis aqui: <a href="contas.html">Despesas</a>, <a href="receitas.html">Receitas</a>, <a href="cartoes.html">Cartões</a>, <a href="categorias.html">Categorias</a> e <a href="configuracoes.html">Configurações</a> (perfis financeiros).</p>
                     </section>`,
     };

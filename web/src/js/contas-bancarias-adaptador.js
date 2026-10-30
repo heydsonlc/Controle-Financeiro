@@ -4,7 +4,7 @@
 // editavel, transferencia pareada, escritor unico do perfil para movimentos, chave contra reenvio, versao do cadastro.
 
 import { supabase } from './cliente.js';
-import { criarChaves, falha, mensagemDeErro, ok } from './adaptador-comum.js';
+import { criarChaves, emMigracao, falha, mensagemDeErro, ok } from './adaptador-comum.js';
 import { iniciarMoldura } from './moldura.js';
 
 const estado = { perfilId: null, versoes: {} };
@@ -128,14 +128,6 @@ const ROTAS = [
     ['DELETE', /^\/api\/contas\/(\d+)\/movimentos\/(\d+)$/, (m) => excluirAjuste(Number(m[1]), Number(m[2]))],
 ];
 
-function mensagem(erro) {
-    // Escritor unico (D5; FIN-ESCRITOR-UNICO-CONTAS-1: cadastro e movimento): o perfil ainda e do Flask.
-    if (erro && erro.hint === 'SISTEMA_FLASK') {
-        return 'As contas bancárias deste perfil ainda são administradas pelo sistema atual (Flask). Nada foi gravado.';
-    }
-    return mensagemDeErro(erro);
-}
-
 async function adaptador({ metodo, caminho, parametros, corpo }) {
     for (const [verbo, padrao, executar] of ROTAS) {
         const m = padrao.exec(caminho);
@@ -143,11 +135,12 @@ async function adaptador({ metodo, caminho, parametros, corpo }) {
             try {
                 return await executar(m, corpo, parametros);
             } catch (erro) {
-                return falha(mensagem(erro), 400);
+                // Escritor unico (D5; FIN-ESCRITOR-UNICO-CONTAS-1): perfil nao habilitado vem do hint (mensagemDeErro).
+                return falha(mensagemDeErro(erro), 400);
             }
         }
     }
-    return falha(`${metodo} ${caminho}: em migração para o novo aplicativo. Até lá, continua no sistema atual.`, 501);
+    return emMigracao(`${metodo} ${caminho}`);
 }
 
 const contexto = await iniciarMoldura();

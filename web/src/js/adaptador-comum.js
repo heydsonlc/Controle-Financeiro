@@ -3,7 +3,27 @@
 
 export const ok = (corpo = {}) => ({ status: 200, corpo: { success: true, ...corpo } });
 export const falha = (error, status = 400) => ({ status, corpo: { success: false, error } });
-export const emMigracao = (funcao) => falha(`${funcao}: em migração para o novo aplicativo. Até lá, continua no sistema atual.`, 501);
+
+// FIN-MIGRACAO-P0P1-01: o Flask grava num banco local, fora da producao. Nenhuma mensagem manda o usuario "continuar no
+// sistema atual": o que o novo aplicativo nao faz ainda nao esta disponivel, e perfil sem escritor NOVO nao esta habilitado.
+export const NAO_DISPONIVEL = 'ainda não está disponível nesta versão do aplicativo. Nada foi gravado.';
+export const PERFIL_NAO_HABILITADO = 'Este perfil ainda não está habilitado para gravação no novo aplicativo. Nada foi gravado.';
+export const CATALOGO_NAO_HABILITADO = 'O catálogo de categorias de despesa ainda não está habilitado para gravação no novo aplicativo. Nada foi gravado.';
+export const emMigracao = (funcao) => falha(`${funcao}: ${NAO_DISPONIVEL}`, 501);
+
+// Recusas do escritor unico (hint do banco), com o mesmo sentido para qualquer tela.
+const POR_DICA = {
+    SISTEMA_FLASK: PERFIL_NAO_HABILITADO,
+    GERADOR_FLASK: 'A geração de recorrências deste perfil ainda não está habilitada no novo aplicativo. Nada foi gravado.',
+    CATALOGO_FLASK: CATALOGO_NAO_HABILITADO,
+    COM_DOCUMENTOS: 'Este financiamento tem documentos ou conferências da Caixa; a exclusão dele ainda não está disponível nesta versão do aplicativo. Nada foi gravado.',
+};
+// Textos do banco que ainda citam o sistema atual sem hint proprio.
+const TEXTOS_DO_BANCO = [
+    [/^Esta categoria ja tem um vinculo legado \(sem perfil\) neste cartao: ajuste-o no sistema atual$/,
+        () => 'Esta categoria já tem um vínculo antigo (sem perfil) neste cartão; o ajuste dele ainda não está disponível nesta versão do aplicativo. Nada foi gravado.'],
+    [/^(A categoria sistêmica .*) Ela é criada pelo sistema atual; nada foi gravado\.$/, (m) => `${m[1]} Nada foi gravado.`],
+];
 export const valorTexto = (valor) => (Number(valor) || 0).toFixed(2);
 
 // Motivos de bloqueio do banco (sem acento) como o usuario le (mesmos textos do FIN-DESPESAS-1).
@@ -23,7 +43,12 @@ const BLOQUEIOS = {
 export const textoBloqueio = (motivo) => BLOQUEIOS[motivo] || `${motivo}.`;
 
 export function mensagemDeErro(error) {
+    if (error && POR_DICA[error.hint]) return POR_DICA[error.hint];
     const texto = (error && error.message) || '';
+    for (const [padrao, reescrever] of TEXTOS_DO_BANCO) {
+        const m = padrao.exec(texto);
+        if (m) return reescrever(m);
+    }
     if (/alterad[ao] por outra operacao/i.test(texto)) return 'O registro foi alterado por outra operação. Recarregue e tente de novo.';
     if (/nao autorizado|nao encontrad[ao] neste perfil/i.test(texto)) return 'Operação não autorizada para este perfil.';
     if (/Operacao bloqueada: /i.test(texto)) return `Operação bloqueada: ${textoBloqueio(texto.replace(/^.*Operacao bloqueada: /i, ''))}`;

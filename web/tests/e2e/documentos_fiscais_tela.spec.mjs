@@ -1,7 +1,7 @@
 // FIN-FIDELIDADE-DOCUMENTOS-1 (fase 1) — tela original de Imposto de Renda do Flask (frontend/templates/imposto_renda.html)
 // sobre o Supabase, SO CONSULTA, modo IRPF. Dados FICTICIOS do "Perfil B" (tests/supabase_local.py,
 // semear_documentos_fiscais_e2e). FIN-DOCUMENTOS-2: revisao e envio de arquivo gravam pelas funcoes do banco (Perfil B no
-// novo aplicativo); OCR de imagem, metadados da empresa e relatorios continuam no sistema atual.
+// novo aplicativo); OCR de imagem, metadados da empresa e relatorios ainda nao estao disponiveis nesta versao.
 import { expect, test } from '@playwright/test';
 
 import { chamarRpc, perfilAtivoId } from './despesas.mjs';
@@ -104,6 +104,6 @@ test('abrir arquivo do comprovante (nova aba com o arquivo do Supabase) e relato
 
     const antes = page.url();
     await page.locator('#ir-btn-exportar').click();  // "Exportar" da barra de acoes (Excel no Flask)
-    await expect.poll(() => testInfo.avisos.join(' | ')).toContain('continua no sistema atual');
+    await expect.poll(() => testInfo.avisos.join(' | ')).toContain('ainda não está disponível nesta versão');
     expect(page.url()).toBe(antes);
 });

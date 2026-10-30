@@ -9,7 +9,7 @@
 // (relatorio-patrimonio.js, sem biblioteca; conferida com o Flask em tests/test_relatorios_patrimonio.py).
 
 import { supabase } from './cliente.js';
-import { criarChaves, falha, mensagemDeErro, ok } from './adaptador-comum.js';
+import { criarChaves, falha, mensagemDeErro, NAO_DISPONIVEL, ok, PERFIL_NAO_HABILITADO } from './adaptador-comum.js';
 import { instalarAberturaDeArquivos } from './arquivo-comprovante.js';
 import { iniciarMoldura } from './moldura.js';
 import { gerarSugestao } from './patrimonio-sugestao.js';
@@ -18,7 +18,7 @@ import { MIME_XLSX } from './exportacao-xlsx.js';
 
 const estado = { perfil: null };
 const chaves = criarChaves();
-const NO_SISTEMA_ATUAL = 'Patrimônio: esta ação continua no sistema atual. Nada foi gravado.';
+const NAO_DISPONIVEL_AQUI = `Patrimônio: esta ação ${NAO_DISPONIVEL}`;
 
 async function rpc(funcao, args) {
     const { data, error } = await funcao(args);
@@ -188,7 +188,7 @@ const ROTAS = [
 // Erros do banco no formato do Flask: 403 fora do perfil Empresa ou sem permissao, 404 nao encontrado, 409 escritor.
 function falhaDoBanco(erro) {
     if (erro && erro.hint === 'SISTEMA_FLASK') {
-        return falha('O patrimônio deste perfil ainda é administrado pelo sistema atual (Flask). Nada foi gravado.', 409);
+        return falha(PERFIL_NAO_HABILITADO, 409);
     }
     if (erro && erro.hint === 'SO_EMPRESA') return falha(erro.message, 403);
     if (erro && erro.hint === 'NAO_ENCONTRADA') return falha(erro.message, 404);
@@ -206,7 +206,7 @@ async function adaptador({ metodo, caminho, parametros, corpo }) {
             }
         }
     }
-    return falha(NO_SISTEMA_ATUAL, 501);
+    return falha(NAO_DISPONIVEL_AQUI, 501);
 }
 
 const contexto = await iniciarMoldura();

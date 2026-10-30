@@ -10,7 +10,7 @@
 // reproduzido (a tela le a modalidade ativa do banco).
 
 import { supabase } from './cliente.js';
-import { criarChaves, falha, mensagemDeErro, ok } from './adaptador-comum.js';
+import { criarChaves, falha, mensagemDeErro, ok, PERFIL_NAO_HABILITADO } from './adaptador-comum.js';
 import { iniciarMoldura } from './moldura.js';
 
 const estado = { perfilId: null };
@@ -182,7 +182,7 @@ const ROTAS = [
 // Erros do banco no formato do Flask: 409 escritor, 404 nao encontrado, 403 sem permissao, 400 o resto.
 function falhaDoBanco(erro) {
     if (erro && erro.hint === 'SISTEMA_FLASK') {
-        return falha('A mobilidade deste perfil ainda é administrada pelo sistema atual (Flask). Nada foi gravado.', 409);
+        return falha(PERFIL_NAO_HABILITADO, 409);
     }
     if (erro && erro.hint === 'NAO_ENCONTRADA') return falha(mensagemDeErro(erro), 404);
     return falha(mensagemDeErro(erro), erro && erro.code === '42501' ? 403 : 400);

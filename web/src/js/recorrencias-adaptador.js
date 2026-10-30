@@ -14,10 +14,10 @@
 // - consorcios (FIN-FIDELIDADE-CONTRATOS-1, migration 20261116090000): lista e detalhe, como o Flask. FIN-CONTRATOS-3
 //   (migration 20261121090000): cadastro, edicao e inativacao pelo escritor do perfil; as parcelas efetivadas nunca
 //   sao apagadas (regeneracao e exclusao seguras no banco);
-//   cadastro, edicao e exclusao continuam no sistema atual (a lista avisa).
+//   o que a tela ainda nao faz responde que nao esta disponivel nesta versao (a lista avisa).
 
 import { supabase } from './cliente.js';
-import { criarChaves, emMigracao, falha, mensagemDeErro, ok, valorTexto } from './adaptador-comum.js';
+import { criarChaves, emMigracao, falha, mensagemDeErro, ok, PERFIL_NAO_HABILITADO, valorTexto } from './adaptador-comum.js';
 import { iniciarMoldura } from './moldura.js';
 
 const estado = { perfilId: null, itens: new Map() };
@@ -300,7 +300,7 @@ async function consorcios(id) {
 
 // FIN-CONTRATOS-3: escrita de consorcios (respostas no formato do Flask; perfil ainda no Flask e recusado pelo banco).
 function falhaConsorcio(error) {
-    if (error.hint === 'SISTEMA_FLASK') return falha('Os consórcios deste perfil ainda são administrados pelo sistema atual (Flask). Nada foi gravado.', 409);
+    if (error.hint === 'SISTEMA_FLASK') return falha(PERFIL_NAO_HABILITADO, 409);
     if (error.hint === 'NAO_ENCONTRADO') return falha('Consórcio não encontrado', 404);
     return falha(mensagemDeErro(error), error.code === '42501' ? 403 : 400);
 }

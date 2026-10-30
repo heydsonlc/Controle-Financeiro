@@ -142,7 +142,7 @@ test('tela original pelo menu: cartoes, fatura por Categoria do Cartao e lancame
     await selecionar(page, 'Cartao Verde');
     await mesDaFatura(page, '2026-11');
     await lancamento(page, 'Livraria').locator('[data-action="excluir-lancamento"]').click();
-    await expect(toast(page)).toHaveText('Erro ao excluir lançamento: Este perfil ainda é administrado pelo sistema atual (Flask). Nada foi gravado.');
+    await expect(toast(page)).toHaveText('Erro ao excluir lançamento: Este perfil ainda não está habilitado para gravação no novo aplicativo. Nada foi gravado.');
     expect(dialogos.at(-1)).toMatch(/^Excluir o lançamento "Livraria"\?/);
     await expect(page.locator('.fatura-lancamento-row')).toHaveCount(2);
 });

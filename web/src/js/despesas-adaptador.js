@@ -10,7 +10,7 @@
 
 import { supabase } from './cliente.js';
 import {
-    criarChaves, emMigracao, falha, hojeBrasilia, mensagemDeErro, ok, textoBloqueio, valorTexto,
+    criarChaves, emMigracao, falha, hojeBrasilia, mensagemDeErro, ok, PERFIL_NAO_HABILITADO, textoBloqueio, valorTexto,
 } from './adaptador-comum.js';
 import { centavos, deslocarMes, mesAtualBrasilia, reais } from './comum.js';
 import { responderDocumentoFinanceiro } from './documento-financeiro.js';
@@ -351,7 +351,7 @@ async function excluir(id, parametros) {
 
 function motivoSemPagamento(dados, bloqueio) {
     if (bloqueio) return textoBloqueio(bloqueio);
-    if (dados.sistema === 'FLASK') return 'O pagamento das despesas deste perfil ainda é feito no sistema atual.';
+    if (dados.sistema === 'FLASK') return PERFIL_NAO_HABILITADO;
     return 'Operação não autorizada para este perfil.';
 }
 
@@ -382,7 +382,7 @@ async function pagarFatura(id, corpo) {
     if (error) return falha(mensagemDeErro(error));
     if (!data.pode_pagar) {
         return falha(data.fatura.paga ? 'Esta fatura já está paga.'
-            : (data.sistema === 'FLASK' ? 'O pagamento das faturas deste perfil ainda é feito no sistema atual.'
+            : (data.sistema === 'FLASK' ? PERFIL_NAO_HABILITADO
                 : 'A fatura não pode ser paga agora (sem compras ou sem permissão).'));
     }
     const executado = Number(data.fatura.valor_executado);
@@ -415,7 +415,7 @@ async function estornar(id, corpo) {
     const vigente = (consulta.data.pagamentos || []).find((p) => p.vigente);
     if (!consulta.data.pode_estornar || !vigente) {
         return falha(consulta.data.sistema === 'FLASK'
-            ? 'O estorno deste perfil ainda é feito no sistema atual.' : 'Não há pagamento vigente para estornar.');
+            ? PERFIL_NAO_HABILITADO : 'Não há pagamento vigente para estornar.');
     }
     const dados = { motivo: String(corpo.motivo || '').trim(), data_estorno: corpo.data_estorno };
     const operacao = `estornar:${id}:${vigente.movimento_id}`;

@@ -1,6 +1,6 @@
 /* FIN-FIDELIDADE-DOCUMENTOS-1 (fase 1) — so o que a tela original de Imposto de Renda (imposto_renda.css) nao tinha. */
 
-/* Aviso da fase 1: o novo aplicativo so consulta; as acoes continuam no sistema atual. */
+/* Aviso do que esta tela grava e do que ainda nao esta disponivel nesta versao. */
 .ir-aviso-fase {
     margin: 0 0 12px;
     padding: 10px 14px;
@@ -42,4 +42,24 @@
 
 .cf-vinculos-ativos .cf-vinculos-vazio {
     color: var(--cf-text-muted, #475569);
+}
+
+/* FIN-MIGRACAO-P0P1-01: retorno do envio no painel "Arquivos importados" (a tela original nao mostrava recusa). */
+.cf-upload-retorno {
+    margin: 0 0 12px;
+    padding: 10px 14px;
+    border: 1px solid var(--cf-border, #d7dde5);
+    border-left: 4px solid var(--cf-success, #16a34a);
+    border-radius: 6px;
+    background: var(--cf-surface, #fff);
+    font-size: 0.875rem;
+}
+
+.cf-upload-retorno[data-situacao="parcial"] {
+    border-left-color: var(--cf-warning, #d97706);
+}
+
+.cf-upload-retorno[data-situacao="erro"] {
+    border-left-color: var(--cf-danger, #dc2626);
+    color: var(--cf-danger-text, #991b1b);
 }

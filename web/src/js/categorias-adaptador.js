@@ -7,19 +7,59 @@
 // - Categorias de despesa e palavras-chave sao comuns a todos os perfis (inclusive os ainda no Flask). FIN-CATEGORIAS-
 //   RECORRENCIAS-2 (migration 20261125090000): cadastro, edicao, exclusao segura e palavras-chave pelas funcoes do
 //   catalogo, que so gravam com o catalogo passado ao novo aplicativo (escritor proprio, padrao Flask) e por conta
-//   gestora; ate la o banco recusa e nada e gravado. Logos: os arquivos estao no servidor do Flask; aqui a tela mostra
-//   o icone e o envio fica para o armazenamento de arquivos (FIN-DOCUMENTOS-2).
+//   gestora; ate la o banco recusa e nada e gravado. Logos: sem armazenamento de arquivos nesta versao; a tela mostra o
+//   icone e o painel de logo fica desabilitado.
+// - FIN-MIGRACAO-P0P1-01: a tela consulta a situacao do catalogo (situacao_catalogo_categorias). Sem catalogo no novo
+//   aplicativo ou sem conta gestora, as acoes das categorias de despesa ficam escondidas, com o motivo no aviso (antes o
+//   formulario inteiro era preenchido e so o salvar recusava, citando o Flask).
 
 import { supabase } from './cliente.js';
-import { criarChaves, falha, mensagemDeErro, ok } from './adaptador-comum.js';
+import { criarChaves, emMigracao, falha, mensagemDeErro, ok } from './adaptador-comum.js';
 import { iniciarMoldura } from './moldura.js';
 
 const estado = { perfilId: null, palavras: null, vinculos: null };
-const GLOBAIS = 'Categorias de despesa são comuns a todos os perfis, inclusive os ainda no sistema atual: cadastro, edição, '
-    + 'exclusão e palavras-chave continuam no sistema atual (Flask) até o catálogo passar ao novo aplicativo. Nada foi gravado.';
-const LOGOS = 'Logo de categoria: os arquivos ficam no servidor do sistema atual; o envio pelo novo aplicativo depende do '
-    + 'armazenamento de arquivos (FIN-DOCUMENTOS-2). Nada foi gravado.';
+const SEM_GESTAO = 'Esta conta não administra o catálogo de categorias. Nada foi gravado.';
+const LOGO_INDISPONIVEL = 'Upload de logo ainda não disponível nesta versão.';
 const chaves = criarChaves();
+
+// Painel de logo: o JS original (classico, funcoes globais) o habilita para a categoria em edicao; aqui fica desabilitado.
+function travarLogo() {
+    for (const id of ['logo-upload-input', 'logo-enviar', 'logo-remover']) {
+        const campo = document.getElementById(id);
+        if (campo) campo.disabled = true;
+    }
+    const status = document.getElementById('logo-upload-status');
+    if (status) status.textContent = LOGO_INDISPONIVEL;
+}
+const atualizarLogoOriginal = window.atualizarLogoPanel;
+if (typeof atualizarLogoOriginal === 'function') {
+    window.atualizarLogoPanel = function (...args) {
+        atualizarLogoOriginal.apply(this, args);
+        travarLogo();
+    };
+}
+travarLogo();
+// Ate a situacao do catalogo chegar, as acoes das categorias de despesa ficam escondidas (nunca aparecem e depois somem).
+document.body.classList.add('cf-catalogo-bloqueado');
+
+async function aplicarSituacaoCatalogo() {
+    const { data, error } = await supabase.rpc('situacao_catalogo_categorias');
+    const habilitado = !error && data && data.escritor === 'NOVO';
+    const gestor = habilitado && data.gestor === true;
+    document.body.classList.toggle('cf-catalogo-bloqueado', !gestor);
+    if (gestor) return;
+    const aviso = document.createElement('p');
+    aviso.id = 'cf-aviso-catalogo';
+    aviso.className = 'categorias-aviso-catalogo';
+    aviso.setAttribute('role', 'note');
+    aviso.textContent = error ? 'Não foi possível verificar a permissão no catálogo: cadastro, edição, exclusão e palavras-chave '
+        + 'das categorias de despesa ficam indisponíveis. Recarregue a página para tentar de novo.'
+        : (habilitado ? 'Esta conta não administra o catálogo de categorias de despesa: cadastro, edição, exclusão e '
+            + 'palavras-chave ficam indisponíveis.'
+            : 'O catálogo de categorias de despesa ainda não está habilitado para gravação nesta versão: cadastro, edição, '
+            + 'exclusão e palavras-chave ficam indisponíveis.');
+    document.querySelector('.categorias-aviso-fase')?.after(aviso);
+}
 
 async function rpc(funcao, args) {
     const { data, error } = await funcao(args);
@@ -130,17 +170,12 @@ const ROTAS = [
     ['DELETE', /^\/api\/categorias\/(\d+)$/, (m) => excluirCategoria(Number(m[1]))],
     ['POST', /^\/api\/categorias\/(\d+)\/palavras-chave$/, (m, corpo) => criarPalavra(Number(m[1]), corpo)],
     ['DELETE', /^\/api\/categorias\/(\d+)\/palavras-chave\/(\d+)$/, (m) => removerPalavra(Number(m[1]), Number(m[2]))],
-    [null, /^\/api\/categorias\/\d+\/logo$/, async () => falha(LOGOS)],
+    [null, /^\/api\/categorias\/\d+\/logo$/, async () => falha(`${LOGO_INDISPONIVEL} Nada foi gravado.`)],
 ];
 
+// Perfil sem escritor NOVO (SISTEMA_FLASK) e catalogo nao habilitado (CATALOGO_FLASK) vem de mensagemDeErro.
 function mensagem(erro) {
-    if (erro && erro.hint === 'SISTEMA_FLASK') {
-        return 'As Categorias do Cartão deste perfil ainda são administradas pelo sistema atual (Flask). Nada foi gravado.';
-    }
-    if (erro && erro.hint === 'CATALOGO_FLASK') return GLOBAIS;
-    if (erro && erro.code === '42501' && /catalogo/i.test(erro.message || '')) {
-        return 'Esta conta não administra o catálogo de categorias. Nada foi gravado.';
-    }
+    if (erro && erro.code === '42501' && /catalogo/i.test(erro.message || '')) return SEM_GESTAO;
     return mensagemDeErro(erro);
 }
 
@@ -161,7 +196,7 @@ async function adaptador({ metodo, caminho, parametros, corpo }) {
             }
         }
     }
-    return falha(`${metodo} ${caminho}: continua no sistema atual nesta fase. Nada foi gravado.`, 501);
+    return emMigracao(`${metodo} ${caminho}`);
 }
 
 const contexto = await iniciarMoldura();
@@ -170,6 +205,7 @@ if (contexto && contexto.perfil) {
     window.CF_REGISTRAR_ADAPTADOR(adaptador);
     const { data: gere } = await supabase.rpc('pode_gerir_perfil', { p_perfil_id: estado.perfilId });
     document.body.classList.toggle('cf-somente-leitura', gere !== true);
+    await aplicarSituacaoCatalogo();
 } else if (contexto) {
     window.CF_REGISTRAR_ADAPTADOR(async () => falha('Nenhum perfil financeiro autorizado para esta conta.', 403));
 }

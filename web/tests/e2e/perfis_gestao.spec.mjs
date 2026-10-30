@@ -69,7 +69,7 @@ test('Configuracoes lista os perfis do usuario com estado, padrao, uso e permiss
     await expect(page.locator('#config-section-backup')).toContainText('Em migração');
     await expect(page.locator('#config-help-title')).toHaveText('Backup');
     await page.click('#config-export-settings');
-    await expect(page.locator('#config-aviso-geral')).toContainText('Exportar configurações: em migração');
+    await expect(page.locator('#config-aviso-geral')).toHaveText('Exportar configurações: ainda não está disponível nesta versão do aplicativo.');
 });
 
 test('criar, editar, tornar padrao, usar, inativar e reativar; isolamento dos dados', async ({ page }) => {
@@ -95,7 +95,7 @@ test('criar, editar, tornar padrao, usar, inativar e reativar; isolamento dos da
     await cartao(page, 'Pessoal').click();
     await page.fill('#config-profile-nome', 'Minhas contas');
     // Pessoal segue no Flask (FIN-ESCRITOR-UNICO-FINAL-1): a gestao dele e recusada pelo escritor unico, antes da regra do nome.
-    await salvar(page, 'Este perfil ainda é administrado pelo sistema atual (Flask). Nada foi gravado.');
+    await salvar(page, 'Este perfil ainda não está habilitado para gravação no novo aplicativo. Nada foi gravado.');
     await expect(page.locator('#config-profile-nome')).toHaveValue('Pessoal');
 
     // Editar nome, tipo, apelido e tornar padrao

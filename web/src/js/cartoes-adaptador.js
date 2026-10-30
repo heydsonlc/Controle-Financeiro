@@ -9,7 +9,7 @@
 // - compra nova: o formulario do novo aplicativo (compra-cartao.js), no modal acrescentado; no Flask fica em Lancamentos.
 
 import { supabase } from './cliente.js';
-import { criarChaves, falha, mensagemDeErro, ok, valorTexto } from './adaptador-comum.js';
+import { criarChaves, emMigracao, falha, mensagemDeErro, ok, valorTexto } from './adaptador-comum.js';
 import { abrirNovaCompra } from './compra-cartao.js';
 import { iniciarMoldura } from './moldura.js';
 
@@ -293,7 +293,7 @@ async function adaptador({ metodo, caminho, parametros, corpo }) {
             }
         }
     }
-    return falha(`${metodo} ${caminho}: em migração para o novo aplicativo. Até lá, continua no sistema atual.`, 501);
+    return emMigracao(`${metodo} ${caminho}`);
 }
 
 // Compra nova (acrescimo): o formulario do novo aplicativo no modal; ao gravar, a tela original recarrega.
