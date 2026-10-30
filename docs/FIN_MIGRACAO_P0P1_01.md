@@ -1,11 +1,10 @@
 # FIN-MIGRACAO-P0P1-01 — Empresa, Documentos Fiscais e catálogo de categorias no novo aplicativo
 
-**Situação (30/10/2026): Etapa 1 pronta.**
-- Código e testes prontos.
-- A produção não foi alterada: nenhuma ativação, nenhum envio real e nenhuma categoria criada.
-- Nada foi publicado; sem commit e sem push.
-
-A Etapa 2 (ativação em produção) depende de autorização expressa.
+**Situação (30/10/2026): Etapa 2 executada e aprovada (§6).**
+- O build foi publicado antes da ativação.
+- A Empresa e o catálogo estão no novo aplicativo, e o titular é gestor do catálogo.
+- Os testes reais foram feitos pela tela.
+- Commits locais `646912c` (código) e o desta documentação; sem push.
 
 ## 1. Por que
 
@@ -72,3 +71,28 @@ O roteiro fica fora do Git, na pasta temporária da sessão: `scratchpad/p0p1/et
   - faz as três operações numa transação;
   - verifica o retrato completo depois de cada passo;
   - desfaz tudo se qualquer verificação falhar.
+
+## 6. Etapa 2 (autorizada pelo titular em 30/10/2026; ordem: publicar antes de ativar)
+
+| Passo | Resultado |
+|---|---|
+| Commit do código | `646912c` (46 arquivos), sem push |
+| Publicação | Cloudflare Pages, deploy `ad78c215` (branch `producao`), em https://controle-financeiro-jah.pages.dev. Build de 166 arquivos, só com a URL do projeto e a chave publicável. O rótulo do commit no deploy ficou `646912c2` por erro de digitação (o conteúdo é o do `646912c`) |
+| Conferência antes de ativar (só leitura) | `PRE_CONDICOES_OK` às 17:01 UTC. Empresa em FLASK, com 1 acesso e 1 preferência; catálogo e gestor vazios; 10 sistêmicas intactas |
+| Ativação (`etapa2_ativar.py ativar --confirmar`, uma transação, executor `postgres`, 17:02:33 UTC) | COMMIT, com todas as verificações internas aprovadas. Empresa FLASK → NOVO (histórico 101); catálogo FLASK → NOVO; gestor = conta `51f5d1d1`. Responsável "Titular (conta 51f5d1d1)" |
+| Conferência depois do commit (só leitura) | Mudaram 4 tabelas, com +1 linha cada (escritor, histórico, catálogo, gestor). As outras 80 tabelas estão idênticas. Nenhuma conta, compra, movimento ou execução de geração nova. Prévias do Pessoal e da Empresa: 0 a gerar |
+| Teste A: envio na Empresa (titular, pela tela, 17:10 UTC) | Documento 4, perfil 2, PDF de 1.629.760 bytes. O SHA-256 do conteúdo confere com o hash registrado; 1 operação e 2 eventos. Nenhuma outra tabela mudou |
+| Teste B: catálogo (titular, pela tela) | 1ª tentativa (categoria 111): criar, adicionar palavra-chave e excluir; edição e remoção da palavra-chave não chegaram ao servidor. 2ª tentativa completa (categoria 112): criar 17:26:55, palavra-chave 17:27:09, editar 17:31:05, remover palavra-chave 17:31:18, excluir 17:31:30, todas com status 200 |
+| Estado final do catálogo | 40 categorias e 221 palavras-chave, como antes; 10 sistêmicas com o mesmo md5. Ficam só os 2 registros de idempotência em `operacao_catalogo` |
+| Documento do teste A | Mantido. É real, pelo nome (`Contrato_Social_e_Procuracao.pdf`), e não existe ação de excluir documento na tela (§7). Aguarda a decisão do titular |
+
+## 7. Pendências registradas
+
+1. **Documentos Fiscais sem ação de excluir documento.**
+   - Nem a tela do Flask nem a do novo aplicativo têm o botão; o Flask não tem a rota.
+   - O banco já tem `excluir_comprovante`.
+2. **Classificação automática na Empresa.** O documento do teste A ficou como "Pagamento realizado / Pix pago" e conta como "Sem lastro". Editar os metadados empresariais continua fora (P1, Lastro da Empresa).
+3. **Texto "Sem descri&ccedil;&atilde;o cadastrada."** com os códigos HTML aparecendo literalmente na tela de Categorias.
+   - Defeito do JS original (`frontend/static/js/categorias.js:396`, `escapeHtml` sobre texto já codificado); também acontece no Flask.
+   - P3, cosmético.
+4. **Push** de `646912c` e do commit desta documentação: aguarda autorização.
