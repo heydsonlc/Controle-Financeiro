@@ -87,3 +87,27 @@ Valor real R$ 2.990,90; despesa prevista R$ 4.934,18 (cadeia estimada antiga).
   - Nada é gravado, mas a recusa não vem pela guarda.
   - A correção (ordem das guardas) fica para um pacote próprio; aqui a regularização não é alterada.
 - **Depois da publicação:** pagamento real da parcela 30 (R$ 2.990,90, conta Caixa, diferença `AJUSTE`), e em seguida o ajuste dos saldos reais das contas.
+
+## 7. Publicação e pagamento real da parcela 30 (31/10/2026)
+
+- **Publicação:**
+  - commit `dda1bdd`, push `98c75fb..dda1bdd`;
+  - migration `20261206090000` aplicada sozinha (47 versões), com as duas vias de dedução da parcela-base iguais a 30;
+  - sem deploy, porque não há mudança de tela.
+- **Validação da publicação** (só leitura):
+  - saldo R$ 269.524,62, ajuste 1 e parcela-base 30;
+  - 29/420, parcela 30 pendente;
+  - parcelas 31..420, TR projetada, despesas, movimentos, saldos bancários, amortizações e a regularização (173 itens) iguais ao retrato anterior.
+- **Pagamento da parcela 30:**
+  - feito por `pagar_despesa`, como titular, numa transação com as conferências antes do commit;
+  - R$ 2.990,90 em 05/10/2026, conta Caixa, diferença `AJUSTE` com justificativa.
+
+| Conferência (sessão nova, só leitura) | Resultado |
+|---|---|
+| Parcela 30 | Paga; `valor_pago` R$ 2.990,90; `dif_apurada` R$ 1.943,28; despesa paga em 05/10/2026 pela Caixa |
+| Contador / próxima | **30/420**; próxima = parcela **31** (05/11/2026, R$ 2.988,13, TR PROJETADA) |
+| Saldo do financiamento | **R$ 269.524,62** (preservado; sem novo ajuste) |
+| Movimentos | 23 → 24: débito de R$ 2.990,90 na Caixa (movimento 172); anteriores iguais |
+| Saldo da Caixa | R$ 71.006,24 → R$ 68.015,34 (efeito normal do pagamento); Nubank R$ 12.469,48 |
+| Ajuste 1, parcelas 31..420, TR projetada, amortizações, regularização, Apple One | Iguais |
+| Tabelas alteradas | `conta`, `financiamento_parcela`, `movimento_financeiro`, `conta_bancaria`, `operacao_despesa`, `pagamento_fatura` |

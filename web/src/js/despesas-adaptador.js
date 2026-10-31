@@ -438,9 +438,19 @@ async function comprasDaFatura(cartaoId, parametros) {
     if (error) return falha(mensagemDeErro(error), 403);
     return ok({ data: (data || []).map((c) => ({
         id: c.id, descricao: c.descricao, valor: Number(c.valor), data_compra: c.data_compra,
-        numero_parcela: c.numero_parcela, total_parcelas: c.total_parcelas, categoria_cartao_id: null,
+        numero_parcela: c.numero_parcela, total_parcelas: c.total_parcelas, categoria_cartao_id: c.categoria_cartao_id,
         categoria_cartao_nome: c.categoria_nome, is_recorrente: Boolean(c.recorrente),
     })) });
+}
+
+// Resumo por Categoria do Cartao (limite e gasto do mes) para o bloco "Despesas por Categoria"; o original le
+// `categorias` na raiz da resposta (FIN-CARTAO-AGRUPAMENTO-CATEGORIAS-01).
+async function categoriasDaFatura(cartaoId, parametros) {
+    const mes = String(parametros.get('mes_referencia') || '').slice(0, 7);
+    if (!MES.test(mes)) return falha('Competência inválida.');
+    const { data, error } = await supabase.rpc('fatura_por_categoria', { p_perfil_id: estado.perfilId, p_cartao_id: cartaoId, p_mes: `${mes}-01` });
+    if (error) return falha(mensagemDeErro(error), 403);
+    return ok({ categorias: data?.categorias || [] });
 }
 
 const ROTAS = [
@@ -454,8 +464,7 @@ const ROTAS = [
     ['GET', /^\/api\/categorias\/?$/, async () => ok({ data: await categoriasDeDespesa() })],
     ['GET', /^\/api\/contas\/?$/, async () => ok({ data: (await contasBancariasAtivas()).map((c) => ({ id: c.id, nome: c.nome, instituicao: c.instituicao })) })],
     ['GET', /^\/api\/cartoes\/(\d+)\/lancamentos$/, (m, p) => comprasDaFatura(Number(m[1]), p)],
-    // Limites por categoria do cartao: sem funcao de leitura no Supabase ainda; o detalhe mostra as compras.
-    ['GET', /^\/api\/cartoes\/(\d+)\/fatura-categorias$/, async () => ok({ categorias: [] })],
+    ['GET', /^\/api\/cartoes\/(\d+)\/fatura-categorias$/, (m, p) => categoriasDaFatura(Number(m[1]), p)],
     // Avisos de recorrencia rejeitada: mostrados no bloco de geracao (despesas-recorrencias.js).
     ['GET', /^\/api\/recorrencias\/pendencias$/, async () => ok({ data: [] })],
     ['GET', /^\/api\/cartoes\/?$/, async () => emMigracao('Recorrência paga no cartão de crédito')],
