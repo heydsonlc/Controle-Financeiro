@@ -200,8 +200,12 @@ def test_auditoria_de_cada_gravacao(comparacao):
 
 def test_motor_le_a_tr_cadastrada(cluster):
     dsn = copiar(cluster)
+    sql(dsn, 'delete from public.indice_tr_mensal')
     with pytest.raises(psycopg2.Error, match='Nao ha TR cadastrada para a competencia 2036-07'):
         sql(dsn, "select financeiro.fin_tr('2036-07-10')")
+    # FIN-AJUSTE-FINANCIAMENTO-REAL-01: depois da ultima publicada, a projetada (a ultima), sem gravar em Indexadores.
+    chamar(dsn, USUARIO_A, 'select financeiro.criar_tr(%s::jsonb, %s)', (json.dumps({'competencia': '2036-06', 'valor_percentual': '0,12'}), chave()))
+    assert sql(dsn, "select financeiro.fin_tr_info('2036-07-10') as v")[0]['v'] == {'valor': 0.0012, 'projetada': True, 'origem': '2036-06'}
     chamar(dsn, USUARIO_A, 'select financeiro.criar_tr(%s::jsonb, %s)', (json.dumps({'competencia': '2036-07', 'valor_percentual': '0,17'}), chave()))
     assert float(sql(dsn, "select financeiro.fin_tr('2036-07-10') as v")[0]['v']) == 0.0017
 

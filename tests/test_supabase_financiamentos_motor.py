@@ -629,7 +629,12 @@ def test_simulacao_de_quitacao_igual_ao_flask_sem_gravar(fidelidade):
         else:
             assert v == nv[k], (k, v, nv[k])
     assert falha(dsn, 'simular_quitacao', PESSOAL, fin_id(dsn), pedido, usuario=USUARIO_B)[0] == '42501'  # sem acesso ao perfil
-    assert falha(dsn, 'simular_quitacao', PESSOAL, fin_id(dsn), {'data_quitacao': '2099-01-10'})[2] == 'TR_AUSENTE'
+    # FIN-AJUSTE-FINANCIAMENTO-REAL-01: depois da ultima TR publicada (2060-12 aqui), a projetada, com aviso; lacuna
+    # entre publicadas continua recusada.
+    futura = rpc(dsn, 'simular_quitacao', PESSOAL, fin_id(dsn), {'data_quitacao': '2099-01-10'})['data']
+    assert any('(projetada: TR de 2060-12, a última publicada)' in o for o in futura['observacoes'])
+    sql(dsn, "delete from public.indice_tr_mensal where competencia = '2030-01'")
+    assert falha(dsn, 'simular_quitacao', PESSOAL, fin_id(dsn), {'data_quitacao': '2030-01-10'})[2] == 'TR_AUSENTE'
 
 
 def test_reversao_remove_o_motor_e_volta(cluster):  # noqa: F811
@@ -641,7 +646,7 @@ def test_reversao_remove_o_motor_e_volta(cluster):  # noqa: F811
     catalogo = ("select p.oid::regprocedure::text s, md5(p.prosrc) c, coalesce(p.proacl::text, '') a from pg_proc p "
                 "join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'financeiro'")
     indices = "select indexname from pg_indexes where indexname in ('financiamento_parcela_numero_unico', 'conta_financiamento_parcela_unica')"
-    com = {r['s']: r for r in sql(dsn, catalogo)}
+    completo = {r['s']: r for r in sql(dsn, catalogo)}
 
     def executar(arquivo):
         conn = psycopg2.connect(dsn)
@@ -651,6 +656,9 @@ def test_reversao_remove_o_motor_e_volta(cluster):  # noqa: F811
         finally:
             conn.close()
 
+    # FIN-AJUSTE-FINANCIAMENTO-REAL-01: a 20261204 redefine funcoes do motor; a reversao e em ordem (a mais nova antes).
+    executar(supabase / 'reversao' / '20261204090000_tr_projetada_anterior.sql')
+    com = {r['s']: r for r in sql(dsn, catalogo)}
     executar(supabase / 'reversao' / '20261123090000_remover_motor_financiamentos.sql')
     sem = {r['s']: r for r in sql(dsn, catalogo)}
     removidas = set(com) - set(sem)
@@ -664,3 +672,5 @@ def test_reversao_remove_o_motor_e_volta(cluster):  # noqa: F811
     assert set(sem) < set(com) and all(sem[s] == com[s] for s in sem if s != 'financeiro.saldo_devedor_pelas_parcelas(integer)')
     executar(supabase / 'migrations' / '20261123090000_financeiro_financiamentos_motor.sql')
     assert {r['s']: r for r in sql(dsn, catalogo)} == com and len(sql(dsn, indices)) == 2
+    executar(supabase / 'migrations' / '20261204090000_financeiro_tr_projetada.sql')
+    assert {r['s']: r for r in sql(dsn, catalogo)} == completo

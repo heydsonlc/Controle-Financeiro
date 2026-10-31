@@ -12,3 +12,18 @@
     color: var(--cf-text-muted, #475569);
     font-size: 0.875rem;
 }
+
+/* FIN-AJUSTE-FINANCIAMENTO-REAL-01: parcela calculada com TR ainda nao publicada (valor projetado). */
+.fin-pill.cf-tr-projetada {
+    margin-left: 4px;
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.cf-tr-projetada-aviso {
+    display: block;
+    margin-top: 2px;
+    color: #92400e;
+    font-size: 0.75rem;
+    font-weight: 600;
+}

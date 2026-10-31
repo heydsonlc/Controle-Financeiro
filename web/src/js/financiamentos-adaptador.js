@@ -144,6 +144,54 @@ async function adaptador({ metodo, caminho, parametros, corpo }) {
     return falha(NA_FASE_1, 501);
 }
 
+// FIN-AJUSTE-FINANCIAMENTO-REAL-01 (migration 20261204090000): parcela pendente calculada com TR ainda nao publicada
+// (financiamento_tela devolve tr_projetada) aparece como projetada no cronograma e na proxima parcela. As funcoes da tela
+// original (script classico) sao envolvidas: desenham como antes e a marca e acrescentada depois.
+const AVISO_TR_PROJETADA = 'Valor projetado: a TR desta competência ainda não foi publicada (usada a última publicada). '
+    + 'É recalculado quando a TR real for cadastrada em Indexadores.';
+const projetada = (parcela) => parcela?.tr_projetada === true && String(parcela.status).toLowerCase() !== 'pago';
+
+function seloTrProjetada() {
+    const selo = document.createElement('span');
+    selo.className = 'fin-pill cf-tr-projetada';
+    selo.textContent = 'TR PROJETADA';
+    selo.title = AVISO_TR_PROJETADA;
+    return selo;
+}
+
+function envolver(nome, depois) {
+    const original = window[nome];
+    if (typeof original !== 'function') return;
+    window[nome] = function (...args) {
+        const resultado = original.apply(this, args);
+        depois(...args);
+        return resultado;
+    };
+}
+
+envolver('renderizarTabelaParcelas', (parcelas) => {
+    const linhas = document.querySelectorAll('#detalhe-parcelas-body > tr');
+    (Array.isArray(parcelas) ? parcelas : []).slice(0, linhas.length).forEach((parcela, i) => {
+        const situacao = linhas[i].cells[8];
+        if (projetada(parcela) && situacao && !situacao.querySelector('.cf-tr-projetada')) situacao.append(' ', seloTrProjetada());
+    });
+});
+
+envolver('renderizarDetalhes', (financiamento) => {
+    const parcelas = Array.isArray(financiamento?.parcelas) ? financiamento.parcelas : [];
+    const proxima = parcelas.find((parcela) => String(parcela.status).toLowerCase() !== 'pago');
+    const valor = document.getElementById('detalhe-proxima-valor');
+    document.getElementById('cf-proxima-tr-projetada')?.remove();
+    if (valor && projetada(proxima)) {
+        const aviso = document.createElement('small');
+        aviso.id = 'cf-proxima-tr-projetada';
+        aviso.className = 'cf-tr-projetada-aviso';
+        aviso.textContent = 'TR projetada';
+        aviso.title = AVISO_TR_PROJETADA;
+        valor.after(aviso);
+    }
+});
+
 const contexto = await iniciarMoldura();
 if (contexto && contexto.perfil) {
     estado.perfilId = contexto.perfil.id;

@@ -123,3 +123,38 @@ test('cadastro SAC/TR, amortizacao e exclusao segura pela tela original', async 
     expect(removido.success).toBe(true);
     expect(await contrato(page, perfil, NOME_2)).toBeUndefined();
 });
+
+// FIN-AJUSTE-FINANCIAMENTO-REAL-01 (migration 20261204090000): parcela com competencia depois da ultima TR publicada
+// (aqui 2035-12) e calculada com a TR projetada (a ultima), sem gravar em Indexadores, e aparece como projetada no
+// cronograma e na proxima parcela; as de TR publicada nao.
+test('TR projetada: contrato alem da ultima TR publicada e marcado na tela', async ({ page }) => {
+    registrarDialogos(page);
+    await entrar(page, B);
+    await page.goto('/financiamentos.html');
+    const perfil = await perfilAtivoId(page);
+    const nome = 'Financiamento TR projetada E2E (ficticio)';
+    const criado = await chamarApi(page, 'POST', '/api/financiamentos', {
+        nome, sistema_amortizacao: 'SAC', indexador_saldo: 'TR', valor_financiado: 8000, prazo_total_meses: 4,
+        taxa_juros_nominal_anual: 9, data_contrato: '2035-10-01', data_primeira_parcela: '2035-11-10', seguro_modo: 'fixo',
+        vigencias_seguro: [{ competencia_inicio: '2035-11-01', valor_mensal: 10 }],
+    });
+    expect(criado.success, JSON.stringify(criado)).toBe(true);
+    const detalhe = (await chamarRpc(page, 'financiamento_tela', { p_perfil_id: perfil, p_financiamento_id: criado.data.id })).corpo;
+    expect(detalhe.parcelas.map((p) => p.tr_projetada === true)).toEqual([false, false, true, true]);
+    // TR projetada = a de 2035-12 (0,10%): mesma correcao das parcelas com TR publicada.
+    const [p2, p3] = [detalhe.parcelas[1], detalhe.parcelas[2]];
+    expect(p3.valor_atualizacao_monetaria).toBeCloseTo(p2.saldo_devedor_apos_pagamento * 0.001, 2);
+
+    await page.reload();
+    const linha = page.locator('#financiamentos-lista .fin-contract-row', { hasText: nome });
+    await linha.locator('[title="Visualizar"]').click();
+    await expect(page.locator('#detalhe-parcelas-body tr')).toHaveCount(4);
+    const selos = page.locator('#detalhe-parcelas-body tr .cf-tr-projetada');
+    await expect(selos).toHaveCount(2);
+    await expect(page.locator('#detalhe-parcelas-body tr').nth(2).locator('.cf-tr-projetada')).toHaveText('TR PROJETADA');
+    await expect(page.locator('#detalhe-parcelas-body tr').nth(1).locator('.cf-tr-projetada')).toHaveCount(0);
+    await expect(page.locator('#cf-proxima-tr-projetada')).toHaveCount(0);  // proxima (2035-11) tem TR publicada
+
+    const removido = await chamarApi(page, 'DELETE', `/api/financiamentos/${criado.data.id}`);
+    expect(removido.success).toBe(true);
+});
