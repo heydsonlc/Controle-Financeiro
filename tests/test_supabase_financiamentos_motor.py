@@ -656,7 +656,9 @@ def test_reversao_remove_o_motor_e_volta(cluster):  # noqa: F811
         finally:
             conn.close()
 
-    # FIN-AJUSTE-FINANCIAMENTO-REAL-01: a 20261204 redefine funcoes do motor; a reversao e em ordem (a mais nova antes).
+    # FIN-AJUSTE-FINANCIAMENTO-REAL-01 e FIN-SALDO-PRECEDENCIA-AJUSTE-01: a 20261204 e a 20261206 redefinem funcoes do
+    # motor; a reversao e em ordem (a mais nova antes).
+    executar(supabase / 'reversao' / '20261206090000_precedencia_ajuste_saldo_anterior.sql')
     executar(supabase / 'reversao' / '20261204090000_tr_projetada_anterior.sql')
     com = {r['s']: r for r in sql(dsn, catalogo)}
     executar(supabase / 'reversao' / '20261123090000_remover_motor_financiamentos.sql')
@@ -673,4 +675,5 @@ def test_reversao_remove_o_motor_e_volta(cluster):  # noqa: F811
     executar(supabase / 'migrations' / '20261123090000_financeiro_financiamentos_motor.sql')
     assert {r['s']: r for r in sql(dsn, catalogo)} == com and len(sql(dsn, indices)) == 2
     executar(supabase / 'migrations' / '20261204090000_financeiro_tr_projetada.sql')
+    executar(supabase / 'migrations' / '20261206090000_financeiro_precedencia_ajuste_saldo.sql')
     assert {r['s']: r for r in sql(dsn, catalogo)} == completo

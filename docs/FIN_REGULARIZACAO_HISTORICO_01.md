@@ -1,6 +1,6 @@
 # FIN-REGULARIZACAO-HISTORICO-01 — Histórico do Pessoal encerrado até 09/2026
 
-**Situação (30/10/2026): execução autorizada pelo titular**, com trava exata: só confirmar se o plano de produção der 122 despesas (R$ 36.684,84), 22 faturas (R$ 44.350,00) e 29 parcelas (R$ 146.591,64), total 173 itens e R$ 227.626,48.
+**Situação (30/10/2026): `FIN_REGULARIZACAO_HISTORICO_01_APROVADA` (executada; §7).** Autorizada pelo titular, com trava exata: só confirmar se o plano de produção der 122 despesas (R$ 36.684,84), 22 faturas (R$ 44.350,00) e 29 parcelas (R$ 146.591,64), total 173 itens e R$ 227.626,48.
 - A parcela 30 **não** é paga neste pacote (ver §6).
 
 ## 1. Decisão do titular (Opção 1)
@@ -67,3 +67,21 @@ No Pessoal, até 09/2026: 14 despesas pagas (com movimento) e 174 pendentes. Nã
 - **Parcela 30 (10/2026): não pagar ainda.** Pagar uma parcela recalcula o saldo pela parcela paga de maior número (`saldo_devedor_pelas_parcelas`), e isso desconsideraria o ajuste de saldo real de 05/10/2026 (parcela-base 30), levando o saldo a cerca de R$ 464 mil estimados. Antes disso, um pacote próprio deve dar precedência ao ajuste de saldo válido ancorado nessa parcela (decisão do titular).
 - **Apple One de 05/2026:** continua pendente. O gasto está na fatura; você pode excluí-lo pela tela.
 - **Saldos das contas bancárias:** ajuste dos saldos reais pela tela (contrato separado).
+
+## 7. Execução real (30/10/2026)
+
+- **Código:** commit `98c75fb`, push `b625794..98c75fb`.
+- **Migration `20261205090000`:** aplicada sozinha (46 versões); só a tabela de auditoria, vazia; nenhum dado existente alterado.
+- **Plano refeito na produção:** igual à trava (122 despesas R$ 36.684,84; 22 faturas R$ 44.350,00; 29 parcelas R$ 146.591,64; total 173, R$ 227.626,48); Apple One fora.
+- **Lote `a27c0da4-d52c-41db-a397-56bdc4e081ea`:** confirmado pela função oficial, como titular, numa transação com as conferências antes do commit.
+
+| Conferência (sessão nova, só leitura) | Resultado |
+|---|---|
+| Itens pagos na data do vencimento | 173 |
+| Movimentos bancários | 23 antes e 23 depois |
+| Saldos Caixa / Nubank | R$ 71.006,24 / R$ 12.469,48, iguais ao retrato anterior |
+| Financiamento | Saldo R$ 269.524,62, data-base 05/10/2026; 29/420 pagas; próxima = parcela 30 (05/10/2026) |
+| Pendente até 09/2026 | Só o Apple One (1938), representado na fatura |
+| Outubro/2026 em diante, Empresa, receitas, compras de cartão, parcelas 30+ | Iguais ao retrato anterior |
+| Tabelas alteradas | `conta`, `financiamento_parcela`, `regularizacao_historica`, `operacao_despesa` |
+| Auditoria / reversão | 173 itens vigentes no lote; `reverter_regularizacao_historica` disponível |
