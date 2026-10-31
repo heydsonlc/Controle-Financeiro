@@ -4,9 +4,11 @@
 // funcoes do banco de perfil.js. Mesmo fluxo do Flask ao salvar: dados do perfil, depois ativar ou
 // inativar, depois padrao. O banco exige gestao explicita do perfil (pode_gerir) em cada chamada;
 // perfis "somente leitura" aparecem, mas o formulario fica bloqueado. Elementos criados por DOM, sem innerHTML.
-// FIN-PRE-PRODUCAO-1: Preferencias Gerais, Aparencia, Comportamento e IA (migration 20261201090000): as financeiras e
-// operacionais sao do perfil em uso (so quem o gere altera), as de interface sao da conta do usuario (todos os perfis).
-// Cada secao salva os seus campos, como o Flask. Backup e OCR continuam fora (avisos na propria secao).
+// FIN-PRE-PRODUCAO-1: Preferencias Gerais e Comportamento (migration 20261201090000): as financeiras e operacionais sao
+// do perfil em uso (so quem o gere altera), as demais sao da conta do usuario (todos os perfis). Cada secao salva os seus
+// campos, como o Flask.
+// FIN-UX-SIMPLIFICACAO-CATEGORIAS-01: sem Aparencia (identidade visual unica: tema e cor nao sao do usuario; o que ja foi
+// gravado fica no banco, sem uso), Backup, IA e Automacao e Documentos Fiscais.
 
 import { supabase } from './cliente.js';
 import { PERFIL_NAO_HABILITADO } from './adaptador-comum.js';
@@ -37,35 +39,11 @@ const ajuda = {
             ['Deste perfil', 'Renda, início do planejamento e fechamento são de cada perfil; só quem gere o perfil altera.'],
         ],
     },
-    aparencia: {
-        titulo: 'Aparência',
-        itens: [['Da sua conta', 'Tema, cor, ícones e abreviação valem em todos os seus perfis.']],
-    },
     comportamento: {
         titulo: 'Comportamento',
         itens: [
             ['Deste perfil', 'Competência automática, aviso de vencida e vínculo do pagamento de cartão.'],
             ['Da sua conta', 'A confirmação de exclusões.'],
-        ],
-    },
-    backup: {
-        titulo: 'Backup',
-        itens: [['Em migração', 'O novo aplicativo usa o backup próprio do banco (Supabase).']],
-    },
-    'ia-automacao': {
-        titulo: 'IA e Automação',
-        itens: [
-            ['Da sua conta', 'Modo inteligente e sugestões de economia.'],
-            ['Deste perfil', 'Classificação automática e correção de categorias.'],
-            ['OCR', 'A leitura de imagens ainda não está disponível nesta versão do aplicativo.'],
-        ],
-    },
-    'documentos-fiscais': {
-        titulo: 'Documentos fiscais por perfil',
-        itens: [
-            ['Pessoal', 'O perfil pessoal usa Imposto de Renda e comprovantes potencialmente dedutíveis.'],
-            ['Empresa', 'O perfil empresa usa Documentos Fiscais e Lastro Empresarial.'],
-            ['Revisão fiscal', 'Classificações seguem informativas e sujeitas à validação contábil.'],
         ],
     },
 };
@@ -304,20 +282,17 @@ function avisarEmMigracao(funcao) {
 // ---- Preferencias (FIN-PRE-PRODUCAO-1) ---------------------------------------------------------------------------
 const SECOES_PREFERENCIAS = {
     gerais: ['nome_usuario', 'renda_principal', 'mes_inicio_planejamento', 'dia_fechamento_mes'],
-    aparencia: ['tema_sistema', 'cor_principal', 'mostrar_icones_coloridos', 'abreviar_valores'],
     comportamento: ['ajustar_competencia_automatico', 'exibir_aviso_despesa_vencida', 'solicitar_confirmacao_exclusao',
         'vincular_pagamento_cartao_auto'],
-    ia: ['modo_inteligente_ativo', 'sugestoes_economia', 'classificacao_automatica', 'correcao_categorias'],
 };
 const preferencias = { escopo: {}, podeGerir: false };
 
 function campoPreferencia(campo) {
-    return campo === 'tema_sistema' ? [...document.querySelectorAll('input[name="tema_sistema"]')] : [$(campo)].filter(Boolean);
+    return [$(campo)].filter(Boolean);
 }
 
 function lerPreferencia(campo) {
     const [primeiro] = campoPreferencia(campo);
-    if (campo === 'tema_sistema') return campoPreferencia(campo).find((radio) => radio.checked)?.value ?? null;
     if (!primeiro) return undefined;
     if (primeiro.type === 'checkbox') return primeiro.checked;
     if (campo === 'mes_inicio_planejamento' || campo === 'dia_fechamento_mes') return primeiro.value === '' ? null : Number(primeiro.value);
@@ -327,12 +302,10 @@ function lerPreferencia(campo) {
 function escreverPreferencia(campo, valor) {
     const elementos = campoPreferencia(campo);
     for (const el of elementos) {
-        if (campo === 'tema_sistema') el.checked = el.value === valor;
-        else if (el.type === 'checkbox') el.checked = Boolean(valor);
+        if (el.type === 'checkbox') el.checked = Boolean(valor);
         else el.value = valor ?? '';
         el.disabled = preferencias.escopo[campo] === 'PERFIL' && !preferencias.podeGerir;
     }
-    if (campo === 'cor_principal' && $('cor_preview')) $('cor_preview').textContent = valor || '';
 }
 
 function avisarPreferencias(texto, tipo = 'info', secao = null) {
@@ -414,7 +387,6 @@ function ligar() {
     for (const botao of document.querySelectorAll('[data-preferences-save]')) {
         botao.addEventListener('click', () => salvarPreferencias(botao.dataset.preferencesSave, botao));
     }
-    $('cor_principal')?.addEventListener('input', (evento) => { $('cor_preview').textContent = evento.target.value; });
     for (const form of document.querySelectorAll('.config-preferences-form')) {
         form.addEventListener('submit', (evento) => evento.preventDefault());
     }

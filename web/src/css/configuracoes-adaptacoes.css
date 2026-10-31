@@ -39,3 +39,21 @@
     background: #fef2f2;
     color: #991b1b;
 }
+
+/* FIN-UX-SIMPLIFICACAO-CATEGORIAS-01: com so tres secoes, a navegacao nao precisa de 300px nem a ajuda de 340px; o espaco
+   vai para a coluna central (perfis e formularios), que em 1366px ficava apertada. */
+.config-shell {
+    grid-template-columns: 220px minmax(0, 1fr) 300px;
+}
+
+@media (max-width: 1280px) {
+    .config-shell {
+        grid-template-columns: 220px minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 900px) {
+    .config-shell {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

@@ -47,7 +47,9 @@ test('tela original: categorias de despesa, palavras-chave, Categorias do Cartao
     await entrar(page, B);
     await abrir(page);
     await expect(page.locator('.module-actionbar.categorias-toolbar')).toBeVisible();
-    await expect(page.locator('.categorias-aviso-fase')).toContainText('Categorias do Cartão');
+    // FIN-UX-SIMPLIFICACAO-CATEGORIAS-01: sem o aviso de fase; o do catalogo so para quem nao o administra (B nao e gestor).
+    await expect(page.locator('.categorias-aviso-fase')).toHaveCount(0);
+    await expect(page.locator('#cf-aviso-catalogo')).toBeVisible();
     await despesa(page, 'Moradia').first().click();
     await expect(page.locator('#categoria-despesa-detalhe')).toContainText('padaria');
     await page.click('#tab-cartao');
@@ -65,6 +67,31 @@ test('tela original: categorias de despesa, palavras-chave, Categorias do Cartao
     await despesa(page, semDescricao.nome).first().click();
     await expect(page.locator('#categoria-despesa-detalhe')).toContainText('Sem descrição cadastrada.');
     await expect(page.locator('#categoria-despesa-detalhe')).not.toContainText('&ccedil;');
+});
+
+// FIN-UX-SIMPLIFICACAO-CATEGORIAS-01: sem os cards-resumo da direita, lista mais larga (mesma largura nas duas abas),
+// itens mais baixos e Categoria do Cartao em duas linhas (dados em cima, vinculos embaixo, na largura do painel).
+test('layout: sem cards-resumo, lista larga e estavel, itens compactos, Cartao em duas linhas', async ({ page }) => {
+    await entrar(page, B);
+    await abrir(page);
+    await expect(page.locator('.categorias-summary-sidebar, .categorias-summary, [id^="summary-"]')).toHaveCount(0);
+    const larguraLista = (seletor) => page.locator(seletor).evaluate((el) => el.closest('aside').getBoundingClientRect().width);
+    const despesas = await larguraLista('#categorias-lista');
+    expect(despesas).toBeGreaterThanOrEqual(320);
+    expect(despesas).toBeLessThanOrEqual(380);
+    expect((await despesa(page, 'Moradia').first().boundingBox()).height).toBeLessThan(66);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+
+    await page.click('#tab-cartao');
+    await cartao(page, 'Mercado B').click();
+    expect(await larguraLista('#categorias-cartao-lista')).toBe(despesas);
+    const dados = await page.locator('#form-categoria-cartao').boundingBox();
+    const vinculos = await page.locator('#categoria-cartao-detalhe .vinculos-card').boundingBox();
+    expect(vinculos.y).toBeGreaterThanOrEqual(dados.y + dados.height);
+    expect(Math.abs(vinculos.width - dados.width)).toBeLessThanOrEqual(1);
+    expect(Math.abs(vinculos.x - dados.x)).toBeLessThanOrEqual(1);
+    await expect(page.locator('#categoria-cartao-detalhe .linked-chip', { hasText: 'Moradia' })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
 test('Perfil B: criar, editar, vincular, desvincular, desativar e reativar Categoria do Cartao', async ({ page }) => {
@@ -135,9 +162,7 @@ test('catalogo ainda nao habilitado: acoes das categorias de despesa escondidas,
     await expect(page.locator('[data-action="editar-despesa"]')).toBeHidden();
     await expect(page.locator('[data-action="excluir-despesa"]')).toBeHidden();
     await expect(page.locator('[data-action="remover-palavra-chave"]').first()).toBeHidden();
-    for (const aviso of ['.categorias-aviso-fase', '#cf-aviso-catalogo']) {
-        expect(await page.locator(aviso).innerText()).not.toMatch(/Flask|sistema atual/i);
-    }
+    expect(await page.locator('#cf-aviso-catalogo').innerText()).not.toMatch(/Flask|sistema atual/i);
 
     const antes = (await chamarRpc(page, 'categorias_tela', { p_perfil_id: await perfilAtivoId(page), p_ativo: null })).corpo;
     const r = await page.evaluate(async () => {

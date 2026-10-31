@@ -58,7 +58,8 @@ async function aplicarSituacaoCatalogo() {
             + 'palavras-chave ficam indisponíveis.'
             : 'O catálogo de categorias de despesa ainda não está habilitado para gravação nesta versão: cadastro, edição, '
             + 'exclusão e palavras-chave ficam indisponíveis.');
-    document.querySelector('.categorias-aviso-fase')?.after(aviso);
+    // FIN-UX-SIMPLIFICACAO-CATEGORIAS-01: o aviso de fase saiu; este so aparece para quem nao pode editar o catalogo.
+    document.querySelector('.categorias-page')?.closest('.container')?.before(aviso);
 }
 
 async function rpc(funcao, args) {

@@ -1,6 +1,9 @@
 <!-- moldura {"ativo": "configuracoes", "titulo": "Configurações e Preferências", "documento": "Configurações e Preferências - Controle Financeiro", "css": ["css/shared/configuracoes.css", "css/configuracoes-adaptacoes.css"], "scripts": ["js/configuracoes.js"]} -->
-<!-- FIN-PRE-PRODUCAO-1: Preferencias Gerais, Aparencia, Comportamento e IA com os formularios do Flask (escopo por
-     perfil ou por usuario marcado em cada campo; js/configuracoes.js).
+<!-- FIN-PRE-PRODUCAO-1: Preferencias Gerais e Comportamento com os formularios do Flask (escopo por perfil ou por
+     usuario marcado em cada campo; js/configuracoes.js).
+     FIN-UX-SIMPLIFICACAO-CATEGORIAS-01: so Perfis Financeiros, Preferencias Gerais e Comportamento. Aparencia saiu (identidade
+     visual unica, sem tema nem cor por usuario; as preferencias ja gravadas ficam no banco, sem uso), assim como Backup,
+     IA e Automacao, Documentos Fiscais (resumo estatico) e o card "Precisa de ajuda?".
      FIN-MIGRACAO-FIDELIDADE-FASE-1: frontend/templates/configuracoes.html. Perfis Financeiros e Documentos
      Fiscais (resumo estatico) sem alteracao; as demais secoes mantem o titulo e mostram "Em migracao".
      <main> interno vira <div> (a moldura ja tem a area principal) e ganha um aviso geral. -->
@@ -49,45 +52,13 @@
                     </span>
                     <span>Preferências Gerais</span>
                 </button>
-                <button type="button" class="config-section-link" data-config-section-target="aparencia">
-                    <span class="config-section-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" focusable="false"><path d="M12 3a9 9 0 1 0 0 18h1a2 2 0 0 0 0-4h-1a2 2 0 0 1 0-4h2a7 7 0 0 0 0-14h-2Z"/><path d="M7.5 10h.1M9.5 6.8h.1M14.5 6.8h.1M16.5 10h.1"/></svg>
-                    </span>
-                    <span>Aparência</span>
-                </button>
                 <button type="button" class="config-section-link" data-config-section-target="comportamento">
                     <span class="config-section-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" focusable="false"><path d="M4 5h16M4 12h10M4 19h7"/><path d="m17 15 3 3-3 3"/></svg>
                     </span>
                     <span>Comportamento</span>
                 </button>
-                <button type="button" class="config-section-link" data-config-section-target="backup">
-                    <span class="config-section-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" focusable="false"><path d="M5 19h14V8l-3-3H5v14Z"/><path d="M8 19v-6h8v6M8 5v4h7"/></svg>
-                    </span>
-                    <span>Backup</span>
-                </button>
-                <button type="button" class="config-section-link" data-config-section-target="ia-automacao">
-                    <span class="config-section-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" focusable="false"><path d="M12 3l1.7 5.2L19 10l-5.3 1.8L12 17l-1.7-5.2L5 10l5.3-1.8L12 3Z"/><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16Z"/></svg>
-                    </span>
-                    <span>IA e Automação</span>
-                </button>
-                <button type="button" class="config-section-link" data-config-section-target="documentos-fiscais">
-                    <span class="config-section-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" focusable="false"><path d="M6 3h9l3 3v15H6V3Z"/><path d="M14 3v4h4M9 11h6M9 15h6M9 19h4"/></svg>
-                    </span>
-                    <span>Documentos Fiscais</span>
-                </button>
             </nav>
-
-            <div class="config-help-card">
-                <span class="config-help-icon" aria-hidden="true">?</span>
-                <div>
-                    <strong>Precisa de ajuda?</strong>
-                    <small>Acesse nossa central de ajuda em etapa futura.</small>
-                </div>
-            </div>
         </aside>
 
         <div class="config-main">
@@ -233,38 +204,6 @@
             </section>
 
 
-            <section class="config-panel" id="config-section-aparencia" data-config-section="aparencia">
-                <header class="config-panel-header">
-                    <div>
-                        <h2>Aparência</h2>
-                        <p>Ajustes visuais da sua conta (valem em todos os seus perfis).</p>
-                    </div>
-                </header>
-                <div class="config-form-card">
-                    <p class="config-pref-aviso" data-pref-aviso hidden></p>
-                    <form class="config-preferences-form">
-                        <fieldset class="config-radio-group">
-                            <legend>Tema do sistema <small class="config-pref-escopo" data-escopo="USUARIO">da sua conta</small></legend>
-                            <label><input type="radio" name="tema_sistema" value="claro"> Tema claro</label>
-                            <label><input type="radio" name="tema_sistema" value="escuro"> Tema escuro</label>
-                            <label><input type="radio" name="tema_sistema" value="auto"> Automático</label>
-                        </fieldset>
-                        <label>
-                            <span>Cor principal <small class="config-pref-escopo" data-escopo="USUARIO">da sua conta</small></span>
-                            <input type="color" id="cor_principal" value="#3b82f6">
-                            <small id="cor_preview">#3b82f6</small>
-                        </label>
-                        <label class="config-toggle-field"><input type="checkbox" id="mostrar_icones_coloridos"><span><strong>Ícones coloridos</strong><small>Usado em contas e categorias quando disponível. <small class="config-pref-escopo" data-escopo="USUARIO">da sua conta</small></small></span></label>
-                        <label class="config-toggle-field"><input type="checkbox" id="abreviar_valores"><span><strong>Abreviar valores grandes</strong><small>Exemplo: R$ 1,2k. <small class="config-pref-escopo" data-escopo="USUARIO">da sua conta</small></small></span></label>
-                    </form>
-                    <div class="config-form-actions">
-                        <span class="config-form-spacer"></span>
-                        <button type="button" class="config-primary-action" data-preferences-save="aparencia">Salvar aparência</button>
-                    </div>
-                </div>
-            </section>
-
-
             <section class="config-panel" id="config-section-comportamento" data-config-section="comportamento">
                 <header class="config-panel-header">
                     <div>
@@ -284,63 +223,6 @@
                         <span class="config-form-spacer"></span>
                         <button type="button" class="config-primary-action" data-preferences-save="comportamento">Salvar comportamento</button>
                     </div>
-                </div>
-            </section>
-
-
-            <section class="config-panel" id="config-section-backup" data-config-section="backup">
-                <header class="config-panel-header config-backup-header">
-                    <span class="config-backup-header-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" focusable="false"><path d="M12 3v18M7 7h10M6 11h12M7 15h10M8 19h8"/></svg>
-                    </span>
-                    <div>
-                        <h2>Backup e Restauração</h2>
-                        <p>Proteja seus dados e configurações. Realize exportações, importações e backups do banco de dados de forma segura.</p>
-                    </div>
-                </header>
-                <div class="config-placeholder-grid">
-                    <article class="config-placeholder-card"><strong>Em migração</strong><span>Esta seção ainda está sendo migrada. O banco do novo aplicativo tem backup próprio (Supabase); a forma de backup e restauração será definida na migração.</span></article>
-                </div>
-            </section>
-
-
-            <section class="config-panel" id="config-section-ia-automacao" data-config-section="ia-automacao">
-                <header class="config-panel-header">
-                    <div>
-                        <h2>IA e Automação</h2>
-                        <p>Centraliza as preferências de automação já existentes e futuras sugestões inteligentes.</p>
-                    </div>
-                </header>
-                <div class="config-form-card">
-                    <p class="config-pref-aviso" data-pref-aviso hidden></p>
-                    <div class="config-behavior-grid">
-                        <label class="config-check-card"><input type="checkbox" id="modo_inteligente_ativo"><span><strong>Modo inteligente</strong><small>Base para recursos futuros. <small class="config-pref-escopo" data-escopo="USUARIO">da sua conta</small></small></span></label>
-                        <label class="config-check-card"><input type="checkbox" id="sugestoes_economia"><span><strong>Sugestões de economia</strong><small>Planejado. <small class="config-pref-escopo" data-escopo="USUARIO">da sua conta</small></small></span></label>
-                        <label class="config-check-card"><input type="checkbox" id="classificacao_automatica"><span><strong>Classificação automática</strong><small>Usa palavras-chave e regras existentes. <small class="config-pref-escopo" data-escopo="PERFIL">deste perfil</small></small></span></label>
-                        <label class="config-check-card"><input type="checkbox" id="correcao_categorias"><span><strong>Correção de categorias</strong><small>Planejado. <small class="config-pref-escopo" data-escopo="PERFIL">deste perfil</small></small></span></label>
-                    </div>
-                    <div class="config-form-actions">
-                        <span class="config-form-spacer"></span>
-                        <button type="button" class="config-primary-action" data-preferences-save="ia">Salvar IA e automação</button>
-                    </div>
-                </div>
-                <div class="config-placeholder-grid">
-                    <article class="config-placeholder-card"><strong>OCR local</strong><span>A leitura de imagens e PDFs escaneados ainda não está disponível nesta versão; o texto de PDF textual é lido no navegador.</span></article>
-                </div>
-            </section>
-
-
-            <section class="config-panel" id="config-section-documentos-fiscais" data-config-section="documentos-fiscais">
-                <header class="config-panel-header">
-                    <div>
-                        <h2>Documentos Fiscais</h2>
-                        <p>Resumo conceitual do comportamento fiscal por perfil. Regras de lastro não foram alteradas.</p>
-                    </div>
-                </header>
-                <div class="config-placeholder-grid">
-                    <article class="config-placeholder-card"><strong>Perfil pessoal</strong><span>Usa Imposto de Renda e comprovantes potencialmente dedutíveis.</span></article>
-                    <article class="config-placeholder-card"><strong>Perfil empresa</strong><span>Usa Documentos Fiscais e Lastro Empresarial.</span></article>
-                    <article class="config-placeholder-card"><strong>Contador</strong><span>Classificações seguem sujeitas a revisão fiscal/contábil.</span></article>
                 </div>
             </section>
         </div>

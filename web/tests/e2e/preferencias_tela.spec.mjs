@@ -43,17 +43,27 @@ test('preferencias do perfil e da conta: salvar, recarregar e trocar de perfil',
     await page.click('[data-preferences-save="gerais"]');
     await expect(secao(page, 'preferencias-gerais').locator('[data-pref-aviso]')).toHaveText('Preferências salvas.');
 
-    await page.click('[data-config-section-target="aparencia"]');
-    await page.check('input[name="tema_sistema"][value="claro"]');
-    await page.click('[data-preferences-save="aparencia"]');
-    await expect(secao(page, 'aparencia').locator('[data-pref-aviso]')).toHaveText('Preferências salvas.');
+    // Comportamento: uma da conta (confirmar exclusoes) e uma do perfil.
+    await page.click('[data-config-section-target="comportamento"]');
+    const confirmar = await page.locator('#solicitar_confirmacao_exclusao').isChecked();
+    await page.setChecked('#solicitar_confirmacao_exclusao', !confirmar);
+    await page.check('#exibir_aviso_despesa_vencida');
+    await page.click('[data-preferences-save="comportamento"]');
+    await expect(secao(page, 'comportamento').locator('[data-pref-aviso]')).toHaveText('Preferências salvas.');
 
     await page.reload();
     await page.click('[data-config-section-target="preferencias-gerais"]');
     await expect(page.locator('#nome_usuario')).toHaveValue('Usuario A (ficticio)');
     await expect(page.locator('#renda_principal')).toHaveValue('4321.5');
     await expect(page.locator('#mes_inicio_planejamento')).toHaveValue('3');
-    await expect(page.locator('input[name="tema_sistema"][value="claro"]')).toBeChecked();
+    await page.click('[data-config-section-target="comportamento"]');
+    await expect(page.locator('#solicitar_confirmacao_exclusao')).toBeChecked({ checked: !confirmar });
+    await expect(page.locator('#exibir_aviso_despesa_vencida')).toBeChecked();
+
+    // FIN-UX-SIMPLIFICACAO-CATEGORIAS-01: identidade visual unica, sem tema nem cor para escolher (Aparencia saiu).
+    await expect(page.locator('input[name="tema_sistema"], #cor_principal, [data-preferences-save="aparencia"], [data-preferences-save="ia"]'))
+        .toHaveCount(0);
+    await page.click('[data-config-section-target="preferencias-gerais"]');
 
     // Empresa: A so le o perfil. As do perfil ficam bloqueadas (e com os valores da Empresa); as da conta seguem.
     await trocarPerfil(page, 'Empresa');

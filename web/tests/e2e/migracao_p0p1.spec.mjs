@@ -189,7 +189,7 @@ test('gestor do catalogo: criar, editar, palavras-chave, protecoes e excluir pel
     await entrar(page);
     await abrirCategorias(page);
     await expect(page.locator('#cf-aviso-catalogo')).toHaveCount(0);
-    expect(await page.locator('.categorias-aviso-fase').innerText()).not.toMatch(ENGANOSO);
+    await expect(page.locator('.categorias-aviso-fase')).toHaveCount(0);  // FIN-UX-SIMPLIFICACAO-CATEGORIAS-01: aviso de fase saiu
 
     // Criar: nome, descricao, cor, icone e ativa. O painel de logo fica desabilitado, com o aviso.
     await page.click('#btn-nova-categoria-despesa');

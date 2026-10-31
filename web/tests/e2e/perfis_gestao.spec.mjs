@@ -64,10 +64,17 @@ test('Configuracoes lista os perfis do usuario com estado, padrao, uso e permiss
     await expect(page.locator('#config-profile-save')).toBeDisabled();
     await expect(alerta(page)).toContainText('somente de leitura');
 
-    // Secoes ainda nao migradas: titulo original e aviso.
-    await page.click('[data-config-section-target="backup"]');
-    await expect(page.locator('#config-section-backup')).toContainText('Em migração');
-    await expect(page.locator('#config-help-title')).toHaveText('Backup');
+    // FIN-UX-SIMPLIFICACAO-CATEGORIAS-01: so as secoes com funcao real (sem Aparencia, Backup, IA e Automacao, Documentos
+    // Fiscais nem o card "Precisa de ajuda?"); um endereco antigo cai em Perfis Financeiros.
+    await expect(page.locator('.config-section-link')).toHaveText(['Perfis Financeiros', 'Preferências Gerais', 'Comportamento']);
+    await expect(page.locator('[data-config-section]')).toHaveCount(3);
+    await expect(page.locator('.config-help-card')).toHaveCount(0);
+    await page.click('[data-config-section-target="comportamento"]');
+    await expect(page.locator('#config-help-title')).toHaveText('Comportamento');
+    await page.goto('/configuracoes.html#backup');
+    await page.reload();
+    await expect(page.locator('#config-section-perfis-financeiros')).toHaveClass(/active/);
+    await expect(page).toHaveURL(/#perfis-financeiros$/);
     await page.click('#config-export-settings');
     await expect(page.locator('#config-aviso-geral')).toHaveText('Exportar configurações: ainda não está disponível nesta versão do aplicativo.');
 });
