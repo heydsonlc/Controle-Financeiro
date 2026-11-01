@@ -1,7 +1,16 @@
 # FIN-CARTAO-DESPESAS-FIXAS-01 — Despesas Fixas do cartão: natureza única, previsto × executado e reconhecimento seguro
 
-**Situação (31/10/2026): `FIN_CARTAO_DESPESAS_FIXAS_01_PRONTO_PARA_PUBLICACAO`.** Implementado, testado e ensaiado numa cópia fiel da produção.
-- Commit, push, migration, deploy e a conciliação real da Netflix 11/2026 aguardam autorização.
+**Situação (01/11/2026): `FIN_CARTAO_DESPESAS_FIXAS_02_PUBLICADO`.**
+- **Commit:** `a1d3be4`, push `9c310f9..a1d3be4`; o push não disparou implantação.
+- **Migration `20261208090000`:** aplicada e conferida.
+  - 49 versões; as 2 tabelas novas estão vazias e com RLS; 9 funções novas e 9 alteradas.
+  - Nenhum dado existente alterado; segurança sem bloqueios.
+- **Deploy `a57bb919`** (Production, branch `producao`) em https://controle-financeiro-jah.pages.dev.
+  - Build de exportação limpa do commit; só 3 arquivos mudaram.
+  - Os 165 arquivos servidos são idênticos ao build.
+- **Homologação por leitura** (titular, sessão somente leitura, com o `despesas.js` servido): Black, Visa, Dashboard, lista de Despesas, limites e reconhecimento das 15 linhas iguais ao ensaio do §5. Perfil Empresa responde (sem dados).
+- **Integridade:** retratos antes, depois e no fim. Só mudaram o registro da versão, as funções e as 2 tabelas novas; saldos, movimentos, compras, faturas e financiamento iguais.
+- **Fora desta publicação:** a conciliação real da Netflix 11/2026 e o cadastro de apelidos reais (ver §6).
 
 ## 1. Diagnóstico (produção só lida)
 
