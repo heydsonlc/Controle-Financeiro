@@ -87,6 +87,12 @@ function linhaParaBanco(l, indice) {
         tipo_movimento: valor !== null && Number(valor) < 0 ? 'credito' : (l.tipo_movimento || 'debito'), categoria_id: l.categoria_id || l.categoria_despesa_id || null,
         categoria_origem: l.categoria_origem || null, ignorar: Boolean(l.ignorar),
         gerar_parcelas_futuras: Boolean(l.gerar_parcelas_futuras), origem_importacao: l.origem_importacao || 'csv',
+        // FIN-CARTAO-IMPORTACAO-FIXAS-01: correcoes da previa (o banco refaz a analise com elas; nada e gravado antes da
+        // confirmacao): outra recorrencia ou 0 = compra comum, lembrar o apelido, conciliar com a previsao, manter repetida.
+        ...(l.recorrencia_escolhida_id === undefined || l.recorrencia_escolhida_id === null ? {}
+            : { recorrencia_escolhida_id: Number(l.recorrencia_escolhida_id) }),
+        salvar_apelido: Boolean(l.salvar_apelido), conciliar_previsao: Boolean(l.conciliar_previsao),
+        manter_duplicada: Boolean(l.manter_duplicada),
     };
 }
 
@@ -150,7 +156,7 @@ async function analisarArquivo(formData) {
     if (!conv.linhas.length) return falha('Nenhuma linha de compra encontrada no arquivo.');
     const analise = await analisar(cartaoId, mes, conv.linhas);
     return ok({ data: { ...base, linhas: analise.linhas.map(linhaParaTela), requer_mapeamento: false, confronto_executado: true,
-        situacao_fatura: analise.situacao_fatura,
+        situacao_fatura: analise.situacao_fatura, recorrencias_cartao: analise.recorrencias_cartao || [],
         validacoes: { ...analise.validacoes, total_fatura: 0, diferenca: 0, revisar_totais: false } } });
 }
 
@@ -167,6 +173,7 @@ async function analisarPdf(lido, cartaoId, mes) {
     return ok({ data: { origem: 'pdf', arquivo_nome: lido.arquivo.name, cartao_id: Number(cartaoId), competencia: mes.slice(0, 7),
         fatura: { ...r.fatura, competencia: `${mes.slice(5, 7)}/${mes.slice(0, 4)}` }, perfil_detectado: r.perfil_detectado,
         linhas: analise.linhas.map(linhaParaTela), requer_mapeamento: false, confronto_executado: true, situacao_fatura: analise.situacao_fatura,
+        recorrencias_cartao: analise.recorrencias_cartao || [],
         validacoes: { ...analise.validacoes, total_fatura: total, diferenca, revisar_totais: Math.abs(diferenca) > 0.01 } } });
 }
 
@@ -205,6 +212,9 @@ function resumo(analise, modo, gravado) {
         // compra nova); recorrencia e parcelada nao precisam de Categoria do Cartao.
         inseridos: gravado ? gravado.inseridos + (gravado.realizadas || 0) : aGravar.reduce((s, l) => s + parcelas(l), 0),
         realizadas: gravado ? gravado.realizadas || 0 : aGravar.filter((l) => l.realiza_lancamento_id).length, duplicados: duplicadas.length,
+        // FIN-CARTAO-IMPORTACAO-FIXAS-01: compras ja lancadas conciliadas com a previsao e despesas fixas reconhecidas
+        conciliacoes: gravado ? gravado.conciliadas || 0 : linhas.filter((l) => l.conciliar_previsao).length,
+        despesas_fixas: aGravar.filter((l) => l.classificacao_importacao === 'DESPESA_FIXA').length,
         erros: comErro.map((l) => ({ linha: l.linha_origem, erro: (l.mensagens || [])[0] || 'Linha precisa de revisão.' })),
         pendencias: { categoria_despesa: aGravar.length ? 0 : comErro.filter((l) => !l.categoria_id).length,
             categoria_cartao: aGravar.filter((l) => !l.categoria_cartao_id && !l.recorrencia_id && !(l.total_parcelas > 1)).length,

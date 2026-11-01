@@ -3,7 +3,7 @@
 // O build troca onclick="f(...)" por data-on-click e style="..." por data-estilo (scripts/build.mjs, adaptarParaCsp).
 // Aqui:
 // - eventos: delegacao no documento; cada data-on-<evento> e lido como chamadas simples "f(arg, ...); g()" com
-//   argumentos literais (numero, texto entre aspas, this, this.value, event; objeto ou lista em JSON, como o
+//   argumentos literais (numero, texto entre aspas, this, this.value, this.checked, event; objeto ou lista em JSON, como o
 //   editarLancamento({...}) de Lancamentos). Sem eval: so funcoes globais da lista
 //   gerada no build (window.CF_PONTE_PERMITIDAS) sao chamadas, com this = elemento, como no atributo original;
 //   FIN-PRE-PRODUCAO-1: tambem metodos com caminho da lista (window.IRDoc.abrirVinculo(4)), com this = o objeto,
@@ -54,6 +54,7 @@
     function argumento(texto, elemento, evento) {
         if (texto === 'this') return elemento;
         if (texto === 'this.value') return elemento.value;
+        if (texto === 'this.checked') return Boolean(elemento.checked);  // caixas de selecao (FIN-CARTAO-IMPORTACAO-FIXAS-01)
         if (texto === 'event') return evento;
         if (/^-?\d+(\.\d+)?$/.test(texto)) return Number(texto);
         if (/^'[^']*'$/.test(texto) || /^"[^"]*"$/.test(texto)) return texto.slice(1, -1);

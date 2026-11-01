@@ -575,7 +575,16 @@ function converterLinhaIntermediaria(linha) {
         reconhecimento_tipo: linha.reconhecimento_tipo || null,
         reconhecimento_acao_recomendada: linha.reconhecimento_acao_recomendada || null,
         tratar_como_novo: !!linha.tratar_como_novo,
-        sugestao_reconhecimento_aplicada: !!linha.sugestao_reconhecimento_aplicada
+        sugestao_reconhecimento_aplicada: !!linha.sugestao_reconhecimento_aplicada,
+        // Classificacao proposta pela previa do novo aplicativo (ausente no Flask): despesa fixa reconhecida, compra ja
+        // lancada que pode ser conciliada com a previsao e as recorrencias candidatas
+        classificacao_importacao: linha.classificacao_importacao || null,
+        despesa_fixa: linha.despesa_fixa || null,
+        recorrencia_id: linha.classificacao_importacao ? toIntOrNull(linha.recorrencia_id) : undefined,
+        recorrencias_candidatas: linha.recorrencias_candidatas || null,
+        apelido_sugerido: linha.apelido_sugerido || null,
+        conciliacao_sugerida: linha.conciliacao_sugerida || null,
+        conciliar_previsao: Boolean(linha.conciliacao_sugerida)
     };
 }
 
@@ -588,6 +597,7 @@ function aplicarPayloadUnificado(data) {
         fatura: data?.fatura || {}
     };
     estado.linhasMapeadas = (data?.linhas || []).map(converterLinhaIntermediaria);
+    estado.recorrenciasCartao = data?.recorrencias_cartao || [];
     estado.linhasInvalidasIniciais = [];
     estado.resumoPrevia = null;
     estado.analiseConfronto = null;
@@ -1262,7 +1272,96 @@ function linhaPossivelParcelamento(linha) {
     return !!detectarParcelamentoLinha(linha);
 }
 
+// Classificacao da previa do novo aplicativo (despesa fixa, compra comum, ja existente...); ausente no Flask
+function classificacaoNova(linha) {
+    return linha.classificacao_importacao || null;
+}
+
+// Despesa fixa reconhecida (ou em revisao, com recorrencia candidata), enquanto nao for tratada como compra comum
+function linhaFixaNova(linha) {
+    const classe = classificacaoNova(linha);
+    if (!classe || linha.tratar_como_novo) return false;
+    return classe === 'DESPESA_FIXA'
+        || (classe === 'REVISAR' && Boolean(linha.despesa_fixa || (linha.recorrencias_candidatas || []).length));
+}
+
+function linhasFixasConfirmaveis() {
+    return estado.linhasMapeadas.filter((linha) => linhaFixaNova(linha) && linhaImportavel(linha));
+}
+
+// Compras ja lancadas que a confirmacao concilia com a previsao da recorrencia (proposta da previa, desmarcavel)
+function linhasConciliacaoConfirmaveis() {
+    return estado.linhasMapeadas.filter((linha) => linha.conciliacao_sugerida && linha.conciliar_previsao);
+}
+
+function resumoDespesaFixa(linha) {
+    const fixa = linha.despesa_fixa;
+    if (!fixa) return 'Escolha a recorrência ou trate como compra comum';
+    const diferenca = Number(fixa.diferenca || 0);
+    const partes = [fixa.nome, `previsto ${formatarMoeda(fixa.valor_previsto)}`, `cobrado ${formatarMoeda(fixa.valor_cobrado)}`];
+    if (Math.abs(diferenca) >= 0.005) partes.push(`diferença ${diferenca < 0 ? '−' : '+'}${formatarMoeda(Math.abs(diferenca))}`);
+    partes.push(`fatura ${fixa.fatura_destino || fixa.competencia}`);
+    return partes.join(' · ');
+}
+
+function seletorRecorrenciaLinha(linha, index) {
+    const atual = linha.recorrencia_escolhida_id === undefined || linha.recorrencia_escolhida_id === null
+        ? '' : String(linha.recorrencia_escolhida_id);
+    const automatica = linha.despesa_fixa && !linha.despesa_fixa.escolhida ? linha.despesa_fixa.nome : null;
+    const opcoes = [`<option value="" ${atual === '' ? 'selected' : ''}>${escapeHtml(automatica ? `Automática: ${automatica}` : 'Escolha a recorrência')}</option>`]
+        .concat((estado.recorrenciasCartao || []).map((r) => `<option value="${escapeAttr(r.id)}" ${atual === String(r.id) ? 'selected' : ''}>${escapeHtml(r.nome)} (${formatarMoeda(r.valor)})</option>`))
+        .concat([`<option value="0" ${atual === '0' ? 'selected' : ''}>Compra comum (sem recorrência)</option>`]);
+    const lembrar = Number(linha.recorrencia_escolhida_id) > 0
+        ? `<label class="import-detected-note"><input type="checkbox" ${linha.salvar_apelido ? 'checked' : ''} onchange="alternarApelidoLinha(${index}, this.checked)"> Lembrar esta descrição</label>`
+        : '';
+    return `<select class="form-control form-control-sm import-inline-select" aria-label="Recorrência da cobrança" onchange="escolherRecorrenciaLinha(${index}, this.value)">${opcoes.join('')}</select>${lembrar}`;
+}
+
+// Correcao da previa: '' = a reconhecida automaticamente; '0' = compra comum; id = outra recorrencia do cartao. Nada e
+// gravado agora: a confirmacao refaz a analise com a escolha.
+function escolherRecorrenciaLinha(index, valor) {
+    const linha = estado.linhasMapeadas[index];
+    if (!linha) return;
+    if (valor === '') {
+        delete linha.recorrencia_escolhida_id;
+        linha.tratar_como_novo = false;
+        linha.classificacao_importacao = linha.recorrencia_id ? 'DESPESA_FIXA' : linha.classificacao_importacao;
+    } else if (valor === '0') {
+        linha.recorrencia_escolhida_id = 0;
+        linha.tratar_como_novo = true;
+        linha.salvar_apelido = false;
+    } else {
+        const recorrencia = (estado.recorrenciasCartao || []).find((r) => String(r.id) === String(valor));
+        if (!recorrencia) return;
+        const cobrado = valorNumericoLinha(linha);
+        linha.recorrencia_escolhida_id = Number(recorrencia.id);
+        linha.tratar_como_novo = false;
+        linha.classificacao_importacao = 'DESPESA_FIXA';
+        linha.status = 'valido';
+        linha.despesa_fixa = {
+            ...(linha.despesa_fixa || {}),
+            recorrencia_id: Number(recorrencia.id), nome: recorrencia.nome, valor_previsto: Number(recorrencia.valor),
+            valor_cobrado: cobrado, diferenca: Math.round((cobrado - Number(recorrencia.valor)) * 100) / 100, escolhida: true
+        };
+    }
+    recalcularConfrontoAtual();
+}
+
+function alternarApelidoLinha(index, marcado) {
+    const linha = estado.linhasMapeadas[index];
+    if (linha) linha.salvar_apelido = Boolean(marcado);
+}
+
+function alternarConciliacaoLinha(index, marcado) {
+    const linha = estado.linhasMapeadas[index];
+    if (!linha) return;
+    linha.conciliar_previsao = Boolean(marcado);
+    renderizarTabelaRetirados();
+    atualizarResumoPainel();
+}
+
 function linhaPossivelRecorrencia(linha) {
+    if (classificacaoNova(linha)) return linhaFixaNova(linha);
     return Boolean(
         linha.is_recorrente
         || linha.recorrencia_id
@@ -1640,6 +1739,11 @@ function observacaoRetiradaLinha(linha) {
         const nome = recorrencia.nome || reconhecimento.descricao_sugerida || linha.descricao_exibida || 'recorrencia';
         return `Vinculada a ${nome} · ${formatarValorLinha(linha)}`;
     }
+    if (linha.conciliacao_sugerida) {
+        const s = linha.conciliacao_sugerida;
+        return `Já lançada; corresponde à previsão ${s.recorrencia_nome} (${formatarMoeda(s.valor_previsto)}, cobrado `
+            + `${formatarMoeda(s.valor_cobrado)}): ${linha.conciliar_previsao ? 'será conciliada na confirmação' : 'não será conciliada'}`;
+    }
     if (linhaDuplicadaPorReconhecimento(linha)) {
         const score = reconhecimento.score ? `Score ${reconhecimento.score}` : 'Alta confiança';
         const sugestao = reconhecimento.descricao_sugerida || reconhecimento.descricao_match || 'match na fatura atual';
@@ -1704,6 +1808,24 @@ function obterInfoOperacional(linha, index) {
             categoriaEditavel: false,
             parcela,
             reconhecimento
+        };
+    }
+
+    if (linhaFixaNova(linha)) {
+        const revisar = classificacaoNova(linha) === 'REVISAR' && linha.recorrencia_escolhida_id === undefined;
+        return {
+            linha,
+            index,
+            status: revisar ? 'Revisar' : 'Despesa fixa',
+            classe: revisar ? 'review' : 'recurrence',
+            tipo: 'Despesa fixa',
+            filtro: 'recorrencias',
+            sugestao: resumoDespesaFixa(linha),
+            descricaoEditavel: false,
+            categoriaEditavel: false,
+            parcela,
+            reconhecimento,
+            fixaNova: true
         };
     }
 
@@ -2148,6 +2270,8 @@ function renderizarLinhaOperacional(item) {
             <td>${escapeHtml(item.tipo || '—')}</td>
             <td class="import-description-cell one-line">
                 <span title="${escapeAttr(item.sugestao || '—')}">${escapeHtml(item.sugestao || '—')}</span>
+                ${classificacaoNova(linha) && (estado.recorrenciasCartao || []).length && !item.parcela
+                    ? seletorRecorrenciaLinha(linha, index) : ''}
             </td>
             <td class="import-operational-edit-cell">
                 ${item.descricaoEditavel ? `
@@ -2193,6 +2317,14 @@ function renderizarAcoesLinhaOperacional(item) {
         return `<div class="row-actions operational">
             ${iconeBotaoAcao('success', 'check', 'Usar sugestão', null, true)}
             ${iconeBotaoAcao('parcel', 'parcel', 'Criar parcelamento', `abrirModalParcelamento(${index})`)}
+            ${iconeBotaoAcao('danger', 'trash', 'Retirar', `alternarIgnorarLinha(${index})`)}
+        </div>`;
+    }
+
+    // Despesa fixa da previa do novo aplicativo: entra na confirmacao (concilia com a previsao); pode virar compra comum
+    if (item.fixaNova) {
+        return `<div class="row-actions operational">
+            ${iconeBotaoAcao('neutral', 'new', 'Tratar como compra comum', `tratarReconhecimentoComoNovo(${index})`)}
             ${iconeBotaoAcao('danger', 'trash', 'Retirar', `alternarIgnorarLinha(${index})`)}
         </div>`;
     }
@@ -2597,6 +2729,11 @@ function usarSugestaoReconhecimento(index) {
 function tratarReconhecimentoComoNovo(index) {
     const linha = estado.linhasMapeadas[index];
     if (!linha) return;
+    // Previa do novo aplicativo: compra comum de verdade (o banco nao reconhece a recorrencia de novo)
+    if (classificacaoNova(linha)) {
+        linha.recorrencia_escolhida_id = 0;
+        linha.salvar_apelido = false;
+    }
     linha.tratar_como_novo = true;
     linha.sugestao_reconhecimento_aplicada = false;
     recalcularConfrontoAtual();
@@ -3277,6 +3414,7 @@ function renderizarLinhaRetirada(linha, index) {
             <td>${formatarValorLinha(linha)}</td>
             <td class="import-description-cell one-line">
                 <span title="${escapeAttr(observacao)}">${escapeHtml(observacao || '-')}</span>
+                ${linha.conciliacao_sugerida ? `<label class="import-detected-note"><input type="checkbox" ${linha.conciliar_previsao ? 'checked' : ''} onchange="alternarConciliacaoLinha(${index}, this.checked)"> Conciliar com a previsão</label>` : ''}
             </td>
             <td>
                 <div class="row-actions operational">
@@ -3407,7 +3545,10 @@ function atualizarControlesImportacao(resumo = calcularResumoLocal()) {
     }
 
     if (btnImportar) {
-        const quantidade = estado.analiseConfronto ? linhasNovasConfirmaveis().length : 0;
+        // novos + despesas fixas reconhecidas + compras ja lancadas a conciliar (as duas ultimas so no novo aplicativo)
+        const quantidade = estado.analiseConfronto
+            ? linhasNovasConfirmaveis().length + linhasFixasConfirmaveis().length + linhasConciliacaoConfirmaveis().length
+            : 0;
         btnImportar.disabled = !estado.analiseConfronto || quantidade === 0 || novasSemCategoriaDespesa().length > 0;
         btnImportar.innerHTML = `
             <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
@@ -3443,8 +3584,7 @@ function montarPayloadImportacao() {
     const cartaoId = parseInt(document.getElementById('cartaoSelect').value, 10);
     const [mes, ano] = document.getElementById('competenciaInput').value.split('/');
     const competencia = `${ano}-${mes}-01`;
-    const linhas = linhasNovasConfirmaveis()
-        .map((linha) => {
+    const paraPayload = (linha) => {
             const payload = {
                 data_compra: linha.data_compra,
                 descricao_original: descricaoOriginalLinha(linha),
@@ -3467,9 +3607,18 @@ function montarPayloadImportacao() {
                 payload.categoria_cartao_id = linha.categoria_cartao_id;
                 payload.categoria_cartao_origem = linha.categoria_cartao_origem;
             }
+            // Escolhas da previa do novo aplicativo (recorrencia, compra comum, apelido)
+            if (linha.recorrencia_escolhida_id !== undefined && linha.recorrencia_escolhida_id !== null) {
+                payload.recorrencia_escolhida_id = linha.recorrencia_escolhida_id;
+            }
+            if (linha.salvar_apelido) payload.salvar_apelido = true;
 
             return payload;
-        });
+        };
+    // Novos lancamentos; despesas fixas reconhecidas (realizam a previsao); compras ja lancadas a conciliar com a previsao
+    const linhas = linhasNovasConfirmaveis().map(paraPayload)
+        .concat(linhasFixasConfirmaveis().map(paraPayload))
+        .concat(linhasConciliacaoConfirmaveis().map((linha) => ({ ...paraPayload(linha), conciliar_previsao: true })));
 
     return {
         cartao_id: cartaoId,
@@ -3495,7 +3644,7 @@ function validarNovosClassificados() {
     }
 
     const novos = linhasNovasConfirmaveis();
-    if (!novos.length) {
+    if (!novos.length && !linhasFixasConfirmaveis().length && !linhasConciliacaoConfirmaveis().length) {
         alert('Nenhum lancamento novo selecionado para importacao.');
         return false;
     }
@@ -3503,6 +3652,14 @@ function validarNovosClassificados() {
     const pendentes = novasSemCategoriaDespesa();
     if (pendentes.length) {
         alert('Classifique a categoria da despesa dos lancamentos novos antes de confirmar.');
+        return false;
+    }
+
+    // Despesa fixa em revisao (ambigua, segunda cobranca, fatura paga...): nada e descartado em silencio
+    const emRevisao = linhasFixasConfirmaveis().filter((linha) => classificacaoNova(linha) === 'REVISAR'
+        && linha.recorrencia_escolhida_id === undefined);
+    if (emRevisao.length) {
+        alert(`Revise ${emRevisao.length} cobranca(s) de despesa fixa: escolha a recorrencia, trate como compra comum ou retire a linha.`);
         return false;
     }
 
@@ -3656,7 +3813,7 @@ async function finalizarImportacao() {
         renderResumoPrevia(previa);
         atualizarResumoPainel();
 
-        if (previa.inseridos === 0) {
+        if (previa.inseridos === 0 && !previa.conciliacoes) {
             alert('Nenhum lancamento novo selecionado para importacao.');
             return;
         }
@@ -3664,6 +3821,8 @@ async function finalizarImportacao() {
         const resumo = calcularResumoLocal();
         const confirmado = confirm(
             `Confirmar importacao de ${previa.inseridos} lancamentos novos?\n\n` +
+            (previa.despesas_fixas ? `Despesas fixas reconhecidas: ${previa.despesas_fixas}\n` : '') +
+            (previa.conciliacoes ? `Compras ja lancadas conciliadas com a previsao: ${previa.conciliacoes}\n` : '') +
             `Ignorados: ${resumo.ignoradas}\n` +
             `Duplicados protegidos: ${previa.duplicados}\n` +
             `Possiveis parcelamentos fora deste MVP: ${estado.analiseConfronto?.parcelamentos.length || 0}`
@@ -3688,6 +3847,7 @@ async function finalizarImportacao() {
                 Linhas inválidas: <strong>${dados.linhas_invalidas}</strong>.
                 Inseridos: <strong>${dados.inseridos}</strong>.
                 Duplicados: <strong>${dados.duplicados}</strong>.
+                ${dados.conciliacoes ? `Conciliadas com a previsão: <strong>${dados.conciliacoes}</strong>.` : ''}
                 Erros: <strong>${(dados.erros || []).length}</strong>.
             </div>
         `;
