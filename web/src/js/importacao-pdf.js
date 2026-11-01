@@ -123,8 +123,10 @@ function lancamentoDaLinha(linha, cartao, grupo, competencia, pagina, numero) {
     }
     const [semParcela, atual, total] = parcelaDaDescricao(descricao);
     const tipo = sufixo === 'C' ? 'credito' : 'debito';
-    const ignorado = tipo === 'credito' || v === 0;
-    if (tipo === 'credito') mensagens.push('Credito identificado; nao sera importado como despesa por padrao.');
+    // FIN-CARTAO-NUBANK-CREDITOS-01: o credito nao e retirado aqui; a previa (banco) classifica: estorno, IOF devolvido e
+    // ajuste abatem a fatura, o pagamento fica fora
+    const ignorado = v === 0;
+    if (tipo === 'credito') mensagens.push('Credito identificado; nunca importado como despesa.');
     if (v === 0) mensagens.push('Lancamento com valor zero ignorado por padrao.');
     return base(`pdf-${pagina}-${numero}`, numero, {
         status: ignorado ? 'ignorado' : 'revisar', data_compra: dataCompra, descricao_original: descricao,
@@ -144,8 +146,8 @@ function creditoAntesDoCartao(linha, competencia, pagina, numero) {
     return base(`pdf-${pagina}-${numero}`, numero, {
         status: 'ignorado', data_compra: dataComAno(data[1], competencia), descricao_original: descricao, descricao_normalizada: descricao,
         descricao_exibida: descricao, grupo: 'CREDITOS', parcela_atual: 1, total_parcelas: 1, parcela: '1/1', valor: Math.abs(valor(v[1])),
-        tipo_movimento: 'credito', mensagens: ['Credito identificado; nao sera importado como despesa por padrao.'],
-        metadados: { pagina, linha_pdf: numero, linha_texto: linha }, ignorar: true,
+        tipo_movimento: 'credito', mensagens: ['Credito identificado; nunca importado como despesa.'],
+        metadados: { pagina, linha_pdf: numero, linha_texto: linha }, ignorar: false,
     });
 }
 

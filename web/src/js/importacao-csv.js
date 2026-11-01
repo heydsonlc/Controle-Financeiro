@@ -182,7 +182,9 @@ export function montarLinha(idx, data, descricao, valor, tipo, parcelaCampo = nu
         descricao_exibida: normalizada || bruta, descricao_classificacao: normalizarClassificacao(normalizada || bruta),
         parcela_atual: parcela, total_parcelas: total, parcela: `${parcela}/${total}`,
         valor: String(valor).replace(/^-/, ''), tipo_movimento: tipo, origem_importacao: origem,
-        ignorar: tipo === 'credito', gerar_parcelas_futuras: false,
+        // FIN-CARTAO-NUBANK-CREDITOS-01: o credito nao e retirado aqui; a previa (banco) classifica: estorno, IOF devolvido e
+        // ajuste abatem a fatura, o pagamento recebido fica fora
+        ignorar: false, gerar_parcelas_futuras: false,
     };
 }
 

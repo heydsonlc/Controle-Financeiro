@@ -48,7 +48,7 @@ test('perfis: Nubank (negativo e credito), Caixa (credito/debito) e manual', () 
     const nubank = converterTabela(lerCsv('date,title,amount\n2029-05-01,Loja - Parcela 1/3,30.00\n2029-05-02,Pagamento recebido,-500.00\n2029-05-03,Zero,0\n'));
     assert.equal(nubank.perfil_detectado, PERFIL_NUBANK);
     assert.deepEqual(nubank.linhas.map((l) => [l.descricao_normalizada, l.parcela, l.valor, l.tipo_movimento, l.ignorar]),
-        [['Loja', '1/3', '30.00', 'debito', false], ['Pagamento recebido', '1/1', '500.00', 'credito', true]]);
+        [['Loja', '1/3', '30.00', 'debito', false], ['Pagamento recebido', '1/1', '500.00', 'credito', false]]);  // a previa classifica o credito
     const caixa = converterTabela(lerCsv('Data;Descritivo;Crédito;Débito\n01/05/2029;Loja;;10,50\n02/05/2029;Estorno;5,00;\n'));
     assert.equal(caixa.perfil_detectado, PERFIL_CAIXA);
     assert.deepEqual(caixa.linhas.map((l) => [l.data_compra, l.valor, l.tipo_movimento]), [['2029-05-01', '10.50', 'debito'], ['2029-05-02', '5.00', 'credito']]);

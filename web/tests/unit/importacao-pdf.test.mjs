@@ -25,7 +25,8 @@ test('fatura Caixa ficticia: texto por posicao, dados da fatura e lancamentos co
         ['2026-10-11', 'AJUSTE A CREDITO', 7.99, 'credito', '1/1', 'ANUIDADE'],
     ]);
     assert.equal(r.linhas.find((l) => l.grupo === 'COMPRAS INTERNACIONAIS').metadados.cotacao, 5.235);
-    assert.ok(r.linhas.every((l) => l.tipo_movimento === 'debito' || l.ignorar));  // credito nunca vira compra
+    // credito nunca vira compra: vai como credito, sem retirar (FIN-CARTAO-NUBANK-CREDITOS-01: a previa classifica)
+    assert.ok(r.linhas.every((l) => l.tipo_movimento === 'debito' || (l.tipo_movimento === 'credito' && !l.ignorar)));
 });
 
 test('arquivo invalido e PDF sem texto (escaneado): mensagens claras, nada lido', async () => {
