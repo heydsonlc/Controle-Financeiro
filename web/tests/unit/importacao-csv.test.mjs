@@ -4,7 +4,7 @@ import { test } from 'node:test';
 
 import {
     PERFIL_CAIXA, PERFIL_MANUAL, PERFIL_NUBANK, converterTabela, decodificar, detectarDelimitador, detectarParcelamentoTexto,
-    lerCsv, lerData, lerValor, normalizarClassificacao, normalizarDescricao,
+    lerCsv, lerData, lerValor, normalizarClassificacao, normalizarDescricao, parcelaNubank,
 } from '../../src/js/importacao-csv.js';
 
 test('delimitador como o Sniffer do Flask (; , tab), com aspas', () => {
@@ -45,7 +45,7 @@ test('parcelas na descricao (PARC, N/T, N DE T) e limpeza da descricao', () => {
 });
 
 test('perfis: Nubank (negativo e credito), Caixa (credito/debito) e manual', () => {
-    const nubank = converterTabela(lerCsv('date,title,amount\n2029-05-01,Loja 1/3,30.00\n2029-05-02,Pagamento recebido,-500.00\n2029-05-03,Zero,0\n'));
+    const nubank = converterTabela(lerCsv('date,title,amount\n2029-05-01,Loja - Parcela 1/3,30.00\n2029-05-02,Pagamento recebido,-500.00\n2029-05-03,Zero,0\n'));
     assert.equal(nubank.perfil_detectado, PERFIL_NUBANK);
     assert.deepEqual(nubank.linhas.map((l) => [l.descricao_normalizada, l.parcela, l.valor, l.tipo_movimento, l.ignorar]),
         [['Loja', '1/3', '30.00', 'debito', false], ['Pagamento recebido', '1/1', '500.00', 'credito', true]]);
@@ -56,4 +56,24 @@ test('perfis: Nubank (negativo e credito), Caixa (credito/debito) e manual', () 
     assert.equal(manual.perfil_detectado, PERFIL_MANUAL);
     assert.equal(manual.requer_mapeamento, true);
     assert.deepEqual(manual.linhas, []);
+});
+
+// FIN-CARTAO-NUBANK-PARCELADAS-01: o padrao efetivo do arquivo do Nubank (titulos FICTICIOS no formato real)
+test('Nubank: parcela so no padrao do arquivo ("Loja - Parcela N/M"); outro numero no titulo e ambiguo', () => {
+    assert.deepEqual(parcelaNubank('Haikar Veiculos - Parcela 5/6'), { parcela_atual: 5, total_parcelas: 6 });
+    assert.equal(parcelaNubank('Mercado Xyz 03/10'), null);
+    assert.equal(parcelaNubank('Loja - Parcela 7/5'), null);  // fora do intervalo
+    const csv = ['date,title,amount', '2029-05-28,Shopee*Classic Comerci - Parcela 1/2,"79,70"',
+        '2029-04-28,Mlp *Magalu-Samsung - Parcela 9/10,"482,80"', '2029-04-28,Anacapri Goiania - Parcela 3/3,"83,30"',
+        '2029-05-18,Allianz Segu*02 de,"259,46"', '2029-05-10,Mercado Xyz 03/10,"50,00"', '2029-05-11,Evento 15/11,"20,00"',
+        '2029-05-12,Pao de Acucar-2378,"75,78"'].join('\n');
+    const linhas = converterTabela(lerCsv(csv)).linhas;
+    assert.deepEqual(linhas.map((l) => [l.descricao_normalizada, l.parcela, l.parcela_ambigua || null]), [
+        ['Shopee*Classic Comerci', '1/2', null], ['Mlp *Magalu-Samsung', '9/10', null], ['Anacapri Goiania', '3/3', null],
+        ['Allianz Segu*02 de', '1/1', null],
+        ['Mercado Xyz', '1/1', { parcela_atual: 3, total_parcelas: 10 }],  // pode ser data, codigo ou parcela: revisar
+        ['Evento 15/11', '1/1', null], ['Pao de Acucar-2378', '1/1', null]]);
+    // Caixa e manual seguem a regra do Flask (N/T no texto e parcela)
+    const caixa = converterTabela(lerCsv('Data;Descritivo;Crédito;Débito\n01/05/2029;Loja 1/3;;10,50\n')).linhas[0];
+    assert.deepEqual([caixa.parcela, caixa.parcela_ambigua], ['1/3', undefined]);
 });

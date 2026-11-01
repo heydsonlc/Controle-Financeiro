@@ -15,13 +15,13 @@ test('planilha ativa, cabecalho, datas por estilo, numeros, texto compartilhado 
             ['date', 'title', 'amount'],
             [{ data: '2033-03-05' }, 'Padaria & Cia', 12.5],
             [null, null, null],
-            [{ data: '2033-03-06' }, { inline: 'Loja 2/5' }, 30],
+            [{ data: '2033-03-06' }, { inline: 'Loja - Parcela 2/5' }, 30],
             ['2033-03-07', 'Pagamento recebido', -500],
         ] },
     ], { ativa: 1 });
     const t = await lerPlanilha(buffer(arquivo));
     assert.deepEqual(t.colunas, ['date', 'title', 'amount']);
-    assert.deepEqual(t.linhas_dados, [['2033-03-05', 'Padaria & Cia', '12.5'], ['2033-03-06', 'Loja 2/5', '30'],
+    assert.deepEqual(t.linhas_dados, [['2033-03-05', 'Padaria & Cia', '12.5'], ['2033-03-06', 'Loja - Parcela 2/5', '30'],
         ['2033-03-07', 'Pagamento recebido', '-500']]);
     const conv = converterTabela(t, 'xlsx');
     assert.deepEqual(conv.linhas.map((l) => [l.data_compra, l.descricao_normalizada, l.parcela, l.valor, l.tipo_movimento, l.origem_importacao]), [

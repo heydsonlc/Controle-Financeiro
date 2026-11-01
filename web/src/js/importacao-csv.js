@@ -112,6 +112,19 @@ export function detectarParcelamentoTexto(descricao) {
     return null;
 }
 
+// FIN-CARTAO-NUBANK-PARCELADAS-01: no arquivo do Nubank a parcela vem no fim do titulo ("Loja - Parcela 3/10", da 1a a
+// ultima). Outro numero no titulo ("MERCADO XYZ 03/10") pode ser data, codigo ou parcela: vai para revisao, sem inventar.
+const PARCELA_NUBANK = /\s+-\s+Parcela\s+(\d{1,2})\s*\/\s*(\d{1,2})\s*$/i;
+
+export function parcelaNubank(titulo) {
+    const m = PARCELA_NUBANK.exec(String(titulo || '').trim());
+    if (!m) return null;
+    const atual = Number(m[1]);
+    const total = Number(m[2]);
+    if (atual < 1 || total <= 1 || atual > total || total > MAX_PARCELAS) return null;
+    return { parcela_atual: atual, total_parcelas: total };
+}
+
 export function normalizarDescricao(descricao) {
     const texto = String(descricao || '').trim();
     const p = detectarParcelamentoTexto(texto);
@@ -149,14 +162,21 @@ export function lerData(valor) {
 }
 
 // Linha intermediaria (formato do parser do Flask), pronta para a analise no banco.
-export function montarLinha(idx, data, descricao, valor, tipo, parcelaCampo = null, origem = 'csv') {
+export function montarLinha(idx, data, descricao, valor, tipo, parcelaCampo = null, origem = 'csv', perfil = null) {
     const bruta = String(descricao || '').trim();
     let [normalizada, parcela, total] = normalizarDescricao(bruta);
+    let ambigua = null;
+    if (perfil === PERFIL_NUBANK && total > 1 && !parcelaNubank(bruta)) {
+        ambigua = { parcela_atual: parcela, total_parcelas: total };
+        parcela = 1;
+        total = 1;
+    }
     if (parcelaCampo) {
         const p = detectarParcelamentoTexto(String(parcelaCampo));
-        if (p) { parcela = p.parcela_atual; total = p.total_parcelas; }
+        if (p) { parcela = p.parcela_atual; total = p.total_parcelas; ambigua = null; }
     }
     return {
+        ...(ambigua ? { parcela_ambigua: ambigua } : {}),
         linha_id: `${origem}-${idx}`, linha_origem: idx, status: tipo === 'credito' ? 'ignorado' : 'revisar',
         data_compra: lerData(data), descricao_original: bruta, descricao_normalizada: normalizada || bruta,
         descricao_exibida: normalizada || bruta, descricao_classificacao: normalizarClassificacao(normalizada || bruta),
@@ -191,7 +211,7 @@ export function converterTabela(tabela, origem = 'csv') {
             tipo = Number(valor) < 0 ? 'credito' : 'debito';
         }
         if (!String(data || '').trim() || !String(descricao || '').trim()) return;
-        base.linhas.push(montarLinha(i + 1, data, descricao, valor, tipo, celula(linha, mapa.parcela), origem));
+        base.linhas.push(montarLinha(i + 1, data, descricao, valor, tipo, celula(linha, mapa.parcela), origem, info.perfil));
     });
     base.total_linhas = base.linhas.length;
     return base;
