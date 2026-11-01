@@ -443,6 +443,8 @@ async function comprasDaFatura(cartaoId, parametros) {
         // FIN-CARTAO-DESPESAS-FIXAS-01: a natureza vem do banco (uma regra so); a fixa traz o previsto da ocorrencia.
         is_recorrente: c.natureza ? c.natureza === 'FIXA' : Boolean(c.recorrente),
         valor_previsto: c.valor_previsto === null || c.valor_previsto === undefined ? null : Number(c.valor_previsto),
+        // FIN-CARTAO-PREVISTO-EXECUTADO-01: a previsao ainda sem cobranca nao e executada
+        valor_executado: c.valor_executado === null || c.valor_executado === undefined ? Number(c.valor) : Number(c.valor_executado),
         situacao_ocorrencia: c.situacao_ocorrencia || null,
     })) });
 }

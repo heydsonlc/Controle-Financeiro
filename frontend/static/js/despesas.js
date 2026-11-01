@@ -2644,8 +2644,9 @@ function organizarLancamentosEmBlocos(lancamentos, resumoCartao) {
             blocos.fixas.push({
                 descricao: lanc.descricao,
                 valor: valorLanc,
-                // Previsto da ocorrencia e situacao (prevista/confirmada), quando a API informa
+                // Previsto, executado e situacao da ocorrencia, quando a API informa
                 valor_previsto: lanc.valor_previsto ?? null,
+                valor_executado: lanc.valor_executado ?? null,
                 situacao_ocorrencia: lanc.situacao_ocorrencia ?? null
             });
         }
@@ -2684,8 +2685,8 @@ function calcularTotaisFatura(blocos, lancamentos) {
     // Bloco 1: Compras Parceladas (valor executado = previsto)
     const previstoParceladas = blocos.parceladas.reduce((sum, p) => sum + parseFloat(p.valor || 0), 0);
 
-    // Bloco 2: Despesas Fixas (valor executado = previsto)
-    const previstoFixas = blocos.fixas.reduce((sum, f) => sum + parseFloat(f.valor || 0), 0);
+    // Bloco 2: Despesas Fixas (aguardando cobrança: o previsto; as demais: o executado)
+    const previstoFixas = blocos.fixas.reduce((sum, f) => sum + previstoFixa(f), 0);
 
     // Bloco 3: Despesas por Categoria (usa valor_previsto do orçamento)
     const previstoCategorias = Object.values(blocos.porCategoria).reduce((sum, cat) => {
@@ -2698,8 +2699,8 @@ function calcularTotaisFatura(blocos, lancamentos) {
     // TOTAL DA FATURA = SOMA DOS PREVISTOS
     const totalFatura = previstoParceladas + previstoFixas + previstoCategorias + previstoOutros;
 
-    // === EXECUTADO: Soma real dos lançamentos (para referência) ===
-    const totalExecutado = lancamentos.reduce((sum, l) => sum + parseFloat(l.valor || 0), 0);
+    // === EXECUTADO: Soma real dos lançamentos (para referência); a previsão ainda sem cobrança não entra ===
+    const totalExecutado = lancamentos.reduce((sum, l) => sum + parseFloat((l.valor_executado ?? l.valor) || 0), 0);
 
     return {
         totalFatura,      // ← PREVISTO (usado no cabeçalho da fatura)
@@ -2771,21 +2772,37 @@ function renderizarBlocoParceladas(parceladas) {
 }
 
 /**
+ * Executado de uma despesa fixa: a prevista (ou não cobrada) não é executada; sem os campos da API, o valor da compra
+ */
+function executadoFixa(f) {
+    return f.valor_executado === null || f.valor_executado === undefined ? parseFloat(f.valor || 0) : parseFloat(f.valor_executado || 0);
+}
+
+/**
+ * Parte da despesa fixa no previsto da fatura: aguardando cobrança, o previsto; nas demais, o executado
+ */
+function previstoFixa(f) {
+    return f.situacao_ocorrencia === 'PREVISTA' ? parseFloat((f.valor_previsto ?? f.valor) || 0) : executadoFixa(f);
+}
+
+/**
  * Legenda previsto x executado de uma despesa fixa (vazia quando a API nao informa o previsto)
  */
 function legendaFixa(f) {
     if (f.valor_previsto === null || f.valor_previsto === undefined) return '';
     const previsto = parseFloat(f.valor_previsto || 0);
-    if (f.situacao_ocorrencia === 'PREVISTA') {
-        return `Previsto R$ ${formatarValorBR(previsto)} · cobrança ainda não importada`;
-    }
-    const diferenca = Math.round((parseFloat(f.valor || 0) - previsto) * 100) / 100;
-    if (diferenca === 0) return `Previsto R$ ${formatarValorBR(previsto)} · confirmado`;
-    return `Previsto R$ ${formatarValorBR(previsto)} · diferença ${diferenca < 0 ? '−' : '+'}R$ ${formatarValorBR(Math.abs(diferenca))}`;
+    const rotulo = `Previsto R$ ${formatarValorBR(previsto)}`;
+    if (f.situacao_ocorrencia === 'PREVISTA') return `${rotulo} · aguardando cobrança`;
+    if (f.situacao_ocorrencia === 'NAO_COBRADA') return `${rotulo} · não cobrada nesta fatura`;
+    if (f.situacao_ocorrencia === 'PAGA') return `${rotulo} · paga com a fatura`;
+    const diferenca = Math.round((executadoFixa(f) - previsto) * 100) / 100;
+    if (diferenca === 0) return `${rotulo} · confirmado`;
+    return `${rotulo} · diferença ${diferenca < 0 ? '−' : '+'}R$ ${formatarValorBR(Math.abs(diferenca))}`;
 }
 
 function renderizarBlocoFixas(fixas) {
-    const total = fixas.reduce((sum, f) => sum + (f.valor || 0), 0);
+    const total = fixas.reduce((sum, f) => sum + executadoFixa(f), 0);
+    const aguardando = fixas.filter(f => f.situacao_ocorrencia === 'PREVISTA').reduce((sum, f) => sum + previstoFixa(f), 0);
     const linhas = fixas.length > 0
         ? fixas.map(f => {
             const legenda = legendaFixa(f);
@@ -2798,17 +2815,19 @@ function renderizarBlocoFixas(fixas) {
             return `
             <div class="linha-simples">
                 ${titulo}
-                <div class="linha-valor">R$ ${formatarValorBR(f.valor)}</div>
+                <div class="linha-valor">R$ ${formatarValorBR(executadoFixa(f))}</div>
             </div>
         `;
         }).join('')
         : '<div class="linha-vazia">Nenhuma despesa fixa no cartão neste mês.</div>';
+    const subtotal = `R$ ${formatarValorBR(total)}`
+        + (aguardando > 0 ? ` · R$ ${formatarValorBR(aguardando)} aguardando cobrança` : '');
 
     return `
         <div class="fatura-bloco">
             <div class="bloco-header">
                 <span class="bloco-titulo">Despesas Fixas</span>
-                <span class="bloco-subtotal">R$ ${formatarValorBR(total)}</span>
+                <span class="bloco-subtotal">${subtotal}</span>
             </div>
             <div class="bloco-lista">${linhas}</div>
         </div>
@@ -2904,7 +2923,7 @@ function renderizarBlocoOutros(outros) {
 
 function renderizarRodapeFatura(blocos) {
     const totalParceladas = blocos.parceladas.reduce((sum, p) => sum + (p.valor || 0), 0);
-    const totalFixas = blocos.fixas.reduce((sum, f) => sum + (f.valor || 0), 0);
+    const totalFixas = blocos.fixas.reduce((sum, f) => sum + previstoFixa(f), 0);
     const totalOutros = blocos.outros.reduce((sum, o) => sum + (o.valor || 0), 0);
     const linhasCategorias = Object.values(blocos.porCategoria || {}).map(cat => {
         const previsto = parseFloat(cat.previsto || 0);

@@ -96,23 +96,36 @@ test('tela: subtotais dos blocos e o nome de cada Categoria do Cartao', () => {
     assert.match(html, /categoria-nome">Mercado</);
 });
 
-// FIN-CARTAO-DESPESAS-FIXAS-01: previsto x executado da fixa, quando o adaptador informa (compras_da_fatura).
-test('fixa: previsto, executado e diferenca; prevista sem cobranca; sem os campos, como antes (Flask)', () => {
+// FIN-CARTAO-DESPESAS-FIXAS-01 / FIN-CARTAO-PREVISTO-EXECUTADO-01: previsto x executado da fixa, quando o adaptador
+// informa (compras_da_fatura): a prevista (ou nao cobrada) nao e executada.
+test('fixa: previsto, executado, diferenca e situacao; sem os campos, como antes (Flask)', () => {
+    const fixa = (descricao, valor, executado, previsto, situacao) => compra(descricao, valor, {
+        is_recorrente: true, valor_previsto: previsto, valor_executado: executado, situacao_ocorrencia: situacao });
     const fixas = [
-        compra('Netflix', 44.9, { is_recorrente: true, valor_previsto: 59.9, situacao_ocorrencia: 'CONFIRMADA' }),
-        compra('ChatGPT', 99.9, { is_recorrente: true, valor_previsto: 99.9, situacao_ocorrencia: 'PREVISTA' }),
-        compra('Claude', 109.9, { is_recorrente: true, valor_previsto: 109.9, situacao_ocorrencia: 'CONFIRMADA' }),
+        fixa('Netflix', 44.9, 44.9, 59.9, 'CONFIRMADA'),
+        fixa('ChatGPT', 99.9, 0, 99.9, 'PREVISTA'),
+        fixa('Claude', 109.9, 109.9, 109.9, 'CONFIRMADA'),
+        fixa('Apple One', 59.9, 0, 59.9, 'NAO_COBRADA'),
+        fixa('X Premium', 119, 119, 119, 'PAGA'),
         compra('Antiga', 10, { is_recorrente: true }),
     ];
     const blocos = organizarLancamentosEmBlocos(fixas, RESUMO);
-    assert.deepEqual(blocos.fixas.map((f) => [f.descricao, f.valor, f.valor_previsto]),
-        [['Netflix', 44.9, 59.9], ['ChatGPT', 99.9, 99.9], ['Claude', 109.9, 109.9], ['Antiga', 10, null]]);
-    const html = renderizarFaturaCompleta(blocos, calcularTotaisFatura(blocos, fixas), '2029-05').replace(/\s+/g, ' ');
+    assert.deepEqual(blocos.fixas.map((f) => [f.descricao, f.valor, f.valor_executado, f.valor_previsto]),
+        [['Netflix', 44.9, 44.9, 59.9], ['ChatGPT', 99.9, 0, 99.9], ['Claude', 109.9, 109.9, 109.9],
+            ['Apple One', 59.9, 0, 59.9], ['X Premium', 119, 119, 119], ['Antiga', 10, null, null]]);
+    const totais = calcularTotaisFatura(blocos, fixas);
+    // executado: so o cobrado (44,90 + 109,90 + 119 + 10); previsto: a prevista pelo previsto, as demais pelo executado,
+    // mais os limites do resumo (300 + 100)
+    assert.equal(Math.round(totais.totalExecutado * 100) / 100, 283.8);
+    assert.equal(Math.round(totais.totalFatura * 100) / 100, 783.7);
+    const html = renderizarFaturaCompleta(blocos, totais, '2029-05').replace(/\s+/g, ' ');
     assert.match(html, /Netflix<\/div> <div class="linha-legenda">Previsto R\$ 59,90 · diferença −R\$ 15,00<\/div> <\/div> <div class="linha-valor">R\$ 44,90/);
-    assert.match(html, /ChatGPT<\/div> <div class="linha-legenda">Previsto R\$ 99,90 · cobrança ainda não importada/);
+    assert.match(html, /ChatGPT<\/div> <div class="linha-legenda">Previsto R\$ 99,90 · aguardando cobrança<\/div> <\/div> <div class="linha-valor">R\$ 0,00/);
     assert.match(html, /Claude<\/div> <div class="linha-legenda">Previsto R\$ 109,90 · confirmado/);
+    assert.match(html, /Apple One<\/div> <div class="linha-legenda">Previsto R\$ 59,90 · não cobrada nesta fatura<\/div> <\/div> <div class="linha-valor">R\$ 0,00/);
+    assert.match(html, /X Premium<\/div> <div class="linha-legenda">Previsto R\$ 119,00 · paga com a fatura/);
     assert.match(html, /<div class="linha-simples"> <div class="linha-titulo">Antiga<\/div> <div class="linha-valor">R\$ 10,00/);
-    assert.match(html, /Despesas Fixas<\/span> <span class="bloco-subtotal">R\$ 264,70/);  // executado
+    assert.match(html, /Despesas Fixas<\/span> <span class="bloco-subtotal">R\$ 283,80 · R\$ 99,90 aguardando cobrança</);
 });
 
 test('defeito anterior: Categoria do Cartao nula e resumo vazio levavam tudo a Outros', () => {

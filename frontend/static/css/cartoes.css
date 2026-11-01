@@ -1018,6 +1018,11 @@
     gap: 2px;
 }
 
+.fatura-lancamento-previsao {
+    font-size: 11px;
+    color: #64748b;
+}
+
 .fatura-lancamento-desc strong {
     overflow: hidden;
     text-overflow: ellipsis;

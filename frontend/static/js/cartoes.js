@@ -552,6 +552,13 @@ function renderizarTabelaFaturaCategorias(categorias) {
     `;
 }
 
+// Previsao de recorrencia ainda sem cobranca (ou nao cobrada): fica fora do total da fatura (vazio sem o campo da API)
+function situacaoPrevisaoLancamento(lancamento) {
+    if (lancamento.situacao_ocorrencia === 'PREVISTA') return '<small class="fatura-lancamento-previsao">Prevista &middot; aguardando cobran&ccedil;a</small>';
+    if (lancamento.situacao_ocorrencia === 'NAO_COBRADA') return '<small class="fatura-lancamento-previsao">Prevista &middot; n&atilde;o cobrada nesta fatura</small>';
+    return '';
+}
+
 function renderizarLancamentosFatura(cartao) {
     const filtro = estadoCartoes.filtroLancamentosFatura || 'todos';
     const lancamentos = obterLancamentosFatura(cartao.id, filtro);
@@ -583,6 +590,7 @@ function renderizarLancamentosFatura(cartao) {
                         <div class="fatura-lancamento-row ${lancamento.status_classificacao !== 'classificado' ? 'needs-review' : ''}">
                             <div class="fatura-lancamento-desc">
                                 <strong>${escapeHtml(lancamento.descricao)}</strong>
+                                ${situacaoPrevisaoLancamento(lancamento)}
                             </div>
                             <span class="fatura-lancamento-cell">${escapeHtml(lancamento.data || '-')}</span>
                             <span class="fatura-lancamento-cell">${escapeHtml(lancamento.categoria_nome || '—')}</span>
