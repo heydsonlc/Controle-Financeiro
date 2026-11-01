@@ -1,10 +1,10 @@
 # FIN-CARTAO-IMPORTACAO-FIXAS-01 — Despesas fixas na importação da fatura: reconhecimento, classificação e conciliação
 
-**Situação (01/11/2026): `FIN_CARTAO_IMPORTACAO_FIXAS_01_PRONTO_PARA_PUBLICACAO`.** Implementado, testado e ensaiado numa cópia fiel da produção.
-- Migrations remotas (`20261209090000` e `20261210090000`), push e deploy aguardam autorização.
+**Situação (01/11/2026): `FIN_CARTAO_IMPORTACAO_FIXAS_01_PUBLICADO`.** Publicado em 01/11/2026 no FIN-CARTAO-CONSOLIDACAO-PUBLICACAO-01, junto com o FIN-CARTAO-PREVISTO-EXECUTADO-01: push `a1d3be4..87ba747`, migrations `20261209090000` e `20261210090000` aplicadas e conferidas (49 → 51, nenhum dado existente alterado), deploy `3ce04e95` (produção, commit `87ba747`).
+- Homologação só de leitura em produção (nenhuma importação confirmada): reimportação do Visa 11/2026 com 13 `JA_EXISTENTE` e a conciliação da Netflix sugerida (580 + 606, diferença −R$ 15,00); APPLE.COM/BILL como compra comum e, escolhida a Apple One, como despesa fixa com o apelido só sugerido; compra casada pelo valor com "Manter como compra diferente"; segunda cobrança da Netflix em revisão.
 - A conciliação real da Netflix 11/2026 continua fora.
 
-Base: `docs/FIN_CARTAO_DESPESAS_FIXAS_01.md` (publicado) e `docs/FIN_CARTAO_PREVISTO_EXECUTADO_01.md` (local).
+Base: `docs/FIN_CARTAO_DESPESAS_FIXAS_01.md` e `docs/FIN_CARTAO_PREVISTO_EXECUTADO_01.md` (publicados).
 
 ## 1. Antes
 
@@ -110,7 +110,6 @@ Tudo numa transação, com a análise refeita sob as travas (idempotente pela ch
 
 ## 7. Pendências
 
-- **Publicação conjunta:** 1209 + 1210, push e deploy, com autorização.
 - **Netflix 11/2026 em produção:** pode ser feita pela própria tela, reimportando a fatura com "Conciliar com a previsão", ou pela função oficial, com autorização.
 - **Apelido da Apple One:** pela tela ("Lembrar esta descrição"), com autorização.
 - **Conciliação por valor de compra comum ou parcela** (mesmo valor e parcela, até 5 dias, regra herdada do Flask): continua. A tela mostra "Já existe" e oferece "Manter como compra diferente" (corrigido no FIN-CARTAO-CONSOLIDACAO-PUBLICACAO-01: a opção existia no banco, mas não na tela).

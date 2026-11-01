@@ -1,7 +1,7 @@
 # FIN-CARTAO-PREVISTO-EXECUTADO-01 — Separação definitiva entre previsão e execução das despesas fixas
 
-**Situação (01/11/2026): `FIN_CARTAO_PREVISTO_EXECUTADO_01_PRONTO_PARA_PUBLICACAO`.** Implementado, testado e ensaiado numa cópia fiel da produção.
-- Migration remota, push e deploy aguardam autorização.
+**Situação (01/11/2026): `FIN_CARTAO_PREVISTO_EXECUTADO_01_PUBLICADO`.** Publicado em 01/11/2026 no FIN-CARTAO-CONSOLIDACAO-PUBLICACAO-01, junto com o FIN-CARTAO-IMPORTACAO-FIXAS-01: push `a1d3be4..87ba747`, migrations `20261209090000` e `20261210090000` aplicadas e conferidas (49 → 51, nenhum dado existente alterado), deploy `3ce04e95` (produção, commit `87ba747`).
+- Produção conferida: Visa 11/2026 executado R$ 2.265,85, previsto R$ 2.767,75, R$ 329,60 aguardando cobrança; Black 11/2026 executado R$ 7.194,80; faturas pagas preservadas.
 - A conciliação real da Netflix 11/2026 e o apelido da Apple One continuam fora.
 
 Base: `docs/FIN_CARTAO_DESPESAS_FIXAS_01.md` (natureza única, reconhecimento e conciliação, publicados em `a1d3be4`).
@@ -119,7 +119,6 @@ A compra que a recorrência gera para o mês (a previsão) entrava no **executad
 
 ## 6. Pendências
 
-- **Publicação:** migration `20261209090000`, push e deploy, com autorização.
 - **Netflix 11/2026 e Apple One:** conciliação e apelido, com autorização específica. A importação passou a oferecer as duas pela tela (`docs/FIN_CARTAO_IMPORTACAO_FIXAS_01.md`).
 - **Faturas de 10/2026 (Black e Visa) abertas só com previsões:** o executado passa a R$ 0,00. Se foram pagas fora do aplicativo, o registro do pagamento é assunto à parte; nada foi alterado.
 - **Previsão de recorrência inativada** (X Premium 10/2026): continua na fatura aberta como prevista. Dispensá-la é decisão do titular.
