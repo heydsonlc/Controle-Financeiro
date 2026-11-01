@@ -105,14 +105,15 @@ def test_analise_classifica_sugere_e_detecta_duplicidade_no_lote(banco):
     assert (l1['status'], l1['categoria_id'], l1['categoria_origem'], l1['categoria_cartao_id'], l1['status_classificacao']) == \
         ('valido', ASSINATURAS, 'palavra_chave', 961, 'classificada')
     assert l1['palavras_chave_encontradas'] == ['netflix']
-    assert (l2['status'], l2['ignorar']) == ('ignorado', True)
+    # FIN-CARTAO-NUBANK-CREDITOS-01: o estorno e credito da fatura (abate o valor a pagar), nao compra
+    assert (l2['status'], l2['ignorar'], l2['classificacao_importacao']) == ('valido', False, 'CREDITO')
     assert (l3['status'], l3['categoria_origem'], l3['categoria_cartao_id'], l3['status_classificacao']) == \
         ('valido', 'manual', None, 'categoria_cartao_pendente')
     assert (l4['status'], l4['duplicidade'], l4['ignorar']) == ('duplicado', 'lote', True)
     assert (l5['status'], 'Data de compra ausente.' in l5['mensagens']) == ('revisar', True)
     v = r['validacoes']
     assert (v['total_linhas'], v['validas'], v['duplicadas'], v['creditos'], v['revisar'], v['total_importavel']) == \
-        (5, 2, 1, 1, 1, 57.4)
+        (5, 3, 1, 1, 1, 57.4)
 
 
 def test_sugestao_ambigua_e_por_historico(banco):
@@ -130,14 +131,15 @@ def test_importacao_grava_tudo_e_reimportar_nao_duplica(banco):
               linha(3, 'ESTORNO', '5.00', tipo_movimento='credito')]
     chave = str(uuid.uuid4())
     r = importar(banco, linhas, chave=chave)
-    assert (r['inseridos'], r['linhas_importadas'], r['faturas']) == (2, 2, [MES])
+    assert (r['inseridos'], r['linhas_importadas'], r['faturas'], r['creditos']) == (2, 2, [MES], 1)
     gravados = importados(banco)
     assert [(g['descricao_original'], g['valor'], str(g['mes_fatura']), g['origem_importacao'], g['categoria_cartao_id'])
             for g in gravados] == [('NETFLIX.COM', Decimal('39.90'), MES, 'csv', 961), ('PADARIA', Decimal('12.50'), MES, 'csv', None)]
-    assert fatura(banco, CARTAO, MES)['valor_executado'] == Decimal('52.40')
+    # FIN-CARTAO-NUBANK-CREDITOS-01: compras R$ 52,40 - estorno R$ 5,00 (credito da fatura, nao compra negativa)
+    assert fatura(banco, CARTAO, MES)['valor_executado'] == Decimal('47.40')
     assert importar(banco, linhas, chave=chave)['repetida'] is True  # mesma chave: mesmo resultado
     reanalise = analisar(banco, linhas)['linhas']
-    assert [x['duplicidade'] for x in reanalise[:2]] == ['banco', 'banco']
+    assert [x['duplicidade'] for x in reanalise] == ['banco', 'banco', 'banco']
     assert falha(banco, 'importar_fatura_cartao', PESSOAL, CARTAO, MES, (linhas), str(uuid.uuid4()))[1] == 'Nenhuma linha para importar'
     assert len(importados(banco)) == 2
 
@@ -237,19 +239,19 @@ def test_sugestoes_e_resolucao(banco):
 
 
 # ---------------------------------------------------------------------------
-# Credito na fatura: pagamento, estorno e ajuste nunca entram como compra nem reduzem a fatura
+# Credito na fatura: nunca entra como compra. O pagamento recebido nao reduz a fatura; estorno e ajuste sao creditos
+# da fatura (FIN-CARTAO-NUBANK-CREDITOS-01: abatem o valor a pagar uma vez, em financeiro.credito_fatura)
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize('descricao, tipo', [('Pagamento recebido', 'pagamento_fatura'), ('PGTO FATURA', 'pagamento_fatura'),
-                                             ('ESTORNO LOJA X', 'estorno'), ('Credito de anuidade', 'credito_ajuste')])
-def test_credito_classificado_e_nunca_importado(banco, descricao, tipo):
+@pytest.mark.parametrize('descricao', ['Pagamento recebido', 'PGTO FATURA'])
+def test_pagamento_recebido_classificado_e_nunca_importado(banco, descricao):
     comprar(banco, descricao='Compra da fatura', valor='100.00', total_parcelas=1, categoria_id=MORADIA)
     antes = fatura(banco, CARTAO, MES)
     # Mesmo que o cliente mande a linha como "debito" e nao retirada, valor negativo e credito.
     for l in (linha(1, descricao, '-80.00', categoria_id=MORADIA),
               linha(1, descricao, '80.00', categoria_id=MORADIA, tipo_movimento='credito', ignorar=False)):
         r = analisar(banco, [l])['linhas'][0]
-        assert (r['tipo_movimento'], r['tipo_credito'], r['status'], r['ignorar']) == ('credito', tipo, 'ignorado', True)
+        assert (r['tipo_movimento'], r['tipo_credito'], r['status'], r['ignorar']) == ('credito', 'pagamento_fatura', 'ignorado', True)
         codigo, mensagem = falha(banco, 'importar_fatura_cartao', PESSOAL, CARTAO, MES, [l], str(uuid.uuid4()))
         assert (codigo, mensagem) == ('22023', 'Nenhuma linha para importar')
     assert importados(banco) == []
@@ -257,11 +259,24 @@ def test_credito_classificado_e_nunca_importado(banco, descricao, tipo):
     assert (depois['valor_executado'], depois['valor']) == (antes['valor_executado'], antes['valor']) == (Decimal('100.00'), antes['valor'])
 
 
-def test_credito_no_meio_da_fatura_nao_reduz_o_total(banco):
+@pytest.mark.parametrize('descricao, tipo', [('ESTORNO LOJA X', 'estorno'), ('Credito de anuidade', 'credito_ajuste')])
+def test_estorno_e_ajuste_sao_creditos_da_fatura_nunca_compra(banco, descricao, tipo):
+    comprar(banco, descricao='Compra da fatura', valor='100.00', total_parcelas=1, categoria_id=MORADIA)
+    for l in (linha(1, descricao, '-80.00', categoria_id=MORADIA),
+              linha(1, descricao, '80.00', categoria_id=MORADIA, tipo_movimento='credito', ignorar=False)):
+        r = analisar(banco, [l])['linhas'][0]
+        assert (r['tipo_movimento'], r['tipo_credito'], r['status'], r['classificacao_importacao']) == \
+            ('credito', tipo, 'valido', 'CREDITO')
+    assert importar(banco, [linha(1, descricao, '-80.00')])['creditos'] == 1
+    assert importados(banco) == []
+    assert fatura(banco, CARTAO, MES)['valor_executado'] == Decimal('20.00')
+
+
+def test_credito_no_meio_da_fatura_abate_o_total_sem_compra_negativa(banco):
     r = importar(banco, [linha(1, 'PADARIA', '40.00', categoria_id=MORADIA), linha(2, 'Pagamento recebido', '-500.00'),
                          linha(3, 'ESTORNO PADARIA', '-40.00')])
-    assert r['inseridos'] == 1
-    assert fatura(banco, CARTAO, MES)['valor_executado'] == Decimal('40.00')
+    assert (r['inseridos'], r['creditos']) == (1, 1)
+    assert fatura(banco, CARTAO, MES)['valor_executado'] == Decimal('0.00')  # o pagamento recebido nao abate
     assert sql(banco, 'select count(*) as n from public.lancamento_agregado where valor <= 0')[0]['n'] == 0
 
 
