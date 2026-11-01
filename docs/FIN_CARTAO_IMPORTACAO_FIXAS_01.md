@@ -60,11 +60,12 @@ Tudo numa transação, com a análise refeita sob as travas (idempotente pela ch
 - **Linhas retiradas:** a compra já lançada mostra a conciliação proposta, com "Conciliar com a previsão" marcado, e pode ser desmarcada.
 - **Confirmação:** envia novos, despesas fixas e conciliações. A mensagem mostra "Despesas fixas reconhecidas" e "Compras já lançadas conciliadas".
 - **Revisão:** uma despesa fixa em revisão impede confirmar até a decisão.
+- **"Manter como compra diferente"** na linha retirada pela regra herdada: a compra casada pelo valor com outra já lançada (mesmo valor e parcela, até 5 dias) ou repetida no próprio arquivo volta como compra nova. A decisão vai na confirmação (`manter_conciliada` / `manter_duplicada`), e o banco a respeita. A mesma compra reimportada não tem essa ação.
 - **Ponte de CSP (`ponte-csp.js`):** passa a aceitar `this.checked`. As caixas de seleção da tela original não funcionavam no novo aplicativo.
 
 ## 5. Testes
 
-- **`tests/test_supabase_cartao_importacao_fixas.py`** (17):
+- **`tests/test_supabase_cartao_importacao_fixas.py`** (18, incluindo a compra casada pelo valor mantida como diferente):
   - prévia classificando as 6 naturezas sem gravar;
   - escolha de recorrência com apelido gravado só na confirmação e reconhecido no mês seguinte;
   - compra comum;
@@ -82,7 +83,7 @@ Tudo numa transação, com a análise refeita sob as travas (idempotente pela ch
   - funções internas;
   - reversão e reaplicação da migration.
 - **`tests/test_gerador_migration_cartao_importacao_fixas.py`** (2).
-- **`web/tests/unit/importar-fixas.test.mjs`** (3), com o `importar_cartao.js` real: conversão (Flask sem os campos fica como antes), linha da fixa, seletor, conciliação proposta, correção e o que vai na confirmação.
+- **`web/tests/unit/importar-fixas.test.mjs`** (5), com o `importar_cartao.js` real: conversão (Flask sem os campos fica como antes), linha da fixa, seletor, conciliação proposta, correção e o que vai na confirmação.
 - **`web/tests/e2e/importar_fixas.spec.mjs`** (1), pela tela no banco descartável: fixa reconhecida, escolha da recorrência com "Lembrar", segunda cobrança em revisão tratada como compra comum, confirmação, naturezas gravadas, apelido e reimportação sem nada novo.
 
 - **Ajustados à regra** (cobrança em fatura paga ou consolidada, ou já cobrada, pede revisão em vez de sair em silêncio):
@@ -91,8 +92,8 @@ Tudo numa transação, com a análise refeita sob as travas (idempotente pela ch
   - 1 de `tests/test_supabase_recorrencia_cartao.py` (a análise vigente passa a ser a da 1210).
 - **Regressão:**
   - Python por impacto: 30 arquivos, 625 aprovados; a única falha é a i3, dívida conhecida de `regularizar_historico`;
-  - unitários 41/41;
-  - E2E 117/117.
+  - unitários 43/43;
+  - E2E 117/117 (e os de importação de novo depois da ação "Manter", 5/5).
 
 ## 6. Ensaio (cópia fiel e descartável da produção, com 1209 e 1210)
 
@@ -112,4 +113,4 @@ Tudo numa transação, com a análise refeita sob as travas (idempotente pela ch
 - **Publicação conjunta:** 1209 + 1210, push e deploy, com autorização.
 - **Netflix 11/2026 em produção:** pode ser feita pela própria tela, reimportando a fatura com "Conciliar com a previsão", ou pela função oficial, com autorização.
 - **Apelido da Apple One:** pela tela ("Lembrar esta descrição"), com autorização.
-- **Conciliação por valor de compra comum ou parcela** (mesmo valor e parcela, até 5 dias, regra herdada do Flask): continua. A tela mostra "Já existe" e permite manter como compra diferente.
+- **Conciliação por valor de compra comum ou parcela** (mesmo valor e parcela, até 5 dias, regra herdada do Flask): continua. A tela mostra "Já existe" e oferece "Manter como compra diferente" (corrigido no FIN-CARTAO-CONSOLIDACAO-PUBLICACAO-01: a opção existia no banco, mas não na tela).

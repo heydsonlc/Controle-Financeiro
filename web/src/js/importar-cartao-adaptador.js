@@ -92,7 +92,7 @@ function linhaParaBanco(l, indice) {
         ...(l.recorrencia_escolhida_id === undefined || l.recorrencia_escolhida_id === null ? {}
             : { recorrencia_escolhida_id: Number(l.recorrencia_escolhida_id) }),
         salvar_apelido: Boolean(l.salvar_apelido), conciliar_previsao: Boolean(l.conciliar_previsao),
-        manter_duplicada: Boolean(l.manter_duplicada),
+        manter_duplicada: Boolean(l.manter_duplicada), manter_conciliada: Boolean(l.manter_conciliada),
     };
 }
 

@@ -199,6 +199,19 @@ def test_reimportacao_integral_e_complementar(banco):
     assert situacao(banco, ids['Claude']) == 'PREVISTA'
 
 
+def test_compra_casada_pelo_valor_mantida_como_diferente(banco):
+    """Regra herdada: mesmo valor e parcela, ate 5 dias, casa com a compra ja lancada; o usuario pode manter a nova."""
+    assinaturas(banco)
+    comprar(banco, descricao='Mercado do bairro', valor='50.00', total_parcelas=1, data_compra='2029-05-10')
+    l = linha(1, 'MERCADO BAIRRO*LOJA 2', '50.00', data='2029-05-12')
+    r = previa(banco, l)['linhas'][0]
+    assert (r['status'], r['classificacao_importacao']) == ('conciliado', 'JA_EXISTENTE')
+    mantida = previa(banco, {**l, 'manter_conciliada': True})['linhas'][0]
+    assert (mantida['status'], mantida['classificacao_importacao']) == ('valido', 'COMPRA')
+    importar(banco, {**l, 'manter_conciliada': True})
+    assert len(sql(banco, "select id from public.lancamento_agregado where valor = 50.00 and mes_fatura = %s", (MES,))) == 2
+
+
 def test_repetida_no_arquivo_so_entra_se_mantida(banco):
     assinaturas(banco)
     a, b = linha(1, 'CAFE', '5.00'), linha(2, 'CAFE', '5.00')

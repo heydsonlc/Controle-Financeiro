@@ -1352,6 +1352,31 @@ function alternarApelidoLinha(index, marcado) {
     if (linha) linha.salvar_apelido = Boolean(marcado);
 }
 
+// Compra que a regra herdada retirou mas pode ser legitima (novo aplicativo): casada pelo valor com compra ja lancada
+// (mesmo valor e parcela, ate 5 dias) ou repetida no proprio arquivo. O usuario decide mante-la.
+function linhaMantivel(linha) {
+    if (!classificacaoNova(linha) || linha.manter_conciliada || linha.manter_duplicada) return false;
+    return (linha.status === 'conciliado' && linhaDuplicadaPorReconhecimento(linha))
+        || (linha.status === 'duplicado' && linha.duplicidade === 'lote');
+}
+
+// "Manter como compra diferente": a linha volta como compra nova; a confirmacao manda a decisao (o banco respeita)
+function manterComoCompraDiferente(index) {
+    const linha = estado.linhasMapeadas[index];
+    if (!linha || !linhaMantivel(linha)) return;
+    if (linha.status === 'conciliado') linha.manter_conciliada = true;
+    else linha.manter_duplicada = true;
+    linha.ignorar = false;
+    linha.status = 'valido';
+    linha.status_classificacao = 'classificada';
+    linha.duplicidade = null;
+    linha.reconhecimento_match = null;
+    linha.conciliacao_sugerida = null;
+    linha.conciliar_previsao = false;
+    linha.classificacao_importacao = Number(linha.total_parcelas) > 1 ? 'PARCELADA' : 'COMPRA';
+    recalcularConfrontoAtual();
+}
+
 function alternarConciliacaoLinha(index, marcado) {
     const linha = estado.linhasMapeadas[index];
     if (!linha) return;
@@ -3418,6 +3443,7 @@ function renderizarLinhaRetirada(linha, index) {
             </td>
             <td>
                 <div class="row-actions operational">
+                    ${linhaMantivel(linha) ? `<button class="row-action-icon import-row-icon neutral" type="button" onclick="manterComoCompraDiferente(${index})" title="Manter como compra diferente" aria-label="Manter como compra diferente">${iconSvg('new')}</button>` : ''}
                     ${iconeBotaoAcao('success', 'undo', 'Restaurar', restauravel ? `alternarIgnorarLinha(${index})` : null, !restauravel)}
                     ${iconeBotaoAcao('neutral', 'eye', 'Ver detalhes', `detalharLinhaRetirada(${index})`)}
                 </div>
@@ -3612,6 +3638,9 @@ function montarPayloadImportacao() {
                 payload.recorrencia_escolhida_id = linha.recorrencia_escolhida_id;
             }
             if (linha.salvar_apelido) payload.salvar_apelido = true;
+            // compra que a regra herdada retiraria, mantida pelo usuario como compra diferente
+            if (linha.manter_conciliada) payload.manter_conciliada = true;
+            if (linha.manter_duplicada) payload.manter_duplicada = true;
 
             return payload;
         };

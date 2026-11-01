@@ -102,3 +102,28 @@ test('confirmacao: fixa, compra comum e a conciliacao da compra ja lancada vao n
     assert.equal(estado.linhasMapeadas[3].despesa_fixa.nome, 'Spotify Duo');
     assert.equal(ctx.validarNovosClassificados(), true);
 });
+
+test('compra retirada pela regra herdada (mesmo valor e parcela ate 5 dias, ou repetida no arquivo): o usuario a mantem', () => {
+    const pelo_valor = analise({ linha_id: 'csv-5', linha_origem: 5, status: 'conciliado', ignorar: true, descricao_original: 'MERCADO BAIRRO',
+        descricao_normalizada: 'MERCADO BAIRRO', valor: 50, classificacao_importacao: 'JA_EXISTENTE',
+        reconhecimento_match: { tipo: 'duplicado_atual', score: 90, descricao_sugerida: 'Mercado do bairro' } });
+    const repetida = analise({ linha_id: 'csv-6', linha_origem: 6, status: 'duplicado', duplicidade: 'lote', descricao_original: 'CAFE',
+        descricao_normalizada: 'CAFE', valor: 5, classificacao_importacao: 'JA_EXISTENTE' });
+    const reimportada = analise({ linha_id: 'csv-7', linha_origem: 7, status: 'duplicado', duplicidade: 'banco', descricao_original: 'PADARIA',
+        descricao_normalizada: 'PADARIA', valor: 12, classificacao_importacao: 'JA_EXISTENTE' });
+    const linhas = preparar([pelo_valor, repetida, reimportada]);
+    assert.deepEqual(linhas.map((l) => ctx.linhaMantivel(l)), [true, true, false]);  // a reimportada (mesma compra) nao
+    assert.match(ctx.renderizarLinhaRetirada(linhas[0], 0), /manterComoCompraDiferente\(0\)/);
+    assert.equal(dados(ctx.montarPayloadImportacao()).linhas.length, 0);
+    ctx.manterComoCompraDiferente(0);
+    ctx.manterComoCompraDiferente(1);
+    const envio = dados(ctx.montarPayloadImportacao()).linhas;
+    assert.deepEqual(envio.map((l) => [l.descricao_original, l.manter_conciliada ?? false, l.manter_duplicada ?? false]),
+        [['MERCADO BAIRRO', true, false], ['CAFE', false, true]]);
+});
+
+test('linha do Flask (sem classificacao do novo aplicativo) nao ganha a acao de manter', () => {
+    const [flask] = preparar([analise({ status: 'conciliado', ignorar: true,
+        reconhecimento_match: { tipo: 'duplicado_atual', score: 90 } })]);
+    assert.equal(ctx.linhaMantivel(flask), false);
+});
