@@ -120,7 +120,7 @@ A compra que a recorrência gera para o mês (a previsão) entrava no **executad
 ## 6. Pendências
 
 - **Publicação:** migration `20261209090000`, push e deploy, com autorização.
-- **Netflix 11/2026 e Apple One:** conciliação e apelido, com autorização específica.
+- **Netflix 11/2026 e Apple One:** conciliação e apelido, com autorização específica. A importação passou a oferecer as duas pela tela (`docs/FIN_CARTAO_IMPORTACAO_FIXAS_01.md`).
 - **Faturas de 10/2026 (Black e Visa) abertas só com previsões:** o executado passa a R$ 0,00. Se foram pagas fora do aplicativo, o registro do pagamento é assunto à parte; nada foi alterado.
 - **Previsão de recorrência inativada** (X Premium 10/2026): continua na fatura aberta como prevista. Dispensá-la é decisão do titular.
 - **Confirmação sem importação:** uma despesa fixa só deixa de ser prevista com a cobrança importada ou conciliada com uma compra lançada. Não há "confirmar cobrança" manual (não pedido).
