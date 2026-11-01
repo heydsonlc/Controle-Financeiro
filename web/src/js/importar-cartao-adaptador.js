@@ -93,6 +93,9 @@ function linhaParaBanco(l, indice) {
             : { recorrencia_escolhida_id: Number(l.recorrencia_escolhida_id) }),
         salvar_apelido: Boolean(l.salvar_apelido), conciliar_previsao: Boolean(l.conciliar_previsao),
         manter_duplicada: Boolean(l.manter_duplicada), manter_conciliada: Boolean(l.manter_conciliada),
+        // FIN-CARTAO-NUBANK-PARCELADAS-01: numero no texto que pode ser parcela (leitor do arquivo) e a decisao do usuario
+        ...(l.parcela_ambigua ? { parcela_ambigua: l.parcela_ambigua } : {}),
+        ...(l.natureza_parcela ? { natureza_parcela: l.natureza_parcela } : {}),
     };
 }
 
@@ -215,6 +218,7 @@ function resumo(analise, modo, gravado) {
         // FIN-CARTAO-IMPORTACAO-FIXAS-01: compras ja lancadas conciliadas com a previsao e despesas fixas reconhecidas
         conciliacoes: gravado ? gravado.conciliadas || 0 : linhas.filter((l) => l.conciliar_previsao).length,
         despesas_fixas: aGravar.filter((l) => l.classificacao_importacao === 'DESPESA_FIXA').length,
+        parceladas: aGravar.filter((l) => l.classificacao_importacao === 'PARCELADA').length,  // FIN-CARTAO-NUBANK-PARCELADAS-01
         erros: comErro.map((l) => ({ linha: l.linha_origem, erro: (l.mensagens || [])[0] || 'Linha precisa de revisão.' })),
         pendencias: { categoria_despesa: aGravar.length ? 0 : comErro.filter((l) => !l.categoria_id).length,
             categoria_cartao: aGravar.filter((l) => !l.categoria_cartao_id && !l.recorrencia_id && !(l.total_parcelas > 1)).length,

@@ -584,7 +584,11 @@ function converterLinhaIntermediaria(linha) {
         recorrencias_candidatas: linha.recorrencias_candidatas || null,
         apelido_sugerido: linha.apelido_sugerido || null,
         conciliacao_sugerida: linha.conciliacao_sugerida || null,
-        conciliar_previsao: Boolean(linha.conciliacao_sugerida)
+        conciliar_previsao: Boolean(linha.conciliacao_sugerida),
+        // Numero no texto que pode ser parcela (fora do padrao do arquivo), a decidir na previa, e a categoria pendente
+        parcela_ambigua: linha.parcela_ambigua || null,
+        natureza_parcela: linha.natureza_parcela || null,
+        categoria_pendente: Boolean(linha.categoria_pendente)
     };
 }
 
@@ -1240,6 +1244,9 @@ function detectarParcelamentoLinha(linha) {
             origem: 'campo'
         };
     }
+    // Previa do novo aplicativo: a parcela e a que o banco classificou; o numero no texto fora do padrao do arquivo vem
+    // como parcela_ambigua, para o usuario decidir (nao e redetectado aqui)
+    if (classificacaoNova(linha)) return null;
 
     const detectado = detectarParcelamentoTexto(descricaoOriginalLinha(linha)) || detectarParcelamentoTexto(linha.parcela);
     if (detectado) {
@@ -1280,13 +1287,48 @@ function classificacaoNova(linha) {
 // Despesa fixa reconhecida (ou em revisao, com recorrencia candidata), enquanto nao for tratada como compra comum
 function linhaFixaNova(linha) {
     const classe = classificacaoNova(linha);
-    if (!classe || linha.tratar_como_novo) return false;
+    if (!classe || linha.tratar_como_novo || linhaParcelaAmbigua(linha)) return false;
     return classe === 'DESPESA_FIXA'
         || (classe === 'REVISAR' && Boolean(linha.despesa_fixa || (linha.recorrencias_candidatas || []).length));
 }
 
 function linhasFixasConfirmaveis() {
     return estado.linhasMapeadas.filter((linha) => linhaFixaNova(linha) && linhaImportavel(linha));
+}
+
+// FIN-CARTAO-NUBANK-PARCELADAS-01: compra parcelada da previa do novo aplicativo (parcela nova, ou numero no texto que
+// pode ser parcela, a decidir). Entra na confirmacao, como as despesas fixas; "Criar parcelamento" segue para gerar as
+// parcelas futuras.
+function linhaParcelaAmbigua(linha) {
+    return Boolean(classificacaoNova(linha) && linha.parcela_ambigua && !linha.natureza_parcela);
+}
+
+function linhaParceladaNova(linha) {
+    return classificacaoNova(linha) === 'PARCELADA' || linhaParcelaAmbigua(linha);
+}
+
+function linhasParceladasConfirmaveis() {
+    return estado.linhasMapeadas.filter((linha) => linhaParceladaNova(linha) && linhaImportavel(linha));
+}
+
+function rotuloParcelaAmbigua(linha) {
+    const p = linha.parcela_ambigua || {};
+    return rotuloParcelamentoVisual({ numero: p.parcela_atual, total: p.total_parcelas });
+}
+
+// Decisao da previa sobre o numero ambiguo: PARCELADA (com o numero do texto) ou AVISTA. Nada e gravado agora: a
+// confirmacao manda a decisao e o banco a refaz.
+function definirNaturezaParcela(index, natureza) {
+    const linha = estado.linhasMapeadas[index];
+    if (!linha || !linha.parcela_ambigua || !['PARCELADA', 'AVISTA'].includes(natureza)) return;
+    const parcelada = natureza === 'PARCELADA';
+    const atual = parcelada ? Number(linha.parcela_ambigua.parcela_atual) : 1;
+    const total = parcelada ? Number(linha.parcela_ambigua.total_parcelas) : 1;
+    Object.assign(linha, {
+        natureza_parcela: natureza, numero_parcela: atual, parcela_atual: atual, total_parcelas: total,
+        parcela: `${atual}/${total}`, parcelado: total > 1, classificacao_importacao: parcelada ? 'PARCELADA' : 'COMPRA'
+    });
+    recalcularConfrontoAtual();
 }
 
 // Compras ja lancadas que a confirmacao concilia com a previsao da recorrencia (proposta da previa, desmarcavel)
@@ -1444,6 +1486,7 @@ function linhaReconhecimentoRecorrenciaPendente(linha) {
 function linhaNovaClassificavel(linha) {
     return linhaImportavel(linha)
         && !linhaPossivelParcelamento(linha)
+        && !linhaParceladaNova(linha)
         && !linhaPossivelRecorrencia(linha)
         && !linhaReconhecimentoPendente(linha);
 }
@@ -1478,6 +1521,7 @@ function montarAnaliseConfronto() {
         duplicados: [],
         conhecidos: [],
         parcelamentos: [],
+        parceladas: [],
         recorrencias: [],
         erros: []
     };
@@ -1508,6 +1552,12 @@ function montarAnaliseConfronto() {
                 reconhecimento: reconhecimentoLinha(linha),
                 motivo: motivoConfrontoLinha(linha, 'reconhecimento')
             });
+            return;
+        }
+
+        // Compra parcelada classificada pelo banco: vai para a confirmacao (nao fica retida como "possivel parcelamento")
+        if (linhaParceladaNova(linha)) {
+            grupos.parceladas.push({ ...itemBase, motivo: 'Compra parcelada' });
             return;
         }
 
@@ -1573,7 +1623,8 @@ function linhasNovasConfirmaveis() {
 }
 
 function novasSemCategoriaDespesa() {
-    return linhasNovasConfirmaveis().filter((linha) => !toIntOrNull(linha.categoria_id || linha.categoria_despesa_id));
+    return linhasNovasConfirmaveis().concat(linhasParceladasConfirmaveis())
+        .filter((linha) => !toIntOrNull(linha.categoria_id || linha.categoria_despesa_id));
 }
 
 function statusLinha(linha) {
@@ -1851,6 +1902,26 @@ function obterInfoOperacional(linha, index) {
             parcela,
             reconhecimento,
             fixaNova: true
+        };
+    }
+
+    if (linhaParceladaNova(linha)) {
+        const ambigua = linhaParcelaAmbigua(linha);
+        return {
+            linha,
+            index,
+            status: ambigua ? 'Revisar' : 'Compra parcelada',
+            classe: ambigua ? 'review' : 'parcelment',
+            tipo: 'Compra parcelada',
+            filtro: 'parcelados',
+            sugestao: ambigua
+                ? `Possível parcela ${rotuloParcelaAmbigua(linha)}: parcelada ou à vista?`
+                : `Parcela ${rotuloParcelamentoVisual(parcela)}`,
+            descricaoEditavel: true,
+            categoriaEditavel: true,
+            parcela,
+            reconhecimento,
+            parceladaNova: true
         };
     }
 
@@ -2295,7 +2366,7 @@ function renderizarLinhaOperacional(item) {
             <td>${escapeHtml(item.tipo || '—')}</td>
             <td class="import-description-cell one-line">
                 <span title="${escapeAttr(item.sugestao || '—')}">${escapeHtml(item.sugestao || '—')}</span>
-                ${classificacaoNova(linha) && (estado.recorrenciasCartao || []).length && !item.parcela
+                ${classificacaoNova(linha) && (estado.recorrenciasCartao || []).length && !item.parcela && !item.parceladaNova
                     ? seletorRecorrenciaLinha(linha, index) : ''}
             </td>
             <td class="import-operational-edit-cell">
@@ -2335,6 +2406,22 @@ function renderizarAcoesLinhaOperacional(item) {
             ${iconeBotaoAcao('success', 'check', 'Usar sugestão', `usarSugestaoReconhecimento(${index})`)}
             ${iconeBotaoAcao('neutral', 'new', 'Tratar como novo', `tratarReconhecimentoComoNovo(${index})`)}
             ${iconeBotaoAcao('danger', 'trash', 'Retirar', `ignorarReconhecimento(${index})`)}
+        </div>`;
+    }
+
+    // Compra parcelada da previa do novo aplicativo: entra na confirmacao; o numero ambiguo pede a decisao
+    if (item.parceladaNova) {
+        if (linhaParcelaAmbigua(linha)) {
+            const confirmar = escapeAttr(`Confirmar parcela ${rotuloParcelaAmbigua(linha)}`);
+            return `<div class="row-actions operational">
+                <button class="row-action-icon import-row-icon parcel" type="button" onclick="definirNaturezaParcela(${index}, 'PARCELADA')" title="${confirmar}" aria-label="${confirmar}">${iconSvg('parcel')}</button>
+                <button class="row-action-icon import-row-icon neutral" type="button" onclick="definirNaturezaParcela(${index}, 'AVISTA')" title="Tratar como compra à vista" aria-label="Tratar como compra à vista">${iconSvg('new')}</button>
+                ${iconeBotaoAcao('danger', 'trash', 'Retirar', `alternarIgnorarLinha(${index})`)}
+            </div>`;
+        }
+        return `<div class="row-actions operational">
+            ${iconeBotaoAcao('parcel', 'parcel', 'Criar parcelamento', `abrirModalParcelamento(${index})`)}
+            ${iconeBotaoAcao('danger', 'trash', 'Retirar', `alternarIgnorarLinha(${index})`)}
         </div>`;
     }
 
@@ -3534,7 +3621,8 @@ function atualizarResumoPainel() {
     const novos = estado.resumoPrevia ? estado.resumoPrevia.inseridos : novosConfronto;
     const bloqueados = resumo.duplicadas + resumo.creditos + estado.linhasInvalidasIniciais.length;
     const valorPlanejado = estado.analiseConfronto
-        ? linhasNovasConfirmaveis().reduce((acc, linha) => acc + (parseValorNumerico(linha.valor) || 0), 0)
+        ? linhasNovasConfirmaveis().concat(linhasParceladasConfirmaveis())
+            .reduce((acc, linha) => acc + (parseValorNumerico(linha.valor) || 0), 0)
         : resumo.totalPrevisto;
 
     setText('detectedCount', totalDetectado);
@@ -3571,9 +3659,11 @@ function atualizarControlesImportacao(resumo = calcularResumoLocal()) {
     }
 
     if (btnImportar) {
-        // novos + despesas fixas reconhecidas + compras ja lancadas a conciliar (as duas ultimas so no novo aplicativo)
+        // novos + despesas fixas reconhecidas + compras ja lancadas a conciliar + compras parceladas (as tres ultimas so no
+        // novo aplicativo)
         const quantidade = estado.analiseConfronto
             ? linhasNovasConfirmaveis().length + linhasFixasConfirmaveis().length + linhasConciliacaoConfirmaveis().length
+                + linhasParceladasConfirmaveis().length
             : 0;
         btnImportar.disabled = !estado.analiseConfronto || quantidade === 0 || novasSemCategoriaDespesa().length > 0;
         btnImportar.innerHTML = `
@@ -3641,13 +3731,18 @@ function montarPayloadImportacao() {
             // compra que a regra herdada retiraria, mantida pelo usuario como compra diferente
             if (linha.manter_conciliada) payload.manter_conciliada = true;
             if (linha.manter_duplicada) payload.manter_duplicada = true;
+            // numero no texto que pode ser parcela e a decisao do usuario (parcelada ou a vista)
+            if (linha.parcela_ambigua) payload.parcela_ambigua = linha.parcela_ambigua;
+            if (linha.natureza_parcela) payload.natureza_parcela = linha.natureza_parcela;
 
             return payload;
         };
-    // Novos lancamentos; despesas fixas reconhecidas (realizam a previsao); compras ja lancadas a conciliar com a previsao
+    // Novos lancamentos; despesas fixas reconhecidas (realizam a previsao); compras ja lancadas a conciliar com a previsao;
+    // compras parceladas (a parcela da fatura)
     const linhas = linhasNovasConfirmaveis().map(paraPayload)
         .concat(linhasFixasConfirmaveis().map(paraPayload))
-        .concat(linhasConciliacaoConfirmaveis().map((linha) => ({ ...paraPayload(linha), conciliar_previsao: true })));
+        .concat(linhasConciliacaoConfirmaveis().map((linha) => ({ ...paraPayload(linha), conciliar_previsao: true })))
+        .concat(linhasParceladasConfirmaveis().map(paraPayload));
 
     return {
         cartao_id: cartaoId,
@@ -3673,8 +3768,16 @@ function validarNovosClassificados() {
     }
 
     const novos = linhasNovasConfirmaveis();
-    if (!novos.length && !linhasFixasConfirmaveis().length && !linhasConciliacaoConfirmaveis().length) {
+    if (!novos.length && !linhasFixasConfirmaveis().length && !linhasConciliacaoConfirmaveis().length
+        && !linhasParceladasConfirmaveis().length) {
         alert('Nenhum lancamento novo selecionado para importacao.');
+        return false;
+    }
+
+    // Numero no texto que pode ser parcela: nada e decidido em silencio
+    const ambiguas = linhasParceladasConfirmaveis().filter(linhaParcelaAmbigua);
+    if (ambiguas.length) {
+        alert(`Revise ${ambiguas.length} possivel(is) parcela(s): confirme como compra parcelada, trate como compra a vista ou retire a linha.`);
         return false;
     }
 
@@ -3852,6 +3955,7 @@ async function finalizarImportacao() {
             `Confirmar importacao de ${previa.inseridos} lancamentos novos?\n\n` +
             (previa.despesas_fixas ? `Despesas fixas reconhecidas: ${previa.despesas_fixas}\n` : '') +
             (previa.conciliacoes ? `Compras ja lancadas conciliadas com a previsao: ${previa.conciliacoes}\n` : '') +
+            (previa.parceladas ? `Compras parceladas: ${previa.parceladas}\n` : '') +
             `Ignorados: ${resumo.ignoradas}\n` +
             `Duplicados protegidos: ${previa.duplicados}\n` +
             `Possiveis parcelamentos fora deste MVP: ${estado.analiseConfronto?.parcelamentos.length || 0}`
