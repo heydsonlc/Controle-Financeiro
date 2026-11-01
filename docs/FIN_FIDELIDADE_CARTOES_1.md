@@ -59,7 +59,7 @@
 - fatura consolidada: a importação inteira é recusada;
 - rastreio no lançamento: `is_importado`, `origem_importacao`, `descricao_original`, `descricao_original_normalizada`; o resumo fica em `operacao_cartao`.
 
-**Crédito na fatura** (verificado a pedido do titular):
+**Crédito na fatura** (verificado a pedido do titular). *Regra substituída em 01/11/2026 pelo FIN-CARTAO-NUBANK-CREDITOS-01 (`docs/FIN_CARTAO_NUBANK_CREDITOS_01.md`): estorno, IOF devolvido e ajuste passaram a ser créditos da fatura (`financeiro.credito_fatura`), que abatem o valor a pagar uma vez; o pagamento recebido continua fora. O texto abaixo descreve a regra deste pacote.*
 - **No Flask e no banco:** crédito na fatura não tem representação como lançamento. O Flask ignora toda linha de crédito, e o leitor de PDF descarta até "OBRIGADO PELO PAGAMENTO". O pagamento da fatura existe só em `financeiro.pagamento_fatura`, registrado em Despesas.
 - **Aqui:** nenhum crédito entra como compra nem reduz a fatura. A análise classifica e explica cada tipo:
   - pagamento da fatura: registrado em Despesas, como pagamento;
@@ -74,7 +74,7 @@
 |---|---|
 | CSV Nubank, Caixa e manual; prévia; confronto; retirados; confirmação; resultado | Funcionando |
 | Reimportar o mesmo arquivo | Nada novo; nada gravado (verificado em E2E) |
-| Créditos e estornos | Identificados e não importados como despesa (ver diferenças) |
+| Créditos e estornos | Identificados e não importados como despesa (ver diferenças); desde o FIN-CARTAO-NUBANK-CREDITOS-01, abatem o valor a pagar |
 | PDF e XLSX | **Pendente** (I1) |
 | Vincular a linha a uma recorrência escolhida (`/recorrencia`) | **Pendente** (I2). A recorrência com o mesmo nome já é reconhecida |
 

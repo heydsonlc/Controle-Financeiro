@@ -166,7 +166,7 @@ As 12 parcelas que faltam, todas na fatura 11/2026:
    - Grava só as 12, sem alterar nenhuma compra existente. A confirmação é idempotente e recusa a segunda vez.
    - Antes e depois, retrato só de leitura.
    - Pagamentos, faturas pagas, movimentos e saldos não mudam.
-2. **Créditos da fatura** (estorno e IOF de volta): não são importados, por regra herdada do Flask. O total do aplicativo fica R$ 53,40 acima do boleto. Decisão à parte.
+2. **Créditos da fatura** (estorno e IOF de volta): resolvido no FIN-CARTAO-NUBANK-CREDITOS-01 (`docs/FIN_CARTAO_NUBANK_CREDITOS_01.md`). Lá também: o Visa 11/2026 tem a mesma falha (11 parcelas e a Netflix R$ 59,90 não gravadas), e a regularização das duas faturas é feita junto.
 3. **Plano NuCel:** a cobrança de R$ 70,00 (compra 652) foi importada como compra comum. A previsão "Plano NullCel" de 11/2026 continua pendente: o nome difere. É candidata à conciliação pela tela (como a Netflix), ou a um apelido.
 4. **Parcelas futuras:** a importação grava só a parcela da fatura. As futuras, quando desejadas, ficam com "Criar parcelamento". Nos meses seguintes, a parcela do arquivo é reconhecida.
 5. Netflix 11/2026 e apelido da Apple One: seguem como antes, cada um com autorização própria.
