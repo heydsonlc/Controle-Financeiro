@@ -119,13 +119,15 @@ def test_fatura_por_categoria_separa_parceladas_e_fixas(banco):
     assert (grupos['categoria_cartao']['categoria_cartao_id'], grupos['categoria_cartao']['gasto_atual'],
             grupos['categoria_cartao']['quantidade_lancamentos'], grupos['categoria_cartao']['disponivel']) == (961, 40, 1, 460)
     assert (grupos['despesas_fixas']['gasto_atual'], grupos['despesas_fixas']['categoria_cartao_id'],
-            grupos['despesas_fixas']['status'], grupos['despesas_fixas']['limite_mensal']) == (45.9, 'despesas_fixas', 'Contratada', None)
+            grupos['despesas_fixas']['status'], grupos['despesas_fixas']['limite_mensal']) == (0, 'despesas_fixas', 'Contratada', None)
+    # FIN-CARTAO-PREVISTO-EXECUTADO-01: a fixa ainda sem cobranca fica fora do executado, no previsto pendente
+    assert grupos['despesas_fixas']['previsto_pendente'] == 45.9
     assert (grupos['compras_parceladas']['gasto_atual'], grupos['compras_parceladas']['categoria_cartao_id']) == (100, 'compras_parceladas')
     assert (grupos['sem_categoria']['gasto_atual'], grupos['sem_categoria']['quantidade_lancamentos']) == (10, 1)
     assert [g['tipo_grupo'] for g in r['categorias']] == ['categoria_cartao', 'compras_parceladas', 'despesas_fixas', 'sem_categoria']
-    assert sum(g['gasto_atual'] for g in r['categorias']) == r['total_fatura'] == 195.9  # nada perdido nem duplicado
+    assert sum(g['gasto_atual'] for g in r['categorias']) == r['total_fatura'] == 150  # nada perdido nem duplicado
     assert (r['total_com_categoria'], r['total_sem_categoria_cartao'], r['total_despesas_fixas'],
-            r['total_compras_parceladas'], r['disponivel_total']) == (40, 10, 45.9, 100, 460)
+            r['total_compras_parceladas'], r['disponivel_total']) == (40, 10, 0, 100, 460)
 
 
 def test_limites_e_lancamentos_por_filtro(banco):
@@ -148,11 +150,12 @@ def test_previsto_da_lista_e_das_faturas_sem_abater_parceladas_e_fixas(banco):
     cenario_leituras(banco)
     f = fatura(banco, CARTAO, MES)
     linha_lista = next(c for c in tabela(banco, 'contas_do_mes', PESSOAL, MES) if c['id'] == f['id'])
-    # executado 195,90 + o que falta do limite 961 (500 - 40, so a compra variavel)
+    # executado 150,00 (sem a fixa prevista de 45,90: FIN-CARTAO-PREVISTO-EXECUTADO-01); previsto = executado + 45,90
+    # previstos + o que falta do limite 961 (500 - 40, so a compra variavel) = 655,90, como antes
     assert (Decimal(str(linha_lista['valor_executado'])), Decimal(str(linha_lista['valor_previsto']))) == \
-        (Decimal('195.90'), Decimal('655.90'))
+        (Decimal('150.00'), Decimal('655.90'))
     cartao = next(x for x in tabela(banco, 'faturas_do_mes', PESSOAL, MES) if x['cartao_id'] == CARTAO)
-    assert (Decimal(str(cartao['valor_executado'])), Decimal(str(cartao['valor_previsto']))) == (Decimal('195.90'), Decimal('655.90'))
+    assert (Decimal(str(cartao['valor_executado'])), Decimal(str(cartao['valor_previsto']))) == (Decimal('150.00'), Decimal('655.90'))
 
 
 def test_dashboard_sem_parceladas_e_fixas(banco):
@@ -268,7 +271,8 @@ def test_importacao_realiza_a_previsao_sem_duplicar(banco):
         (Decimal('59.90'), Decimal('44.90'), 'IMPORTACAO', None)
     lida = compras(banco)[real['id']]
     assert (lida['natureza'], lida['valor'], lida['valor_previsto'], lida['situacao_ocorrencia']) == ('FIXA', 44.9, 59.9, 'CONFIRMADA')
-    assert fatura(banco, CARTAO, MES)['valor_executado'] == Decimal('314.60')  # 59,90 + 99,90 + 109,90 + 44,90 (real)
+    # so a cobranca real: as previsoes de ChatGPT, Claude e Apple One ficam fora (FIN-CARTAO-PREVISTO-EXECUTADO-01)
+    assert fatura(banco, CARTAO, MES)['valor_executado'] == Decimal('44.90')
     # valor-base da recorrencia intacto; a proxima competencia continua prevista em R$ 59,90
     assert sql(banco, 'select valor from public.item_despesa where id = %s', (ids['Netflix'],))[0]['valor'] == Decimal('59.90')
     gerar_mes(banco, '2029-06-01')
@@ -319,7 +323,8 @@ def conciliar(dsn, previsto, cobranca, chave=None, usuario=None, **kw):
 def test_conciliacao_netflix_uma_ocorrencia_e_reversao(banco):
     item, previsto, cobranca = caso_netflix(banco)
     absorvida = sql(banco, 'select * from public.lancamento_agregado where id = %s', (cobranca,))[0]
-    assert fatura(banco, CARTAO, MES)['valor_executado'] == Decimal('104.80')  # dupla contagem antes
+    # so a cobranca real; a previsao fica fora do executado (FIN-CARTAO-PREVISTO-EXECUTADO-01)
+    assert fatura(banco, CARTAO, MES)['valor_executado'] == Decimal('44.90')
     chave = str(uuid.uuid4())
     r = conciliar(banco, previsto, cobranca, chave=chave)
     assert (r['valor_previsto'], r['valor_executado'], r['diferenca']) == (59.9, 44.9, -15.0)
@@ -340,7 +345,7 @@ def test_conciliacao_netflix_uma_ocorrencia_e_reversao(banco):
     assert ocorrencia(banco, item)['valor'] == Decimal('59.90')
     volta = sql(banco, 'select * from public.lancamento_agregado where id = %s', (cobranca,))[0]
     assert dict(volta) == dict(absorvida)
-    assert fatura(banco, CARTAO, MES)['valor_executado'] == Decimal('104.80')
+    assert fatura(banco, CARTAO, MES)['valor_executado'] == Decimal('44.90')
     assert falha(banco, 'reverter_ocorrencia_recorrencia', PESSOAL, r['ocorrencia_id'], str(uuid.uuid4()))[0] == 'P0001'
 
 
