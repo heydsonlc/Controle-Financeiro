@@ -163,7 +163,9 @@ def test_categorias_do_cartao_do_perfil_com_legado(banco):
 
 
 def test_limites_com_gasto_do_mes_como_o_flask(banco):
-    comprar(banco)  # 100,00 em 3x a partir de 05/2029, categoria 952 -> 961
+    comprar(banco, total_parcelas=1, valor='33.34')  # a vista, categoria 952 -> 961
+    # FIN-CARTAO-DESPESAS-FIXAS-01 (divergencia aceita do Flask): a parcelada nao consome o limite da Categoria do Cartao
+    comprar(banco)  # 100,00 em 3x a partir de 05/2029, tambem 961
     lim = limites(banco)
     assert set(lim) == {981, 982}  # 983 e de perfil NULL: o Flask lista so os do perfil
     assert (lim[981]['gasto_atual'], lim[981]['disponivel'], lim[981]['percentual_utilizado']) == (33.34, 466.66, 6.67)
@@ -233,17 +235,22 @@ def test_leitor_nao_altera_limites(banco):
 # ---------------------------------------------------------------------------
 
 def test_fatura_por_categoria_como_o_flask(banco):
-    comprar(banco)                                                       # 33,34 classificado (961)
+    comprar(banco, total_parcelas=1, valor='33.34')                      # 33,34 a vista classificado (961)
+    comprar(banco)                                                       # parcela de 33,34 (961): fora da categoria
     a_vista(banco, descricao='Mercado', valor='40.00', categoria_id=MORADIA)  # sem Categoria do Cartao
     sql(banco, "insert into public.lancamento_agregado (perfil_financeiro_id, cartao_id, categoria_id, categoria_cartao_id, "
                "descricao, valor, data_compra, mes_fatura, numero_parcela, total_parcelas) "
                "values (%s, %s, %s, 962, 'Sem limite', 10.00, '2029-05-02', '2029-05-01', 1, 1)", (PESSOAL, CARTAO, MORADIA))
     r = resumo(banco)
-    assert (r['total_fatura'], r['total_com_categoria'], r['total_sem_categoria_cartao']) == (83.34, 43.34, 40.0)
+    # FIN-CARTAO-DESPESAS-FIXAS-01 (divergencia aceita do Flask): a parcela entra no total, em grupo proprio, e nao na
+    # Categoria do Cartao.
+    assert (r['total_fatura'], r['total_com_categoria'], r['total_sem_categoria_cartao'], r['total_compras_parceladas']) == \
+        (116.68, 43.34, 40.0, 33.34)
     # Limite total: so os ativos do perfil (981); disponivel e percentual so com as categorias vinculadas.
     assert (r['limite_total'], r['disponivel_total'], r['percentual_total'], r['status_total']) == (500, 466.66, 6.67, 'Normal')
     grupos = {g['tipo_grupo']: g for g in r['categorias']}
-    assert [g['tipo_grupo'] for g in r['categorias']] == ['categoria_cartao', 'categoria_sem_limite', 'sem_categoria']
+    assert [g['tipo_grupo'] for g in r['categorias']] == ['categoria_cartao', 'categoria_sem_limite', 'compras_parceladas',
+                                                          'sem_categoria']
     assert (grupos['categoria_cartao']['categoria_cartao_nome'], grupos['categoria_cartao']['gasto_atual'],
             grupos['categoria_cartao']['disponivel'], grupos['categoria_cartao']['status']) == ('Streaming CC', 33.34, 466.66, 'Normal')
     assert (grupos['categoria_sem_limite']['categoria_cartao_id'], grupos['categoria_sem_limite']['disponivel'],
@@ -273,7 +280,9 @@ def test_lancamentos_por_filtro_e_bloqueio(banco):
     assert [(x['descricao'], x['status_classificacao']) for x in todos] == \
         [('Notebook', 'classificado'), ('Mercado', 'sem_categoria_cartao')]
     assert [x['descricao'] for x in lancamentos(banco, 'sem_categoria')] == ['Mercado']
-    assert [x['descricao'] for x in lancamentos(banco, '961')] == ['Notebook']
+    # FIN-CARTAO-DESPESAS-FIXAS-01: a parcelada tem filtro proprio e nao entra na Categoria do Cartao
+    assert [x['descricao'] for x in lancamentos(banco, 'compras_parceladas')] == ['Notebook']
+    assert lancamentos(banco, '961') == []
     assert todos[0]['parcela_atual'] == 1 and todos[0]['parcelas_total'] == 3 and todos[0]['compra_id']
     assert all(x['pode_editar'] for x in todos)
     pagar(banco, CARTAO, '2029-05-01')

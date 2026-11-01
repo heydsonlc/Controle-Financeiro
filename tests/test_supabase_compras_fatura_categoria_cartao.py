@@ -84,7 +84,8 @@ def test_devolve_a_categoria_do_cartao_gravada(banco):
 def test_colunas_anteriores_iguais_e_a_nova_no_fim(banco):
     cenario(banco)
     lidas = compras(banco)
-    assert all(list(x) == COLUNAS_ANTERIORES + ['categoria_cartao_id'] for x in lidas)
+    # 20261208090000 acrescenta valor_previsto, natureza e situacao_ocorrencia depois desta (FIN-CARTAO-DESPESAS-FIXAS-01).
+    assert all(list(x)[:len(COLUNAS_ANTERIORES) + 1] == COLUNAS_ANTERIORES + ['categoria_cartao_id'] for x in lidas)
     notebook = next(x for x in lidas if x['descricao'].startswith('Notebook'))
     assert (notebook['numero_parcela'], notebook['total_parcelas'], notebook['recorrente']) == (1, 3, False)
 

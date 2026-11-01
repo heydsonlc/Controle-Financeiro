@@ -2643,7 +2643,10 @@ function organizarLancamentosEmBlocos(lancamentos, resumoCartao) {
         else if (isRecorrenteCartao && totalParcelas <= 1) {
             blocos.fixas.push({
                 descricao: lanc.descricao,
-                valor: valorLanc
+                valor: valorLanc,
+                // Previsto da ocorrencia e situacao (prevista/confirmada), quando a API informa
+                valor_previsto: lanc.valor_previsto ?? null,
+                situacao_ocorrencia: lanc.situacao_ocorrencia ?? null
             });
         }
         // PARTE 3: Despesas por Categoria (com previsão)
@@ -2767,15 +2770,38 @@ function renderizarBlocoParceladas(parceladas) {
     `;
 }
 
+/**
+ * Legenda previsto x executado de uma despesa fixa (vazia quando a API nao informa o previsto)
+ */
+function legendaFixa(f) {
+    if (f.valor_previsto === null || f.valor_previsto === undefined) return '';
+    const previsto = parseFloat(f.valor_previsto || 0);
+    if (f.situacao_ocorrencia === 'PREVISTA') {
+        return `Previsto R$ ${formatarValorBR(previsto)} · cobrança ainda não importada`;
+    }
+    const diferenca = Math.round((parseFloat(f.valor || 0) - previsto) * 100) / 100;
+    if (diferenca === 0) return `Previsto R$ ${formatarValorBR(previsto)} · confirmado`;
+    return `Previsto R$ ${formatarValorBR(previsto)} · diferença ${diferenca < 0 ? '−' : '+'}R$ ${formatarValorBR(Math.abs(diferenca))}`;
+}
+
 function renderizarBlocoFixas(fixas) {
     const total = fixas.reduce((sum, f) => sum + (f.valor || 0), 0);
     const linhas = fixas.length > 0
-        ? fixas.map(f => `
+        ? fixas.map(f => {
+            const legenda = legendaFixa(f);
+            const titulo = legenda
+                ? `<div>
+                    <div class="linha-titulo">${f.descricao}</div>
+                    <div class="linha-legenda">${legenda}</div>
+                </div>`
+                : `<div class="linha-titulo">${f.descricao}</div>`;
+            return `
             <div class="linha-simples">
-                <div class="linha-titulo">${f.descricao}</div>
+                ${titulo}
                 <div class="linha-valor">R$ ${formatarValorBR(f.valor)}</div>
             </div>
-        `).join('')
+        `;
+        }).join('')
         : '<div class="linha-vazia">Nenhuma despesa fixa no cartão neste mês.</div>';
 
     return `

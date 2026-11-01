@@ -277,17 +277,23 @@ def test_gasto_acima_da_previsao_nao_reprograma_o_mes_seguinte(banco):
 
 
 def test_recorrencia_importada_com_valor_diferente_nao_duplica_a_ocorrencia(banco):
-    """Como vincular_linha_recorrencia do Flask: a ocorrencia do mes ja existe; a linha nao gera outra compra."""
+    """A ocorrencia do mes ja existe (prevista): a linha nao gera outra compra. FIN-CARTAO-DESPESAS-FIXAS-01: a cobranca
+    real realiza a previsao (executado R$ 49,90, previsto R$ 45,90 preservado); antes ela so saia da efetivacao."""
     item = criar(banco)['item_id']
     gerar_mes(banco, '2029-05-01')
+    prevista = [x for x in compras_da_recorrencia(banco, item) if str(x['mes_fatura']) == '2029-05-01'][0]
     linha = {**_linha_importada(1, '49.90', '2029-05-20'), 'descricao_original': 'Streaming no cartao',
              'descricao_normalizada': 'Streaming no cartao', 'descricao_exibida': 'Streaming no cartao',
              'descricao_classificacao': 'streaming no cartao'}
     analise = rpc(banco, 'analisar_importacao_cartao', PESSOAL, CARTAO, '2029-05-01', [linha])['linhas'][0]
-    assert (analise['status'], analise['ignorar'], analise['conciliacao']['valor']) == ('conciliado', True, 45.9)
-    assert 'Recorrencia ja lancada nesta fatura' in ' '.join(analise['mensagens'])
-    assert falha(banco, 'importar_fatura_cartao', PESSOAL, CARTAO, '2029-05-01', [linha], str(uuid.uuid4()))[1] == 'Nenhuma linha para importar'
-    assert [x['valor'] for x in compras_da_recorrencia(banco, item) if str(x['mes_fatura']) == '2029-05-01'] == [Decimal('45.90')]
+    assert (analise['status'], analise['ignorar'], analise['realiza_lancamento_id'], analise['valor_previsto']) == \
+        ('valido', False, prevista['id'], 45.9)
+    assert 'confirma a previsao de R$ 45.90' in ' '.join(analise['mensagens'])
+    assert rpc(banco, 'importar_fatura_cartao', PESSOAL, CARTAO, '2029-05-01', [linha], str(uuid.uuid4()))['realizadas'] == 1
+    maio = [x for x in compras_da_recorrencia(banco, item) if str(x['mes_fatura']) == '2029-05-01']
+    assert [(x['id'], x['valor']) for x in maio] == [(prevista['id'], Decimal('49.90'))]
+    assert sql(banco, 'select valor_previsto from financeiro.ocorrencia_recorrencia_cartao where lancamento_id = %s',
+               (prevista['id'],))[0]['valor_previsto'] == Decimal('45.90')
 
 
 def test_recorrencia_importada_antes_da_geracao_e_reconhecida_pelo_gerador(banco):
@@ -331,7 +337,9 @@ def test_reversao_20261107_restaura_a_definicao_anterior_e_volta(banco):
     atual = "select p.prosrc from pg_proc p where p.oid = %s::regprocedure"
     privilegios = (f"select has_function_privilege('authenticated', '{ANALISAR}', 'execute') a, "
                    f"has_function_privilege('anon', '{ANALISAR}', 'execute') n")
-    assert sql(banco, atual, (ANALISAR,))[0]['prosrc'] == _corpo_analisar(nova)
+    # vigente: a de 20261208090000 (FIN-CARTAO-DESPESAS-FIXAS-01), que substitui a de 20261107090000
+    vigente = RAIZ_SUPABASE / 'migrations' / '20261208090000_financeiro_cartao_despesas_fixas.sql'
+    assert sql(banco, atual, (ANALISAR,))[0]['prosrc'] == _corpo_analisar(vigente)
     _aplicar(banco, reversao)
     assert sql(banco, atual, (ANALISAR,))[0]['prosrc'] == _corpo_analisar(anterior)
     assert (lambda r: (r['a'], r['n']))(sql(banco, privilegios)[0]) == (True, False)

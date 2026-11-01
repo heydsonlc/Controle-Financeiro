@@ -439,7 +439,11 @@ async function comprasDaFatura(cartaoId, parametros) {
     return ok({ data: (data || []).map((c) => ({
         id: c.id, descricao: c.descricao, valor: Number(c.valor), data_compra: c.data_compra,
         numero_parcela: c.numero_parcela, total_parcelas: c.total_parcelas, categoria_cartao_id: c.categoria_cartao_id,
-        categoria_cartao_nome: c.categoria_nome, is_recorrente: Boolean(c.recorrente),
+        categoria_cartao_nome: c.categoria_nome,
+        // FIN-CARTAO-DESPESAS-FIXAS-01: a natureza vem do banco (uma regra so); a fixa traz o previsto da ocorrencia.
+        is_recorrente: c.natureza ? c.natureza === 'FIXA' : Boolean(c.recorrente),
+        valor_previsto: c.valor_previsto === null || c.valor_previsto === undefined ? null : Number(c.valor_previsto),
+        situacao_ocorrencia: c.situacao_ocorrencia || null,
     })) });
 }
 

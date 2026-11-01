@@ -9,6 +9,9 @@ import { chamarRpc, perfilAtivoId, registrarDialogos } from './despesas.mjs';
 const A = { email: process.env.CF_EMAIL_A || 'usuario.a@teste.local', senha: process.env.CF_SENHA_A };
 const B = { email: process.env.CF_EMAIL_B || 'usuario.b@teste.local', senha: process.env.CF_SENHA_B };
 const VEICULO = 'Carro E2E (ficticio)';
+// "Hoje" como o banco (financeiro.hoje_brasilia), e nao em UTC: das 21h a meia-noite de Brasilia a data UTC ja e o dia
+// seguinte, e no ultimo dia do mes o veiculo nasceria no mes seguinte (11 projecoes na janela de 12 meses).
+const HOJE_BRASILIA = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
 
 test.use({ viewport: { width: 1366, height: 900 } });
 
@@ -62,7 +65,7 @@ test('veiculo, assinatura e transporte por app como no Flask; cadastro, projecoe
     // Cadastro: o veiculo novo sai com as projecoes do MVP (categorias sistemicas, nunca criadas aqui).
     const novo = await api(page, 'POST', '/api/veiculos', {
         nome: 'Moto E2E (ficticia)', tipo: 'moto', combustivel: 'gasolina', autonomia_km_l: 30, status: 'ATIVO',
-        data_inicio: new Date().toISOString().slice(0, 10), combustivel_valor_mensal: 150, preco_medio_combustivel: 6,
+        data_inicio: HOJE_BRASILIA, combustivel_valor_mensal: 150, preco_medio_combustivel: 6,
     });
     expect(novo.status).toBe(201);
     expect(novo.corpo.data.nome).toBe('Moto E2E (ficticia)');

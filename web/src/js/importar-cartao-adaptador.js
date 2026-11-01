@@ -201,10 +201,14 @@ function resumo(analise, modo, gravado) {
     const avisos = linhas.flatMap((l, i) => (l.mensagens || []).map((aviso) => ({ linha: i + 1, aviso, avisos: [aviso] })));
     return {
         success: true, modo, total_recebidas: linhas.length, linhas_validas: aGravar.length, linhas_invalidas: comErro.length,
-        inseridos: gravado ? gravado.inseridos : aGravar.reduce((s, l) => s + parcelas(l), 0), duplicados: duplicadas.length,
+        // FIN-CARTAO-DESPESAS-FIXAS-01: a cobranca real que realiza a previsao da recorrencia conta como importada (sem
+        // compra nova); recorrencia e parcelada nao precisam de Categoria do Cartao.
+        inseridos: gravado ? gravado.inseridos + (gravado.realizadas || 0) : aGravar.reduce((s, l) => s + parcelas(l), 0),
+        realizadas: gravado ? gravado.realizadas || 0 : aGravar.filter((l) => l.realiza_lancamento_id).length, duplicados: duplicadas.length,
         erros: comErro.map((l) => ({ linha: l.linha_origem, erro: (l.mensagens || [])[0] || 'Linha precisa de revisão.' })),
         pendencias: { categoria_despesa: aGravar.length ? 0 : comErro.filter((l) => !l.categoria_id).length,
-            categoria_cartao: aGravar.filter((l) => !l.categoria_cartao_id).length, avisos: avisos.length },
+            categoria_cartao: aGravar.filter((l) => !l.categoria_cartao_id && !l.recorrencia_id && !(l.total_parcelas > 1)).length,
+            avisos: avisos.length },
         avisos_linhas: avisos.slice(0, 50),
         amostra_duplicados: duplicadas.slice(0, 20).map((l) => ({ descricao: l.descricao_exibida, data_compra: l.data_compra,
             valor: Number(l.valor), numero_parcela: l.parcela_atual, total_parcelas: l.total_parcelas,

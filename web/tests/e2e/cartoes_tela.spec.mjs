@@ -127,9 +127,11 @@ test('tela original pelo menu: cartoes, fatura por Categoria do Cartao e lancame
     await mesDaFatura(page, '2026-11');
     await expect(metrica(page, 'Total da fatura')).toHaveText('R$ 1.220,00');
     await expect(metrica(page, 'Limite total')).toHaveText('R$ 0,00');
-    await expect(page.locator('.fatura-table-row .table-category')).toHaveText(['Mercado', 'Restaurantes', 'Combustivel', 'Sem Categoria do Cartao']);
+    // FIN-CARTAO-DESPESAS-FIXAS-01: a parcela (sem Categoria do Cartao) fica no grupo proprio, fora das categorias.
+    await expect(page.locator('.fatura-table-row .table-category')).toHaveText(['Mercado', 'Restaurantes', 'Combustivel', 'Compras parceladas']);
     await expect(grupo(page, 'Mercado').locator('.usage-cell strong')).toHaveText('R$ 500,00');
-    await expect(grupo(page, 'Sem Categoria do Cartao').locator('.fatura-row-warning')).toHaveText('Lancamentos sem Categoria do Cartao devem ser revisados.');
+    await expect(grupo(page, 'Compras parceladas').locator('.fatura-row-warning')).toHaveText('Parcelas ja contratadas: nao consomem limite de Categoria do Cartao.');
+    await expect(grupo(page, 'Compras parceladas').locator('.usage-cell strong')).toHaveText('R$ 200,00');
     await expect(page.locator('.fatura-lancamento-row')).toHaveCount(6);
     await expect(lancamento(page, 'Compra parcelada')).toContainText('2/3');
     await grupo(page, 'Restaurantes').locator('[data-action="ver-lancamentos-fatura"]').click();
@@ -197,8 +199,10 @@ test('cadastro, limites, compra, edicao de um lancamento, parcelas futuras, excl
 
     await mesDaFatura(page, '2031-05');
     await expect(metrica(page, 'Total da fatura')).toHaveText('R$ 33,34');
-    await expect(metrica(page, 'Disponível')).toHaveText('R$ 466,66');
+    // FIN-CARTAO-DESPESAS-FIXAS-01: a parcela (Categoria do Cartao Mercado B gravada) nao consome o limite da categoria
+    await expect(metrica(page, 'Disponível')).toHaveText('R$ 500,00');
     await expect(grupo(page, 'Mercado B').locator('.compact-pill')).toHaveText('Normal');
+    await expect(grupo(page, 'Compras parceladas').locator('.usage-cell strong')).toHaveText('R$ 33,34');
     await expect(lancamento(page, 'Geladeira E2E')).toContainText('Mercado B');
     await expect(lancamento(page, 'Geladeira E2E')).toContainText('1/3');
 

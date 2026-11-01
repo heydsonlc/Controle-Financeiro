@@ -1,7 +1,11 @@
 # FIN-CARTAO-AGRUPAMENTO-CATEGORIAS-01 — Agrupamento da fatura por Categoria do Cartão em Despesas
 
-**Situação (31/10/2026): `FIN_CARTAO_AGRUPAMENTO_CATEGORIAS_01_PRONTO_PARA_PUBLICACAO`.** Implementado, testado e ensaiado numa cópia fiel da produção.
-- Commit, push, migration e deploy aguardam autorização.
+**Situação (31/10/2026): `FIN_CARTAO_AGRUPAMENTO_CATEGORIAS_01_PUBLICADO`.**
+- Commit `9c310f9`, push `dda1bdd..9c310f9`.
+- Migration `20261207090000` aplicada (48 versões; só `compras_da_fatura` mudou; nenhum dado alterado).
+- Deploy `593e6319`: 165 arquivos servidos idênticos ao build do commit.
+- Conferência em produção (só leitura): Black e Visa 11/2026 com os números do §5; demais tabelas iguais ao retrato anterior.
+- A regra de natureza foi depois refinada por `docs/FIN_CARTAO_DESPESAS_FIXAS_01.md` (parceladas e fixas fora das Categorias do Cartão em todas as leituras).
 
 ## 1. Defeito (diagnóstico, produção só lida)
 

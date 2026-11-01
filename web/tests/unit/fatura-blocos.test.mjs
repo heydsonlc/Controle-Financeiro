@@ -96,6 +96,25 @@ test('tela: subtotais dos blocos e o nome de cada Categoria do Cartao', () => {
     assert.match(html, /categoria-nome">Mercado</);
 });
 
+// FIN-CARTAO-DESPESAS-FIXAS-01: previsto x executado da fixa, quando o adaptador informa (compras_da_fatura).
+test('fixa: previsto, executado e diferenca; prevista sem cobranca; sem os campos, como antes (Flask)', () => {
+    const fixas = [
+        compra('Netflix', 44.9, { is_recorrente: true, valor_previsto: 59.9, situacao_ocorrencia: 'CONFIRMADA' }),
+        compra('ChatGPT', 99.9, { is_recorrente: true, valor_previsto: 99.9, situacao_ocorrencia: 'PREVISTA' }),
+        compra('Claude', 109.9, { is_recorrente: true, valor_previsto: 109.9, situacao_ocorrencia: 'CONFIRMADA' }),
+        compra('Antiga', 10, { is_recorrente: true }),
+    ];
+    const blocos = organizarLancamentosEmBlocos(fixas, RESUMO);
+    assert.deepEqual(blocos.fixas.map((f) => [f.descricao, f.valor, f.valor_previsto]),
+        [['Netflix', 44.9, 59.9], ['ChatGPT', 99.9, 99.9], ['Claude', 109.9, 109.9], ['Antiga', 10, null]]);
+    const html = renderizarFaturaCompleta(blocos, calcularTotaisFatura(blocos, fixas), '2029-05').replace(/\s+/g, ' ');
+    assert.match(html, /Netflix<\/div> <div class="linha-legenda">Previsto R\$ 59,90 · diferença −R\$ 15,00<\/div> <\/div> <div class="linha-valor">R\$ 44,90/);
+    assert.match(html, /ChatGPT<\/div> <div class="linha-legenda">Previsto R\$ 99,90 · cobrança ainda não importada/);
+    assert.match(html, /Claude<\/div> <div class="linha-legenda">Previsto R\$ 109,90 · confirmado/);
+    assert.match(html, /<div class="linha-simples"> <div class="linha-titulo">Antiga<\/div> <div class="linha-valor">R\$ 10,00/);
+    assert.match(html, /Despesas Fixas<\/span> <span class="bloco-subtotal">R\$ 264,70/);  // executado
+});
+
 test('defeito anterior: Categoria do Cartao nula e resumo vazio levavam tudo a Outros', () => {
     const semCategoria = COMPRAS.filter((c) => c.total_parcelas <= 1 && !c.is_recorrente)
         .map((c) => ({ ...c, categoria_cartao_id: null }));
