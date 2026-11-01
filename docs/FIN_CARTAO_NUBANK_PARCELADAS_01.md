@@ -1,8 +1,7 @@
 # FIN-CARTAO-NUBANK-PARCELADAS-01 — Compras parceladas na importação do Nubank
 
-**Situação (01/11/2026): `FIN_CARTAO_NUBANK_PARCELADAS_01_PRONTO_PARA_HOMOLOGACAO`.** Implementado, testado e ensaiado numa cópia fiel da produção.
-- Migration remota `20261211090000`, push e deploy aguardam autorização.
-- A regularização das 12 parcelas de 11/2026 também aguarda autorização.
+**Situação (01/11/2026): `FIN_CARTAO_NUBANK_PARCELADAS_01_PUBLICADO`.** Publicado em 01/11/2026 no FIN-CARTAO-NUBANK-PUBLICACAO-01: push `87ba747..3e09635`, migrations `20261211090000` e `20261212090000` aplicadas e conferidas (51 → 53, nenhum dado existente alterado), deploy `abd08b7a` (produção, commit `3e09635`, 165/165 arquivos iguais ao build). Homologação só de leitura: as prévias dos arquivos reais de 11/2026 batem com o ensaio; nenhuma importação confirmada.
+- A regularização das parcelas de 11/2026 (Black e Visa, pela tela) aguarda autorização.
 
 Base: commit `87ba747`, migrations até `20261210090000` (`docs/FIN_CARTAO_IMPORTACAO_FIXAS_01.md`, `docs/FIN_CARTAO_DESPESAS_FIXAS_01.md`).
 

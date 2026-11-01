@@ -1,8 +1,7 @@
 # FIN-CARTAO-NUBANK-CREDITOS-01 — Créditos, estornos e ajustes da fatura na importação
 
-**Situação (01/11/2026): `FIN_CARTAO_NUBANK_CREDITOS_01_PRONTO_PARA_PUBLICACAO`.** Implementado, testado e ensaiado numa cópia fiel da produção, junto com o FIN-CARTAO-NUBANK-PARCELADAS-01.
-- Migrations remotas `20261211090000` e `20261212090000`, push e deploy aguardam autorização.
-- A regularização das faturas reais aguarda autorização.
+**Situação (01/11/2026): `FIN_CARTAO_NUBANK_CREDITOS_01_PUBLICADO`.** Publicado em 01/11/2026 no FIN-CARTAO-NUBANK-PUBLICACAO-01: push `87ba747..3e09635`, migrations `20261211090000` e `20261212090000` aplicadas e conferidas (51 → 53, nenhum dado existente alterado), deploy `abd08b7a` (produção, commit `3e09635`, 165/165 arquivos iguais ao build). Homologação só de leitura: as prévias dos arquivos reais de 11/2026 batem com o ensaio; nenhuma importação confirmada.
+- A regularização das faturas reais (pela tela) aguarda autorização.
 
 Base: `docs/FIN_CARTAO_NUBANK_PARCELADAS_01.md` (commits locais até `0baa621`).
 
@@ -164,7 +163,7 @@ A conferência do Visa pedida no contrato comparou o PDF real (`Fatura Outubro.p
 
 ## 7. Pendências
 
-1. **Publicação conjunta:** 1211 + 1212, push e deploy, com autorização.
+1. **Publicação conjunta:** feita (deploy `abd08b7a`).
 2. **Regularização das faturas reais de 11/2026**, depois da publicação e com autorização. Pela tela, reimportando os mesmos arquivos e com retrato só de leitura antes e depois. Nenhuma compra existente é alterada; pagamentos, movimentos e saldos ficam como estão.
 
    | Cartão e arquivo | O que a reimportação grava | O que o titular decide | Valor a pagar |
