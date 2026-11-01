@@ -281,7 +281,7 @@ def test_importacao_realiza_a_previsao_sem_duplicar(banco):
     dup, outra = analisar(banco, linha(1, 'NETFLIX ENTRETENIMENTO BARUERI', '44.90', data='2029-05-17'),
                           linha(2, 'NETFLIX', '12.00', data='2029-05-20'))
     assert dup['status'] == 'duplicado'
-    assert (outra['status'], outra['realiza_lancamento_id']) == ('conciliado', None)
+    assert (outra['status'], outra['realiza_lancamento_id'], outra['ignorar']) == ('revisar', None, False)  # FIN-CARTAO-IMPORTACAO-FIXAS-01: pede revisao (nao e descartada)
 
 
 def test_sem_previsao_a_linha_vira_a_ocorrencia(banco):
@@ -298,7 +298,7 @@ def test_previsao_em_fatura_paga_nao_muda(banco):
     ids = assinaturas(banco)
     pagar(banco, CARTAO, MES)
     r = analisar(banco, linha(1, 'NETFLIX ENTRETENIMENTO', '44.90'))[0]
-    assert (r['status'], r['realiza_lancamento_id']) == ('conciliado', None)
+    assert (r['status'], r['realiza_lancamento_id'], r['ignorar']) == ('revisar', None, False)  # FIN-CARTAO-IMPORTACAO-FIXAS-01: pede revisao (nao e descartada)
     assert ocorrencia(banco, ids['Netflix'])['valor'] == Decimal('59.90')
 
 

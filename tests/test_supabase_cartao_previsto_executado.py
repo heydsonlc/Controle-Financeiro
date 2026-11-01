@@ -196,7 +196,7 @@ def test_fatura_fechada_previsao_continua_fora_e_nao_e_realizada(banco):
     sql(banco, "update public.conta set status_fatura = 'FECHADA' where id = %s", (fatura(banco, CARTAO, MES)['id'],))
     assert lista(banco)[2] == D('40.00')
     r = analisar(banco, linha(1, 'NETFLIX.COM', '59.90', categoria=None))[0]
-    assert (r['status'], r['realiza_lancamento_id']) == ('conciliado', None)
+    assert (r['status'], r['realiza_lancamento_id'], r['ignorar']) == ('revisar', None, False)  # FIN-CARTAO-IMPORTACAO-FIXAS-01: pede revisao (nao e descartada)
     assert fixa(banco, item)['situacao_ocorrencia'] == 'PREVISTA'
 
 
