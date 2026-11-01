@@ -337,9 +337,9 @@ def test_reversao_20261107_restaura_a_definicao_anterior_e_volta(banco):
     atual = "select p.prosrc from pg_proc p where p.oid = %s::regprocedure"
     privilegios = (f"select has_function_privilege('authenticated', '{ANALISAR}', 'execute') a, "
                    f"has_function_privilege('anon', '{ANALISAR}', 'execute') n")
-    # vigente: a de 20261210090000 (FIN-CARTAO-IMPORTACAO-FIXAS-01), que substitui as de 20261209090000, 20261208090000
-    # e 20261107090000
-    vigente = RAIZ_SUPABASE / 'migrations' / '20261210090000_financeiro_cartao_importacao_fixas.sql'
+    # vigente: a de 20261211090000 (FIN-CARTAO-NUBANK-PARCELADAS-01), que substitui as de 20261210090000, 20261209090000,
+    # 20261208090000 e 20261107090000
+    vigente = RAIZ_SUPABASE / 'migrations' / '20261211090000_financeiro_cartao_nubank_parceladas.sql'
     assert sql(banco, atual, (ANALISAR,))[0]['prosrc'] == _corpo_analisar(vigente)
     _aplicar(banco, reversao)
     assert sql(banco, atual, (ANALISAR,))[0]['prosrc'] == _corpo_analisar(anterior)
