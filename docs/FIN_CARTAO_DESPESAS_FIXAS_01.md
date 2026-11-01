@@ -129,5 +129,6 @@
   - a previsão da recorrência ainda sem cobrança real continua contando no **executado** da fatura e no **valor a pagar** (no Visa 11/2026, R$ 269,70 de ChatGPT, Claude e Apple One);
   - o previsto da fixa no cabeçalho da fatura usa o valor da compra (executado).
   - Objetivo do próximo pacote: a cobrança não importada permanece como previsão e só vira executada quando conciliada.
+  - **Tratado em `docs/FIN_CARTAO_PREVISTO_EXECUTADO_01.md`** (migration `20261209090000`, pronta para publicação).
 - **Parcelas:** previsto = executado = valor da parcela; conciliar parcela importada com valor diferente fica fora.
 - **Telas do Flask:** continuam somando fixas e parceladas nas categorias (divergência registrada).
