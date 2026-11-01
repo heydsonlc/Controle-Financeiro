@@ -96,6 +96,9 @@ function linhaParaBanco(l, indice) {
         // FIN-CARTAO-NUBANK-PARCELADAS-01: numero no texto que pode ser parcela (leitor do arquivo) e a decisao do usuario
         ...(l.parcela_ambigua ? { parcela_ambigua: l.parcela_ambigua } : {}),
         ...(l.natureza_parcela ? { natureza_parcela: l.natureza_parcela } : {}),
+        // FIN-CARTAO-NUBANK-CREDITOS-01: compra original escolhida para o credito (0 = sem compra vinculada)
+        ...(l.credito_compra_id === undefined || l.credito_compra_id === null ? {}
+            : { credito_compra_id: Number(l.credito_compra_id) }),
     };
 }
 
@@ -205,7 +208,9 @@ function validarPedido(corpo) {
 function resumo(analise, modo, gravado) {
     const linhas = analise.linhas;
     const aGravar = linhas.filter((l) => !l.ignorar && l.status === 'valido' && l.categoria_id);
-    const comErro = linhas.filter((l) => !l.ignorar && !(l.status === 'valido' && l.categoria_id));
+    // FIN-CARTAO-NUBANK-CREDITOS-01: credito da fatura (sem Categoria de Despesa) abate o valor a pagar
+    const creditos = linhas.filter((l) => !l.ignorar && l.status === 'valido' && l.tipo_movimento === 'credito');
+    const comErro = linhas.filter((l) => !l.ignorar && !(l.status === 'valido' && (l.categoria_id || l.tipo_movimento === 'credito')));
     const duplicadas = linhas.filter((l) => ['duplicado', 'conciliado'].includes(l.status));
     const parcelas = (l) => (l.gerar_parcelas_futuras && l.total_parcelas > 1 ? l.total_parcelas - l.parcela_atual + 1 : 1);
     const avisos = linhas.flatMap((l, i) => (l.mensagens || []).map((aviso) => ({ linha: i + 1, aviso, avisos: [aviso] })));
@@ -219,6 +224,8 @@ function resumo(analise, modo, gravado) {
         conciliacoes: gravado ? gravado.conciliadas || 0 : linhas.filter((l) => l.conciliar_previsao).length,
         despesas_fixas: aGravar.filter((l) => l.classificacao_importacao === 'DESPESA_FIXA').length,
         parceladas: aGravar.filter((l) => l.classificacao_importacao === 'PARCELADA').length,  // FIN-CARTAO-NUBANK-PARCELADAS-01
+        creditos: gravado ? gravado.creditos || 0 : creditos.length,
+        total_creditos: gravado ? Number(gravado.total_creditos || 0) : creditos.reduce((s, l) => s + Number(l.valor), 0),
         erros: comErro.map((l) => ({ linha: l.linha_origem, erro: (l.mensagens || [])[0] || 'Linha precisa de revisão.' })),
         pendencias: { categoria_despesa: aGravar.length ? 0 : comErro.filter((l) => !l.categoria_id).length,
             categoria_cartao: aGravar.filter((l) => !l.categoria_cartao_id && !l.recorrencia_id && !(l.total_parcelas > 1)).length,

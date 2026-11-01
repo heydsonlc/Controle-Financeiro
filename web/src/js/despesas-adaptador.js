@@ -436,6 +436,17 @@ async function comprasDaFatura(cartaoId, parametros) {
     if (!MES.test(mes)) return falha('Competência inválida.');
     const { data, error } = await supabase.rpc('compras_da_fatura', { p_perfil_id: estado.perfilId, p_cartao_id: cartaoId, p_mes: `${mes}-01` });
     if (error) return falha(mensagemDeErro(error), 403);
+    // FIN-CARTAO-NUBANK-CREDITOS-01: creditos da fatura (estorno, IOF devolvido, ajuste), negativos: o bloco proprio da
+    // tela abate o previsto e o executado (o mesmo valor a pagar do pagamento e da lista)
+    const creditos = await supabase.rpc('lancamentos_fatura_por_categoria', { p_perfil_id: estado.perfilId, p_cartao_id: cartaoId,
+        p_mes: `${mes}-01`, p_filtro: 'creditos' });
+    if (creditos.error) return falha(mensagemDeErro(creditos.error), 403);
+    const linhasCredito = (creditos.data?.lancamentos || []).map((c) => ({
+        id: c.id, descricao: c.descricao, valor: Number(c.valor), valor_executado: Number(c.valor), data_compra: c.data,
+        numero_parcela: null, total_parcelas: null, categoria_cartao_id: null, is_recorrente: false, credito: true,
+        legenda_credito: [c.categoria_nome, c.compra_original ? `compra original: ${c.compra_original.descricao}` : 'sem compra vinculada']
+            .filter(Boolean).join(' · '),
+    }));
     return ok({ data: (data || []).map((c) => ({
         id: c.id, descricao: c.descricao, valor: Number(c.valor), data_compra: c.data_compra,
         numero_parcela: c.numero_parcela, total_parcelas: c.total_parcelas, categoria_cartao_id: c.categoria_cartao_id,
@@ -446,7 +457,7 @@ async function comprasDaFatura(cartaoId, parametros) {
         // FIN-CARTAO-PREVISTO-EXECUTADO-01: a previsao ainda sem cobranca nao e executada
         valor_executado: c.valor_executado === null || c.valor_executado === undefined ? Number(c.valor) : Number(c.valor_executado),
         situacao_ocorrencia: c.situacao_ocorrencia || null,
-    })) });
+    })).concat(linhasCredito) });
 }
 
 // Resumo por Categoria do Cartao (limite e gasto do mes) para o bloco "Despesas por Categoria"; o original le

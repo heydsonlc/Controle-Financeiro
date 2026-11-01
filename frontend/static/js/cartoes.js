@@ -439,6 +439,7 @@ function renderizarFaturaPorCategoria(cartao, resumoFatura) {
                 <article>
                     <span>Total da fatura</span>
                     <strong>${formatarMoeda(resumoFatura.total_fatura)}</strong>
+                    ${Number(resumoFatura.total_creditos || 0) > 0 ? `<small class="fatura-lancamento-previsao">Compras ${formatarMoeda(resumoFatura.total_compras)} &middot; cr&eacute;ditos &minus;${formatarMoeda(resumoFatura.total_creditos)}</small>` : ''}
                 </article>
                 <article>
                     <span>Limite total</span>
@@ -559,12 +560,32 @@ function situacaoPrevisaoLancamento(lancamento) {
     return '';
 }
 
+// Credito da fatura (estorno, IOF devolvido, ajuste): abate o valor a pagar; sem acoes de compra (vazio sem o campo da API)
+function renderizarCreditoFatura(lancamento) {
+    const original = lancamento.compra_original;
+    return `
+        <div class="fatura-lancamento-row">
+            <div class="fatura-lancamento-desc">
+                <strong>${escapeHtml(lancamento.descricao)}</strong>
+                <small class="fatura-lancamento-previsao">Cr&eacute;dito da fatura &middot; ${original ? `compra original: ${escapeHtml(original.descricao)} (${formatarMoeda(original.valor)})` : 'sem compra vinculada'}</small>
+            </div>
+            <span class="fatura-lancamento-cell">${escapeHtml(lancamento.data || '-')}</span>
+            <span class="fatura-lancamento-cell">${escapeHtml(lancamento.categoria_nome || '—')}</span>
+            <span class="fatura-lancamento-cell">&mdash;</span>
+            <span class="fatura-lancamento-cell">&mdash;</span>
+            <span class="fatura-lancamento-cell fatura-lancamento-valor">${formatarMoeda(lancamento.valor)}</span>
+            <div class="lancamento-acoes"></div>
+        </div>
+    `;
+}
+
 function renderizarLancamentosFatura(cartao) {
     const filtro = estadoCartoes.filtroLancamentosFatura || 'todos';
     const lancamentos = obterLancamentosFatura(cartao.id, filtro);
     const titulo = filtro === 'todos'
         ? 'Lan&ccedil;amentos da fatura'
-        : (filtro === 'sem_categoria' ? 'Lan&ccedil;amentos sem Categoria do Cart&atilde;o' : 'Lan&ccedil;amentos da categoria selecionada');
+        : (filtro === 'sem_categoria' ? 'Lan&ccedil;amentos sem Categoria do Cart&atilde;o'
+            : (filtro === 'creditos' ? 'Cr&eacute;ditos e ajustes da fatura' : 'Lan&ccedil;amentos da categoria selecionada'));
 
     return `
         <section class="fatura-lancamentos">
@@ -586,7 +607,7 @@ function renderizarLancamentosFatura(cartao) {
                         <span>Valor</span>
                         <span>A&ccedil;&otilde;es</span>
                     </div>
-                    ${lancamentos.map((lancamento) => `
+                    ${lancamentos.map((lancamento) => lancamento.natureza === 'CREDITO' ? renderizarCreditoFatura(lancamento) : `
                         <div class="fatura-lancamento-row ${lancamento.status_classificacao !== 'classificado' ? 'needs-review' : ''}">
                             <div class="fatura-lancamento-desc">
                                 <strong>${escapeHtml(lancamento.descricao)}</strong>

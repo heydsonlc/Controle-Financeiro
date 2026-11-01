@@ -2598,7 +2598,8 @@ function organizarLancamentosEmBlocos(lancamentos, resumoCartao) {
         parceladas: [],      // Parte 1: total_parcelas > 1
         fixas: [],           // Parte 2: recorrentes mensais (quando vierem marcadas)
         porCategoria: {},    // Parte 3: com categoria que tem previs?es
-        outros: []           // Parte 4: resto
+        outros: [],          // Parte 4: resto
+        creditos: []         // Creditos da fatura (estorno, IOF devolvido, ajuste), quando a API informa
     };
 
     const categoriasResumo = Array.isArray(resumoCartao?.categorias)
@@ -2630,8 +2631,17 @@ function organizarLancamentosEmBlocos(lancamentos, resumoCartao) {
         const categoriaPrevista = blocos.porCategoria[lanc.categoria_cartao_id];
         const isRecorrenteCartao = lanc.is_recorrente === true;  // Lançamento gerado por despesa recorrente
 
+        // Credito da fatura: nao e compra; abate o valor a pagar (valor negativo)
+        if (lanc.credito) {
+            blocos.creditos.push({
+                descricao: lanc.descricao,
+                valor: valorLanc,
+                data_compra: lanc.data_compra,
+                legenda: lanc.legenda_credito || ''
+            });
+        }
         // PARTE 1: Compras Parceladas
-        if (totalParcelas > 1) {
+        else if (totalParcelas > 1) {
             blocos.parceladas.push({
                 descricao: lanc.descricao,
                 valor: valorLanc,
@@ -2696,8 +2706,11 @@ function calcularTotaisFatura(blocos, lancamentos) {
     // Bloco 4: Outros Lançamentos (valor executado = previsto)
     const previstoOutros = blocos.outros.reduce((sum, o) => sum + parseFloat(o.valor || 0), 0);
 
+    // Creditos da fatura (negativos): abatem o previsto e o executado (estes ja estao em lancamentos)
+    const creditos = (blocos.creditos || []).reduce((sum, c) => sum + parseFloat(c.valor || 0), 0);
+
     // TOTAL DA FATURA = SOMA DOS PREVISTOS
-    const totalFatura = previstoParceladas + previstoFixas + previstoCategorias + previstoOutros;
+    const totalFatura = previstoParceladas + previstoFixas + previstoCategorias + previstoOutros + creditos;
 
     // === EXECUTADO: Soma real dos lançamentos (para referência); a previsão ainda sem cobrança não entra ===
     const totalExecutado = lancamentos.reduce((sum, l) => sum + parseFloat((l.valor_executado ?? l.valor) || 0), 0);
@@ -2739,6 +2752,7 @@ function renderizarFaturaCompleta(blocos, totais, competencia) {
                 ${renderizarBlocoFixas(blocos.fixas)}
                 ${renderizarBlocoPorCategoria(blocos.porCategoria)}
                 ${renderizarBlocoOutros(blocos.outros)}
+                ${renderizarBlocoCreditos(blocos.creditos || [])}
             </div>
 
             ${renderizarRodapeFatura(blocos)}
@@ -2921,6 +2935,29 @@ function renderizarBlocoOutros(outros) {
     `;
 }
 
+// Creditos da fatura (sem o bloco quando nao ha credito, como antes)
+function renderizarBlocoCreditos(creditos) {
+    if (!creditos.length) return '';
+    const total = creditos.reduce((sum, c) => sum + (c.valor || 0), 0);
+    return `
+        <div class="fatura-bloco">
+            <div class="bloco-header">
+                <span class="bloco-titulo">Créditos e Ajustes</span>
+                <span class="bloco-subtotal">− R$ ${formatarValorBR(Math.abs(total))}</span>
+            </div>
+            <div class="bloco-lista">${creditos.map(c => `
+                <div class="linha-simples">
+                    <div>
+                        <div class="linha-titulo">${c.descricao}</div>
+                        <div class="linha-legenda">${[c.data_compra ? formatarDataCurta(c.data_compra) : '', c.legenda].filter(Boolean).join(' · ')}</div>
+                    </div>
+                    <div class="linha-valor">− R$ ${formatarValorBR(Math.abs(c.valor))}</div>
+                </div>
+            `).join('')}</div>
+        </div>
+    `;
+}
+
 function renderizarRodapeFatura(blocos) {
     const totalParceladas = blocos.parceladas.reduce((sum, p) => sum + (p.valor || 0), 0);
     const totalFixas = blocos.fixas.reduce((sum, f) => sum + previstoFixa(f), 0);
@@ -2952,6 +2989,11 @@ function renderizarRodapeFatura(blocos) {
                 <span class="rodape-valor">R$ ${formatarValorBR(totalOutros)}</span>
                 <span class="rodape-label">Outros Lançamentos</span>
             </div>
+            ${(blocos.creditos || []).length ? `
+            <div class="rodape-linha">
+                <span class="rodape-valor">− R$ ${formatarValorBR(Math.abs(blocos.creditos.reduce((sum, c) => sum + (c.valor || 0), 0)))}</span>
+                <span class="rodape-label">Créditos e Ajustes</span>
+            </div>` : ''}
         </div>
     `;
 }

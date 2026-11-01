@@ -588,7 +588,9 @@ function converterLinhaIntermediaria(linha) {
         // Numero no texto que pode ser parcela (fora do padrao do arquivo), a decidir na previa, e a categoria pendente
         parcela_ambigua: linha.parcela_ambigua || null,
         natureza_parcela: linha.natureza_parcela || null,
-        categoria_pendente: Boolean(linha.categoria_pendente)
+        categoria_pendente: Boolean(linha.categoria_pendente),
+        // Credito da fatura (estorno, IOF devolvido, ajuste): natureza, compra original e candidatas
+        credito: linha.credito || null
     };
 }
 
@@ -1206,8 +1208,65 @@ function linhaComErro(linha) {
     return linha.status === 'erro' || linha.status_classificacao === 'erro';
 }
 
+// Credito que fica fora da efetivacao (pagamento recebido; no Flask, todo credito). FIN-CARTAO-NUBANK-CREDITOS-01: o
+// credito que o banco abate da fatura (estorno, IOF devolvido, ajuste) entra na confirmacao, com o tratamento proprio.
 function linhaCredito(linha) {
-    return linha.tipo_movimento === 'credito';
+    return linha.tipo_movimento === 'credito' && !linhaCreditoNova(linha);
+}
+
+function linhaCreditoNova(linha) {
+    return linha.tipo_movimento === 'credito' && Boolean(linha.credito)
+        && ['CREDITO', 'REVISAR'].includes(classificacaoNova(linha));
+}
+
+function linhaCreditoPendente(linha) {
+    return linhaCreditoNova(linha) && classificacaoNova(linha) === 'REVISAR';
+}
+
+function linhasCreditoConfirmaveis() {
+    return estado.linhasMapeadas.filter((linha) => linhaCreditoNova(linha) && linhaImportavel(linha));
+}
+
+function resumoCredito(linha) {
+    const c = linha.credito || {};
+    if (linhaCreditoPendente(linha)) {
+        return `${c.rotulo || 'Crédito'} · escolha a compra original (${(c.candidatas || []).length} candidatas) ou registre sem compra`;
+    }
+    const partes = [c.rotulo || 'Crédito', `abate ${formatarMoeda(valorNumericoLinha(linha))} da fatura ${c.fatura_destino || ''}`.trim()];
+    partes.push(c.compra
+        ? `compra original: ${c.compra.descricao} (${formatarMoeda(c.compra.valor)})${c.parcial ? ', parcial' : ''}`
+        : 'sem compra vinculada');
+    return partes.join(' · ');
+}
+
+function seletorCompraCredito(linha, index) {
+    const candidatas = (linha.credito || {}).candidatas || [];
+    if (!candidatas.length) return '';
+    const atual = linha.credito_compra_id === undefined || linha.credito_compra_id === null ? '' : String(linha.credito_compra_id);
+    const opcoes = [`<option value="" ${atual === '' ? 'selected' : ''}>${candidatas.length === 1 ? 'Automática' : 'Escolha a compra original'}</option>`]
+        .concat(candidatas.map((c) => `<option value="${escapeAttr(c.id)}" ${atual === String(c.id) ? 'selected' : ''}>${escapeHtml(c.descricao)} · ${escapeHtml(c.data_compra || '')} · ${formatarMoeda(c.valor)}</option>`))
+        .concat([`<option value="0" ${atual === '0' ? 'selected' : ''}>Sem compra vinculada</option>`]);
+    return `<select class="form-control form-control-sm import-inline-select" aria-label="Compra original do crédito" onchange="escolherCompraCredito(${index}, this.value)">${opcoes.join('')}</select>`;
+}
+
+// Correcao da previa: '' = a do banco; '0' = sem compra vinculada; id = uma das candidatas. Nada e gravado agora: a
+// confirmacao manda a escolha e o banco refaz a analise.
+function escolherCompraCredito(index, valor) {
+    const linha = estado.linhasMapeadas[index];
+    if (!linha || !linha.credito) return;
+    if (!linha.credito_original) linha.credito_original = { ...linha.credito, classe: linha.classificacao_importacao };
+    if (valor === '') {
+        delete linha.credito_compra_id;
+        linha.credito = { ...linha.credito_original };
+        linha.classificacao_importacao = linha.credito_original.classe;
+    } else {
+        const compra = valor === '0' ? null : (linha.credito.candidatas || []).find((c) => String(c.id) === String(valor));
+        if (valor !== '0' && !compra) return;
+        linha.credito_compra_id = valor === '0' ? 0 : Number(compra.id);
+        linha.credito = { ...linha.credito, compra, parcial: compra ? valorNumericoLinha(linha) < Number(compra.estornavel) : null };
+        linha.classificacao_importacao = 'CREDITO';
+    }
+    recalcularConfrontoAtual();
 }
 
 function linhaTratadaParcelamento(linha) {
@@ -1415,7 +1474,9 @@ function manterComoCompraDiferente(index) {
     linha.reconhecimento_match = null;
     linha.conciliacao_sugerida = null;
     linha.conciliar_previsao = false;
-    linha.classificacao_importacao = Number(linha.total_parcelas) > 1 ? 'PARCELADA' : 'COMPRA';
+    // credito repetido legitimo (ex.: tres ajustes de R$ 0,01) continua credito da fatura
+    linha.classificacao_importacao = linha.tipo_movimento === 'credito' && linha.credito ? 'CREDITO'
+        : (Number(linha.total_parcelas) > 1 ? 'PARCELADA' : 'COMPRA');
     recalcularConfrontoAtual();
 }
 
@@ -1487,6 +1548,7 @@ function linhaNovaClassificavel(linha) {
     return linhaImportavel(linha)
         && !linhaPossivelParcelamento(linha)
         && !linhaParceladaNova(linha)
+        && !linhaCreditoNova(linha)
         && !linhaPossivelRecorrencia(linha)
         && !linhaReconhecimentoPendente(linha);
 }
@@ -1522,6 +1584,7 @@ function montarAnaliseConfronto() {
         conhecidos: [],
         parcelamentos: [],
         parceladas: [],
+        creditos: [],
         recorrencias: [],
         erros: []
     };
@@ -1531,6 +1594,12 @@ function montarAnaliseConfronto() {
         if (linhaTratadaParcelamento(linha)) return;
         if (linhaRecorrenciaVinculada(linha)) return;
         if (linha.ignorar && !linhaDuplicada(linha) && !linhaComErro(linha)) return;
+
+        // Credito que o banco abate da fatura: vai para a confirmacao (nao e compra nem fica retido como bloqueado)
+        if (linhaCreditoNova(linha) && !linhaDuplicada(linha)) {
+            grupos.creditos.push({ ...itemBase, motivo: 'Crédito da fatura' });
+            return;
+        }
 
         if (linhaComErro(linha) || linhaCredito(linha)) {
             grupos.erros.push({
@@ -1832,7 +1901,8 @@ function observacaoRetiradaLinha(linha) {
         return (linha.mensagens || linha.avisos || []).join(' | ') || 'Linha bloqueada pela validação técnica.';
     }
     if (linhaCredito(linha)) {
-        return 'Crédito ou estorno não entra como nova despesa.';
+        // novo aplicativo: o motivo do banco (o pagamento recebido nao e credito desta fatura)
+        return (classificacaoNova(linha) && (linha.mensagens || [])[0]) || 'Crédito ou estorno não entra como nova despesa.';
     }
     if (linha.ignorar) {
         return 'Retirado manualmente antes da efetivação.';
@@ -1902,6 +1972,24 @@ function obterInfoOperacional(linha, index) {
             parcela,
             reconhecimento,
             fixaNova: true
+        };
+    }
+
+    if (linhaCreditoNova(linha)) {
+        const pendente = linhaCreditoPendente(linha);
+        return {
+            linha,
+            index,
+            status: pendente ? 'Revisar' : 'Crédito',
+            classe: pendente ? 'review' : 'valid',
+            tipo: (linha.credito && linha.credito.rotulo) || 'Crédito',
+            filtro: 'creditos',
+            sugestao: resumoCredito(linha),
+            descricaoEditavel: false,
+            categoriaEditavel: false,
+            parcela: null,
+            reconhecimento,
+            creditoNovo: true
         };
     }
 
@@ -2367,7 +2455,8 @@ function renderizarLinhaOperacional(item) {
             <td class="import-description-cell one-line">
                 <span title="${escapeAttr(item.sugestao || '—')}">${escapeHtml(item.sugestao || '—')}</span>
                 ${classificacaoNova(linha) && (estado.recorrenciasCartao || []).length && !item.parcela && !item.parceladaNova
-                    ? seletorRecorrenciaLinha(linha, index) : ''}
+                    && !item.creditoNovo ? seletorRecorrenciaLinha(linha, index) : ''}
+                ${item.creditoNovo ? seletorCompraCredito(linha, index) : ''}
             </td>
             <td class="import-operational-edit-cell">
                 ${item.descricaoEditavel ? `
@@ -2406,6 +2495,13 @@ function renderizarAcoesLinhaOperacional(item) {
             ${iconeBotaoAcao('success', 'check', 'Usar sugestão', `usarSugestaoReconhecimento(${index})`)}
             ${iconeBotaoAcao('neutral', 'new', 'Tratar como novo', `tratarReconhecimentoComoNovo(${index})`)}
             ${iconeBotaoAcao('danger', 'trash', 'Retirar', `ignorarReconhecimento(${index})`)}
+        </div>`;
+    }
+
+    // Credito da fatura: entra na confirmacao (a compra original e escolhida na celula); pode ser retirado
+    if (item.creditoNovo) {
+        return `<div class="row-actions operational">
+            ${iconeBotaoAcao('danger', 'trash', 'Retirar', `alternarIgnorarLinha(${index})`)}
         </div>`;
     }
 
@@ -3663,7 +3759,7 @@ function atualizarControlesImportacao(resumo = calcularResumoLocal()) {
         // novo aplicativo)
         const quantidade = estado.analiseConfronto
             ? linhasNovasConfirmaveis().length + linhasFixasConfirmaveis().length + linhasConciliacaoConfirmaveis().length
-                + linhasParceladasConfirmaveis().length
+                + linhasParceladasConfirmaveis().length + linhasCreditoConfirmaveis().length
             : 0;
         btnImportar.disabled = !estado.analiseConfronto || quantidade === 0 || novasSemCategoriaDespesa().length > 0;
         btnImportar.innerHTML = `
@@ -3734,6 +3830,13 @@ function montarPayloadImportacao() {
             // numero no texto que pode ser parcela e a decisao do usuario (parcelada ou a vista)
             if (linha.parcela_ambigua) payload.parcela_ambigua = linha.parcela_ambigua;
             if (linha.natureza_parcela) payload.natureza_parcela = linha.natureza_parcela;
+            // credito da fatura: o tipo e a compra original escolhida (0 = sem compra vinculada)
+            if (linhaCreditoNova(linha)) {
+                payload.tipo_movimento = 'credito';
+                if (linha.credito_compra_id !== undefined && linha.credito_compra_id !== null) {
+                    payload.credito_compra_id = linha.credito_compra_id;
+                }
+            }
 
             return payload;
         };
@@ -3742,7 +3845,8 @@ function montarPayloadImportacao() {
     const linhas = linhasNovasConfirmaveis().map(paraPayload)
         .concat(linhasFixasConfirmaveis().map(paraPayload))
         .concat(linhasConciliacaoConfirmaveis().map((linha) => ({ ...paraPayload(linha), conciliar_previsao: true })))
-        .concat(linhasParceladasConfirmaveis().map(paraPayload));
+        .concat(linhasParceladasConfirmaveis().map(paraPayload))
+        .concat(linhasCreditoConfirmaveis().map(paraPayload));  // creditos da fatura (abatem o valor a pagar)
 
     return {
         cartao_id: cartaoId,
@@ -3769,7 +3873,7 @@ function validarNovosClassificados() {
 
     const novos = linhasNovasConfirmaveis();
     if (!novos.length && !linhasFixasConfirmaveis().length && !linhasConciliacaoConfirmaveis().length
-        && !linhasParceladasConfirmaveis().length) {
+        && !linhasParceladasConfirmaveis().length && !linhasCreditoConfirmaveis().length) {
         alert('Nenhum lancamento novo selecionado para importacao.');
         return false;
     }
@@ -3778,6 +3882,13 @@ function validarNovosClassificados() {
     const ambiguas = linhasParceladasConfirmaveis().filter(linhaParcelaAmbigua);
     if (ambiguas.length) {
         alert(`Revise ${ambiguas.length} possivel(is) parcela(s): confirme como compra parcelada, trate como compra a vista ou retire a linha.`);
+        return false;
+    }
+
+    // Credito com mais de uma compra candidata: a escolha e do usuario
+    const creditosPendentes = linhasCreditoConfirmaveis().filter((linha) => linhaCreditoPendente(linha));
+    if (creditosPendentes.length) {
+        alert(`Escolha a compra original de ${creditosPendentes.length} credito(s), registre sem compra vinculada ou retire a linha.`);
         return false;
     }
 
@@ -3945,7 +4056,7 @@ async function finalizarImportacao() {
         renderResumoPrevia(previa);
         atualizarResumoPainel();
 
-        if (previa.inseridos === 0 && !previa.conciliacoes) {
+        if (previa.inseridos === 0 && !previa.conciliacoes && !previa.creditos) {
             alert('Nenhum lancamento novo selecionado para importacao.');
             return;
         }
@@ -3956,6 +4067,7 @@ async function finalizarImportacao() {
             (previa.despesas_fixas ? `Despesas fixas reconhecidas: ${previa.despesas_fixas}\n` : '') +
             (previa.conciliacoes ? `Compras ja lancadas conciliadas com a previsao: ${previa.conciliacoes}\n` : '') +
             (previa.parceladas ? `Compras parceladas: ${previa.parceladas}\n` : '') +
+            (previa.creditos ? `Creditos da fatura (abatem o valor a pagar): ${previa.creditos} · ${formatarMoeda(previa.total_creditos)}\n` : '') +
             `Ignorados: ${resumo.ignoradas}\n` +
             `Duplicados protegidos: ${previa.duplicados}\n` +
             `Possiveis parcelamentos fora deste MVP: ${estado.analiseConfronto?.parcelamentos.length || 0}`
@@ -3981,6 +4093,7 @@ async function finalizarImportacao() {
                 Inseridos: <strong>${dados.inseridos}</strong>.
                 Duplicados: <strong>${dados.duplicados}</strong>.
                 ${dados.conciliacoes ? `Conciliadas com a previsão: <strong>${dados.conciliacoes}</strong>.` : ''}
+                ${dados.creditos ? `Créditos abatidos da fatura: <strong>${dados.creditos}</strong> (${formatarMoeda(dados.total_creditos)}).` : ''}
                 Erros: <strong>${(dados.erros || []).length}</strong>.
             </div>
         `;
