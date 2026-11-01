@@ -89,12 +89,14 @@ test('estorno so a partir da parcela paga mais recente; tela de Financiamentos o
     expect(r.success).toBe(false);
     expect(r.error).toContain('Use o fluxo de Despesas');
 
-    // Limpeza na ordem certa (3, depois 2): volta ao estado inicial e ao saldo da conta.
-    await abrirDespesas(page, '2033-04');
-    await estornar(page, PARCELA_3, 'Limpeza do E2E', '2033-04-12');
-    await expect.poll(() => dialogos.at(-1)).toBe('Pagamento estornado com sucesso.');
-    await abrirDespesas(page, '2033-03');
-    await estornar(page, PARCELA_2, 'Limpeza do E2E', '2033-04-12');
-    await expect.poll(() => dialogos.at(-1)).toBe('Pagamento estornado com sucesso.');
+    // Limpeza na ordem certa (3, depois 2): volta ao estado inicial e ao saldo da conta. Os dois estornos mostram a mesma
+    // mensagem: espera-se o dialogo deste estorno (novo, nao o anterior) e a parcela de volta a "Pendente".
+    for (const [mes, parcela] of [['2033-04', PARCELA_3], ['2033-03', PARCELA_2]]) {
+        await abrirDespesas(page, mes);
+        const antes = dialogos.length;
+        await estornar(page, parcela, 'Limpeza do E2E', '2033-04-12');
+        await expect.poll(() => dialogos.slice(antes).at(-1)).toBe('Pagamento estornado com sucesso.');
+        await expect(despesa(page, parcela).locator('.status-badge')).toHaveText('Pendente');
+    }
     expect(await contrato(page)).toEqual({ saldo: 2000, parcelas: [[1, 'pago'], [2, 'pendente'], [3, 'pendente']] });
 });
