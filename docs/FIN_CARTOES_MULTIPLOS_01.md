@@ -225,14 +225,13 @@ Funções existentes alteradas (texto de `20261212090000` mais os trechos marcad
 | Cobrança real | compra 615, R$ 229,28 em 07/10/2026, no Visa 11/2026, cartão 7136 (mais o IOF de R$ 8,02) |
 
 - **Duplicidade:** em 11/2026 o Supabase conta duas vezes no previsto: R$ 225 pendentes no Black e R$ 229,28 executados no Visa. Não é a mesma fatura, por isso a importação não as concilia.
-- **Correção proposta (não feita):**
-  - mudar o cartão da recorrência para o Visa (edição da recorrência);
-  - dispensar pelo fluxo oficial as previsões pendentes do Black (709 e 710);
-  - em 11/2026, conciliar a previsão do Visa com a compra 615 (diferença +R$ 4,28) ou deixá-la ser realizada na reconstrução.
+- **Decisão do titular (02/11/2026):** a recorrência fica no Black para as próximas cobranças; não volta para o Visa.
+  A correção proposta antes (mudar o cartão para o Visa) foi descartada. O tratamento da previsão 709 (Black 11/2026)
+  diante da cobrança de 10/2026 no Visa fica para a conferência da reconstrução, sem alterar o valor da recorrência.
 
 ## 10. Pendências para publicação e reconstrução real
 
-1. **Publicação:** 1213, push e deploy, com autorização.
+1. **Publicação:** conjunta com o FIN-CATEGORIAS-CONSOLIDACAO-01 (push, 1213, 1214 e deploy do frontend), com autorização.
 2. **Cadastro dos cartões** na tela de Cartões:
 
    | Contrato | Cartão | Tipo | Situação |
@@ -250,5 +249,5 @@ Funções existentes alteradas (texto de `20261212090000` mais os trechos marcad
    - conferência e execução com o hash;
    - depois, a reimportação dos dois PDFs com as decisões do titular: Categoria das linhas novas, estorno da Apple, ajustes repetidos e segunda Netflix.
 6. **Pagamentos de novembro** (já feitos fora do aplicativo): depois da reconstrução, em Despesas → pagar fatura, com a data real e a conta de débito. Não há movimento bancário desses pagamentos hoje; o banco recusa pagar a mesma fatura duas vezes.
-7. **Recorrência "SUPABASE SINGAPORE":** corrigir o contrato (seção 9).
+7. **Recorrência "SUPABASE SINGAPORE":** permanece no Black (seção 9); conferir só a previsão de 11/2026 na reconstrução.
 8. **Função para desfazer um crédito importado** (do FIN-CARTAO-NUBANK-CREDITOS-01): segue pendente.

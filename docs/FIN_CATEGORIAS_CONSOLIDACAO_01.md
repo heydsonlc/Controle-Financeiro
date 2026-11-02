@@ -141,10 +141,15 @@ Ensaio separado, numa outra cópia idêntica, no estado atual da produção (ant
 
 ## 7. Plano para a produção (cada passo com autorização)
 
+Publicação conjunta com o FIN-CARTOES-MULTIPLOS-01 (contrato FIN-CARTOES-CATEGORIAS-PUBLICACAO-01):
+
 1. Push dos commits locais em fast-forward.
-2. Aplicar `20261213090000`, se ainda não estiver aplicada, e `20261214090000`, nessa ordem e só elas (`aplicar_uma.py`). Nenhum dado muda.
-3. Sem deploy: nenhuma tela muda. O script fala direto com o banco, não com o navegador.
-4. Sequência preferencial (cenário A): cartões vinculados → limpeza seletiva de 11/2026 → reimportação dos PDFs → consolidação.
+2. Aplicar `20261213090000` e depois `20261214090000`, só elas (`aplicar_uma.py`). Nenhum dado muda.
+3. Build limpo e deploy do frontend no projeto existente do Cloudflare Pages. Esta consolidação não muda telas, mas o
+   pacote de múltiplos cartões, que vai junto, muda Cartões e Importação: publicar as migrations sem o frontend deixaria a
+   interface antiga sobre a estrutura nova.
+4. Sequência preferencial (cenário A): cartões vinculados → limpeza seletiva de 11/2026 → reimportação dos PDFs →
+   pagamentos já realizados → consolidação.
    - Nunca consolidar entre a limpeza e a reimportação; a função recusa.
 5. Consolidação:
    - `python scripts/consolidar_categorias.py previa --saida previa.json`;
