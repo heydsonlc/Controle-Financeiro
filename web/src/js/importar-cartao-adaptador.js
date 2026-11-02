@@ -15,7 +15,7 @@ import { criarChaves, emMigracao, falha, mensagemDeErro, ok } from './adaptador-
 import { converterTabela, decodificar, detectarPerfilCsv, lerCsv, lerData, lerValor, normalizarClassificacao, normalizarDescricao,
     PERFIL_CAIXA, PERFIL_MANUAL, PERFIL_NUBANK } from './importacao-csv.js';
 import { lerPlanilha } from './importacao-xlsx.js';
-import { parseTextoCaixa, textoDoPdf } from './importacao-pdf.js';
+import { eFaturaNubank, parseTextoCaixa, parseTextoNubank, textoDoPdf } from './importacao-pdf.js';
 import { iniciarMoldura } from './moldura.js';
 
 const estado = { perfilId: null };
@@ -99,6 +99,10 @@ function linhaParaBanco(l, indice) {
         // FIN-CARTAO-NUBANK-CREDITOS-01: compra original escolhida para o credito (0 = sem compra vinculada)
         ...(l.credito_compra_id === undefined || l.credito_compra_id === null ? {}
             : { credito_compra_id: Number(l.credito_compra_id) }),
+        // FIN-CARTOES-MULTIPLOS-01: o final do cartao lido do arquivo e o cartao de origem escolhido (0 = sem cartao)
+        ...(l.cartao_final ? { cartao_final: String(l.cartao_final) } : {}),
+        ...(l.cartao_vinculado_escolhido_id === undefined || l.cartao_vinculado_escolhido_id === null ? {}
+            : { cartao_vinculado_escolhido_id: Number(l.cartao_vinculado_escolhido_id) }),
     };
 }
 
@@ -163,14 +167,20 @@ async function analisarArquivo(formData) {
     const analise = await analisar(cartaoId, mes, conv.linhas);
     return ok({ data: { ...base, linhas: analise.linhas.map(linhaParaTela), requer_mapeamento: false, confronto_executado: true,
         situacao_fatura: analise.situacao_fatura, recorrencias_cartao: analise.recorrencias_cartao || [],
+        cartoes_contrato: analise.cartoes_contrato || [],
         validacoes: { ...analise.validacoes, total_fatura: 0, diferenca: 0, revisar_totais: false } } });
 }
 
 // PDF: linhas e dados da fatura (vencimento, total, cartoes) pelas regras do Flask; a diferenca entre o total da fatura
 // e o importavel aparece como no Flask (calcular_validacoes).
 async function analisarPdf(lido, cartaoId, mes) {
-    const r = parseTextoCaixa(lido.paginas, mes.slice(0, 7));
-    if (!r.linhas.length) return falha('Nenhum lancamento reconhecido no PDF (o layout aceito e o da fatura Caixa).');
+    // FIN-CARTOES-MULTIPLOS-01: a fatura do Nubank (com o final do cartao de cada compra) ou a da Caixa
+    const nubank = eFaturaNubank(lido.paginas);
+    const r = nubank ? parseTextoNubank(lido.paginas, mes.slice(0, 7)) : parseTextoCaixa(lido.paginas, mes.slice(0, 7));
+    if (!r.linhas.length) {
+        return falha(nubank ? 'Nenhum lancamento reconhecido no PDF do Nubank.'
+            : 'Nenhum lancamento reconhecido no PDF (os layouts aceitos sao os das faturas Caixa e Nubank).');
+    }
     const linhas = r.linhas.map((l) => ({ ...l, valor: Number(l.valor).toFixed(2),
         descricao_classificacao: normalizarClassificacao(l.descricao_normalizada) }));
     const analise = await analisar(cartaoId, mes, linhas);
@@ -179,7 +189,7 @@ async function analisarPdf(lido, cartaoId, mes) {
     return ok({ data: { origem: 'pdf', arquivo_nome: lido.arquivo.name, cartao_id: Number(cartaoId), competencia: mes.slice(0, 7),
         fatura: { ...r.fatura, competencia: `${mes.slice(5, 7)}/${mes.slice(0, 4)}` }, perfil_detectado: r.perfil_detectado,
         linhas: analise.linhas.map(linhaParaTela), requer_mapeamento: false, confronto_executado: true, situacao_fatura: analise.situacao_fatura,
-        recorrencias_cartao: analise.recorrencias_cartao || [],
+        recorrencias_cartao: analise.recorrencias_cartao || [], cartoes_contrato: analise.cartoes_contrato || [],
         validacoes: { ...analise.validacoes, total_fatura: total, diferenca, revisar_totais: Math.abs(diferenca) > 0.01 } } });
 }
 

@@ -3,7 +3,9 @@
 // (tolerancias x = 1 e y = 3, como extract_text), e as linhas do "Demonstrativo" viram lancamentos (grupos, cartao,
 // compras internacionais com cotacao, creditos "C", parcelas, anuidade sem data). PDF sem texto (escaneado) fica fora,
 // como no Flask: nao ha OCR. O PDF.js entra so para extrair o texto: sem desenhar paginas, sem eval, sem fonte externa.
-// parseTextoCaixa e linhasDaPagina sao puras (tests/unit/importacao-pdf.test.mjs).
+// parseTextoCaixa, parseTextoNubank e linhasDaPagina sao puras (tests/unit/importacao-pdf.test.mjs).
+
+import { PERFIL_NUBANK, montarLinha } from './importacao-csv.js';
 
 const GRUPOS = new Set(['ANUIDADE', 'COMPRAS', 'COMPRAS PARCELADAS', 'COMPRAS INTERNACIONAIS']);
 const DINHEIRO = '(\\d{1,3}(?:\\.\\d{3})*,\\d{2})';
@@ -206,6 +208,52 @@ export function parseTextoCaixa(paginasTexto, competenciaTexto) {
     });
     fatura.cartoes_detectados = [...new Set(fatura.cartoes_detectados)].sort();
     return { origem: 'pdf', perfil_detectado: 'caixa_pdf', requer_mapeamento: false, fatura, linhas, total_linhas: linhas.length };
+}
+
+// FIN-CARTOES-MULTIPLOS-01 — fatura do Nubank em PDF. Cada compra traz o final do cartao, do titular ou do adicional
+// ("16 AGO •••• 6030 Loja R$ 9,90"); linha sem cartao (IOF, credito, servico, pagamento) fica sem cartao identificado, como
+// no documento. A parcela, como no CSV ("Loja - Parcela 3/10"). O ano vem do cabecalho "FATURA 08 SET 2026": compra de
+// mes posterior ao do vencimento e do ano anterior. So as paginas "TRANSACOES DE ..." (o resumo repete valores).
+const MESES_NU = { JAN: 1, FEV: 2, MAR: 3, ABR: 4, MAI: 5, JUN: 6, JUL: 7, AGO: 8, SET: 9, OUT: 10, NOV: 11, DEZ: 12 };
+const NOMES_MES = Object.keys(MESES_NU).join('|');
+const reTransacaoNu = new RegExp(`^(\\d{2}) (${NOMES_MES})\\s+(?:[•·*]{4}\\s*(\\d{4})\\s+)?(.+?)\\s+([−-])?\\s?R\\$\\s*${DINHEIRO}$`);
+const rePaginaNu = /TRANSA[CÇ][OÕ]ES DE \d{2} [A-Z]{3} A \d{2} [A-Z]{3}/i;
+
+export function eFaturaNubank(paginasTexto) {
+    const texto = (paginasTexto || []).join('\n');
+    return /Nu Pagamentos/i.test(texto) && rePaginaNu.test(texto);
+}
+
+export function parseTextoNubank(paginasTexto, competenciaTexto) {
+    const competencia = lerCompetencia(competenciaTexto);
+    const texto = (paginasTexto || []).join('\n');
+    const fatura = { emissor: 'Nubank', vencimento: null, valor_total: null, cartoes_detectados: [], totais_por_cartao: {} };
+    const venc = new RegExp(`FATURA (\\d{2}) (${NOMES_MES}) (\\d{4})`).exec(texto);
+    if (venc) fatura.vencimento = iso(venc[3], MESES_NU[venc[2]], venc[1]);
+    const total = new RegExp(`^Total a pagar R\\$\\s*${DINHEIRO}$`, 'm').exec(texto);
+    if (total) fatura.valor_total = valor(total[1]);
+    const ano = venc ? Number(venc[3]) : competencia.ano;
+    const mesVencimento = venc ? MESES_NU[venc[2]] : competencia.mes;
+    const linhas = [];
+    (paginasTexto || []).forEach((pagina, i) => {
+        if (!rePaginaNu.test(pagina)) return;
+        pagina.split(/\r?\n/).forEach((bruta, j) => {
+            const linha = limpar(bruta);
+            const m = reTransacaoNu.exec(linha);
+            if (!m) return;
+            const [, dia, mes, final, descricao, sinal, textoValor] = m;
+            const anoCompra = MESES_NU[mes] > mesVencimento ? ano - 1 : ano;
+            const data = new Date(Date.UTC(anoCompra, MESES_NU[mes] - 1, Number(dia)));
+            if (data.getUTCDate() !== Number(dia)) return;
+            const montada = montarLinha(`${i + 1}-${j + 1}`, iso(anoCompra, MESES_NU[mes], dia), descricao,
+                valor(textoValor).toFixed(2), sinal ? 'credito' : 'debito', null, 'pdf', PERFIL_NUBANK);
+            linhas.push({ ...montada, linha_origem: linhas.length + 1, cartao_final: final || null,
+                metadados: { pagina: i + 1, linha_pdf: j + 1, linha_texto: linha } });
+            if (final && !fatura.cartoes_detectados.includes(final)) fatura.cartoes_detectados.push(final);
+        });
+    });
+    fatura.cartoes_detectados.sort();
+    return { origem: 'pdf', perfil_detectado: 'nubank_pdf', requer_mapeamento: false, fatura, linhas, total_linhas: linhas.length };
 }
 
 // Texto de uma pagina a partir dos trechos do PDF.js ({str, transform, width}), como extract_text(x_tolerance=1,
