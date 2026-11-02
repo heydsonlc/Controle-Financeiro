@@ -424,7 +424,8 @@ def test_i3_toda_escrita_do_novo_aplicativo_recusa_perfil_do_flask_sem_gravar(ba
                   'valor_pago': '10.00', 'valor_devido': '10.00', 'valor_recebido': '10.00', 'data': '2027-03-05',
                   'data_pagamento': '2027-03-05', 'data_recebimento': '2027-03-05', 'data_estorno': '2027-03-06',
                   'motivo': 'teste de guarda', 'conta_bancaria_id': contas[0], 'conta_origem_id': contas[0],
-                  'conta_destino_id': contas[-1], 'fonte_id': 0, 'descricao': 'Guarda (ficticio)'}
+                  'conta_destino_id': contas[-1], 'fonte_id': 0, 'descricao': 'Guarda (ficticio)',
+                  'ate_competencia': '2026-01'}  # regularizar_historico valida a competencia antes da guarda
     antes = resumo_tabelas(banco)
     resultado = {}
     for f in funcoes_de_escrita(banco):
