@@ -75,7 +75,7 @@
 | CSV Nubank, Caixa e manual; prévia; confronto; retirados; confirmação; resultado | Funcionando |
 | Reimportar o mesmo arquivo | Nada novo; nada gravado (verificado em E2E) |
 | Créditos e estornos | Identificados e não importados como despesa (ver diferenças); desde o FIN-CARTAO-NUBANK-CREDITOS-01, abatem o valor a pagar |
-| PDF e XLSX | **Pendente** (I1) |
+| PDF e XLSX | **Pendente** (I1); depois, PDF da Caixa e (FIN-CARTOES-MULTIPLOS-01) do Nubank, com o final do cartão de cada compra |
 | Vincular a linha a uma recorrência escolhida (`/recorrencia`) | **Pendente** (I2). A recorrência com o mesmo nome já é reconhecida |
 
 ## 3. Integrações
