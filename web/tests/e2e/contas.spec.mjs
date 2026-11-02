@@ -161,7 +161,7 @@ test('usuario B ve so as proprias contas', async ({ page }) => {
     await abrirDespesas(page, '2026-11');
     // FIN-RECORRENCIAS-AUTOMATICAS-1: as faturas dos cartoes do Perfil B sao geradas ao abrir o mes (gerador novo).
     expect((await nomes(page)).filter((n) => !n.startsWith('Fatura '))).toEqual(['Aluguel B 11/2026']);
-    for (const fatura of (await nomes(page)).filter((n) => n.startsWith('Fatura '))) expect(fatura).toMatch(/^Fatura Cartao (B|Pagamento) - 11\/2026$/);
+    for (const fatura of (await nomes(page)).filter((n) => n.startsWith('Fatura '))) expect(fatura).toMatch(/^Fatura (Cartao (B|Pagamento)|Contrato Multiplo E2E) - 11\/2026$/);
     for (const nome of ['Aluguel 11/2026', 'Internet 11/2026', 'Contador 11/2026', 'Cartao Azul']) {
         await expect(page.getByText(nome)).toHaveCount(0);
     }
