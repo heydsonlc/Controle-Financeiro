@@ -2,8 +2,10 @@ from __future__ import annotations
 
 try:
     from backend.models import db, Categoria
+    from backend.services.catalogo_categorias_service import flask_pode_escrever_catalogo
 except ImportError:
     from models import db, Categoria
+    from services.catalogo_categorias_service import flask_pode_escrever_catalogo
 
 
 MODULO_MOBILIDADE = 'mobilidade'
@@ -11,7 +13,6 @@ MODULO_MOBILIDADE = 'mobilidade'
 MOB_COMBUSTIVEL = 'MOB_COMBUSTIVEL'
 MOB_SEGURO_VEICULAR = 'MOB_SEGURO_VEICULAR'
 MOB_TRIBUTOS_VEICULARES = 'MOB_TRIBUTOS_VEICULARES'
-MOB_REVISAO = 'MOB_REVISAO'
 MOB_MANUTENCAO = 'MOB_MANUTENCAO'
 MOB_PNEUS = 'MOB_PNEUS'
 MOB_USO_VEICULO = 'MOB_USO_VEICULO'
@@ -38,12 +39,6 @@ CATEGORIAS_SISTEMICAS_MOBILIDADE = {
         'descricao': 'IPVA, licenciamento e taxas obrigatórias similares.',
         'cor': '#7c3aed',
         'icone': 'receipt',
-    },
-    MOB_REVISAO: {
-        'nome': 'Revisão',
-        'descricao': 'Revisões programadas do veículo.',
-        'cor': '#0891b2',
-        'icone': 'clipboard-check',
     },
     MOB_MANUTENCAO: {
         'nome': 'Manutenção Veicular',
@@ -109,6 +104,10 @@ def _aplicar_metadados_sistemicos(categoria: Categoria, codigo_sistema: str, def
     return categoria
 
 
+class CategoriaSistemicaAusente(ValueError):
+    """A categoria sistemica nao existe e o catalogo e do novo aplicativo: o Flask nao a cria."""
+
+
 def obter_categoria_sistemica(codigo_sistema: str) -> Categoria:
     """
     Retorna uma Categoria de Despesa sistêmica por código estável.
@@ -121,6 +120,14 @@ def obter_categoria_sistemica(codigo_sistema: str) -> Categoria:
     definicao = _definicao(codigo_sistema)
 
     categoria = Categoria.query.filter_by(codigo_sistema=codigo_sistema).first()
+    # FIN-CATEGORIAS-CONSOLIDACAO-01: com o catalogo no novo aplicativo, o Flask so le a categoria sistemica; nunca a
+    # cria, promove ou reescreve (a guarda das rotas de categorias nao cobre este caminho).
+    if not flask_pode_escrever_catalogo(f'categoria sistemica {codigo_sistema}'):
+        if categoria is None:
+            raise CategoriaSistemicaAusente(
+                f'A categoria sistêmica "{definicao["nome"]}" ({codigo_sistema}) não existe e o catálogo é administrado '
+                'pelo novo aplicativo. Nada foi gravado.')
+        return categoria
     if categoria:
         _aplicar_metadados_sistemicos(categoria, codigo_sistema, definicao)
         db.session.add(categoria)
@@ -159,9 +166,10 @@ def categoria_sistemica_mobilidade_id_para_tipo_evento(tipo_evento: str | None) 
         'TRIBUTO': MOB_TRIBUTOS_VEICULARES,
         'TRIBUTOS': MOB_TRIBUTOS_VEICULARES,
         'TAXA_OBRIGATORIA': MOB_TRIBUTOS_VEICULARES,
-        'REVISAO': MOB_REVISAO,
-        'REVISAO_GERAL': MOB_REVISAO,
-        'REVISAO_PROGRAMADA': MOB_REVISAO,
+        # FIN-CATEGORIAS-CONSOLIDACAO-01: revisao e Manutencao Veicular (o tipo do evento fica no metadata)
+        'REVISAO': MOB_MANUTENCAO,
+        'REVISAO_GERAL': MOB_MANUTENCAO,
+        'REVISAO_PROGRAMADA': MOB_MANUTENCAO,
         'TROCA_PNEUS': MOB_PNEUS,
         'PNEUS': MOB_PNEUS,
         'ALINHAMENTO_BALANCEAMENTO': MOB_PNEUS,

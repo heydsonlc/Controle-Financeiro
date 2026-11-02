@@ -13,8 +13,7 @@ Despesas geradas por Mobilidade devem usar categorias sistêmicas granulares con
 | `MOB_COMBUSTIVEL` | Combustível | combustível e abastecimento |
 | `MOB_SEGURO_VEICULAR` | Seguro Veicular | seguro do veículo |
 | `MOB_TRIBUTOS_VEICULARES` | Tributos Veiculares | IPVA, licenciamento e taxas obrigatórias similares |
-| `MOB_REVISAO` | Revisão | revisão programada |
-| `MOB_MANUTENCAO` | Manutenção Veicular | manutenção geral, preventiva ou corretiva |
+| `MOB_MANUTENCAO` | Manutenção Veicular | manutenção geral, preventiva ou corretiva, e revisões (REVISAO, REVISAO_GERAL, REVISAO_PROGRAMADA) |
 | `MOB_PNEUS` | Pneus | pneus, troca de pneus e alinhamento associado quando aplicável |
 | `MOB_USO_VEICULO` | Uso do Veículo | estacionamento, pedágio e custos de uso do carro próprio |
 | `MOB_APP` | Transporte por Aplicativo | Uber, 99, táxi e similares |
@@ -30,3 +29,9 @@ O backend deve buscar essas categorias por `codigo_sistema`, nunca por ID fixo n
 ## Histórico
 
 Como a base foi zerada antes desta implementação, não houve migração histórica de despesas antigas, contas antigas ou recorrências antigas vinculadas à categoria genérica Mobilidade.
+
+## Consolidação (FIN-CATEGORIAS-CONSOLIDACAO-01)
+
+- `MOB_REVISAO` deixou de ser categoria sistêmica: as revisões usam `MOB_MANUTENCAO` e o tipo do evento continua na regra e na despesa prevista. São 9 categorias obrigatórias.
+- Com o catálogo no novo aplicativo (escritor NOVO), o Flask só lê a categoria sistêmica: não cria, não promove pelo nome e não reescreve. Se ela faltar, a operação é recusada (`CategoriaSistemicaAusente`).
+- As categorias gerais equivalentes ("Transporte por App", "Manutenção de Veículo") são incorporadas às sistêmicas pela função oficial: docs/FIN_CATEGORIAS_CONSOLIDACAO_01.md.

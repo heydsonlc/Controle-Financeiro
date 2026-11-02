@@ -3,7 +3,8 @@ FIN-MIGRACAO-P0P1-01 (Etapa 1) — Empresa no novo aplicativo e catalogo de cate
 
 Reproduz o estado da producao antes da Etapa 2: Pessoal no novo aplicativo (com recorrencias, cartao, contas e um item
 legado SEM perfil e ativo), Empresa VAZIA ainda sem escritor (padrao FLASK) com o titular gestor, catalogo de categorias
-sem escritor nem gestor e as 10 categorias sistemicas de Mobilidade. Prova:
+sem escritor nem gestor e as 9 categorias sistemicas de Mobilidade (sem MOB_REVISAO desde
+FIN-CATEGORIAS-CONSOLIDACAO-01). Prova:
 - Empresa FLASK: toda escrita recusada (SISTEMA_FLASK), nada gravado;
 - a ativacao (definir_gerador_recorrencia, a operacao oficial) so grava a linha do escritor e a do historico: nenhuma
   outra tabela muda (ativar != gerar), a previa da Empresa e zero em qualquer competencia (inclusive a retroativa) e a
@@ -171,7 +172,7 @@ def catalogo(dsn, funcao, *args, usuario=USUARIO_D):
 
 def test_catalogo_so_com_escritor_novo_e_gestor(banco):
     intactas = sistemicas(banco)
-    assert intactas['n'] == 10
+    assert intactas['n'] == 9  # FIN-CATEGORIAS-CONSOLIDACAO-01: sem MOB_REVISAO
     nova = {'nome': 'Teste Migracao Catalogo', 'descricao': 'ficticia', 'cor': '#123456', 'icone': 'tag', 'ativo': True}
     assert como_d(banco, 'select financeiro.situacao_catalogo_categorias()') == {'escritor': 'FLASK', 'gestor': False}
     e = erro(catalogo, banco, 'criar_categoria', nova, str(uuid.uuid4()))

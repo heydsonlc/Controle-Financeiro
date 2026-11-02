@@ -447,7 +447,7 @@ def gestor(dsn, usuario=USUARIO_A):
 
 
 def sistemicas(dsn):
-    """As 10 categorias sistemicas de Mobilidade, como o Flask as cria (categoria_default.obter_categoria_sistemica)."""
+    """As 9 categorias sistemicas de Mobilidade, como o Flask as cria (categoria_default.obter_categoria_sistemica)."""
     from backend.services.categoria_default import CATEGORIAS_SISTEMICAS_MOBILIDADE
     for codigo, d in CATEGORIAS_SISTEMICAS_MOBILIDADE.items():
         sql(dsn, "insert into public.categoria (nome, descricao, cor, icone, ativo, sistemica, codigo_sistema, modulo_origem, "

@@ -25,7 +25,6 @@ CATEGORIAS_MOBILIDADE = [
     ('MOB_COMBUSTIVEL', 'Combustível', 'Combustível e abastecimento de veículos.', '#f97316', 'fuel'),
     ('MOB_SEGURO_VEICULAR', 'Seguro Veicular', 'Seguro do veículo.', '#2563eb', 'shield'),
     ('MOB_TRIBUTOS_VEICULARES', 'Tributos Veiculares', 'IPVA, licenciamento e taxas obrigatórias similares.', '#7c3aed', 'receipt'),
-    ('MOB_REVISAO', 'Revisão', 'Revisões programadas do veículo.', '#0891b2', 'clipboard-check'),
     ('MOB_MANUTENCAO', 'Manutenção Veicular', 'Manutenção geral, preventiva ou corretiva.', '#475569', 'wrench'),
     ('MOB_PNEUS', 'Pneus', 'Pneus, troca de pneus e alinhamento associado.', '#111827', 'circle'),
     ('MOB_USO_VEICULO', 'Uso do Veículo', 'Estacionamento, pedágio e custos de uso do carro próprio.', '#0f766e', 'road'),

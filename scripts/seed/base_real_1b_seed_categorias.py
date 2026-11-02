@@ -8,6 +8,10 @@ O seed e idempotente:
 - palavras-chave seguem a Categoria de Despesa;
 - Categoria do Cartao e criada apenas no perfil Pessoal;
 - vinculos Categoria de Despesa -> Categoria do Cartao sao criados apenas no perfil Pessoal.
+
+FIN-CATEGORIAS-CONSOLIDACAO-01: as categorias de Mobilidade usam os nomes das sistemicas (Transporte por Aplicativo,
+Manutencao Veicular, Pneus, Lavagem Veicular), reaproveitadas pelo nome; "Software e IA" foi incorporada em "Assinaturas".
+O seed nao recria "Transporte por App", "Manutencao de Veiculo", "Revisao" nem "Software e IA".
 """
 
 from __future__ import annotations
@@ -49,11 +53,12 @@ CATEGORIAS = [
     ("Servicos", "Manutenção residencial", "tool", "#475569", "manutencao residencial, manutenção residencial, encanador, eletricista, pintura, pedreiro, marceneiro"),
     ("Servicos", "Serviços gerais", "tool", "#6b7280", "servico, serviço, manutencao, manutenção, instalacao, instalação, assistencia, assistência"),
     ("Mobilidade", "Combustível", "fuel", "#ef4444", "posto, combustivel, combustível, gasolina, etanol, diesel, shell, ipiranga, petrobras, abastecimento"),
-    ("Mobilidade", "Transporte por App", "car", "#2563eb", "uber, 99, taxi, táxi, transporte app, corrida"),
+    ("Mobilidade", "Transporte por Aplicativo", "smartphone", "#16a34a", "uber, 99, taxi, táxi, transporte app, corrida"),
     ("Mobilidade", "Estacionamento", "car", "#64748b", "estacionamento, parking, zona azul"),
-    ("Mobilidade", "Manutenção de Veículo", "car", "#0f766e", "oficina, pneu, revisao, revisão, oleo, óleo, autopecas, autopeças, mecanica, mecânica"),
-    ("Digital", "Assinaturas", "repeat", "#7c3aed", "assinatura, mensalidade, netflix, spotify, prime, amazon prime, disney, max, youtube, streaming"),
-    ("Digital", "Software e IA", "briefcase", "#4f46e5", "openai, chatgpt, microsoft, google workspace, canva, software, ia, inteligencia artificial, inteligência artificial, saas"),
+    ("Mobilidade", "Manutenção Veicular", "wrench", "#475569", "oficina, revisao, revisão, oleo, óleo, autopecas, autopeças, mecanica, mecânica"),
+    ("Mobilidade", "Pneus", "circle", "#111827", "pneu"),
+    ("Mobilidade", "Lavagem Veicular", "sparkles", "#0284c7", "lavajato"),
+    ("Digital", "Assinaturas", "repeat", "#7c3aed", "assinatura, mensalidade, netflix, spotify, prime, amazon prime, disney, max, youtube, streaming, openai, chatgpt, microsoft, google workspace, canva, software, ia, inteligencia artificial, inteligência artificial, saas"),
     ("Educacao", "Educação", "education", "#0891b2", "escola, faculdade, curso, matricula, matrícula, mensalidade escolar, livro, livros, treinamento"),
     ("Financeiro", "Impostos e Taxas", "receipt", "#b45309", "darf, dare, gru, imposto, taxa, tributo, iptu, ipva, iss, inss, irrf"),
     ("Financeiro", "Tarifas Bancárias", "bank", "#475569", "tarifa, anuidade, juros, encargo, banco, pacote de servicos, pacote de serviços"),
@@ -80,11 +85,12 @@ VINCULOS = [
     ("Hortifruti / Verdurão", "Verdurão"),
     ("Panificadora", "Panificadora"),
     ("Combustível", "Mobilidade"),
-    ("Transporte por App", "Mobilidade"),
+    ("Transporte por Aplicativo", "Mobilidade"),
     ("Estacionamento", "Mobilidade"),
-    ("Manutenção de Veículo", "Mobilidade"),
+    ("Manutenção Veicular", "Mobilidade"),
+    ("Pneus", "Mobilidade"),
+    ("Lavagem Veicular", "Mobilidade"),
     ("Assinaturas", "Assinaturas"),
-    ("Software e IA", "Assinaturas"),
 ]
 
 

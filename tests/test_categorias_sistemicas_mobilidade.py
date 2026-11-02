@@ -13,10 +13,12 @@ from backend.services.categoria_default import (
     MOB_APP,
     MOB_ASSINATURA,
     MOB_COMBUSTIVEL,
+    MOB_MANUTENCAO,
     MOB_PNEUS,
     MOB_SEGURO_VEICULAR,
     MOB_TRIBUTOS_VEICULARES,
     MOB_USO_VEICULO,
+    categoria_sistemica_mobilidade_id_para_tipo_evento,
     garantir_categorias_sistemicas_mobilidade,
     obter_categoria_sistemica_id,
 )
@@ -166,6 +168,31 @@ def test_manutencao_por_km_mapeia_pneus_para_categoria_sistemica(client, app_con
     assert gerar.status_code == 201
     despesa_id = gerar.get_json()['data']['id']
     assert _codigo(DespesaPrevista.query.get(despesa_id).categoria_id) == MOB_PNEUS
+
+
+def test_revisao_usa_manutencao_veicular_e_nao_cria_categoria_revisao(client, app_context):
+    """FIN-CATEGORIAS-CONSOLIDACAO-01: revisao e Manutencao Veicular; o tipo do evento continua na regra e na prevista."""
+    veiculo = Veiculo(nome='Carro Revisao', tipo='carro', combustivel='gasolina', autonomia_km_l=Decimal('10.0'),
+                      status='ATIVO', data_inicio=date(2026, 6, 1), combustivel_valor_mensal=Decimal('500.00'),
+                      preco_medio_combustivel=Decimal('5.00'))
+    db.session.add(veiculo)
+    db.session.commit()
+    for tipo in ('REVISAO', 'REVISAO_GERAL', 'REVISAO_PROGRAMADA'):
+        assert _codigo(categoria_sistemica_mobilidade_id_para_tipo_evento(tipo)) == MOB_MANUTENCAO
+    response = client.post(f'/api/veiculos/{veiculo.id}/regras-km',
+                           json={'tipo_evento': 'REVISAO', 'intervalo_km': 10000, 'custo_estimado': '600.00'})
+    assert response.status_code == 201
+    regra = VeiculoRegraManutencaoKm.query.get(response.get_json()['data']['id'])
+    assert (regra.tipo_evento, _codigo(regra.categoria_id)) == ('REVISAO', MOB_MANUTENCAO)
+    gerar = client.post(f'/api/veiculos/{veiculo.id}/manutencoes-km/gerar', json={'regra_id': regra.id})
+    assert gerar.status_code == 201
+    despesa = DespesaPrevista.query.get(gerar.get_json()['data']['id'])
+    assert (_tipo_evento(despesa), _codigo(despesa.categoria_id)) == ('REVISAO', MOB_MANUTENCAO)
+    garantir_categorias_sistemicas_mobilidade()
+    assert 'MOB_REVISAO' not in CATEGORIAS_SISTEMICAS_MOBILIDADE and len(CATEGORIAS_SISTEMICAS_MOBILIDADE) == 9
+    assert Categoria.query.filter((Categoria.codigo_sistema == 'MOB_REVISAO') | (Categoria.nome == 'Revisão')).count() == 0
+    with pytest.raises(ValueError):
+        obter_categoria_sistemica_id('MOB_REVISAO')
 
 
 def test_recorrencias_mobilidade_nao_dependem_de_categoria_mobilidade(app_context):

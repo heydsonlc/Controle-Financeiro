@@ -184,7 +184,7 @@ test('catalogo no novo aplicativo: conta nao gestora nao ve as acoes e e recusad
 test('gestor do catalogo: criar, editar, palavras-chave, protecoes e excluir pela tela; sistemicas intactas', async ({ page, request }) => {
     await admin(request, { acao: 'gestor', gestor: true });
     const antes = (await admin(request, { acao: 'retrato' })).catalogo;
-    expect(antes.n_sistemicas).toBe(10);
+    expect(antes.n_sistemicas).toBe(9);  // FIN-CATEGORIAS-CONSOLIDACAO-01: sem MOB_REVISAO
     const dialogos = registrarDialogos(page);
     await entrar(page);
     await abrirCategorias(page);

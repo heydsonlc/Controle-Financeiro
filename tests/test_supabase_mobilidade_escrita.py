@@ -79,7 +79,7 @@ def erro(funcao, *args, **kw):
 
 
 def semear_categorias_mobilidade(dsn):
-    """As 10 categorias sistemicas MOB_* como o Flask as cria (categoria_default.py), nas duas copias."""
+    """As 9 categorias sistemicas MOB_* como o Flask as cria (categoria_default.py), nas duas copias."""
     for codigo, d in CATEGORIAS_SISTEMICAS_MOBILIDADE.items():
         sql(dsn, "insert into public.categoria (nome, descricao, cor, icone, ativo, sistemica, codigo_sistema, modulo_origem, "
                  "bloquear_edicao, bloquear_exclusao) values (%s, %s, %s, %s, true, true, %s, 'mobilidade', true, true)",
