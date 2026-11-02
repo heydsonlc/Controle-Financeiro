@@ -173,7 +173,14 @@ t = trocar(t, "        'situacao_fatura', financeiro.situacao_fatura(financeiro.
            "        'cartoes_contrato', coalesce((select jsonb_agg(jsonb_build_object('id', v.id, 'nome', v.nome, 'final', v.final,\n"
            "                                                                 'tipo', v.tipo, 'portador', v.portador, 'situacao', v.situacao)\n"
            "                                              order by v.situacao <> 'ATIVO', v.final)\n"
-           "                                        from financeiro.cartao_vinculado v where v.contrato_id = p_cartao_id), '[]'::jsonb),\n")
+           "                                        from financeiro.cartao_vinculado v where v.contrato_id = p_cartao_id), '[]'::jsonb),\n"
+           "        -- os tipos de arquivo ja importados nesta fatura (PDF ou planilha): o outro so depois da limpeza seletiva\n"
+           "        'fontes_importadas', coalesce((select jsonb_agg(distinct case when l.origem_importacao in ('csv', 'xlsx') then 'planilha'\n"
+           "                                                                     else l.origem_importacao end)\n"
+           "                                         from public.lancamento_agregado l\n"
+           "                                        where l.cartao_id = p_cartao_id and coalesce(l.mes_fatura_original, l.mes_fatura) = v_comp\n"
+           "                                          and coalesce(l.is_importado, false)\n"
+           "                                          and financeiro.pertence_ao_perfil(l.perfil_financeiro_id, p_perfil_id)), '[]'::jsonb),\n")
 t = trocar(t, "            'ignorados', count(*) filter (where l ->> 'status' = 'ignorado'))\n",
            "            'ignorados', count(*) filter (where l ->> 'status' = 'ignorado'),\n"
            f"            -- {MARCA}: finais do arquivo sem cartao cadastrado e linhas sem cartao identificado\n"
@@ -193,11 +200,49 @@ t = trocar(t, "                'IMPORTACAO', null);\n            v_realizadas :=
            "            if (v_l ->> 'cartao_vinculado_id') is not null then\n"
            "                update public.lancamento_agregado set cartao_vinculado_id = (v_l ->> 'cartao_vinculado_id')::integer where id = v_id;\n"
            "            end if;\n")
+t = trocar(t, "        raise exception 'Nenhuma linha para importar' using errcode = '22023';\n    end if;\n",
+           "        raise exception 'Nenhuma linha para importar' using errcode = '22023';\n    end if;\n"
+           f"    -- {MARCA}: o PDF e a planilha (CSV ou XLSX) sao a mesma fatura: o que ja foi importado de um tipo de arquivo nao\n"
+           "    -- recebe linhas novas do outro (valores arredondados de outro jeito viriam em dobro). Reconstruir pelo outro arquivo\n"
+           "    -- so depois da limpeza seletiva.\n"
+           "    if jsonb_array_length(v_a_gravar) > 0 and exists (\n"
+           "        select 1 from public.lancamento_agregado l\n"
+           "         where l.cartao_id = p_cartao_id and coalesce(l.mes_fatura_original, l.mes_fatura) = v_comp and coalesce(l.is_importado, false)\n"
+           "           and financeiro.pertence_ao_perfil(l.perfil_financeiro_id, p_perfil_id)\n"
+           "           and (case when l.origem_importacao in ('csv', 'xlsx') then 'planilha' else l.origem_importacao end)\n"
+           "               is distinct from (case when coalesce(v_a_gravar -> 0 ->> 'origem_importacao', 'csv') in ('csv', 'xlsx') then 'planilha'\n"
+           "                                      else v_a_gravar -> 0 ->> 'origem_importacao' end)) then\n"
+           "        raise exception 'Importacao nao realizada: a fatura de % ja foi importada de outro tipo de arquivo (PDF ou planilha). Importe o mesmo tipo de arquivo, ou faca a limpeza seletiva antes de reconstruir pelo outro.',\n"
+           "            to_char(v_comp, 'MM/YYYY') using errcode = 'P0001', hint = 'OUTRA_FONTE';\n"
+           "    end if;\n")
 t = trocar(t, "                                                    is_importado, origem_importacao, criado_em, mes_fatura_original)\n",
            "                                                    is_importado, origem_importacao, criado_em, mes_fatura_original,\n"
            f"                                                    cartao_vinculado_id)  -- {MARCA}\n")
 t = trocar(t, "                    nullif(v_orig, v_alvo))\n",
            "                    nullif(v_orig, v_alvo), (v_l ->> 'cartao_vinculado_id')::integer)\n")
+t = trocar(t, "    v_total_cred numeric := 0;\nbegin\n",
+           "    v_total_cred numeric := 0;\n"
+           f"    v_lanc_cred  integer;  -- {MARCA}: compra original do credito\n"
+           "begin\n")
+t = trocar(t, "        insert into financeiro.credito_fatura (perfil_financeiro_id, cartao_id, fatura_id, mes_fatura, mes_fatura_original,\n",
+           f"        -- {MARCA}: na reconstrucao a compra original vem no mesmo arquivo e ja foi gravada acima: o credito sem compra\n"
+           "        -- (e sem escolha do usuario) procura de novo, pelas mesmas regras da previa; vincula so a candidata unica.\n"
+           "        v_lanc_cred := (v_l -> 'credito' -> 'compra' ->> 'id')::integer;\n"
+           "        if v_lanc_cred is null and v_l -> 'credito' ->> 'natureza' in ('IOF_DEVOLVIDO', 'ESTORNO')\n"
+           "           and not coalesce((v_l -> 'credito' ->> 'escolhida')::boolean, false) then\n"
+           "            select case when jsonb_array_length(x -> 'credito' -> 'candidatas') = 1\n"
+           "                        then (x -> 'credito' -> 'candidatas' -> 0 ->> 'id')::integer end\n"
+           "              into v_lanc_cred\n"
+           "              from jsonb_array_elements(financeiro.analisar_importacao_cartao(p_perfil_id, p_cartao_id, v_comp,\n"
+           "                       jsonb_build_array(jsonb_strip_nulls(jsonb_build_object(\n"
+           "                           'linha_id', v_l ->> 'linha_id', 'data_compra', v_l ->> 'data_compra', 'valor', v_l ->> 'valor',\n"
+           "                           'descricao_original', v_l ->> 'descricao_original', 'descricao_normalizada', v_l ->> 'descricao_normalizada',\n"
+           "                           'tipo_movimento', 'credito', 'cartao_final', v_l ->> 'cartao_final',\n"
+           "                           'cartao_vinculado_escolhido_id', v_l -> 'cartao_vinculado_escolhido_id')))) -> 'linhas') x;\n"
+           "        end if;\n"
+           "        insert into financeiro.credito_fatura (perfil_financeiro_id, cartao_id, fatura_id, mes_fatura, mes_fatura_original,\n")
+t = trocar(t, "                (v_l -> 'credito' -> 'compra' ->> 'id')::integer, v_l ->> 'hash_deduplicacao',\n",
+           "                v_lanc_cred, v_l ->> 'hash_deduplicacao',\n")
 t = trocar(t, "                                               chave, origem_importacao, operacao_chave, user_id)\n",
            "                                               chave, origem_importacao, operacao_chave, user_id, cartao_vinculado_id)\n")
 t = trocar(t, "                left(coalesce(v_l ->> 'origem_importacao', 'csv'), 20), p_chave, (select auth.uid()))\n",

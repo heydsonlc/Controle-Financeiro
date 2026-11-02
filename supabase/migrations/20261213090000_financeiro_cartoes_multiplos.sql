@@ -1291,6 +1291,13 @@ begin
                                                                  'tipo', v.tipo, 'portador', v.portador, 'situacao', v.situacao)
                                               order by v.situacao <> 'ATIVO', v.final)
                                         from financeiro.cartao_vinculado v where v.contrato_id = p_cartao_id), '[]'::jsonb),
+        -- os tipos de arquivo ja importados nesta fatura (PDF ou planilha): o outro so depois da limpeza seletiva
+        'fontes_importadas', coalesce((select jsonb_agg(distinct case when l.origem_importacao in ('csv', 'xlsx') then 'planilha'
+                                                                     else l.origem_importacao end)
+                                         from public.lancamento_agregado l
+                                        where l.cartao_id = p_cartao_id and coalesce(l.mes_fatura_original, l.mes_fatura) = v_comp
+                                          and coalesce(l.is_importado, false)
+                                          and financeiro.pertence_ao_perfil(l.perfil_financeiro_id, p_perfil_id)), '[]'::jsonb),
         -- FIN-CARTAO-IMPORTACAO-FIXAS-01: recorrencias do cartao que a previa pode escolher (ativas, ou inativas com previsao pendente)
         'recorrencias_cartao', coalesce((select jsonb_agg(jsonb_build_object('id', i.id, 'nome', i.nome, 'valor', i.valor,
                                                                     'ativa', coalesce(i.ativo, true)) order by i.nome, i.id)
@@ -1374,6 +1381,7 @@ declare
     v_cred_ids   bigint[] := '{}';
     v_cid        bigint;
     v_total_cred numeric := 0;
+    v_lanc_cred  integer;  -- FIN-CARTOES-MULTIPLOS-01: compra original do credito
 begin
     perform financeiro.exigir_escrita_novo(p_perfil_id);  -- FIN-ESCRITOR-UNICO-FINAL-1
     if not financeiro.pode_gerir_perfil(p_perfil_id) then
@@ -1426,6 +1434,19 @@ begin
     end if;
     if jsonb_array_length(v_a_gravar) = 0 and jsonb_array_length(v_conciliar) = 0 and jsonb_array_length(v_creditos) = 0 then
         raise exception 'Nenhuma linha para importar' using errcode = '22023';
+    end if;
+    -- FIN-CARTOES-MULTIPLOS-01: o PDF e a planilha (CSV ou XLSX) sao a mesma fatura: o que ja foi importado de um tipo de arquivo nao
+    -- recebe linhas novas do outro (valores arredondados de outro jeito viriam em dobro). Reconstruir pelo outro arquivo
+    -- so depois da limpeza seletiva.
+    if jsonb_array_length(v_a_gravar) > 0 and exists (
+        select 1 from public.lancamento_agregado l
+         where l.cartao_id = p_cartao_id and coalesce(l.mes_fatura_original, l.mes_fatura) = v_comp and coalesce(l.is_importado, false)
+           and financeiro.pertence_ao_perfil(l.perfil_financeiro_id, p_perfil_id)
+           and (case when l.origem_importacao in ('csv', 'xlsx') then 'planilha' else l.origem_importacao end)
+               is distinct from (case when coalesce(v_a_gravar -> 0 ->> 'origem_importacao', 'csv') in ('csv', 'xlsx') then 'planilha'
+                                      else v_a_gravar -> 0 ->> 'origem_importacao' end)) then
+        raise exception 'Importacao nao realizada: a fatura de % ja foi importada de outro tipo de arquivo (PDF ou planilha). Importe o mesmo tipo de arquivo, ou faca a limpeza seletiva antes de reconstruir pelo outro.',
+            to_char(v_comp, 'MM/YYYY') using errcode = 'P0001', hint = 'OUTRA_FONTE';
     end if;
 
     for v_l in select e from jsonb_array_elements(v_a_gravar) e loop
@@ -1529,6 +1550,21 @@ begin
             raise exception 'Importacao nao realizada: a fatura de % esta consolidada e o credito "%" cairia nela. Retire a linha ou importe em outra competencia.',
                 to_char(v_alvo, 'MM/YYYY'), v_l ->> 'descricao_exibida' using errcode = 'P0001', hint = 'CONSOLIDADA';
         end if;
+        -- FIN-CARTOES-MULTIPLOS-01: na reconstrucao a compra original vem no mesmo arquivo e ja foi gravada acima: o credito sem compra
+        -- (e sem escolha do usuario) procura de novo, pelas mesmas regras da previa; vincula so a candidata unica.
+        v_lanc_cred := (v_l -> 'credito' -> 'compra' ->> 'id')::integer;
+        if v_lanc_cred is null and v_l -> 'credito' ->> 'natureza' in ('IOF_DEVOLVIDO', 'ESTORNO')
+           and not coalesce((v_l -> 'credito' ->> 'escolhida')::boolean, false) then
+            select case when jsonb_array_length(x -> 'credito' -> 'candidatas') = 1
+                        then (x -> 'credito' -> 'candidatas' -> 0 ->> 'id')::integer end
+              into v_lanc_cred
+              from jsonb_array_elements(financeiro.analisar_importacao_cartao(p_perfil_id, p_cartao_id, v_comp,
+                       jsonb_build_array(jsonb_strip_nulls(jsonb_build_object(
+                           'linha_id', v_l ->> 'linha_id', 'data_compra', v_l ->> 'data_compra', 'valor', v_l ->> 'valor',
+                           'descricao_original', v_l ->> 'descricao_original', 'descricao_normalizada', v_l ->> 'descricao_normalizada',
+                           'tipo_movimento', 'credito', 'cartao_final', v_l ->> 'cartao_final',
+                           'cartao_vinculado_escolhido_id', v_l -> 'cartao_vinculado_escolhido_id')))) -> 'linhas') x;
+        end if;
         insert into financeiro.credito_fatura (perfil_financeiro_id, cartao_id, fatura_id, mes_fatura, mes_fatura_original,
                                                natureza, descricao, descricao_original, data_credito, valor, lancamento_id,
                                                chave, origem_importacao, operacao_chave, user_id, cartao_vinculado_id)
@@ -1536,7 +1572,7 @@ begin
                 v_fat, v_alvo, nullif(v_comp, v_alvo), v_l -> 'credito' ->> 'natureza',
                 left(coalesce(nullif(v_l ->> 'descricao_exibida', ''), v_l ->> 'descricao_normalizada'), 200),
                 v_l ->> 'descricao_original', (v_l ->> 'data_compra')::date, (v_l ->> 'valor')::numeric,
-                (v_l -> 'credito' -> 'compra' ->> 'id')::integer, v_l ->> 'hash_deduplicacao',
+                v_lanc_cred, v_l ->> 'hash_deduplicacao',
                 left(coalesce(v_l ->> 'origem_importacao', 'csv'), 20), p_chave, (select auth.uid()),
                 (v_l ->> 'cartao_vinculado_id')::integer)  -- FIN-CARTOES-MULTIPLOS-01
         returning id into v_cid;

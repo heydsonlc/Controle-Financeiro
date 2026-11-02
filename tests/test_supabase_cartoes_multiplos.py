@@ -174,6 +174,38 @@ def test_compras_identicas_de_cartoes_diferentes_e_reimportacao(banco):
     assert previa(banco, linha(3, 'SUPERMERCADO', '50.00', final='3333'))['linhas'][0]['classificacao_importacao'] == 'COMPRA'
 
 
+def test_pdf_e_planilha_sao_a_mesma_fatura(banco):
+    """O PDF do Nubank arredonda o IOF diferente do CSV (R$ 1,47 x R$ 1,46): a mesma fatura nao entra pelos dois."""
+    cartao(banco, '1111')
+    importar(banco, linha(1, 'PADARIA', '8.00'), linha(2, 'IOF de "Nuvem"', '1.46'))  # do CSV (origem csv)
+    pdf = [linha(1, 'PADARIA', '8.00', final='1111', origem_importacao='pdf'),
+           linha(2, 'IOF de "Nuvem"', '1.47', final='1111', origem_importacao='pdf')]
+    r = previa(banco, *pdf)
+    assert (r['fontes_importadas'], [x['classificacao_importacao'] for x in r['linhas']]) == (['planilha'], ['JA_EXISTENTE', 'COMPRA'])
+    antes = md5_compras(banco)
+    erro = falha(banco, 'importar_fatura_cartao', PESSOAL, CARTAO, MES, pdf, str(uuid.uuid4()))
+    assert erro[0] == 'P0001' and 'outro tipo de arquivo' in erro[1]
+    assert md5_compras(banco) == antes
+    # a planilha de novo continua aceita (complementar)
+    assert importar(banco, linha(3, 'FARMACIA', '5.00'))['inseridos'] == 1
+
+
+def test_credito_e_compra_original_no_mesmo_arquivo(banco):
+    """Reconstrucao: a compra original vem no mesmo arquivo; a confirmacao vincula a candidata unica, nunca uma de varias."""
+    cartao(banco, '1111')
+    arquivo = [linha(1, 'IOF de "Nuvem"', '1.47'), linha(2, 'IOF de volta de Nuvem', '-1.47'),
+               linha(3, 'Loja Som', '99.90'), linha(4, 'Loja Som', '129.90', data='2029-05-13'),
+               linha(5, 'Estorno de "Loja Som"', '-50.22')]
+    r = previa(banco, *arquivo)['linhas']
+    assert [(x['credito'] or {}).get('compra') for x in r if x['tipo_movimento'] == 'credito'] == [None, None]  # ainda nao gravadas
+    res = importar(banco, *arquivo)
+    assert (res['inseridos'], res['creditos']) == (3, 2)
+    vinculos = sql(banco, 'select cf.descricao, l.descricao compra from financeiro.credito_fatura cf '
+                          'left join public.lancamento_agregado l on l.id = cf.lancamento_id order by cf.id')
+    assert vinculos == [{'descricao': 'IOF de volta de Nuvem', 'compra': 'IOF de "Nuvem"'},
+                        {'descricao': 'Estorno de "Loja Som"', 'compra': None}]  # duas candidatas: sem vinculo
+
+
 def test_dois_cartoes_uma_fatura_por_cartao_e_pagamento_unico(banco):
     cartao(banco, '1111')
     cartao(banco, '2222', 'VIRTUAL')
