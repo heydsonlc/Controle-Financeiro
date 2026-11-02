@@ -1,7 +1,7 @@
 # FIN-CARTOES-MULTIPLOS-01 — Contratos com vários cartões, fatura consolidada e reconstrução das importações
 
-**Situação (02/11/2026): `FIN_CARTOES_MULTIPLOS_PUBLICACAO_01_PREPARADO`.** Implementado, testado e ensaiado numa cópia fiel da produção, inclusive com o PDF real do Nubank de 11/2026 (seção 6).
-- A publicação (push, migration `20261213090000`, deploy) aguarda autorização expressa.
+**Situação (02/11/2026): `FIN_CARTOES_CATEGORIAS_PUBLICACAO_01_PUBLICADO`.** Publicado em 02/11/2026 no FIN-CARTOES-CATEGORIAS-PUBLICACAO-01: push `3e09635..a1eebb1`, migrations `20261213090000` e `20261214090000` aplicadas e conferidas (53 → 55, nenhum dado existente alterado), deploy `8a8a63f7` (produção, commit `a1eebb1`, 165/165 arquivos iguais ao build). Homologação só de leitura (`docs/FIN_CARTOES_CATEGORIAS_PUBLICACAO_01.md`).
+- Nenhum cartão vinculado foi cadastrado; as compras existentes seguem sem cartão identificado até a reconstrução.
 - A limpeza real, a reconstrução das faturas de 11/2026 e o registro dos pagamentos também aguardam autorização.
 
 Base: `3e09635` (publicado), commit documental local `f913a79`, migrations até `20261212090000`.

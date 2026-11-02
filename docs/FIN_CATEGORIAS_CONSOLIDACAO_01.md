@@ -1,7 +1,7 @@
 # FIN-CATEGORIAS-CONSOLIDACAO-01 — Consolidação de categorias e dependências do Mobilidade
 
-**Situação (02/11/2026): `FIN_CATEGORIAS_CONSOLIDACAO_01_PRONTO_PARA_HOMOLOGACAO`.** Implementado, testado e ensaiado numa cópia fiel da produção.
-- Push, a migration `20261214090000` na produção e a execução das incorporações aguardam autorização.
+**Situação (02/11/2026): `FIN_CARTOES_CATEGORIAS_PUBLICACAO_01_PUBLICADO` (infraestrutura).** Publicado em 02/11/2026 no FIN-CARTOES-CATEGORIAS-PUBLICACAO-01: push `3e09635..a1eebb1`, migrations `20261213090000` e `20261214090000` aplicadas e conferidas (53 → 55, nenhum dado existente alterado), deploy `8a8a63f7` (produção, commit `a1eebb1`, 165/165 arquivos iguais ao build). Homologação só de leitura (`docs/FIN_CARTOES_CATEGORIAS_PUBLICACAO_01.md`).
+- As quatro incorporações NÃO foram executadas: só depois da reconstrução de 11/2026, com prévia, hash e autorização própria.
 - Base: diagnóstico FIN-CATEGORIAS-REDUNDANCIA-01 e Adendo 02.
 
 ## 1. Incorporações aprovadas (IDs da produção)
