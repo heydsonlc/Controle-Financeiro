@@ -13,7 +13,7 @@ import { criarChaves, emMigracao, falha, mensagemDeErro, ok, valorTexto } from '
 import { abrirNovaCompra } from './compra-cartao.js';
 import { iniciarMoldura } from './moldura.js';
 
-const estado = { perfilId: null, cartoes: [], versoesCartao: {}, versoesLancamento: {}, versoesParcelamento: {} };
+const estado = { perfilId: null, cartoes: [], versoesCartao: {}, versoesLancamento: {}, versoesParcelamento: {}, versoesVinculado: {} };
 const chaves = criarChaves();
 const MES = /^\d{4}-(0[1-9]|1[0-2])$/;
 const SENSIVEIS = ['numero_cartao', 'data_validade', 'codigo_seguranca'];
@@ -144,6 +144,28 @@ async function limites(cartaoId, parametros) {
 
 const limiteTexto = (v) => (v === null || v === undefined || v === '' ? '' : String(v));
 
+// FIN-CARTOES-MULTIPLOS-01: cartoes vinculados ao contrato (fisico, virtual, adicional). So os 4 ultimos digitos; a versao
+// lida acompanha a edicao (o banco recusa a de outra operacao).
+async function vinculados(contratoId) {
+    const data = await rpc((a) => supabase.rpc('cartoes_vinculados', a), { p_perfil_id: estado.perfilId, p_contrato_id: contratoId });
+    for (const c of data || []) estado.versoesVinculado[c.id] = c.versao;
+    return ok({ data: data || [] });
+}
+
+async function salvarVinculado(contratoId, vinculadoId, corpo) {
+    const dados = {};
+    for (const campo of ['nome', 'final', 'tipo', 'portador', 'situacao', 'data_inicio', 'data_cancelamento', 'substituto_id']) {
+        if (corpo[campo] !== undefined) dados[campo] = corpo[campo] === '' ? null : corpo[campo];
+    }
+    const { data, error } = await supabase.rpc('salvar_cartao_vinculado', {
+        p_perfil_id: estado.perfilId, p_contrato_id: contratoId, p_cartao_vinculado_id: vinculadoId, p_dados: dados,
+        p_versao: vinculadoId ? estado.versoesVinculado[vinculadoId] || null : null,
+    });
+    if (error) return falha(mensagemDeErro(error));
+    estado.versoesVinculado[data.id] = data.versao;
+    return { status: vinculadoId ? 200 : 201, corpo: { success: true, data } };
+}
+
 async function vincular(cartaoId, corpo) {
     const { data, error } = await supabase.rpc('vincular_limite_cartao', {
         p_perfil_id: estado.perfilId, p_cartao_id: cartaoId,
@@ -273,6 +295,9 @@ const ROTAS = [
     ['POST', /^\/api\/cartoes\/(\d+)\/categorias-limite$/, (m, corpo) => vincular(Number(m[1]), corpo || {})],
     ['PUT', /^\/api\/cartoes\/(\d+)\/categorias-limite\/(\d+)$/, (m, corpo) => atualizarLimite(Number(m[1]), Number(m[2]), corpo || {})],
     ['DELETE', /^\/api\/cartoes\/(\d+)\/categorias-limite\/(\d+)$/, (m) => desativarLimite(Number(m[1]), Number(m[2]))],
+    ['GET', /^\/api\/cartoes\/(\d+)\/vinculados$/, (m) => vinculados(Number(m[1]))],
+    ['POST', /^\/api\/cartoes\/(\d+)\/vinculados$/, (m, corpo) => salvarVinculado(Number(m[1]), null, corpo || {})],
+    ['PUT', /^\/api\/cartoes\/(\d+)\/vinculados\/(\d+)$/, (m, corpo) => salvarVinculado(Number(m[1]), Number(m[2]), corpo || {})],
     ['GET', /^\/api\/cartoes\/(\d+)\/fatura-categorias$/, (m, c, p) => faturaCategorias(Number(m[1]), p)],
     ['GET', /^\/api\/cartoes\/(\d+)\/fatura-lancamentos$/, (m, c, p) => faturaLancamentos(Number(m[1]), p)],
     ['PUT', /^\/api\/cartoes\/lancamentos\/(\d+)$/, (m, corpo) => editarLancamento(Number(m[1]), corpo || {})],

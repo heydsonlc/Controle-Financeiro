@@ -281,6 +281,60 @@
         </div>
     </div>
 
+    <!-- FIN-CARTOES-MULTIPLOS-01: cartao vinculado ao contrato (fisico, virtual, adicional). So os 4 ultimos digitos. -->
+    <div id="modal-cartao-vinculado" class="modal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2 id="modal-vinculado-titulo">Adicionar cart&atilde;o</h2>
+                <button class="modal-close" type="button" data-close-modal="modal-cartao-vinculado" aria-label="Fechar">&times;</button>
+            </div>
+
+            <form id="form-cartao-vinculado">
+                <input type="hidden" id="vinculado-id">
+                <div class="form-group">
+                    <label for="vinculado-nome">Identifica&ccedil;&atilde;o *</label>
+                    <input type="text" id="vinculado-nome" required maxlength="60" placeholder="Ex.: Virtual Amazon">
+                </div>
+                <div class="form-group">
+                    <label for="vinculado-final">4 &uacute;ltimos d&iacute;gitos *</label>
+                    <input type="text" id="vinculado-final" required inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label for="vinculado-tipo">Tipo *</label>
+                    <select id="vinculado-tipo" required>
+                        <option value="FISICO">F&iacute;sico</option>
+                        <option value="VIRTUAL">Virtual</option>
+                        <option value="ADICIONAL">Adicional</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="vinculado-portador">Portador</label>
+                    <input type="text" id="vinculado-portador" maxlength="80" placeholder="Titular">
+                </div>
+                <div class="form-group">
+                    <label for="vinculado-situacao">Situa&ccedil;&atilde;o</label>
+                    <select id="vinculado-situacao">
+                        <option value="ATIVO">Ativo</option>
+                        <option value="CANCELADO">Cancelado</option>
+                        <option value="SUBSTITUIDO">Substitu&iacute;do</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="vinculado-cancelamento">Cancelado em</label>
+                    <input type="date" id="vinculado-cancelamento">
+                </div>
+                <div class="form-group">
+                    <label for="vinculado-substituto">Substitu&iacute;do por</label>
+                    <select id="vinculado-substituto"></select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="cf-button cf-button-secondary" data-close-modal="modal-cartao-vinculado">Cancelar</button>
+                    <button type="submit" class="cf-button cf-button-primary">Salvar cart&atilde;o</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- FIN-FIDELIDADE-CARTOES-1 (removido): modal "Revelar CVV". O novo aplicativo nao guarda nem mostra o CVV. -->
     <!-- Modal: Editar lançamento de fatura -->
     <div id="modal-editar-lancamento" class="modal">

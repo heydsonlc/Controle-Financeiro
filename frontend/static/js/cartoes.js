@@ -13,6 +13,8 @@ const estadoCartoes = {
     limitesPorCartao: new Map(),
     faturasPorCartao: new Map(),
     lancamentosFatura: new Map(),
+    // FIN-CARTOES-MULTIPLOS-01: cartoes vinculados de cada contrato (null = recurso indisponivel, como no Flask)
+    vinculadosPorCartao: new Map(),
     cartaoSelecionadoId: null,
     parcelamentoGestao: null,
     filtroLancamentosFatura: 'todos',
@@ -134,6 +136,7 @@ function configurarEventosCartoes() {
         document.getElementById(id)?.addEventListener('change', desconfirmarFechamento);
     });
     document.getElementById('form-categoria-limite')?.addEventListener('submit', salvarCategoriaLimite);
+    document.getElementById('form-cartao-vinculado')?.addEventListener('submit', salvarVinculado);
     document.getElementById('form-revelar-cvv')?.addEventListener('submit', revelarCodigoSeguranca);
     document.getElementById('form-gerenciar-parcelamento')?.addEventListener('submit', salvarParcelasFuturas);
     document.getElementById('btn-cancelar-parcelas-futuras')?.addEventListener('click', cancelarParcelasFuturas);
@@ -201,8 +204,19 @@ async function carregarFaturaCartao(cartaoId) {
     if (!cartaoId) return;
     await Promise.all([
         carregarResumoFaturaCartao(cartaoId),
-        carregarLancamentosFaturaCartao(cartaoId, estadoCartoes.filtroLancamentosFatura || 'todos')
+        carregarLancamentosFaturaCartao(cartaoId, estadoCartoes.filtroLancamentosFatura || 'todos'),
+        carregarVinculadosCartao(cartaoId)
     ]);
+}
+
+// Cartoes vinculados ao contrato; sem o recurso (Flask), a secao nao aparece
+async function carregarVinculadosCartao(cartaoId) {
+    try {
+        const resp = await fetchJson(`${API_CARTOES}/${cartaoId}/vinculados`);
+        estadoCartoes.vinculadosPorCartao.set(Number(cartaoId), resp.data || []);
+    } catch (_erro) {
+        estadoCartoes.vinculadosPorCartao.set(Number(cartaoId), null);
+    }
 }
 
 async function carregarFaturaSelecionada() {
@@ -384,6 +398,8 @@ function renderizarDetalheCartao() {
             </div>
         </header>
 
+        ${renderizarCartoesVinculados(cartao)}
+
         <section class="detail-card categorias-vinculadas-card">
             <h3>Categorias do Cart&atilde;o Vinculadas</h3>
             ${renderizarTabelaLimites(limites)}
@@ -407,6 +423,115 @@ function renderizarDetalheCartao() {
             <h3>Regra operacional</h3>
             <p>As despesas pagas neste cart&atilde;o s&atilde;o agrupadas automaticamente pela Categoria do Cart&atilde;o com base na Categoria de Despesa.</p>
         </section>
+    `;
+}
+
+// FIN-CARTOES-MULTIPLOS-01: os cartoes do contrato (fisico, virtual, adicional), compactos, dentro do detalhe
+const TIPOS_VINCULADO = { FISICO: 'F&iacute;sico', VIRTUAL: 'Virtual', ADICIONAL: 'Adicional' };
+const SITUACOES_VINCULADO = { ATIVO: ['Ativo', 'status-ativo'], CANCELADO: ['Cancelado', 'status-atencao'], SUBSTITUIDO: ['Substitu&iacute;do', 'status-atencao'] };
+
+function renderizarCartoesVinculados(cartao) {
+    const vinculados = estadoCartoes.vinculadosPorCartao.get(Number(cartao.id));
+    if (!Array.isArray(vinculados)) return '';
+    return `
+        <section class="detail-card cartoes-vinculados-card">
+            <div class="cartoes-vinculados-header">
+                <div>
+                    <h3>Cart&otilde;es do contrato</h3>
+                    <p>Uma fatura e um pagamento por contrato; cada compra guarda o cart&atilde;o de origem.</p>
+                </div>
+                <button class="cf-button cf-button-secondary" type="button" data-action="novo-vinculado">${cartoesIcon('card')} <span>Adicionar cart&atilde;o</span></button>
+            </div>
+            ${vinculados.length ? `
+                <div class="fatura-table">
+                    ${vinculados.map((v) => {
+                        const [situacao, classe] = SITUACOES_VINCULADO[v.situacao] || [v.situacao, ''];
+                        return `
+                        <div class="fatura-table-row">
+                            <div><strong>&bull;&bull;&bull;&bull; ${escapeHtml(v.final)}</strong> ${escapeHtml(v.nome)}</div>
+                            <div>${TIPOS_VINCULADO[v.tipo] || escapeHtml(v.tipo)}</div>
+                            <div>${escapeHtml(v.portador || '—')}</div>
+                            <div><span class="compact-pill ${classe}">${situacao}</span>${v.substituto ? ` <small>por &bull;&bull;&bull;&bull; ${escapeHtml(v.substituto.final)}</small>` : ''}</div>
+                            <div>${Number(v.compras || 0)} compra${Number(v.compras) === 1 ? '' : 's'}</div>
+                            <div><button class="row-action-button" type="button" data-action="editar-vinculado" data-vinculado-id="${v.id}" title="Editar cart&atilde;o" aria-label="Editar cart&atilde;o">${cartoesIcon('edit')}</button></div>
+                        </div>`;
+                    }).join('')}
+                </div>
+            ` : '<div class="table-empty"><p>Nenhum cart&atilde;o vinculado. Cadastre os cart&otilde;es f&iacute;sicos, virtuais e adicionais deste contrato (s&oacute; os 4 &uacute;ltimos d&iacute;gitos).</p></div>'}
+        </section>
+    `;
+}
+
+function abrirModalVinculado(vinculadoId = null) {
+    const cartao = obterCartaoSelecionado();
+    if (!cartao) return;
+    const vinculados = estadoCartoes.vinculadosPorCartao.get(Number(cartao.id)) || [];
+    const atual = vinculados.find((v) => v.id === vinculadoId) || null;
+    document.getElementById('modal-vinculado-titulo').textContent = atual ? 'Editar cartão' : 'Adicionar cartão';
+    document.getElementById('vinculado-id').value = atual ? atual.id : '';
+    document.getElementById('vinculado-nome').value = atual?.nome || '';
+    document.getElementById('vinculado-final').value = atual?.final || '';
+    document.getElementById('vinculado-tipo').value = atual?.tipo || 'FISICO';
+    document.getElementById('vinculado-portador').value = atual?.portador || '';
+    document.getElementById('vinculado-situacao').value = atual?.situacao || 'ATIVO';
+    document.getElementById('vinculado-cancelamento').value = atual?.data_cancelamento || '';
+    const substituto = document.getElementById('vinculado-substituto');
+    substituto.innerHTML = '<option value="">—</option>' + vinculados.filter((v) => v.id !== vinculadoId)
+        .map((v) => `<option value="${v.id}" ${atual?.substituto?.id === v.id ? 'selected' : ''}>&bull;&bull;&bull;&bull; ${escapeHtml(v.final)} ${escapeHtml(v.nome)}</option>`).join('');
+    abrirModal('modal-cartao-vinculado');
+}
+
+async function salvarVinculado(event) {
+    event.preventDefault();
+    const cartao = obterCartaoSelecionado();
+    if (!cartao) return;
+    const id = document.getElementById('vinculado-id').value;
+    const corpo = {
+        nome: document.getElementById('vinculado-nome').value.trim(),
+        final: document.getElementById('vinculado-final').value.trim(),
+        tipo: document.getElementById('vinculado-tipo').value,
+        portador: document.getElementById('vinculado-portador').value.trim(),
+        situacao: document.getElementById('vinculado-situacao').value,
+        data_cancelamento: document.getElementById('vinculado-cancelamento').value,
+        substituto_id: document.getElementById('vinculado-substituto').value
+    };
+    try {
+        await fetchJson(`${API_CARTOES}/${cartao.id}/vinculados${id ? `/${id}` : ''}`, {
+            method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo)
+        });
+        fecharModal('modal-cartao-vinculado');
+        await carregarVinculadosCartao(cartao.id);
+        renderizarDetalheCartao();
+    } catch (error) {
+        mostrarErro(error.message);
+    }
+}
+
+// A fatura unica do contrato por cartao vinculado (e o que nao tem cartao identificado)
+function renderizarFaturaPorCartao(resumoFatura) {
+    const linhas = resumoFatura?.por_cartao || [];
+    if (!linhas.length || !linhas.some((l) => l.cartao_vinculado_id)) return '';
+    return `
+        <div class="fatura-table fatura-por-cartao">
+            <div class="fatura-table-header">
+                <div>Cart&atilde;o</div>
+                <div>Compras</div>
+                <div>Cr&eacute;ditos</div>
+                <div>Total</div>
+                <div>Situa&ccedil;&atilde;o</div>
+                <div>A&ccedil;&otilde;es</div>
+            </div>
+            ${linhas.map((l) => `
+                <div class="fatura-table-row">
+                    <div>${l.cartao_vinculado_id ? `<strong>&bull;&bull;&bull;&bull; ${escapeHtml(l.final)}</strong> ${TIPOS_VINCULADO[l.tipo] || ''}` : 'Sem cart&atilde;o identificado'}</div>
+                    <div>${formatarMoeda(l.compras)}</div>
+                    <div>${Number(l.creditos || 0) ? `&minus;${formatarMoeda(l.creditos)}` : '—'}</div>
+                    <div><strong>${formatarMoeda(l.total)}</strong></div>
+                    <div>${l.situacao ? `<span class="compact-pill ${(SITUACOES_VINCULADO[l.situacao] || [])[1] || ''}">${(SITUACOES_VINCULADO[l.situacao] || [l.situacao])[0]}</span>` : '—'}</div>
+                    <div><button class="cf-button cf-button-secondary fatura-action" type="button" data-action="ver-lancamentos-fatura" data-filtro-fatura="cartao-${l.cartao_vinculado_id || 0}">Ver lan&ccedil;amentos</button></div>
+                </div>
+            `).join('')}
+        </div>
     `;
 }
 
@@ -456,6 +581,7 @@ function renderizarFaturaPorCategoria(cartao, resumoFatura) {
             </div>
 
             ${renderizarTabelaFaturaCategorias(resumoFatura.categorias || [])}
+            ${renderizarFaturaPorCartao(resumoFatura)}
             ${renderizarLancamentosFatura(cartao)}
         </section>
     `;
@@ -567,7 +693,7 @@ function renderizarCreditoFatura(lancamento) {
         <div class="fatura-lancamento-row">
             <div class="fatura-lancamento-desc">
                 <strong>${escapeHtml(lancamento.descricao)}</strong>
-                <small class="fatura-lancamento-previsao">Cr&eacute;dito da fatura &middot; ${original ? `compra original: ${escapeHtml(original.descricao)} (${formatarMoeda(original.valor)})` : 'sem compra vinculada'}</small>
+                <small class="fatura-lancamento-previsao">Cr&eacute;dito da fatura &middot; ${original ? `compra original: ${escapeHtml(original.descricao)} (${formatarMoeda(original.valor)})` : 'sem compra vinculada'}${lancamento.cartao_vinculado ? ` &middot; &bull;&bull;&bull;&bull; ${escapeHtml(lancamento.cartao_vinculado.final)}` : ''}</small>
             </div>
             <span class="fatura-lancamento-cell">${escapeHtml(lancamento.data || '-')}</span>
             <span class="fatura-lancamento-cell">${escapeHtml(lancamento.categoria_nome || '—')}</span>
@@ -585,7 +711,8 @@ function renderizarLancamentosFatura(cartao) {
     const titulo = filtro === 'todos'
         ? 'Lan&ccedil;amentos da fatura'
         : (filtro === 'sem_categoria' ? 'Lan&ccedil;amentos sem Categoria do Cart&atilde;o'
-            : (filtro === 'creditos' ? 'Cr&eacute;ditos e ajustes da fatura' : 'Lan&ccedil;amentos da categoria selecionada'));
+            : (filtro === 'creditos' ? 'Cr&eacute;ditos e ajustes da fatura'
+                : (filtro.startsWith('cartao-') ? 'Lan&ccedil;amentos do cart&atilde;o selecionado' : 'Lan&ccedil;amentos da categoria selecionada')));
 
     return `
         <section class="fatura-lancamentos">
@@ -612,6 +739,7 @@ function renderizarLancamentosFatura(cartao) {
                             <div class="fatura-lancamento-desc">
                                 <strong>${escapeHtml(lancamento.descricao)}</strong>
                                 ${situacaoPrevisaoLancamento(lancamento)}
+                                ${lancamento.cartao_vinculado ? `<small class="fatura-lancamento-previsao">&bull;&bull;&bull;&bull; ${escapeHtml(lancamento.cartao_vinculado.final)}</small>` : ''}
                             </div>
                             <span class="fatura-lancamento-cell">${escapeHtml(lancamento.data || '-')}</span>
                             <span class="fatura-lancamento-cell">${escapeHtml(lancamento.categoria_nome || '—')}</span>
@@ -754,6 +882,10 @@ async function tratarCliqueDetalhe(event) {
         abrirModalEditarLancamento(Number(button.dataset.lancamentoId));
     } else if (action === 'gerenciar-parcelamento') {
         await abrirModalGerenciarParcelamento(Number(button.dataset.lancamentoId));
+    } else if (action === 'novo-vinculado') {
+        abrirModalVinculado();
+    } else if (action === 'editar-vinculado') {
+        abrirModalVinculado(Number(button.dataset.vinculadoId));
     } else if (action === 'excluir-lancamento') {
         await confirmarExcluirLancamento(Number(button.dataset.lancamentoId), button.dataset.lancamentoDesc);
     }

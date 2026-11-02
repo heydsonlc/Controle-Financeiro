@@ -585,6 +585,7 @@
 }
 
 .fatura-card-header,
+.cartoes-vinculados-header,
 .fatura-lancamentos-header {
     display: flex;
     align-items: flex-start;
@@ -593,6 +594,7 @@
 }
 
 .fatura-card-header p,
+.cartoes-vinculados-header p,
 .fatura-lancamentos-header p {
     margin: 5px 0 0;
     color: #64748b;
@@ -1690,6 +1692,7 @@
     }
 
     .fatura-card-header,
+    .cartoes-vinculados-header,
     .fatura-lancamentos-header {
         flex-direction: column;
         align-items: stretch;
@@ -1719,4 +1722,13 @@
     .available-grid {
         grid-template-columns: 1fr;
     }
+}
+
+/* FIN-CARTOES-MULTIPLOS-01: cartoes do contrato e a fatura por cartao (mesmas linhas compactas da fatura) */
+.cartoes-vinculados-card .fatura-table {
+    margin-top: 10px;
+}
+
+.fatura-por-cartao {
+    margin-top: 14px;
 }

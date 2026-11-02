@@ -87,6 +87,7 @@ const RPCS_DE_LEITURA = new Set(['meus_perfis', 'contas_bancarias_do_perfil', 'c
     'cartoes_da_tela', 'categorias_cartao_do_perfil', 'limites_do_cartao', 'fatura_por_categoria',
     'lancamentos_fatura_por_categoria', 'parcelamento_da_compra',
     'analisar_importacao_cartao', 'sugerir_categorias_importacao', 'resolver_categoria_cartao_tela',
+    'cartoes_vinculados',  // FIN-CARTOES-MULTIPLOS-01 (so leitura)
     // FIN-FIDELIDADE-MOVIMENTACOES-1 (so leitura; a conferencia de saldo nao altera nada)
     'contas_bancarias_tela', 'conta_bancaria_tela', 'extrato_conta_bancaria', 'conferir_saldo_conta',
     'compras_do_cartao_tela', 'despesas_diretas_tela', 'receitas_lancamentos_tela',
@@ -154,6 +155,8 @@ const RPCS_DE_ESCRITA = new Map([
     ['editar_lancamento_cartao', 'cartoes-adaptador.js'],
     ['editar_parcelas_futuras', 'cartoes-adaptador.js'],
     ['cancelar_parcelas_futuras', 'cartoes-adaptador.js'],
+    // FIN-CARTOES-MULTIPLOS-01 (cartao vinculado ao contrato: so os 4 ultimos digitos; versao, perfil e contrato no banco)
+    ['salvar_cartao_vinculado', 'cartoes-adaptador.js'],
     // FIN-FIDELIDADE-CARTOES-1 (Importar Cartao: so depois da confirmacao na tela; tudo ou nada, analise refeita no banco)
     ['importar_fatura_cartao', 'importar-cartao-adaptador.js'],
     // FIN-CARTOES-RECORRENCIA-PENDENCIA-1 (so dispensa o aviso; nao muda recorrencia, compra nem fatura)

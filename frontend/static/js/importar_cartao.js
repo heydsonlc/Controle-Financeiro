@@ -590,7 +590,11 @@ function converterLinhaIntermediaria(linha) {
         natureza_parcela: linha.natureza_parcela || null,
         categoria_pendente: Boolean(linha.categoria_pendente),
         // Credito da fatura (estorno, IOF devolvido, ajuste): natureza, compra original e candidatas
-        credito: linha.credito || null
+        credito: linha.credito || null,
+        // Cartao vinculado de origem (pelo final do arquivo ou escolhido na previa)
+        cartao_vinculado: linha.cartao_vinculado || null,
+        cartao_vinculado_arquivo: linha.cartao_origem === 'ARQUIVO' ? (linha.cartao_vinculado || null) : null,
+        cartao_vinculado_escolhido_id: linha.cartao_vinculado_escolhido_id ?? undefined
     };
 }
 
@@ -604,6 +608,7 @@ function aplicarPayloadUnificado(data) {
     };
     estado.linhasMapeadas = (data?.linhas || []).map(converterLinhaIntermediaria);
     estado.recorrenciasCartao = data?.recorrencias_cartao || [];
+    estado.cartoesContrato = data?.cartoes_contrato || [];  // cartoes vinculados do contrato (novo aplicativo)
     estado.linhasInvalidasIniciais = [];
     estado.resumoPrevia = null;
     estado.analiseConfronto = null;
@@ -1217,6 +1222,70 @@ function linhaCredito(linha) {
 function linhaCreditoNova(linha) {
     return linha.tipo_movimento === 'credito' && Boolean(linha.credito)
         && ['CREDITO', 'REVISAR'].includes(classificacaoNova(linha));
+}
+
+// FIN-CARTOES-MULTIPLOS-01: cartao vinculado de origem da linha. O do arquivo (final do PDF) vem marcado; sem final, a
+// linha fica "sem cartao identificado" ate o usuario escolher (nunca um cartao presumido). So com cartoes no contrato.
+function rotuloCartaoVinculado(c) {
+    const tipos = { FISICO: 'físico', VIRTUAL: 'virtual', ADICIONAL: 'adicional' };
+    return `•••• ${c.final} · ${tipos[c.tipo] || ''}${c.situacao && c.situacao !== 'ATIVO' ? ' (cancelado)' : ''}`;
+}
+
+function seletorCartaoLinha(linha, index) {
+    const cartoes = estado.cartoesContrato || [];
+    if (!cartoes.length) return linha.cartao_final ? `<span class="import-detected-note">Cartão ${escapeHtml(linha.cartao_final)}</span>` : '';
+    const escolhido = linha.cartao_vinculado_escolhido_id;
+    const arquivo = linha.cartao_vinculado_arquivo;
+    const automatico = arquivo ? `${rotuloCartaoVinculado(arquivo)} (arquivo)`
+        : (linha.cartao_final ? `Final ${linha.cartao_final} não cadastrado` : 'Cartão não identificado');
+    const opcoes = [`<option value="" ${escolhido === undefined ? 'selected' : ''}>${escapeHtml(automatico)}</option>`]
+        .concat(cartoes.map((c) => `<option value="${escapeAttr(c.id)}" ${String(escolhido) === String(c.id) ? 'selected' : ''}>${escapeHtml(rotuloCartaoVinculado(c))}</option>`))
+        .concat([`<option value="0" ${String(escolhido) === '0' ? 'selected' : ''}>Sem cartão identificado</option>`]);
+    return `<select class="form-control form-control-sm import-inline-select" aria-label="Cartão de origem" onchange="escolherCartaoLinha(${index}, this.value)">${opcoes.join('')}</select>`;
+}
+
+function definirCartaoLinha(linha, valor) {
+    if (!linha) return;
+    if (valor === '') {
+        delete linha.cartao_vinculado_escolhido_id;
+        linha.cartao_vinculado = linha.cartao_vinculado_arquivo || null;
+        return;
+    }
+    const cartao = valor === '0' ? null : (estado.cartoesContrato || []).find((c) => String(c.id) === String(valor));
+    if (valor !== '0' && !cartao) return;
+    linha.cartao_vinculado_escolhido_id = cartao ? Number(cartao.id) : 0;
+    linha.cartao_vinculado = cartao;
+}
+
+// Correcao da previa: '' = o do arquivo (ou nenhum); '0' = sem cartao identificado; id = um cartao do contrato. Nada e
+// gravado agora: a confirmacao manda a escolha e o banco refaz a analise.
+function escolherCartaoLinha(index, valor) {
+    definirCartaoLinha(estado.linhasMapeadas[index], valor);
+    recalcularConfrontoAtual();
+}
+
+// O cartao de origem para as linhas selecionadas (o CSV do Nubank nao traz o cartao de cada compra)
+function aplicarCartaoSelecionadas(valor) {
+    const selecionadas = [...estado.linhasSelecionadas];
+    if (!selecionadas.length) {
+        alert('Selecione as linhas do cartão escolhido.');
+        return;
+    }
+    selecionadas.forEach((index) => definirCartaoLinha(estado.linhasMapeadas[index], valor));
+    estado.linhasSelecionadas = new Set();
+    recalcularConfrontoAtual();
+}
+
+function renderizarCartaoLote() {
+    const cartoes = estado.cartoesContrato || [];
+    if (!cartoes.length) return '';
+    return `<div class="import-detected-note">
+        <select class="form-control form-control-sm import-inline-select" aria-label="Cartão de origem das selecionadas" onchange="aplicarCartaoSelecionadas(this.value)">
+            <option value="">Cartão de origem das selecionadas…</option>
+            ${cartoes.map((c) => `<option value="${escapeAttr(c.id)}">${escapeHtml(rotuloCartaoVinculado(c))}</option>`).join('')}
+            <option value="0">Sem cartão identificado</option>
+        </select>
+    </div>`;
 }
 
 function linhaCreditoPendente(linha) {
@@ -2398,6 +2467,7 @@ function renderizarEditorPrePersistencia() {
         && indicesVisiveis.every((index) => estado.linhasSelecionadas.has(index));
 
     container.innerHTML = `
+        ${renderizarCartaoLote()}
         <div class="import-preview-shell operational">
             <div class="import-preview-table-wrap operational">
                 <table class="import-preview-table import-operational-table">
@@ -2449,6 +2519,7 @@ function renderizarLinhaOperacional(item) {
             <td><span class="import-raw-text">${escapeHtml(linha.data_compra || '-')}</span></td>
             <td class="import-description-cell one-line">
                 <span class="import-raw-description" title="${escapeAttr(descricaoOriginal)}">${escapeHtml(descricaoOriginal || '-')}</span>
+                ${seletorCartaoLinha(linha, index)}
             </td>
             <td><span class="import-raw-value">${formatarValorLinha(linha)}</span></td>
             <td>${escapeHtml(item.tipo || '—')}</td>
@@ -3830,6 +3901,11 @@ function montarPayloadImportacao() {
             // numero no texto que pode ser parcela e a decisao do usuario (parcelada ou a vista)
             if (linha.parcela_ambigua) payload.parcela_ambigua = linha.parcela_ambigua;
             if (linha.natureza_parcela) payload.natureza_parcela = linha.natureza_parcela;
+            // cartao de origem: o final do arquivo e a escolha da previa (0 = sem cartao identificado)
+            if (linha.cartao_final) payload.cartao_final = linha.cartao_final;
+            if (linha.cartao_vinculado_escolhido_id !== undefined && linha.cartao_vinculado_escolhido_id !== null) {
+                payload.cartao_vinculado_escolhido_id = linha.cartao_vinculado_escolhido_id;
+            }
             // credito da fatura: o tipo e a compra original escolhida (0 = sem compra vinculada)
             if (linhaCreditoNova(linha)) {
                 payload.tipo_movimento = 'credito';
