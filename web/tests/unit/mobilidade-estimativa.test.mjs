@@ -9,7 +9,8 @@ const ORIGINAL = new URL('../../../frontend/static/js/veiculos.js', import.meta.
 
 function carregarOriginal() {
     const nada = () => {};
-    const contexto = { console, Set, Map, Date, document: { addEventListener: nada, getElementById: () => null, querySelectorAll: () => [] },
+    const contexto = { console, Set, Map, Date, addEventListener: nada,
+        document: { addEventListener: nada, getElementById: () => null, querySelectorAll: () => [] },
         localStorage: { getItem: () => null, setItem: nada } };
     contexto.window = contexto;
     vm.createContext(contexto);
