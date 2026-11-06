@@ -48,9 +48,17 @@ pytestmark = pytest.mark.skipif(PG_BIN is None, reason='binarios do PostgreSQL (
 PESSOAL, PERFIL_B = ID['PESSOAL'], ID['PERFIL_B']
 REVERSAO = ROOT / 'supabase' / 'reversao' / '20261127090000_remover_mobilidade_escrita.sql'
 MIGRATION = ROOT / 'supabase' / 'migrations' / '20261127090000_financeiro_mobilidade_escrita.sql'
+REVERSAO_1215 = ROOT / 'supabase' / 'reversao' / '20261215090000_mobilidade_integridade_anterior.sql'
+MIGRATION_1215 = ROOT / 'supabase' / 'migrations' / '20261215090000_financeiro_mobilidade_integridade.sql'
 HOJE = dt.date.today()
 M2, M3 = (HOJE + relativedelta(months=2)).month, (HOJE + relativedelta(months=3)).month
 SEM_HORA = {'criado_em', 'atualizado_em', 'created_at', 'updated_at', 'km_estimado_ultimo_calculo_em', 'registrado_em'}
+# FIN-MVP-MOB-01: o novo aplicativo preserva o id da prevista ao regerar (o Flask apaga e recria); a comparacao e pela
+# identidade logica. A identidade, os vinculos e os parametros gravados ao confirmar so existem no novo aplicativo.
+SO_NO_NOVO = {'despesa_prevista': {'id', 'obrigacao', 'periodo_referencia', 'conta_id', 'lancamento_id'},
+              'veiculo': {'km_estimado_ultimo_despesa_prevista_id'},
+              'despesa_prevista_acao_log': {'despesa_prevista_id', 'despesa_prevista_criada_id'}}
+METADATA_SO_NO_NOVO = {'combustivel', 'autonomia_km_l', 'preco_litro'}
 TABELAS = ('veiculo', 'despesa_prevista', 'veiculo_regra_manutencao_km', 'veiculo_ciclo_manutencao', 'veiculo_financiamento',
            'mobilidade_assinatura', 'mobilidade_cenario_ativo', 'despesa_prevista_acao_log', 'item_despesa', 'conta', 'categoria')
 
@@ -116,14 +124,18 @@ def tabelas(dsn):
         linhas = sql(dsn, f'select * from public.{tabela} order by id')
         normal = []
         for linha in linhas:
-            linha = {k: v for k, v in linha.items() if k not in SEM_HORA}
+            linha = {k: v for k, v in linha.items() if k not in SEM_HORA and k not in SO_NO_NOVO.get(tabela, ())}
             for campo in ('metadata', 'metadata_json'):
                 if isinstance(linha.get(campo), str):
                     try:
                         linha[campo] = _arredondar(json.loads(linha[campo]))
                     except ValueError:
                         pass
+                    if tabela == 'despesa_prevista' and isinstance(linha[campo], dict):
+                        linha[campo] = {k: v for k, v in linha[campo].items() if k not in METADATA_SO_NO_NOVO}
             normal.append(linha)
+        if tabela == 'despesa_prevista':
+            normal.sort(key=lambda x: (x['origem_tipo'], x['origem_id'], x['data_original_prevista'], json.dumps(x['metadata'], sort_keys=True, default=str)))
         saida[tabela] = normal
     return saida
 
@@ -268,14 +280,15 @@ def test_respostas_iguais_ao_flask(comparacao):
     for nome in previas_f:
         assert previas_n[nome] == previas_f[nome], nome
     acoes_f, acoes_n = comparacao['acoes']
-    assert acoes_n['confirmar']['despesa_prevista'] == acoes_f['confirmar'][1]['data']['despesa_prevista']
+    assert acoes_n['confirmar']['despesa_prevista']['status'] == acoes_f['confirmar'][1]['data']['despesa_prevista']['status']
     criada_f, criada_n = acoes_f['confirmar'][1]['data']['entidade_criada'], acoes_n['confirmar']['entidade_criada']
     assert {k: criada_n[k] for k in ('tipo', 'id', 'descricao', 'valor', 'data_vencimento')} == \
         {k: criada_f[k] for k in ('tipo', 'id', 'descricao', 'valor', 'data_vencimento')}
-    assert acoes_n['adiar']['ciclo'] == acoes_f['adiar'][1]['ciclo']
+    assert acoes_n['adiar']['ciclo']['ajustado'] == acoes_f['adiar'][1]['ciclo']['ajustado']
     for acao in ('adiar', 'ignorar'):
         f, n = acoes_f[acao][1]['data'], acoes_n[acao]['data']
-        assert {k: v for k, v in n.items() if k not in SEM_HORA} == {k: v for k, v in f.items() if k not in SEM_HORA}, acao
+        ignorar = SEM_HORA | {'id'}  # FIN-MVP-MOB-01: ids preservados ao regerar
+        assert {k: v for k, v in n.items() if k not in ignorar} == {k: v for k, v in f.items() if k not in ignorar}, acao
 
 
 # =====================================================================================================================
@@ -470,6 +483,11 @@ def test_privilegios(banco):
 
 def test_reversao_remove_as_funcoes_e_preserva_os_dados(banco):
     v = rpc(banco, 'criar_veiculo', PESSOAL, VEICULO_1, chave())['veiculo_id']
+    conn = psycopg2.connect(banco)
+    conn.autocommit = True
+    with conn.cursor() as cur:
+        cur.execute(REVERSAO_1215.read_text(encoding='utf-8'))  # ordem de reversao: a mais nova primeiro
+    conn.close()
     dados = sql(banco, "select md5(string_agg(x::text, '|' order by x.id)) h from public.despesa_prevista x where origem_id = %s", (v,))
     conn = psycopg2.connect(banco)
     conn.autocommit = True
@@ -485,5 +503,6 @@ def test_reversao_remove_as_funcoes_e_preserva_os_dados(banco):
     conn.autocommit = True
     with conn.cursor() as cur:
         cur.execute(MIGRATION.read_text(encoding='utf-8'))  # reaplica
+        cur.execute(MIGRATION_1215.read_text(encoding='utf-8'))
     conn.close()
     assert rpc(banco, 'criar_veiculo', PESSOAL, VEICULO_2, chave())['veiculo_id']
