@@ -204,14 +204,14 @@
 .despesa-linha-principal {
     display: grid;
     grid-template-columns:
-        minmax(210px, 22fr)
-        minmax(170px, 18fr)
-        minmax(130px, 10fr)
+        minmax(230px, 24fr)
+        minmax(190px, 20fr)
+        minmax(84px, 6fr)
         minmax(110px, 10fr)
         minmax(120px, 12fr)
         minmax(150px, 14fr)
         minmax(105px, 8fr)
-        minmax(90px, 6fr);
+        minmax(116px, 6fr);
     align-items: center;
     column-gap: 8px;
 }
@@ -1945,11 +1945,11 @@ body.mobile-view .despesa-valor-principal {
     background: #0051d5;
 }
 
-/* Summary cards - 6 cards em linha única, mesma largura da lista */
+/* Summary cards - 5 cards em linha única, mesma largura da lista */
 .despesas-summary-cards {
     grid-column: 1;
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 12px;
     margin-bottom: 0;
 }

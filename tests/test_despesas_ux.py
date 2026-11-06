@@ -191,8 +191,8 @@ def test_template_contem_colunas_essenciais(client):
     assert 'total-geral' in html
     assert 'total-pendentes' in html
     assert 'total-pagas' in html
-    # Novos cards
-    assert 'total-vencendo-7d' in html
+    # Novos cards (MVP-FIN-AJUSTES-01: sem o card Vencendo em 7 dias)
+    assert 'total-vencendo-7d' not in html
     assert 'total-recorrentes' in html
     assert 'total-cartoes' in html
 

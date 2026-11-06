@@ -60,11 +60,40 @@ function renderFormaPagamentoDespesa(despesa) {
     if (window.FormasPagamentoUI?.renderFormaPagamento) {
         return window.FormasPagamentoUI.renderFormaPagamento(valor || 'Nao informado', {
             size: 'sm',
-            showLabel: true,
+            showLabel: false,
             className: 'despesa-forma-pagamento-icon despesa-payment-method'
         });
     }
-    return `<span class="despesa-forma-pagamento-fallback" aria-hidden="true">$</span>`;
+    return `<span class="despesa-forma-pagamento-fallback" role="img" title="Forma de pagamento" aria-label="Forma de pagamento">$</span>`;
+}
+
+/**
+ * Acoes da despesa em tres posicoes fixas: [editar ou detalhes] [pagar] [estornar].
+ * A acao impossivel fica visivel e desabilitada, com o motivo no titulo.
+ */
+function botaoEditarDespesa(id, disponivel = true) {
+    const titulo = disponivel ? 'Editar' : 'Edição indisponível nesta linha';
+    return `<button class="row-action-button" onclick="editarDespesa(${id})" title="${titulo}" aria-label="${titulo}" ${disponivel ? '' : 'disabled'}>${despesasIcon('edit')}</button>`;
+}
+
+function botaoPagarDespesa(id, { pago = false, disponivel = true, tituloPagar = 'Marcar como pago', tituloPago = 'Já pago' } = {}) {
+    const titulo = !disponivel ? 'Pagamento indisponível nesta linha' : (pago ? tituloPago : tituloPagar);
+    return `<button class="row-action-button success" onclick="marcarComoPago(${id})" title="${titulo}" aria-label="${titulo}" ${pago || !disponivel ? 'disabled' : ''}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                </button>`;
+}
+
+function botaoEstornarDespesa(id, { pago = false, disponivel = true, tituloIndisponivel = 'Sem pagamento para estornar' } = {}) {
+    const ativo = pago && disponivel;
+    const titulo = ativo ? 'Estornar pagamento' : tituloIndisponivel;
+    return `<button class="row-action-button danger" onclick="abrirModalEstorno(${id})" title="${titulo}" aria-label="${titulo}" ${ativo ? '' : 'disabled'}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="1 4 1 10 7 10"></polyline>
+                        <path d="M3.51 15a9 9 0 1 0 .49-4.99"></path>
+                    </svg>
+                </button>`;
 }
 
 // Carregar dados ao iniciar a página
@@ -559,16 +588,17 @@ function renderizarAgrupadorSemanal(agrupador, index) {
                     R$ ${formatarValorBR(totais.valor_total)}
                 </div>
                 <div class="despesa-cell despesa-cell-acoes row-actions despesa-actions">
-                    <button class="row-action-button success" onclick="pagarTodasOcorrencias(${index})" title="${todasPagas ? 'Todas ocorrencias ja pagas' : 'Pagar todas as ocorrencias pendentes'}" aria-label="${todasPagas ? 'Todas ocorrencias ja pagas' : 'Pagar todas as ocorrencias pendentes'}" ${todasPagas ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''}>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                    </button>
                     <button class="row-action-button" onclick="toggleAgrupadorSemanal(${index})" title="Expandir ocorrencias" aria-label="Expandir ocorrencias">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="6 9 12 15 18 9"></polyline>
                         </svg>
                     </button>
+                    <button class="row-action-button success" onclick="pagarTodasOcorrencias(${index})" title="${todasPagas ? 'Todas ocorrencias ja pagas' : 'Pagar todas as ocorrencias pendentes'}" aria-label="${todasPagas ? 'Todas ocorrencias ja pagas' : 'Pagar todas as ocorrencias pendentes'}" ${todasPagas ? 'disabled' : ''}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                    </button>
+                    ${botaoEstornarDespesa(0, { disponivel: false, tituloIndisponivel: 'Estorne pela ocorrência' })}
                 </div>
             </div>
 
@@ -666,12 +696,9 @@ function renderizarOcorrenciaIndividual(despesa) {
                     R$ ${formatarValorBR(parseFloat(despesa.valor))}
                 </div>
                 <div class="despesa-cell despesa-cell-acoes row-actions despesa-actions">
-                    <button class="row-action-button success" onclick="marcarComoPago(${despesa.id})" title="${pagoFlag ? 'Ja pago' : 'Marcar como pago'}" aria-label="${pagoFlag ? 'Ja pago' : 'Marcar como pago'}" ${pagoFlag ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''}>
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                    </button>
-                    <button class="row-action-button" onclick="editarDespesa(${despesa.id})" title="Editar" aria-label="Editar">${despesasIcon('edit')}</button>
+                    ${botaoEditarDespesa(despesa.id)}
+                    ${botaoPagarDespesa(despesa.id, { pago: pagoFlag })}
+                    ${botaoEstornarDespesa(despesa.id, { pago: pagoFlag })}
                 </div>
             </div>
         </div>
@@ -946,6 +973,8 @@ function renderizarDespesas(despesasParaRenderizar) {
                         <polyline points="6 9 12 15 18 9"></polyline>
                     </svg>
                 </button>
+                ${botaoPagarDespesa(despesa.id, { pago: despesa.pago, tituloPagar: 'Pagar fatura', tituloPago: 'Fatura já paga' })}
+                ${botaoEstornarDespesa(despesa.id, { pago: despesa.pago })}
                 ${despesa.status_fatura === 'ABERTA' ? `
                     <button class="row-action-button success" onclick="consolidarFatura(${despesa.cartao_id || despesa.id}, '${despesa.competencia || despesa.mes_competencia || ''}')" title="Consolidar fatura" aria-label="Consolidar fatura">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -954,36 +983,14 @@ function renderizarDespesas(despesasParaRenderizar) {
                         </svg>
                     </button>
                 ` : ''}
-                <button class="row-action-button success" onclick="marcarComoPago(${despesa.id})" title="${despesa.pago ? 'Fatura já paga' : 'Pagar fatura'}" aria-label="${despesa.pago ? 'Fatura já paga' : 'Pagar fatura'}" ${despesa.pago ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="20 6 9 17 4 12"></polyline>
-                    </svg>
-                </button>
-                ${despesa.pago ? `
-                <button class="row-action-button danger" onclick="abrirModalEstorno(${despesa.id})" title="Estornar pagamento" aria-label="Estornar pagamento">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="1 4 1 10 7 10"></polyline>
-                        <path d="M3.51 15a9 9 0 1 0 .49-4.99"></path>
-                    </svg>
-                </button>` : ''}
             </div>
-        ` : (isAgrupado ? '' : `
+        ` : `
             <div class="row-actions despesa-actions">
-                <button class="row-action-button" onclick="editarDespesa(${despesa.id})" title="Editar" aria-label="Editar">${despesasIcon('edit')}</button>
-                <button class="row-action-button success" onclick="marcarComoPago(${despesa.id})" title="${despesa.pago ? 'Já pago' : 'Marcar como pago'}" aria-label="${despesa.pago ? 'Já pago' : 'Marcar como pago'}" ${despesa.pago ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="20 6 9 17 4 12"></polyline>
-                    </svg>
-                </button>
-                ${despesa.pago ? `
-                <button class="row-action-button danger" onclick="abrirModalEstorno(${despesa.id})" title="Estornar pagamento" aria-label="Estornar pagamento">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="1 4 1 10 7 10"></polyline>
-                        <path d="M3.51 15a9 9 0 1 0 .49-4.99"></path>
-                    </svg>
-                </button>` : ''}
+                ${botaoEditarDespesa(despesa.id, !isAgrupado)}
+                ${botaoPagarDespesa(despesa.id, { pago: despesa.pago, disponivel: !isAgrupado })}
+                ${botaoEstornarDespesa(despesa.id, { pago: despesa.pago, disponivel: !isAgrupado })}
             </div>
-        `);
+        `;
 
         return `
             <div class="despesa-card despesa-card-padrao ${statusClass} ${tipoClass}" data-despesa-id="${despesa.id}">
@@ -1004,7 +1011,7 @@ function renderizarDespesas(despesasParaRenderizar) {
                         R$ ${formatarValorBR(valorDespesa)}
                     </div>
                     <div class="despesa-cell despesa-cell-acoes">
-                        ${acoesHTML || '<span class="despesa-muted">&mdash;</span>'}
+                        ${acoesHTML}
                     </div>
                 </div>
 
@@ -1217,14 +1224,10 @@ const CORES_CINZA_PADRAO = new Set(['#6e6e73', '#6c757d', '#868e96']);
 function renderizarSidebar(sidebar) {
     if (!sidebar) return;
 
-    // Cards extras (vencendo 7d, cartoes)
-    const elV7d = document.getElementById('total-vencendo-7d');
-    const elV7dSub = document.getElementById('summary-vencendo-sub');
+    // Card extra (cartoes)
     const elCart = document.getElementById('total-cartoes');
     const elCartSub = document.getElementById('summary-cartoes-sub');
 
-    if (elV7d) elV7d.textContent = `R$ ${formatarValorBR(sidebar.vencendo_7d_valor || 0)}`;
-    if (elV7dSub) elV7dSub.textContent = `${sidebar.vencendo_7d_count || 0} despesa(s)`;
     if (elCart) elCart.textContent = `R$ ${formatarValorBR(sidebar.cartoes_valor || 0)}`;
     if (elCartSub) elCartSub.textContent = `${sidebar.cartoes_count || 0} fatura(s)`;
 

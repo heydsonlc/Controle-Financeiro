@@ -217,7 +217,7 @@
             : `<span class="payment-method__fallback">${escapeHtml(info.iconeFallback)}</span>`;
 
         return `
-            <span class="payment-method payment-method--${escapeHtml(tamanho.classe)} ${escapeHtml(info.classe)} ${fallbackClass}${className}" title="${title}" aria-label="${title}" data-payment-method="${escapeHtml(info.key)}" style="${style}">
+            <span class="payment-method payment-method--${escapeHtml(tamanho.classe)} ${escapeHtml(info.classe)} ${fallbackClass}${className}"${showLabel ? '' : ' role="img"'} title="${title}" aria-label="${title}" data-payment-method="${escapeHtml(info.key)}" style="${style}">
                 <span class="payment-method__icon" aria-hidden="true">${imagem}</span>
                 ${showLabel ? `<span class="payment-method__label">${label}</span>` : ''}
             </span>

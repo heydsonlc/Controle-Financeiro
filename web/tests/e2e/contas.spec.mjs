@@ -49,7 +49,7 @@ test('login abre Despesas (tela original) no mes atual', async ({ page }) => {
     await esperarMes(page, mesAtual());
     await expect(page.locator('.app-topbar-title')).toHaveText('Gerenciamento de Despesas');
     await expect(page.locator('.despesas-summary-cards .summary-card-label'))
-        .toHaveText(['Total do mes', 'Pendentes', 'Pagas', 'Vencendo em 7 dias', 'Cartoes / Faturas', 'Saldo do mes']);
+        .toHaveText(['Total do mes', 'Pendentes', 'Pagas', 'Cartoes / Faturas', 'Saldo do mes']);
     await expect(page.locator('.btn-nova-despesa')).toBeVisible();
     await expect(page.locator('#filtro-forma-pagamento')).toBeVisible();
 });
@@ -79,6 +79,44 @@ test('novembro (Pessoal): grupos, ordem, situacoes, valores, resumo e geracao', 
         'Cartao Azul · 12/2026 — Cartao sem dia de vencimento configurado',
         'Cartao Verde · 12/2026 — Cartao sem dia de vencimento configurado',
     ]);
+});
+
+// MVP-FIN-AJUSTES-01 (P07 a P09): so o icone da forma de pagamento; tres acoes sempre, nas mesmas posicoes.
+test('novembro (Pessoal): icone da forma de pagamento e tres acoes em posicoes fixas', async ({ page }) => {
+    await entrar(page, A);
+    await abrirDespesas(page, '2026-11');
+    const metodos = page.locator('#despesas-lista .despesa-cell-forma-pagamento .payment-method');
+    await expect(metodos).toHaveCount(5);
+    await expect(page.locator('#despesas-lista .payment-method__label')).toHaveCount(0);
+    for (const metodo of await metodos.all()) {
+        await expect(metodo).toHaveAttribute('role', 'img');
+        await expect(metodo).toHaveAttribute('title', /\S/);
+        await expect(metodo).toHaveAttribute('aria-label', /\S/);
+    }
+
+    const posicoes = [];
+    for (const linha of await page.locator('#despesas-lista .despesa-card').all()) {
+        const botoes = linha.locator('.despesa-actions .row-action-button');
+        await expect(botoes).toHaveCount(3);
+        posicoes.push(await botoes.evaluateAll((b) => b.map((x) => {
+            const r = x.getBoundingClientRect();
+            return [Math.round(r.left), Math.round(r.width)];
+        })));
+    }
+    expect(new Set(posicoes.map((p) => JSON.stringify(p))).size).toBe(1);
+
+    // Pendente: pagar habilitado, estornar visivel e desabilitado. Paga: o inverso. Fatura: detalhes no lugar de editar.
+    const pendente = despesa(page, 'Aluguel 11/2026');
+    await expect(pendente.locator('[data-on-click^="editarDespesa"]')).toBeEnabled();
+    await expect(pendente.locator('[data-on-click^="marcarComoPago"]')).toBeEnabled();
+    await expect(pendente.locator('[data-on-click^="abrirModalEstorno"]')).toBeDisabled();
+    await expect(pendente.locator('[data-on-click^="abrirModalEstorno"]')).toHaveAttribute('title', 'Sem pagamento para estornar');
+    const paga = despesa(page, 'Internet 11/2026');
+    await expect(paga.locator('[data-on-click^="marcarComoPago"]')).toBeDisabled();
+    await expect(paga.locator('[data-on-click^="abrirModalEstorno"]')).toBeEnabled();
+    const fatura = despesa(page, 'Fatura Cartao Azul');
+    await expect(fatura.locator('.despesa-actions .row-action-button').first()).toHaveAttribute('data-on-click', /^toggleDetalhesFatura/);
+    await expect(fatura.locator('[data-on-click^="abrirModalEstorno"]')).toBeDisabled();
 });
 
 test('filtros e busca da barra de acoes', async ({ page }) => {

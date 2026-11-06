@@ -22,7 +22,7 @@ function carregarOriginal() {
 }
 
 const original = carregarOriginal();
-const { calcularTotaisFatura, renderizarFaturaCompleta } = original;
+const { calcularTotaisFatura, renderizarAgrupadorSemanal, renderizarFaturaCompleta } = original;
 // Objetos criados no contexto do vm tem outro Object.prototype: comparados como dados.
 const organizarLancamentosEmBlocos = (...args) => JSON.parse(JSON.stringify(original.organizarLancamentosEmBlocos(...args)));
 
@@ -176,6 +176,19 @@ test('fixa conciliada: uma linha so, no previsto e no executado', () => {
     assert.equal(totais.totalFatura, 44.9);
     assert.equal(totais.totalExecutado, 44.9);
     assert.equal(blocos.fixas.length, 1);
+});
+
+// MVP-FIN-AJUSTES-01 (P09)
+test('agrupador semanal e ocorrencias: tres acoes; estornar so a ocorrencia paga', () => {
+    const ocorrencia = (id, status) => ({ id, nome: 'Diarista', valor: 50, status, pago: status === 'Pago', data_vencimento: '2029-05-07' });
+    const html = renderizarAgrupadorSemanal({ nome: 'Diarista', mes_competencia: '2029-05-01',
+        ocorrencias: [ocorrencia(1, 'Pago'), ocorrencia(2, 'Pendente')] }, 0);
+    const linhas = html.split('despesa-cell-acoes').slice(1, 4).map((trecho) => trecho.split('</div>')[0]);
+    assert.deepEqual(linhas.map((l) => l.match(/<button/g).length), [3, 3, 3]);
+    const estorno = (l) => l.match(/<button[^>]*abrirModalEstorno[^>]*>/)[0];
+    assert.match(estorno(linhas[0]), /disabled/);
+    assert.doesNotMatch(estorno(linhas[1]), /disabled/);
+    assert.match(estorno(linhas[2]), /disabled/);
 });
 
 test('defeito anterior: Categoria do Cartao nula e resumo vazio levavam tudo a Outros', () => {

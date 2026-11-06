@@ -161,7 +161,7 @@ test('cadastrar, recusas sem gravar, editar e gerar em Despesas com nome, valor,
     await expect(gerada.locator('.despesa-cell-valor')).toHaveText('R$ 109,90');
     await expect(gerada.locator('.despesa-cell-vencimento')).toHaveText('10/01/2031');
     await expect(gerada.locator('.despesa-cell-detalhe')).toHaveText('Fibra');  // observacoes da recorrencia
-    await expect(gerada.locator('.despesa-cell-forma-pagamento')).toContainText(/pix/i);
+    await expect(gerada.locator('.despesa-cell-forma-pagamento .payment-method')).toHaveAttribute('title', /pix/i);
     expect(await page.locator('.despesas-grupo-titulo').allTextContents()).toContain('DESPESAS RECORRENTES');
     // Sem duplicidade: reabrir o mes nao gera de novo a mesma conta (o plano a ve como existente).
     await abrirDespesas(page, '2031-01');
