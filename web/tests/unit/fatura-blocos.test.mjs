@@ -119,14 +119,34 @@ test('fixa: previsto, executado, diferenca e situacao; sem os campos, como antes
     assert.equal(Math.round(totais.totalExecutado * 100) / 100, 283.8);
     assert.equal(Math.round(totais.totalFatura * 100) / 100, 783.7);
     const html = renderizarFaturaCompleta(blocos, totais, '2029-05').replace(/\s+/g, ' ');
-    assert.match(html, /Netflix<\/span> <span class="linha-legenda">Previsto R\$ 59,90 · diferença −R\$ 15,00<\/span> <span class="linha-valor">R\$ 44,90/);
+    assert.match(html, /Netflix<\/span> <span class="linha-valor">R\$ 44,90/);
     // MVP-FIN-AJUSTES-01 (P01): antes da cobranca a linha mostra o valor definido na recorrencia, marcado como previsto
-    assert.match(html, /linha-simples linha-prevista"[^>]*> <span class="linha-data">10\/05<\/span> <span class="linha-titulo">ChatGPT<\/span> <span class="linha-legenda">Previsto · aguardando cobrança<\/span> <span class="linha-valor">R\$ 99,90/);
-    assert.match(html, /Claude<\/span> <span class="linha-legenda">Previsto R\$ 109,90 · confirmado/);
-    assert.match(html, /Apple One<\/span> <span class="linha-legenda">Previsto R\$ 59,90 · não cobrada nesta fatura<\/span> <span class="linha-valor">R\$ 0,00/);
-    assert.match(html, /X Premium<\/span> <span class="linha-legenda">Previsto R\$ 119,00 · paga com a fatura/);
+    assert.match(html, /linha-simples linha-prevista"[^>]*> <span class="linha-data">10\/05<\/span> <span class="linha-titulo">ChatGPT<\/span> <span class="linha-valor">R\$ 99,90/);
+    assert.match(html, /Claude<\/span> <span class="linha-valor">R\$ 109,90/);
+    assert.match(html, /Apple One<\/span> <span class="linha-valor">R\$ 0,00/);
+    assert.match(html, /X Premium<\/span> <span class="linha-valor">R\$ 119,00/);
     assert.match(html, /<span class="linha-titulo">Antiga<\/span> <span class="linha-valor">R\$ 10,00/);
-    assert.match(html, /Despesas Fixas<\/span> <span class="bloco-subtotal">R\$ 283,80 · R\$ 99,90 aguardando cobrança</);
+    // FIN-FATURA-AJUSTES-02 (P17): cabecalho = soma das linhas exibidas, igual ao rodape; so Data, Descricao e Valor
+    assert.match(html, /Despesas Fixas<\/span> <span class="bloco-subtotal">R\$ 383,70<\/span>/);
+    assert.match(html, /rodape-valor">R\$ 383,70<\/span> <span class="rodape-label">Despesas Fixas/);
+    const bloco = html.match(/Despesas Fixas<\/span>.*?Despesas por Categoria/)[0];
+    assert.doesNotMatch(bloco, /linha-legenda|Previsto|aguardando|confirmado|cobrada|paga com|diferença/i);
+});
+
+// FIN-FATURA-AJUSTES-02 (P17): o exemplo do contrato; a compra real absorve a previsao sem contar duas vezes
+test('despesas fixas: recorrencias ainda sem cobranca somam no cabecalho; total executado continua sem elas', () => {
+    const fixa = (descricao, valor) => compra(descricao, valor, { data_compra: '2029-11-01', is_recorrente: true, valor_previsto: valor,
+        valor_executado: 0, situacao_ocorrencia: 'PREVISTA' });
+    const lancamentos = [fixa('Plano Celular', 70), fixa('Servidor', 225)];
+    const blocos = organizarLancamentosEmBlocos(lancamentos, { categorias: [] });
+    const totais = calcularTotaisFatura(blocos, lancamentos);
+    assert.equal(totais.totalFatura, 295);
+    assert.equal(totais.totalExecutado, 0);
+    const html = renderizarFaturaCompleta(blocos, totais, '2029-11').replace(/\s+/g, ' ');
+    assert.match(html, /Despesas Fixas<\/span> <span class="bloco-subtotal">R\$ 295,00<\/span>/);
+    assert.match(html, /<span class="linha-data">01\/11<\/span> <span class="linha-titulo">Plano Celular<\/span> <span class="linha-valor">R\$ 70,00/);
+    assert.match(html, /<span class="linha-data">01\/11<\/span> <span class="linha-titulo">Servidor<\/span> <span class="linha-valor">R\$ 225,00/);
+    assert.match(html, /title="Servidor"/);  // o texto da situacao tambem saiu do titulo da linha
 });
 
 // MVP-FIN-AJUSTES-01 (P03): a fatura Black 11/2026 da producao mostrava R$ 7.827,55 com R$ 9.114,84 no banco (contas_do_mes)
@@ -142,18 +162,25 @@ test('categoria acima do limite: o previsto usa o gasto, como o banco e o rodape
     assert.match(html, /rodape-valor">R\$ 100,00<\/span> <span class="rodape-label">Farmacia/);
 });
 
-// MVP-FIN-AJUSTES-01 (P02)
-test('categorias: cabecalho Executado; saldo e excedente por extenso, sem setas; valores preservados', () => {
+// FIN-FATURA-AJUSTES-02 (P16)
+test('categorias: quatro colunas na ordem do cabecalho, saldo com sinal, sem os textos repetitivos', () => {
     const lancamentos = [compra('Acima', 350, { categoria_cartao_id: 1 }), compra('Exata', 100, { categoria_cartao_id: 2 })];
     const blocos = organizarLancamentosEmBlocos(lancamentos, RESUMO);
     const html = renderizarFaturaCompleta(blocos, calcularTotaisFatura(blocos, lancamentos), '2029-05').replace(/\s+/g, ' ');
-    assert.match(html, /Despesas por Categoria<\/span> <span class="bloco-subtotal">Executado</);
+    assert.match(html, /categoria-colunas"> <span>Categoria<\/span> <span>Previsto<\/span> <span>Saldo<\/span> <span>Executado<\/span> <\/div>/);
     assert.doesNotMatch(html, /[↑↓]/);
-    assert.match(html, /categoria-situacao excedente">Excedente R\$ 50,00<\/span> <div class="categoria-indicador"[^>]*> R\$ 350,00/);
-    assert.match(html, /categoria-situacao no-limite">No limite</);
+    const linha = (nome, classe, saldo, executado) => new RegExp(`categoria-nome">${nome}</span> <span class="categoria-valor"[^>]*>R\\$ ${classe}</span> `
+        + `<span class="categoria-saldo${saldo.startsWith('-') ? ' negativo' : ''}"[^>]*>${saldo.replace('$', '\\$')}</span> <span class="categoria-indicador"[^>]*>R\\$ ${executado}</span>`);
+    assert.match(html, linha('Mercado', '300,00', '-R$ 50,00', '350,00'));
+    assert.match(html, linha('Farmacia', '100,00', 'R$ 0,00', '100,00'));
     const saldo = organizarLancamentosEmBlocos(COMPRAS, RESUMO);
-    assert.match(renderizarFaturaCompleta(saldo, calcularTotaisFatura(saldo, COMPRAS), '2029-05').replace(/\s+/g, ' '),
-        /categoria-situacao saldo">Saldo R\$ 150,00</);
+    const positivo = renderizarFaturaCompleta(saldo, calcularTotaisFatura(saldo, COMPRAS), '2029-05').replace(/\s+/g, ' ');
+    assert.match(positivo, linha('Mercado', '300,00', 'R$ 150,00', '150,00'));
+    assert.doesNotMatch(html + positivo, /Excedente|No limite|categoria-situacao/);
+    assert.doesNotMatch((html + positivo).replace(/<span>Saldo<\/span>/g, ''), />\s*Saldo\b/);
+    // Sem categoria com previsao, sem o cabecalho das colunas
+    const vazio = organizarLancamentosEmBlocos([], { categorias: [] });
+    assert.doesNotMatch(renderizarFaturaCompleta(vazio, calcularTotaisFatura(vazio, []), '2029-05'), /categoria-colunas/);
 });
 
 // MVP-FIN-AJUSTES-01 (P04)

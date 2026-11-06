@@ -26,6 +26,33 @@ test.afterEach(async ({}, testInfo) => {
     expect(testInfo.problemas, 'CSP/erros de JS').toEqual([]);
 });
 
+// FIN-FATURA-AJUSTES-02 (P16): quatro colunas alinhadas com o cabecalho, a direita, sem corte, em uma largura. Devolve o espaco flexivel.
+async function conferirColunas(page, categorias, largura) {
+    await page.setViewportSize({ width: largura, height: 900 });
+    const cabecalho = categorias.locator('.categoria-colunas span');
+    await expect(cabecalho).toHaveText(['Categoria', 'Previsto', 'Saldo', 'Executado']);
+    const linha = categorias.locator('.categoria-linha').first();
+    const celulas = ['.categoria-nome', '.categoria-valor', '.categoria-saldo', '.categoria-indicador'].map((c) => linha.locator(c));
+    const caixas = await Promise.all(celulas.map((c) => c.boundingBox()));
+    const titulos = await Promise.all((await cabecalho.all()).map((c) => c.boundingBox()));
+    caixas.forEach((caixa, i) => {
+        expect(Math.abs(caixa.x - titulos[i].x), `coluna ${i}`).toBeLessThanOrEqual(1);
+        expect(Math.abs(caixa.width - titulos[i].width), `coluna ${i}`).toBeLessThanOrEqual(1);
+        if (i) expect(caixa.x, `ordem ${i}`).toBeGreaterThanOrEqual(caixas[i - 1].x + caixas[i - 1].width);
+    });
+    for (const celula of celulas.slice(1)) {
+        expect(await celula.evaluate((e) => getComputedStyle(e).textAlign)).toBe('right');
+        expect(await celula.evaluate((e) => e.scrollWidth <= e.clientWidth), 'valor cortado').toBe(true);
+    }
+    expect(await celulas[0].evaluate((e) => getComputedStyle(e).textAlign)).toMatch(/left|start/);
+    const altura = (await linha.boundingBox()).height;
+    expect(altura).toBeGreaterThanOrEqual(30);
+    expect(altura).toBeLessThanOrEqual(32);
+    const blocoEl = categorias;
+    expect(await blocoEl.evaluate((e) => e.scrollWidth <= e.clientWidth), 'sem estouro horizontal').toBe(true);
+    return caixas[3].x - (caixas[2].x + caixas[2].width);
+}
+
 async function entrar(page, conta) {
     await page.goto('/index.html');
     await page.fill('#email', conta.email);
@@ -80,6 +107,12 @@ test('detalhe da fatura: parcelada, Categoria do Cartao com limite e Outros, sem
     await expect(categorias.locator('.categoria-nome')).toHaveText(['Mercado B']);
     expect(normal(await categorias.locator('.categoria-valor').textContent())).toMatch(/^R\$ 300,00/);
     await expect(categorias.locator('.categoria-indicador')).toHaveText('R$ 150,00');
+    // FIN-FATURA-AJUSTES-02 (P16): saldo positivo na cor padrao
+    const saldoPositivo = categorias.locator('.categoria-saldo');
+    await expect(saldoPositivo).toHaveText('R$ 150,00');
+    await expect(saldoPositivo).not.toHaveClass(/negativo/);
+    const cor = (l) => l.evaluate((e) => getComputedStyle(e).color);
+    expect(await cor(saldoPositivo)).toBe(await cor(categorias.locator('.categoria-valor')));
     await categorias.locator('.categoria-linha').click();
     await expect(categorias.locator('.categoria-detalhes .linha-titulo')).toHaveText(['Feira E2E', 'Padaria E2E']);
     // Sem Categoria do Cartao: Outros.
@@ -125,14 +158,23 @@ test('fatura: recorrencia prevista, excedente da categoria, previsto igual ao da
     const fixas = bloco(detalhe, 'Despesas Fixas');
     await expect(fixas.locator('.linha-simples')).toHaveCount(1);
     await expect(fixas.locator('.linha-prevista .linha-valor')).toHaveText('R$ 60,00');
-    await expect(fixas.locator('.linha-legenda')).toHaveText('Previsto · aguardando cobrança');
-    await expect(fixas.locator('.bloco-subtotal')).toHaveText('R$ 0,00 · R$ 60,00 aguardando cobrança');
+    // FIN-FATURA-AJUSTES-02 (P17): so Data, Descricao e Valor, com a soma das linhas no cabecalho
+    await expect(fixas.locator('.linha-legenda')).toHaveCount(0);
+    await expect(fixas.locator('.bloco-subtotal')).toHaveText('R$ 60,00');
+    await expect(fixas).not.toContainText(/previsto|aguardando/i);
 
-    // P02: cabecalho do lado do executado; identificacao por extenso, sem seta.
+    // FIN-FATURA-AJUSTES-02 (P16): Categoria | Previsto | Saldo | Executado, saldo negativo em vermelho
     const categorias = bloco(detalhe, 'Despesas por Categoria');
-    await expect(categorias.locator('.bloco-subtotal')).toHaveText('Executado');
-    await expect(categorias.locator('.categoria-situacao.excedente')).toHaveText('Excedente R$ 50,00');
+    await expect(categorias.locator('.bloco-subtotal')).toHaveCount(0);
+    await expect(categorias.locator('.categoria-valor')).toHaveText('R$ 300,00');
+    await expect(categorias.locator('.categoria-saldo.negativo')).toHaveText('-R$ 50,00');
+    expect(await categorias.locator('.categoria-saldo').evaluate((e) => getComputedStyle(e).color)).toBe('rgb(198, 40, 40)');
     await expect(categorias.locator('.categoria-indicador')).toHaveText('R$ 350,00');
+    await expect(categorias).not.toContainText(/Excedente|No limite/);
+    const espaco1366 = await conferirColunas(page, categorias, 1366);
+    const espaco1920 = await conferirColunas(page, categorias, 1920);
+    expect(espaco1920, 'espaco flexivel antes de Executado').toBeGreaterThan(espaco1366);
+    await page.setViewportSize({ width: 1366, height: 900 });
 
     // P03: previsto do detalhe = previsto da lista (o do banco): 60 + 350; executado sem a previsao.
     const totais = (await detalhe.locator('.fatura-totais .total-valor').allTextContents()).map(normal);

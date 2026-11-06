@@ -683,14 +683,6 @@
     border-color: #c7c7cc;
 }
 
-.categoria-info {
-    flex: 1 1 auto;
-    min-width: 0;
-    display: flex;
-    gap: 8px;
-    align-items: center;
-}
-
 .categoria-valor {
     font-weight: 700;
     color: #1d1d1f;
@@ -703,21 +695,6 @@
     font-size: 13px;
     font-weight: 500;
     color: #1d1d1f;
-}
-
-.categoria-situacao {
-    flex: 0 0 auto;
-    font-size: 12px;
-    font-weight: 600;
-    color: #6e6e73;
-}
-
-.categoria-situacao.saldo {
-    color: #1f7a4d;
-}
-
-.categoria-situacao.excedente {
-    color: #c62828;
 }
 
 .categoria-indicador {
@@ -1588,13 +1565,6 @@ body.mobile-view .despesa-valor-principal {
     background: rgba(0, 0, 0, 0.02);
 }
 
-.categoria-info {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex: 1;
-}
-
 .categoria-valor {
     font-size: 16px;
     font-weight: 600;
@@ -1620,6 +1590,54 @@ body.mobile-view .despesa-valor-principal {
     color: #6e6e73;
     min-width: 24px;
     text-align: center;
+}
+
+/* Despesas por Categoria: CATEGORIA | PREVISTO | SALDO | espaco flexivel | EXECUTADO, com o cabecalho na mesma grade */
+.categoria-colunas,
+.categoria-linha {
+    display: grid;
+    grid-template-columns: minmax(0, 200px) 104px 104px minmax(0, 1fr) 104px;
+    column-gap: 12px;
+    align-items: center;
+    padding: 0 20px;
+}
+
+.categoria-colunas {
+    height: 28px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #6e6e73;
+    text-align: right;
+    border-bottom: 1px solid #f5f5f7;
+}
+
+.categoria-colunas span:first-child {
+    text-align: left;
+}
+
+.categoria-colunas span:last-child,
+.categoria-linha .categoria-indicador {
+    grid-column: 5;
+}
+
+.categoria-linha .categoria-valor,
+.categoria-linha .categoria-saldo,
+.categoria-linha .categoria-indicador {
+    min-width: 0;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: normal;
+    text-align: right;
+}
+
+.categoria-linha .categoria-nome {
+    font-size: 13px !important;
+    white-space: nowrap;
+}
+
+/* !important: .categoria-linha * forca a cor herdada */
+.categoria-linha .categoria-saldo.negativo {
+    color: #c62828 !important;
 }
 
 .categoria-detalhes {
@@ -1688,15 +1706,22 @@ body.mobile-view .despesa-valor-principal {
         font-size: 20px;
     }
 
-    .categoria-info {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 4px;
+    .categoria-colunas,
+    .categoria-linha {
+        grid-template-columns: minmax(0, 1fr) 76px 76px 76px;
+        column-gap: 6px;
+        padding: 0 8px;
     }
 
-    .categoria-valor {
-        min-width: auto;
-        font-size: 14px;
+    .categoria-colunas span:last-child,
+    .categoria-linha .categoria-indicador {
+        grid-column: 4;
+    }
+
+    .categoria-linha .categoria-valor,
+    .categoria-linha .categoria-saldo,
+    .categoria-linha .categoria-indicador {
+        font-size: 12px;
     }
 
     .linha-simples {

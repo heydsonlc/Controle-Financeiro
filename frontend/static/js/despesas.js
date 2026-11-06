@@ -2829,41 +2829,23 @@ function valorLinhaFixa(f) {
     return f.situacao_ocorrencia === 'PREVISTA' ? previstoFixa(f) : executadoFixa(f);
 }
 
-/**
- * Legenda previsto x executado de uma despesa fixa (vazia quando a API nao informa o previsto)
- */
-function legendaFixa(f) {
-    if (f.valor_previsto === null || f.valor_previsto === undefined) return '';
-    const previsto = parseFloat(f.valor_previsto || 0);
-    const rotulo = `Previsto R$ ${formatarValorBR(previsto)}`;
-    if (f.situacao_ocorrencia === 'PREVISTA') return 'Previsto · aguardando cobrança';
-    if (f.situacao_ocorrencia === 'NAO_COBRADA') return `${rotulo} · não cobrada nesta fatura`;
-    if (f.situacao_ocorrencia === 'PAGA') return `${rotulo} · paga com a fatura`;
-    const diferenca = Math.round((executadoFixa(f) - previsto) * 100) / 100;
-    if (diferenca === 0) return `${rotulo} · confirmado`;
-    return `${rotulo} · diferença ${diferenca < 0 ? '−' : '+'}R$ ${formatarValorBR(Math.abs(diferenca))}`;
-}
-
 function renderizarBlocoFixas(fixas) {
-    const total = fixas.reduce((sum, f) => sum + executadoFixa(f), 0);
-    const aguardando = fixas.filter(f => f.situacao_ocorrencia === 'PREVISTA').reduce((sum, f) => sum + previstoFixa(f), 0);
+    // Soma das linhas exibidas: o mesmo valor das Despesas Fixas no rodape
+    const total = fixas.reduce((sum, f) => sum + valorLinhaFixa(f), 0);
     const linhas = fixas.length > 0
         ? fixas.map(f => renderizarLinhaFatura({
             data: f.data_compra,
             descricao: f.descricao,
-            legenda: legendaFixa(f),
             valor: `R$ ${formatarValorBR(valorLinhaFixa(f))}`,
             prevista: f.situacao_ocorrencia === 'PREVISTA'
         })).join('')
         : '<div class="linha-vazia">Nenhuma despesa fixa no cartão neste mês.</div>';
-    const subtotal = `R$ ${formatarValorBR(total)}`
-        + (aguardando > 0 ? ` · R$ ${formatarValorBR(aguardando)} aguardando cobrança` : '');
 
     return `
         <div class="fatura-bloco">
             <div class="bloco-header">
                 <span class="bloco-titulo">Despesas Fixas</span>
-                <span class="bloco-subtotal">${subtotal}</span>
+                <span class="bloco-subtotal">R$ ${formatarValorBR(total)}</span>
             </div>
             <div class="bloco-lista">${linhas}</div>
         </div>
@@ -2871,19 +2853,17 @@ function renderizarBlocoFixas(fixas) {
 }
 
 /**
- * Saldo ou excedente da categoria: quanto falta para o previsto ou quanto passou dele
+ * Saldo da categoria: previsto menos executado; negativo quando passou do previsto
  */
-function situacaoCategoria(previsto, executado) {
-    const diferenca = Math.round((previsto - executado) * 100) / 100;
-    if (diferenca > 0) return { classe: 'saldo', texto: `Saldo R$ ${formatarValorBR(diferenca)}` };
-    if (diferenca < 0) return { classe: 'excedente', texto: `Excedente R$ ${formatarValorBR(-diferenca)}` };
-    return { classe: 'no-limite', texto: 'No limite' };
+function saldoCategoria(previsto, executado) {
+    const saldo = Math.round((previsto - executado) * 100) / 100;
+    return { negativo: saldo < 0, texto: `${saldo < 0 ? '-' : ''}R$ ${formatarValorBR(Math.abs(saldo))}` };
 }
 
 /**
  * Renderiza bloco "Despesas por Categoria"
  *
- * LINHA PRINCIPAL: Mostra PREVISTO (orçamento da categoria), o saldo ou excedente e o EXECUTADO
+ * LINHA PRINCIPAL: CATEGORIA | PREVISTO (orçamento da categoria) | SALDO | EXECUTADO
  * DETALHAMENTO INTERNO: Mostra EXECUTADO (lançamentos reais)
  */
 function renderizarBlocoPorCategoria(porCategoria) {
@@ -2892,7 +2872,7 @@ function renderizarBlocoPorCategoria(porCategoria) {
         ? categorias.map(cat => {
             const previsto = parseFloat(cat.previsto || 0);
             const executado = cat.lancamentos.reduce((sum, l) => sum + (l.valor || 0), 0);
-            const situacao = situacaoCategoria(previsto, executado);
+            const saldo = saldoCategoria(previsto, executado);
 
             // ← DETALHAMENTO: Valores EXECUTADOS (lançamentos reais)
             const detalhes = cat.lancamentos.length > 0
@@ -2907,14 +2887,10 @@ function renderizarBlocoPorCategoria(porCategoria) {
             return `
                 <div class="categoria-bloco">
                     <button type="button" class="categoria-linha" onclick="toggleCategoriaDetalhe('${cat.id}')">
-                        <div class="categoria-info">
-                            <span class="categoria-valor" title="Previsto desta categoria">R$ ${formatarValorBR(previsto)}</span>
-                            <span class="categoria-nome">${cat.nome}</span>
-                        </div>
-                        <span class="categoria-situacao ${situacao.classe}">${situacao.texto}</span>
-                        <div class="categoria-indicador" title="Total executado desta categoria">
-                            R$ ${formatarValorBR(executado)}
-                        </div>
+                        <span class="categoria-nome">${cat.nome}</span>
+                        <span class="categoria-valor" title="Previsto desta categoria">R$ ${formatarValorBR(previsto)}</span>
+                        <span class="categoria-saldo${saldo.negativo ? ' negativo' : ''}" title="Previsto menos executado">${saldo.texto}</span>
+                        <span class="categoria-indicador" title="Total executado desta categoria">R$ ${formatarValorBR(executado)}</span>
                     </button>
                     <div class="categoria-detalhes" id="categoria-detalhe-${cat.id}" style="display: none;">
                         ${detalhes}
@@ -2928,8 +2904,14 @@ function renderizarBlocoPorCategoria(porCategoria) {
         <div class="fatura-bloco">
             <div class="bloco-header">
                 <span class="bloco-titulo">Despesas por Categoria</span>
-                <span class="bloco-subtotal">Executado</span>
             </div>
+            ${categorias.length > 0 ? `
+            <div class="categoria-colunas">
+                <span>Categoria</span>
+                <span>Previsto</span>
+                <span>Saldo</span>
+                <span>Executado</span>
+            </div>` : ''}
             <div class="bloco-lista">${conteudo}</div>
         </div>
     `;
