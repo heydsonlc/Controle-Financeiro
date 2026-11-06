@@ -40,9 +40,16 @@ async function entrar(page, conta) {
     await page.waitForLoadState('networkidle');
 }
 
+// Todos os cadastros, sem os filtros de abertura (Ativas e o mes corrente): os cenarios usam anos futuros e inativas.
+async function verTudo(page) {
+    await expect(page.locator('#recorrencias-total')).toHaveText(/cadastros? no total/);
+    await page.selectOption('#filtro-status', '');
+    await page.fill('#filtro-competencia', '');
+}
+
 async function abrirRecorrencias(page) {
     await page.goto('/recorrencias.html');
-    await expect(page.locator('#recorrencias-total')).toHaveText(/cadastros? no total/);
+    await verTudo(page);
 }
 
 const linha = (page, nome) => page.locator('#recorrencias-lista .recorrencias-row', { has: page.locator('strong', { hasText: nome }) });
@@ -72,7 +79,15 @@ test('tela original: menu, indicadores, lista, filtros e aviso de consorcios', a
     await expect(itemDoMenu(page, 'recorrencias')).toHaveClass(/active/);
     await expect(itemDoMenu(page, 'recorrencias').locator('.app-nav-status')).toHaveCount(0);  // ja migrada
     await expect(page.locator('.recorrencias-kpi-card')).toHaveCount(4);
+    // MVP-FIN-AJUSTES-01 (P05/P06): abre em Ativas e no mes corrente; sem a coluna Tipo; inicio futuro nao e antecipado.
+    const hoje = new Date();
+    await expect(page.locator('#filtro-status')).toHaveValue('ativa');
+    await expect(page.locator('#filtro-competencia')).toHaveValue(`${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`);
+    await page.fill('#filtro-competencia', '2026-12');
+    await expect(linha(page, 'Mensalidade B')).toHaveCount(0);
+    await page.fill('#filtro-competencia', '2027-01');
     await expect(linha(page, 'Mensalidade B')).toContainText('Mensal');
+    await expect(page.locator('.recorrencias-header span')).toHaveText(['Descricao', 'Frequencia', 'Proximo venc.', 'Valor', 'Categoria', 'Status', 'Acoes']);
     await expect(linha(page, 'Mensalidade B')).toContainText('R$ 120,00');
     await expect(page.locator('#recorrencias-aviso-consorcios')).toContainText('Parcelas pagas nunca são apagadas');
     await page.selectOption('#filtro-status', 'inativa');
@@ -198,7 +213,7 @@ test('perfil so de leitura: lista sem acoes; isolamento e escrita direta recusad
     await entrar(page, A);
     await abrirRecorrencias(page);
     await trocarPerfil(page, 'Empresa');
-    await expect(page.locator('#recorrencias-total')).toHaveText(/cadastros? no total/);
+    await verTudo(page);
     await expect(linha(page, 'Aluguel sala')).toBeVisible();
     await expect(page.locator('#btn-nova-recorrencia')).toBeHidden();
     await expect(page.locator('#secao-formulario')).toBeHidden();

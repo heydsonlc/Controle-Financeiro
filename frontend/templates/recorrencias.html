@@ -22,9 +22,13 @@
                     <label class="module-filter-label" for="filtro-status">Status</label>
                     <select id="filtro-status" class="module-filter-control" onchange="aplicarFiltrosRecorrencias()">
                         <option value="">Todos</option>
-                        <option value="ativa">Ativas</option>
+                        <option value="ativa" selected>Ativas</option>
                         <option value="inativa">Inativas</option>
                     </select>
+                </div>
+                <div class="module-filter-group filter-item">
+                    <label class="module-filter-label" for="filtro-competencia">Competencia</label>
+                    <input id="filtro-competencia" class="module-filter-control" type="month" onchange="aplicarFiltrosRecorrencias()">
                 </div>
                 <div class="module-filter-group filter-item">
                     <label class="module-filter-label" for="filtro-frequencia">Frequencia</label>

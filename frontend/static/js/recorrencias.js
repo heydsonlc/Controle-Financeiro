@@ -14,6 +14,7 @@ let estadoRecorrencias = {
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
+    setValue('filtro-competencia', competenciaAtual());
     await carregarDadosBase();
     await carregarRecorrencias();
     prepararFormularioNovaRecorrencia();
@@ -174,7 +175,6 @@ function obterItensUnificados() {
             nome: item.nome,
             descricao: item.descricao,
             tipo: 'recorrencia_simples',
-            tipoLabel: 'Despesa',
             frequencia: item.frequencia || item.tipo_recorrencia || 'mensal',
             proximoVencimento: item.proximo_vencimento,
             valor: Number(item.valor || 0),
@@ -197,7 +197,6 @@ function obterItensUnificados() {
         nome: item.nome,
         descricao: item.observacoes,
         tipo: 'consorcio',
-        tipoLabel: 'Consorcio',
         frequencia: 'parcelas',
         proximoVencimento: item.mes_inicio,
         valor: Number(item.valor_inicial || 0),
@@ -214,9 +213,44 @@ function obterItensUnificados() {
     return [...recorrencias, ...consorcios];
 }
 
+function competenciaAtual() {
+    const hoje = new Date();
+    return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+}
+
+// Ha ocorrencia semanal ou a cada 2 semanas no mes? Primeira ocorrencia: o inicio levado ao dia da semana, como no banco.
+function ocorrenciaSemanalNoMes(item, inicio, ano, mes) {
+    const semanas = Number(item.raw?.frequencia_semanas) || (item.frequencia === 'quinzenal' ? 2 : 1);
+    const [anoInicio, mesInicio, diaInicio] = inicio.split('-').map(Number);
+    const umDia = 24 * 60 * 60 * 1000;
+    let primeira = Date.UTC(anoInicio, mesInicio - 1, diaInicio);
+    const diaSemana = item.raw?.dia_semana;
+    if (diaSemana !== null && diaSemana !== undefined) {
+        primeira += ((Number(diaSemana) - new Date(primeira).getUTCDay() + 7) % 7) * umDia;
+    }
+    const passo = semanas * 7 * umDia;
+    const passos = Math.max(0, Math.ceil((Date.UTC(ano, mes - 1, 1) - primeira) / passo));
+    return primeira + passos * passo <= Date.UTC(ano, mes, 0);
+}
+
+// A recorrencia ocorre na competencia (AAAA-MM), pela frequencia e pela vigencia? O inicio futuro nao e antecipado.
+// Sem data de inicio nao ha o que calcular: o cadastro continua na lista.
+function ocorreNaCompetencia(item, competencia) {
+    const inicio = String(item.raw?.data_vencimento || item.raw?.mes_inicio || '').slice(0, 10);
+    if (!inicio) return true;
+    if (competencia < inicio.slice(0, 7)) return false;
+    const [ano, mes] = competencia.split('-').map(Number);
+    const [anoInicio, mesInicio] = inicio.split('-').map(Number);
+    if (item.frequencia === 'anual') return mes === mesInicio;
+    if (item.frequencia === 'semanal' || item.frequencia === 'quinzenal') return ocorrenciaSemanalNoMes(item, inicio, ano, mes);
+    const parcelas = Number(item.raw?.numero_parcelas || 0);
+    return !parcelas || (ano - anoInicio) * 12 + (mes - mesInicio) < parcelas;
+}
+
 function obterItensFiltrados(itens) {
     const filtroTipo = document.getElementById('filtro-tipo')?.value || '';
     const filtroStatus = document.getElementById('filtro-status')?.value || '';
+    const filtroCompetencia = document.getElementById('filtro-competencia')?.value || '';
     const filtroFrequencia = document.getElementById('filtro-frequencia')?.value || '';
     const filtroCategoria = document.getElementById('filtro-categoria')?.value || '';
     const busca = normalizarBusca(document.getElementById('filtro-busca')?.value || '');
@@ -224,6 +258,7 @@ function obterItensFiltrados(itens) {
     return itens.filter(item => {
         if (filtroTipo && item.tipo !== filtroTipo) return false;
         if (filtroStatus && item.status !== filtroStatus) return false;
+        if (filtroCompetencia && !ocorreNaCompetencia(item, filtroCompetencia)) return false;
         if (filtroFrequencia && item.frequencia !== filtroFrequencia) return false;
         if (filtroCategoria && String(item.categoriaId || '') !== filtroCategoria) return false;
         if (busca && !normalizarBusca(`${item.nome} ${item.descricao || ''} ${item.categoriaNome}`).includes(busca)) return false;
@@ -292,7 +327,7 @@ function renderizarLista(itens) {
     if (itens.length === 0) {
         container.innerHTML = `
             <div class="recorrencias-empty">
-                <strong>Nenhuma recorrencia cadastrada.</strong>
+                <strong>${estadoRecorrencias.recorrencias.length || estadoRecorrencias.consorcios.length ? 'Nenhuma recorrencia com estes filtros.' : 'Nenhuma recorrencia cadastrada.'}</strong>
                 <span>Cadastre uma recorrencia para automatizar previsoes.</span>
             </div>
         `;
@@ -303,7 +338,6 @@ function renderizarLista(itens) {
         <div class="recorrencias-table">
             <div class="recorrencias-header">
                 <span>Descricao</span>
-                <span>Tipo</span>
                 <span>Frequencia</span>
                 <span>Proximo venc.</span>
                 <span>Valor</span>
@@ -338,8 +372,7 @@ function renderizarLinha(item) {
                     <small>${escapeHtml(item.descricao || detalhe || '')}</small>
                 </span>
             </div>
-            <span><span class="recorrencias-pill type">${escapeHtml(item.tipoLabel)}</span>${meioPagamentoHtml}</span>
-            <span>${escapeHtml(detalhe)}</span>
+            <span>${escapeHtml(detalhe)}${meioPagamentoHtml}</span>
             <span>${vencimento}${dias !== null ? `<small class="next-days">(${dias} ${dias === 1 ? 'dia' : 'dias'})</small>` : ''}</span>
             <span class="recorrencias-value">${formatarMoeda(item.valor)}</span>
             <span class="categoria-cell"><i style="background:${corCategoria(item.categoriaId)}"></i>${escapeHtml(item.categoriaNome)}</span>

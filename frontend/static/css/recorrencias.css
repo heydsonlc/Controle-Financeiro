@@ -11,7 +11,8 @@
 }
 
 .recorrencias-toolbar .filter-item:nth-child(1) .module-filter-control,
-.recorrencias-toolbar .filter-item:nth-child(3) .module-filter-control {
+.recorrencias-toolbar .filter-item:nth-child(3) .module-filter-control,
+.recorrencias-toolbar .filter-item:nth-child(4) .module-filter-control {
     width: 136px;
 }
 
@@ -19,8 +20,8 @@
     width: 108px;
 }
 
-.recorrencias-toolbar .filter-item:nth-child(4) .module-filter-control {
-    width: 260px;
+.recorrencias-toolbar .filter-item:nth-child(5) .module-filter-control {
+    width: 200px;
 }
 
 .recorrencias-search {
@@ -352,7 +353,7 @@
     align-items: center;
     display: grid;
     gap: 12px;
-    grid-template-columns: minmax(210px, 1.7fr) 100px 110px 130px 120px minmax(130px, 1fr) 90px 86px;
+    grid-template-columns: minmax(250px, 2fr) 150px 130px 120px minmax(150px, 1.1fr) 90px 86px;
 }
 
 .recorrencias-header {
@@ -419,11 +420,6 @@
     font-weight: 800;
     line-height: 1;
     padding: 5px 9px;
-}
-
-.recorrencias-pill.type {
-    background: #fee2e2;
-    color: #dc2626;
 }
 
 .recorrencias-pill.active {
