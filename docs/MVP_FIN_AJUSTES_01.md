@@ -1,6 +1,6 @@
 # MVP-FIN-AJUSTES-01 — Correções e simplificação da interface
 
-**Situação (05/11/2026): implementado e testado localmente; aguarda homologação do titular.** Sem push, sem deploy, sem migration e sem nenhuma alteração de dados. A única consulta à produção foi a auditoria do P03, em sessão só de leitura.
+**Situação (05/11/2026): testado; publicação autorizada no FIN-MVP-AJUSTES-01-PUBLICACAO, sem homologação manual.** Sem migration e sem nenhuma alteração de dados. A produção só foi lida, em sessão só de leitura, nas auditorias do P03.
 
 Contrato: FIN-MVP-AJUSTES-01 (11 pendências em quatro telas). Commits por módulo: Faturas, Recorrências, Despesas e Cartões.
 
@@ -53,6 +53,7 @@ O detalhe calcula o previsto na tela, e o banco calcula o da lista (`contas_do_m
 
 - **P07:** Forma de pagamento mostra só o ícone, com título e nome acessível (`role="img"`). A coluna ficou mais estreita.
 - **P08:** sai o card Vencendo em 7 dias. Os cinco restantes dividem a largura: uma linha em tela larga, duas a 1366 px.
+- **Barra de filtros (FIN-MVP-AJUSTES-01-PUBLICACAO):** a sobreposição a 1366 px foi corrigida com a solução de Recorrências: os filtros quebram em duas linhas, com controles de 130 px. Valores e comportamento dos filtros não mudam.
 - **P09:** toda linha tem três ações nas mesmas posições: editar, pagar e estornar. Na fatura e no agrupador semanal, a primeira é a de detalhes. A ação impossível fica visível e desabilitada, com o motivo no título.
   - No Flask, "Consolidar fatura" continua como quarta ação. No novo aplicativo ela não aparece.
   - **Mudança de comportamento:** a ocorrência paga dentro do agrupador semanal passa a oferecer o estorno, pelo mesmo fluxo das demais despesas.
@@ -68,26 +69,29 @@ O detalhe calcula o previsto na tela, e o banco calcula o da lista (`contas_do_m
   - O status do vínculo inativo deixa de aparecer em lista própria: ele só reaparece em Categorias disponíveis.
 - **P11:** sai Nova compra da barra, com o modal e o `compra-cartao.js`, que só ela usava. As compras seguem por Importar Cartão, Lançamentos e Recorrências.
 
-**Pendência registrada:** o modal removido mostrava a prévia das parcelas antes de gravar. O formulário de Lançamentos não mostra. A sugestão de fatura pelo fechamento e a confirmação de fatura consolidada existem lá.
+**Pendência P14 (fora deste MVP):** recuperar a prévia das parcelas. O modal removido a mostrava antes de gravar, e o formulário de Lançamentos não mostra. A sugestão de fatura pelo fechamento e a confirmação de fatura consolidada existem lá.
 
 ## 6. Testes
 
 | Bateria | Resultado |
 |---|---|
 | Unitários web | 70/70, com os novos de `fatura-blocos` e `recorrencias-competencia` |
-| E2E completo | 122/122 |
+| E2E completo | 123/123, com o teste de sobreposição dos filtros de Despesas (falhava antes da correção) |
 | Seleção de impacto (nível 2, pytest) | 359/359; a suíte Python inteira não foi rodada |
 
 - **E2E novos:** recorrência prevista, excedente, previsto igual ao da lista e altura das linhas em 1366 e 390 px; filtros de Recorrências; ícone e posições das três ações; editar, desvincular, olho e revincular em Cartões.
 - **Compra nova no E2E:** o cenário do fechamento passou para o formulário de Lançamentos; os demais criam a compra pela função do banco.
-- **Conferência visual:** telas capturadas a 1366 e 1920 px, com dados fictícios.
+- **Conferência visual:** as quatro telas capturadas a 1366 e 1920 px, com dados fictícios.
+- **As 16 faturas auditadas:** o `calcularTotaisFatura` da tela, sobre as respostas reais, é igual ao previsto e ao executado do banco nas 16.
 
-## 7. Ressalvas
+## 7. Ajustes aceitos pelo titular
 
-- **Despesas a 1366 px:** a grade continua pedindo 1180 px e rola na horizontal, como antes. As três ações ficam à direita da rolagem. Em 1920 px tudo aparece.
-- **Barra de filtros de Despesas a 1366 px:** os filtros se sobrepõem. O defeito já existia e ficou fora do contrato; a correção é a mesma feita em Recorrências.
+- **Estorno na ocorrência semanal paga:** mantido, com as proteções financeiras existentes.
+- **Despesas a 1366 px:** a rolagem horizontal da tabela fica aceita provisoriamente. As três ações ficam à direita da rolagem; em 1920 px tudo aparece.
+- **Netflix:** continua sem conciliação automática.
+- **Limites antigos sem perfil:** não modificados.
 - **Cartões:** a tabela Lançamentos da fatura também rola na horizontal, como antes.
 
 ## 8. Publicação
 
-Sem migration. Quando homologado: push dos commits locais e deploy do frontend, com autorização expressa.
+Sem migration. Publicação autorizada pelo titular no contrato FIN-MVP-AJUSTES-01-PUBLICACAO: push em avanço direto e deploy do frontend.

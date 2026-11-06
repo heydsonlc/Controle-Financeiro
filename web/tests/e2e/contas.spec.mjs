@@ -81,6 +81,35 @@ test('novembro (Pessoal): grupos, ordem, situacoes, valores, resumo e geracao', 
     ]);
 });
 
+// FIN-MVP-AJUSTES-01-PUBLICACAO: nenhum rotulo, campo ou botao da barra de filtros sobre outro ou cortado pela barra.
+test('filtros de Despesas sem sobreposicao a 1366 e 1920 px', async ({ page }) => {
+    await entrar(page, A);
+    for (const width of [1366, 1920]) {
+        await page.setViewportSize({ width, height: 900 });
+        await abrirDespesas(page, '2026-11');
+        const problemas = await page.locator('.module-actionbar-inner').evaluate((barra) => {
+            const itens = [...barra.querySelectorAll('.module-filter-label, .module-filter-control, .despesas-search-wrapper, .module-actionbar-actions > *')]
+                .map((e) => ({ nome: e.id || e.textContent.trim() || e.className, r: e.getBoundingClientRect() }));
+            const folga = 0.5;
+            const cruzam = (a, b) => a.left < b.right - folga && b.left < a.right - folga && a.top < b.bottom - folga && b.top < a.bottom - folga;
+            const achados = [];
+            const caixa = barra.getBoundingClientRect();
+            itens.forEach((item, i) => {
+                if (item.r.right > caixa.right + folga || item.r.left < caixa.left - folga) achados.push(`cortado: ${item.nome}`);
+                itens.slice(i + 1).forEach((outro) => { if (cruzam(item.r, outro.r)) achados.push(`${item.nome} x ${outro.nome}`); });
+            });
+            return achados;
+        });
+        expect(problemas, `largura ${width}`).toEqual([]);
+    }
+    // Os filtros continuam funcionando na barra reorganizada.
+    await page.setViewportSize({ width: 1366, height: 900 });
+    await page.selectOption('#filtro-status', 'pago');
+    await expect(page.locator('#despesas-lista .despesa-card')).toHaveCount(2);
+    await page.selectOption('#filtro-status', '');
+    await expect(page.locator('#despesas-lista .despesa-card')).toHaveCount(5);
+});
+
 // MVP-FIN-AJUSTES-01 (P07 a P09): so o icone da forma de pagamento; tres acoes sempre, nas mesmas posicoes.
 test('novembro (Pessoal): icone da forma de pagamento e tres acoes em posicoes fixas', async ({ page }) => {
     await entrar(page, A);

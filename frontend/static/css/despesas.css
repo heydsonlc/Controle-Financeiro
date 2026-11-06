@@ -1885,6 +1885,25 @@ body.mobile-view .despesa-valor-principal {
     flex-shrink: 0;
 }
 
+/* Cinco filtros e tres botoes: quebram em duas linhas quando nao cabem, sem um sobre o outro (como em Recorrencias) */
+body.app-shell-body .despesas-toolbar .module-actionbar-filters {
+    flex-wrap: wrap;
+    overflow: visible;
+}
+
+body.app-shell-body .despesas-toolbar .module-filter-group {
+    flex: 0 0 auto;
+}
+
+body.app-shell-body .despesas-toolbar .module-filter-control {
+    width: 130px;
+}
+
+body.app-shell-body .despesas-toolbar .despesas-search-input,
+body.app-shell-body .despesas-toolbar .despesas-search-input:focus {
+    width: 96px;
+}
+
 .despesas-busca-group .despesas-search-wrapper {
     display: flex;
     align-items: center;
