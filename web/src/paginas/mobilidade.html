@@ -403,18 +403,43 @@
                 </div>
                 <div class="form-group">
                     <label for="combustivel">Combustível *</label>
-                    <select id="combustivel" required>
+                    <select id="combustivel" required onchange="atualizarCamposCombustivel()">
                         <option value="gasolina">Gasolina</option>
                         <option value="etanol">Etanol</option>
+                        <option value="flex">Flex (gasolina e etanol)</option>
                         <option value="diesel">Diesel</option>
                         <option value="gnv">GNV</option>
                         <option value="eletrico">Elétrico</option>
                         <option value="outro">Outro</option>
                     </select>
                 </div>
-                <div class="form-group">
+                <div class="form-group" id="grupo-autonomia-unica">
                     <label for="autonomia_km_l">Autonomia (km/L) *</label>
-                    <input type="number" step="0.01" id="autonomia_km_l" required placeholder="Ex: 12">
+                    <input type="number" step="0.01" id="autonomia_km_l" required placeholder="Ex: 12" oninput="atualizarCamposCombustivel()">
+                </div>
+                <div class="form-group campo-flex" style="display:none;">
+                    <label for="autonomia_gasolina_km_l">Autonomia com gasolina (km/L) *</label>
+                    <input type="number" step="0.01" min="0" id="autonomia_gasolina_km_l" placeholder="Ex: 12" oninput="atualizarCamposCombustivel()">
+                </div>
+                <div class="form-group campo-flex" style="display:none;">
+                    <label for="autonomia_etanol_km_l">Autonomia com etanol (km/L) *</label>
+                    <input type="number" step="0.01" min="0" id="autonomia_etanol_km_l" placeholder="Ex: 8,5" oninput="atualizarCamposCombustivel()">
+                </div>
+                <div class="form-group campo-flex" style="display:none;">
+                    <label for="preco_gasolina">Preço da gasolina (R$/L)</label>
+                    <input type="number" step="0.01" min="0" id="preco_gasolina" placeholder="Ex: 5,79" oninput="atualizarCamposCombustivel()">
+                </div>
+                <div class="form-group campo-flex" style="display:none;">
+                    <label for="preco_etanol">Preço do etanol (R$/L)</label>
+                    <input type="number" step="0.01" min="0" id="preco_etanol" placeholder="Ex: 3,89" oninput="atualizarCamposCombustivel()">
+                </div>
+                <div class="form-group campo-flex" style="display:none;">
+                    <label for="combustivel_referencia">Combustível de referência *</label>
+                    <select id="combustivel_referencia" onchange="atualizarCamposCombustivel()">
+                        <option value="gasolina">Gasolina</option>
+                        <option value="etanol">Etanol</option>
+                    </select>
+                    <small class="hint">Usado na projeção e na estimativa de quilometragem.</small>
                 </div>
                 <div class="form-group" id="status-group">
                     <label for="status">Status *</label>
@@ -434,12 +459,24 @@
             <h3>Projeções MVP (despesas previstas)</h3>
             <div class="form-grid">
                 <div class="form-group">
-                    <label>Combustível (mensal)</label>
-                    <input type="number" step="0.01" id="combustivel_valor_mensal" placeholder="Valor mensal (ex: 500)">
+                    <label for="custo_combustivel_modo">Custo do combustível</label>
+                    <select id="custo_combustivel_modo" onchange="atualizarCamposCombustivel()">
+                        <option value="MANUAL">Informado manualmente</option>
+                        <option value="CALCULADO">Calculado pela quilometragem</option>
+                    </select>
                 </div>
                 <div class="form-group">
+                    <label for="km_mensal_estimado">Quilometragem mensal estimada</label>
+                    <input type="number" step="0.01" min="0" id="km_mensal_estimado" placeholder="Ex: 1000" oninput="atualizarCamposCombustivel()">
+                </div>
+                <div class="form-group">
+                    <label>Combustível (mensal)</label>
+                    <input type="number" step="0.01" id="combustivel_valor_mensal" placeholder="Valor mensal (ex: 500)">
+                    <small class="hint" id="custo-calculado-aviso" style="display:none;"></small>
+                </div>
+                <div class="form-group" id="grupo-preco-unico">
                     <label>Preço médio combustível (R$/L)</label>
-                    <input type="number" step="0.01" id="preco_medio_combustivel" placeholder="Opcional (ex: 5.79)">
+                    <input type="number" step="0.01" id="preco_medio_combustivel" placeholder="Opcional (ex: 5.79)" oninput="atualizarCamposCombustivel()">
                     <small class="hint">Usado apenas para estimar km via consumo.</small>
                 </div>
                 <div class="form-group">

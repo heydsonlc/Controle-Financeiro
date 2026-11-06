@@ -756,7 +756,7 @@ async function toggleProjecoesApp(id) {
                     <td>${escapeHtml(tipo)}</td>
                     <td>${escapeHtml(categoria)}</td>
                     <td class="right">${valor}</td>
-                    <td><span class="badge-prevista">${escapeHtml(p.status)}</span></td>
+                    <td><span class="badge-prevista">${escapeHtml(rotuloStatusPrevista(p.status))}</span></td>
                     <td>${actions}</td>
                 </tr>`;
             }).join('');
@@ -828,7 +828,7 @@ async function toggleProjecoesApp(id) {
                         <td>${escapeHtml(tipo)}</td>
                         <td>${escapeHtml(categoria)}</td>
                         <td class="right">${valor}</td>
-                        <td><span class="badge-prevista">${escapeHtml(p.status)}</span></td>
+                        <td><span class="badge-prevista">${escapeHtml(rotuloStatusPrevista(p.status))}</span></td>
                         <td>${actions}</td>
                     </tr>`;
                 }).join('')}</tbody>
@@ -873,7 +873,7 @@ function renderVeiculoCard(v) {
             </div>
 
             <div class="card-body">
-                <div class="veiculo-sub">${escapeHtml(v.tipo)} - ${escapeHtml(v.combustivel)} - Autonomia: ${v.autonomia_km_l} km/L</div>
+                <div class="veiculo-sub">${escapeHtml(v.tipo)} - ${escapeHtml(rotuloCombustivel(v))} - Autonomia: ${v.autonomia_km_l} km/L</div>
                 <div class="veiculo-sub">${inicio}</div>
                 <div class="veiculo-sub">Km estimado total: ${Number(kmTotal).toLocaleString('pt-BR')} <span class="small-note">(estimativa)</span></div>
             </div>
@@ -922,19 +922,29 @@ function _parseIsoDate(iso) {
     return new Date(y, m, 1);
 }
 
+// A previsao de combustivel coberta pela recorrencia (SUPRIMIDA) nao vira despesa, mas segue valendo para estimar e comparar
+function statusEntraNaEstimativa(status, tipo) {
+    const st = String(status || '').toUpperCase();
+    if (st === 'SUPRIMIDA') return String(tipo || '').toUpperCase() === 'COMBUSTIVEL';
+    return ['PREVISTA', 'CONFIRMADA', 'ADIADA'].includes(st);
+}
+
+function rotuloStatusPrevista(status) {
+    return String(status || '').toUpperCase() === 'SUPRIMIDA' ? 'Coberta pela recorrência' : (status || '');
+}
+
 function calcularCustoMensalEstimado(despesas, mesesJanela = 12, tiposExcluir = new Set()) {
     const inicio = _primeiroDiaMes(new Date());
     const fim = _addMeses(inicio, mesesJanela);
 
-    const statusValidos = new Set(['PREVISTA', 'CONFIRMADA', 'ADIADA']);
     const tiposMensais = new Set(['COMBUSTIVEL', 'PARCELA_FINANCIAMENTO']);
 
     const totalMensalPorMes = new Array(mesesJanela).fill(0);
     let somaNaoMensaisNaJanela = 0;
 
     (despesas || []).forEach(d => {
-        if (!statusValidos.has(String(d.status || '').toUpperCase())) return;
         const tipo = String(d.tipo_evento || d.metadata?.tipo_evento || '').toUpperCase();
+        if (!statusEntraNaEstimativa(d.status, tipo)) return;
         if (tiposExcluir && tiposExcluir.has(tipo)) return;
         const iso = d.data_atual_prevista || d.data_prevista;
         const dt = _parseIsoDate(iso);
@@ -1028,7 +1038,7 @@ function _ordemGrupoPrevisao(grupo) {
 }
 
 function _resumoStatus(itens) {
-    const acc = { PREVISTA: 0, CONFIRMADA: 0, ADIADA: 0, IGNORADA: 0 };
+    const acc = { PREVISTA: 0, CONFIRMADA: 0, ADIADA: 0, IGNORADA: 0, SUPRIMIDA: 0 };
     (itens || []).forEach(i => {
         const st = String(i?.status || '').toUpperCase();
         if (acc[st] !== undefined) acc[st] += 1;
@@ -1038,6 +1048,7 @@ function _resumoStatus(itens) {
     if (acc.ADIADA) parts.push(`${acc.ADIADA} adiada(s)`);
     if (acc.CONFIRMADA) parts.push(`${acc.CONFIRMADA} confirmada(s)`);
     if (acc.IGNORADA) parts.push(`${acc.IGNORADA} ignorada(s)`);
+    if (acc.SUPRIMIDA) parts.push(`${acc.SUPRIMIDA} coberta(s) pela recorrência`);
     return parts.join(' • ') || '—';
 }
 
@@ -1068,7 +1079,6 @@ function _rotuloDetalheTipo(p) {
 }
 
 function _consolidarProjecoes(projecoes, mesesResumo = 12, tiposRegras = new Set()) {
-    const statusValidos = new Set(['PREVISTA', 'CONFIRMADA', 'ADIADA']);
     const inicio = _primeiroDiaMes(new Date());
     const fim = _addMeses(inicio, mesesResumo);
 
@@ -1089,8 +1099,7 @@ function _consolidarProjecoes(projecoes, mesesResumo = 12, tiposRegras = new Set
         });
 
         const janela = itensOrdenados.filter(p => {
-            const st = String(p?.status || '').toUpperCase();
-            if (!statusValidos.has(st)) return false;
+            if (!statusEntraNaEstimativa(p?.status, p?.tipo_evento || p?.metadata?.tipo_evento)) return false;
             const dt = _parseIsoDate(p?.data_atual_prevista || p?.data_prevista);
             if (!dt) return false;
             return dt >= inicio && dt < fim;
@@ -1236,12 +1245,53 @@ function abrirModalNovo() {
     document.getElementById('status').value = 'SIMULADO';
     document.getElementById('data_inicio').value = new Date().toISOString().slice(0, 10);
     toggleDataInicio();
+    atualizarCamposCombustivel();
     document.getElementById('modal-veiculo').style.display = 'block';
 }
 
 function fecharModal() {
     document.getElementById('modal-veiculo').style.display = 'none';
     veiculoEditando = null;
+}
+
+function rotuloCombustivel(v) {
+    return v?.combustivel === 'flex' ? `flex (${v.combustivel_referencia || 'gasolina'})` : (v?.combustivel || '');
+}
+
+function valorCampoVeiculo(id) {
+    return document.getElementById(id)?.value || '';
+}
+
+// Campos do Flex e do custo calculado. O formulario do Flask nao tem estes campos: tudo aqui e opcional.
+function atualizarCamposCombustivel() {
+    const modoCampo = document.getElementById('custo_combustivel_modo');
+    if (!modoCampo) return;
+    const flex = valorCampoVeiculo('combustivel') === 'flex';
+    const calculado = modoCampo.value === 'CALCULADO';
+    document.querySelectorAll('.campo-flex').forEach(el => { el.style.display = flex ? '' : 'none'; });
+    document.getElementById('grupo-autonomia-unica').style.display = flex ? 'none' : '';
+    document.getElementById('grupo-preco-unico').style.display = flex ? 'none' : '';
+    document.getElementById('autonomia_km_l').required = !flex;
+    document.getElementById('autonomia_gasolina_km_l').required = flex;
+    document.getElementById('autonomia_etanol_km_l').required = flex;
+    document.getElementById('km_mensal_estimado').required = calculado;
+
+    const etanol = valorCampoVeiculo('combustivel_referencia') === 'etanol';
+    const autonomia = Number(valorCampoVeiculo(flex ? (etanol ? 'autonomia_etanol_km_l' : 'autonomia_gasolina_km_l') : 'autonomia_km_l'));
+    const preco = Number(valorCampoVeiculo(flex ? (etanol ? 'preco_etanol' : 'preco_gasolina') : 'preco_medio_combustivel'));
+    const km = Number(valorCampoVeiculo('km_mensal_estimado'));
+    const custo = document.getElementById('combustivel_valor_mensal');
+    const aviso = document.getElementById('custo-calculado-aviso');
+    custo.readOnly = calculado;
+    aviso.style.display = calculado ? '' : 'none';
+    if (!calculado) return;
+    if (autonomia > 0 && preco > 0 && km > 0) {
+        custo.value = (Math.round((km / autonomia * preco) * 100) / 100).toFixed(2);
+        aviso.textContent = 'Quilometragem ÷ autonomia × preço por litro.';
+    } else {
+        custo.value = '';
+        aviso.textContent = 'Informe a quilometragem, a autonomia e o preço por litro.';
+    }
 }
 
 function toggleDataInicio() {
@@ -1280,6 +1330,15 @@ async function abrirModalEditar(id) {
 
         document.getElementById('combustivel_valor_mensal').value = v.projecao_combustivel?.valor_mensal ?? '';
         document.getElementById('preco_medio_combustivel').value = v.preco_medio_combustivel ?? '';
+        if (document.getElementById('custo_combustivel_modo')) {
+            document.getElementById('autonomia_gasolina_km_l').value = v.autonomia_gasolina_km_l ?? '';
+            document.getElementById('autonomia_etanol_km_l').value = v.autonomia_etanol_km_l ?? '';
+            document.getElementById('preco_gasolina').value = v.preco_gasolina ?? '';
+            document.getElementById('preco_etanol').value = v.preco_etanol ?? '';
+            document.getElementById('combustivel_referencia').value = v.combustivel_referencia || 'gasolina';
+            document.getElementById('km_mensal_estimado').value = v.km_mensal_estimado ?? '';
+            document.getElementById('custo_combustivel_modo').value = v.custo_combustivel_modo || 'MANUAL';
+        }
 
         document.getElementById('ipva_mes').value = v.ipva?.mes ?? '';
         document.getElementById('ipva_valor').value = v.ipva?.valor ?? '';
@@ -1291,6 +1350,7 @@ async function abrirModalEditar(id) {
         document.getElementById('licenciamento_valor').value = v.licenciamento?.valor ?? '';
 
         toggleDataInicio();
+        atualizarCamposCombustivel();
         document.getElementById('modal-veiculo').style.display = 'block';
     } catch (e) {
         console.error(e);
@@ -1322,6 +1382,20 @@ async function salvarVeiculo(event) {
         licenciamento_mes: document.getElementById('licenciamento_mes').value || null,
         licenciamento_valor: document.getElementById('licenciamento_valor').value || null,
     };
+    if (document.getElementById('custo_combustivel_modo')) {
+        payload.custo_combustivel_modo = document.getElementById('custo_combustivel_modo').value;
+        payload.km_mensal_estimado = document.getElementById('km_mensal_estimado').value || null;
+    }
+    if (payload.combustivel === 'flex') {
+        // No Flex, autonomia e preco em uso seguem o combustivel de referencia (o banco decide)
+        delete payload.autonomia_km_l;
+        delete payload.preco_medio_combustivel;
+        payload.autonomia_gasolina_km_l = document.getElementById('autonomia_gasolina_km_l').value;
+        payload.autonomia_etanol_km_l = document.getElementById('autonomia_etanol_km_l').value;
+        payload.preco_gasolina = document.getElementById('preco_gasolina').value || null;
+        payload.preco_etanol = document.getElementById('preco_etanol').value || null;
+        payload.combustivel_referencia = document.getElementById('combustivel_referencia').value;
+    }
 
     const id = document.getElementById('veiculo-id').value;
     const url = id ? `${API_VEICULOS}/${id}` : API_VEICULOS;
@@ -1421,7 +1495,7 @@ async function toggleProjecoes(id) {
                 <td>${escapeHtml(tipo)}</td>
                 <td>${escapeHtml(categoria)}</td>
                 <td class="right">${valor}</td>
-                <td><span class="badge-prevista">${p.status}</span></td>
+                <td><span class="badge-prevista">${escapeHtml(rotuloStatusPrevista(p.status))}</span></td>
                 <td>${actions}</td>
             </tr>`;
         }).join('');
@@ -1486,7 +1560,7 @@ async function toggleProjecoes(id) {
                     <td>${escapeHtml(tipo)}</td>
                     <td>${escapeHtml(categoria)}</td>
                     <td class="right">${valor}</td>
-                    <td><span class="badge-prevista">${escapeHtml(p.status)}</span></td>
+                    <td><span class="badge-prevista">${escapeHtml(rotuloStatusPrevista(p.status))}</span></td>
                     <td>${actions}</td>
                 </tr>`;
             }).join('');
@@ -2247,7 +2321,7 @@ async function construirTodosOsCenarios(veiculos, apps) {
             tipo: 'VEICULO',
             id: v.id,
             nome: v.nome,
-            subLabel: `${v.tipo} · ${v.combustivel} · ${v.autonomia_km_l} km/L`,
+            subLabel: `${v.tipo} · ${rotuloCombustivel(v)} · ${v.autonomia_km_l} km/L`,
             statusLabel: v.status,
             custoMensal: custo,
             custoAnual: custo * 12,
@@ -3043,7 +3117,7 @@ function renderConfVeiculos() {
                 <div class="conf-item-thumb">${renderImagemModalidade({ tipo: 'VEICULO', raw: v, nome: v.nome }, 'conf-item-image')}</div>
                 <div class="conf-item-info">
                     <div class="conf-item-nome">${escapeHtml(v.nome)} <span class="card-badge ${v.status === 'ATIVO' ? 'status-ativo' : 'status-simulado'}">${escapeHtml(v.status)}</span></div>
-                    <div class="conf-item-sub">${escapeHtml(v.tipo)} · ${escapeHtml(v.combustivel)} · ${v.autonomia_km_l} km/L</div>
+                    <div class="conf-item-sub">${escapeHtml(v.tipo)} · ${escapeHtml(rotuloCombustivel(v))} · ${v.autonomia_km_l} km/L</div>
                 </div>
                 <div class="conf-item-custo">${formatarMoeda(custo)}/mês</div>
                 <div class="conf-item-acoes">

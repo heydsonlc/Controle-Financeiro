@@ -109,3 +109,64 @@ test('outro titular nao ve o veiculo', async ({ page }) => {
     await expect(page.locator('#conf-veiculos-lista')).not.toContainText('Carregando');
     await expect(page.locator('#conf-veiculos-lista')).not.toContainText(VEICULO);
 });
+
+// FIN-MVP-MOB-01: Flex pela tela: autonomia e preco por combustivel, custo calculado e custo manual. Veiculo excluido no fim.
+test('veiculo flex: campos, custo calculado, referencia e custo manual', async ({ page }) => {
+    const dialogos = registrarDialogos(page);
+    await entrar(page, B);
+    await page.goto('/mobilidade.html');
+    await expect(page.locator('#comp-cards')).toContainText(VEICULO);
+    const perfil = await perfilAtivoId(page);
+    const lido = async (nome) => (await chamarRpc(page, 'veiculos_tela', { p_perfil_id: perfil, p_id: null })).corpo.find((v) => v.nome === nome);
+    const NOME = 'Flex E2E (ficticio)';
+
+    await page.locator('#btn-novo-veiculo').click();
+    await expect(page.locator('#autonomia_km_l')).toBeVisible();
+    await expect(page.locator('#autonomia_gasolina_km_l')).toBeHidden();
+    await page.fill('#nome', NOME);
+    await page.selectOption('#combustivel', 'flex');
+    await expect(page.locator('#autonomia_km_l')).toBeHidden();
+    await expect(page.locator('#preco_medio_combustivel')).toBeHidden();
+    await page.fill('#autonomia_gasolina_km_l', '10');
+    await page.fill('#autonomia_etanol_km_l', '7');
+    await page.fill('#preco_gasolina', '6');
+    await page.fill('#preco_etanol', '4');
+    await page.selectOption('#custo_combustivel_modo', 'CALCULADO');
+    await expect(page.locator('#custo-calculado-aviso')).toContainText('Informe a quilometragem');
+    await page.fill('#km_mensal_estimado', '1000');
+    await expect(page.locator('#combustivel_valor_mensal')).toHaveValue('600.00');
+    await page.selectOption('#combustivel_referencia', 'etanol');
+    await expect(page.locator('#combustivel_valor_mensal')).toHaveValue('571.43');
+    await page.selectOption('#combustivel_referencia', 'gasolina');
+    await page.locator('#form-veiculo').evaluate((f) => f.requestSubmit());
+    await expect.poll(async () => (await lido(NOME))?.autonomia_km_l).toBe(10);
+    expect(await lido(NOME)).toMatchObject({ combustivel: 'flex', combustivel_referencia: 'gasolina', custo_combustivel_modo: 'CALCULADO',
+        km_mensal_estimado: 1000, projecao_combustivel: { valor_mensal: 600 } });
+
+    // Edicao pela tela: referencia etanol recalcula; depois, custo manual fica como informado.
+    const id = (await lido(NOME)).id;
+    await page.locator('#tab-configuracao').click();
+    await page.locator(`#conf-veiculos-lista [data-on-click="abrirModalEditar(${id})"]`).click();
+    await expect(page.locator('#autonomia_etanol_km_l')).toHaveValue('7');
+    await page.selectOption('#combustivel_referencia', 'etanol');
+    await page.locator('#form-veiculo').evaluate((f) => f.requestSubmit());
+    await expect.poll(async () => (await lido(NOME))?.autonomia_km_l).toBe(7);
+    expect((await lido(NOME)).projecao_combustivel.valor_mensal).toBe(571.43);
+    await expect(page.locator('#conf-veiculos-lista')).toContainText('flex (etanol)');
+
+    await page.locator(`#conf-veiculos-lista [data-on-click="abrirModalEditar(${id})"]`).click();
+    await expect(page.locator('#combustivel_valor_mensal')).toHaveValue('571.43');
+    await page.selectOption('#custo_combustivel_modo', 'MANUAL');
+    await page.fill('#combustivel_valor_mensal', '480');
+    await page.locator('#form-veiculo').evaluate((f) => f.requestSubmit());
+    await expect.poll(async () => (await lido(NOME))?.custo_combustivel_modo).toBe('MANUAL');
+    expect((await lido(NOME)).projecao_combustivel.valor_mensal).toBe(480);
+
+    // Simulado: nao gera despesa real ao confirmar com pagamento; motivo na resposta.
+    const alvo = (await chamarRpc(page, 'projecoes_mobilidade_tela', { p_perfil_id: perfil, p_origem_tipo: 'VEICULO', p_origem_id: id, p_meses: 12 })).corpo[0];
+    const recusa = await api(page, 'POST', `/api/despesas-previstas/${alvo.id}/confirmar`, { meio_pagamento: 'pix' });
+    expect(recusa.status).toBe(400);
+    expect(recusa.corpo.error).toContain('Veículo simulado');
+    expect(dialogos.length).toBeGreaterThan(0);
+    expect((await api(page, 'DELETE', `/api/veiculos/${id}`)).status).toBe(200);
+});
