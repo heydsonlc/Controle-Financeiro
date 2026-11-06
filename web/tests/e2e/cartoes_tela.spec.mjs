@@ -86,27 +86,17 @@ async function inativarCartao(page, nome) {
     await expect(itemCartao(page, nome)).toHaveCount(0);
 }
 
-async function categoriaMoradia(page) {
-    const valor = await page.locator('#compra-categoria option', { hasText: 'Moradia' }).first().getAttribute('value');
-    await page.selectOption('#compra-categoria', valor);
-}
-
-// Compra nova pelo modal acrescentado. c: { cartao, descricao, valor, parcelas, data, mes }
+// Compra pela funcao do banco (a tela de compra nova e Lancamentos: cenario do fechamento abaixo e lancamentos_tela.spec).
+// c: { cartao, descricao, valor, parcelas, data, mes }
 async function novaCompra(page, c) {
-    await page.click('#btn-nova-compra-cartao');
-    await expect(page.locator('#modal-nova-compra')).toHaveClass(/open/);
-    await page.selectOption('#compra-cartao', { label: c.cartao });
-    await page.fill('#compra-descricao', c.descricao);
-    await page.fill('#compra-valor', c.valor);
-    if (c.parcelas) await page.fill('#compra-parcelas', String(c.parcelas));
-    await page.fill('#compra-data', c.data);
-    await page.locator('#compra-data').dispatchEvent('change');
-    if (c.mes) await page.fill('#compra-mes', c.mes);
-    await categoriaMoradia(page);
-    await expect(page.locator('#compra-previa li')).toHaveCount(c.parcelas || 1);
+    const perfil = await perfilAtivoId(page);
+    const cartao = (await chamarRpc(page, 'cartoes_do_perfil', { p_perfil_id: perfil })).corpo.find((x) => x.nome === c.cartao);
+    const categoria = (await chamarRpc(page, 'categorias_de_despesa', {})).corpo.find((x) => x.nome.startsWith('Moradia'));
+    const r = await chamarRpc(page, 'criar_compra', { p_perfil_id: perfil, p_chave: crypto.randomUUID(), p_dados: {
+        cartao_id: cartao.id, descricao: c.descricao, valor: c.valor, total_parcelas: c.parcelas || 1, data_compra: c.data,
+        mes_fatura: `${c.mes}-01`, categoria_id: categoria.id } });
+    expect(r.status, c.descricao).toBe(200);
 }
-
-const salvarCompra = (page) => page.click('#cartao-painel button[type=submit]');
 
 test('tela original pelo menu: cartoes, fatura por Categoria do Cartao e lancamentos (Pessoal)', async ({ page }) => {
     await entrar(page, A);
@@ -120,7 +110,7 @@ test('tela original pelo menu: cartoes, fatura por Categoria do Cartao e lancame
     await expect(page.locator('#summary-cartoes-ativos')).toHaveText('2');
     // Limites de exemplo sem perfil (legado): o Flask lista so os do perfil, como aqui.
     await expect(page.locator('#summary-categorias-vinculadas')).toHaveText('0');
-    await expect(detalhe(page).locator('.categorias-vinculadas-card .table-empty h4')).toHaveText('Nenhuma Categoria do Cartão vinculada');
+    await expect(detalhe(page).locator('.categorias-vinculadas-card')).toHaveCount(0);  // MVP-FIN-AJUSTES-01 (P10)
     await expect(detalhe(page).locator('[data-action="revelar-cvv"]')).toHaveCount(0);  // CVV nao e guardado
 
     await selecionar(page, 'Cartao Azul');
@@ -189,13 +179,30 @@ test('cadastro, limites, compra, edicao de um lancamento, parcelas futuras, excl
     await expect(page.locator('#summary-limite-total')).toHaveText('R$ 500,00');
     await expect(detalhe(page).locator('.available-category strong')).toHaveText(['Viagem B']);
 
-    // Compra nova (acrescimo): 3 parcelas a partir de 05/2031.
-    await novaCompra(page, { cartao: 'Cartao Roxo', descricao: 'Geladeira E2E', valor: '100,00', parcelas: 3, data: '2031-05-12', mes: '2031-05' });
-    await page.locator('#compra-mes').dispatchEvent('change');
-    await expect(page.locator('#compra-previa li')).toHaveText(['1/3 · fatura 05/2031 · R$ 33,34', '2/3 · fatura 06/2031 · R$ 33,33', '3/3 · fatura 07/2031 · R$ 33,33']);
-    await salvarCompra(page);
-    await expect(toast(page)).toHaveText('Compra registrada em 3 parcelas, a partir da fatura 05/2031.');
-    await expect(page.locator('#modal-nova-compra')).not.toHaveClass(/open/);
+    // MVP-FIN-AJUSTES-01 (P10/P11): a tabela da fatura edita, desvincula e mostra os lancamentos; compra nova nao fica aqui.
+    await expect(page.locator('#btn-nova-compra-cartao')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Nova compra' })).toHaveCount(0);
+    await expect(detalhe(page).locator('.fatura-table-header > div').last()).toHaveText('Ações');
+    await grupo(page, 'Mercado B').locator('[data-action="editar-limite"]').click();
+    await expect(page.locator('#limite-categoria-cartao option:checked')).toHaveText('Mercado B');
+    await page.fill('#limite-valor', '600');
+    await page.click('#form-categoria-limite button[type=submit]');
+    await expect(toast(page)).toHaveText('Limite salvo.');
+    await expect(grupo(page, 'Mercado B').locator('> div').nth(1)).toHaveText('R$ 600,00');
+    await grupo(page, 'Mercado B').locator('[data-action="toggle-limite"]').click();
+    await expect(toast(page)).toHaveText('Vínculo desativado.');
+    await expect(grupo(page, 'Mercado B')).toHaveCount(0);
+    await expect(detalhe(page).locator('.available-category strong')).toHaveText(['Mercado B', 'Viagem B']);
+    // Vincular de novo reaproveita o vinculo desativado e a tabela consolidada se atualiza.
+    await detalhe(page).locator('.available-category', { hasText: 'Mercado B' }).locator('[data-action="vincular-disponivel"]').click();
+    await page.fill('#limite-valor', '500');
+    await page.click('#form-categoria-limite button[type=submit]');
+    await expect(toast(page)).toHaveText('Limite salvo.');
+    await expect(grupo(page, 'Mercado B').locator('> div').nth(1)).toHaveText('R$ 500,00');
+    await expect(detalhe(page).locator('.available-category strong')).toHaveText(['Viagem B']);
+
+    // Compra nova: 3 parcelas a partir de 05/2031.
+    await novaCompra(page, { cartao: 'Cartao Roxo', descricao: 'Geladeira E2E', valor: '100.00', parcelas: 3, data: '2031-05-12', mes: '2031-05' });
 
     await mesDaFatura(page, '2031-05');
     await expect(metrica(page, 'Total da fatura')).toHaveText('R$ 33,34');
@@ -203,6 +210,21 @@ test('cadastro, limites, compra, edicao de um lancamento, parcelas futuras, excl
     await expect(metrica(page, 'Disponível')).toHaveText('R$ 500,00');
     await expect(grupo(page, 'Mercado B').locator('.compact-pill')).toHaveText('Normal');
     await expect(grupo(page, 'Compras parceladas').locator('.usage-cell strong')).toHaveText('R$ 33,34');
+    // Desvincular nao apaga lancamentos: a fatura continua igual; so o limite sai.
+    await grupo(page, 'Mercado B').locator('[data-action="toggle-limite"]').click();
+    await expect(toast(page)).toHaveText('Vínculo desativado.');
+    await expect(metrica(page, 'Total da fatura')).toHaveText('R$ 33,34');
+    await expect(grupo(page, 'Compras parceladas').locator('.usage-cell strong')).toHaveText('R$ 33,34');
+    await expect(lancamento(page, 'Geladeira E2E')).toHaveCount(1);
+    await grupo(page, 'Compras parceladas').locator('[data-action="ver-lancamentos-fatura"]').click();
+    await expect(lancamento(page, 'Geladeira E2E')).toHaveCount(1);
+    await expect(grupo(page, 'Compras parceladas').locator('[data-action="editar-limite"]')).toBeDisabled();
+    await expect(grupo(page, 'Compras parceladas').locator('[data-action="toggle-limite"]')).toBeDisabled();
+    await detalhe(page).locator('.available-category', { hasText: 'Mercado B' }).locator('[data-action="vincular-disponivel"]').click();
+    await page.fill('#limite-valor', '500');
+    await page.click('#form-categoria-limite button[type=submit]');
+    await expect(toast(page)).toHaveText('Limite salvo.');
+    await expect(grupo(page, 'Mercado B').locator('.compact-pill')).toHaveText('Normal');
     await expect(lancamento(page, 'Geladeira E2E')).toContainText('Mercado B');
     await expect(lancamento(page, 'Geladeira E2E')).toContainText('1/3');
 
@@ -237,9 +259,7 @@ test('cadastro, limites, compra, edicao de um lancamento, parcelas futuras, excl
     await expect(page.locator('.fatura-lancamento-row')).toHaveCount(0);
 
     // Excluir parcelada: segunda confirmacao com as quantidades; a vista: so a do original.
-    await novaCompra(page, { cartao: 'Cartao Roxo', descricao: 'Sofa E2E', valor: '50,00', parcelas: 2, data: '2031-06-02', mes: '2031-06' });
-    await salvarCompra(page);
-    await expect(toast(page)).toHaveText('Compra registrada em 2 parcelas, a partir da fatura 06/2031.');
+    await novaCompra(page, { cartao: 'Cartao Roxo', descricao: 'Sofa E2E', valor: '50.00', parcelas: 2, data: '2031-06-02', mes: '2031-06' });
     await mesDaFatura(page, '2031-06');
     await lancamento(page, 'Sofa E2E').locator('[data-action="excluir-lancamento"]').click();
     await expect(lancamento(page, 'Sofa E2E')).toHaveCount(0);
@@ -259,45 +279,53 @@ test('cadastro, limites, compra, edicao de um lancamento, parcelas futuras, excl
 
 test('fechamento confirmado sugere a fatura; manual prevalece; consolidada so com confirmacao e protegida', async ({ page }) => {
     test.skip(!process.env.CF_E2E_LOCAL, 'a consolidacao usa o gancho do harness local');
-    registrarDialogos(page);
+    const dialogos = registrarDialogos(page);
     await entrar(page, B);
     await abrirCartoes(page);
     await novoCartao(page, { nome: 'Cartao Lilas', fechamento: 25, vencimento: 5, confirmado: true });
     await expect(page.locator('#cartao-compra-no-fechamento')).toHaveValue('PROXIMO');
 
-    await page.click('#btn-nova-compra-cartao');
-    await page.selectOption('#compra-cartao', { label: 'Cartao Lilas' });
-    const data = async (valor) => { await page.fill('#compra-data', valor); await page.locator('#compra-data').dispatchEvent('change'); };
+    // MVP-FIN-AJUSTES-01 (P11): a compra nova fica em Lancamentos, com a mesma sugestao pelo fechamento.
+    const abrirCompra = async () => {
+        await page.goto('/lancamentos.html');
+        await expect(page.locator('#filtro-mes')).not.toHaveValue('');
+        await page.click('#btn-novo-lancamento');
+        await page.selectOption('#lancamento-tipo', 'cartao');
+        await page.selectOption('#lancamento-cartao', { label: 'Cartao Lilas' });
+    };
+    const data = async (valor) => { await page.fill('#lancamento-data', valor); await page.locator('#lancamento-data').dispatchEvent('change'); };
+    const sugestao = page.locator('#lancamento-fatura-sugestao');
+    const preencher = async (descricao, valor) => {
+        await page.fill('#lancamento-descricao', descricao);
+        await page.fill('#lancamento-valor', valor);
+        await page.selectOption('#lancamento-categoria-despesa-cartao', { label: 'Moradia' });
+        await page.locator('#form-lancamento').evaluate((f) => f.requestSubmit());
+    };
+    await abrirCompra();
     await data('2031-11-24');
-    await expect(page.locator('#compra-mes')).toHaveValue('2031-12');
-    await expect(page.locator('#compra-sugestao')).toHaveText('Sugerida pelo fechamento: fatura 12/2031 (fecha 25/11, vence 05/12).');
+    await expect(page.locator('#lancamento-mes-fatura')).toHaveValue('2031-12');
+    await expect(sugestao).toHaveText('Sugerida pelo fechamento: fatura de 12/2031 (fecha 25/11, vence 05/12).');
     await data('2031-11-25');
-    await expect(page.locator('#compra-mes')).toHaveValue('2032-01');
-    await page.fill('#compra-mes', '2032-02');
+    await expect(page.locator('#lancamento-mes-fatura')).toHaveValue('2032-01');
+    await page.fill('#lancamento-mes-fatura', '2032-02');
     await data('2031-11-24');
-    await expect(page.locator('#compra-mes')).toHaveValue('2032-02');
-    await expect(page.locator('#compra-sugestao')).toContainText('Mês escolhido: 02/2032.');
+    await expect(page.locator('#lancamento-mes-fatura')).toHaveValue('2032-02');
+    await expect(sugestao).toContainText('Mês escolhido manualmente: 02/2032.');
     await data('2031-11-26');
-    await page.click('#compra-usar-sugerida');
-    await expect(page.locator('#compra-mes')).toHaveValue('2032-01');
-    await page.fill('#compra-descricao', 'Mesa E2E');
-    await page.fill('#compra-valor', '100,00');
-    await categoriaMoradia(page);
-    await expect(page.locator('#compra-previa li')).toHaveText(['1/1 · fatura 01/2032 · R$ 100,00']);
-    await salvarCompra(page);
-    await expect(toast(page)).toHaveText('Compra registrada na fatura 01/2032.');
+    await page.click('#lancamento-usar-sugerida');
+    await expect(page.locator('#lancamento-mes-fatura')).toHaveValue('2032-01');
+    await preencher('Mesa E2E', '100');
+    await expect.poll(() => dialogos.join('|')).toContain('Lançamento em cartão salvo com sucesso!');
 
     const consolidacao = await page.request.post('/__e2e__/consolidar', { data: { cartao: 'Cartao Lilas', competencia: '2032-01-01' } });
     expect(consolidacao.status()).toBe(200);
+    await abrirCompra();
+    await data('2031-11-27');
+    await expect(sugestao).toContainText('Essa fatura está consolidada: a inclusão pedirá confirmação.');
+    await preencher('Cadeira E2E', '10');
+    await expect.poll(() => dialogos.join('|')).toContain('Esta compra entra em fatura já consolidada');
+    await expect.poll(() => dialogos.filter((m) => m.includes('salvo com sucesso')).length).toBe(2);
     await abrirCartoes(page);
-    await novaCompra(page, { cartao: 'Cartao Lilas', descricao: 'Cadeira E2E', valor: '10,00', data: '2031-11-27' });
-    await expect(page.locator('#compra-sugestao')).toContainText('Essa fatura está consolidada: a inclusão pede confirmação.');
-    await expect(page.locator('#compra-previa li')).toHaveText(['1/1 · fatura 01/2032 · R$ 10,00 (fatura consolidada)']);
-    await salvarCompra(page);
-    await expect(page.locator('#cartao-painel .login-error')).toHaveText('Confirme a inclusão na fatura consolidada ou escolha outro mês da fatura.');
-    await page.locator('#compra-previa input[type=checkbox]').check();
-    await salvarCompra(page);
-    await expect(toast(page)).toHaveText('Compra registrada na fatura 01/2032.');
 
     // Na fatura consolidada nada muda por aqui (D6): edicao e exclusao recusadas.
     await selecionar(page, 'Cartao Lilas');
@@ -316,9 +344,7 @@ test('integracao com Despesas: fatura paga protege os lancamentos; estornada, vo
     await entrar(page, B);
     await abrirCartoes(page);
     await novoCartao(page, { nome: 'Cartao Pagamento', fechamento: 3, vencimento: 12 });
-    await novaCompra(page, { cartao: 'Cartao Pagamento', descricao: 'Compra a pagar E2E', valor: '150,00', data: '2034-05-02', mes: '2034-05' });
-    await salvarCompra(page);
-    await expect(toast(page)).toHaveText('Compra registrada na fatura 05/2034.');
+    await novaCompra(page, { cartao: 'Cartao Pagamento', descricao: 'Compra a pagar E2E', valor: '150.00', data: '2034-05-02', mes: '2034-05' });
 
     // Despesas (como no Flask): a fatura do mes com o valor das compras; pagar e estornar.
     await abrirDespesas(page, '2034-05');
@@ -360,10 +386,11 @@ test('LEITOR ve sem acoes; escrita direta e outro perfil recusados', async ({ pa
     await selecionar(page, 'Cartao Empresa');
     await mesDaFatura(page, '2026-11');
     await expect(metrica(page, 'Total da fatura')).toHaveText('R$ 250,00');
-    for (const seletor of ['#btn-novo-cartao', '#btn-vincular-categoria', '#btn-nova-compra-cartao', '[data-action="editar-cartao"]',
-        '[data-action="abrir-limite"]', '.lancamento-acoes']) {
+    for (const seletor of ['#btn-novo-cartao', '#btn-vincular-categoria', '[data-action="editar-cartao"]',
+        '[data-action="abrir-limite"]', '.lancamento-acoes', '[data-action="editar-limite"]', '[data-action="toggle-limite"]']) {
         await expect(page.locator(seletor).first()).toBeHidden();
     }
+    await expect(page.locator('.fatura-table-row [data-action="ver-lancamentos-fatura"]').first()).toBeVisible();
     const empresa = await perfilAtivoId(page);
     const cartao = Number(await itemCartao(page, 'Cartao Empresa').getAttribute('data-cartao-id'));
     const status = [

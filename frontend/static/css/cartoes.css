@@ -577,7 +577,6 @@
     font-size: 13px;
 }
 
-.categorias-vinculadas-card,
 .categorias-disponiveis-card,
 .fatura-categorias-card {
     display: grid;
@@ -644,15 +643,6 @@
     font-size: 16px;
 }
 
-.limites-table {
-    display: grid;
-    border: 1px solid rgba(15, 23, 42, 0.08);
-    border-radius: 7px;
-    overflow: hidden;
-}
-
-.limites-table-header,
-.limites-table-row,
 .fatura-table-header,
 .fatura-table-row {
     display: grid;
@@ -664,21 +654,9 @@
     border-bottom: 1px solid rgba(15, 23, 42, 0.07);
 }
 
-.limites-table-header {
-    background: #f8fafc;
-    color: #475569;
-    font-size: 12px;
-    font-weight: 750;
-}
-
-.limites-table-row,
 .fatura-table-row {
     color: #334155;
     font-size: 12px;
-}
-
-.limites-table-row:last-child {
-    border-bottom: none;
 }
 
 .fatura-table {
@@ -887,21 +865,6 @@
     border-color: rgba(220, 38, 38, 0.35);
     color: #dc2626;
     background: #fff7f7;
-}
-
-.limite-total-row {
-    display: grid;
-    grid-template-columns: minmax(170px, 1.25fr) minmax(112px, 0.72fr) minmax(160px, 1fr) minmax(112px, 0.72fr) minmax(86px, 0.55fr) 74px;
-    align-items: center;
-    gap: 10px;
-    min-height: 42px;
-    padding: 0 12px;
-    border: 1px solid rgba(15, 23, 42, 0.08);
-    border-top: none;
-    border-radius: 0 0 7px 7px;
-    background: #f8fafc;
-    color: #0f172a;
-    font-size: 12px;
 }
 
 .available-grid {
@@ -1641,16 +1604,10 @@
         border-right: none;
     }
 
-    .limites-table-header {
-        display: none;
-    }
-
     .fatura-table-header {
         display: none;
     }
 
-    .limites-table-row,
-    .limite-total-row,
     .fatura-table-row {
         grid-template-columns: 1fr;
         gap: 6px;

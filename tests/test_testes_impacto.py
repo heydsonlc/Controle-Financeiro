@@ -93,9 +93,9 @@ def test_selecao_backend_sql_e_remotos(ti):
 def test_selecao_web_por_importacao_e_tela(ti):
     sel = ti.selecionar({'web/src/js/fechamento.js': None}, 2)
     e2e = set(sel['e2e'])
-    # fechamento.js e importado por compra-cartao.js e lancamentos-adaptador.js, carregados pelas paginas da moldura
-    # (web/src/paginas/cartoes.html e lancamentos.html); cartoes.spec/fechamento.spec sairam no FIN-FIDELIDADE-CARTOES-1.
-    assert {'web/tests/e2e/cartoes_tela.spec.mjs', 'web/tests/e2e/lancamentos_tela.spec.mjs'} <= e2e
+    # fechamento.js e importado por lancamentos-adaptador.js, carregado pela pagina da moldura (lancamentos.html);
+    # cartoes.spec/fechamento.spec sairam no FIN-FIDELIDADE-CARTOES-1.
+    assert 'web/tests/e2e/lancamentos_tela.spec.mjs' in e2e
     assert 'web/tests/e2e/receitas.spec.mjs' not in e2e
     assert sel['unit_web'] == ['web/src/js/fechamento.js']
     sel = ti.selecionar({'web/tests/e2e/run_e2e.py': {1}}, 2)

@@ -34,6 +34,7 @@ function cartoesIcon(name) {
         lock: '<path d="M7 11V8a5 5 0 0 1 10 0v3"/><path d="M6 11h12v9H6v-9Z"/><path d="M12 15v2"/>',
         remove: '<path d="M6 6l12 12M18 6 6 18"/>',
         check: '<path d="M5 12.5l4 4L19 7"/>',
+        eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.8"/>',
         more: '<path d="M12 5h.1M12 12h.1M12 19h.1"/>',
         info: '<path d="M12 11v6"/><path d="M12 7h.1"/><path d="M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/>',
         alert: '<path d="M12 5 3.5 19h17L12 5Z"/><path d="M12 10v4M12 17h.1"/>',
@@ -369,11 +370,7 @@ function renderizarDetalheCartao() {
         return;
     }
 
-    const limites = filtrarLimitesPorStatus(obterLimitesCartao(cartao.id));
-    const limitesAtivos = obterLimitesAtivos(cartao.id);
     const disponiveis = obterCategoriasDisponiveis(cartao.id);
-    const totalLimite = limitesAtivos.reduce((sum, limite) => sum + Number(limite.limite_mensal || 0), 0);
-    const totalGasto = limitesAtivos.reduce((sum, limite) => sum + Number(limite.gasto_atual || 0), 0);
     const resumoFatura = obterResumoFatura(cartao.id);
     const final = obterFinalCartao(cartao);
 
@@ -399,18 +396,6 @@ function renderizarDetalheCartao() {
         </header>
 
         ${renderizarCartoesVinculados(cartao)}
-
-        <section class="detail-card categorias-vinculadas-card">
-            <h3>Categorias do Cart&atilde;o Vinculadas</h3>
-            ${renderizarTabelaLimites(limites)}
-            <div class="limite-total-row">
-                <strong>Total</strong>
-                <strong>${formatarMoeda(totalLimite)}</strong>
-                <span>${formatarMoeda(totalGasto)}</span>
-                <span>${formatarMoeda(totalLimite - totalGasto)}</span>
-                <span>${totalLimite > 0 ? Math.round((totalGasto / totalLimite) * 100) : 0}%</span>
-            </div>
-        </section>
 
         <section class="detail-card categorias-disponiveis-card">
             <h3>Categorias dispon&iacute;veis para vincular</h3>
@@ -580,7 +565,7 @@ function renderizarFaturaPorCategoria(cartao, resumoFatura) {
                 </article>
             </div>
 
-            ${renderizarTabelaFaturaCategorias(resumoFatura.categorias || [])}
+            ${renderizarTabelaFaturaCategorias(cartao, resumoFatura.categorias || [])}
             ${renderizarFaturaPorCartao(resumoFatura)}
             ${renderizarLancamentosFatura(cartao)}
         </section>
@@ -623,15 +608,30 @@ function filtroCategoriaFatura(categoria) {
     return 'todos';
 }
 
-function renderizarTabelaFaturaCategorias(categorias) {
+// Editar e desvincular valem para o vinculo ativo com este cartao; os demais grupos so mostram os lancamentos
+function renderizarAcoesFaturaCategoria(categoria, filtro, limite) {
+    const nome = escapeHtml(categoria.categoria_cartao_nome);
+    const semVinculo = 'Sem v&iacute;nculo neste cart&atilde;o';
+    return `
+        <div class="row-actions">
+            <button class="row-action-button" type="button" data-action="editar-limite" data-limite-id="${limite?.id || ''}" title="${limite ? 'Editar limite' : semVinculo}" aria-label="${limite ? 'Editar limite' : semVinculo}: ${nome}" ${limite ? '' : 'disabled'}>${cartoesIcon('edit')}</button>
+            <button class="row-action-button danger" type="button" data-action="toggle-limite" data-limite-id="${limite?.id || ''}" title="${limite ? 'Desvincular' : semVinculo}" aria-label="${limite ? 'Desvincular' : semVinculo}: ${nome}" ${limite ? '' : 'disabled'}>${cartoesIcon('remove')}</button>
+            <button class="row-action-button" type="button" data-action="ver-lancamentos-fatura" data-filtro-fatura="${escapeHtml(filtro)}" title="Ver lan&ccedil;amentos" aria-label="Ver lan&ccedil;amentos: ${nome}">${cartoesIcon('eye')}</button>
+        </div>
+    `;
+}
+
+function renderizarTabelaFaturaCategorias(cartao, categorias) {
     if (!categorias.length) {
         return `
             <div class="table-empty">
-                <h4>Nenhum lan&ccedil;amento na fatura</h4>
-                <p>Configure as Categorias do Cart&atilde;o para acompanhar limites e consumo.</p>
+                <h4>Nenhuma Categoria do Cart&atilde;o vinculada</h4>
+                <p>Use Vincular categoria para associar uma categoria global e definir o limite mensal.</p>
             </div>
         `;
     }
+
+    const limites = obterLimitesAtivos(cartao.id);
 
     return `
         <div class="fatura-table">
@@ -647,6 +647,7 @@ function renderizarTabelaFaturaCategorias(categorias) {
                 const filtro = filtroCategoriaFatura(categoria);
                 const percentual = categoria.percentual;
                 const cor = categoria.categoria_cartao_cor || (categoria.sem_categoria ? '#f97316' : '#2563eb');
+                const limite = limites.find((item) => item.categoria_cartao_id === categoria.categoria_cartao_id);
                 return `
                     <div class="fatura-table-row ${categoria.sem_categoria ? 'sem-categoria-row' : ''}">
                         <div class="table-category">
@@ -666,11 +667,7 @@ function renderizarTabelaFaturaCategorias(categorias) {
                         <div>
                             <span class="compact-pill ${classeStatusFatura(categoria.status)}">${rotuloStatusFatura(categoria.status)}</span>
                         </div>
-                        <div>
-                            <button class="cf-button cf-button-secondary fatura-action" type="button" data-action="ver-lancamentos-fatura" data-filtro-fatura="${escapeHtml(filtro)}">
-                                Ver lan&ccedil;amentos
-                            </button>
-                        </div>
+                        ${renderizarAcoesFaturaCategoria(categoria, filtro, limite)}
                         ${categoria.avisos?.length ? `<div class="fatura-row-warning">${escapeHtml(categoria.avisos[0])}</div>` : ''}
                     </div>
                 `;
@@ -772,67 +769,6 @@ function renderizarLancamentosFatura(cartao) {
 
 function lancamentoTemParcelamentoGerenciavel(lancamento) {
     return Number(lancamento.parcelas_total || lancamento.total_parcelas || 1) > 1 && Boolean(lancamento.compra_id);
-}
-
-function filtrarLimitesPorStatus(limites) {
-    if (estadoCartoes.status === 'ativos') return limites.filter((limite) => limite.ativo);
-    if (estadoCartoes.status === 'inativos') return limites.filter((limite) => !limite.ativo);
-    return limites;
-}
-
-function renderizarTabelaLimites(limites) {
-    if (!limites.length) {
-        return `
-            <div class="table-empty">
-                <h4>Nenhuma Categoria do Cart&atilde;o vinculada</h4>
-                <p>Use Vincular categoria para associar uma categoria global e definir o limite mensal.</p>
-            </div>
-        `;
-    }
-
-    const linhas = limites.map((limite) => {
-        const categoria = obterCategoriaCartao(limite.categoria_cartao_id);
-        const limiteMensal = Number(limite.limite_mensal || 0);
-        const gastoAtual = Number(limite.gasto_atual || 0);
-        const disponivel = Number(limite.disponivel ?? (limiteMensal - gastoAtual));
-        const percentual = Math.min(Number(limite.percentual_utilizado || 0), 999);
-        return `
-            <div class="limites-table-row">
-                <div class="table-category">
-                    <span class="categoria-icon" style="color:${escapeHtml(categoria?.cor || '#2563eb')}">${renderizarIconeCategoriaCartao(categoria, '18px')}</span>
-                    <span>${escapeHtml(categoria?.nome || limite.categoria_cartao_nome || 'Categoria')}</span>
-                </div>
-                <div>${formatarMoeda(limiteMensal)}</div>
-                <div class="usage-cell">
-                    <strong>${formatarMoeda(gastoAtual)}</strong>
-                    <small>${Math.round(percentual)}%</small>
-                    <span class="progress-track"><span style="width:${Math.min(percentual, 100)}%"></span></span>
-                </div>
-                <div class="${disponivel < 0 ? 'negative' : 'positive'}">${formatarMoeda(disponivel)}</div>
-                <div>
-                    <span class="compact-pill ${limite.ativo ? 'status-ativo' : 'status-inativo'}">${limite.ativo ? 'Ativa' : 'Inativa'}</span>
-                </div>
-                <div class="row-actions">
-                    <button class="row-action-button" type="button" data-action="editar-limite" data-limite-id="${limite.id}" title="Editar limite" aria-label="Editar limite">${cartoesIcon('edit')}</button>
-                    <button class="row-action-button danger" type="button" data-action="toggle-limite" data-limite-id="${limite.id}" title="${limite.ativo ? 'Desativar' : 'Reativar'}" aria-label="${limite.ativo ? 'Desativar' : 'Reativar'}">${limite.ativo ? cartoesIcon('remove') : cartoesIcon('check')}</button>
-                </div>
-            </div>
-        `;
-    }).join('');
-
-    return `
-        <div class="limites-table">
-            <div class="limites-table-header">
-                <div>Categoria do Cart&atilde;o</div>
-                <div>Limite mensal</div>
-                <div>Gasto atual</div>
-                <div>Dispon&iacute;vel</div>
-                <div>Status</div>
-                <div>A&ccedil;&otilde;es</div>
-            </div>
-            ${linhas}
-        </div>
-    `;
 }
 
 function renderizarCategoriasDisponiveis(disponiveis) {

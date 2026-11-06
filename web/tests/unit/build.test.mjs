@@ -141,9 +141,9 @@ const RPCS_DE_ESCRITA = new Map([
     ['editar_fonte_receita', 'receitas-adaptador.js'],
     ['inativar_fonte_receita', 'receitas-adaptador.js'],
     // FIN-CARTOES-1 (compras e cartoes). FIN-FIDELIDADE-CARTOES-1: tela original de Cartoes pelo adaptador; a compra
-    // nova continua com o formulario do novo aplicativo (compra-cartao.js); editar_compra fica sem tela (a do Flask edita
-    // um lancamento por editar_lancamento_cartao).
-    ['criar_compra', ['compra-cartao.js', 'lancamentos-adaptador.js']],  // FIN-FIDELIDADE-MOVIMENTACOES-1: Lancamentos
+    // nova fica em Lancamentos (MVP-FIN-AJUSTES-01); editar_compra fica sem tela (a do Flask edita um lancamento por
+    // editar_lancamento_cartao).
+    ['criar_compra', ['lancamentos-adaptador.js']],  // FIN-FIDELIDADE-MOVIMENTACOES-1: Lancamentos
     ['excluir_compra', ['cartoes-adaptador.js', 'lancamentos-adaptador.js']],
     ['criar_cartao', 'cartoes-adaptador.js'],
     ['editar_cartao', 'cartoes-adaptador.js'],

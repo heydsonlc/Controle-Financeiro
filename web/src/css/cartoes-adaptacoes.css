@@ -3,30 +3,22 @@
 /* Quem so le o perfil ve cartoes, limites e faturas, sem as acoes de escrita (o banco recusaria de qualquer forma). */
 body.cf-somente-leitura #btn-novo-cartao,
 body.cf-somente-leitura #btn-vincular-categoria,
-body.cf-somente-leitura #btn-nova-compra-cartao,
 body.cf-somente-leitura [data-action="editar-cartao"],
 body.cf-somente-leitura [data-action="abrir-limite"],
-body.cf-somente-leitura .limites-table .row-actions,
 body.cf-somente-leitura [data-action="vincular-disponivel"],
 body.cf-somente-leitura .lancamento-acoes {
     display: none;
 }
 
+/* Na tabela da fatura, o olho continua na mesma posicao. */
+body.cf-somente-leitura [data-action="editar-limite"],
+body.cf-somente-leitura [data-action="toggle-limite"] {
+    visibility: hidden;
+}
+
 /* Numero, validade e CVV desativados (nao guardados): aviso no formulario do cartao. */
 .cartao-dados-sensiveis {
     margin: -4px 0 12px;
-}
-
-/* Compra nova no modal: o formulario do novo aplicativo (app.css) com o espacamento do modal original. */
-.nova-compra-painel {
-    padding: 0 4px 4px;
-}
-
-.nova-compra-painel .despesa-form {
-    border: 0;
-    padding: 0;
-    margin: 0;
-    box-shadow: none;
 }
 
 /* Defeito do Flask (visto na captura em 1366 px): as tres colunas pedem no minimo 1180 px, mas o corte de 1320 px do

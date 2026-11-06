@@ -6,11 +6,10 @@
 // - numero completo, validade e CVV: nunca enviados nem guardados (os campos ficam desativados);
 // - editar um lancamento nao troca o numero nem o total de parcelas; excluir uma parcela exclui as parcelas abertas
 //   da compra, depois de uma segunda confirmacao com as quantidades (as de fatura paga ou fechada ficam);
-// - compra nova: o formulario do novo aplicativo (compra-cartao.js), no modal acrescentado; no Flask fica em Lancamentos.
+// - compra nova: em Importar Cartao, Lancamentos e Recorrencias, como no Flask (MVP-FIN-AJUSTES-01, P11);
 
 import { supabase } from './cliente.js';
 import { criarChaves, emMigracao, falha, mensagemDeErro, ok, valorTexto } from './adaptador-comum.js';
-import { abrirNovaCompra } from './compra-cartao.js';
 import { iniciarMoldura } from './moldura.js';
 
 const estado = { perfilId: null, cartoes: [], versoesCartao: {}, versoesLancamento: {}, versoesParcelamento: {}, versoesVinculado: {} };
@@ -321,40 +320,12 @@ async function adaptador({ metodo, caminho, parametros, corpo }) {
     return emMigracao(`${metodo} ${caminho}`);
 }
 
-// Compra nova (acrescimo): o formulario do novo aplicativo no modal; ao gravar, a tela original recarrega.
-function prepararNovaCompra(podeGerir) {
-    const botao = document.getElementById('btn-nova-compra-cartao');
-    botao.hidden = !podeGerir;
-    botao.addEventListener('click', () => {
-        const cartoes = estado.cartoes.filter((c) => c.ativo && c.dia_vencimento);
-        if (!cartoes.length) {
-            window.mostrarErro('Cadastre um cartão com dia de vencimento antes de lançar compras.');
-            return;
-        }
-        const modal = document.getElementById('modal-nova-compra');
-        modal.classList.add('open');
-        abrirNovaCompra({
-            painel: document.getElementById('cartao-painel'),
-            perfilId: estado.perfilId,
-            cartoes,
-            cartaoId: window.CF_CARTOES.cartaoSelecionadoId(),
-            mes: window.CF_CARTOES.mes(),
-            aoFechar: () => modal.classList.remove('open'),
-            aoGravar: async (mensagem) => {
-                await window.carregarTelaCartoes();
-                window.mostrarSucesso(mensagem);
-            },
-        });
-    });
-}
-
 const contexto = await iniciarMoldura();
 if (contexto && contexto.perfil) {
     estado.perfilId = contexto.perfil.id;
     // Quem so le o perfil ve cartoes, limites e faturas, sem as acoes de escrita (o banco recusaria de qualquer forma).
     const { data: gere } = await supabase.rpc('pode_gerir_perfil', { p_perfil_id: estado.perfilId });
     document.body.classList.toggle('cf-somente-leitura', !gere);
-    prepararNovaCompra(gere === true);
     window.CF_REGISTRAR_ADAPTADOR(adaptador);
 } else if (contexto) {
     window.CF_REGISTRAR_ADAPTADOR(async () => falha('Nenhum perfil financeiro autorizado para esta conta.', 403));

@@ -4,12 +4,6 @@
 (function () {
     'use strict';
 
-    // Estado da tela original (const global do script classico) para o modulo do adaptador (compra nova).
-    window.CF_CARTOES = Object.freeze({
-        mes: () => estadoCartoes.mesSelecionado,  // eslint-disable-line no-undef
-        cartaoSelecionadoId: () => estadoCartoes.cartaoSelecionadoId,  // eslint-disable-line no-undef
-    });
-
     // 1. Numero, validade e CVV nao sao guardados no novo aplicativo (decisao de seguranca do FIN-CARTOES-1): os
     //    campos ficam desativados e vazios, para que nada seja digitado, mantido no formulario ou enviado.
     const SENSIVEIS = ['cartao-numero', 'cartao-data-validade', 'cartao-cvv'];
