@@ -1,6 +1,6 @@
 # MVP-FIN-AJUSTES-01 — Correções e simplificação da interface
 
-**Situação (05/11/2026): testado; publicação autorizada no FIN-MVP-AJUSTES-01-PUBLICACAO, sem homologação manual.** Sem migration e sem nenhuma alteração de dados. A produção só foi lida, em sessão só de leitura, nas auditorias do P03.
+**Situação (05/11/2026): `FIN_MVP_AJUSTES_01_PUBLICADO`.** Publicado no FIN-MVP-AJUSTES-01-PUBLICACAO: push `a1eebb1..f3ade96`, deploy `633a6b90` (produção, commit `f3ade96`), sem migration (55 aplicadas) e sem nenhuma alteração de dados.
 
 Contrato: FIN-MVP-AJUSTES-01 (11 pendências em quatro telas). Commits por módulo: Faturas, Recorrências, Despesas e Cartões.
 
@@ -94,4 +94,25 @@ O detalhe calcula o previsto na tela, e o banco calcula o da lista (`contas_do_m
 
 ## 8. Publicação
 
-Sem migration. Publicação autorizada pelo titular no contrato FIN-MVP-AJUSTES-01-PUBLICACAO: push em avanço direto e deploy do frontend.
+Autorizada pelo titular no contrato FIN-MVP-AJUSTES-01-PUBLICACAO, sem homologação manual.
+
+| Etapa | Resultado |
+|---|---|
+| GitHub | `a1eebb1..f3ade96` em avanço direto, sem force; 24 arquivos não rastreados preservados |
+| Migrations | Nenhuma; 55 aplicadas, como antes |
+| Build e deploy | Build limpo do `git archive f3ade96`; deploy `633a6b90` no ramo `producao`, com `--commit-hash` |
+| Arquivos | 164/164 iguais ao build, com e sem parâmetro de cache (`max-age=0`) |
+| Segurança | CSP, X-Frame-Options DENY, nosniff e Referrer-Policy servidos; `http://` → 301 `https://` |
+| Navegação sem login | Seis telas levam ao login a 1366 e 1920 px, sem erro de CSP e sem nenhum pedido de escrita |
+| Frontend × banco | As 196 RPCs do build existem e são executáveis por `authenticated`; nenhuma por `anon` |
+| 16 faturas | O `despesas.js` publicado, sobre as respostas reais, é igual ao previsto e ao executado do banco nas 16 |
+| Dados | As 82 tabelas de `public` e `financeiro` iguais antes e depois da publicação; saldos, movimentos e financiamento iguais |
+
+- **Não verificado em produção:** as telas com sessão autenticada. Não há credencial de teste, e as contas reais não foram usadas. A tela autenticada foi conferida no ambiente isolado.
+- **Cache residual:** `js/compra-cartao.js`, removido do deploy, ainda responde pelo cache de borda até expirar (até 7 dias). Nenhuma página o carrega.
+
+## 9. Pendências
+
+- **P12 e P13 (Mobilidade):** fora desta publicação.
+- **P14:** recuperar a prévia das parcelas (seção 5).
+- **Reconstrução de 11/2026 e consolidação das categorias:** seguem aguardando autorização própria.
