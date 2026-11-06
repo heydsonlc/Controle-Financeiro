@@ -25,7 +25,7 @@
 | Excluir lançamento | Funcionando (ver diferenças) |
 
 **Acréscimos (melhorias do novo aplicativo mantidas):**
-- **Nova compra:** botão e modal com o formulário do novo aplicativo: prévia das parcelas, fatura sugerida pelo fechamento, confirmação de fatura consolidada. No Flask a compra é cadastrada em Lançamentos, uma tela mista com Receitas e IR que continua em migração.
+- **Nova compra (removida no MVP-FIN-AJUSTES-01, P11; compras por Importar Cartão, Lançamentos e Recorrências; a prévia das parcelas ficou como pendência):** botão e modal com o formulário do novo aplicativo: prévia das parcelas, fatura sugerida pelo fechamento, confirmação de fatura consolidada. No Flask a compra é cadastrada em Lançamentos, uma tela mista com Receitas e IR que continua em migração.
 - **Inativar cartão** no modal de edição: a rota `DELETE /api/cartoes/<id>` do Flask existe, mas a tela dele não tinha o botão. Nunca há exclusão física.
 
 **Pagamento e estorno da fatura:** em Despesas, como no Flask (FIN-FIDELIDADE-DESPESAS-1). A lista de faturas e o pagamento que a tela de Cartões anterior do novo aplicativo tinha saíram dela; a mesma função continua em Despesas.

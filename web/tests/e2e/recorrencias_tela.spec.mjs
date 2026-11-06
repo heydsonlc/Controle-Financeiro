@@ -83,6 +83,12 @@ test('tela original: menu, indicadores, lista, filtros e aviso de consorcios', a
     const hoje = new Date();
     await expect(page.locator('#filtro-status')).toHaveValue('ativa');
     await expect(page.locator('#filtro-competencia')).toHaveValue(`${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`);
+    const filtros = await page.locator('.recorrencias-toolbar .filter-item').evaluateAll((itens) => itens.map((i) => i.getBoundingClientRect())
+        .map((r) => ({ esquerda: r.left, direita: r.right, topo: r.top })));
+    for (const [i, filtro] of filtros.entries()) {  // nenhum filtro sobre o seguinte, nem com a linha quebrada
+        if (filtros[i + 1] && filtros[i + 1].topo === filtro.topo) expect(filtro.direita).toBeLessThanOrEqual(filtros[i + 1].esquerda);
+    }
+    await expect(page.locator('#filtro-busca')).toBeInViewport({ ratio: 1 });
     await page.fill('#filtro-competencia', '2026-12');
     await expect(linha(page, 'Mensalidade B')).toHaveCount(0);
     await page.fill('#filtro-competencia', '2027-01');

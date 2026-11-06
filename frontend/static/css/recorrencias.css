@@ -6,14 +6,23 @@
     gap: 8px 12px;
 }
 
+/* Seis filtros: quebram em duas linhas quando nao cabem (sem rolagem escondendo a busca) */
+body.app-shell-body .recorrencias-toolbar .module-actionbar-filters {
+    flex-wrap: wrap;
+    overflow: visible;
+}
+
 .recorrencias-toolbar .filter-item {
-    flex: 0 1 auto;
+    flex: 0 0 auto;
 }
 
 .recorrencias-toolbar .filter-item:nth-child(1) .module-filter-control,
-.recorrencias-toolbar .filter-item:nth-child(3) .module-filter-control,
 .recorrencias-toolbar .filter-item:nth-child(4) .module-filter-control {
     width: 136px;
+}
+
+.recorrencias-toolbar .filter-item:nth-child(3) .module-filter-control {
+    width: 170px;
 }
 
 .recorrencias-toolbar .filter-item:nth-child(2) .module-filter-control {
@@ -353,7 +362,7 @@
     align-items: center;
     display: grid;
     gap: 12px;
-    grid-template-columns: minmax(250px, 2fr) 150px 130px 120px minmax(150px, 1.1fr) 90px 86px;
+    grid-template-columns: minmax(220px, 2fr) 130px 120px 110px minmax(130px, 1.1fr) 90px 86px;
 }
 
 .recorrencias-header {

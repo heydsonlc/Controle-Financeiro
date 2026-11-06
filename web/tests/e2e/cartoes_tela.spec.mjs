@@ -183,6 +183,10 @@ test('cadastro, limites, compra, edicao de um lancamento, parcelas futuras, excl
     await expect(page.locator('#btn-nova-compra-cartao')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Nova compra' })).toHaveCount(0);
     await expect(detalhe(page).locator('.fatura-table-header > div').last()).toHaveText('Ações');
+    // As tres acoes cabem na tabela, sem rolagem, a 1366 px (a tabela corta o que passa da largura).
+    const tabela = await detalhe(page).locator('.fatura-table').first().boundingBox();
+    const olho = await grupo(page, 'Mercado B').locator('[data-action="ver-lancamentos-fatura"]').boundingBox();
+    expect(olho.x + olho.width).toBeLessThanOrEqual(tabela.x + tabela.width);
     await grupo(page, 'Mercado B').locator('[data-action="editar-limite"]').click();
     await expect(page.locator('#limite-categoria-cartao option:checked')).toHaveText('Mercado B');
     await page.fill('#limite-valor', '600');

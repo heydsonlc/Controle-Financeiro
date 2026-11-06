@@ -1,0 +1,93 @@
+# MVP-FIN-AJUSTES-01 — Correções e simplificação da interface
+
+**Situação (05/11/2026): implementado e testado localmente; aguarda homologação do titular.** Sem push, sem deploy, sem migration e sem nenhuma alteração de dados. A única consulta à produção foi a auditoria do P03, em sessão só de leitura.
+
+Contrato: FIN-MVP-AJUSTES-01 (11 pendências em quatro telas). Commits por módulo: Faturas, Recorrências, Despesas e Cartões.
+
+## 1. Faturas de cartão (detalhe em Despesas)
+
+| Pendência | Resultado |
+|---|---|
+| **P01** | A linha da despesa fixa mostra o valor definido na recorrência antes da cobrança, em itálico e cinza, com "Previsto · aguardando cobrança". Antes mostrava R$ 0,00. O subtotal continua separando o executado do que aguarda cobrança. O executado não muda |
+| **P02** | O cabeçalho direito de Despesas por Categoria passa a "Executado", porque a coluna da direita é o executado. "Consolidado" foi evitado: no sistema, significa fatura fechada. As setas viraram "Saldo R$ X", "Excedente R$ X" ou "No limite". Valores e cálculos preservados |
+| **P03** | Auditoria e correção (seção 2) |
+| **P04** | Linha única DATA, DESCRIÇÃO e VALOR, com 30 px (categorias 32 px), em todos os blocos e também em tela estreita. A legenda fica ao lado da descrição e o texto inteiro no título da linha. A descrição agora é escapada |
+
+## 2. Auditoria dos totais (P03)
+
+O detalhe calcula o previsto na tela, e o banco calcula o da lista (`contas_do_mes`). As duas fórmulas foram comparadas nas 16 faturas de 05/2026 a 12/2026 da produção, com as mesmas respostas que a tela recebe.
+
+- **Defeito comprovado:** a tela somava o limite da categoria mesmo com gasto acima dele. O banco e o rodapé do próprio detalhe usam o maior entre limite e gasto.
+- **Único caso na produção:** Black 11/2026.
+
+| | Valor |
+|---|---|
+| Tela antes | R$ 7.827,55 |
+| Banco e tela depois | R$ 9.114,84 |
+| Diferença | R$ 1.287,29 = excedentes das categorias 57 (R$ 179,22) e 59 (R$ 1.108,07) |
+
+- **Correção:** só a tela. Com ela, as 16 faturas ficam iguais ao banco, e nenhum valor gravado muda.
+
+**Conferido, sem defeito:**
+- Parcelada, fixa e categoria: cada compra entra em um bloco só, pela mesma regra do banco (`natureza_da_compra`).
+- Fixa conciliada: uma linha só, no previsto e no executado.
+- Fixa e parcelada não consomem limite: regra do FIN-CARTAO-DESPESAS-FIXAS-01. Por isso o previsto soma a fixa e o limite inteiro da categoria.
+- Previsão sem conciliar ao lado de cobrança real conta nos dois lados até a conciliação. É o caso da Netflix 11/2026, que o titular decidiu não conciliar.
+
+**Ressalva:** limite legado sem perfil entra no previsto da lista, mas não em `fatura_por_categoria`. Só aparece nos dados fictícios de teste: a auditoria não achou o caso na produção. Corrigir exigiria migration, por isso ficou fora.
+
+## 3. Recorrências
+
+- **P05:** o filtro Status abre em Ativas. O filtro novo Competência abre no mês corrente.
+  - Mensal: a partir do mês de início.
+  - Anual: só no mês do vencimento.
+  - Semanal e a cada 2 semanas: quando há ocorrência no mês, pela mesma âncora do banco.
+  - Consórcio: dentro do prazo das parcelas.
+  - Início futuro nunca é antecipado.
+  - Limpar o mês lista todos os cadastros.
+  - A lista continua com uma linha por cadastro. Os indicadores, a agenda e a composição não mudam.
+- **P06:** sai a coluna Tipo; as larguras foram redistribuídas. O ícone da forma de pagamento, que estava nessa coluna, passou para Frequência.
+- **Barra de filtros:** com seis filtros, ela quebra em duas linhas quando não cabem.
+
+## 4. Despesas
+
+- **P07:** Forma de pagamento mostra só o ícone, com título e nome acessível (`role="img"`). A coluna ficou mais estreita.
+- **P08:** sai o card Vencendo em 7 dias. Os cinco restantes dividem a largura: uma linha em tela larga, duas a 1366 px.
+- **P09:** toda linha tem três ações nas mesmas posições: editar, pagar e estornar. Na fatura e no agrupador semanal, a primeira é a de detalhes. A ação impossível fica visível e desabilitada, com o motivo no título.
+  - No Flask, "Consolidar fatura" continua como quarta ação. No novo aplicativo ela não aparece.
+  - **Mudança de comportamento:** a ocorrência paga dentro do agrupador semanal passa a oferecer o estorno, pelo mesmo fluxo das demais despesas.
+
+## 5. Cartões
+
+- **P10:** sai o painel Categorias do Cartão Vinculadas. A tabela Fatura por Categoria do Cartão ganha editar limite, desvincular e olho.
+  - Desvincular só desativa o vínculo; lançamentos e totais ficam iguais.
+  - A categoria desvinculada volta para Categorias disponíveis, e vincular de novo reaproveita o vínculo.
+  - Ao vincular, a tabela se atualiza.
+  - Grupos sem vínculo (parceladas, fixas, sem categoria) têm editar e desvincular desabilitados.
+  - As colunas foram reduzidas: a coluna de ações era cortada a 1366 px.
+  - O status do vínculo inativo deixa de aparecer em lista própria: ele só reaparece em Categorias disponíveis.
+- **P11:** sai Nova compra da barra, com o modal e o `compra-cartao.js`, que só ela usava. As compras seguem por Importar Cartão, Lançamentos e Recorrências.
+
+**Pendência registrada:** o modal removido mostrava a prévia das parcelas antes de gravar. O formulário de Lançamentos não mostra. A sugestão de fatura pelo fechamento e a confirmação de fatura consolidada existem lá.
+
+## 6. Testes
+
+| Bateria | Resultado |
+|---|---|
+| Unitários web | 70/70, com os novos de `fatura-blocos` e `recorrencias-competencia` |
+| E2E completo | 122/122 |
+| Seleção de impacto (nível 2, pytest) | 359/359; a suíte Python inteira não foi rodada |
+
+- **E2E novos:** recorrência prevista, excedente, previsto igual ao da lista e altura das linhas em 1366 e 390 px; filtros de Recorrências; ícone e posições das três ações; editar, desvincular, olho e revincular em Cartões.
+- **Compra nova no E2E:** o cenário do fechamento passou para o formulário de Lançamentos; os demais criam a compra pela função do banco.
+- **Conferência visual:** telas capturadas a 1366 e 1920 px, com dados fictícios.
+
+## 7. Ressalvas
+
+- **Despesas a 1366 px:** a grade continua pedindo 1180 px e rola na horizontal, como antes. As três ações ficam à direita da rolagem. Em 1920 px tudo aparece.
+- **Barra de filtros de Despesas a 1366 px:** os filtros se sobrepõem. O defeito já existia e ficou fora do contrato; a correção é a mesma feita em Recorrências.
+- **Cartões:** a tabela Lançamentos da fatura também rola na horizontal, como antes.
+
+## 8. Publicação
+
+Sem migration. Quando homologado: push dos commits locais e deploy do frontend, com autorização expressa.

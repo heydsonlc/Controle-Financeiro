@@ -671,12 +671,12 @@
     color: #475569;
     font-size: 12px;
     font-weight: 750;
-    grid-template-columns: minmax(170px, 1.2fr) minmax(96px, 0.58fr) minmax(150px, 0.9fr) minmax(104px, 0.65fr) minmax(92px, 0.55fr) minmax(126px, 0.72fr);
+    grid-template-columns: minmax(130px, 1.2fr) minmax(76px, 0.58fr) minmax(110px, 0.9fr) minmax(84px, 0.65fr) minmax(76px, 0.55fr) 112px;
 }
 
 .fatura-table-row {
     position: relative;
-    grid-template-columns: minmax(170px, 1.2fr) minmax(96px, 0.58fr) minmax(150px, 0.9fr) minmax(104px, 0.65fr) minmax(92px, 0.55fr) minmax(126px, 0.72fr);
+    grid-template-columns: minmax(130px, 1.2fr) minmax(76px, 0.58fr) minmax(110px, 0.9fr) minmax(84px, 0.65fr) minmax(76px, 0.55fr) 112px;
 }
 
 .fatura-table-row.sem-categoria-row {
