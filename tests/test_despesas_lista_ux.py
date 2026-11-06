@@ -51,7 +51,7 @@ def test_linhas_usam_grid_unico_com_forma_status_e_acoes():
     ]:
         assert js.count(classe) >= 3
 
-    assert "showLabel: true" in js
+    assert "showLabel: false" in js  # MVP-FIN-AJUSTES-01: so o icone, com titulo e nome acessivel
     assert "renderFormaPagamentoDespesa" in js
     assert "row-action-button" in js
 
@@ -60,8 +60,8 @@ def test_css_forca_linha_unica_e_conteudo_centralizado():
     css = _read("frontend/static/css/despesas.css")
 
     assert "grid-template-columns:" in css
-    assert "minmax(210px, 22fr)" in css
-    assert "minmax(90px, 6fr)" in css
+    assert "minmax(230px, 24fr)" in css
+    assert "minmax(116px, 6fr)" in css  # tres acoes de 32 px
     assert "white-space: nowrap" in css
     assert "overflow: hidden" in css
     assert "text-overflow: ellipsis" in css

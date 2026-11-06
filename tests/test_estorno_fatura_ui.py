@@ -78,11 +78,11 @@ def test_js_botao_estorno_no_ramo_de_fatura():
 
     # O bloco de acoes de fatura (isFaturaCartao ? ...) deve conter o botao de estorno
     inicio = js.index('const acoesHTML = isFaturaCartao ?')
-    fim = js.index("` : (isAgrupado ? '' : `", inicio)
+    fim = js.index("` : `", inicio)
     bloco_fatura = js[inicio:fim]
 
-    assert 'abrirModalEstorno' in bloco_fatura
-    assert 'despesa.pago' in bloco_fatura
+    assert 'botaoEstornarDespesa(despesa.id, { pago: despesa.pago })' in bloco_fatura
+    assert 'onclick="abrirModalEstorno(${id})"' in js
 
 
 def test_js_modal_estorno_diferencia_fatura_de_despesa():

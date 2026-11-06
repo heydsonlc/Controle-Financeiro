@@ -107,9 +107,10 @@ test('fatura: recorrencia prevista, excedente da categoria, previsto igual ao da
     const cartao = criado.corpo.cartao_id;
     expect((await chamarRpc(page, 'vincular_limite_cartao', { p_perfil_id: perfil, p_cartao_id: cartao,
         p_dados: { categoria_cartao_id: MERCADO_B, limite_mensal: '300.00' } })).status).toBe(200);
-    expect((await chamarRpc(page, 'criar_recorrencia_cartao', { p_perfil_id: perfil, p_chave: crypto.randomUUID(), p_dados: {
+    const recorrencia = await chamarRpc(page, 'criar_recorrencia_cartao', { p_perfil_id: perfil, p_chave: crypto.randomUUID(), p_dados: {
         nome: 'Streaming E2E', valor: '60.00', categoria_id: moradia, data_vencimento: '2038-03-05', cartao_id: cartao,
-        tipo_recorrencia: 'mensal', descricao: '' } })).status).toBe(200);
+        tipo_recorrencia: 'mensal', descricao: '' } });
+    expect(recorrencia.status).toBe(200);
     expect((await chamarRpc(page, 'criar_compra', { p_perfil_id: perfil, p_chave: crypto.randomUUID(), p_dados: {
         cartao_id: cartao, descricao: 'Mercado do mes com um nome bem longo para nao quebrar a linha da fatura E2E', valor: '350.00',
         total_parcelas: 1, data_compra: '2038-03-02', mes_fatura: '2038-03-01', categoria_id: moradia } })).status).toBe(200);
@@ -155,6 +156,10 @@ test('fatura: recorrencia prevista, excedente da categoria, previsto igual ao da
     await conferir();
     await page.setViewportSize({ width: 1366, height: 900 });
 
+    // Limpeza do cenario: recorrencia e cartao inativados (com o cartao inativo, a recorrencia ativa seria recusada na geracao)
+    const versao = (await chamarRpc(page, 'recorrencias_do_perfil', { p_perfil_id: perfil })).corpo.find((r) => r.id === recorrencia.corpo.item_id).versao;
+    expect((await chamarRpc(page, 'definir_situacao_recorrencia_cartao', { p_perfil_id: perfil, p_item_id: recorrencia.corpo.item_id, p_versao: versao,
+        p_ativo: false })).status).toBe(200);
     const cartoes = await chamarRpc(page, 'cartoes_do_perfil', { p_perfil_id: perfil });
     const registro = cartoes.corpo.find((c) => c.id === cartao);
     expect((await chamarRpc(page, 'inativar_cartao', { p_perfil_id: perfil, p_cartao_id: cartao, p_versao: registro.versao })).status).toBe(200);
