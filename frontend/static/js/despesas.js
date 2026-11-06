@@ -2645,6 +2645,7 @@ function organizarLancamentosEmBlocos(lancamentos, resumoCartao) {
             blocos.parceladas.push({
                 descricao: lanc.descricao,
                 valor: valorLanc,
+                data_compra: lanc.data_compra,
                 numero_parcela: numeroParcela,
                 total_parcelas: totalParcelas
             });
@@ -2654,6 +2655,7 @@ function organizarLancamentosEmBlocos(lancamentos, resumoCartao) {
             blocos.fixas.push({
                 descricao: lanc.descricao,
                 valor: valorLanc,
+                data_compra: lanc.data_compra,
                 // Previsto, executado e situacao da ocorrencia, quando a API informa
                 valor_previsto: lanc.valor_previsto ?? null,
                 valor_executado: lanc.valor_executado ?? null,
@@ -2686,7 +2688,7 @@ function organizarLancamentosEmBlocos(lancamentos, resumoCartao) {
  * Calcula totais da fatura
  *
  * REGRA IMUTÁVEL: A fatura mostra SEMPRE valores PREVISTOS
- * - totalFatura = soma dos PREVISTOS de todos os blocos
+ * - totalFatura = soma dos PREVISTOS de todos os blocos (o mesmo previsto do banco em contas_do_mes)
  * - totalExecutado = soma dos EXECUTADOS (apenas para referência interna)
  */
 function calcularTotaisFatura(blocos, lancamentos) {
@@ -2698,10 +2700,8 @@ function calcularTotaisFatura(blocos, lancamentos) {
     // Bloco 2: Despesas Fixas (aguardando cobrança: o previsto; as demais: o executado)
     const previstoFixas = blocos.fixas.reduce((sum, f) => sum + previstoFixa(f), 0);
 
-    // Bloco 3: Despesas por Categoria (usa valor_previsto do orçamento)
-    const previstoCategorias = Object.values(blocos.porCategoria).reduce((sum, cat) => {
-        return sum + parseFloat(cat.previsto || 0);
-    }, 0);
+    // Bloco 3: Despesas por Categoria (o orçamento; acima dele, o gasto)
+    const previstoCategorias = Object.values(blocos.porCategoria).reduce((sum, cat) => sum + previstoCategoria(cat), 0);
 
     // Bloco 4: Outros Lançamentos (valor executado = previsto)
     const previstoOutros = blocos.outros.reduce((sum, o) => sum + parseFloat(o.valor || 0), 0);
@@ -2719,6 +2719,14 @@ function calcularTotaisFatura(blocos, lancamentos) {
         totalFatura,      // ← PREVISTO (usado no cabeçalho da fatura)
         totalExecutado    // ← EXECUTADO (referência interna, não exibido)
     };
+}
+
+/**
+ * Parte da categoria no previsto da fatura: o orçamento; acima dele, o gasto (a compra acima do limite também será paga)
+ */
+function previstoCategoria(cat) {
+    const executado = (cat.lancamentos || []).reduce((sum, l) => sum + parseFloat(l.valor || 0), 0);
+    return Math.max(parseFloat(cat.previsto || 0), executado);
 }
 
 /**
@@ -2760,18 +2768,30 @@ function renderizarFaturaCompleta(blocos, totais, competencia) {
     `;
 }
 
+/**
+ * Linha da fatura: DATA | DESCRIÇÃO | VALOR, sempre em uma linha; a legenda fica ao lado da descrição e o texto inteiro no título
+ */
+function renderizarLinhaFatura({ data, descricao, legenda, valor, prevista }) {
+    const titulo = [descricao, legenda].filter(Boolean).join(' · ');
+    return `
+        <div class="linha-simples${prevista ? ' linha-prevista' : ''}" title="${escapeHtmlDespesa(titulo)}">
+            <span class="linha-data">${data ? formatarDataCurta(data) : '&mdash;'}</span>
+            <span class="linha-titulo">${escapeHtmlDespesa(descricao)}</span>
+            ${legenda ? `<span class="linha-legenda">${escapeHtmlDespesa(legenda)}</span>` : ''}
+            <span class="linha-valor">${valor}</span>
+        </div>
+    `;
+}
+
 function renderizarBlocoParceladas(parceladas) {
     const total = parceladas.reduce((sum, p) => sum + (p.valor || 0), 0);
     const linhas = parceladas.length > 0
-        ? parceladas.map(p => `
-            <div class="linha-simples">
-                <div>
-                    <div class="linha-titulo">${p.descricao}</div>
-                    <div class="linha-legenda">${formatarParcelaAtual(p.numero_parcela, p.total_parcelas)}</div>
-                </div>
-                <div class="linha-valor">R$ ${formatarValorBR(p.valor)}</div>
-            </div>
-        `).join('')
+        ? parceladas.map(p => renderizarLinhaFatura({
+            data: p.data_compra,
+            descricao: p.descricao,
+            legenda: formatarParcelaAtual(p.numero_parcela, p.total_parcelas),
+            valor: `R$ ${formatarValorBR(p.valor)}`
+        })).join('')
         : '<div class="linha-vazia">Nenhuma compra parcelada neste mês.</div>';
 
     return `
@@ -2800,13 +2820,20 @@ function previstoFixa(f) {
 }
 
 /**
+ * Valor da linha da despesa fixa: aguardando cobrança, o valor definido na recorrência; nas demais, o executado
+ */
+function valorLinhaFixa(f) {
+    return f.situacao_ocorrencia === 'PREVISTA' ? previstoFixa(f) : executadoFixa(f);
+}
+
+/**
  * Legenda previsto x executado de uma despesa fixa (vazia quando a API nao informa o previsto)
  */
 function legendaFixa(f) {
     if (f.valor_previsto === null || f.valor_previsto === undefined) return '';
     const previsto = parseFloat(f.valor_previsto || 0);
     const rotulo = `Previsto R$ ${formatarValorBR(previsto)}`;
-    if (f.situacao_ocorrencia === 'PREVISTA') return `${rotulo} · aguardando cobrança`;
+    if (f.situacao_ocorrencia === 'PREVISTA') return 'Previsto · aguardando cobrança';
     if (f.situacao_ocorrencia === 'NAO_COBRADA') return `${rotulo} · não cobrada nesta fatura`;
     if (f.situacao_ocorrencia === 'PAGA') return `${rotulo} · paga com a fatura`;
     const diferenca = Math.round((executadoFixa(f) - previsto) * 100) / 100;
@@ -2818,21 +2845,13 @@ function renderizarBlocoFixas(fixas) {
     const total = fixas.reduce((sum, f) => sum + executadoFixa(f), 0);
     const aguardando = fixas.filter(f => f.situacao_ocorrencia === 'PREVISTA').reduce((sum, f) => sum + previstoFixa(f), 0);
     const linhas = fixas.length > 0
-        ? fixas.map(f => {
-            const legenda = legendaFixa(f);
-            const titulo = legenda
-                ? `<div>
-                    <div class="linha-titulo">${f.descricao}</div>
-                    <div class="linha-legenda">${legenda}</div>
-                </div>`
-                : `<div class="linha-titulo">${f.descricao}</div>`;
-            return `
-            <div class="linha-simples">
-                ${titulo}
-                <div class="linha-valor">R$ ${formatarValorBR(executadoFixa(f))}</div>
-            </div>
-        `;
-        }).join('')
+        ? fixas.map(f => renderizarLinhaFatura({
+            data: f.data_compra,
+            descricao: f.descricao,
+            legenda: legendaFixa(f),
+            valor: `R$ ${formatarValorBR(valorLinhaFixa(f))}`,
+            prevista: f.situacao_ocorrencia === 'PREVISTA'
+        })).join('')
         : '<div class="linha-vazia">Nenhuma despesa fixa no cartão neste mês.</div>';
     const subtotal = `R$ ${formatarValorBR(total)}`
         + (aguardando > 0 ? ` · R$ ${formatarValorBR(aguardando)} aguardando cobrança` : '');
@@ -2849,9 +2868,19 @@ function renderizarBlocoFixas(fixas) {
 }
 
 /**
+ * Saldo ou excedente da categoria: quanto falta para o previsto ou quanto passou dele
+ */
+function situacaoCategoria(previsto, executado) {
+    const diferenca = Math.round((previsto - executado) * 100) / 100;
+    if (diferenca > 0) return { classe: 'saldo', texto: `Saldo R$ ${formatarValorBR(diferenca)}` };
+    if (diferenca < 0) return { classe: 'excedente', texto: `Excedente R$ ${formatarValorBR(-diferenca)}` };
+    return { classe: 'no-limite', texto: 'No limite' };
+}
+
+/**
  * Renderiza bloco "Despesas por Categoria"
  *
- * LINHA PRINCIPAL: Mostra PREVISTO (orçamento da categoria)
+ * LINHA PRINCIPAL: Mostra PREVISTO (orçamento da categoria), o saldo ou excedente e o EXECUTADO
  * DETALHAMENTO INTERNO: Mostra EXECUTADO (lançamentos reais)
  */
 function renderizarBlocoPorCategoria(porCategoria) {
@@ -2860,34 +2889,27 @@ function renderizarBlocoPorCategoria(porCategoria) {
         ? categorias.map(cat => {
             const previsto = parseFloat(cat.previsto || 0);
             const executado = cat.lancamentos.reduce((sum, l) => sum + (l.valor || 0), 0);
-            const indicador = executado < previsto ? '↑' : executado > previsto ? '↓' : '=';
-            const corIndicador = executado < previsto ? '#10b981' : executado > previsto ? '#ef4444' : '#6e6e73';
+            const situacao = situacaoCategoria(previsto, executado);
 
             // ← DETALHAMENTO: Valores EXECUTADOS (lançamentos reais)
             const detalhes = cat.lancamentos.length > 0
-                ? cat.lancamentos.map(l => `
-                    <div class="linha-simples">
-                        <div>
-                            <div class="linha-titulo">${l.descricao}</div>
-                            ${l.data_compra ? `<div class="linha-legenda">${formatarDataCurta(l.data_compra)} • executado</div>` : `<div class="linha-legenda">executado</div>`}
-                            ${l.observacoes ? `<div class="linha-legenda">${l.observacoes}</div>` : ''}
-                        </div>
-                        <div class="linha-valor">R$ ${formatarValorBR(l.valor)}</div>
-                    </div>
-                `).join('')
+                ? cat.lancamentos.map(l => renderizarLinhaFatura({
+                    data: l.data_compra,
+                    descricao: l.descricao,
+                    legenda: l.observacoes,
+                    valor: `R$ ${formatarValorBR(l.valor)}`
+                })).join('')
                 : '<div class="linha-vazia">Nenhum lançamento executado.</div>';
 
             return `
                 <div class="categoria-bloco">
                     <button type="button" class="categoria-linha" onclick="toggleCategoriaDetalhe('${cat.id}')">
                         <div class="categoria-info">
-                            <span class="categoria-valor">
-                                R$ ${formatarValorBR(previsto)}
-                                <span style="margin-left: 6px; font-weight: 700; color: ${corIndicador};" title="Comparação: executado vs previsto">${indicador}</span>
-                            </span>
+                            <span class="categoria-valor" title="Previsto desta categoria">R$ ${formatarValorBR(previsto)}</span>
                             <span class="categoria-nome">${cat.nome}</span>
                         </div>
-                        <div class="categoria-indicador" style="color: #6e6e73; font-size: 13px;" title="Total executado desta categoria">
+                        <span class="categoria-situacao ${situacao.classe}">${situacao.texto}</span>
+                        <div class="categoria-indicador" title="Total executado desta categoria">
                             R$ ${formatarValorBR(executado)}
                         </div>
                     </button>
@@ -2903,7 +2925,7 @@ function renderizarBlocoPorCategoria(porCategoria) {
         <div class="fatura-bloco">
             <div class="bloco-header">
                 <span class="bloco-titulo">Despesas por Categoria</span>
-                <span class="bloco-subtotal">Previsto</span>
+                <span class="bloco-subtotal">Executado</span>
             </div>
             <div class="bloco-lista">${conteudo}</div>
         </div>
@@ -2913,15 +2935,11 @@ function renderizarBlocoPorCategoria(porCategoria) {
 function renderizarBlocoOutros(outros) {
     const total = outros.reduce((sum, o) => sum + (o.valor || 0), 0);
     const linhas = outros.length > 0
-        ? outros.map(o => `
-            <div class="linha-simples">
-                <div>
-                    <div class="linha-titulo">${o.descricao}</div>
-                    ${o.data_compra ? `<div class="linha-legenda">${formatarDataCurta(o.data_compra)}</div>` : ''}
-                </div>
-                <div class="linha-valor">R$ ${formatarValorBR(o.valor)}</div>
-            </div>
-        `).join('')
+        ? outros.map(o => renderizarLinhaFatura({
+            data: o.data_compra,
+            descricao: o.descricao,
+            valor: `R$ ${formatarValorBR(o.valor)}`
+        })).join('')
         : '<div class="linha-vazia">Sem outros lançamentos no cartão.</div>';
 
     return `
@@ -2945,15 +2963,12 @@ function renderizarBlocoCreditos(creditos) {
                 <span class="bloco-titulo">Créditos e Ajustes</span>
                 <span class="bloco-subtotal">− R$ ${formatarValorBR(Math.abs(total))}</span>
             </div>
-            <div class="bloco-lista">${creditos.map(c => `
-                <div class="linha-simples">
-                    <div>
-                        <div class="linha-titulo">${c.descricao}</div>
-                        <div class="linha-legenda">${[c.data_compra ? formatarDataCurta(c.data_compra) : '', c.legenda].filter(Boolean).join(' · ')}</div>
-                    </div>
-                    <div class="linha-valor">− R$ ${formatarValorBR(Math.abs(c.valor))}</div>
-                </div>
-            `).join('')}</div>
+            <div class="bloco-lista">${creditos.map(c => renderizarLinhaFatura({
+                data: c.data_compra,
+                descricao: c.descricao,
+                legenda: c.legenda,
+                valor: `− R$ ${formatarValorBR(Math.abs(c.valor))}`
+            })).join('')}</div>
         </div>
     `;
 }
@@ -2963,12 +2978,9 @@ function renderizarRodapeFatura(blocos) {
     const totalFixas = blocos.fixas.reduce((sum, f) => sum + previstoFixa(f), 0);
     const totalOutros = blocos.outros.reduce((sum, o) => sum + (o.valor || 0), 0);
     const linhasCategorias = Object.values(blocos.porCategoria || {}).map(cat => {
-        const previsto = parseFloat(cat.previsto || 0);
-        const executado = (cat.lancamentos || []).reduce((s, l) => s + parseFloat(l.valor || 0), 0);
-        const valorRodape = Math.max(previsto, executado);
         return `
         <div class="rodape-linha">
-            <span class="rodape-valor">R$ ${formatarValorBR(valorRodape)}</span>
+            <span class="rodape-valor">R$ ${formatarValorBR(previstoCategoria(cat))}</span>
             <span class="rodape-label">${cat.nome}</span>
         </div>
     `;

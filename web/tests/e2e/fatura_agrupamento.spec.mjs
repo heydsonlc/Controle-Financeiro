@@ -94,3 +94,68 @@ test('detalhe da fatura: parcelada, Categoria do Cartao com limite e Outros, sem
     const registro = cartoes.corpo.find((c) => c.id === cartao);
     expect((await chamarRpc(page, 'inativar_cartao', { p_perfil_id: perfil, p_cartao_id: cartao, p_versao: registro.versao })).status).toBe(200);
 });
+
+// MVP-FIN-AJUSTES-01 (P01 a P04): valor da recorrencia antes da cobranca, cabecalho, excedente, previsto igual ao da lista
+// e linhas compactas. Perfil B, cartao criado aqui, em 03/2038; dados FICTICIOS.
+test('fatura: recorrencia prevista, excedente da categoria, previsto igual ao da lista e linhas compactas', async ({ page }) => {
+    await entrar(page, B);
+    const perfil = await perfilAtivoId(page);
+    const moradia = await idDaCategoria(page, 'Moradia');
+    const nome = 'Cartao Ajustes (E2E)';
+    const criado = await chamarRpc(page, 'criar_cartao', { p_perfil_id: perfil, p_chave: crypto.randomUUID(),
+        p_dados: { nome, dia_fechamento: 3, dia_vencimento: 12 } });
+    const cartao = criado.corpo.cartao_id;
+    expect((await chamarRpc(page, 'vincular_limite_cartao', { p_perfil_id: perfil, p_cartao_id: cartao,
+        p_dados: { categoria_cartao_id: MERCADO_B, limite_mensal: '300.00' } })).status).toBe(200);
+    expect((await chamarRpc(page, 'criar_recorrencia_cartao', { p_perfil_id: perfil, p_chave: crypto.randomUUID(), p_dados: {
+        nome: 'Streaming E2E', valor: '60.00', categoria_id: moradia, data_vencimento: '2038-03-05', cartao_id: cartao,
+        tipo_recorrencia: 'mensal', descricao: '' } })).status).toBe(200);
+    expect((await chamarRpc(page, 'criar_compra', { p_perfil_id: perfil, p_chave: crypto.randomUUID(), p_dados: {
+        cartao_id: cartao, descricao: 'Mercado do mes com um nome bem longo para nao quebrar a linha da fatura E2E', valor: '350.00',
+        total_parcelas: 1, data_compra: '2038-03-02', mes_fatura: '2038-03-01', categoria_id: moradia } })).status).toBe(200);
+
+    await abrirDespesas(page, '2038-03');
+    const fatura = despesa(page, `Fatura ${nome} - 03/2038`);
+    await fatura.locator('[data-on-click^="toggleDetalhesFatura"]').click();
+    const detalhe = fatura.locator('.fatura-detalhes');
+    await expect(detalhe.locator('.fatura-container')).toBeVisible();
+
+    // P01: a linha mostra o valor da recorrencia; o executado continua sem ele.
+    const fixas = bloco(detalhe, 'Despesas Fixas');
+    await expect(fixas.locator('.linha-simples')).toHaveCount(1);
+    await expect(fixas.locator('.linha-prevista .linha-valor')).toHaveText('R$ 60,00');
+    await expect(fixas.locator('.linha-legenda')).toHaveText('Previsto · aguardando cobrança');
+    await expect(fixas.locator('.bloco-subtotal')).toHaveText('R$ 0,00 · R$ 60,00 aguardando cobrança');
+
+    // P02: cabecalho do lado do executado; identificacao por extenso, sem seta.
+    const categorias = bloco(detalhe, 'Despesas por Categoria');
+    await expect(categorias.locator('.bloco-subtotal')).toHaveText('Executado');
+    await expect(categorias.locator('.categoria-situacao.excedente')).toHaveText('Excedente R$ 50,00');
+    await expect(categorias.locator('.categoria-indicador')).toHaveText('R$ 350,00');
+
+    // P03: previsto do detalhe = previsto da lista (o do banco): 60 + 350; executado sem a previsao.
+    const totais = (await detalhe.locator('.fatura-totais .total-valor').allTextContents()).map(normal);
+    expect(totais).toEqual(['R$ 410,00', 'R$ 350,00']);
+    await expect(fatura.locator('.despesa-cell-valor')).toHaveText(/R\$ 410,00/);
+
+    // P04: uma linha so, 28 a 32 px, DATA | DESCRICAO | VALOR, inclusive com descricao longa e em tela estreita.
+    await categorias.locator('.categoria-linha').click();
+    const conferir = async () => {
+        const linhas = detalhe.locator('.linha-simples:visible, .categoria-linha:visible');
+        expect(await linhas.count()).toBe(3);
+        for (const linha of await linhas.all()) {
+            const altura = (await linha.boundingBox()).height;
+            expect(altura).toBeGreaterThanOrEqual(28);
+            expect(altura).toBeLessThanOrEqual(32);
+        }
+    };
+    await conferir();
+    await expect(categorias.locator('.linha-data')).toHaveText('02/03');
+    await page.setViewportSize({ width: 390, height: 800 });
+    await conferir();
+    await page.setViewportSize({ width: 1366, height: 900 });
+
+    const cartoes = await chamarRpc(page, 'cartoes_do_perfil', { p_perfil_id: perfil });
+    const registro = cartoes.corpo.find((c) => c.id === cartao);
+    expect((await chamarRpc(page, 'inativar_cartao', { p_perfil_id: perfil, p_cartao_id: cartao, p_versao: registro.versao })).status).toBe(200);
+});

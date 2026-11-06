@@ -119,13 +119,63 @@ test('fixa: previsto, executado, diferenca e situacao; sem os campos, como antes
     assert.equal(Math.round(totais.totalExecutado * 100) / 100, 283.8);
     assert.equal(Math.round(totais.totalFatura * 100) / 100, 783.7);
     const html = renderizarFaturaCompleta(blocos, totais, '2029-05').replace(/\s+/g, ' ');
-    assert.match(html, /Netflix<\/div> <div class="linha-legenda">Previsto R\$ 59,90 · diferença −R\$ 15,00<\/div> <\/div> <div class="linha-valor">R\$ 44,90/);
-    assert.match(html, /ChatGPT<\/div> <div class="linha-legenda">Previsto R\$ 99,90 · aguardando cobrança<\/div> <\/div> <div class="linha-valor">R\$ 0,00/);
-    assert.match(html, /Claude<\/div> <div class="linha-legenda">Previsto R\$ 109,90 · confirmado/);
-    assert.match(html, /Apple One<\/div> <div class="linha-legenda">Previsto R\$ 59,90 · não cobrada nesta fatura<\/div> <\/div> <div class="linha-valor">R\$ 0,00/);
-    assert.match(html, /X Premium<\/div> <div class="linha-legenda">Previsto R\$ 119,00 · paga com a fatura/);
-    assert.match(html, /<div class="linha-simples"> <div class="linha-titulo">Antiga<\/div> <div class="linha-valor">R\$ 10,00/);
+    assert.match(html, /Netflix<\/span> <span class="linha-legenda">Previsto R\$ 59,90 · diferença −R\$ 15,00<\/span> <span class="linha-valor">R\$ 44,90/);
+    // MVP-FIN-AJUSTES-01 (P01): antes da cobranca a linha mostra o valor definido na recorrencia, marcado como previsto
+    assert.match(html, /linha-simples linha-prevista"[^>]*> <span class="linha-data">10\/05<\/span> <span class="linha-titulo">ChatGPT<\/span> <span class="linha-legenda">Previsto · aguardando cobrança<\/span> <span class="linha-valor">R\$ 99,90/);
+    assert.match(html, /Claude<\/span> <span class="linha-legenda">Previsto R\$ 109,90 · confirmado/);
+    assert.match(html, /Apple One<\/span> <span class="linha-legenda">Previsto R\$ 59,90 · não cobrada nesta fatura<\/span> <span class="linha-valor">R\$ 0,00/);
+    assert.match(html, /X Premium<\/span> <span class="linha-legenda">Previsto R\$ 119,00 · paga com a fatura/);
+    assert.match(html, /<span class="linha-titulo">Antiga<\/span> <span class="linha-valor">R\$ 10,00/);
     assert.match(html, /Despesas Fixas<\/span> <span class="bloco-subtotal">R\$ 283,80 · R\$ 99,90 aguardando cobrança</);
+});
+
+// MVP-FIN-AJUSTES-01 (P03): a fatura Black 11/2026 da producao mostrava R$ 7.827,55 com R$ 9.114,84 no banco (contas_do_mes)
+test('categoria acima do limite: o previsto usa o gasto, como o banco e o rodape', () => {
+    const lancamentos = [compra('Acima', 350, { categoria_cartao_id: 1 }), compra('Abaixo', 40, { categoria_cartao_id: 2 })];
+    const blocos = organizarLancamentosEmBlocos(lancamentos, RESUMO);
+    const totais = calcularTotaisFatura(blocos, lancamentos);
+    // Mercado: limite 300, gasto 350 (entra 350); Farmacia: limite 100, gasto 40 (entra 100)
+    assert.equal(totais.totalFatura, 450);
+    assert.equal(totais.totalExecutado, 390);
+    const html = renderizarFaturaCompleta(blocos, totais, '2029-05').replace(/\s+/g, ' ');
+    assert.match(html, /rodape-valor">R\$ 350,00<\/span> <span class="rodape-label">Mercado/);
+    assert.match(html, /rodape-valor">R\$ 100,00<\/span> <span class="rodape-label">Farmacia/);
+});
+
+// MVP-FIN-AJUSTES-01 (P02)
+test('categorias: cabecalho Executado; saldo e excedente por extenso, sem setas; valores preservados', () => {
+    const lancamentos = [compra('Acima', 350, { categoria_cartao_id: 1 }), compra('Exata', 100, { categoria_cartao_id: 2 })];
+    const blocos = organizarLancamentosEmBlocos(lancamentos, RESUMO);
+    const html = renderizarFaturaCompleta(blocos, calcularTotaisFatura(blocos, lancamentos), '2029-05').replace(/\s+/g, ' ');
+    assert.match(html, /Despesas por Categoria<\/span> <span class="bloco-subtotal">Executado</);
+    assert.doesNotMatch(html, /[↑↓]/);
+    assert.match(html, /categoria-situacao excedente">Excedente R\$ 50,00<\/span> <div class="categoria-indicador"[^>]*> R\$ 350,00/);
+    assert.match(html, /categoria-situacao no-limite">No limite</);
+    const saldo = organizarLancamentosEmBlocos(COMPRAS, RESUMO);
+    assert.match(renderizarFaturaCompleta(saldo, calcularTotaisFatura(saldo, COMPRAS), '2029-05').replace(/\s+/g, ' '),
+        /categoria-situacao saldo">Saldo R\$ 150,00</);
+});
+
+// MVP-FIN-AJUSTES-01 (P04)
+test('linha da fatura: DATA, DESCRICAO e VALOR nessa ordem, em todos os blocos, com a descricao escapada', () => {
+    const lancamentos = [compra('<b>Loja</b>', 10), compra('Parcela', 5, { numero_parcela: 2, total_parcelas: 3 }),
+        compra('Fixa', 7, { is_recorrente: true }), compra('Mercado', 3, { categoria_cartao_id: 1 })];
+    const blocos = organizarLancamentosEmBlocos(lancamentos, RESUMO);
+    const html = renderizarFaturaCompleta(blocos, calcularTotaisFatura(blocos, lancamentos), '2029-05').replace(/\s+/g, ' ');
+    assert.equal(html.match(/class="linha-simples/g).length, 4);
+    assert.equal(html.match(/class="linha-simples[^>]*> <span class="linha-data">10\/05<\/span> <span class="linha-titulo">/g).length, 4);
+    assert.match(html, /&lt;b&gt;Loja&lt;\/b&gt;<\/span> <span class="linha-valor">R\$ 10,00/);
+    assert.match(html, /Parcela<\/span> <span class="linha-legenda">02\/03<\/span> <span class="linha-valor">R\$ 5,00/);
+});
+
+// MVP-FIN-AJUSTES-01 (P01): a cobranca conciliada absorve a previsao (uma linha CONFIRMADA): o valor nao conta duas vezes
+test('fixa conciliada: uma linha so, no previsto e no executado', () => {
+    const lancamentos = [compra('Netflix', 44.9, { is_recorrente: true, valor_previsto: 59.9, valor_executado: 44.9, situacao_ocorrencia: 'CONFIRMADA' })];
+    const blocos = organizarLancamentosEmBlocos(lancamentos, { categorias: [] });
+    const totais = calcularTotaisFatura(blocos, lancamentos);
+    assert.equal(totais.totalFatura, 44.9);
+    assert.equal(totais.totalExecutado, 44.9);
+    assert.equal(blocos.fixas.length, 1);
 });
 
 test('defeito anterior: Categoria do Cartao nula e resumo vazio levavam tudo a Outros', () => {
