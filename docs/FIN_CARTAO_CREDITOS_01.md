@@ -1,6 +1,6 @@
 # FIN-CARTAO-CREDITOS-01 — Natureza do lançamento na importação de cartão (P18)
 
-**Situação (06/11/2026): implementado e testado no ramo local `cartao-creditos-01`, sobre `c77b257`. Não publicado.** Sem migration; as funções do banco não mudaram. Duas pendências dependem de migration e aguardam autorização (seção 6).
+**Situação (07/11/2026): publicado (`39824b3`, deploy `b66d9555`).** Sem migration; as funções do banco não mudaram. As duas pendências que dependem de migration (seção 6) seguem no FIN-CARTAO-CREDITOS-02, e a reconstrução das faturas de 11/2026 fica bloqueada até essa correção.
 
 ## 1. Causa raiz
 
