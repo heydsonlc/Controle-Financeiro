@@ -1,6 +1,6 @@
 # FIN-CARTAO-CREDITOS-02 — Integridade e deduplicação dos créditos da fatura
 
-**Situação (07/11/2026): implementado e testado localmente no ramo `cartao-creditos-02`.** Sem push, sem deploy e sem migration em produção. A produção só foi lida, em sessão somente leitura. A publicação depende de autorização específica. A reconstrução das faturas de 11/2026 continua bloqueada até a publicação.
+**Situação (07/11/2026): publicado (`f94b207`, migration `20261216090000`, 57 no total).** Sem deploy: a tela não mudou. Auditoria somente leitura aprovada (seção 6). A reconstrução das faturas de 11/2026 sai do bloqueio técnico e passa a etapa própria de planejamento e autorização.
 
 ## 1. Diagnóstico
 
@@ -66,3 +66,12 @@ O nome da loja entre aspas não decide a natureza. Texto que começa por estorno
 - `tests/test_gerador_migration_cartao_creditos_integridade.py`
 
 A tela não muda.
+
+## 6. Publicação e auditoria (07/11/2026)
+
+- **Antes:** 56 migrations, a 1216 única pendente; as duas funções vigentes iguais ao texto anterior (o da reversão); 89 testes direcionados aprovados, inclusive o arquivo de recorrências do cartão.
+- **Migration:** aplicada e conferida; 2 funções alteradas, nenhuma criada ou removida, nenhuma tabela nova, nenhum dado existente alterado, nenhum bloqueio de segurança.
+- **Funções publicadas:** iguais ao texto da migration; mesma assinatura, `security definer`, `search_path` fixo, executáveis só por `authenticated`.
+- **Dados financeiros:** contas, compras, movimentos, saldos, financiamento, faturas, recorrências, cartões, duplicidades, despesas dos meses e Dashboard iguais antes e depois. `credito_fatura` vazia.
+- **Atividade do app durante a publicação:** duas linhas gravadas pela tela, fora da migration (identificador de transação anterior e posterior ao dela): a recorrência 377 (Energia Elétrica), com valor e situação inalterados, e a conta bancária 96, com o saldo inalterado.
+
