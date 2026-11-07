@@ -3,8 +3,9 @@
 -- retirando a versao de supabase_migrations.schema_migrations.
 do $$
 begin
-    if exists (select 1 from public.veiculo v where v.combustivel = 'flex' or v.custo_combustivel_modo <> 'MANUAL' or v.km_mensal_estimado is not null) then
-        raise exception 'Ha veiculo Flex ou com custo calculado: a reversao perderia esses dados';
+    if exists (select 1 from public.veiculo v where v.combustivel = 'flex' or v.custo_combustivel_modo <> 'MANUAL' or v.km_mensal_estimado is not null
+                                                     or v.em_uso_paralelo) then
+        raise exception 'Ha veiculo Flex, com custo calculado ou em uso paralelo: a reversao perderia esses dados';
     end if;
     if exists (select 1 from public.despesa_prevista d where d.conta_id is not null or d.lancamento_id is not null) then
         raise exception 'Ha previstas vinculadas a contas ou compras: a reversao perderia os vinculos';
@@ -1411,6 +1412,8 @@ drop function financeiro.mob_aplicar_decisoes(integer, public.mobilidade_cenario
 drop function financeiro.mob_conflitos_previa(integer, text, integer, date);
 drop function financeiro.mob_conflitos_troca(integer, text, integer, date);
 drop function financeiro.mob_compra_substituida(integer);
+drop function financeiro.mob_em_uso_paralelo(text, integer);
+drop function financeiro.mob_situacao_uso(public.veiculo);
 drop function financeiro.mob_dados_flex(public.veiculo, jsonb);
 drop function financeiro.mob_planejar_prevista(integer, integer, integer, text, date, numeric);
 drop function financeiro.mob_sincronizar_combustivel(integer, integer, numeric);
@@ -1422,6 +1425,7 @@ drop function financeiro.mob_item_combustivel(integer, integer);
 drop function financeiro.prevista_financeira(text, integer);
 drop function financeiro.desvincular_abastecimento(integer, integer);
 drop function financeiro.vincular_abastecimento(integer, integer, jsonb);
+drop function financeiro.custos_veiculos_tela(integer, date);
 drop function financeiro.candidatas_abastecimento(integer, integer);
 drop function financeiro.abastecimentos_veiculo_tela(integer, integer);
 drop function financeiro.anular_abastecimento(integer, integer, jsonb);
@@ -1438,6 +1442,7 @@ alter table public.despesa_prevista
     drop column obrigacao, drop column periodo_referencia, drop column conta_id, drop column lancamento_id;
 alter table public.veiculo
     drop constraint veiculo_combustivel_referencia_valida, drop constraint veiculo_custo_combustivel_modo_valido,
+    drop constraint veiculo_em_uso_nao_simulado, drop column em_uso_paralelo,
     drop column autonomia_gasolina_km_l, drop column autonomia_etanol_km_l, drop column preco_gasolina, drop column preco_etanol,
     drop column combustivel_referencia, drop column km_mensal_estimado, drop column custo_combustivel_modo;
 comment on column public.veiculo.autonomia_km_l is null;

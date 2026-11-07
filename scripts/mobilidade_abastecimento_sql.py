@@ -96,6 +96,37 @@ revoke all on financeiro.mobilidade_troca_decisao from public, anon, authenticat
 -- A regra ja existente (um cenario ativo por perfil) passa a ser garantida pelo banco.
 create unique index ux_mobilidade_cenario_ativo_perfil on public.mobilidade_cenario_ativo (perfil_financeiro_id) where status = 'ATIVO';
 
+-- Situacao do veiculo: SIMULADO (so comparacao), CENARIO (a modalidade financeira ativa), EM_USO (real, fora do cenario: marcado
+-- em uso paralelo, ou ATIVO que nunca foi o cenario) ou FORA_DE_USO (saiu do cenario e nao esta em uso paralelo).
+create function financeiro.mob_situacao_uso(p_v public.veiculo)
+    returns text
+    language sql
+    stable
+    security definer
+    set search_path = ''
+as $$
+    select case
+               when p_v.status = 'SIMULADO' then 'SIMULADO'
+               when exists (select 1 from public.mobilidade_cenario_ativo c
+                             where c.tipo_modalidade = 'VEICULO' and c.origem_id = p_v.id and c.status = 'ATIVO') then 'CENARIO'
+               when p_v.em_uso_paralelo then 'EM_USO'
+               when exists (select 1 from public.mobilidade_cenario_ativo c
+                             where c.tipo_modalidade = 'VEICULO' and c.origem_id = p_v.id and c.status = 'INATIVO') then 'FORA_DE_USO'
+               else 'EM_USO'
+           end
+$$;
+
+-- Veiculo em uso paralelo: a recorrencia dele continua na troca do cenario e as despesas dele nao entram em conflito.
+create function financeiro.mob_em_uso_paralelo(p_tipo text, p_origem_id integer)
+    returns boolean
+    language sql
+    stable
+    security definer
+    set search_path = ''
+as $$
+    select p_tipo = 'VEICULO' and exists (select 1 from public.veiculo v where v.id = p_origem_id and v.em_uso_paralelo)
+$$;
+
 -- A compra foi substituida na troca de modalidade?
 create function financeiro.mob_compra_substituida(p_lancamento_id integer)
     returns boolean
@@ -127,7 +158,8 @@ as $$
     itens as (select i.* from public.item_despesa i
                where financeiro.pertence_ao_perfil(i.perfil_financeiro_id, p_perfil_id) and i.recorrente
                  and i.origem_contexto in ('combustivel_mensal', 'transporte_app_mensal', 'assinatura_mensal')
-                 and (i.origem_tipo, i.origem_id) is distinct from (p_tipo, p_origem_id))
+                 and (i.origem_tipo, i.origem_id) is distinct from (p_tipo, p_origem_id)
+                 and not financeiro.mob_em_uso_paralelo(i.origem_tipo, i.origem_id))
     select x.* from (
         select 'CONTA'::text as natureza, c.id as registro_id, coalesce(c.descricao, i.nome)::text as descricao,
                date_trunc('month', c.mes_referencia)::date as competencia, c.valor as valor, i.origem_tipo::text as modalidade_tipo,
@@ -156,7 +188,7 @@ as $$
     order by x.competencia, x.natureza, x.registro_id
 $$;
 
--- Conflitos para a previa ({} sem conflito: a resposta continua igual a de antes).
+-- Conflitos para a previa e o veiculo que sai do cenario ({} sem nenhum dos dois: a resposta continua igual a de antes).
 create function financeiro.mob_conflitos_previa(p_perfil_id integer, p_tipo text, p_origem_id integer, p_inicio date)
     returns jsonb
     language sql
@@ -168,6 +200,11 @@ as $$
                'decidir', coalesce(jsonb_agg(to_jsonb(c) - 'decidir' order by c.competencia, c.natureza, c.registro_id) filter (where c.decidir), '[]'::jsonb),
                'sem_alteracao', coalesce(jsonb_agg(to_jsonb(c) - 'decidir' order by c.competencia, c.natureza, c.registro_id) filter (where not c.decidir), '[]'::jsonb)))
            end
+           || coalesce((select jsonb_build_object('veiculo_saindo', jsonb_build_object('id', v.id, 'nome', v.nome))
+                          from public.mobilidade_cenario_ativo a
+                          join public.veiculo v on v.id = a.origem_id
+                         where financeiro.pertence_ao_perfil(a.perfil_financeiro_id, p_perfil_id) and a.status = 'ATIVO' and a.tipo_modalidade = 'VEICULO'
+                           and ('VEICULO', a.origem_id) is distinct from (p_tipo, p_origem_id) and not v.em_uso_paralelo), '{}'::jsonb)
       from financeiro.mob_conflitos_troca(p_perfil_id, p_tipo, p_origem_id, p_inicio) c
 $$;
 
@@ -610,6 +647,51 @@ begin
 end
 $$;
 
+-- Por veiculo, no mes: o custo estimado (projecao), o que esta financeiramente registrado (contas e compras cobradas do veiculo,
+-- pela recorrencia, pela prevista confirmada ou pelo vinculo do abastecimento, cada despesa uma vez) e o abastecido (operacional).
+create function financeiro.custos_veiculos_tela(p_perfil_id integer, p_mes date)
+    returns jsonb
+    language plpgsql
+    stable
+    security definer
+    set search_path = ''
+as $$
+declare
+    v_mes date := date_trunc('month', coalesce(p_mes, financeiro.hoje_brasilia())::timestamp)::date;
+begin
+    if not financeiro.pode_acessar_perfil(p_perfil_id) then
+        raise exception 'Perfil financeiro nao autorizado' using errcode = '42501';
+    end if;
+    return coalesce((
+        select jsonb_agg(jsonb_build_object('veiculo_id', v.id, 'nome', v.nome, 'situacao_uso', financeiro.mob_situacao_uso(v),
+                                            'estimado', e.total, 'registrado', r.total, 'abastecido', a.total, 'abastecimentos', a.n) order by v.id)
+          from public.veiculo v
+         cross join lateral (select coalesce(sum(d.valor_previsto), 0) as total from public.despesa_prevista d
+                              where d.origem_tipo = 'VEICULO' and d.origem_id = v.id and d.status not in ('IGNORADA', 'CANCELADA')
+                                and date_trunc('month', coalesce(d.data_atual_prevista, d.data_prevista)::timestamp)::date = v_mes) e
+         cross join lateral (select coalesce(sum(x.valor), 0) as total from (
+                                 select c.valor from public.conta c
+                                  where date_trunc('month', c.mes_referencia)::date = v_mes and not coalesce(c.is_fatura_cartao, false)
+                                    and c.status_pagamento is distinct from 'Substituida'
+                                    and (exists (select 1 from public.item_despesa i where i.id = c.item_despesa_id and i.origem_tipo = 'VEICULO' and i.origem_id = v.id)
+                                         or exists (select 1 from public.despesa_prevista d where d.conta_id = c.id and d.origem_tipo = 'VEICULO' and d.origem_id = v.id)
+                                         or exists (select 1 from financeiro.abastecimento b where b.conta_id = c.id and b.veiculo_id = v.id))
+                                 union all
+                                 select financeiro.valor_executado_compra(l.valor, financeiro.situacao_previsao(l.id,
+                                            financeiro.natureza_da_compra(l.total_parcelas, l.is_recorrente, l.item_despesa_id, l.categoria_cartao_id),
+                                            l.is_importado, l.cartao_id, l.mes_fatura))
+                                   from public.lancamento_agregado l
+                                  where l.mes_fatura = v_mes
+                                    and (exists (select 1 from public.item_despesa i where i.id = l.item_despesa_id and i.origem_tipo = 'VEICULO' and i.origem_id = v.id)
+                                         or exists (select 1 from public.despesa_prevista d where d.lancamento_id = l.id and d.origem_tipo = 'VEICULO' and d.origem_id = v.id)
+                                         or exists (select 1 from financeiro.abastecimento b where b.lancamento_id = l.id and b.veiculo_id = v.id))) x) r
+         cross join lateral (select coalesce(sum(b.valor_total), 0) as total, count(*) as n from financeiro.abastecimento b
+                              where b.veiculo_id = v.id and b.anulado_em is null
+                                and date_trunc('month', b.data_abastecimento::timestamp)::date = v_mes) a
+         where financeiro.pertence_ao_perfil(v.perfil_financeiro_id, p_perfil_id)), '[]'::jsonb);
+end
+$$;
+
 -- Compras e contas que podem corresponder ao abastecimento. So consulta: nunca escolhe nem vincula sozinha. Mesmo valor,
 -- de 3 dias antes a 10 depois (data de processamento), mesmo contrato de cartao quando informado e cartao fisico compativel.
 create function financeiro.candidatas_abastecimento(p_perfil_id integer, p_id integer)
@@ -755,7 +837,8 @@ $$;
 """
 
 # Funcoes internas (sem execute para ninguem) e as chamadas pelo aplicativo.
-INTERNAS_NOVAS = ['mob_compra_substituida(integer)', 'mob_conflitos_troca(integer, text, integer, date)',
+INTERNAS_NOVAS = ['mob_situacao_uso(public.veiculo)', 'mob_em_uso_paralelo(text, integer)', 'mob_compra_substituida(integer)',
+                  'mob_conflitos_troca(integer, text, integer, date)',
                   'mob_conflitos_previa(integer, text, integer, date)',
                   'mob_aplicar_decisoes(integer, public.mobilidade_cenario_ativo, jsonb)',
                   'mob_validar_hodometro(integer, date, numeric, integer)', 'mob_km_veiculo(public.veiculo, numeric)',
@@ -763,5 +846,6 @@ INTERNAS_NOVAS = ['mob_compra_substituida(integer)', 'mob_conflitos_troca(intege
                   'mob_abastecimento(integer, integer)', 'mob_exigir_motivo(jsonb)']
 PUBLICAS_NOVAS = ['registrar_abastecimento(integer, jsonb, uuid)', 'corrigir_abastecimento(integer, integer, jsonb)',
                   'anular_abastecimento(integer, integer, jsonb)', 'abastecimentos_veiculo_tela(integer, integer)',
-                  'candidatas_abastecimento(integer, integer)', 'vincular_abastecimento(integer, integer, jsonb)',
+                  'candidatas_abastecimento(integer, integer)', 'custos_veiculos_tela(integer, date)',
+                  'vincular_abastecimento(integer, integer, jsonb)',
                   'desvincular_abastecimento(integer, integer)']

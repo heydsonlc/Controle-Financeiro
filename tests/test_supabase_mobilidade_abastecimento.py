@@ -352,7 +352,7 @@ def test_um_cenario_ativo_por_perfil_e_garantido_pelo_banco(banco):
                    "values (%s, 'VEICULO', %s, %s, 'ATIVO')", (PESSOAL, b, MES))
 
 
-def test_segundo_veiculo_em_uso_continua_contando_e_o_que_saiu_do_cenario_nao(banco):
+def test_segundo_veiculo_nunca_cenario_continua_contando_e_o_que_saiu_sem_uso_paralelo_nao(banco):
     a = criar(banco, {**ATIVO, 'nome': 'Sai do cenario (ficticio)', 'combustivel_valor_mensal': 200})
     b = criar(banco, {**ATIVO, 'nome': 'Sempre em uso (ficticio)', 'combustivel_valor_mensal': 50})
     c = criar(banco, {**ATIVO, 'nome': 'Entra no cenario (ficticio)', 'combustivel_valor_mensal': 70})
@@ -374,6 +374,161 @@ def test_caminho_de_app_fora_do_cenario_nao_conta(banco):
     assert despesas_do_mes(banco) == base and saidas_previstas(banco) == []  # simulacao fora do financeiro real
     trocar(banco, 'TRANSPORTE_APP', caminho)  # cenario ativo sem recorrencia: a previsao passa a contar
     assert despesas_do_mes(banco) == (base[0] + 750, base[1] + 750)
+
+
+# =====================================================================================================================
+# Veiculos em uso simultaneo
+# =====================================================================================================================
+
+def custos(dsn, mes=MES):
+    return {c['veiculo_id']: c for c in rpc(dsn, 'custos_veiculos_tela', PESSOAL, mes.isoformat())}
+
+
+def contas_vivas(dsn, veiculo):
+    return sql(dsn, "select date_trunc('month', c.mes_referencia)::date mes, count(*) n from public.conta c join public.item_despesa i on i.id = c.item_despesa_id "
+                    "where i.origem_tipo = 'VEICULO' and i.origem_id = %s and c.status_pagamento is distinct from 'Substituida' group by 1 order by 1", (veiculo,))
+
+
+def test_dois_veiculos_em_uso_na_mesma_competencia_sem_duplicar(banco):
+    saidas_base = despesas_do_mes(banco)[0]
+    meu = criar(banco, {**ATIVO, 'nome': 'Meu (ficticio)', 'em_uso_paralelo': True})
+    dela = criar(banco, {**ATIVO, 'nome': 'Da familia (ficticio)', 'combustivel_valor_mensal': 150})
+    ativar(banco, meu)
+    item_dela = trocar(banco, 'VEICULO', dela, meio_pagamento='pix')['recorrencia']['id']  # meu veiculo fica em uso: sem conflito
+    gerar_confirmado(banco, mes=MES.isoformat())
+    assert sql(banco, "select ativo from public.item_despesa where origem_id = %s and origem_tipo = 'VEICULO'", (meu,)) == [{'ativo': True}]
+    assert len(sql(banco, "select id from public.item_despesa where origem_tipo = 'VEICULO' and recorrente")) == 2
+    # Cada veiculo com sua conta por mes, uma vez, e o Dashboard soma as duas.
+    assert [c['n'] for c in contas_vivas(banco, meu)] == [1, 1] and [c['n'] for c in contas_vivas(banco, dela)] == [1, 1]
+    assert despesas_do_mes(banco)[0] == saidas_base + 350
+    assert {p['status'] for p in previstas(banco, meu)} == {'SUPRIMIDA'} and contas_item(banco, item_dela)
+    c = custos(banco)
+    assert c[meu]['situacao_uso'] == 'EM_USO' and c[dela]['situacao_uso'] == 'CENARIO'
+    assert (c[meu]['estimado'], c[meu]['registrado'], c[dela]['estimado'], c[dela]['registrado']) == (200, 200, 150, 150)
+
+
+def test_marcar_em_uso_nao_cria_recorrencia_nem_despesa(banco):
+    a = criar(banco, {**ATIVO, 'nome': 'Sem recorrencia (ficticio)'})
+    base = dados_financeiros(banco)
+    rpc(banco, 'editar_veiculo', PESSOAL, a, {'em_uso_paralelo': True})
+    assert dados_financeiros(banco) == base
+    assert sql(banco, "select count(*) n from public.item_despesa where origem_tipo = 'VEICULO'")[0]['n'] == 0
+    simulado = criar(banco, SIMULADO)
+    assert 'simulado' in mensagem(erro(rpc, banco, 'editar_veiculo', PESSOAL, simulado, {'em_uso_paralelo': True}))
+
+
+def test_marcar_depois_da_troca_devolve_as_previsoes_sem_duplicar(banco):
+    a = criar(banco, {**ATIVO, 'nome': 'Saiu do cenario (ficticio)'})
+    b = criar(banco, {**ATIVO, 'nome': 'Entrou (ficticio)', 'combustivel_valor_mensal': 70})
+    ativar(banco, a)
+    gerar_confirmado(banco, mes=MES.isoformat())  # contas de MES e PROXIMO
+    item_a = sql(banco, "select id from public.item_despesa where origem_id = %s and origem_tipo = 'VEICULO'", (a,))[0]['id']
+    futura = [x for x in contas_item(banco, item_a) if x['mes_referencia'].replace(day=1) == PROXIMO][0]['id']
+    trocar(banco, 'VEICULO', b, [{'natureza': 'CONTA', 'id': futura, 'decisao': 'SUBSTITUIR'}], meio_pagamento='pix')
+    assert custos(banco)[a]['situacao_uso'] == 'FORA_DE_USO'
+    fora = despesas_do_mes(banco)[0]
+    rpc(banco, 'editar_veiculo', PESSOAL, a, {'em_uso_paralelo': True})
+    assert custos(banco)[a]['situacao_uso'] == 'EM_USO'
+    # MES ja tem conta (nao soma a previsao); de PROXIMO em diante a previsao volta, inclusive onde a conta foi substituida.
+    assert despesas_do_mes(banco)[0] == fora
+    por_mes = {p['data_prevista']: p['status'] for p in previstas(banco, a)}
+    assert por_mes[MES] == 'SUPRIMIDA' and por_mes[PROXIMO] == 'PREVISTA' and por_mes[DEPOIS] == 'PREVISTA'
+    assert sql(banco, 'select ativo from public.item_despesa where id = %s', (item_a,)) == [{'ativo': False}]  # nada recriado
+
+
+def test_alternar_o_cenario_preserva_veiculos_historicos_e_despesas(banco):
+    a = criar(banco, {**ATIVO, 'nome': 'A (ficticio)', 'em_uso_paralelo': True})
+    b = criar(banco, {**ATIVO, 'nome': 'B (ficticio)', 'em_uso_paralelo': True, 'combustivel_valor_mensal': 150})
+    abastecer(banco, a, hodometro_km=100)
+    abastecer(banco, b, hodometro_km=200, valor_total=88)
+    ativar(banco, a)
+    trocar(banco, 'VEICULO', b, meio_pagamento='pix')
+    gerar_confirmado(banco, mes=DEPOIS.isoformat())
+    leituras = sql(banco, 'select id, veiculo_id, hodometro_km, litros from financeiro.abastecimento order by id')
+    executados = sql(banco, "select c.id, c.valor, c.status_pagamento from public.conta c join public.item_despesa i on i.id = c.item_despesa_id "
+                            "where i.origem_tipo = 'VEICULO' order by c.id")
+    for destino in (a, b, a):
+        assert conflitos(banco, 'VEICULO', destino) is None
+        trocar(banco, 'VEICULO', destino, meio_pagamento='pix')
+        gerar_confirmado(banco, mes=DEPOIS.isoformat())
+    assert sql(banco, 'select id, veiculo_id, hodometro_km, litros from financeiro.abastecimento order by id') == leituras
+    assert sql(banco, "select c.id, c.valor, c.status_pagamento from public.conta c join public.item_despesa i on i.id = c.item_despesa_id "
+                      "where i.origem_tipo = 'VEICULO' order by c.id") == executados
+    assert {c['n'] for v in (a, b) for c in contas_vivas(banco, v)} == {1}
+    assert len(sql(banco, "select id from public.item_despesa where origem_tipo = 'VEICULO' and recorrente and ativo")) == 2
+
+
+def test_tirar_o_uso_paralelo_encerra_a_recorrencia_sem_apagar_contas(banco):
+    a = criar(banco, {**ATIVO, 'nome': 'A (ficticio)', 'em_uso_paralelo': True})
+    b = criar(banco, {**ATIVO, 'nome': 'B (ficticio)', 'combustivel_valor_mensal': 150})
+    item = ativar(banco, a)['recorrencia']['id']
+    trocar(banco, 'VEICULO', b, meio_pagamento='pix')
+    gerar_confirmado(banco, mes=MES.isoformat())
+    contas = contas_item(banco, item)
+    assert erro(rpc, banco, 'excluir_veiculo', PESSOAL, a).diag.message_hint == 'EM_USO'
+    rpc(banco, 'editar_veiculo', PESSOAL, a, {'em_uso_paralelo': False})
+    assert sql(banco, 'select ativo from public.item_despesa where id = %s', (item,)) == [{'ativo': False}]
+    assert contas_item(banco, item) == contas and custos(banco)[a]['situacao_uso'] == 'FORA_DE_USO'
+    # As futuras ja lancadas continuam reais ate a proxima troca decidir.
+    assert len(conflitos(banco, 'ASSINATURA', assinatura(banco))['decidir']) == 2  # uma de cada veiculo
+
+
+def test_previa_avisa_o_veiculo_que_sai_do_cenario(banco):
+    a = criar(banco, ATIVO)
+    ativar(banco, a)
+    ass = assinatura(banco)
+    previa = rpc(banco, 'previa_mobilidade', PESSOAL, {'tipo_modalidade': 'ASSINATURA', 'origem_id': ass})
+    assert previa['veiculo_saindo']['id'] == a
+    rpc(banco, 'editar_veiculo', PESSOAL, a, {'em_uso_paralelo': True})
+    assert 'veiculo_saindo' not in rpc(banco, 'previa_mobilidade', PESSOAL, {'tipo_modalidade': 'ASSINATURA', 'origem_id': ass})
+
+
+def test_custos_separam_estimado_registrado_e_abastecido_sem_contar_duas_vezes(banco):
+    v = criar(banco, ATIVO)
+    alvo = previstas(banco, v)[0]
+    conta = rpc(banco, 'confirmar_despesa_prevista', PESSOAL, alvo['id'], {'meio_pagamento': 'pix'})['entidade_criada']['id']
+    a = abastecer(banco, v, data_abastecimento=HOJE.isoformat(), valor_total=200, preco_litro=5, meio_pagamento='pix')
+    rpc(banco, 'vincular_abastecimento', PESSOAL, a['id'], {'conta_id': conta})  # mesma conta pela prevista e pelo abastecimento
+    c = custos(banco)[v]
+    assert (c['estimado'], c['registrado'], c['abastecido'], c['abastecimentos']) == (200, 200, 200, 1)
+    simulado = criar(banco, SIMULADO)
+    abastecer(banco, simulado, data_abastecimento=HOJE.isoformat(), valor_total=99)
+    s = custos(banco)[simulado]
+    assert s['situacao_uso'] == 'SIMULADO' and s['registrado'] == 0 and s['abastecido'] == 99 and s['estimado'] == 600
+
+
+def test_simulado_nao_afeta_nada_mesmo_com_veiculos_em_uso(banco):
+    a = criar(banco, {**ATIVO, 'em_uso_paralelo': True})
+    ativar(banco, a)
+    gerar_confirmado(banco, mes=MES.isoformat())
+    base = dashboard(banco)['fluxo_caixa'], dados_financeiros(banco)
+    s = criar(banco, SIMULADO)
+    abastecer(banco, s)
+    assert (dashboard(banco)['fluxo_caixa'], dados_financeiros(banco)) == base
+
+
+def test_de_etanol_para_flex_preserva_historico_e_valores(banco):
+    v = criar(banco, ETANOL)
+    rpc(banco, 'converter_veiculo', PESSOAL, v, {'data_inicio': HOJE.isoformat()})
+    p = previstas(banco, v)[0]
+    conta = rpc(banco, 'confirmar_despesa_prevista', PESSOAL, p['id'], {'meio_pagamento': 'pix'})['entidade_criada']['id']
+    a = abastecer(banco, v, combustivel='etanol', preco_litro=4, valor_total=100, hodometro_km=30000)
+    historicos = {'abastecimentos': 'select * from financeiro.abastecimento order by id',
+                  'conta': 'select * from public.conta order by id',
+                  'confirmada': "select id, valor_previsto, metadata, status from public.despesa_prevista where status = 'CONFIRMADA' order by id",
+                  'km': 'select km_estimado_acumulado from public.veiculo where id = %s' % v}
+    antes = {n: sql(banco, q) for n, q in historicos.items()}
+    rpc(banco, 'editar_veiculo', PESSOAL, v, {'combustivel': 'flex', 'autonomia_gasolina_km_l': 12, 'autonomia_etanol_km_l': 8, 'preco_gasolina': 6,
+                                              'preco_etanol': 4, 'combustivel_referencia': 'etanol'})
+    linha = sql(banco, 'select combustivel, autonomia_km_l, preco_medio_combustivel, combustivel_valor_mensal, custo_combustivel_modo from public.veiculo where id = %s', (v,))[0]
+    assert linha == {'combustivel': 'flex', 'autonomia_km_l': Decimal('8.00'), 'preco_medio_combustivel': Decimal('4.00'),
+                     'combustivel_valor_mensal': Decimal('400.00'), 'custo_combustivel_modo': 'MANUAL'}
+    assert {n: sql(banco, q) for n, q in historicos.items()} == antes
+    assert sql(banco, 'select id from public.conta where id = %s', (conta,))
+    # Agora aceita gasolina, e a leitura continua na mesma sequencia do veiculo.
+    b = abastecer(banco, v, combustivel='gasolina', preco_litro=6, valor_total=120, hodometro_km=30500)
+    assert [x['id'] for x in historico(banco, v)['abastecimentos']] == [b['id'], a['id']]
+    assert historico(banco, v)['abastecimentos'][0]['km_rodados'] == 500.0
 
 
 # =====================================================================================================================
@@ -502,6 +657,18 @@ def test_troca_nao_conclui_com_conflito_sem_decisao(banco):
     assert e.diag.message_hint == 'PREVIA_DESATUALIZADA'  # o mes corrente nao pode ser substituido
     assert 'invalida' in mensagem(erro(trocar, banco, 'ASSINATURA', ass, [dict(tudo[0], decisao='APAGAR')] + tudo[1:]))
     assert dados_financeiros(banco) == base and sql(banco, 'select * from public.mobilidade_cenario_ativo order by id') == cenarios
+    assert sql(banco, 'select count(*) n from financeiro.mobilidade_troca_decisao')[0]['n'] == 0
+
+
+def test_veiculo_em_uso_paralelo_nao_entra_em_conflito_na_troca(banco):
+    v, item, contas = preparar_troca(banco)
+    rpc(banco, 'editar_veiculo', PESSOAL, v, {'em_uso_paralelo': True})
+    ass = assinatura(banco)
+    assert conflitos(banco, 'ASSINATURA', ass) is None
+    base = dados_financeiros(banco)
+    trocar(banco, 'ASSINATURA', ass)
+    assert dados_financeiros(banco) == base
+    assert sql(banco, 'select ativo from public.item_despesa where id = %s', (item,)) == [{'ativo': True}]
     assert sql(banco, 'select count(*) n from financeiro.mobilidade_troca_decisao')[0]['n'] == 0
 
 

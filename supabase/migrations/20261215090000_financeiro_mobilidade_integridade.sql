@@ -14,7 +14,7 @@
 --   Registrar nunca cria despesa. A leitura real manda na quilometragem; a estimativa so completa os dias depois dela.
 -- - Troca de modalidade: despesas futuras da modalidade anterior sao decididas uma a uma (manter ou substituir), com
 --   registro; a substituida fica preservada, fora dos indicadores. O mes corrente, o que foi pago e o que tem movimento nao mudam.
--- - Modalidade inativa fica fora do Dashboard, como o veiculo simulado.
+-- - Modalidade inativa fica fora do Dashboard, como o veiculo simulado. Veiculo em uso paralelo conta e mantem a recorrencia.
 
 -- =====================================================================================================================
 -- 1. Estrutura: so colunas opcionais. Veiculo existente continua MANUAL, sem nenhum valor alterado.
@@ -27,12 +27,16 @@ alter table public.veiculo
     add column combustivel_referencia  character varying(10),
     add column km_mensal_estimado      numeric(10, 2),
     add column custo_combustivel_modo  character varying(10) not null default 'MANUAL',
+    add column em_uso_paralelo         boolean not null default false,
+    add constraint veiculo_em_uso_nao_simulado check (not em_uso_paralelo or status is distinct from 'SIMULADO'),
     add constraint veiculo_combustivel_referencia_valida check (combustivel_referencia in ('gasolina', 'etanol')),
     add constraint veiculo_custo_combustivel_modo_valido check (custo_combustivel_modo in ('MANUAL', 'CALCULADO'));
 comment on column public.veiculo.custo_combustivel_modo is
     'FIN-MVP-MOB-01: MANUAL = vale o valor informado; CALCULADO = km / autonomia x preco, recalculado ao salvar. O padrao nunca muda um valor existente.';
 comment on column public.veiculo.autonomia_km_l is
     'Autonomia em uso. No Flex, a do combustivel de referencia (FIN-MVP-MOB-01).';
+comment on column public.veiculo.em_uso_paralelo is
+    'FIN-MVP-MOB-01: veiculo real em uso junto do cenario financeiro. Na troca do cenario, a recorrencia dele continua e as previsoes seguem contando. Nao cria recorrencia.';
 
 alter table public.despesa_prevista
     add column obrigacao          text,
@@ -170,6 +174,37 @@ revoke all on financeiro.mobilidade_troca_decisao from public, anon, authenticat
 -- A regra ja existente (um cenario ativo por perfil) passa a ser garantida pelo banco.
 create unique index ux_mobilidade_cenario_ativo_perfil on public.mobilidade_cenario_ativo (perfil_financeiro_id) where status = 'ATIVO';
 
+-- Situacao do veiculo: SIMULADO (so comparacao), CENARIO (a modalidade financeira ativa), EM_USO (real, fora do cenario: marcado
+-- em uso paralelo, ou ATIVO que nunca foi o cenario) ou FORA_DE_USO (saiu do cenario e nao esta em uso paralelo).
+create function financeiro.mob_situacao_uso(p_v public.veiculo)
+    returns text
+    language sql
+    stable
+    security definer
+    set search_path = ''
+as $$
+    select case
+               when p_v.status = 'SIMULADO' then 'SIMULADO'
+               when exists (select 1 from public.mobilidade_cenario_ativo c
+                             where c.tipo_modalidade = 'VEICULO' and c.origem_id = p_v.id and c.status = 'ATIVO') then 'CENARIO'
+               when p_v.em_uso_paralelo then 'EM_USO'
+               when exists (select 1 from public.mobilidade_cenario_ativo c
+                             where c.tipo_modalidade = 'VEICULO' and c.origem_id = p_v.id and c.status = 'INATIVO') then 'FORA_DE_USO'
+               else 'EM_USO'
+           end
+$$;
+
+-- Veiculo em uso paralelo: a recorrencia dele continua na troca do cenario e as despesas dele nao entram em conflito.
+create function financeiro.mob_em_uso_paralelo(p_tipo text, p_origem_id integer)
+    returns boolean
+    language sql
+    stable
+    security definer
+    set search_path = ''
+as $$
+    select p_tipo = 'VEICULO' and exists (select 1 from public.veiculo v where v.id = p_origem_id and v.em_uso_paralelo)
+$$;
+
 -- A compra foi substituida na troca de modalidade?
 create function financeiro.mob_compra_substituida(p_lancamento_id integer)
     returns boolean
@@ -185,8 +220,7 @@ $$;
 -- 2. Funcoes novas (internas)
 -- =====================================================================================================================
 -- A prevista conta como obrigacao financeira real? Ficam so nas telas de Mobilidade as de veiculo SIMULADO, as de veiculo que
--- saiu do cenario financeiro (outra modalidade foi ativada) e as de caminho de app que nao e o cenario ativo. Veiculo ATIVO que
--- nunca foi o cenario (segundo carro em uso) continua contando.
+-- saiu do cenario financeiro sem continuar em uso e as de caminho de app que nao e o cenario ativo. Veiculo em uso conta.
 create function financeiro.prevista_financeira(p_origem_tipo text, p_origem_id integer)
     returns boolean
     language sql
@@ -196,11 +230,8 @@ create function financeiro.prevista_financeira(p_origem_tipo text, p_origem_id i
 as $$
     select case p_origem_tipo
                when 'VEICULO' then
-                   not exists (select 1 from public.veiculo v where v.id = p_origem_id and v.status = 'SIMULADO')
-                   and not (exists (select 1 from public.mobilidade_cenario_ativo c
-                                     where c.tipo_modalidade = 'VEICULO' and c.origem_id = p_origem_id and c.status = 'INATIVO')
-                            and not exists (select 1 from public.mobilidade_cenario_ativo c
-                                             where c.tipo_modalidade = 'VEICULO' and c.origem_id = p_origem_id and c.status = 'ATIVO'))
+                   not exists (select 1 from public.veiculo v where v.id = p_origem_id
+                                 and financeiro.mob_situacao_uso(v) in ('SIMULADO', 'FORA_DE_USO'))
                when 'TRANSPORTE_APP' then
                    exists (select 1 from public.mobilidade_cenario_ativo c
                             where c.tipo_modalidade = 'TRANSPORTE_APP' and c.origem_id = p_origem_id and c.status = 'ATIVO')
@@ -395,6 +426,13 @@ as $$
 declare
     v public.veiculo := p_v;
 begin
+    if p_dados ? 'em_uso_paralelo' then
+        v.em_uso_paralelo := financeiro.mob_bool(p_dados -> 'em_uso_paralelo', false);
+    end if;
+    v.em_uso_paralelo := coalesce(v.em_uso_paralelo, false);
+    if v.em_uso_paralelo and v.status = 'SIMULADO' then
+        raise exception 'Veículo simulado não fica em uso paralelo: converta para ativo antes. Nada foi gravado.' using errcode = '22023';
+    end if;
     if p_dados ? 'km_mensal_estimado' then
         v.km_mensal_estimado := financeiro.numero_seguro(p_dados -> 'km_mensal_estimado');
         if v.km_mensal_estimado < 0 then
@@ -463,7 +501,8 @@ as $$
     itens as (select i.* from public.item_despesa i
                where financeiro.pertence_ao_perfil(i.perfil_financeiro_id, p_perfil_id) and i.recorrente
                  and i.origem_contexto in ('combustivel_mensal', 'transporte_app_mensal', 'assinatura_mensal')
-                 and (i.origem_tipo, i.origem_id) is distinct from (p_tipo, p_origem_id))
+                 and (i.origem_tipo, i.origem_id) is distinct from (p_tipo, p_origem_id)
+                 and not financeiro.mob_em_uso_paralelo(i.origem_tipo, i.origem_id))
     select x.* from (
         select 'CONTA'::text as natureza, c.id as registro_id, coalesce(c.descricao, i.nome)::text as descricao,
                date_trunc('month', c.mes_referencia)::date as competencia, c.valor as valor, i.origem_tipo::text as modalidade_tipo,
@@ -492,7 +531,7 @@ as $$
     order by x.competencia, x.natureza, x.registro_id
 $$;
 
--- Conflitos para a previa ({} sem conflito: a resposta continua igual a de antes).
+-- Conflitos para a previa e o veiculo que sai do cenario ({} sem nenhum dos dois: a resposta continua igual a de antes).
 create function financeiro.mob_conflitos_previa(p_perfil_id integer, p_tipo text, p_origem_id integer, p_inicio date)
     returns jsonb
     language sql
@@ -504,6 +543,11 @@ as $$
                'decidir', coalesce(jsonb_agg(to_jsonb(c) - 'decidir' order by c.competencia, c.natureza, c.registro_id) filter (where c.decidir), '[]'::jsonb),
                'sem_alteracao', coalesce(jsonb_agg(to_jsonb(c) - 'decidir' order by c.competencia, c.natureza, c.registro_id) filter (where not c.decidir), '[]'::jsonb)))
            end
+           || coalesce((select jsonb_build_object('veiculo_saindo', jsonb_build_object('id', v.id, 'nome', v.nome))
+                          from public.mobilidade_cenario_ativo a
+                          join public.veiculo v on v.id = a.origem_id
+                         where financeiro.pertence_ao_perfil(a.perfil_financeiro_id, p_perfil_id) and a.status = 'ATIVO' and a.tipo_modalidade = 'VEICULO'
+                           and ('VEICULO', a.origem_id) is distinct from (p_tipo, p_origem_id) and not v.em_uso_paralelo), '{}'::jsonb)
       from financeiro.mob_conflitos_troca(p_perfil_id, p_tipo, p_origem_id, p_inicio) c
 $$;
 
@@ -944,6 +988,51 @@ begin
 end
 $$;
 
+-- Por veiculo, no mes: o custo estimado (projecao), o que esta financeiramente registrado (contas e compras cobradas do veiculo,
+-- pela recorrencia, pela prevista confirmada ou pelo vinculo do abastecimento, cada despesa uma vez) e o abastecido (operacional).
+create function financeiro.custos_veiculos_tela(p_perfil_id integer, p_mes date)
+    returns jsonb
+    language plpgsql
+    stable
+    security definer
+    set search_path = ''
+as $$
+declare
+    v_mes date := date_trunc('month', coalesce(p_mes, financeiro.hoje_brasilia())::timestamp)::date;
+begin
+    if not financeiro.pode_acessar_perfil(p_perfil_id) then
+        raise exception 'Perfil financeiro nao autorizado' using errcode = '42501';
+    end if;
+    return coalesce((
+        select jsonb_agg(jsonb_build_object('veiculo_id', v.id, 'nome', v.nome, 'situacao_uso', financeiro.mob_situacao_uso(v),
+                                            'estimado', e.total, 'registrado', r.total, 'abastecido', a.total, 'abastecimentos', a.n) order by v.id)
+          from public.veiculo v
+         cross join lateral (select coalesce(sum(d.valor_previsto), 0) as total from public.despesa_prevista d
+                              where d.origem_tipo = 'VEICULO' and d.origem_id = v.id and d.status not in ('IGNORADA', 'CANCELADA')
+                                and date_trunc('month', coalesce(d.data_atual_prevista, d.data_prevista)::timestamp)::date = v_mes) e
+         cross join lateral (select coalesce(sum(x.valor), 0) as total from (
+                                 select c.valor from public.conta c
+                                  where date_trunc('month', c.mes_referencia)::date = v_mes and not coalesce(c.is_fatura_cartao, false)
+                                    and c.status_pagamento is distinct from 'Substituida'
+                                    and (exists (select 1 from public.item_despesa i where i.id = c.item_despesa_id and i.origem_tipo = 'VEICULO' and i.origem_id = v.id)
+                                         or exists (select 1 from public.despesa_prevista d where d.conta_id = c.id and d.origem_tipo = 'VEICULO' and d.origem_id = v.id)
+                                         or exists (select 1 from financeiro.abastecimento b where b.conta_id = c.id and b.veiculo_id = v.id))
+                                 union all
+                                 select financeiro.valor_executado_compra(l.valor, financeiro.situacao_previsao(l.id,
+                                            financeiro.natureza_da_compra(l.total_parcelas, l.is_recorrente, l.item_despesa_id, l.categoria_cartao_id),
+                                            l.is_importado, l.cartao_id, l.mes_fatura))
+                                   from public.lancamento_agregado l
+                                  where l.mes_fatura = v_mes
+                                    and (exists (select 1 from public.item_despesa i where i.id = l.item_despesa_id and i.origem_tipo = 'VEICULO' and i.origem_id = v.id)
+                                         or exists (select 1 from public.despesa_prevista d where d.lancamento_id = l.id and d.origem_tipo = 'VEICULO' and d.origem_id = v.id)
+                                         or exists (select 1 from financeiro.abastecimento b where b.lancamento_id = l.id and b.veiculo_id = v.id))) x) r
+         cross join lateral (select coalesce(sum(b.valor_total), 0) as total, count(*) as n from financeiro.abastecimento b
+                              where b.veiculo_id = v.id and b.anulado_em is null
+                                and date_trunc('month', b.data_abastecimento::timestamp)::date = v_mes) a
+         where financeiro.pertence_ao_perfil(v.perfil_financeiro_id, p_perfil_id)), '[]'::jsonb);
+end
+$$;
+
 -- Compras e contas que podem corresponder ao abastecimento. So consulta: nunca escolhe nem vincula sozinha. Mesmo valor,
 -- de 3 dias antes a 10 depois (data de processamento), mesmo contrato de cartao quando informado e cartao fisico compativel.
 create function financeiro.candidatas_abastecimento(p_perfil_id integer, p_id integer)
@@ -1129,6 +1218,7 @@ as $$
         || coalesce((select jsonb_build_object('km_real', a.hodometro_km, 'km_real_data', a.data_abastecimento)
                        from financeiro.abastecimento a where a.veiculo_id = (p_v).id and a.anulado_em is null
                       order by a.data_abastecimento desc, a.hodometro_km desc, a.id desc limit 1), '{}'::jsonb)
+        || case when (p_v).em_uso_paralelo then jsonb_build_object('em_uso_paralelo', true) else '{}'::jsonb end
       from (select round(coalesce((p_v).combustivel_valor_mensal, 0), 2) comb,
                    round(coalesce((p_v).seguro_valor, 0) / 12, 2) seg,
                    round(coalesce((p_v).ipva_valor, 0) / 12, 2) ipva,
@@ -1325,12 +1415,12 @@ begin
                                 combustivel_valor_mensal, ipva_mes, ipva_valor, seguro_mes, seguro_valor, licenciamento_mes,
                                 licenciamento_valor, preco_medio_combustivel, km_estimado_acumulado, criado_em, atualizado_em,
                                 autonomia_gasolina_km_l, autonomia_etanol_km_l, preco_gasolina, preco_etanol,
-                                combustivel_referencia, km_mensal_estimado, custo_combustivel_modo)
+                                combustivel_referencia, km_mensal_estimado, custo_combustivel_modo, em_uso_paralelo)
     values (p_perfil_id, v.nome, v.tipo, v.combustivel, v.autonomia_km_l, v.status, v.data_inicio,
             v.combustivel_valor_mensal, v.ipva_mes, v.ipva_valor, v.seguro_mes, v.seguro_valor, v.licenciamento_mes,
             v.licenciamento_valor, v.preco_medio_combustivel, 0, financeiro.mob_agora(), financeiro.mob_agora(),
             v.autonomia_gasolina_km_l, v.autonomia_etanol_km_l, v.preco_gasolina, v.preco_etanol,
-            v.combustivel_referencia, v.km_mensal_estimado, v.custo_combustivel_modo)
+            v.combustivel_referencia, v.km_mensal_estimado, v.custo_combustivel_modo, v.em_uso_paralelo)
     returning id into v.id;
     perform financeiro.mob_aplicar_categorias(v.id);
     perform financeiro.mob_gerar_projecoes(p_perfil_id, v.id, financeiro.mob_meses(p_dados -> 'meses_futuros', 12));
@@ -1362,13 +1452,21 @@ begin
            preco_medio_combustivel = v.preco_medio_combustivel, atualizado_em = financeiro.mob_agora(),
            autonomia_gasolina_km_l = v.autonomia_gasolina_km_l, autonomia_etanol_km_l = v.autonomia_etanol_km_l,
            preco_gasolina = v.preco_gasolina, preco_etanol = v.preco_etanol, combustivel_referencia = v.combustivel_referencia,
-           km_mensal_estimado = v.km_mensal_estimado, custo_combustivel_modo = v.custo_combustivel_modo
+           km_mensal_estimado = v.km_mensal_estimado, custo_combustivel_modo = v.custo_combustivel_modo,
+           em_uso_paralelo = v.em_uso_paralelo
      where id = v.id;
     perform financeiro.mob_aplicar_categorias(v.id);
     perform financeiro.mob_gerar_projecoes(p_perfil_id, v.id, financeiro.mob_meses(p_dados -> 'meses_futuros', 12));
     -- FIN-MVP-MOB-01: o custo novo vale para a recorrencia e so para as ocorrencias futuras elegiveis
     if v.combustivel_valor_mensal is distinct from v_antes.combustivel_valor_mensal and coalesce(v.combustivel_valor_mensal, 0) > 0 then
         perform financeiro.mob_sincronizar_combustivel(p_perfil_id, v.id, v.combustivel_valor_mensal);
+    end if;
+    -- FIN-MVP-MOB-01: deixou de estar em uso sem ser o cenario: a recorrencia se encerra, como na troca. As contas ja lancadas ficam.
+    if v_antes.em_uso_paralelo and not v.em_uso_paralelo and financeiro.mob_situacao_uso(v) <> 'CENARIO' then
+        update public.item_despesa i set ativo = false
+         where financeiro.pertence_ao_perfil(i.perfil_financeiro_id, p_perfil_id) and i.origem_tipo = 'VEICULO' and i.origem_id = v.id
+           and i.recorrente and i.ativo;
+        perform financeiro.mob_restaurar_combustivel(p_perfil_id, v.id);
     end if;
     return jsonb_build_object('veiculo_id', v.id);
 end
@@ -1499,11 +1597,13 @@ begin
     if found then
         update public.item_despesa i set ativo = false
          where financeiro.pertence_ao_perfil(i.perfil_financeiro_id, p_perfil_id) and i.origem_tipo = v_anterior.tipo_modalidade
-           and i.origem_id = v_anterior.origem_id and i.recorrente and i.ativo;
+           and i.origem_id = v_anterior.origem_id and i.recorrente and i.ativo
+           -- FIN-MVP-MOB-01: veiculo em uso paralelo so sai do cenario: a recorrencia dele continua
+           and not financeiro.mob_em_uso_paralelo(v_anterior.tipo_modalidade, v_anterior.origem_id);
         update public.mobilidade_cenario_ativo set status = 'INATIVO', updated_at = financeiro.mob_agora()
          where id = v_anterior.id;
         -- FIN-MVP-MOB-01: sem a recorrencia, as previsoes de combustivel suprimidas por ela voltam (exceto as ja cobertas)
-        if v_anterior.tipo_modalidade = 'VEICULO' then
+        if v_anterior.tipo_modalidade = 'VEICULO' and not financeiro.mob_em_uso_paralelo('VEICULO', v_anterior.origem_id) then
             perform financeiro.mob_restaurar_combustivel(p_perfil_id, v_anterior.origem_id);
         end if;
     end if;
@@ -1582,6 +1682,11 @@ begin
     returning * into v_c;
     -- FIN-MVP-MOB-01: despesas futuras da modalidade anterior: cada uma com a decisao do usuario, ou nada e gravado
     v_troca := financeiro.mob_aplicar_decisoes(p_perfil_id, v_c, p_dados -> 'decisoes');
+    -- A competencia substituida deixou de estar coberta: a previsao do veiculo que saiu volta para a tela de Mobilidade.
+    if v_anterior.tipo_modalidade = 'VEICULO' and (v_anterior.tipo_modalidade, v_anterior.origem_id) is distinct from (v_tipo, v_origem)
+       and not financeiro.mob_em_uso_paralelo('VEICULO', v_anterior.origem_id) then
+        perform financeiro.mob_restaurar_combustivel(p_perfil_id, v_anterior.origem_id);
+    end if;
     return financeiro.registrar_operacao_mobilidade(p_chave, p_perfil_id, 'ativar_mobilidade', v_troca || jsonb_build_object(
         'cenario', financeiro.mob_cenario_flask(v_c),
         'recorrencia', case when v_rec.id is not null then financeiro.item_despesa_flask(v_rec) end,
@@ -2020,6 +2125,10 @@ begin
     if exists (select 1 from financeiro.abastecimento a where a.veiculo_id = v.id) then  -- FIN-MVP-MOB-01
         raise exception 'O veículo tem abastecimentos registrados (histórico). Nada foi excluído.'
             using errcode = '22023', hint = 'COM_HISTORICO';
+    end if;
+    if (financeiro.mob_item_combustivel(p_perfil_id, v.id)).id is not null then
+        raise exception 'O veículo tem recorrência de combustível ativa. Tire o uso paralelo antes de excluir. Nada foi excluído.'
+            using errcode = '22023', hint = 'EM_USO';
     end if;
     if exists (select 1 from public.veiculo_financiamento f where f.veiculo_id = v.id)
        or exists (select 1 from public.veiculo_regra_manutencao_km r where r.veiculo_id = v.id)
@@ -2602,6 +2711,8 @@ revoke execute on function financeiro.mob_dispensar_cobertas(integer, integer, p
 revoke execute on function financeiro.mob_sincronizar_combustivel(integer, integer, numeric) from public, anon, authenticated;
 revoke execute on function financeiro.mob_planejar_prevista(integer, integer, integer, text, date, numeric) from public, anon, authenticated;
 revoke execute on function financeiro.mob_dados_flex(public.veiculo, jsonb) from public, anon, authenticated;
+revoke execute on function financeiro.mob_situacao_uso(public.veiculo) from public, anon, authenticated;
+revoke execute on function financeiro.mob_em_uso_paralelo(text, integer) from public, anon, authenticated;
 revoke execute on function financeiro.mob_compra_substituida(integer) from public, anon, authenticated;
 revoke execute on function financeiro.mob_conflitos_troca(integer, text, integer, date) from public, anon, authenticated;
 revoke execute on function financeiro.mob_conflitos_previa(integer, text, integer, date) from public, anon, authenticated;
@@ -2622,6 +2733,8 @@ revoke execute on function financeiro.abastecimentos_veiculo_tela(integer, integ
 grant execute on function financeiro.abastecimentos_veiculo_tela(integer, integer) to authenticated;
 revoke execute on function financeiro.candidatas_abastecimento(integer, integer) from public, anon;
 grant execute on function financeiro.candidatas_abastecimento(integer, integer) to authenticated;
+revoke execute on function financeiro.custos_veiculos_tela(integer, date) from public, anon;
+grant execute on function financeiro.custos_veiculos_tela(integer, date) to authenticated;
 revoke execute on function financeiro.vincular_abastecimento(integer, integer, jsonb) from public, anon;
 grant execute on function financeiro.vincular_abastecimento(integer, integer, jsonb) to authenticated;
 revoke execute on function financeiro.desvincular_abastecimento(integer, integer) from public, anon;

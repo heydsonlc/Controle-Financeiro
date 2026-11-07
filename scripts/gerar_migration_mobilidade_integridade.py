@@ -456,6 +456,10 @@ t = trocar(t, """    if exists (select 1 from public.veiculo_financiamento f whe
         raise exception 'O veículo tem abastecimentos registrados (histórico). Nada foi excluído.'
             using errcode = '22023', hint = 'COM_HISTORICO';
     end if;
+    if (financeiro.mob_item_combustivel(p_perfil_id, v.id)).id is not null then
+        raise exception 'O veículo tem recorrência de combustível ativa. Tire o uso paralelo antes de excluir. Nada foi excluído.'
+            using errcode = '22023', hint = 'EM_USO';
+    end if;
     if exists (select 1 from public.veiculo_financiamento f where f.veiculo_id = v.id)
 """)
 NOVO['excluir_veiculo'] = t
@@ -464,13 +468,18 @@ NOVO['excluir_veiculo'] = t
 # Recorrencia de combustivel: fonte unica da despesa e sincronizada com o veiculo
 # ---------------------------------------------------------------------------------------------------------------------
 t = ORIG['ativar_mobilidade']
+t = trocar(t, """           and i.origem_id = v_anterior.origem_id and i.recorrente and i.ativo;
+""", f"""           and i.origem_id = v_anterior.origem_id and i.recorrente and i.ativo
+           -- {MARCA}: veiculo em uso paralelo so sai do cenario: a recorrencia dele continua
+           and not financeiro.mob_em_uso_paralelo(v_anterior.tipo_modalidade, v_anterior.origem_id);
+""")
 t = trocar(t, """        update public.mobilidade_cenario_ativo set status = 'INATIVO', updated_at = financeiro.mob_agora()
          where id = v_anterior.id;
     end if;
 """, f"""        update public.mobilidade_cenario_ativo set status = 'INATIVO', updated_at = financeiro.mob_agora()
          where id = v_anterior.id;
         -- {MARCA}: sem a recorrencia, as previsoes de combustivel suprimidas por ela voltam (exceto as ja cobertas)
-        if v_anterior.tipo_modalidade = 'VEICULO' then
+        if v_anterior.tipo_modalidade = 'VEICULO' and not financeiro.mob_em_uso_paralelo('VEICULO', v_anterior.origem_id) then
             perform financeiro.mob_restaurar_combustivel(p_perfil_id, v_anterior.origem_id);
         end if;
     end if;
@@ -504,6 +513,11 @@ t = trocar(t, """    returning * into v_c;
 """, f"""    returning * into v_c;
     -- {MARCA}: despesas futuras da modalidade anterior: cada uma com a decisao do usuario, ou nada e gravado
     v_troca := financeiro.mob_aplicar_decisoes(p_perfil_id, v_c, p_dados -> 'decisoes');
+    -- A competencia substituida deixou de estar coberta: a previsao do veiculo que saiu volta para a tela de Mobilidade.
+    if v_anterior.tipo_modalidade = 'VEICULO' and (v_anterior.tipo_modalidade, v_anterior.origem_id) is distinct from (v_tipo, v_origem)
+       and not financeiro.mob_em_uso_paralelo('VEICULO', v_anterior.origem_id) then
+        perform financeiro.mob_restaurar_combustivel(p_perfil_id, v_anterior.origem_id);
+    end if;
     return financeiro.registrar_operacao_mobilidade(p_chave, p_perfil_id, 'ativar_mobilidade', v_troca || jsonb_build_object(
 """)
 NOVO['ativar_mobilidade'] = t
@@ -537,7 +551,8 @@ t = trocar(t, """           preco_medio_combustivel = v.preco_medio_combustivel,
 """, """           preco_medio_combustivel = v.preco_medio_combustivel, atualizado_em = financeiro.mob_agora(),
            autonomia_gasolina_km_l = v.autonomia_gasolina_km_l, autonomia_etanol_km_l = v.autonomia_etanol_km_l,
            preco_gasolina = v.preco_gasolina, preco_etanol = v.preco_etanol, combustivel_referencia = v.combustivel_referencia,
-           km_mensal_estimado = v.km_mensal_estimado, custo_combustivel_modo = v.custo_combustivel_modo
+           km_mensal_estimado = v.km_mensal_estimado, custo_combustivel_modo = v.custo_combustivel_modo,
+           em_uso_paralelo = v.em_uso_paralelo
      where id = v.id;
 """)
 t = trocar(t, """    perform financeiro.mob_gerar_projecoes(p_perfil_id, v.id, financeiro.mob_meses(p_dados -> 'meses_futuros', 12));
@@ -546,6 +561,13 @@ t = trocar(t, """    perform financeiro.mob_gerar_projecoes(p_perfil_id, v.id, f
     -- {MARCA}: o custo novo vale para a recorrencia e so para as ocorrencias futuras elegiveis
     if v.combustivel_valor_mensal is distinct from v_antes.combustivel_valor_mensal and coalesce(v.combustivel_valor_mensal, 0) > 0 then
         perform financeiro.mob_sincronizar_combustivel(p_perfil_id, v.id, v.combustivel_valor_mensal);
+    end if;
+    -- {MARCA}: deixou de estar em uso sem ser o cenario: a recorrencia se encerra, como na troca. As contas ja lancadas ficam.
+    if v_antes.em_uso_paralelo and not v.em_uso_paralelo and financeiro.mob_situacao_uso(v) <> 'CENARIO' then
+        update public.item_despesa i set ativo = false
+         where financeiro.pertence_ao_perfil(i.perfil_financeiro_id, p_perfil_id) and i.origem_tipo = 'VEICULO' and i.origem_id = v.id
+           and i.recorrente and i.ativo;
+        perform financeiro.mob_restaurar_combustivel(p_perfil_id, v.id);
     end if;
     return jsonb_build_object('veiculo_id', v.id);
 """)
@@ -576,12 +598,12 @@ t = ORIG['criar_veiculo']
 t = trocar(t, """                                licenciamento_valor, preco_medio_combustivel, km_estimado_acumulado, criado_em, atualizado_em)
 """, """                                licenciamento_valor, preco_medio_combustivel, km_estimado_acumulado, criado_em, atualizado_em,
                                 autonomia_gasolina_km_l, autonomia_etanol_km_l, preco_gasolina, preco_etanol,
-                                combustivel_referencia, km_mensal_estimado, custo_combustivel_modo)
+                                combustivel_referencia, km_mensal_estimado, custo_combustivel_modo, em_uso_paralelo)
 """)
 t = trocar(t, """            v.licenciamento_valor, v.preco_medio_combustivel, 0, financeiro.mob_agora(), financeiro.mob_agora())
 """, """            v.licenciamento_valor, v.preco_medio_combustivel, 0, financeiro.mob_agora(), financeiro.mob_agora(),
             v.autonomia_gasolina_km_l, v.autonomia_etanol_km_l, v.preco_gasolina, v.preco_etanol,
-            v.combustivel_referencia, v.km_mensal_estimado, v.custo_combustivel_modo)
+            v.combustivel_referencia, v.km_mensal_estimado, v.custo_combustivel_modo, v.em_uso_paralelo)
 """)
 NOVO['criar_veiculo'] = t
 
@@ -604,6 +626,7 @@ t = trocar(t, """                else '{{}}'::jsonb end
         || coalesce((select jsonb_build_object('km_real', a.hodometro_km, 'km_real_data', a.data_abastecimento)
                        from financeiro.abastecimento a where a.veiculo_id = (p_v).id and a.anulado_em is null
                       order by a.data_abastecimento desc, a.hodometro_km desc, a.id desc limit 1), '{{}}'::jsonb)
+        || case when (p_v).em_uso_paralelo then jsonb_build_object('em_uso_paralelo', true) else '{{}}'::jsonb end
       from (select""")
 NOVO['veiculo_flask'] = t
 
@@ -621,12 +644,16 @@ alter table public.veiculo
     add column combustivel_referencia  character varying(10),
     add column km_mensal_estimado      numeric(10, 2),
     add column custo_combustivel_modo  character varying(10) not null default 'MANUAL',
+    add column em_uso_paralelo         boolean not null default false,
+    add constraint veiculo_em_uso_nao_simulado check (not em_uso_paralelo or status is distinct from 'SIMULADO'),
     add constraint veiculo_combustivel_referencia_valida check (combustivel_referencia in ('gasolina', 'etanol')),
     add constraint veiculo_custo_combustivel_modo_valido check (custo_combustivel_modo in ('MANUAL', 'CALCULADO'));
 comment on column public.veiculo.custo_combustivel_modo is
     'FIN-MVP-MOB-01: MANUAL = vale o valor informado; CALCULADO = km / autonomia x preco, recalculado ao salvar. O padrao nunca muda um valor existente.';
 comment on column public.veiculo.autonomia_km_l is
     'Autonomia em uso. No Flex, a do combustivel de referencia (FIN-MVP-MOB-01).';
+comment on column public.veiculo.em_uso_paralelo is
+    'FIN-MVP-MOB-01: veiculo real em uso junto do cenario financeiro. Na troca do cenario, a recorrencia dele continua e as previsoes seguem contando. Nao cria recorrencia.';
 
 alter table public.despesa_prevista
     add column obrigacao          text,
@@ -674,8 +701,7 @@ AUXILIARES = """-- =============================================================
 -- 2. Funcoes novas (internas)
 -- =====================================================================================================================
 -- A prevista conta como obrigacao financeira real? Ficam so nas telas de Mobilidade as de veiculo SIMULADO, as de veiculo que
--- saiu do cenario financeiro (outra modalidade foi ativada) e as de caminho de app que nao e o cenario ativo. Veiculo ATIVO que
--- nunca foi o cenario (segundo carro em uso) continua contando.
+-- saiu do cenario financeiro sem continuar em uso e as de caminho de app que nao e o cenario ativo. Veiculo em uso conta.
 create function financeiro.prevista_financeira(p_origem_tipo text, p_origem_id integer)
     returns boolean
     language sql
@@ -685,11 +711,8 @@ create function financeiro.prevista_financeira(p_origem_tipo text, p_origem_id i
 as $$
     select case p_origem_tipo
                when 'VEICULO' then
-                   not exists (select 1 from public.veiculo v where v.id = p_origem_id and v.status = 'SIMULADO')
-                   and not (exists (select 1 from public.mobilidade_cenario_ativo c
-                                     where c.tipo_modalidade = 'VEICULO' and c.origem_id = p_origem_id and c.status = 'INATIVO')
-                            and not exists (select 1 from public.mobilidade_cenario_ativo c
-                                             where c.tipo_modalidade = 'VEICULO' and c.origem_id = p_origem_id and c.status = 'ATIVO'))
+                   not exists (select 1 from public.veiculo v where v.id = p_origem_id
+                                 and financeiro.mob_situacao_uso(v) in ('SIMULADO', 'FORA_DE_USO'))
                when 'TRANSPORTE_APP' then
                    exists (select 1 from public.mobilidade_cenario_ativo c
                             where c.tipo_modalidade = 'TRANSPORTE_APP' and c.origem_id = p_origem_id and c.status = 'ATIVO')
@@ -884,6 +907,13 @@ as $$
 declare
     v public.veiculo := p_v;
 begin
+    if p_dados ? 'em_uso_paralelo' then
+        v.em_uso_paralelo := financeiro.mob_bool(p_dados -> 'em_uso_paralelo', false);
+    end if;
+    v.em_uso_paralelo := coalesce(v.em_uso_paralelo, false);
+    if v.em_uso_paralelo and v.status = 'SIMULADO' then
+        raise exception 'Veículo simulado não fica em uso paralelo: converta para ativo antes. Nada foi gravado.' using errcode = '22023';
+    end if;
     if p_dados ? 'km_mensal_estimado' then
         v.km_mensal_estimado := financeiro.numero_seguro(p_dados -> 'km_mensal_estimado');
         if v.km_mensal_estimado < 0 then
@@ -960,7 +990,7 @@ migration = f"""-- {MARCA}: integridade financeira da Mobilidade e combustivel F
 --   Registrar nunca cria despesa. A leitura real manda na quilometragem; a estimativa so completa os dias depois dela.
 -- - Troca de modalidade: despesas futuras da modalidade anterior sao decididas uma a uma (manter ou substituir), com
 --   registro; a substituida fica preservada, fora dos indicadores. O mes corrente, o que foi pago e o que tem movimento nao mudam.
--- - Modalidade inativa fica fora do Dashboard, como o veiculo simulado.
+-- - Modalidade inativa fica fora do Dashboard, como o veiculo simulado. Veiculo em uso paralelo conta e mantem a recorrencia.
 
 {ESTRUTURA}
 {ESTRUTURA_ABASTECIMENTO}
@@ -984,8 +1014,9 @@ reversao = f"""-- Reversao de {VERSAO} ({MARCA}): volta as funcoes ao texto ante
 -- retirando a versao de supabase_migrations.schema_migrations.
 do $$
 begin
-    if exists (select 1 from public.veiculo v where v.combustivel = 'flex' or v.custo_combustivel_modo <> 'MANUAL' or v.km_mensal_estimado is not null) then
-        raise exception 'Ha veiculo Flex ou com custo calculado: a reversao perderia esses dados';
+    if exists (select 1 from public.veiculo v where v.combustivel = 'flex' or v.custo_combustivel_modo <> 'MANUAL' or v.km_mensal_estimado is not null
+                                                     or v.em_uso_paralelo) then
+        raise exception 'Ha veiculo Flex, com custo calculado ou em uso paralelo: a reversao perderia esses dados';
     end if;
     if exists (select 1 from public.despesa_prevista d where d.conta_id is not null or d.lancamento_id is not null) then
         raise exception 'Ha previstas vinculadas a contas ou compras: a reversao perderia os vinculos';
@@ -1016,6 +1047,7 @@ alter table public.despesa_prevista
     drop column obrigacao, drop column periodo_referencia, drop column conta_id, drop column lancamento_id;
 alter table public.veiculo
     drop constraint veiculo_combustivel_referencia_valida, drop constraint veiculo_custo_combustivel_modo_valido,
+    drop constraint veiculo_em_uso_nao_simulado, drop column em_uso_paralelo,
     drop column autonomia_gasolina_km_l, drop column autonomia_etanol_km_l, drop column preco_gasolina, drop column preco_etanol,
     drop column combustivel_referencia, drop column km_mensal_estimado, drop column custo_combustivel_modo;
 comment on column public.veiculo.autonomia_km_l is null;
