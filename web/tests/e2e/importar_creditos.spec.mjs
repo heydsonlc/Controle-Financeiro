@@ -9,6 +9,7 @@ import { abrirDespesas, chamarRpc, despesa, normal, perfilAtivoId, registrarDial
 
 const B = { email: process.env.CF_EMAIL_B || 'usuario.b@teste.local', senha: process.env.CF_SENHA_B };
 const CARTAO = 'Cartao Creditos E2E';
+const CARTAO_MISTO = 'Cartao Mistos E2E';
 
 test.use({ viewport: { width: 1600, height: 900 } });
 
@@ -45,14 +46,26 @@ const FATURA = [
     '2034-06-23,Padaria E2E,"8,00"',                               // compra comum
 ].join('\n');
 
+// Cada analise pedida ao banco, com o tipo com que a linha do IOF devolvido foi enviada (previa: envio do arquivo;
+// confirmacao: chaves da gravacao ja a caminho, pela tela de resultado).
+function espiarAnalises(page) {
+    const analises = [];
+    page.on('request', (pedido) => {
+        if (!/analisar_importacao_cartao/.test(pedido.url())) return;
+        const iof = (pedido.postDataJSON().p_linhas || []).find((l) => /IOF de volta/.test(l.descricao_original || ''));
+        if (iof) analises.push({ credito: iof.tipo_movimento, momento: pedido.postDataJSON().p_linhas.some((l) => /Pagamento recebido/.test(l.descricao_original)) ? 'previa' : 'confirmacao' });
+    });
+    return analises;
+}
+
 const linhaDe = (page, texto) => page.locator('#editorPrePersistencia tr', { hasText: texto });
 const bloco = (detalhe, titulo) => detalhe.locator('.fatura-bloco', { has: detalhe.page().locator('.bloco-titulo', { hasText: titulo }) });
 
-async function abrirImportacao(page) {
+async function abrirImportacao(page, cartao = CARTAO, competencia = '06/2034') {
     await page.goto('/importar-cartao.html');
-    await expect(page.locator('#cartaoSelect option', { hasText: CARTAO })).toHaveCount(1);
-    await page.selectOption('#cartaoSelect', { label: CARTAO });
-    await page.fill('#competenciaInput', '06/2034');
+    await expect(page.locator('#cartaoSelect option', { hasText: cartao })).toHaveCount(1);
+    await page.selectOption('#cartaoSelect', { label: cartao });
+    await page.fill('#competenciaInput', competencia);
     await page.locator('#competenciaInput').dispatchEvent('input');
 }
 
@@ -72,6 +85,7 @@ test('creditos do Nubank: estorno escolhido, IOF vinculado, ajuste e pagamento f
         expect(r.status, descricao).toBe(200);
     }
 
+    const analises = espiarAnalises(page);
     await abrirImportacao(page);
     await page.locator('#csvFile').setInputFiles({ name: 'Nubank_2034-07-12.csv', mimeType: 'text/csv', buffer: Buffer.from(FATURA) });
     await expect(page.locator('#resumoConfiguracaoImportacao')).toContainText('CSV analisado com sucesso.');
@@ -79,8 +93,12 @@ test('creditos do Nubank: estorno escolhido, IOF vinculado, ajuste e pagamento f
 
     const iof = linhaDe(page, 'IOF de volta de Nuvem E2E');
     await expect(iof.locator('.import-status-pill')).toHaveText('Crédito');
+    await expect(iof.locator('.import-raw-value')).toHaveText(/^− R\$\s0,99$/);
     await expect(iof).toContainText(/Devolucao de IOF · abate R\$\s0,99 da fatura 06\/2034 · compra original: IOF de "Nuvem E2E"/);
     await expect(linhaDe(page, 'Credito de ajuste E2E')).toContainText('Credito ou ajuste da fatura');
+    await expect(page.locator('#retiradosContainer')).not.toContainText('Já existe na fatura');
+    // FIN-CARTAO-CREDITOS-01: creditos abatem a soma em processamento (8,00 - 50,22 - 0,99 - 3,00)
+    await expect(page.locator('#kpiValorProcessamento')).toHaveText(/^-\s?R\$\s46,21$/);
     const estorno = linhaDe(page, 'Loja Som E2E');
     await expect(estorno.locator('.import-status-pill')).toHaveText('Revisar');
     await expect(linhaDe(page, 'Pagamento recebido')).toHaveCount(0);  // retirado: pagamento nao e credito desta fatura
@@ -96,6 +114,9 @@ test('creditos do Nubank: estorno escolhido, IOF vinculado, ajuste e pagamento f
     await expect(page.locator('#resultadoContainer')).toContainText('Importação concluída.');
     await expect(page.locator('#resultadoContainer')).toContainText(/Créditos abatidos da fatura: 3 \(R\$\s54,21\)/);
     expect(dialogos.find((d) => d.startsWith('Confirmar importacao'))).toMatch(/Creditos da fatura \(abatem o valor a pagar\): 3/);
+    // FIN-CARTAO-CREDITOS-01: em nenhuma analise o credito chega ao banco como debito; a previa nao repete a analise
+    expect(analises.filter((a) => a.credito !== 'credito')).toEqual([]);
+    expect(analises.filter((a) => a.momento === 'previa').length).toBe(1);
 
     const resumo = (await chamarRpc(page, 'fatura_por_categoria', { p_perfil_id: perfil, p_cartao_id: cartao, p_mes: '2034-06-01' })).corpo;
     expect([Number(resumo.total_compras), Number(resumo.total_creditos), Number(resumo.total_fatura)]).toEqual([967.26, 54.21, 913.05]);
@@ -122,6 +143,67 @@ test('creditos do Nubank: estorno escolhido, IOF vinculado, ajuste e pagamento f
     await expect(page.locator('#btnImportar')).toContainText('(0)');
 
     // Limpeza do cenario: cartao inativado (compras, creditos e faturas continuam registrados)
+    const registro = (await chamarRpc(page, 'cartoes_do_perfil', { p_perfil_id: perfil })).corpo.find((c) => c.id === cartao);
+    expect((await chamarRpc(page, 'inativar_cartao', { p_perfil_id: perfil, p_cartao_id: cartao, p_versao: registro.versao })).status).toBe(200);
+});
+
+// FIN-CARTAO-CREDITOS-01 (P18): debitos e creditos de mesmo valor no mesmo arquivo. A compra casada pelo valor sai com o
+// motivo; a outra de mesmo valor e nova; o credito de mesmo valor e data de uma compra lancada abate, sem duplicidade;
+// estorno integral e parcial; reimportacao nao grava nada. Fatura: 126,00 de compras - 85,00 de creditos = 41,00.
+const MISTA = [
+    'date,title,amount',
+    '2034-07-10,Loja A E2E,"8,00"',                       // casada pelo valor com a compra lancada a mao
+    '2034-07-10,Loja B E2E,"8,00"',                       // outra compra de mesmo valor: nova
+    '2034-07-12,Loja Igual E2E,"- 50,00"',                // credito de mesmo valor, data e descricao de compra lancada
+    '2034-07-13,"Estorno de ""Loja Total E2E""","- 20,00"',  // estorno integral
+    '2034-07-14,"Estorno de ""Loja Meia E2E""","- 15,00"',   // estorno parcial
+].join('\n');
+
+test('debito e credito de mesmo valor: natureza preservada, compra nova mantida e reimportacao sem efeito', async ({ page }) => {
+    registrarDialogos(page);
+    await entrar(page, B);
+    const perfil = await perfilAtivoId(page);
+    const moradia = (await chamarRpc(page, 'categorias_de_despesa', {})).corpo.find((c) => c.nome.startsWith('Moradia')).id;
+    const criado = await chamarRpc(page, 'criar_cartao', { p_perfil_id: perfil, p_chave: crypto.randomUUID(),
+        p_dados: { nome: CARTAO_MISTO, dia_fechamento: 3, dia_vencimento: 12 } });
+    expect(criado.status).toBe(200);
+    const cartao = criado.corpo.cartao_id;
+    for (const [descricao, valor, data] of [['Lancada a mao E2E', '8.00', '2034-07-10'], ['Loja Igual E2E', '50.00', '2034-07-12'],
+        ['Loja Total E2E', '20.00', '2034-07-01'], ['Loja Meia E2E', '40.00', '2034-07-02']]) {
+        const r = await chamarRpc(page, 'criar_compra', { p_perfil_id: perfil, p_chave: crypto.randomUUID(), p_dados: {
+            cartao_id: cartao, descricao, valor, total_parcelas: 1, data_compra: data, mes_fatura: '2034-07-01', categoria_id: moradia } });
+        expect(r.status, descricao).toBe(200);
+    }
+
+    await abrirImportacao(page, CARTAO_MISTO, '07/2034');
+    await page.locator('#csvFile').setInputFiles({ name: 'Nubank_2034-08-12.csv', mimeType: 'text/csv', buffer: Buffer.from(MISTA) });
+    await expect(page.locator('#resumoConfiguracaoImportacao')).toContainText('CSV analisado com sucesso.');
+    await page.click('#btnStep4');
+
+    await expect(linhaDe(page, 'Loja Igual E2E').locator('.import-status-pill')).toHaveText('Crédito');
+    await expect(linhaDe(page, 'Loja Total E2E')).toContainText(/Estorno de compra · abate R\$\s20,00 .* compra original: Loja Total E2E/);
+    await expect(linhaDe(page, 'Loja Meia E2E')).toContainText(/compra original: Loja Meia E2E \(R\$\s40,00\), parcial/);
+    const retirados = page.locator('#retiradosContainer');
+    await expect(retirados.locator('tr', { hasText: 'Loja A E2E' })).toContainText('Já existe na fatura');
+    await expect(retirados.locator('tr', { hasText: 'Loja B E2E' })).toHaveCount(0);
+    await linhaDe(page, 'Loja B E2E').locator('.import-category-cell select').selectOption(String(moradia));
+    await expect(page.locator('#btnImportar')).toContainText('(4)');
+    await page.click('#btnImportar');
+    await expect(page.locator('#resultadoContainer')).toContainText('Importação concluída.');
+    await expect(page.locator('#resultadoContainer')).toContainText(/Créditos abatidos da fatura: 3 \(R\$\s85,00\)/);
+    const totais = async () => {
+        const r = (await chamarRpc(page, 'fatura_por_categoria', { p_perfil_id: perfil, p_cartao_id: cartao, p_mes: '2034-07-01' })).corpo;
+        return [Number(r.total_compras), Number(r.total_creditos), Number(r.total_fatura)];
+    };
+    expect(await totais()).toEqual([126, 85, 41]);
+
+    // Reimportar: compras e creditos protegidos, nada novo
+    await abrirImportacao(page, CARTAO_MISTO, '07/2034');
+    await page.locator('#csvFile').setInputFiles({ name: 'Nubank_2034-08-12.csv', mimeType: 'text/csv', buffer: Buffer.from(MISTA) });
+    await expect(page.locator('#resumoConfiguracaoImportacao')).toContainText(/Total importável: R\$\s0,00/);
+    await expect(page.locator('#btnImportar')).toContainText('(0)');
+    expect(await totais()).toEqual([126, 85, 41]);
+
     const registro = (await chamarRpc(page, 'cartoes_do_perfil', { p_perfil_id: perfil })).corpo.find((c) => c.id === cartao);
     expect((await chamarRpc(page, 'inativar_cartao', { p_perfil_id: perfil, p_cartao_id: cartao, p_versao: registro.versao })).status).toBe(200);
 });
