@@ -2,7 +2,7 @@
 
 **Situação (07/11/2026): contrato complementar implementado e testado localmente no ramo `mob-01-abastecimentos`.** Sem push, sem deploy e sem migration em produção. A produção só foi lida, em sessão só de leitura. A publicação depende de nova autorização expressa.
 
-O contrato complementar corrige os dois impedimentos que interromperam a publicação em 06/11/2026 (quilometragem real e duplicidade na troca de modalidade) e acrescenta o registro de abastecimento. Está na seção 9.
+O contrato complementar corrige os dois impedimentos que interromperam a publicação em 06/11/2026 (quilometragem real e duplicidade na troca de modalidade) e acrescenta o registro de abastecimento e os veículos em uso simultâneo. Está na seção 9.
 
 Base: diagnóstico FIN-MOBILIDADE-DIAGNOSTICO-01, sobre o commit de produção `f3ade96`.
 
@@ -175,7 +175,7 @@ Quando autorizada: push, aplicar só `20261215090000`, conferir o hash e fazer b
 | Ativar um cenário desativa os demais? | Sim. `ativar_mobilidade` inativa o anterior e as recorrências dele. Era regra só de função; agora um índice único garante um cenário ativo por perfil. |
 | Veículo em uso × cenário financeiro | São coisas distintas: `veiculo.status` diz se o veículo é real; `mobilidade_cenario_ativo` diz qual modalidade gera a recorrência. ATIVO não significa cenário ativo. |
 | Recorrência × veículo | `item_despesa` com `origem_tipo = 'VEICULO'`, `origem_id` e `origem_contexto = 'combustivel_mensal'`. |
-| Ativar um segundo veículo afeta o primeiro? | Sim: a recorrência do primeiro é inativada mesmo com ele em uso, e as contas futuras dele conviviam em silêncio com as novas. É o defeito corrigido em 9.4. |
+| Ativar um segundo veículo afeta o primeiro? | Sim: a recorrência do primeiro é inativada mesmo com ele em uso, e as contas futuras dele conviviam em silêncio com as novas. Corrigido em 9.4 e 9.5. |
 
 Produção hoje: 1 veículo (SIMULADO, etanol), nenhum cenário, nenhuma regra de km, 55 migrations, 1215 não aplicada.
 
@@ -229,9 +229,36 @@ No Pix, débito ou dinheiro, o vínculo é com `conta`, em vez de compra. Sem v�
 - **Fora da troca:** conta paga ou com movimento, compra já cobrada, mês corrente.
 - **Alternância:** A → B → A não repete a decisão já tomada, e substituído não cobre a competência. Resultado: uma despesa viva por mês.
 
-**Previsões que contam no Dashboard:** ficam só na tela de Mobilidade as de veículo simulado, as de veículo que saiu do cenário e as de caminho de app que não é o cenário ativo. Veículo ATIVO que nunca foi cenário, como um segundo carro em uso, continua contando.
+### 9.5 Veículos em uso simultâneo
 
-### 9.5 Vínculo com a despesa
+Trocar o cenário de comparação não significa deixar de usar um veículo. Cada veículo tem agora uma situação, calculada em `mob_situacao_uso`:
+
+| Situação | Quando | Previsões no Dashboard |
+|---|---|---|
+| Simulado | `status = 'SIMULADO'` | Não contam |
+| Cenário financeiro | É a modalidade ativa do perfil | Contam |
+| Em uso | Marcado "Em uso em paralelo", ou ATIVO que nunca foi cenário | Contam |
+| Fora de uso | Saiu do cenário sem a marca | Não contam |
+
+- **Marca:** `veiculo.em_uso_paralelo`, no cadastro. Só para veículo ATIVO. Marcar não cria recorrência nem despesa.
+- **Troca do cenário:** a recorrência do veículo em uso paralelo continua ativa, sem conflito a decidir. É a mesma recorrência; nenhuma nova é criada.
+- **Sem duplicar:** enquanto a recorrência existe, as previsões de combustível dela ficam suprimidas. Sem recorrência, conta a previsão até virar despesa. Cada competência fica com uma única fonte.
+- **Marcar depois da troca:** as previsões voltam a contar, a recorrência encerrada não renasce e os meses que já têm conta não somam a previsão.
+- **Tirar a marca:** a recorrência se encerra, como numa troca, e as contas lançadas ficam. As futuras vão para a decisão da próxima troca.
+- **Aviso:** a prévia informa quando um veículo vai sair do cenário sem a marca.
+- **Exclusão:** veículo com recorrência ativa é recusado.
+
+**Previsões de app:** caminho de transporte por app que não é o cenário ativo não conta.
+
+**Custos por veículo:** `custos_veiculos_tela` e a tabela na aba Configuração mostram, no mês:
+
+- **Estimado:** a projeção.
+- **Registrado:** contas e compras cobradas do veículo, pela recorrência, pela prevista confirmada ou pelo vínculo do abastecimento, cada despesa uma vez.
+- **Abastecido:** o registro operacional, que não soma nos totais financeiros.
+
+**Etanol para Flex:** editar o cadastro preserva abastecimentos, contas, previstas confirmadas e km consolidado. O custo em modo manual não muda, e a sequência do hodômetro continua a mesma.
+
+### 9.6 Vínculo com a despesa
 
 Prontos no banco, sem tela: `candidatas_abastecimento`, `vincular_abastecimento` e `desvincular_abastecimento`.
 
@@ -239,19 +266,19 @@ Prontos no banco, sem tela: `candidatas_abastecimento`, `vincular_abastecimento`
 - **Vincular:** recusa valor ou cartão divergente e despesa já usada. Não cria nem altera a compra. Excluir a compra só limpa o vínculo, então a limpeza de importação não perde o abastecimento.
 - **Importador:** não foi alterado, como exigido enquanto o FIN-CARTAO-CREDITOS-02 estiver pendente.
 
-### 9.6 Testes
+### 9.7 Testes
 
 | Bateria | Resultado |
 |---|---|
-| `test_supabase_mobilidade_abastecimento.py` | 47/47 |
+| `test_supabase_mobilidade_abastecimento.py` | 57/57 |
 | `test_supabase_mobilidade_integridade.py` | 26/26 |
-| Seleção de impacto (pytest) | 1.503 de 1.506 na rodada completa; as 3 falhas eram testes a ajustar (reversão fora de ordem e troca sem decisão) e passaram depois do ajuste. A rodada completa não foi repetida. |
-| Unitários do frontend | 83/83 |
-| E2E completo | 127/127, duas vezes, sem novas tentativas; a segunda com a tela final |
+| Seleção de impacto (pytest) | 1.516 casos: 1.492 aprovados, 24 pulados, 0 falhas, na rodada completa final |
+| Unitários do frontend | 84/84 |
+| E2E completo | 128/128, sem novas tentativas, com a versão final |
 
 Duas falhas reais apareceram nos testes e foram corrigidas: leitura menor no mesmo dia era aceita, e cadastro antigo com combustível em maiúscula escapava da validação.
 
-### 9.7 Ensaio na cópia fiel da produção
+### 9.8 Ensaio na cópia fiel da produção
 
 | Verificação | Resultado |
 |---|---|
@@ -265,10 +292,10 @@ Duas falhas reais apareceram nos testes e foram corrigidas: leitura menor no mes
 
 O efeito no Dashboard é o da seção 4: R$ 800,00, R$ 4.799,00 e R$ 4.600,00 a menos em 11/2026, 12/2026 e 01/2027, por sair a simulação.
 
-### 9.8 Pendências
+### 9.9 Pendências
 
 - **Tela de vínculo e sugestão na importação:** depende do FIN-CARTAO-CREDITOS-02 e dos cartões cadastrados na reconstrução de 11/2026. O modelo já comporta, sem refazer abastecimentos.
-- **Vários cenários financeiros ativos:** mantido um por perfil. Veículo que saiu do cenário e continua em uso perde as previsões no Dashboard. Proposta: marcar no veículo "em uso paralelo", sem nova recorrência, e só depois avaliar recorrências simultâneas, com a mesma decisão por conflito.
+- **Vários cenários financeiros ativos:** mantido um por perfil. O uso paralelo cobre os dois carros da família sem ampliar os cenários.
 - **Lançamento manual com dados de abastecimento:** exige mudar Lançamentos e o motor de compras. Proposta separada: depois de criar a despesa de combustível, oferecer o vínculo com um abastecimento.
 - **Troca de hodômetro ou painel:** não há como reiniciar a sequência.
 - **Auditoria na tela:** decisões de troca e histórico de correções ficam no banco, sem tela de consulta.
