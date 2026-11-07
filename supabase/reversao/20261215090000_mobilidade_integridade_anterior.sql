@@ -1,6 +1,6 @@
--- Reversao de 20261215090000 (FIN-MVP-MOB-01): volta as funcoes ao texto anterior e remove as colunas novas. Recusada com veiculo Flex,
--- custo calculado ou vinculo gravado (a informacao se perderia). So com autorizacao, retirando a versao de
--- supabase_migrations.schema_migrations.
+-- Reversao de 20261215090000 (FIN-MVP-MOB-01): volta as funcoes ao texto anterior e remove as colunas e tabelas novas. Recusada com veiculo
+-- Flex, custo calculado, vinculo, abastecimento ou decisao de troca gravados (a informacao se perderia). So com autorizacao,
+-- retirando a versao de supabase_migrations.schema_migrations.
 do $$
 begin
     if exists (select 1 from public.veiculo v where v.combustivel = 'flex' or v.custo_combustivel_modo <> 'MANUAL' or v.km_mensal_estimado is not null) then
@@ -8,6 +8,12 @@ begin
     end if;
     if exists (select 1 from public.despesa_prevista d where d.conta_id is not null or d.lancamento_id is not null) then
         raise exception 'Ha previstas vinculadas a contas ou compras: a reversao perderia os vinculos';
+    end if;
+    if exists (select 1 from financeiro.abastecimento) then
+        raise exception 'Ha abastecimentos registrados: a reversao perderia o historico';
+    end if;
+    if exists (select 1 from financeiro.mobilidade_troca_decisao) then
+        raise exception 'Ha decisoes de troca de modalidade: a reversao perderia o registro e devolveria contas substituidas';
     end if;
 end
 $$;
@@ -461,6 +467,63 @@ begin
 end
 $$;
 
+-- previa_mobilidade: texto de 20261127090000.
+create or replace function financeiro.previa_mobilidade(p_perfil_id integer, p_dados jsonb)
+    returns jsonb
+    language plpgsql
+    stable
+    security definer
+    set search_path = ''
+as $$
+declare
+    v_tipo   text := upper(coalesce(p_dados ->> 'tipo_modalidade', ''));
+    v_origem integer := financeiro.mob_inteiro(p_dados -> 'origem_id');
+    v_meio   text := nullif(lower(coalesce(p_dados ->> 'meio_pagamento', '')), '');
+    v_cartao integer := financeiro.mob_inteiro(p_dados -> 'cartao_id');
+    v_o      jsonb;
+    v_cat    integer;
+    v_cc     jsonb;
+    v_avisos jsonb := '[]'::jsonb;
+    v_rec    jsonb := null;
+begin
+    if not financeiro.pode_acessar_perfil(p_perfil_id) then
+        raise exception 'Perfil financeiro nao autorizado' using errcode = '42501';
+    end if;
+    if v_tipo not in ('VEICULO', 'TRANSPORTE_APP', 'ASSINATURA') then
+        raise exception 'tipo_modalidade invalido: %', v_tipo using errcode = '22023';
+    end if;
+    if v_origem is null or v_origem = 0 then
+        raise exception 'origem_id (%) e obrigatorio para tipo_modalidade=%',
+            case v_tipo when 'VEICULO' then 'veiculo.id' when 'TRANSPORTE_APP' then 'caminho_id' else 'assinatura.id' end,
+            v_tipo using errcode = '22023';
+    end if;
+    v_o := financeiro.mob_origem(p_perfil_id, v_tipo, v_origem);
+    if v_tipo = 'ASSINATURA' and v_o ->> 'status' <> 'ATIVO' then
+        v_avisos := v_avisos || to_jsonb('Assinatura esta INATIVA.'::text);
+    end if;
+    v_cat := financeiro.mob_categoria(v_o ->> 'codigo');
+    v_cc := financeiro.mob_resolver_cc(p_perfil_id, v_cartao, v_cat);
+    if v_cc ->> 'aviso' is not null then
+        v_avisos := v_avisos || (v_cc -> 'aviso');
+    end if;
+    if v_tipo = 'ASSINATURA' or (v_o ->> 'valor')::numeric > 0 then
+        v_rec := jsonb_build_object('nome', v_o ->> 'rotulo', 'valor', (v_o ->> 'valor')::float8, 'tipo_recorrencia', 'mensal',
+            'categoria_id', v_cat, 'categoria_cartao_id', v_cc -> 'id', 'meio_pagamento', v_meio, 'cartao_id', v_cartao,
+            'origem_tipo', v_tipo, 'origem_id', v_origem, 'origem_contexto', v_o ->> 'contexto');
+    else
+        v_avisos := v_avisos || to_jsonb(case v_tipo
+            when 'VEICULO' then 'Veiculo nao possui valor de combustivel mensal configurado — recorrencia nao sera criada.'
+            else 'Caminho sem valor mensal calculado — recorrencia nao sera criada.' end);
+    end if;
+    return jsonb_build_object('tipo_modalidade', v_tipo, 'origem_id', v_origem, 'nome_origem', v_o ->> 'nome',
+        'recorrencia', v_rec,
+        'despesas_previstas', case when v_tipo = 'VEICULO'
+            then '["IPVA (anual)", "Seguro (anual)", "Licenciamento (anual)", "Parcelas de financiamento (se houver)"]'::jsonb
+            else '[]'::jsonb end,
+        'avisos', v_avisos);
+end
+$$;
+
 -- mob_registrar_combustivel: texto de 20261127090000.
 create or replace function financeiro.mob_registrar_combustivel(p_perfil_id integer, p_d public.despesa_prevista)
     returns void
@@ -574,6 +637,226 @@ begin
     perform financeiro.mob_registrar_combustivel(p_perfil_id, v_d);
     return jsonb_build_object('despesa_prevista', jsonb_build_object('id', v_d.id, 'status', v_d.status),
                               'entidade_criada', v_criada);
+end
+$$;
+
+-- veiculo_manutencoes_km_tela: texto de 20261115090000.
+create or replace function financeiro.veiculo_manutencoes_km_tela(p_perfil_id integer, p_veiculo_id integer, p_janela integer)
+    returns jsonb
+    language plpgsql
+    stable
+    security definer
+    set search_path = ''
+as $$
+declare
+    v_v        public.veiculo;
+    v_janela   integer := coalesce(p_janela, 3);
+    v_hoje     date := financeiro.hoje_brasilia();
+    v_km_atual numeric;
+    v_km_mes   numeric;
+    v_fonte    text;
+    v_obs      text;
+    v_itens    jsonb := '[]'::jsonb;
+    v_total    numeric := 0;
+    v_fonte_i  text := 'INDISPONIVEL';
+    v_r        public.veiculo_regra_manutencao_km;
+    v_rest     numeric;
+    v_meses    integer;
+    v_data     date;
+    v_exist    public.despesa_prevista;
+    v_mod      numeric;
+begin
+    if not financeiro.pode_acessar_perfil(p_perfil_id) then
+        raise exception 'Perfil financeiro nao autorizado' using errcode = '42501';
+    end if;
+    v_v := financeiro.veiculo_do_perfil(p_perfil_id, p_veiculo_id);
+    if v_v.id is null then
+        raise exception 'Veículo não encontrado' using errcode = '22023', hint = 'NAO_ENCONTRADA';
+    end if;
+    v_km_atual := coalesce(v_v.km_estimado_acumulado, 0);
+    -- _calcular_km_mes_estimado: historico (media movel) > projetado (combustivel mensal / preco * autonomia).
+    v_km_mes := ((financeiro.uso_do_veiculo(v_v, v_janela)) ->> 'media_movel_km_mes')::numeric;
+    if v_km_mes > 0 then
+        v_fonte := 'HISTORICO';
+        v_obs := 'Baseado no uso estimado (histórico via consumo). Pode variar.';
+    elsif coalesce(v_v.combustivel_valor_mensal, 0) > 0 and coalesce(v_v.preco_medio_combustivel, 0) > 0
+          and coalesce(v_v.autonomia_km_l, 0) > 0 then
+        v_km_mes := v_v.combustivel_valor_mensal / v_v.preco_medio_combustivel * v_v.autonomia_km_l;
+        v_fonte := 'PROJETADO';
+        v_obs := 'Baseado em uso projetado (combustível mensal, preço médio e autonomia). Pode variar.';
+    else
+        v_km_mes := 0;
+        v_fonte := 'INDISPONIVEL';
+        v_obs := 'Sem dados suficientes para estimar uso mensal. Informe combustível mensal e preço médio, ou gere histórico.';
+    end if;
+
+    for v_r in select * from public.veiculo_regra_manutencao_km r
+                where financeiro.pertence_ao_perfil(r.perfil_financeiro_id, p_perfil_id) and r.veiculo_id = v_v.id and r.ativo
+                order by r.id
+    loop
+        select d.* into v_exist from public.despesa_prevista d
+         where financeiro.pertence_ao_perfil(d.perfil_financeiro_id, p_perfil_id)
+           and d.origem_tipo = 'VEICULO' and d.origem_id = v_v.id and d.status in ('PREVISTA', 'ADIADA', 'CONFIRMADA')
+           and financeiro.json_seguro(d.metadata) ->> 'tipo_evento' = v_r.tipo_evento
+         order by d.id limit 1;
+        -- _calcular_km_restante
+        if coalesce(v_r.intervalo_km, 0) <= 0 then
+            v_rest := 0;
+        elsif v_km_atual <= 0 then
+            v_rest := v_r.intervalo_km;
+        else
+            v_mod := mod(v_km_atual, v_r.intervalo_km::numeric);
+            v_rest := case when v_mod = 0 then 0 else v_r.intervalo_km - v_mod end;
+        end if;
+        v_meses := null;
+        v_data := null;
+        if v_km_mes > 0 and v_rest > 0 then
+            v_meses := ceil(v_rest / v_km_mes)::integer;
+            v_data := date_trunc('month', v_hoje + make_interval(months => v_meses))::date;
+        elsif v_km_mes > 0 and v_rest = 0 then
+            v_meses := 0;
+            v_data := date_trunc('month', v_hoje)::date;
+        end if;
+        v_itens := v_itens || jsonb_build_array(jsonb_build_object(
+            'regra_id', v_r.id, 'tipo_evento', v_r.tipo_evento, 'intervalo_km', v_r.intervalo_km,
+            'meses_intervalo', v_r.meses_intervalo, 'custo_estimado', v_r.custo_estimado, 'categoria_id', v_r.categoria_id,
+            'km_atual_estimado', v_km_atual, 'km_restante', v_rest, 'media_movel_km_mes', v_km_mes,
+            'meses_estimados', v_meses, 'data_prevista_estimada', v_data,
+            'existe_evento', v_exist.id is not null, 'evento_existente_id', v_exist.id,
+            'evento_existente_status', v_exist.status));
+        -- calcular_impacto_mensal_manutencao
+        if coalesce(v_r.custo_estimado, 0) > 0 then
+            if v_km_mes > 0 and coalesce(v_r.intervalo_km, 0) > 0 then
+                v_total := v_total + v_r.custo_estimado * (v_km_mes / v_r.intervalo_km);
+                v_fonte_i := 'KM';
+            elsif coalesce(v_r.meses_intervalo, 0) > 0 then
+                v_total := v_total + v_r.custo_estimado / v_r.meses_intervalo;
+                if v_fonte_i <> 'KM' then
+                    v_fonte_i := 'TEMPO';
+                end if;
+            end if;
+        end if;
+    end loop;
+
+    return jsonb_build_object(
+        'veiculo_id', v_v.id, 'janela_meses', v_janela, 'observacao', v_obs, 'fonte_uso', v_fonte, 'km_mes_estimado', v_km_mes,
+        'regras', coalesce((select jsonb_agg(financeiro.regra_km_flask(r) order by r.id) from public.veiculo_regra_manutencao_km r
+                             where financeiro.pertence_ao_perfil(r.perfil_financeiro_id, p_perfil_id)
+                               and r.veiculo_id = v_v.id and r.ativo), '[]'::jsonb),
+        'estimativas', v_itens, 'impacto_mensal_total', v_total, 'fonte_impacto', v_fonte_i,
+        'observacao_impacto', case v_fonte_i when 'KM' then 'Impacto mensal estimado via km (uso estimado/projetado). Pode variar.'
+                                             when 'TEMPO' then 'Impacto mensal estimado via intervalo informado (meses). Pode variar.' end,
+        'tipos_evento_regras', coalesce((select jsonb_agg(r.tipo_evento order by r.id) from public.veiculo_regra_manutencao_km r
+                                          where financeiro.pertence_ao_perfil(r.perfil_financeiro_id, p_perfil_id)
+                                            and r.veiculo_id = v_v.id and r.ativo), '[]'::jsonb));
+end
+$$;
+
+-- gerar_manutencao_km_veiculo: texto de 20261127090000.
+create or replace function financeiro.gerar_manutencao_km_veiculo(p_perfil_id integer, p_veiculo_id integer, p_dados jsonb)
+    returns jsonb
+    language plpgsql
+    volatile
+    security definer
+    set search_path = ''
+as $$
+declare
+    v_regra_id integer := financeiro.mob_inteiro(p_dados -> 'regra_id');
+    v          public.veiculo;
+    v_r        public.veiculo_regra_manutencao_km;
+    v_km_mes   numeric;
+    v_atual    numeric;
+    v_rest     numeric;
+    v_mod      numeric;
+    v_data     date;
+    v_id       integer;
+begin
+    perform financeiro.exigir_escrita_novo(p_perfil_id);
+    if v_regra_id is null or v_regra_id = 0 then
+        raise exception 'regra_id é obrigatório' using errcode = '22023';
+    end if;
+    select * into v from public.veiculo x where x.id = p_veiculo_id for update;
+    if not found or not financeiro.pertence_ao_perfil(v.perfil_financeiro_id, p_perfil_id) then
+        raise exception 'Veículo não encontrado' using errcode = '22023';
+    end if;
+    select * into v_r from public.veiculo_regra_manutencao_km r
+     where r.id = v_regra_id and r.veiculo_id = v.id and r.ativo and financeiro.pertence_ao_perfil(r.perfil_financeiro_id, p_perfil_id);
+    if not found then
+        raise exception 'Regra de manutenção não encontrada' using errcode = '22023';
+    end if;
+    if exists (select 1 from public.despesa_prevista d
+                where financeiro.pertence_ao_perfil(d.perfil_financeiro_id, p_perfil_id) and d.origem_tipo = 'VEICULO'
+                  and d.origem_id = v.id and d.status in ('PREVISTA', 'ADIADA', 'CONFIRMADA')
+                  and financeiro.mob_tipo_evento(d.metadata) = v_r.tipo_evento) then
+        return jsonb_build_object('gerada', false);
+    end if;
+    v_km_mes := (financeiro.uso_do_veiculo(v, financeiro.mob_meses(p_dados -> 'janela_meses', 3)) ->> 'media_movel_km_mes')::numeric;
+    if coalesce(v_km_mes, 0) <= 0 then
+        v_km_mes := case when coalesce(v.combustivel_valor_mensal, 0) > 0 and coalesce(v.preco_medio_combustivel, 0) > 0
+                               and coalesce(v.autonomia_km_l, 0) > 0
+                         then v.combustivel_valor_mensal / v.preco_medio_combustivel * v.autonomia_km_l else 0 end;
+    end if;
+    if v_km_mes <= 0 then
+        return jsonb_build_object('gerada', false);
+    end if;
+    v_atual := coalesce(v.km_estimado_acumulado, 0);
+    if coalesce(v_r.intervalo_km, 0) <= 0 then
+        v_rest := 0;
+    elsif v_atual <= 0 then
+        v_rest := v_r.intervalo_km;
+    else
+        v_mod := mod(v_atual, v_r.intervalo_km::numeric);
+        v_rest := case when v_mod = 0 then 0 else v_r.intervalo_km - v_mod end;
+    end if;
+    v_data := date_trunc('month', financeiro.hoje_brasilia() + make_interval(months => ceil(v_rest / v_km_mes)::integer))::date;
+    v_id := financeiro.mob_inserir_prevista(coalesce(v.perfil_financeiro_id, p_perfil_id), 'VEICULO', v.id,
+        financeiro.mob_categoria_evento(v_r.tipo_evento), v_data, v_r.custo_estimado,
+        jsonb_build_object('tipo_evento', v_r.tipo_evento, 'intervalo_km', v_r.intervalo_km, 'ciclo_id', null,
+                           'ordem_no_ciclo', null));
+    return jsonb_build_object('gerada', true, 'data',
+        (select financeiro.despesa_prevista_flask(d) from public.despesa_prevista d where d.id = v_id));
+end
+$$;
+
+-- excluir_veiculo: texto de 20261127090000.
+create or replace function financeiro.excluir_veiculo(p_perfil_id integer, p_veiculo_id integer)
+    returns jsonb
+    language plpgsql
+    volatile
+    security definer
+    set search_path = ''
+as $$
+declare
+    v public.veiculo;
+begin
+    perform financeiro.exigir_escrita_novo(p_perfil_id);
+    v := financeiro.mob_veiculo(p_perfil_id, p_veiculo_id);
+    if exists (select 1 from public.mobilidade_cenario_ativo c
+                where financeiro.pertence_ao_perfil(c.perfil_financeiro_id, p_perfil_id)
+                  and c.status = 'ATIVO' and c.tipo_modalidade = 'VEICULO' and c.origem_id = v.id) then
+        raise exception 'Este veículo é a modalidade de mobilidade ativa. Ative outra modalidade antes de excluir. Nada foi excluído.'
+            using errcode = '22023', hint = 'EM_USO';
+    end if;
+    if exists (select 1 from public.despesa_prevista d
+                where financeiro.pertence_ao_perfil(d.perfil_financeiro_id, p_perfil_id)
+                  and d.origem_tipo = 'VEICULO' and d.origem_id = v.id
+                  and (d.status in ('CONFIRMADA', 'ADIADA')
+                       or exists (select 1 from public.despesa_prevista_acao_log l
+                                   where l.despesa_prevista_id = d.id or l.despesa_prevista_criada_id = d.id))) then
+        raise exception 'O veículo tem despesas previstas já confirmadas ou adiadas (histórico). Nada foi excluído.'
+            using errcode = '22023', hint = 'COM_HISTORICO';
+    end if;
+    if exists (select 1 from public.veiculo_financiamento f where f.veiculo_id = v.id)
+       or exists (select 1 from public.veiculo_regra_manutencao_km r where r.veiculo_id = v.id)
+       or exists (select 1 from public.veiculo_ciclo_manutencao c where c.veiculo_id = v.id) then
+        raise exception 'Remova antes o financiamento e as regras de manutenção do veículo. Nada foi excluído.'
+            using errcode = '22023', hint = 'COM_VINCULOS';
+    end if;
+    delete from public.despesa_prevista d
+     where financeiro.pertence_ao_perfil(d.perfil_financeiro_id, p_perfil_id) and d.origem_tipo = 'VEICULO'
+       and d.origem_id = v.id;
+    delete from public.veiculo where id = v.id;
+    return jsonb_build_object('veiculo_id', v.id, 'excluido', true);
 end
 $$;
 
@@ -958,6 +1241,176 @@ begin
 end
 $$;
 
+-- contas_do_mes: texto de 20261212090000.
+create or replace function financeiro.contas_do_mes(p_perfil_id integer, p_mes date)
+    returns table (
+        id integer, grupo text, nome text, valor numeric, valor_previsto numeric, valor_executado numeric,
+        data_vencimento date, data_pagamento date, situacao text, status_pagamento text,
+        categoria_nome text, categoria_cor text, cartao_id integer, cartao_nome text,
+        numero_parcela integer, total_parcelas integer, debito_automatico boolean
+    )
+    language plpgsql
+    stable
+    security definer
+    set search_path = ''
+as $$
+declare
+    v_mes date;
+    v_hoje date := (now() at time zone 'America/Sao_Paulo')::date;
+    v_pessoal boolean;
+begin
+    if not financeiro.pode_acessar_perfil(p_perfil_id) then
+        raise exception 'Perfil financeiro nao autorizado' using errcode = '42501';
+    end if;
+    if p_mes is null then
+        raise exception 'Mes de competencia obrigatorio' using errcode = '22023';
+    end if;
+    v_mes := date_trunc('month', p_mes)::date;
+    v_pessoal := exists (select 1 from public.perfil_financeiro p where p.id = p_perfil_id and p.nome = 'Pessoal');
+
+    return query
+    with contas as (
+        select c.*
+          from public.conta c
+         where (c.perfil_financeiro_id = p_perfil_id or (c.perfil_financeiro_id is null and v_pessoal))
+           and (
+                (coalesce(c.is_fatura_cartao, false) = false and date_trunc('month', c.mes_referencia) = v_mes)
+             or (c.is_fatura_cartao = true and date_trunc('month', c.cartao_competencia) = v_mes)
+           )
+    ),
+    gastos as (
+        -- gasto do mes por cartao e categoria de cartao, no perfil (mes_fatura = 1o dia, como no Flask)
+        -- FIN-CARTAO-PREVISTO-EXECUTADO-01: total = executado (sem previsao pendente); pendente = previsoes aguardando cobranca
+        select l.cartao_id, l.categoria_cartao_id, sum(financeiro.valor_executado_compra(l.valor, sit.s)) as total,
+               sum(l.valor) filter (where sit.s = 'PREVISTA') as pendente,
+               -- FIN-CARTAO-DESPESAS-FIXAS-01: parceladas e fixas nao consomem o limite da Categoria do Cartao
+               sum(l.valor) filter (where financeiro.natureza_da_compra(l.total_parcelas, l.is_recorrente, l.item_despesa_id, l.categoria_cartao_id) = 'CATEGORIA') as total_categoria
+          from public.lancamento_agregado l
+         cross join lateral (select financeiro.situacao_previsao(l.id, financeiro.natureza_da_compra(l.total_parcelas, l.is_recorrente, l.item_despesa_id, l.categoria_cartao_id), l.is_importado, l.cartao_id, l.mes_fatura) as s) sit
+         where (l.perfil_financeiro_id = p_perfil_id or (l.perfil_financeiro_id is null and v_pessoal))
+           and l.mes_fatura = v_mes
+         group by l.cartao_id, l.categoria_cartao_id
+    ),
+    faturas as (
+        select c.id,
+               -- FIN-CARTAO-NUBANK-CREDITOS-01: executado das compras menos os creditos da fatura (valor a pagar)
+               coalesce((select sum(g.total) from gastos g where g.cartao_id = c.item_despesa_id), 0)
+                   - financeiro.creditos_fatura(c.id) as executado,
+               coalesce((select sum(g.pendente) from gastos g where g.cartao_id = c.item_despesa_id), 0) as pendente,
+               coalesce((select sum(greatest(lim.limite_mensal - coalesce(g.total_categoria, 0), 0))
+                           from public.cartao_categoria_limite lim
+                           left join gastos g
+                             on g.cartao_id = lim.cartao_id and g.categoria_cartao_id = lim.categoria_cartao_id
+                          where lim.cartao_id = c.item_despesa_id and lim.ativo), 0) as complemento
+          from contas c
+         where c.is_fatura_cartao = true
+    )
+    select c.id,
+           case when c.is_fatura_cartao then 'FATURA' else 'DESPESA' end,
+           c.descricao::text,
+           case
+               when not coalesce(c.is_fatura_cartao, false) then c.valor
+               when c.status_pagamento = 'Pago' then f.executado
+               else f.executado + f.pendente + f.complemento
+           end,
+           case when c.is_fatura_cartao then f.executado + f.pendente + f.complemento end,
+           case when c.is_fatura_cartao then f.executado end,
+           c.data_vencimento,
+           c.data_pagamento,
+           case
+               when c.status_pagamento = 'Pago' then 'PAGA'
+               when c.status_pagamento = 'Atrasado' or c.data_vencimento < v_hoje then 'VENCIDA'
+               else 'PENDENTE'
+           end,
+           coalesce(c.status_pagamento, 'Pendente')::text,
+           cat.nome::text,
+           cat.cor::text,
+           case when c.is_fatura_cartao then c.item_despesa_id end,
+           case when c.is_fatura_cartao then item.nome::text end,
+           c.numero_parcela,
+           c.total_parcelas,
+           coalesce(c.debito_automatico, false)
+      from contas c
+      left join faturas f on f.id = c.id
+      left join public.item_despesa item on item.id = c.item_despesa_id
+      left join public.categoria cat on cat.id = item.categoria_id
+     order by 2, c.data_vencimento, c.descricao, c.id;
+end
+$$;
+
+-- despesas_diretas_tela: texto de 20261109090000.
+create or replace function financeiro.despesas_diretas_tela(p_perfil_id integer)
+    returns jsonb
+    language plpgsql
+    stable
+    security definer
+    set search_path = ''
+as $$
+begin
+    if not financeiro.pode_acessar_perfil(p_perfil_id) then
+        raise exception 'Perfil financeiro nao autorizado' using errcode = '42501';
+    end if;
+    return coalesce((
+        select jsonb_agg(jsonb_build_object(
+                   'id', c.id, 'nome', c.descricao, 'descricao', coalesce(c.observacoes, ''),
+                   'tipo', coalesce(i.tipo, 'Simples'), 'valor', c.valor, 'conta_bancaria_id', c.conta_bancaria_id,
+                   'financiamento_parcela_id', c.financiamento_parcela_id, 'categoria_id', cat.id,
+                   'categoria', case when cat.id is null then null else jsonb_build_object(
+                       'id', cat.id, 'nome', cat.nome, 'cor', to_jsonb(cat) -> 'cor', 'icone', to_jsonb(cat) -> 'icone',
+                       'logo_url', to_jsonb(cat) -> 'logo_url') end,
+                   'data_vencimento', c.data_vencimento, 'data_pagamento', c.data_pagamento,
+                   'pago', c.status_pagamento = 'Pago', 'status_pagamento', c.status_pagamento,
+                   'mes_competencia', to_char(c.mes_referencia, 'YYYY-MM'), 'recorrente', coalesce(i.recorrente, false),
+                   'tipo_recorrencia', i.tipo_recorrencia,
+                   'meio_pagamento', case when i.id is not null then i.meio_pagamento
+                                          when c.debito_automatico then 'debito' end,
+                   'debito_automatico', c.debito_automatico, 'numero_parcela', c.numero_parcela,
+                   'total_parcelas', c.total_parcelas, 'agrupado', false, 'ativo', true, 'is_fatura_cartao', false)
+                 order by c.data_vencimento desc, c.id desc)
+          from public.conta c
+          left join public.item_despesa i on i.id = c.item_despesa_id
+          left join public.categoria cat on cat.id = i.categoria_id
+         where financeiro.pertence_ao_perfil(c.perfil_financeiro_id, p_perfil_id)
+           and not coalesce(c.is_fatura_cartao, false)), '[]'::jsonb);
+end
+$$;
+
+-- bloqueio_do_pagamento: texto de 20261120090000.
+create or replace function financeiro.bloqueio_do_pagamento(p_conta_id integer)
+    returns text
+    language plpgsql
+    stable
+    security definer
+    set search_path = ''
+as $$
+declare
+    v_conta public.conta;
+    v_item  public.item_despesa;
+begin
+    select * into v_conta from public.conta where id = p_conta_id;
+    if not found then
+        return 'Despesa inexistente';
+    end if;
+    select * into v_item from public.item_despesa where id = v_conta.item_despesa_id;
+    if coalesce(v_conta.is_fatura_cartao, false) then
+        return 'Fatura de cartao: pague na tela de cartoes';
+    end if;
+    -- FIN-CONTRATOS-2: parcelas de consorcio (despesa comum do item 'Consorcio') e de financiamento (sincronizada pela
+    -- financeiro.sincronizar_parcela_paga) sao pagas aqui, pelo escritor unico do perfil.
+    return null;
+end
+$$;
+
+drop function financeiro.mob_exigir_motivo(jsonb);
+drop function financeiro.mob_abastecimento(integer, integer);
+drop function financeiro.mob_dados_abastecimento(integer, jsonb);
+drop function financeiro.mob_abastecimento_flask(financeiro.abastecimento);
+drop function financeiro.mob_km_veiculo(public.veiculo, numeric);
+drop function financeiro.mob_validar_hodometro(integer, date, numeric, integer);
+drop function financeiro.mob_aplicar_decisoes(integer, public.mobilidade_cenario_ativo, jsonb);
+drop function financeiro.mob_conflitos_previa(integer, text, integer, date);
+drop function financeiro.mob_conflitos_troca(integer, text, integer, date);
+drop function financeiro.mob_compra_substituida(integer);
 drop function financeiro.mob_dados_flex(public.veiculo, jsonb);
 drop function financeiro.mob_planejar_prevista(integer, integer, integer, text, date, numeric);
 drop function financeiro.mob_sincronizar_combustivel(integer, integer, numeric);
@@ -967,8 +1420,19 @@ drop function financeiro.mob_suprimir_combustivel(integer, integer);
 drop function financeiro.mob_competencia_coberta(integer, integer, date);
 drop function financeiro.mob_item_combustivel(integer, integer);
 drop function financeiro.prevista_financeira(text, integer);
+drop function financeiro.desvincular_abastecimento(integer, integer);
+drop function financeiro.vincular_abastecimento(integer, integer, jsonb);
+drop function financeiro.candidatas_abastecimento(integer, integer);
+drop function financeiro.abastecimentos_veiculo_tela(integer, integer);
+drop function financeiro.anular_abastecimento(integer, integer, jsonb);
+drop function financeiro.corrigir_abastecimento(integer, integer, jsonb);
+drop function financeiro.registrar_abastecimento(integer, jsonb, uuid);
 
 drop index public.ux_despesa_prevista_obrigacao_periodo;
+drop index public.ux_mobilidade_cenario_ativo_perfil;
+drop table financeiro.mobilidade_troca_decisao;
+drop table financeiro.abastecimento_historico;
+drop table financeiro.abastecimento;
 drop function financeiro.mob_periodo(text, date);
 alter table public.despesa_prevista
     drop column obrigacao, drop column periodo_referencia, drop column conta_id, drop column lancamento_id;

@@ -35,6 +35,8 @@ pytestmark = pytest.mark.skipif(PG_BIN is None, reason='binarios do PostgreSQL (
 SUPABASE = Path(__file__).resolve().parent.parent / 'supabase'
 MIGRATION = SUPABASE / 'migrations' / '20261213090000_financeiro_cartoes_multiplos.sql'
 REVERSAO = SUPABASE / 'reversao' / '20261213090000_cartoes_multiplos_anterior.sql'
+MIGRATION_1215 = SUPABASE / 'migrations' / '20261215090000_financeiro_mobilidade_integridade.sql'
+REVERSAO_1215 = SUPABASE / 'reversao' / '20261215090000_mobilidade_integridade_anterior.sql'
 
 
 def D(valor):
@@ -404,9 +406,11 @@ def executar(dsn, arquivo):
 
 def test_reversao_recusada_com_cartao_e_reaplicacao(banco):
     antes = md5_compras(banco)
+    executar(banco, REVERSAO_1215)  # ordem de reversao: a mais nova primeiro (o abastecimento referencia o cartao vinculado)
     executar(banco, REVERSAO)
     assert sql(banco, "select to_regclass('financeiro.cartao_vinculado') t")[0]['t'] is None
     executar(banco, MIGRATION)
+    executar(banco, MIGRATION_1215)
     assert md5_compras(banco) == antes
     cartao(banco, '1111')
     with pytest.raises(psycopg2.Error, match='cartoes vinculados cadastrados'):

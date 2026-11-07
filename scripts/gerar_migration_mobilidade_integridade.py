@@ -14,6 +14,9 @@ import re
 import sys
 from pathlib import Path
 
+from mobilidade_abastecimento_sql import (AUXILIARES_ABASTECIMENTO, AUXILIARES_KM, AUXILIARES_TROCA, ESTRUTURA_ABASTECIMENTO,
+                                          INTERNAS_NOVAS, PUBLICAS_NOVAS)
+
 _args = argparse.ArgumentParser(description=__doc__.splitlines()[0])
 _args.add_argument('raiz', nargs='?', default=str(Path(__file__).resolve().parents[1]), help='raiz do projeto')
 _args.add_argument('--verificar', action='store_true', help='nao grava: falha se a saida difere dos arquivos versionados')
@@ -22,10 +25,13 @@ RAIZ = Path(ARGS.raiz)
 MIG = RAIZ / 'supabase' / 'migrations'
 MARCA = 'FIN-MVP-MOB-01'
 VERSAO = '20261215090000'
+F1109 = '20261109090000_financeiro_contas_bancarias.sql'
 F1115 = '20261115090000_financeiro_mobilidade_leitura.sql'
 F1117 = '20261117090000_financeiro_lastro_saidas_leitura.sql'
+F1120 = '20261120090000_financeiro_contratos_pagamento.sql'
 F1127 = '20261127090000_financeiro_mobilidade_escrita.sql'
 F1209 = '20261209090000_financeiro_cartao_previsto_executado.sql'
+F1212 = '20261212090000_financeiro_cartao_nubank_creditos.sql'
 
 
 def bloco(arquivo, nome):
@@ -60,6 +66,13 @@ FONTES = {
     'ativar_mobilidade': F1127,
     'mob_registrar_combustivel': F1127,
     'confirmar_despesa_prevista': F1127,
+    'previa_mobilidade': F1127,
+    'excluir_veiculo': F1127,
+    'gerar_manutencao_km_veiculo': F1127,
+    'veiculo_manutencoes_km_tela': F1115,
+    'contas_do_mes': F1212,
+    'despesas_diretas_tela': F1109,
+    'bloqueio_do_pagamento': F1120,
 }
 ORIG = {n: bloco(a, n) for n, a in FONTES.items()}
 NOVO = {}
@@ -68,6 +81,10 @@ NOVO = {}
 # Veiculos simulados fora do que e financeiro real
 # ---------------------------------------------------------------------------------------------------------------------
 t = ORIG['dashboard_resumo_tela']
+t = trocar(t, """                               and date_trunc('month', c.mes_referencia) = v_inicio and c.is_fatura_cartao is not true), 0)
+""", f"""                               and date_trunc('month', c.mes_referencia) = v_inicio and c.is_fatura_cartao is not true
+                               and c.status_pagamento is distinct from 'Substituida'), 0)  -- {MARCA}
+""")
 t = trocar(t, """                               and date_trunc('month', d.data_atual_prevista) = v_inicio
                                and d.status in ('PREVISTA', 'ADIADA')), 0);
 """, f"""                               and date_trunc('month', d.data_atual_prevista) = v_inicio
@@ -94,7 +111,44 @@ t = trocar(t, """               and d.status not in ('IGNORADA', 'CANCELADA', 'S
 """, f"""               and d.status not in ('IGNORADA', 'CANCELADA', 'SUPRIMIDA')
                and financeiro.prevista_financeira(d.origem_tipo, d.origem_id)  -- {MARCA}
 """)
+t = trocar(t, """               and c.data_vencimento >= v_ini and c.data_vencimento < v_fim and c.is_fatura_cartao is not true
+""", f"""               and c.data_vencimento >= v_ini and c.data_vencimento < v_fim and c.is_fatura_cartao is not true
+               and c.status_pagamento is distinct from 'Substituida'  -- {MARCA}
+""")
+t = trocar(t, """             where la.perfil_financeiro_id = p_perfil_id and la.valor > 0 and la.data_compra >= v_ini and la.data_compra < v_fim
+""", f"""             where la.perfil_financeiro_id = p_perfil_id and la.valor > 0 and la.data_compra >= v_ini and la.data_compra < v_fim
+               and not financeiro.mob_compra_substituida(la.id)  -- {MARCA}
+""")
 NOVO['saidas_lastro'] = t
+
+t = ORIG['contas_do_mes']
+t = trocar(t, """         where (c.perfil_financeiro_id = p_perfil_id or (c.perfil_financeiro_id is null and v_pessoal))
+           and (
+                (coalesce(c.is_fatura_cartao, false) = false and date_trunc('month', c.mes_referencia) = v_mes)
+""", f"""         where (c.perfil_financeiro_id = p_perfil_id or (c.perfil_financeiro_id is null and v_pessoal))
+           and c.status_pagamento is distinct from 'Substituida'  -- {MARCA}: preservada, fora das despesas do mes
+           and (
+                (coalesce(c.is_fatura_cartao, false) = false and date_trunc('month', c.mes_referencia) = v_mes)
+""")
+NOVO['contas_do_mes'] = t
+
+t = ORIG['despesas_diretas_tela']
+t = trocar(t, """           and not coalesce(c.is_fatura_cartao, false)), '[]'::jsonb);
+""", f"""           and not coalesce(c.is_fatura_cartao, false)
+           and c.status_pagamento is distinct from 'Substituida'), '[]'::jsonb);  -- {MARCA}
+""")
+NOVO['despesas_diretas_tela'] = t
+
+t = ORIG['bloqueio_do_pagamento']
+t = trocar(t, """        return 'Fatura de cartao: pague na tela de cartoes';
+    end if;
+""", f"""        return 'Fatura de cartao: pague na tela de cartoes';
+    end if;
+    if v_conta.status_pagamento = 'Substituida' then  -- {MARCA}
+        return 'Despesa substituida na troca de modalidade de Mobilidade';
+    end if;
+""")
+NOVO['bloqueio_do_pagamento'] = t
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Identidade da ocorrencia (obrigacao + periodo), vinculos e ids preservados
@@ -307,7 +361,104 @@ t = trocar(t, """            v_km     numeric;
             continue when coalesce(v_aut, 0) <= 0 or coalesce(v_litros, 0) <= 0;
             v_km := v_litros * v_aut;
 """)
+t = trocar(t, """    v_soma    numeric := 0;
+    v_d       record;
+begin
+""", """    v_soma    numeric := 0;
+    v_d       record;
+    v_km      jsonb;
+begin
+""")
+t = trocar(t, """    return jsonb_build_object(
+        'veiculo_id', p_v.id, 'km_estimado_acumulado', coalesce(p_v.km_estimado_acumulado, 0),
+""", f"""    -- {MARCA}: quilometragem real e estimada, so quando ha leitura ou competencia coberta (os demais respondem como antes)
+    v_km := financeiro.mob_km_veiculo(p_v, v_soma / v_janela);
+    return jsonb_build_object(
+        'veiculo_id', p_v.id, 'km_estimado_acumulado', coalesce(p_v.km_estimado_acumulado, 0),
+""")
+t = trocar(t, """        'preco_medio_combustivel', nullif(p_v.preco_medio_combustivel, 0), 'autonomia_km_l', nullif(p_v.autonomia_km_l, 0));
+""", """        'preco_medio_combustivel', nullif(p_v.preco_medio_combustivel, 0), 'autonomia_km_l', nullif(p_v.autonomia_km_l, 0))
+        || case when v_km ->> 'km_real' is not null or (v_km ->> 'km_estimado')::numeric > 0
+                then jsonb_build_object('quilometragem', v_km) else '{{}}'::jsonb end;
+""".replace('{{}}', '{}'))
 NOVO['uso_do_veiculo'] = t
+
+t = ORIG['veiculo_manutencoes_km_tela']
+t = trocar(t, """    v_mod      numeric;
+begin
+""", """    v_mod      numeric;
+    v_km       jsonb;
+begin
+""")
+t = trocar(t, """    v_km_atual := coalesce(v_v.km_estimado_acumulado, 0);
+    -- _calcular_km_mes_estimado: historico (media movel) > projetado (combustivel mensal / preco * autonomia).
+    v_km_mes := ((financeiro.uso_do_veiculo(v_v, v_janela)) ->> 'media_movel_km_mes')::numeric;
+    if v_km_mes > 0 then
+        v_fonte := 'HISTORICO';
+""", f"""    -- _calcular_km_mes_estimado: historico (media movel) > projetado (combustivel mensal / preco * autonomia).
+    v_km_mes := ((financeiro.uso_do_veiculo(v_v, v_janela)) ->> 'media_movel_km_mes')::numeric;
+    -- {MARCA}: a leitura real do hodometro vem primeiro; a estimativa so completa os dias depois dela
+    v_km := financeiro.mob_km_veiculo(v_v, v_km_mes);
+    v_km_atual := (v_km ->> 'km_atual')::numeric;
+    if v_km ->> 'fonte_km_mes' = 'LEITURAS' then
+        v_km_mes := (v_km ->> 'km_mes')::numeric;
+        v_fonte := 'LEITURAS';
+        v_obs := 'Baseado nas leituras reais do hodômetro.';
+    elsif v_km ->> 'fonte_km_mes' = 'CADASTRO' then
+        v_km_mes := (v_km ->> 'km_mes')::numeric;
+        v_fonte := 'CADASTRO';
+        v_obs := 'Baseado na quilometragem mensal informada no veículo. Pode variar.';
+    elsif v_km_mes > 0 then
+        v_fonte := 'HISTORICO';
+""")
+t = trocar(t, """                                            and r.veiculo_id = v_v.id and r.ativo), '[]'::jsonb));
+""", """                                            and r.veiculo_id = v_v.id and r.ativo), '[]'::jsonb))
+        || case when v_km ->> 'km_real' is not null
+                then jsonb_build_object('km_real', v_km -> 'km_real', 'km_real_data', v_km -> 'km_real_data', 'km_estimado', v_km -> 'km_estimado')
+                else '{}'::jsonb end;
+""")
+NOVO['veiculo_manutencoes_km_tela'] = t
+
+t = ORIG['gerar_manutencao_km_veiculo']
+t = trocar(t, """    v_id       integer;
+begin
+    perform financeiro.exigir_escrita_novo(p_perfil_id);
+    if v_regra_id is null or v_regra_id = 0 then
+""", """    v_id       integer;
+    v_km       jsonb;
+begin
+    perform financeiro.exigir_escrita_novo(p_perfil_id);
+    if v_regra_id is null or v_regra_id = 0 then
+""")
+t = trocar(t, """    v_km_mes := (financeiro.uso_do_veiculo(v, financeiro.mob_meses(p_dados -> 'janela_meses', 3)) ->> 'media_movel_km_mes')::numeric;
+    if coalesce(v_km_mes, 0) <= 0 then
+        v_km_mes := case when coalesce(v.combustivel_valor_mensal, 0) > 0 and coalesce(v.preco_medio_combustivel, 0) > 0
+                               and coalesce(v.autonomia_km_l, 0) > 0
+                         then v.combustivel_valor_mensal / v.preco_medio_combustivel * v.autonomia_km_l else 0 end;
+    end if;
+    if v_km_mes <= 0 then
+        return jsonb_build_object('gerada', false);
+    end if;
+    v_atual := coalesce(v.km_estimado_acumulado, 0);
+""", f"""    -- {MARCA}: leitura real do hodometro + estimativa so depois dela
+    v_km := financeiro.mob_km_veiculo(v, (financeiro.uso_do_veiculo(v, financeiro.mob_meses(p_dados -> 'janela_meses', 3)) ->> 'media_movel_km_mes')::numeric);
+    v_km_mes := (v_km ->> 'km_mes')::numeric;
+    if v_km_mes <= 0 then
+        return jsonb_build_object('gerada', false);
+    end if;
+    v_atual := (v_km ->> 'km_atual')::numeric;
+""")
+NOVO['gerar_manutencao_km_veiculo'] = t
+
+t = ORIG['excluir_veiculo']
+t = trocar(t, """    if exists (select 1 from public.veiculo_financiamento f where f.veiculo_id = v.id)
+""", f"""    if exists (select 1 from financeiro.abastecimento a where a.veiculo_id = v.id) then  -- {MARCA}
+        raise exception 'O veículo tem abastecimentos registrados (histórico). Nada foi excluído.'
+            using errcode = '22023', hint = 'COM_HISTORICO';
+    end if;
+    if exists (select 1 from public.veiculo_financiamento f where f.veiculo_id = v.id)
+""")
+NOVO['excluir_veiculo'] = t
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Recorrencia de combustivel: fonte unica da despesa e sincronizada com o veiculo
@@ -338,7 +489,34 @@ t = trocar(t, """        if v_tipo = 'TRANSPORTE_APP' then
         if v_tipo = 'TRANSPORTE_APP' then
             update public.despesa_prevista d set status = 'SUPRIMIDA', atualizado_em = financeiro.mob_agora()
 """)
+t = trocar(t, """    v_sup      integer;
+begin
+    perform financeiro.exigir_escrita_novo(p_perfil_id);
+    if not financeiro.mob_bool(p_dados -> 'confirmado', false) then
+""", """    v_sup      integer;
+    v_troca    jsonb;
+begin
+    perform financeiro.exigir_escrita_novo(p_perfil_id);
+    if not financeiro.mob_bool(p_dados -> 'confirmado', false) then
+""")
+t = trocar(t, """    returning * into v_c;
+    return financeiro.registrar_operacao_mobilidade(p_chave, p_perfil_id, 'ativar_mobilidade', jsonb_build_object(
+""", f"""    returning * into v_c;
+    -- {MARCA}: despesas futuras da modalidade anterior: cada uma com a decisao do usuario, ou nada e gravado
+    v_troca := financeiro.mob_aplicar_decisoes(p_perfil_id, v_c, p_dados -> 'decisoes');
+    return financeiro.registrar_operacao_mobilidade(p_chave, p_perfil_id, 'ativar_mobilidade', v_troca || jsonb_build_object(
+""")
 NOVO['ativar_mobilidade'] = t
+
+t = ORIG['previa_mobilidade']
+t = trocar(t, """            else '[]'::jsonb end,
+        'avisos', v_avisos);
+""", f"""            else '[]'::jsonb end,
+        'avisos', v_avisos)
+        -- {MARCA}: despesas futuras da modalidade anterior a decidir antes de trocar
+        || financeiro.mob_conflitos_previa(p_perfil_id, v_tipo, v_origem, financeiro.mob_data(p_dados ->> 'data_inicio'));
+""")
+NOVO['previa_mobilidade'] = t
 
 t = ORIG['editar_veiculo']
 t = trocar(t, """declare
@@ -420,6 +598,13 @@ t = trocar(t, """        'total_mensal_estimado', c.comb + c.seg + c.ipva + c.li
                                         'custo_combustivel_modo', (p_v).custo_combustivel_modo)
                 else '{{}}'::jsonb end
       from (select""")
+t = trocar(t, """                else '{{}}'::jsonb end
+      from (select""".replace('{{}}', '{}'), f"""                else '{{}}'::jsonb end
+        -- {MARCA}: ultima leitura real do hodometro, quando ha
+        || coalesce((select jsonb_build_object('km_real', a.hodometro_km, 'km_real_data', a.data_abastecimento)
+                       from financeiro.abastecimento a where a.veiculo_id = (p_v).id and a.anulado_em is null
+                      order by a.data_abastecimento desc, a.hodometro_km desc, a.id desc limit 1), '{{}}'::jsonb)
+      from (select""")
 NOVO['veiculo_flask'] = t
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -488,7 +673,9 @@ create unique index ux_despesa_prevista_obrigacao_periodo
 AUXILIARES = """-- =====================================================================================================================
 -- 2. Funcoes novas (internas)
 -- =====================================================================================================================
--- A prevista conta como obrigacao financeira real? As de veiculo SIMULADO ficam so nas telas de Mobilidade.
+-- A prevista conta como obrigacao financeira real? Ficam so nas telas de Mobilidade as de veiculo SIMULADO, as de veiculo que
+-- saiu do cenario financeiro (outra modalidade foi ativada) e as de caminho de app que nao e o cenario ativo. Veiculo ATIVO que
+-- nunca foi o cenario (segundo carro em uso) continua contando.
 create function financeiro.prevista_financeira(p_origem_tipo text, p_origem_id integer)
     returns boolean
     language sql
@@ -496,8 +683,18 @@ create function financeiro.prevista_financeira(p_origem_tipo text, p_origem_id i
     security definer
     set search_path = ''
 as $$
-    select not (p_origem_tipo = 'VEICULO'
-                and exists (select 1 from public.veiculo v where v.id = p_origem_id and v.status = 'SIMULADO'))
+    select case p_origem_tipo
+               when 'VEICULO' then
+                   not exists (select 1 from public.veiculo v where v.id = p_origem_id and v.status = 'SIMULADO')
+                   and not (exists (select 1 from public.mobilidade_cenario_ativo c
+                                     where c.tipo_modalidade = 'VEICULO' and c.origem_id = p_origem_id and c.status = 'INATIVO')
+                            and not exists (select 1 from public.mobilidade_cenario_ativo c
+                                             where c.tipo_modalidade = 'VEICULO' and c.origem_id = p_origem_id and c.status = 'ATIVO'))
+               when 'TRANSPORTE_APP' then
+                   exists (select 1 from public.mobilidade_cenario_ativo c
+                            where c.tipo_modalidade = 'TRANSPORTE_APP' and c.origem_id = p_origem_id and c.status = 'ATIVO')
+               else true
+           end
 $$;
 
 -- Recorrencia ativa de combustivel do veiculo (a da ativacao da modalidade).
@@ -525,10 +722,10 @@ as $$
     select coalesce(date_trunc('month', (financeiro.mob_item_combustivel(p_perfil_id, p_veiculo_id)).data_vencimento::timestamp)::date <= p_mes, false)
         or exists (select 1 from public.conta c join public.item_despesa i on i.id = c.item_despesa_id
                     where i.origem_tipo = 'VEICULO' and i.origem_id = p_veiculo_id and i.origem_contexto = 'combustivel_mensal'
-                      and date_trunc('month', c.mes_referencia) = p_mes)
+                      and date_trunc('month', c.mes_referencia) = p_mes and c.status_pagamento is distinct from 'Substituida')
         or exists (select 1 from public.lancamento_agregado l join public.item_despesa i on i.id = l.item_despesa_id
                     where i.origem_tipo = 'VEICULO' and i.origem_id = p_veiculo_id and i.origem_contexto = 'combustivel_mensal'
-                      and l.mes_fatura = p_mes)
+                      and l.mes_fatura = p_mes and not financeiro.mob_compra_substituida(l.id))
 $$;
 
 -- Com a recorrencia ativa, as previsoes de combustivel das competencias dela deixam de contar. Devolve quantas.
@@ -588,12 +785,12 @@ as $$
       from (select date_trunc('month', c.mes_referencia)::date as mes
               from public.conta c join public.item_despesa i on i.id = c.item_despesa_id
              where i.origem_tipo = 'VEICULO' and i.origem_id = p_veiculo_id and i.origem_contexto = 'combustivel_mensal'
-               and i.id <> p_item.id
+               and i.id <> p_item.id and c.status_pagamento is distinct from 'Substituida'
             union
             select l.mes_fatura
               from public.lancamento_agregado l join public.item_despesa i on i.id = l.item_despesa_id
              where i.origem_tipo = 'VEICULO' and i.origem_id = p_veiculo_id and i.origem_contexto = 'combustivel_mensal'
-               and i.id <> p_item.id
+               and i.id <> p_item.id and not financeiro.mob_compra_substituida(l.id)
             union
             select date_trunc('month', c.mes_referencia)::date
               from public.despesa_prevista d join public.conta c on c.id = d.conta_id
@@ -738,13 +935,14 @@ $$;
 """
 
 ORDEM = ['veiculo_flask', 'uso_do_veiculo', 'mob_inserir_prevista', 'mob_dados_veiculo', 'criar_veiculo', 'editar_veiculo',
-         'mob_gerar_projecoes', 'ativar_mobilidade', 'mob_registrar_combustivel', 'confirmar_despesa_prevista',
-         'dashboard_resumo_tela', 'saidas_lastro']
+         'mob_gerar_projecoes', 'ativar_mobilidade', 'previa_mobilidade', 'mob_registrar_combustivel', 'confirmar_despesa_prevista',
+         'veiculo_manutencoes_km_tela', 'gerar_manutencao_km_veiculo', 'excluir_veiculo', 'dashboard_resumo_tela', 'saidas_lastro',
+         'contas_do_mes', 'despesas_diretas_tela', 'bloqueio_do_pagamento']
 INTERNAS = ['mob_periodo(text, date)', 'prevista_financeira(text, integer)', 'mob_item_combustivel(integer, integer)',
             'mob_competencia_coberta(integer, integer, date)', 'mob_suprimir_combustivel(integer, integer)',
             'mob_restaurar_combustivel(integer, integer)', 'mob_dispensar_cobertas(integer, integer, public.item_despesa)',
             'mob_sincronizar_combustivel(integer, integer, numeric)',
-            'mob_planejar_prevista(integer, integer, integer, text, date, numeric)', 'mob_dados_flex(public.veiculo, jsonb)']
+            'mob_planejar_prevista(integer, integer, integer, text, date, numeric)', 'mob_dados_flex(public.veiculo, jsonb)'] + INTERNAS_NOVAS
 
 migration = f"""-- {MARCA}: integridade financeira da Mobilidade e combustivel Flex. Gerada por scripts/gerar_migration_mobilidade_integridade.py
 -- a partir do texto vigente de cada funcao. Nenhum valor financeiro muda; o unico preenchimento e o da identidade das
@@ -758,9 +956,18 @@ migration = f"""-- {MARCA}: integridade financeira da Mobilidade e combustivel F
 -- - Confirmar guarda o vinculo com a conta ou compra e, no combustivel, os parametros do momento.
 -- - Veiculo SIMULADO fica fora do Dashboard, dos alertas e das saidas; confirmar com pagamento e recusado.
 -- - Flex: autonomia e preco por combustivel, combustivel de referencia e custo MANUAL (padrao) ou CALCULADO.
+-- - Abastecimentos: registro operacional com hodometro, litros calculados e vinculo opcional com compra ou conta ja existente.
+--   Registrar nunca cria despesa. A leitura real manda na quilometragem; a estimativa so completa os dias depois dela.
+-- - Troca de modalidade: despesas futuras da modalidade anterior sao decididas uma a uma (manter ou substituir), com
+--   registro; a substituida fica preservada, fora dos indicadores. O mes corrente, o que foi pago e o que tem movimento nao mudam.
+-- - Modalidade inativa fica fora do Dashboard, como o veiculo simulado.
 
 {ESTRUTURA}
+{ESTRUTURA_ABASTECIMENTO}
 {AUXILIARES}
+{AUXILIARES_TROCA}
+{AUXILIARES_KM}
+{AUXILIARES_ABASTECIMENTO}
 -- =====================================================================================================================
 -- 3. Funcoes substituidas
 -- =====================================================================================================================
@@ -768,11 +975,13 @@ migration = f"""-- {MARCA}: integridade financeira da Mobilidade e combustivel F
 -- =====================================================================================================================
 -- 4. Privilegios: as funcoes novas sao internas
 -- =====================================================================================================================
-""" + '\n'.join(f'revoke execute on function financeiro.{f} from public, anon, authenticated;' for f in INTERNAS) + '\n'
+""" + '\n'.join(f'revoke execute on function financeiro.{f} from public, anon, authenticated;' for f in INTERNAS) + '\n' + \
+    '\n'.join(f'revoke execute on function financeiro.{f} from public, anon;\ngrant execute on function financeiro.{f} to authenticated;'
+              for f in PUBLICAS_NOVAS) + '\n'
 
-reversao = f"""-- Reversao de {VERSAO} ({MARCA}): volta as funcoes ao texto anterior e remove as colunas novas. Recusada com veiculo Flex,
--- custo calculado ou vinculo gravado (a informacao se perderia). So com autorizacao, retirando a versao de
--- supabase_migrations.schema_migrations.
+reversao = f"""-- Reversao de {VERSAO} ({MARCA}): volta as funcoes ao texto anterior e remove as colunas e tabelas novas. Recusada com veiculo
+-- Flex, custo calculado, vinculo, abastecimento ou decisao de troca gravados (a informacao se perderia). So com autorizacao,
+-- retirando a versao de supabase_migrations.schema_migrations.
 do $$
 begin
     if exists (select 1 from public.veiculo v where v.combustivel = 'flex' or v.custo_combustivel_modo <> 'MANUAL' or v.km_mensal_estimado is not null) then
@@ -780,6 +989,12 @@ begin
     end if;
     if exists (select 1 from public.despesa_prevista d where d.conta_id is not null or d.lancamento_id is not null) then
         raise exception 'Ha previstas vinculadas a contas ou compras: a reversao perderia os vinculos';
+    end if;
+    if exists (select 1 from financeiro.abastecimento) then
+        raise exception 'Ha abastecimentos registrados: a reversao perderia o historico';
+    end if;
+    if exists (select 1 from financeiro.mobilidade_troca_decisao) then
+        raise exception 'Ha decisoes de troca de modalidade: a reversao perderia o registro e devolveria contas substituidas';
     end if;
 end
 $$;
@@ -789,9 +1004,13 @@ update public.despesa_prevista set status = 'PREVISTA'
  where status = 'SUPRIMIDA' and obrigacao = 'COMBUSTIVEL';
 
 """ + '\n'.join(f'-- {n}: texto de {FONTES[n][:14]}.\n{como_replace(ORIG[n])}\n' for n in ORDEM) + '\n' + \
-    '\n'.join(f'drop function financeiro.{f};' for f in reversed(INTERNAS[1:])) + f"""
+    '\n'.join(f'drop function financeiro.{f};' for f in reversed(PUBLICAS_NOVAS + INTERNAS[1:])) + f"""
 
 drop index public.ux_despesa_prevista_obrigacao_periodo;
+drop index public.ux_mobilidade_cenario_ativo_perfil;
+drop table financeiro.mobilidade_troca_decisao;
+drop table financeiro.abastecimento_historico;
+drop table financeiro.abastecimento;
 drop function financeiro.mob_periodo(text, date);
 alter table public.despesa_prevista
     drop column obrigacao, drop column periodo_referencia, drop column conta_id, drop column lancamento_id;

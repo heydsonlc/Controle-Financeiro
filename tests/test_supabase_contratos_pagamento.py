@@ -360,7 +360,6 @@ def test_reversao_devolve_as_definicoes_anteriores_e_volta(cluster):  # noqa: F8
     dsn = copiar(cluster)
     estado_funcoes = ("select p.oid::regprocedure::text s, md5(p.prosrc) c, coalesce(p.proacl::text, '') a from pg_proc p "
                       "join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'financeiro'")
-    com = {r['s']: r for r in sql(dsn, estado_funcoes)}
 
     def executar(arquivo):
         conn = psycopg2.connect(dsn)
@@ -370,6 +369,9 @@ def test_reversao_devolve_as_definicoes_anteriores_e_volta(cluster):  # noqa: F8
         finally:
             conn.close()
 
+    # Ordem de reversao: a mais nova primeiro (a 20261215090000 substitui bloqueio_do_pagamento).
+    executar(supabase / 'reversao' / '20261215090000_mobilidade_integridade_anterior.sql')
+    com = {r['s']: r for r in sql(dsn, estado_funcoes)}
     executar(supabase / 'reversao' / '20261120090000_pagamento_despesa_anterior.sql')
     sem = {r['s']: r for r in sql(dsn, estado_funcoes)}
     internas = {'financeiro.parcela_da_despesa(integer)', 'financeiro.saldo_devedor_pelas_parcelas(integer)',

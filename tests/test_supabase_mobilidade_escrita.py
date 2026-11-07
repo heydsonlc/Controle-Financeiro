@@ -436,7 +436,9 @@ def test_recorrencia_da_modalidade_entra_no_gerador_e_sai_ao_trocar(banco):
     contas = sql(banco, 'select valor, data_vencimento from public.conta where item_despesa_id = %s order by data_vencimento', (item,))
     assert contas and contas[0]['valor'] == Decimal('200.00') and len({c['data_vencimento'] for c in contas}) == len(contas)
     ass = rpc(banco, 'criar_assinatura_mobilidade', PESSOAL, ASSINATURA, chave())['assinatura_id']
-    rpc(banco, 'ativar_mobilidade', PESSOAL, {'tipo_modalidade': 'ASSINATURA', 'origem_id': ass, 'confirmado': True}, chave())
+    futuras = sql(banco, 'select id from public.conta where item_despesa_id = %s', (item,))
+    rpc(banco, 'ativar_mobilidade', PESSOAL, {'tipo_modalidade': 'ASSINATURA', 'origem_id': ass, 'confirmado': True,
+                                              'decisoes': [{'natureza': 'CONTA', 'id': c['id'], 'decisao': 'MANTER'} for c in futuras]}, chave())
     assert sql(banco, 'select ativo from public.item_despesa where id = %s', (item,)) == [{'ativo': False}]
     antes = len(contas)
     gerar_confirmado(banco, mes='2031-06-01')

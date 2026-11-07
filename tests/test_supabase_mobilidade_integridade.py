@@ -219,7 +219,10 @@ def test_trocar_de_modalidade_devolve_as_previsoes_nao_cobertas(banco):
     gerar_confirmado(banco, mes=MES.isoformat())  # contas de MES e PROXIMO
     rpc(banco, 'editar_veiculo', PESSOAL, v, {'combustivel_valor_mensal': 300})
     ass = rpc(banco, 'criar_assinatura_mobilidade', PESSOAL, {'nome': 'Assinatura (ficticia)', 'valor_mensal': 900}, chave())['assinatura_id']
-    rpc(banco, 'ativar_mobilidade', PESSOAL, {'tipo_modalidade': 'ASSINATURA', 'origem_id': ass, 'confirmado': True}, chave())
+    futura = sql(banco, "select c.id from public.conta c join public.item_despesa i on i.id = c.item_despesa_id where i.origem_id = %s and i.origem_tipo = 'VEICULO' "
+                        'and c.mes_referencia >= %s', (v, PROXIMO))
+    rpc(banco, 'ativar_mobilidade', PESSOAL, {'tipo_modalidade': 'ASSINATURA', 'origem_id': ass, 'confirmado': True,
+                                              'decisoes': [{'natureza': 'CONTA', 'id': c['id'], 'decisao': 'MANTER'} for c in futura]}, chave())
     por_mes = {p['data_prevista']: p for p in previstas(banco, v)}
     assert por_mes[MES]['status'] == 'SUPRIMIDA' and por_mes[PROXIMO]['status'] == 'SUPRIMIDA'  # ja ha conta
     assert por_mes[DEPOIS]['status'] == 'PREVISTA' and por_mes[DEPOIS]['valor_previsto'] == Decimal('300.00')  # valor atual
