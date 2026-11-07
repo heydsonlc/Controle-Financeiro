@@ -53,6 +53,11 @@ async function criarVeiculo(corpo) {
     return criado({ message: 'Veículo criado', data: await veiculoLido(r.veiculo_id) });
 }
 
+async function registrarAbastecimento(corpo) {
+    const r = await comChave(`abastecimento:${JSON.stringify(corpo)}`, (a) => supabase.rpc('registrar_abastecimento', a), { p_dados: corpo });
+    return criado({ message: 'Abastecimento registrado', data: r.abastecimento });
+}
+
 async function editarVeiculo(id, corpo) {
     await chamar((a) => supabase.rpc('editar_veiculo', a), { p_veiculo_id: id, p_dados: corpo });
     return ok({ message: 'Veículo atualizado', data: await veiculoLido(id) });
@@ -103,6 +108,9 @@ async function criarCaminho(corpo) {
 const ROTAS = [
     ['GET', /^\/api\/categorias\/?$/, async () => lista(await chamar((a) => supabase.rpc('mobilidade_categorias_tela', a), {}))],
     ['GET', /^\/api\/cartoes\/?$/, () => cartoes()],
+    ['GET', /^\/api\/cartoes\/(\d+)\/vinculados$/, async (m) => ok({
+        data: await chamar((a) => supabase.rpc('cartoes_vinculados', a), { p_contrato_id: Number(m[1]) }),
+    })],
     ['GET', /^\/api\/veiculos\/mobilidade\/ativo$/, async () => ok({ data: await chamar((a) => supabase.rpc('mobilidade_ativa_tela', a), {}) })],
     ['GET', /^\/api\/veiculos\/mobilidade\/assinaturas$/, async (m, c, p) => ok({
         data: await chamar((a) => supabase.rpc('mobilidade_assinaturas_tela', a), {
@@ -119,6 +127,18 @@ const ROTAS = [
     ['POST', /^\/api\/veiculos\/mobilidade\/ativar$/, (m, c) => ativar(c || {})],
     ['GET', /^\/api\/veiculos\/cenario-ativo$/, async () => ok({ data: {} })],
     ['POST', /^\/api\/veiculos\/cenario-ativo$/, async () => falha(NAO_REPRODUZIDO, 501)],
+    ['POST', /^\/api\/veiculos\/abastecimentos$/, (m, c) => registrarAbastecimento(c || {})],
+    ['PUT', /^\/api\/veiculos\/abastecimentos\/(\d+)$/, async (m, c) => ok({
+        message: 'Abastecimento corrigido',
+        data: (await chamar((a) => supabase.rpc('corrigir_abastecimento', a), { p_id: Number(m[1]), p_dados: c || {} })).abastecimento,
+    })],
+    ['POST', /^\/api\/veiculos\/abastecimentos\/(\d+)\/anular$/, async (m, c) => ok({
+        message: 'Abastecimento anulado',
+        data: (await chamar((a) => supabase.rpc('anular_abastecimento', a), { p_id: Number(m[1]), p_dados: c || {} })).abastecimento,
+    })],
+    ['GET', /^\/api\/veiculos\/(\d+)\/abastecimentos$/, async (m) => ok({
+        data: await chamar((a) => supabase.rpc('abastecimentos_veiculo_tela', a), { p_veiculo_id: Number(m[1]) }),
+    })],
     ['GET', /^\/api\/veiculos\/?$/, async () => lista(await chamar((a) => supabase.rpc('veiculos_tela', a), { p_id: null }))],
     ['POST', /^\/api\/veiculos\/?$/, (m, c) => criarVeiculo(c || {})],
     ['GET', /^\/api\/veiculos\/(\d+)$/, async (m) => ok({ data: await veiculoLido(Number(m[1])) })],

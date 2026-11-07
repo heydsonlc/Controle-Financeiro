@@ -42,3 +42,35 @@ test('rotulos', () => {
     assert.equal(rotuloCombustivel({ combustivel: 'flex', combustivel_referencia: 'etanol' }), 'flex (etanol)');
     assert.equal(rotuloCombustivel({ combustivel: 'gasolina' }), 'gasolina');
 });
+
+// FIN-MVP-MOB-01: abastecimento. Os litros saem do valor e do preco, sem arredondar; a tela mostra tres casas.
+test('litros calculados pelo valor e pelo preco', () => {
+    const { calcularLitros, formatarLitros } = carregarOriginal();
+    assert.equal(calcularLitros('176.00', '4.40'), 40);
+    assert.equal(formatarLitros(calcularLitros(176, 4.4)), '40,000');
+    assert.equal(formatarLitros(calcularLitros(150.33, 5.899)), '25,484');
+    for (const [valor, preco] of [[0, 4.4], [176, 0], ['', ''], [-1, 4.4]]) assert.equal(calcularLitros(valor, preco), null);
+    assert.equal(formatarLitros(null), '—');
+});
+
+test('combustiveis aceitos pelo veiculo', () => {
+    const { combustiveisDoVeiculo } = carregarOriginal();
+    assert.deepEqual([...combustiveisDoVeiculo({ combustivel: 'flex' })], ['gasolina', 'etanol']);
+    assert.deepEqual([...combustiveisDoVeiculo({ combustivel: 'etanol' })], ['etanol']);
+    assert.deepEqual([...combustiveisDoVeiculo({ combustivel: 'eletrico' })], []);
+    assert.equal(combustiveisDoVeiculo({ combustivel: 'outro' }).length, 5);
+});
+
+test('conflitos da troca: cada despesa com as duas opcoes, sem escolha marcada', () => {
+    const { htmlConflitosTroca } = carregarOriginal();
+    assert.equal(htmlConflitosTroca(undefined), '');
+    const html = htmlConflitosTroca({
+        decidir: [{ natureza: 'CONTA', registro_id: 7, competencia: '2026-12-01', descricao: 'Combustivel', valor: 200 }],
+        sem_alteracao: [{ natureza: 'CONTA', registro_id: 6, competencia: '2026-11-01', descricao: 'Combustivel', valor: 200 }],
+    });
+    assert.equal((html.match(/type="radio"/g) || []).length, 2);
+    assert.match(html, /name="troca-CONTA-7" value="MANTER"/);
+    assert.match(html, /name="troca-CONTA-7" value="SUBSTITUIR"/);
+    assert.doesNotMatch(html, /checked/);
+    assert.match(html, /Não mudam nesta troca/);
+});

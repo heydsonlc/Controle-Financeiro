@@ -45,6 +45,8 @@ function veiculosIcon(name) {
         trash: '<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/>',
         check: '<path d="M5 12.5l4 4L19 7"/>',
         clock: '<path d="M12 6v6l4 2"/><path d="M20 12a8 8 0 1 1-8-8"/>',
+        fuel: '<path d="M5 20V5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v15"/><path d="M4 20h11M7 8h5"/><path d="M14 12h2a1 1 0 0 1 1 1v3a1.5 1.5 0 0 0 3 0V9l-3-3"/>',
+        list: '<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>',
         remove: '<path d="M6 6l12 12M18 6 6 18"/>'
     };
     return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="width:1em;height:1em;display:inline-block;vertical-align:-0.125em;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">${icons[name] || icons.eye}</svg>`;
@@ -876,6 +878,7 @@ function renderVeiculoCard(v) {
                 <div class="veiculo-sub">${escapeHtml(v.tipo)} - ${escapeHtml(rotuloCombustivel(v))} - Autonomia: ${v.autonomia_km_l} km/L</div>
                 <div class="veiculo-sub">${inicio}</div>
                 <div class="veiculo-sub">Km estimado total: ${Number(kmTotal).toLocaleString('pt-BR')} <span class="small-note">(estimativa)</span></div>
+                ${v.km_real !== undefined ? `<div class="veiculo-sub">Km real: ${formatarKm(v.km_real)} <span class="small-note">(${formatarData(v.km_real_data)})</span></div>` : ''}
             </div>
 
             <div class="card-cost" id="custo-mensal-${v.id}">
@@ -885,6 +888,8 @@ function renderVeiculoCard(v) {
             </div>
 
             <div class="row-actions card-actions">
+                <button class="row-action-button" onclick="abrirModalAbastecimento(${v.id})" title="Abastecer" aria-label="Abastecer">${veiculosIcon('fuel')}</button>
+                <button class="row-action-button" onclick="abrirHistoricoAbastecimentos(${v.id})" title="Abastecimentos" aria-label="Abastecimentos">${veiculosIcon('list')}</button>
                 <button class="row-action-button" onclick="abrirModalEditar(${v.id})" title="Editar" aria-label="Editar">${veiculosIcon('edit')}</button>
                 <button class="row-action-button" onclick="toggleProjecoes(${v.id})" title="Projecoes" aria-label="Projecoes">${veiculosIcon('eye')}</button>
                 <button class="row-action-button danger" onclick="deletarVeiculo(${v.id}, '${escapeAttr(v.nome)}')" title="Excluir" aria-label="Excluir">${veiculosIcon('trash')}</button>
@@ -1808,7 +1813,8 @@ async function carregarManutencaoKmModal(veiculoId) {
             const notaFonte =
                 fonteUso === 'PROJETADO'
                     ? 'Estimativa com base em uso projetado (simulação).'
-                    : (fonteUso === 'HISTORICO' ? 'Estimativa com base no uso histórico.' : 'Estimativa indisponível.');
+                    : (fonteUso === 'HISTORICO' ? 'Estimativa com base no uso histórico.'
+                        : (FONTES_KM_MES[fonteUso] ? `Estimativa com base em ${FONTES_KM_MES[fonteUso]}.` : 'Estimativa indisponível.'));
             usoEl.innerHTML = `
                 <div><strong>Km acumulado estimado:</strong> ${Number(usoResumo.km_estimado_acumulado || 0).toLocaleString('pt-BR')} km</div>
                 <div><strong>Média móvel:</strong> ${Number(usoResumo.media_movel_km_mes || 0).toLocaleString('pt-BR')} km/mês (últimos ${usoResumo.janela_meses || 3} meses)</div>
@@ -2917,6 +2923,7 @@ function _renderizarPreviaAtivacao(previa, container) {
         html += `<div style="color:#d97706;background:#fffbeb;border-radius:4px;padding:4px 8px;margin-bottom:4px;">⚠ ${escapeHtml(a)}</div>`;
     });
 
+    html += htmlConflitosTroca(previa.conflitos);
     html += `</div>`;
     container.innerHTML = html;
 }
@@ -2934,6 +2941,11 @@ async function confirmarAtivacaoMobilidade() {
     const categoriaId = document.getElementById('ativar-mob-categoria-id')?.value || '';
     const dataInicio = document.getElementById('ativar-mob-data-inicio')?.value || '';
     const criarRec = document.getElementById('ativar-mob-criar-recorrencia')?.checked !== false;
+    const troca = coletarDecisoesTroca();
+    if (troca.faltam > 0) {
+        alert(`Escolha manter ou substituir para ${troca.faltam} despesa(s) da modalidade anterior.`);
+        return;
+    }
 
     try {
         const resp = await fetch(`${API_VEICULOS}/mobilidade/ativar`, {
@@ -2948,6 +2960,7 @@ async function confirmarAtivacaoMobilidade() {
                 data_inicio: dataInicio || null,
                 criar_recorrencia: criarRec,
                 confirmado: true,
+                decisoes: troca.decisoes,
             }),
         });
         const data = await resp.json();
@@ -3117,10 +3130,12 @@ function renderConfVeiculos() {
                 <div class="conf-item-thumb">${renderImagemModalidade({ tipo: 'VEICULO', raw: v, nome: v.nome }, 'conf-item-image')}</div>
                 <div class="conf-item-info">
                     <div class="conf-item-nome">${escapeHtml(v.nome)} <span class="card-badge ${v.status === 'ATIVO' ? 'status-ativo' : 'status-simulado'}">${escapeHtml(v.status)}</span></div>
-                    <div class="conf-item-sub">${escapeHtml(v.tipo)} · ${escapeHtml(rotuloCombustivel(v))} · ${v.autonomia_km_l} km/L</div>
+                    <div class="conf-item-sub">${escapeHtml(v.tipo)} · ${escapeHtml(rotuloCombustivel(v))} · ${v.autonomia_km_l} km/L${v.km_real !== undefined ? ` · ${formatarKm(v.km_real)}` : ''}</div>
                 </div>
                 <div class="conf-item-custo">${formatarMoeda(custo)}/mês</div>
                 <div class="conf-item-acoes">
+                    <button class="row-action-button" onclick="abrirModalAbastecimento(${v.id})" title="Abastecer" aria-label="Abastecer">${veiculosIcon('fuel')}</button>
+                    <button class="row-action-button" onclick="abrirHistoricoAbastecimentos(${v.id})" title="Abastecimentos" aria-label="Abastecimentos">${veiculosIcon('list')}</button>
                     <button class="row-action-button" onclick="abrirModalEditar(${v.id})" title="Editar" aria-label="Editar">${veiculosIcon('edit')}</button>
                     <button class="row-action-button" onclick="toggleProjecoes(${v.id})" title="Projeções" aria-label="Projeções">${veiculosIcon('eye')}</button>
                     <button class="row-action-button" onclick="abrirModalFinanciamento(${v.id})" title="Financiamento" aria-label="Financiamento">${veiculosIcon('file')}</button>
@@ -3791,3 +3806,258 @@ const _originalInit = document.addEventListener;
         // A função ativarAba('comparacao') será chamada após carregarVeiculos/carregarCaminhosApp terminarem.
     });
 })();
+
+// ================================================================
+// FIN-MVP-MOB-01 — ABASTECIMENTOS: registro operacional do veiculo, fonte da quilometragem real. Nao cria despesa: o vinculo
+// com a compra ou a conta correspondente e feito depois, sem criar outra.
+// ================================================================
+const COMBUSTIVEIS_ABASTECIMENTO = { gasolina: 'Gasolina', etanol: 'Etanol', diesel: 'Diesel', gnv: 'GNV', outro: 'Outro' };
+const MEIOS_ABASTECIMENTO = { cartao: 'Cartão', pix: 'Pix', debito: 'Débito', dinheiro: 'Dinheiro', boleto: 'Boleto', outro: 'Outro' };
+const FONTES_KM_MES = { LEITURAS: 'leituras do hodômetro', HISTORICO: 'consumo confirmado', CADASTRO: 'quilometragem informada no veículo', PROJETADO: 'custo do combustível' };
+let abastecimentosVeiculoId = null;
+let abastecimentosCache = [];
+
+// Litros = valor / preco. O banco guarda sem arredondar; so a exibicao usa tres casas.
+function calcularLitros(valor, preco) {
+    const v = Number(valor);
+    const p = Number(preco);
+    return v > 0 && p > 0 ? v / p : null;
+}
+
+function formatarLitros(litros) {
+    if (litros === null || litros === undefined) return '—';
+    return Number(litros).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+}
+
+function formatarKm(km) {
+    return `${Number(km).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} km`;
+}
+
+function combustiveisDoVeiculo(veiculo) {
+    const c = String(veiculo?.combustivel || '').toLowerCase();
+    if (c === 'flex') return ['gasolina', 'etanol'];
+    if (c === 'eletrico') return [];
+    return c !== 'outro' && COMBUSTIVEIS_ABASTECIMENTO[c] ? [c] : Object.keys(COMBUSTIVEIS_ABASTECIMENTO);
+}
+
+function atualizarCombustiveisAbastecimento(valor = null) {
+    const veiculo = (caminhosVeiculos || []).find(v => String(v.id) === document.getElementById('abast-veiculo').value);
+    const opcoes = combustiveisDoVeiculo(veiculo);
+    const campo = document.getElementById('abast-combustivel');
+    const referencia = valor || veiculo?.combustivel_referencia;
+    campo.innerHTML = (opcoes.length === 1 ? '' : '<option value="">Selecione...</option>')
+        + opcoes.map(c => `<option value="${c}">${COMBUSTIVEIS_ABASTECIMENTO[c]}</option>`).join('');
+    if (referencia && opcoes.includes(referencia)) campo.value = referencia;
+}
+
+function atualizarLitrosAbastecimento() {
+    document.getElementById('abast-litros').textContent = formatarLitros(
+        calcularLitros(document.getElementById('abast-valor').value, document.getElementById('abast-preco').value));
+}
+
+async function carregarCartoesFisicosAbastecimento(selecionado = null) {
+    const contrato = document.getElementById('abast-cartao').value;
+    const campo = document.getElementById('abast-cartao-fisico');
+    campo.innerHTML = '<option value="">Não identificado</option>';
+    if (!contrato) return;
+    try {
+        const resp = await fetch(`${API_CARTOES}/${contrato}/vinculados`);
+        const data = await resp.json();
+        const ativos = (data.data || []).filter(c => c.situacao === 'ATIVO' || String(c.id) === String(selecionado));
+        campo.innerHTML += ativos.map(c => `<option value="${c.id}">${escapeHtml(c.nome)} (final ${escapeHtml(c.final)})</option>`).join('');
+        if (selecionado) campo.value = String(selecionado);
+    } catch (e) { console.error(e); }
+}
+
+async function atualizarMeioAbastecimento(cartao = null, fisico = null) {
+    const comCartao = document.getElementById('abast-meio').value === 'cartao';
+    document.querySelectorAll('.abast-cartao').forEach((el) => { el.style.display = comCartao ? '' : 'none'; });
+    if (!comCartao) {
+        document.getElementById('abast-cartao').value = '';
+        document.getElementById('abast-cartao-fisico').value = '';
+        return;
+    }
+    if (!cartoesCacheGlobal) {
+        try {
+            const r = await fetch(API_CARTOES);
+            const d = await r.json();
+            cartoesCacheGlobal = extrairListaApi(d).filter(c => c.tipo === 'Agregador' || c.ativo !== false);
+        } catch (e) { cartoesCacheGlobal = []; }
+    }
+    const campo = document.getElementById('abast-cartao');
+    campo.innerHTML = '<option value="">Não informado</option>'
+        + cartoesCacheGlobal.map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
+    if (cartao) campo.value = String(cartao);
+    await carregarCartoesFisicosAbastecimento(fisico);
+}
+
+async function abrirModalAbastecimento(veiculoId = null, registro = null) {
+    document.getElementById('form-abastecimento').reset();
+    document.getElementById('abast-id').value = registro?.id || '';
+    document.getElementById('abast-titulo').textContent = registro ? 'Corrigir abastecimento' : 'Abastecer';
+    document.getElementById('abast-motivo-grupo').style.display = registro ? '' : 'none';
+    document.getElementById('abast-motivo').required = Boolean(registro);
+    const campoVeiculo = document.getElementById('abast-veiculo');
+    const veiculos = (caminhosVeiculos || []).filter(v => combustiveisDoVeiculo(v).length);
+    // O veiculo e sempre uma escolha, mesmo com um so; pre-selecionado apenas quando a acao parte dele.
+    campoVeiculo.innerHTML = '<option value="">Selecione o veículo...</option>'
+        + veiculos.map(v => `<option value="${v.id}">${escapeHtml(v.nome)}</option>`).join('');
+    campoVeiculo.value = veiculoId ? String(veiculoId) : '';
+    const data = document.getElementById('abast-data');
+    const hoje = new Date().toLocaleDateString('en-CA');
+    data.max = hoje;
+    data.value = registro?.data_abastecimento || hoje;
+    atualizarCombustiveisAbastecimento(registro?.combustivel);
+    if (registro) {
+        document.getElementById('abast-hodometro').value = registro.hodometro_km;
+        document.getElementById('abast-preco').value = registro.preco_litro;
+        document.getElementById('abast-valor').value = registro.valor_total;
+        document.getElementById('abast-meio').value = registro.meio_pagamento || '';
+        document.getElementById('abast-estabelecimento').value = registro.estabelecimento || '';
+        document.getElementById('abast-observacoes').value = registro.observacoes || '';
+    }
+    await atualizarMeioAbastecimento(registro?.cartao_id, registro?.cartao_vinculado_id);
+    atualizarLitrosAbastecimento();
+    document.getElementById('modal-abastecimento').style.display = 'block';
+}
+
+function fecharModalAbastecimento() {
+    document.getElementById('modal-abastecimento').style.display = 'none';
+}
+
+async function salvarAbastecimento(event) {
+    event.preventDefault();
+    const id = document.getElementById('abast-id').value;
+    const numero = (campo) => { const v = document.getElementById(campo).value; return v === '' ? null : Number(v); };
+    const corpo = {
+        veiculo_id: numero('abast-veiculo'),
+        data_abastecimento: document.getElementById('abast-data').value,
+        hodometro_km: numero('abast-hodometro'),
+        combustivel: document.getElementById('abast-combustivel').value,
+        preco_litro: numero('abast-preco'),
+        valor_total: numero('abast-valor'),
+        meio_pagamento: document.getElementById('abast-meio').value || null,
+        cartao_id: numero('abast-cartao'),
+        cartao_vinculado_id: numero('abast-cartao-fisico'),
+        estabelecimento: document.getElementById('abast-estabelecimento').value,
+        observacoes: document.getElementById('abast-observacoes').value,
+    };
+    if (id) corpo.motivo = document.getElementById('abast-motivo').value;
+    const resp = await fetch(`${API_VEICULOS}/abastecimentos${id ? `/${id}` : ''}`, {
+        method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo),
+    });
+    const data = await resp.json();
+    if (!data.success) {
+        alert(`Erro: ${data.error}`);
+        return;
+    }
+    fecharModalAbastecimento();
+    await carregarVeiculos();
+    if (abastecimentosVeiculoId) await carregarHistoricoAbastecimentos();
+}
+
+async function carregarHistoricoAbastecimentos() {
+    const lista = document.getElementById('abast-historico-lista');
+    const resp = await fetch(`${API_VEICULOS}/${abastecimentosVeiculoId}/abastecimentos`);
+    const data = await resp.json();
+    if (!data.success) {
+        lista.innerHTML = `<p class="small-note">${escapeHtml(data.error)}</p>`;
+        return;
+    }
+    abastecimentosCache = data.data.abastecimentos || [];
+    const km = data.data.quilometragem || {};
+    document.getElementById('abast-km-resumo').innerHTML = km.km_real === null || km.km_real === undefined
+        ? '<div class="small-note">Sem leitura real do hodômetro: a quilometragem é só estimada.</div>'
+        : `<div><strong>Km real:</strong> ${formatarKm(km.km_real)} <span class="small-note">(${formatarData(km.km_real_data)})</span></div>
+           <div><strong>Estimado hoje:</strong> ${formatarKm(km.km_atual)} <span class="small-note">(+${formatarKm(km.km_estimado)} depois da leitura)</span></div>
+           <div><strong>Uso mensal:</strong> ${Number(km.km_mes) > 0 ? `${formatarKm(km.km_mes)}/mês <span class="small-note">(${escapeHtml(FONTES_KM_MES[km.fonte_km_mes] || '')})</span>` : '—'}</div>`;
+    if (!abastecimentosCache.length) {
+        lista.innerHTML = '<div class="empty-state"><p>Nenhum abastecimento registrado.</p></div>';
+        return;
+    }
+    lista.innerHTML = `
+        <div class="abast-tabela-wrap"><table class="abast-tabela">
+            <thead><tr><th>Data</th><th>Hodômetro</th><th>Rodados</th><th>Combustível</th><th>R$/L</th><th>Valor</th><th>Litros</th><th>Pagamento</th><th>Despesa</th><th></th></tr></thead>
+            <tbody>${abastecimentosCache.map(a => `
+                <tr class="${a.anulado ? 'abast-anulado' : ''}">
+                    <td>${formatarData(a.data_abastecimento)}${a.corrigido ? ' <span class="small-note">(corrigido)</span>' : ''}</td>
+                    <td>${formatarKm(a.hodometro_km)}</td>
+                    <td>${a.km_rodados === null || a.km_rodados === undefined ? '—' : formatarKm(a.km_rodados)}</td>
+                    <td>${escapeHtml(COMBUSTIVEIS_ABASTECIMENTO[a.combustivel] || a.combustivel)}</td>
+                    <td>${Number(a.preco_litro).toLocaleString('pt-BR', { minimumFractionDigits: 3 })}</td>
+                    <td>${formatarMoeda(a.valor_total)}</td>
+                    <td>${formatarLitros(a.litros)}</td>
+                    <td>${escapeHtml(a.cartao_nome ? `${a.cartao_nome}${a.cartao_final ? ` ${a.cartao_final}` : ''}` : (MEIOS_ABASTECIMENTO[a.meio_pagamento] || '—'))}</td>
+                    <td>${a.anulado ? 'Anulado' : (a.situacao_vinculo === 'VINCULADO' ? 'Vinculada' : 'Aguardando')}</td>
+                    <td>${a.anulado ? '' : `<div class="row-actions">
+                        <button class="row-action-button" onclick="corrigirAbastecimento(${a.id})" title="Corrigir" aria-label="Corrigir">${veiculosIcon('edit')}</button>
+                        <button class="row-action-button danger" onclick="anularAbastecimento(${a.id})" title="Anular" aria-label="Anular">${veiculosIcon('remove')}</button>
+                    </div>`}</td>
+                </tr>`).join('')}</tbody>
+        </table></div>`;
+}
+
+async function abrirHistoricoAbastecimentos(veiculoId) {
+    abastecimentosVeiculoId = veiculoId;
+    const veiculo = (caminhosVeiculos || []).find(v => Number(v.id) === Number(veiculoId));
+    document.getElementById('abast-historico-titulo').textContent = `Abastecimentos — ${veiculo?.nome || ''}`;
+    document.getElementById('abast-historico-lista').innerHTML = '<p class="loading">Carregando...</p>';
+    document.getElementById('modal-abastecimentos').style.display = 'block';
+    await carregarHistoricoAbastecimentos();
+}
+
+function fecharHistoricoAbastecimentos() {
+    document.getElementById('modal-abastecimentos').style.display = 'none';
+    abastecimentosVeiculoId = null;
+}
+
+function corrigirAbastecimento(id) {
+    const registro = abastecimentosCache.find(a => a.id === id);
+    if (registro) abrirModalAbastecimento(registro.veiculo_id, registro);
+}
+
+async function anularAbastecimento(id) {
+    const motivo = prompt('Motivo da anulação (o registro continua no histórico):');
+    if (!motivo || !motivo.trim()) return;
+    const resp = await fetch(`${API_VEICULOS}/abastecimentos/${id}/anular`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ motivo }),
+    });
+    const data = await resp.json();
+    if (!data.success) {
+        alert(`Erro: ${data.error}`);
+        return;
+    }
+    await carregarVeiculos();
+    await carregarHistoricoAbastecimentos();
+}
+
+// FIN-MVP-MOB-01: despesas futuras da modalidade anterior na prévia da ativação: cada uma exige manter ou substituir.
+function htmlConflitosTroca(conflitos) {
+    if (!conflitos) return '';
+    const competencia = (c) => formatarMesAno(c.competencia);
+    const linhas = (conflitos.decidir || []).map(c => `
+        <tr>
+            <td>${escapeHtml(competencia(c))}</td>
+            <td>${escapeHtml(c.descricao || '')}</td>
+            <td>${formatarMoeda(c.valor)}</td>
+            <td><label><input type="radio" name="troca-${c.natureza}-${c.registro_id}" value="MANTER" data-natureza="${c.natureza}" data-id="${c.registro_id}"> Manter</label></td>
+            <td><label><input type="radio" name="troca-${c.natureza}-${c.registro_id}" value="SUBSTITUIR" data-natureza="${c.natureza}" data-id="${c.registro_id}"> Substituir</label></td>
+        </tr>`).join('');
+    const semAlteracao = (conflitos.sem_alteracao || []).map(c => `<li>${escapeHtml(competencia(c))} — ${escapeHtml(c.descricao || '')} (${formatarMoeda(c.valor)})</li>`).join('');
+    return `
+        ${linhas ? `<div class="troca-conflitos" id="troca-conflitos">
+            <div class="troca-titulo">Despesas futuras da modalidade anterior</div>
+            <div class="small-note">Escolha cada uma. A substituída sai dos totais e fica guardada no histórico.</div>
+            <table class="abast-tabela"><tbody>${linhas}</tbody></table>
+        </div>` : ''}
+        ${semAlteracao ? `<div class="small-note troca-mes-corrente">Não mudam nesta troca (mês corrente ou fatura fechada):<ul>${semAlteracao}</ul></div>` : ''}`;
+}
+
+function coletarDecisoesTroca() {
+    const nomes = new Set(Array.from(document.querySelectorAll('#troca-conflitos input[type="radio"]')).map(r => r.name));
+    const marcados = Array.from(document.querySelectorAll('#troca-conflitos input[type="radio"]:checked'));
+    return {
+        faltam: nomes.size - marcados.length,
+        decisoes: marcados.map(r => ({ natureza: r.dataset.natureza, id: Number(r.dataset.id), decisao: r.value })),
+    };
+}

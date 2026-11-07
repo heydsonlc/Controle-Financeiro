@@ -105,6 +105,7 @@ const RPCS_DE_LEITURA = new Set(['meus_perfis', 'contas_bancarias_do_perfil', 'c
     'dashboard_resumo_tela',  // FIN-FIDELIDADE-CONSOLIDACAO-1 (so leitura)
     // FIN-FIDELIDADE-PATRIMONIO-1 (Mobilidade, fase 1, so leitura)
     'mobilidade_categorias_tela', 'veiculos_tela', 'projecoes_mobilidade_tela', 'veiculo_uso_tela', 'veiculo_regras_km_tela',
+    'registrar_abastecimento', 'corrigir_abastecimento', 'anular_abastecimento', 'abastecimentos_veiculo_tela',
     'veiculo_manutencoes_km_tela', 'veiculo_financiamento_tela', 'mobilidade_ativa_tela', 'mobilidade_assinaturas_tela',
     'transporte_app_tela', 'previa_mobilidade',  // FIN-MOBILIDADE-2: previa da ativacao (so le)
     'consorcios_tela',  // FIN-FIDELIDADE-CONTRATOS-1 (Consorcios, so leitura)

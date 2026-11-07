@@ -8,6 +8,7 @@ import { chamarRpc, perfilAtivoId, registrarDialogos } from './despesas.mjs';
 
 const A = { email: process.env.CF_EMAIL_A || 'usuario.a@teste.local', senha: process.env.CF_SENHA_A };
 const B = { email: process.env.CF_EMAIL_B || 'usuario.b@teste.local', senha: process.env.CF_SENHA_B };
+const C = { email: process.env.CF_EMAIL_C || 'usuario.c@teste.local', senha: process.env.CF_SENHA_C };
 const VEICULO = 'Carro E2E (ficticio)';
 // "Hoje" como o banco (financeiro.hoje_brasilia), e nao em UTC: das 21h a meia-noite de Brasilia a data UTC ja e o dia
 // seguinte, e no ultimo dia do mes o veiculo nasceria no mes seguinte (11 projecoes na janela de 12 meses).
@@ -169,4 +170,105 @@ test('veiculo flex: campos, custo calculado, referencia e custo manual', async (
     expect(recusa.corpo.error).toContain('Veículo simulado');
     expect(dialogos.length).toBeGreaterThan(0);
     expect((await api(page, 'DELETE', `/api/veiculos/${id}`)).status).toBe(200);
+});
+
+// FIN-MVP-MOB-01: abastecimento pela tela: veiculo obrigatorio, litros calculados, hodometro e correcao, sem criar despesa.
+test('abastecimento: formulario compacto, litros, historico, regressao e correcao', async ({ page }) => {
+    const dialogos = registrarDialogos(page);
+    await entrar(page, B);
+    await page.goto('/mobilidade.html');
+    await expect(page.locator('#comp-cards')).toContainText(VEICULO);
+    const perfil = await perfilAtivoId(page);
+    const veiculo = (await chamarRpc(page, 'veiculos_tela', { p_perfil_id: perfil, p_id: null })).corpo.find((v) => v.nome === VEICULO);
+    const preencher = async (km, valor) => {
+        await page.fill('#abast-hodometro', km);
+        await page.fill('#abast-preco', '4.40');
+        await page.fill('#abast-valor', valor);
+    };
+
+    // Pela acao geral, o veiculo nao vem escolhido.
+    await page.locator('#btn-abastecer').click();
+    await expect(page.locator('#modal-abastecimento')).toBeVisible();
+    await expect(page.locator('#abast-veiculo')).toHaveValue('');
+    await preencher('52300', '176');
+    await expect(page.locator('#abast-litros')).toHaveText('40,000');
+    await page.locator('#form-abastecimento button[type="submit"]').click();
+    await expect(page.locator('#modal-abastecimento')).toBeVisible();  // veiculo obrigatorio: o navegador nao envia
+    await page.selectOption('#abast-veiculo', String(veiculo.id));
+    await expect(page.locator('#abast-combustivel')).toHaveValue(veiculo.combustivel.toLowerCase());
+    await page.locator('#form-abastecimento button[type="submit"]').click();
+    await expect(page.locator('#modal-abastecimento')).toBeHidden();
+
+    // A partir do veiculo, ele vem selecionado; a regressao e recusada com o motivo.
+    await page.locator('#tab-configuracao').click();
+    await page.locator(`#conf-veiculos-lista [data-on-click="abrirModalAbastecimento(${veiculo.id})"]`).click();
+    await expect(page.locator('#abast-veiculo')).toHaveValue(String(veiculo.id));
+    await preencher('52000', '88');
+    await page.fill('#abast-data', HOJE_BRASILIA);
+    await page.locator('#abast-observacoes').fill('Leitura errada');
+    const antes = await page.evaluate(() => document.querySelectorAll('#abast-veiculo option').length);
+    expect(antes).toBeGreaterThan(1);
+    await page.locator('#form-abastecimento').evaluate((f) => f.requestSubmit());
+    await expect.poll(() => dialogos.length).toBeGreaterThan(0);
+    await page.locator('#modal-abastecimento .close').click();
+
+    // Historico, correcao com motivo e quilometragem real.
+    await page.locator(`#conf-veiculos-lista [data-on-click="abrirHistoricoAbastecimentos(${veiculo.id})"]`).click();
+    await expect(page.locator('#abast-historico-lista')).toContainText('40,000');
+    await expect(page.locator('#abast-historico-lista')).toContainText('Aguardando');
+    await expect(page.locator('#abast-km-resumo')).toContainText('52.300');
+    await page.locator('#abast-historico-lista [title="Corrigir"]').click();
+    await expect(page.locator('#abast-motivo')).toBeVisible();
+    await page.fill('#abast-hodometro', '52400');
+    await page.fill('#abast-motivo', 'Leitura conferida no painel');
+    await page.locator('#form-abastecimento').evaluate((f) => f.requestSubmit());
+    await expect(page.locator('#abast-km-resumo')).toContainText('52.400');
+    await expect(page.locator('#abast-historico-lista')).toContainText('(corrigido)');
+    await page.locator('#modal-abastecimentos .close').click();
+    await expect(page.locator('#conf-veiculos-lista')).toContainText('52.400 km');
+});
+
+// FIN-MVP-MOB-01: troca de modalidade pela tela: a previa mostra as despesas futuras e a ativacao exige decidir cada uma. No
+// usuario C: a recorrencia e as contas nao podem entrar no Perfil B, compartilhado com os specs de contas.
+test('troca de modalidade: decide as despesas futuras e a substituida sai dos totais', async ({ page }) => {
+    const dialogos = registrarDialogos(page);
+    await entrar(page, C);
+    await page.goto('/mobilidade.html');
+    await page.waitForLoadState('networkidle');
+    const perfil = await perfilAtivoId(page);
+    const veiculo = (await api(page, 'POST', '/api/veiculos', {
+        nome: 'Troca E2E (ficticio)', tipo: 'carro', combustivel: 'gasolina', autonomia_km_l: 10, status: 'ATIVO',
+        data_inicio: HOJE_BRASILIA, combustivel_valor_mensal: 200, preco_medio_combustivel: 6,
+    })).corpo.data;
+    const ativada = await api(page, 'POST', '/api/veiculos/mobilidade/ativar', {
+        tipo_modalidade: 'VEICULO', origem_id: veiculo.id, meio_pagamento: 'pix', confirmado: true,
+    });
+    expect(ativada.corpo.data.recorrencia.id).toBeGreaterThan(0);
+    const assinatura = (await api(page, 'POST', '/api/veiculos/mobilidade/assinaturas', { nome: 'Assinatura troca E2E (ficticia)', valor_mensal: 900 })).corpo.data;
+
+    // Despesas gera automaticamente o mes e o seguinte.
+    await page.goto('/contas.html');
+    await expect(page.locator('body')).toContainText('Combustivel - Troca E2E');
+    await page.goto('/mobilidade.html');
+    await page.waitForLoadState('networkidle');
+
+    await page.evaluate((id) => window.abrirModalAtivacaoMobilidade('ASSINATURA', id), assinatura.id);
+    await page.locator('#modal-ativar-mobilidade').getByText('Ver prévia').click();
+    await expect(page.locator('#troca-conflitos')).toContainText('Combustivel - Troca E2E');
+    await expect(page.locator('#ativar-mob-resultado')).toContainText('Não mudam nesta troca');
+    await expect(page.locator('#troca-conflitos input:checked')).toHaveCount(0);
+
+    // Sem decidir, nao ativa.
+    await page.locator('#modal-ativar-mobilidade').getByText('Confirmar ativação').click();
+    await expect.poll(() => dialogos.some((d) => /Escolha manter ou substituir/.test(d.message || d))).toBe(true);
+    expect((await chamarRpc(page, 'mobilidade_ativa_tela', { p_perfil_id: perfil })).corpo.nome_origem).toBe('Troca E2E (ficticio)');
+
+    const radio = page.locator('#troca-conflitos input[value="SUBSTITUIR"]').first();
+    const contaId = Number(await radio.getAttribute('data-id'));
+    await radio.check();
+    await page.locator('#modal-ativar-mobilidade').getByText('Confirmar ativação').click();
+    await expect(page.locator('#modal-ativar-mobilidade')).toBeHidden();
+    expect((await chamarRpc(page, 'mobilidade_ativa_tela', { p_perfil_id: perfil })).corpo.nome_origem).toBe('Assinatura troca E2E (ficticia)');
+    const despesas = (await chamarRpc(page, 'despesas_diretas_tela', { p_perfil_id: perfil })).corpo;
+    expect(despesas.map((d) => d.id)).not.toContain(contaId);
 });

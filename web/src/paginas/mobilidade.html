@@ -12,6 +12,14 @@
                 </span>
                 <span class="action-button-label">Novo veículo próprio</span>
             </button>
+            <button class="action-icon-button secondary" id="btn-abastecer" type="button" onclick="abrirModalAbastecimento()" title="Abastecer" aria-label="Abastecer">
+                <span class="action-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M5 20V5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v15M4 20h11M7 8h5M14 12h2a1 1 0 0 1 1 1v3a1.5 1.5 0 0 0 3 0V9l-3-3"/>
+                    </svg>
+                </span>
+                <span class="action-button-label">Abastecer</span>
+            </button>
             <button class="action-icon-button secondary" type="button" onclick="abrirModalAssinaturaNovo()" title="Carro por assinatura" aria-label="Carro por assinatura">
                 <span class="action-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -756,7 +764,7 @@
 </div>
 <!-- VEIC-2 / VEIC-2B: Modal de ativação de modalidade de mobilidade -->
 <div id="modal-ativar-mobilidade" class="modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="ativar-mob-titulo">
-    <div class="modal-content" style="max-width:520px;">
+    <div class="modal-content" style="max-width:600px;">
         <div class="modal-header">
             <h2 id="ativar-mob-titulo">Ativar modalidade de mobilidade</h2>
             <button class="modal-close" onclick="fecharModalAtivacaoMobilidade()" aria-label="Fechar">&times;</button>
@@ -811,6 +819,103 @@
         <div class="modal-footer">
             <button type="button" class="btn btn-secondary" onclick="fecharModalAtivacaoMobilidade()">Cancelar</button>
             <button type="button" class="btn btn-primary" onclick="confirmarAtivacaoMobilidade()">Confirmar ativação</button>
+        </div>
+    </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- MODAL — Abastecimento (registro operacional, nao cria despesa)    -->
+<!-- ================================================================ -->
+<div id="modal-abastecimento" class="modal">
+    <div class="modal-content modal-abastecimento">
+        <div class="modal-header">
+            <h2 id="abast-titulo">Abastecer</h2>
+            <span class="close" onclick="fecharModalAbastecimento()">&times;</span>
+        </div>
+        <form id="form-abastecimento" onsubmit="salvarAbastecimento(event)">
+            <input type="hidden" id="abast-id">
+            <div class="abast-grid">
+                <div class="form-group abast-span-2">
+                    <label for="abast-veiculo">Veículo *</label>
+                    <select id="abast-veiculo" required onchange="atualizarCombustiveisAbastecimento()"></select>
+                </div>
+                <div class="form-group">
+                    <label for="abast-data">Data *</label>
+                    <input type="date" id="abast-data" required>
+                </div>
+                <div class="form-group">
+                    <label for="abast-hodometro">Hodômetro (km) *</label>
+                    <input type="number" step="0.1" min="0" id="abast-hodometro" required placeholder="Ex: 52300">
+                </div>
+                <div class="form-group">
+                    <label for="abast-combustivel">Combustível *</label>
+                    <select id="abast-combustivel" required></select>
+                </div>
+                <div class="form-group">
+                    <label for="abast-preco">Preço por litro *</label>
+                    <input type="number" step="0.001" min="0.001" id="abast-preco" required placeholder="Ex: 4,399" oninput="atualizarLitrosAbastecimento()">
+                </div>
+                <div class="form-group">
+                    <label for="abast-valor">Valor total *</label>
+                    <input type="number" step="0.01" min="0.01" id="abast-valor" required placeholder="Ex: 176,00" oninput="atualizarLitrosAbastecimento()">
+                </div>
+                <div class="form-group">
+                    <label for="abast-litros">Litros calculados</label>
+                    <output id="abast-litros" class="abast-litros">—</output>
+                </div>
+                <div class="form-group">
+                    <label for="abast-meio">Pagamento</label>
+                    <select id="abast-meio" onchange="atualizarMeioAbastecimento()">
+                        <option value="">Não informado</option>
+                        <option value="cartao">Cartão de crédito</option>
+                        <option value="pix">Pix</option>
+                        <option value="debito">Débito</option>
+                        <option value="dinheiro">Dinheiro</option>
+                        <option value="boleto">Boleto</option>
+                        <option value="outro">Outro</option>
+                    </select>
+                </div>
+                <div class="form-group abast-cartao" style="display:none;">
+                    <label for="abast-cartao">Cartão</label>
+                    <select id="abast-cartao" onchange="carregarCartoesFisicosAbastecimento()"></select>
+                </div>
+                <div class="form-group abast-cartao" style="display:none;">
+                    <label for="abast-cartao-fisico">Cartão físico</label>
+                    <select id="abast-cartao-fisico"></select>
+                </div>
+                <div class="form-group">
+                    <label for="abast-estabelecimento">Estabelecimento</label>
+                    <input type="text" id="abast-estabelecimento" maxlength="120">
+                </div>
+                <div class="form-group abast-span-2">
+                    <label for="abast-observacoes">Observações</label>
+                    <input type="text" id="abast-observacoes" maxlength="500">
+                </div>
+                <div class="form-group abast-span-3" id="abast-motivo-grupo" style="display:none;">
+                    <label for="abast-motivo">Motivo da correção *</label>
+                    <input type="text" id="abast-motivo" maxlength="300">
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="fecharModalAbastecimento()">Cancelar</button>
+                <button type="submit" class="btn btn-primary btn-sm">Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- MODAL — Historico de abastecimentos e quilometragem do veiculo    -->
+<!-- ================================================================ -->
+<div id="modal-abastecimentos" class="modal">
+    <div class="modal-content modal-lg">
+        <div class="modal-header">
+            <h2 id="abast-historico-titulo">Abastecimentos</h2>
+            <span class="close" onclick="fecharHistoricoAbastecimentos()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <div id="abast-km-resumo" class="abast-km-resumo"></div>
+            <div id="abast-historico-lista"></div>
         </div>
     </div>
 </div>

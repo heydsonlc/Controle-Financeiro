@@ -645,6 +645,7 @@
 
 .conf-item {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 12px;
     padding: 10px 12px;
@@ -704,6 +705,7 @@
     display: flex;
     gap: 6px;
     flex-shrink: 0;
+    margin-left: auto;
 }
 
 /* ----------------------------------------------------------------
@@ -2048,4 +2050,92 @@
     border-color: rgba(245, 158, 11, 0.28);
     background: rgba(245, 158, 11, 0.08);
     color: #92400e;
+}
+
+/* FIN-MVP-MOB-01 — abastecimento: formulario compacto em colunas e historico em tabela */
+.modal-abastecimento {
+    max-width: 640px;
+}
+
+.abast-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px 12px;
+}
+
+.abast-grid .form-group {
+    margin-bottom: 0;
+}
+
+.abast-span-2 {
+    grid-column: span 2;
+}
+
+.abast-span-3 {
+    grid-column: 1 / -1;
+}
+
+.abast-litros {
+    display: block;
+    padding: 8px 0;
+    font-weight: 600;
+}
+
+.abast-km-resumo {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 20px;
+    margin-bottom: 12px;
+    font-size: 0.875rem;
+}
+
+.abast-tabela-wrap {
+    overflow-x: auto;
+}
+
+.abast-tabela {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+}
+
+.abast-tabela th,
+.abast-tabela td {
+    padding: 6px 8px;
+    border-bottom: 1px solid #e5e7eb;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.abast-tabela .row-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 4px;
+}
+
+.abast-anulado td {
+    color: #9ca3af;
+}
+
+.troca-conflitos {
+    margin-top: 8px;
+}
+
+.troca-titulo {
+    font-weight: 600;
+}
+
+.troca-mes-corrente {
+    margin-top: 8px;
+}
+
+.troca-mes-corrente ul {
+    margin: 4px 0 0 16px;
+    padding: 0;
+}
+
+@media (max-width: 640px) {
+    .abast-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
