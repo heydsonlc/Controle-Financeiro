@@ -11,6 +11,7 @@ import { trocarPerfil } from './moldura.mjs';
 const A = { email: process.env.CF_EMAIL_A || 'usuario.a@teste.local', senha: process.env.CF_SENHA_A };
 const B = { email: process.env.CF_EMAIL_B || 'usuario.b@teste.local', senha: process.env.CF_SENHA_B };
 const ID_PERFIL_B = process.env.CF_ID_PERFIL_B || '103';
+const E = { email: process.env.CF_EMAIL_E || 'usuario.e@teste.local', senha: process.env.CF_SENHA_E };  // perfil proprio (P19)
 
 test.use({ viewport: { width: 1366, height: 900 } });
 
@@ -102,6 +103,53 @@ test('avulsa: cadastrar pelo modal original (competencia do Flask), editar e exc
     expect(dialogos.at(-2)).toMatch(/^Tem certeza que deseja deletar a despesa "Conserto geladeira"\?/);
     await expect(despesa(page, 'Conserto geladeira')).toHaveCount(0);
     await expect.poll(totalGeral).toBeCloseTo(antes, 2);
+});
+
+// FIN-DESPESAS-DEBITO-AUTOMATICO-01 (P19): despesa em debito automatico gerada antes de a recorrencia ter conta bancaria
+// ("Energia E", o estado real da Energia Eletrica, no perfil proprio do usuario E). Sem conta em lugar nenhum: recusada, com o
+// caminho. Vinculada a conta na recorrencia: o valor do mes muda, com a conta da recorrencia, sem tocar na recorrencia, no
+// mes seguinte nem no mes pago.
+test('debito automatico: conta vinculada depois a recorrencia permite editar a despesa pendente', async ({ page }) => {
+    const dialogos = registrarDialogos(page);
+    await entrar(page, E);
+    await abrirDespesas(page, '2029-10');
+    const valor = (nome) => despesa(page, nome).locator('.despesa-cell-valor');
+    async function editarValor(novo) {
+        await despesa(page, 'Energia E').locator('[data-on-click^="editarDespesa"]').click();
+        await expect(page.locator('#modal-titulo')).toHaveText('Editar Despesa');
+        await expect(page.locator('#valor')).toHaveValue('510.33');
+        await page.fill('#valor', novo);
+        await salvarDespesa(page);
+    }
+    await editarValor('581.20');
+    await expect.poll(() => dialogos.at(-1)).toBe('Erro: Débito automático exige uma conta bancária ativa do perfil. Vincule a conta '
+        + 'na recorrência (tela Recorrências) ou reative a conta bancária. Nada foi gravado.');
+    await page.locator('#modal-despesa [data-on-click="fecharModal()"]').first().click();
+    await expect(valor('Energia E')).toHaveText('R$ 510,33');
+
+    // como o usuario fez: a conta vinculada na recorrencia (as despesas ja geradas continuam sem conta)
+    const perfil = await perfilAtivoId(page);
+    const contas = await chamarRpc(page, 'contas_bancarias_do_perfil', { p_perfil_id: perfil });
+    const contaE = contas.corpo.find((c) => c.nome === 'Conta E (ficticia)').id;
+    const versao = await chamarRpc(page, 'recorrencias_do_perfil', { p_perfil_id: perfil });
+    const vinculo = await chamarRpc(page, 'editar_recorrencia', { p_perfil_id: perfil, p_item_id: 457,
+        p_versao: versao.corpo.find((r) => r.id === 457).versao, p_dados: { debito_automatico: true, conta_bancaria_id: contaE } });
+    expect(vinculo.status).toBe(200);
+    await abrirDespesas(page, '2029-10');
+    await editarValor('581.20');
+    await expect.poll(() => dialogos.at(-1)).toBe('Despesa atualizada com sucesso');
+    await expect(valor('Energia E')).toHaveText('R$ 581,20');
+
+    const outubro = (await chamarRpc(page, 'contas_do_mes', { p_perfil_id: perfil, p_mes: '2029-10-01' })).corpo.find((c) => c.nome === 'Energia E');
+    const edicao = (await chamarRpc(page, 'despesa_para_edicao', { p_perfil_id: perfil, p_conta_id: outubro.id })).corpo;
+    expect([edicao.conta.debito_automatico, edicao.conta.conta_bancaria_id, Number(edicao.conta.valor)]).toEqual([true, contaE, 581.2]);
+    const recorrencia = (await chamarRpc(page, 'recorrencias_do_perfil', { p_perfil_id: perfil })).corpo.find((r) => r.id === 457);
+    expect(Number(recorrencia.valor)).toBe(510.33);  // o valor padrao da recorrencia nao muda
+    await trocarCompetencia(page, '2029-11');
+    await expect(valor('Energia E')).toHaveText('R$ 510,33');
+    await trocarCompetencia(page, '2029-09');
+    await expect(valor('Energia E')).toHaveText('R$ 510,33');  // a paga fica como estava
+    await expect(despesa(page, 'Energia E').locator('.status-badge')).toContainText(/pag/i);
 });
 
 test('despesa paga nao abre edicao e fatura nao tem edicao', async ({ page }) => {

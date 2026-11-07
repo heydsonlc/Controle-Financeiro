@@ -23,8 +23,20 @@ const TEXTOS_DO_BANCO = [
     [/^Esta categoria ja tem um vinculo legado \(sem perfil\) neste cartao: ajuste-o no sistema atual$/,
         () => 'Esta categoria já tem um vínculo antigo (sem perfil) neste cartão; o ajuste dele ainda não está disponível nesta versão do aplicativo. Nada foi gravado.'],
     [/^(A categoria sistêmica .*) Ela é criada pelo sistema atual; nada foi gravado\.$/, (m) => `${m[1]} Nada foi gravado.`],
+    // FIN-DESPESAS-DEBITO-AUTOMATICO-01 (P19): a regra continua no banco; a mensagem diz onde vincular a conta.
+    [/^Debito automatico exige uma conta bancaria ativa do perfil$/,
+        () => 'Débito automático exige uma conta bancária ativa do perfil. Vincule a conta na recorrência (tela Recorrências) ou reative a conta bancária. Nada foi gravado.'],
 ];
 export const valorTexto = (valor) => (Number(valor) || 0).toFixed(2);
+
+// FIN-DESPESAS-DEBITO-AUTOMATICO-01 (P19): conta bancaria do debito automatico na edicao de uma despesa. A despesa gerada
+// antes de a recorrencia ter conta ficou sem ela, e vincular a conta depois so muda a recorrencia: a edicao usa a conta da
+// recorrencia (despesa_para_edicao.item). A conta propria da despesa prevalece; o banco continua exigindo conta ativa do perfil.
+export function contaDoDebito(edicao) {
+    const propria = edicao.conta.conta_bancaria_id ?? null;
+    if (!edicao.conta.debito_automatico) return propria;
+    return propria ?? edicao.item?.conta_bancaria_id ?? null;
+}
 
 // Motivos de bloqueio do banco (sem acento) como o usuario le (mesmos textos do FIN-DESPESAS-1).
 const BLOQUEIOS = {

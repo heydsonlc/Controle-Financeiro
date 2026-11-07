@@ -8,7 +8,7 @@
 // - "A partir de documento" (FIN-PRE-PRODUCAO-1): lista, sugestao e criacao do lancamento por js/documento-financeiro.js.
 
 import { supabase } from './cliente.js';
-import { criarChaves, emMigracao, falha, mensagemDeErro, ok, textoBloqueio, valorTexto } from './adaptador-comum.js';
+import { contaDoDebito, criarChaves, emMigracao, falha, mensagemDeErro, ok, textoBloqueio, valorTexto } from './adaptador-comum.js';
 import { confirmacoes, consolidadaDoErro } from './fechamento.js';
 import { responderDocumentoFinanceiro } from './documento-financeiro.js';
 import { iniciarMoldura } from './moldura.js';
@@ -175,7 +175,7 @@ async function atualizarDespesa(id, corpo) {
     if (!(Number(corpo.valor) > 0)) return avisar('Informe um valor válido.');
     const dados = {
         nome: String(corpo.nome || '').trim(), valor: valorTexto(corpo.valor), descricao: String(corpo.descricao || '').trim(),
-        debito_automatico: Boolean(edicao.conta.debito_automatico), conta_bancaria_id: edicao.conta.conta_bancaria_id,
+        debito_automatico: Boolean(edicao.conta.debito_automatico), conta_bancaria_id: contaDoDebito(edicao),
         categoria_id: corpo.categoria_id, data_vencimento: edicao.conta.data_vencimento,
     };
     if (corpo.data_vencimento && corpo.data_vencimento !== edicao.conta.data_vencimento) {

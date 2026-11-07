@@ -547,6 +547,39 @@ def semear_pendencia_e2e(cur, categoria_id=201):
                 (iid, nome, PERFIS[chave]['id'], categoria_id, ancora, valor, CARTAO_E2E[0]))
 
 
+# FIN-DESPESAS-DEBITO-AUTOMATICO-01 (despesas.spec.mjs): usuario E, titular de um perfil FICTICIO so deste cenario (gerador
+# NOVO), com uma conta bancaria e a recorrencia em debito automatico cadastrada sem conta, mais as despesas geradas antes do
+# vinculo, tambem sem conta (estado da P19; a de 09/2029 ja paga). Perfil proprio: abrir Despesas gera as lacunas de todas
+# as recorrencias do perfil ate o mes seguinte, e assim nenhum outro spec ve nem gera estes dados. A, B, C e D nao mudam.
+USUARIO_E = {'id': str(uuid.UUID('eeeeeeee-0000-4000-8000-00000000000e')), 'email': 'usuario.e@teste.local'}
+PERFIL_E = {'id': 130, 'nome': 'Perfil E (ficticio)'}
+DEBITO_SEM_CONTA_E2E = (457, 'Energia E', '2029-09-10', '510.33')
+
+
+def semear_debito_sem_conta_e2e(cur, categoria_id=201):
+    cur.execute('insert into auth.users (id, email) values (%s, %s)', (USUARIO_E['id'], USUARIO_E['email']))
+    cur.execute("insert into public.perfil_financeiro (id, nome, tipo, cor, ativo, padrao) values (%s, %s, 'PESSOAL', '#2563eb', true, false)",
+                (PERFIL_E['id'], PERFIL_E['nome']))
+    cur.execute("insert into financeiro.perfil_acesso (user_id, perfil_financeiro_id, papel, pode_gerir) values (%s, %s, 'TITULAR', true)",
+                (USUARIO_E['id'], PERFIL_E['id']))
+    cur.execute('select financeiro.definir_gerador_recorrencia(%s, %s, %s, %s)',
+                (PERFIL_E['id'], 'NOVO', 'administrador de teste', 'cenario ficticio E2E'))
+    cur.execute("insert into public.conta_bancaria (perfil_financeiro_id, nome, instituicao, tipo, status, cor_display) "
+                "values (%s, 'Conta E (ficticia)', 'Banco ficticio', 'Conta Corrente', 'ATIVO', '#3b82f6')", (PERFIL_E['id'],))
+    iid, nome, ancora, valor = DEBITO_SEM_CONTA_E2E
+    cur.execute("insert into public.item_despesa (id, nome, tipo, perfil_financeiro_id, categoria_id, ativo, recorrente, "
+                "tipo_recorrencia, data_vencimento, valor, meio_pagamento, conta_bancaria_id) "
+                "values (%s, %s, 'Simples', %s, %s, true, true, 'mensal', %s, %s, 'debito_automatico', null)",
+                (iid, nome, PERFIL_E['id'], categoria_id, ancora, valor))
+    for mes, status, pagamento in (('2029-09-01', 'Pago', '2029-09-10'), ('2029-10-01', 'Pendente', None),
+                                   ('2029-11-01', 'Pendente', None)):
+        cur.execute("insert into public.conta (item_despesa_id, perfil_financeiro_id, mes_referencia, descricao, valor, "
+                    "data_vencimento, status_pagamento, data_pagamento, debito_automatico, conta_bancaria_id, "
+                    "is_fatura_cartao, estouro_orcamento, status_fatura) "
+                    "values (%s, %s, %s, %s, %s, %s::date + 9, %s, %s, true, null, false, false, 'ABERTA')",
+                    (iid, PERFIL_E['id'], mes, nome, valor, mes, status, pagamento))
+
+
 # FIN-RECEITAS-1 (E2E): receitas FICTICIAS de 11/2026 (previsoes; um recebimento parcial com movimento).
 RECEITAS_E2E = [  # nome, tipo, perfil, recorrente, valor_base, dia, valor previsto 11/2026
     ('Salário (A)', 'SALARIO_FIXO', 'PESSOAL', True, '5000.00', 5, '5000.00'),

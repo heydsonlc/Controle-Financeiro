@@ -49,6 +49,7 @@ from tests.supabase_local import (  # noqa: E402
     USUARIO_B,
     USUARIO_C,
     USUARIO_D,
+    USUARIO_E,
     EMPRESA_D,
     ClusterLocal,
     PostgrestLocal,
@@ -64,6 +65,7 @@ from tests.supabase_local import (  # noqa: E402
     semear_empresa_c_e2e,
     semear_empresa_vazia,
     semear_patrimonio_e2e,
+    semear_debito_sem_conta_e2e,
     semear_pendencia_e2e,
     semear_receitas_e2e,
     semear_recorrencia_e2e,
@@ -76,6 +78,7 @@ CONTAS = {
     USUARIO_B['email']: {**USUARIO_B, 'senha': 'Senha-ficticia-B-2026'},
     USUARIO_C['email']: {**USUARIO_C, 'senha': 'Senha-ficticia-C-2026'},  # FIN-PRE-PRODUCAO-1 (Empresa C)
     USUARIO_D['email']: {**USUARIO_D, 'senha': 'Senha-ficticia-D-2026'},  # FIN-MIGRACAO-P0P1-01 (Empresa D vazia)
+    USUARIO_E['email']: {**USUARIO_E, 'senha': 'Senha-ficticia-E-2026'},  # FIN-DESPESAS-DEBITO-AUTOMATICO-01 (Perfil E)
 }
 HOP_BY_HOP = {'connection', 'keep-alive', 'transfer-encoding', 'content-length', 'server', 'date'}
 
@@ -336,6 +339,7 @@ def main():
                 semear_receitas_e2e(cur)  # FIN-RECEITAS-1 (receitas.spec.mjs)
                 semear_cartoes_e2e(cur)  # FIN-CARTOES-1 e FIN-FIDELIDADE-CARTOES-1 (cartoes_tela.spec.mjs)
                 semear_pendencia_e2e(cur)  # FIN-CARTOES-RECORRENCIA-PENDENCIA-1 (pendencia.spec.mjs)
+                semear_debito_sem_conta_e2e(cur)  # FIN-DESPESAS-DEBITO-AUTOMATICO-01 (despesas.spec.mjs)
                 semear_financiamento_e2e(cur)  # FIN-FIDELIDADE-CONTRATOS-1 (financiamentos_tela.spec.mjs)
                 semear_patrimonio_e2e(cur)  # FIN-FIDELIDADE-PATRIMONIO-1 (patrimonio_tela.spec.mjs)
                 semear_documentos_fiscais_e2e(cur)  # FIN-FIDELIDADE-DOCUMENTOS-1 (documentos_fiscais_tela.spec.mjs)
@@ -417,7 +421,8 @@ def main():
                            'CF_SENHA_A': CONTAS[USUARIO_A['email']]['senha'],
                            'CF_SENHA_B': CONTAS[USUARIO_B['email']]['senha'],
                            'CF_EMAIL_C': USUARIO_C['email'], 'CF_SENHA_C': CONTAS[USUARIO_C['email']]['senha'],
-                           'CF_EMAIL_D': USUARIO_D['email'], 'CF_SENHA_D': CONTAS[USUARIO_D['email']]['senha']}
+                           'CF_EMAIL_D': USUARIO_D['email'], 'CF_SENHA_D': CONTAS[USUARIO_D['email']]['senha'],
+                           'CF_EMAIL_E': USUARIO_E['email'], 'CF_SENHA_E': CONTAS[USUARIO_E['email']]['senha']}
                     return subprocess.run([npx, 'playwright', 'test', '-c', 'playwright.config.mjs', *extras],
                                           cwd=WEB, env=env).returncode
                 except KeyboardInterrupt:

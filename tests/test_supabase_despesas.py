@@ -335,6 +335,67 @@ def test_debito_automatico_exige_conta_bancaria_ativa_do_proprio_perfil(banco):
         criar(banco, {**AVULSA, 'debito_automatico': True, 'conta_bancaria_id': propria})
 
 
+def _recorrencia_debito_sem_conta(dsn):
+    """Estado real da P19 (Energia Eletrica): recorrencia em debito automatico cadastrada sem conta bancaria e as despesas
+    geradas antes do vinculo, tambem sem conta; uma ja paga."""
+    item_id = sql(dsn, "insert into public.item_despesa (nome, tipo, perfil_financeiro_id, categoria_id, ativo, recorrente, "
+                       "tipo_recorrencia, data_vencimento, valor, meio_pagamento, conta_bancaria_id) values ('Energia Eletrica', "
+                       "'Simples', %s, %s, true, true, 'mensal', '2029-09-10', 510.33, 'debito_automatico', null) returning id",
+                  (ID['PESSOAL'], MORADIA))[0]['id']
+    contas = {}
+    for mes, status, pagamento in (('2029-09-01', 'Pago', '2029-09-10'), ('2029-10-01', 'Pendente', None), ('2029-11-01', 'Pendente', None)):
+        contas[mes[:7]] = sql(dsn, "insert into public.conta (item_despesa_id, perfil_financeiro_id, mes_referencia, descricao, valor, "
+                                   "data_vencimento, status_pagamento, data_pagamento, debito_automatico, conta_bancaria_id, "
+                                   "is_fatura_cartao, estouro_orcamento, status_fatura) values (%s, %s, %s, 'Energia Eletrica', 510.33, "
+                                   "%s::date + 9, %s, %s, true, null, false, false, 'ABERTA') returning id",
+                              (item_id, ID['PESSOAL'], mes, mes, status, pagamento))[0]['id']
+    return item_id, contas
+
+
+def test_conta_vinculada_depois_a_recorrencia_permite_editar_as_pendentes(banco):
+    """FIN-DESPESAS-DEBITO-AUTOMATICO-01 (P19): vincular a conta a recorrencia nao chega as despesas ja geradas; a tela
+    passa a enviar a conta da recorrencia (despesa_para_edicao.item) e o valor do mes muda, sem tocar na recorrencia,
+    nas outras despesas nem no pagamento feito. A regra do banco continua a mesma."""
+    item_id, contas = _recorrencia_debito_sem_conta(banco)
+    caixa = conta_bancaria(banco, 'Conta Pessoal (A)')
+    novembro = contas['2029-11']
+    # causa: a despesa em debito automatico sem conta propria, reenviada como esta, e recusada (antes e depois do vinculo)
+    with pytest.raises(errors.InvalidParameterValue, match='conta bancaria ativa do perfil'):
+        editar(banco, novembro, {'valor': '581.20', 'debito_automatico': True, 'conta_bancaria_id': None})
+    rpc(banco, 'editar_recorrencia', ID['PESSOAL'], item_id, sql(banco, 'select financeiro.versao_recorrencia(%s) v', (item_id,))[0]['v'],
+        {'debito_automatico': True, 'conta_bancaria_id': caixa})
+    e = edicao(banco, novembro)
+    assert (e['conta']['debito_automatico'], e['conta']['conta_bancaria_id'], e['item']['conta_bancaria_id']) == (True, None, caixa)
+    antes = {m: md5_conta(banco, c) for m, c in contas.items() if c != novembro}
+    n_contas = sql(banco, 'select count(*) n from public.conta where item_despesa_id = %s', (item_id,))[0]['n']
+    with pytest.raises(errors.InvalidParameterValue, match='conta bancaria ativa do perfil'):
+        editar(banco, novembro, {'valor': '581.20', 'debito_automatico': True, 'conta_bancaria_id': e['conta']['conta_bancaria_id']})
+    # o que a tela corrigida envia: a conta da recorrencia
+    editar(banco, novembro, {'valor': '581.20', 'debito_automatico': True, 'conta_bancaria_id': e['item']['conta_bancaria_id']})
+    c, i = conta(banco, novembro), item(banco, item_id)
+    assert (c['valor'], c['debito_automatico'], c['conta_bancaria_id'], c['mes_referencia'], c['status_pagamento']) == \
+        (Decimal('581.20'), True, caixa, D(2029, 11, 1), 'Pendente')
+    assert (i['valor'], i['conta_bancaria_id'], i['meio_pagamento']) == (Decimal('510.33'), caixa, 'debito_automatico')
+    assert {m: md5_conta(banco, c) for m, c in contas.items() if c != novembro} == antes  # outubro e o setembro pago intactos
+    assert sql(banco, 'select count(*) n from public.conta where item_despesa_id = %s', (item_id,))[0]['n'] == n_contas
+
+
+@pytest.mark.parametrize('caso', ['inativa', 'outro_perfil', 'sem_conta'])
+def test_edicao_em_debito_automatico_continua_exigindo_conta_ativa_do_perfil(banco, caso):
+    item_id, contas = _recorrencia_debito_sem_conta(banco)
+    caixa = conta_bancaria(banco, 'Conta Pessoal (A)')
+    if caso != 'sem_conta':
+        rpc(banco, 'editar_recorrencia', ID['PESSOAL'], item_id, sql(banco, 'select financeiro.versao_recorrencia(%s) v', (item_id,))[0]['v'],
+            {'debito_automatico': True, 'conta_bancaria_id': caixa})
+    alvo = {'inativa': caixa, 'outro_perfil': conta_bancaria(banco, 'Conta Perfil B'), 'sem_conta': None}[caso]
+    if caso == 'inativa':
+        sql(banco, "update public.conta_bancaria set status = 'INATIVO' where id = %s", (caixa,))
+    antes = md5_conta(banco, contas['2029-10'])
+    with pytest.raises(errors.InvalidParameterValue, match='conta bancaria ativa do perfil'):
+        editar(banco, contas['2029-10'], {'valor': '581.20', 'debito_automatico': True, 'conta_bancaria_id': alvo})
+    assert md5_conta(banco, contas['2029-10']) == antes
+
+
 def test_sem_debito_a_conta_bancaria_nao_e_gravada(banco):
     r = criar(banco, {**AVULSA, 'conta_bancaria_id': conta_bancaria(banco, 'Conta Pessoal (A)')})
     assert conta(banco, r['conta_id'])['conta_bancaria_id'] is None

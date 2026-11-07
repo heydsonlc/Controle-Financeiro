@@ -10,7 +10,8 @@
 
 import { supabase } from './cliente.js';
 import {
-    criarChaves, emMigracao, falha, hojeBrasilia, mensagemDeErro, ok, PERFIL_NAO_HABILITADO, textoBloqueio, valorTexto,
+    contaDoDebito, criarChaves, emMigracao, falha, hojeBrasilia, mensagemDeErro, ok, PERFIL_NAO_HABILITADO, textoBloqueio,
+    valorTexto,
 } from './adaptador-comum.js';
 import { centavos, deslocarMes, mesAtualBrasilia, reais } from './comum.js';
 import { responderDocumentoFinanceiro } from './documento-financeiro.js';
@@ -308,7 +309,7 @@ async function atualizar(id, corpo) {
         valor: valorTexto(corpo.valor),
         descricao: String(corpo.descricao || '').trim(),
         debito_automatico: Boolean(edicao.conta.debito_automatico),
-        conta_bancaria_id: edicao.conta.conta_bancaria_id,
+        conta_bancaria_id: contaDoDebito(edicao),
     };
     if (corpo.data_vencimento && corpo.data_vencimento !== edicao.conta.data_vencimento) {
         if (!edicao.pode_mudar_vencimento) return falha('O vencimento desta conta não pode ser alterado aqui.');
