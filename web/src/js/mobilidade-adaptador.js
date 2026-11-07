@@ -127,6 +127,7 @@ const ROTAS = [
     ['POST', /^\/api\/veiculos\/mobilidade\/ativar$/, (m, c) => ativar(c || {})],
     ['GET', /^\/api\/veiculos\/cenario-ativo$/, async () => ok({ data: {} })],
     ['POST', /^\/api\/veiculos\/cenario-ativo$/, async () => falha(NAO_REPRODUZIDO, 501)],
+    ['GET', /^\/api\/veiculos\/custos$/, async () => ok({ data: await chamar((a) => supabase.rpc('custos_veiculos_tela', a), { p_mes: null }) })],
     ['POST', /^\/api\/veiculos\/abastecimentos$/, (m, c) => registrarAbastecimento(c || {})],
     ['PUT', /^\/api\/veiculos\/abastecimentos\/(\d+)$/, async (m, c) => ok({
         message: 'Abastecimento corrigido',

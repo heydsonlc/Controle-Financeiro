@@ -272,3 +272,22 @@ test('troca de modalidade: decide as despesas futuras e a substituida sai dos to
     const despesas = (await chamarRpc(page, 'despesas_diretas_tela', { p_perfil_id: perfil })).corpo;
     expect(despesas.map((d) => d.id)).not.toContain(contaId);
 });
+
+// FIN-MVP-MOB-01: veiculo em uso paralelo pela tela: a marca fica no cadastro e a tabela separa estimado de registrado.
+test('veiculo em uso paralelo: marca no cadastro e custos por veiculo', async ({ page }) => {
+    registrarDialogos(page);
+    await entrar(page, C);
+    await page.goto('/mobilidade.html');
+    await page.waitForLoadState('networkidle');
+    await page.locator('#tab-configuracao').click();
+    const veiculo = (await chamarRpc(page, 'veiculos_tela', { p_perfil_id: await perfilAtivoId(page), p_id: null })).corpo.find((v) => v.nome === 'Troca E2E (ficticio)');
+    await expect(page.locator('#conf-veiculos-custos')).toContainText('Fora de uso');
+    await page.locator(`#conf-veiculos-lista [data-on-click="abrirModalEditar(${veiculo.id})"]`).click();
+    await expect(page.locator('#grupo-uso-paralelo')).toBeVisible();
+    await expect(page.locator('#em_uso_paralelo')).not.toBeChecked();
+    await page.locator('#em_uso_paralelo').check();
+    await page.locator('#form-veiculo').evaluate((f) => f.requestSubmit());
+    await expect(page.locator('#conf-veiculos-custos')).toContainText('Em uso');
+    await expect(page.locator('#conf-veiculos-custos')).toContainText('Registrado');
+    expect((await chamarRpc(page, 'veiculos_tela', { p_perfil_id: await perfilAtivoId(page), p_id: veiculo.id })).corpo.em_uso_paralelo).toBe(true);
+});

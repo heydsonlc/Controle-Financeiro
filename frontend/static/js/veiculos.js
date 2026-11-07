@@ -1306,6 +1306,8 @@ function toggleDataInicio() {
     if (!wrap) return;
     const ativo = status === 'ATIVO';
     wrap.style.display = ativo ? 'block' : 'none';
+    const usoParalelo = document.getElementById('grupo-uso-paralelo');
+    if (usoParalelo) usoParalelo.style.display = ativo ? 'block' : 'none';
     if (statusGroup) {
         if (ativo) {
             statusGroup.classList.remove('span-2');
@@ -1332,6 +1334,7 @@ async function abrirModalEditar(id) {
         document.getElementById('autonomia_km_l').value = v.autonomia_km_l ?? '';
         document.getElementById('status').value = v.status || 'SIMULADO';
         document.getElementById('data_inicio').value = v.data_inicio ? v.data_inicio.slice(0, 10) : new Date().toISOString().slice(0, 10);
+        if (document.getElementById('em_uso_paralelo')) document.getElementById('em_uso_paralelo').checked = Boolean(v.em_uso_paralelo);
 
         document.getElementById('combustivel_valor_mensal').value = v.projecao_combustivel?.valor_mensal ?? '';
         document.getElementById('preco_medio_combustivel').value = v.preco_medio_combustivel ?? '';
@@ -1387,6 +1390,9 @@ async function salvarVeiculo(event) {
         licenciamento_mes: document.getElementById('licenciamento_mes').value || null,
         licenciamento_valor: document.getElementById('licenciamento_valor').value || null,
     };
+    if (document.getElementById('em_uso_paralelo')) {
+        payload.em_uso_paralelo = status === 'ATIVO' && document.getElementById('em_uso_paralelo').checked;
+    }
     if (document.getElementById('custo_combustivel_modo')) {
         payload.custo_combustivel_modo = document.getElementById('custo_combustivel_modo').value;
         payload.km_mensal_estimado = document.getElementById('km_mensal_estimado').value || null;
@@ -2923,6 +2929,9 @@ function _renderizarPreviaAtivacao(previa, container) {
         html += `<div style="color:#d97706;background:#fffbeb;border-radius:4px;padding:4px 8px;margin-bottom:4px;">⚠ ${escapeHtml(a)}</div>`;
     });
 
+    if (previa.veiculo_saindo) {
+        html += `<div class="small-note troca-veiculo-saindo">${escapeHtml(previa.veiculo_saindo.nome)} sai do cenário e a recorrência dele se encerra. Se ele continua em uso, marque "Em uso em paralelo" no cadastro do veículo antes de confirmar.</div>`;
+    }
     html += htmlConflitosTroca(previa.conflitos);
     html += `</div>`;
     container.innerHTML = html;
@@ -3157,6 +3166,7 @@ function renderConfVeiculos() {
             </div>
         `;
     }).join('');
+    renderCustosVeiculos();
 }
 
 function renderConfAssinaturas() {
@@ -4060,4 +4070,39 @@ function coletarDecisoesTroca() {
         faltam: nomes.size - marcados.length,
         decisoes: marcados.map(r => ({ natureza: r.dataset.natureza, id: Number(r.dataset.id), decisao: r.value })),
     };
+}
+
+// FIN-MVP-MOB-01: por veiculo, o custo estimado (projecao) separado do que esta financeiramente registrado no mes.
+const SITUACOES_USO = { CENARIO: 'Cenário financeiro', EM_USO: 'Em uso', SIMULADO: 'Simulado', FORA_DE_USO: 'Fora de uso' };
+
+function htmlCustosVeiculos(custos) {
+    if (!custos || !custos.length) return '';
+    return `
+        <div class="abast-tabela-wrap custos-veiculos">
+            <table class="abast-tabela">
+                <thead><tr><th>Veículo no mês</th><th>Situação</th><th>Estimado</th><th>Registrado</th><th>Abastecido</th></tr></thead>
+                <tbody>${custos.map(c => `
+                    <tr>
+                        <td>${escapeHtml(c.nome)}</td>
+                        <td>${escapeHtml(SITUACOES_USO[c.situacao_uso] || c.situacao_uso)}</td>
+                        <td>${formatarMoeda(c.estimado)}</td>
+                        <td>${formatarMoeda(c.registrado)}</td>
+                        <td>${formatarMoeda(c.abastecido)}</td>
+                    </tr>`).join('')}</tbody>
+            </table>
+        </div>
+        <div class="small-note">Estimado é a projeção. Registrado são as despesas lançadas. Abastecido é o registro do veículo e não soma nos totais financeiros.</div>`;
+}
+
+async function renderCustosVeiculos() {
+    const el = document.getElementById('conf-veiculos-custos');
+    if (!el) return;
+    try {
+        const resp = await fetch(`${API_VEICULOS}/custos`);
+        const data = await resp.json();
+        el.innerHTML = data.success ? htmlCustosVeiculos(data.data) : '';
+    } catch (e) {
+        console.error(e);
+        el.innerHTML = '';
+    }
 }

@@ -74,3 +74,13 @@ test('conflitos da troca: cada despesa com as duas opcoes, sem escolha marcada',
     assert.doesNotMatch(html, /checked/);
     assert.match(html, /Não mudam nesta troca/);
 });
+
+test('custos por veiculo: estimado separado do registrado', () => {
+    const { htmlCustosVeiculos } = carregarOriginal();
+    assert.equal(htmlCustosVeiculos([]), '');
+    const html = htmlCustosVeiculos([{ nome: 'Carro', situacao_uso: 'EM_USO', estimado: 200, registrado: 150, abastecido: 90 }]);
+    assert.match(html, /Em uso/);
+    assert.match(html, /Estimado/);
+    assert.match(html, /Registrado/);
+    assert.match(html, /não soma nos totais financeiros/);
+});
