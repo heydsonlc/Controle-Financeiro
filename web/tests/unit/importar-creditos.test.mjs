@@ -123,3 +123,80 @@ test('credito repetido legitimo no arquivo (tres ajustes de R$ 0,01): mantido co
     assert.deepEqual(dados(ctx.montarPayloadImportacao().linhas).map((l) => [l.tipo_movimento, Boolean(l.manter_duplicada)]),
         [['credito', false], ['credito', true]]);
 });
+
+// FIN-CARTAO-CREDITOS-01 (P18): a natureza da linha sobrevive a todo o fluxo da previa.
+const compraComum = (extra) => credito({ linha_id: 'csv-9', linha_origem: 9, descricao_original: 'Padaria', descricao_normalizada: 'Padaria',
+    descricao_exibida: 'Padaria', valor: 8, tipo_movimento: 'debito', classificacao_importacao: 'COMPRA', credito: null, categoria_id: 7, ...extra });
+const MATCH = { tipo: 'duplicado_atual', score: 90, confianca: 'alta', descricao_sugerida: 'IOF de "Cloudflare"', motivos: [] };
+
+test('reconhecimento: leva a natureza e os mesmos campos da confirmacao', () => {
+    preparar([IOF, compraComum({ cartao_final: '6030', parcela_ambigua: { parcela_atual: 3, total_parcelas: 10 } })]);
+    const [iof, padaria] = dados(ctx.montarPayloadReconhecimento().linhas);
+    assert.deepEqual([iof.descricao_original, iof.valor, iof.tipo_movimento], ['IOF de volta de Cloudflare', '0.99', 'credito']);
+    assert.deepEqual([padaria.tipo_movimento, padaria.cartao_final, padaria.parcela_ambigua.total_parcelas], ['debito', '6030', 10]);
+    const confirmacao = dados(ctx.montarPayloadImportacao().linhas).find((l) => l.descricao_original === 'Padaria');
+    assert.deepEqual([confirmacao.tipo_movimento, confirmacao.cartao_final], [padaria.tipo_movimento, padaria.cartao_final]);
+});
+
+test('credito nunca e "ja existe na fatura", mesmo com reconhecimento devolvido para a linha', () => {
+    const [iof, padaria] = preparar([IOF, compraComum()]);
+    iof.reconhecimento_match = MATCH;
+    padaria.reconhecimento_match = MATCH;
+    estado.analiseConfronto = ctx.montarAnaliseConfronto();
+    assert.deepEqual([ctx.linhaRetiradaEfetivacao(iof), ctx.linhaDuplicadaOperacional(iof), ctx.linhaReconhecimentoPendente(iof)], [false, false, false]);
+    assert.deepEqual(dados(estado.analiseConfronto.creditos.map((c) => c.linha.descricao_original)), ['IOF de volta de Cloudflare']);
+    assert.equal(ctx.obterInfoOperacional(iof, 0).status, 'Crédito');
+    assert.equal(ctx.motivoRetiradaLinha(padaria), 'Já existe na fatura');  // a compra continua protegida
+});
+
+test('valor da previa: credito com sinal e abatido das somas', () => {
+    const [iof, padaria] = preparar([IOF, compraComum()]);
+    assert.match(ctx.formatarValorLinha(iof), /^− R\$\s0,99$/);
+    assert.match(ctx.formatarValorLinha(padaria), /^R\$\s8,00$/);
+    assert.equal(ctx.calcularKpisImportacao().valorProcessamento.toFixed(2), '7.01');
+    assert.equal(ctx.calcularResumoLocal().totalPrevisto.toFixed(2), '7.01');
+});
+
+test('linha ja analisada pelo banco nao passa por segundo reconhecimento; mapeamento manual e Flask, sim', () => {
+    preparar([IOF, compraComum()]);
+    assert.equal(ctx.reconhecimentoSeparadoNecessario(), false);
+    const { classificacao_importacao, ...flask } = compraComum();  // eslint-disable-line no-unused-vars
+    preparar([flask]);
+    assert.equal(ctx.reconhecimentoSeparadoNecessario(), true);
+});
+
+test('mapeamento manual: o valor perde o sinal, a natureza nao; credito nao vira compra', () => {
+    const PERFIS = vm.runInContext('PERFIS', ctx);
+    const mapa = { data_compra: 0, descricao: 1, valor: 2, parcela: null, credito: null, debito: null };
+    const manual = (bruto, extra = {}) => ctx.interpretarLinhaPorPerfil(['16/05/2029', 'Estorno Loja', bruto],
+        { perfil: PERFIS.MANUAL, mapeamento: mapa, regraNubank: 'absoluto', regraCaixa: 'debito', categoriaPadrao: 7, ...extra }).linha;
+    assert.deepEqual([manual('-40,00').valor, manual('-40,00').tipo_movimento], ['40.00', 'credito']);
+    assert.equal(manual('40,00').tipo_movimento, 'debito');
+    assert.equal(manual('-40,00', { perfil: PERFIS.NUBANK }).tipo_movimento, 'credito');
+    assert.equal(manual('-40,00', { perfil: PERFIS.NUBANK, regraNubank: 'despesas_negativas' }).tipo_movimento, 'debito');
+
+    const colunas = { data_compra: 0, descricao: 1, valor: null, parcela: null, debito: 2, credito: 3 };
+    const caixa = (debito, credito, regraCaixa) => ctx.interpretarLinhaPorPerfil(['16/05/2029', 'Loja', debito, credito],
+        { perfil: PERFIS.CAIXA, mapeamento: colunas, regraCaixa, categoriaPadrao: 7 }).linha;
+    assert.equal(caixa('', '40,00', 'credito').tipo_movimento, 'credito');
+    assert.equal(caixa('', '40,00', 'auto').tipo_movimento, 'credito');
+    assert.equal(caixa('40,00', '', 'auto').tipo_movimento, 'debito');
+    assert.equal(caixa('40,00', '', 'debito').tipo_movimento, 'debito');
+
+    estado.linhasMapeadas = [manual('-40,00'), manual('100,00')];
+    estado.analiseConfronto = ctx.montarAnaliseConfronto();
+    assert.equal(ctx.linhaCredito(estado.linhasMapeadas[0]), true);
+    assert.deepEqual(dados(ctx.montarPayloadImportacao().linhas).map((l) => [l.valor, l.tipo_movimento]), [['100.00', 'debito']]);
+    assert.deepEqual(dados(ctx.montarPayloadReconhecimento().linhas).map((l) => l.valor), ['100.00']);
+});
+
+test('confirmacao: a compra casada pelo valor vai ignorada e primeiro, para a outra de mesmo valor continuar nova', () => {
+    const lancada = compraComum({ linha_id: 'csv-1', linha_origem: 1, descricao_original: 'Loja A', status: 'conciliado', ignorar: true,
+        classificacao_importacao: 'JA_EXISTENTE', reconhecimento_match: MATCH });
+    const nova = compraComum({ linha_id: 'csv-2', linha_origem: 2, descricao_original: 'Loja B' });
+    const reimportada = compraComum({ linha_id: 'csv-3', linha_origem: 3, descricao_original: 'Loja C', status: 'duplicado', ignorar: true,
+        duplicidade: 'banco', classificacao_importacao: 'JA_EXISTENTE' });
+    preparar([nova, lancada, reimportada]);
+    assert.deepEqual(dados(ctx.montarPayloadImportacao().linhas).map((l) => [l.descricao_original, l.ignorar]),
+        [['Loja A', true], ['Loja B', false]]);
+});

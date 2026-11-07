@@ -114,7 +114,7 @@ test('compra retirada pela regra herdada (mesmo valor e parcela ate 5 dias, ou r
     const linhas = preparar([pelo_valor, repetida, reimportada]);
     assert.deepEqual(linhas.map((l) => ctx.linhaMantivel(l)), [true, true, false]);  // a reimportada (mesma compra) nao
     assert.match(ctx.renderizarLinhaRetirada(linhas[0], 0), /manterComoCompraDiferente\(0\)/);
-    assert.equal(dados(ctx.montarPayloadImportacao()).linhas.length, 0);
+    assert.equal(dados(ctx.montarPayloadImportacao()).linhas.filter((l) => !l.ignorar).length, 0);  // nada a gravar
     ctx.manterComoCompraDiferente(0);
     ctx.manterComoCompraDiferente(1);
     const envio = dados(ctx.montarPayloadImportacao()).linhas;

@@ -903,12 +903,15 @@ function interpretarLinhaPorPerfil(linhaCsv, config) {
     }
 
     let valor = null;
+    let tipo = 'debito';
     if (config.perfil === PERFIS.CAIXA) {
         const credito = mapeamento.credito !== null ? parseValorNumerico(linhaCsv[mapeamento.credito]) : null;
         const debito = mapeamento.debito !== null ? parseValorNumerico(linhaCsv[mapeamento.debito]) : null;
         if (config.regraCaixa === 'debito') valor = debito;
-        else if (config.regraCaixa === 'credito') valor = credito;
-        else valor = (debito !== null && debito !== 0) ? debito : credito;
+        else if (config.regraCaixa === 'credito' || debito === null || debito === 0) {
+            valor = credito;
+            tipo = 'credito';
+        } else valor = debito;
         if (valor === null || valor === 0) {
             return { ok: false, erro: 'Linha sem valor compatível com regra crédito/débito' };
         }
@@ -931,6 +934,9 @@ function interpretarLinhaPorPerfil(linhaCsv, config) {
         } else {
             valor = Math.abs(valorBruto);
         }
+        // FIN-CARTAO-CREDITOS-01: o valor perde o sinal, a natureza nao: negativo e credito (fica retirado, nunca vira
+        // compra), salvo quando a regra escolhida diz que as despesas vem negativas
+        if (valorBruto < 0 && !(config.perfil === PERFIS.NUBANK && config.regraNubank === 'despesas_negativas')) tipo = 'credito';
     }
 
     const parcelaDescricao = detectarParcelaDescricao(descricao);
@@ -945,6 +951,7 @@ function interpretarLinhaPorPerfil(linhaCsv, config) {
             descricao: String(descricao).trim(),
             descricao_exibida: String(descricao).trim(),
             valor: formatarValor(valor),
+            tipo_movimento: tipo,
             categoria_id: config.categoriaPadrao,
             categoria_cartao_id: null,
             categoria_cartao_origem: null,
@@ -1567,8 +1574,9 @@ function linhaPossivelRecorrencia(linha) {
     );
 }
 
+// FIN-CARTAO-CREDITOS-01: reconhecimento compara com compras ja lancadas; credito nao e compra, nunca e "ja existe na fatura"
 function reconhecimentoLinha(linha) {
-    return linha.reconhecimento_match || null;
+    return linha.tipo_movimento === 'credito' ? null : (linha.reconhecimento_match || null);
 }
 
 function reconhecimentoEhRecorrencia(reconhecimento) {
@@ -1888,8 +1896,13 @@ function valorNumericoLinha(linha) {
     return parseValorNumerico(linha?.valor) || 0;
 }
 
+// FIN-CARTAO-CREDITOS-01: o valor chega sempre positivo; a natureza da o efeito na fatura (credito abate)
+function valorFinanceiroLinha(linha) {
+    return linha?.tipo_movimento === 'credito' ? -valorNumericoLinha(linha) : valorNumericoLinha(linha);
+}
+
 function formatarValorLinha(linha) {
-    return formatarMoeda(valorNumericoLinha(linha));
+    return `${linha?.tipo_movimento === 'credito' ? '− ' : ''}${formatarMoeda(valorNumericoLinha(linha))}`;
 }
 
 function temConfrontoAtivo() {
@@ -3719,7 +3732,7 @@ function calcularKpisImportacao() {
     const conhecidas = processamento.filter((item) => item.filtro === 'conhecidas').length;
     const parcelamentos = processamento.filter((item) => item.filtro === 'parcelados').length;
     const novos = processamento.filter((item) => item.filtro === 'novos').length;
-    const valorProcessamento = processamento.reduce((acc, item) => acc + valorNumericoLinha(item.linha), 0);
+    const valorProcessamento = processamento.reduce((acc, item) => acc + valorFinanceiroLinha(item.linha), 0);
     const pendencias = processamento.filter((item) => {
         if (item.filtro === 'novos') return !toIntOrNull(item.linha.categoria_id || item.linha.categoria_despesa_id);
         return item.filtro !== 'novos';
@@ -3760,7 +3773,7 @@ function calcularResumoLocal() {
     const duplicadas = linhas.filter(linhaDuplicada).length;
     const creditos = linhas.filter(linhaCredito).length;
     const parceladas = linhas.filter((linha) => Number(linha.total_parcelas) > 1).length;
-    const totalPrevisto = ativas.reduce((acc, linha) => acc + (parseValorNumerico(linha.valor) || 0), 0);
+    const totalPrevisto = ativas.reduce((acc, linha) => acc + valorFinanceiroLinha(linha), 0);
     const valorSemCategoriaCartao = 0;
 
     return {
@@ -3863,6 +3876,33 @@ function renderizarClassificacao() {
     `).join('');
 }
 
+// FIN-CARTAO-CREDITOS-01: o que o banco precisa para julgar a linha (natureza, cartao de origem, parcela e decisoes da
+// previa). A analise e a confirmacao enviam os mesmos campos: a mesma linha nunca e avaliada com dados diferentes.
+function camposPreviaLinha(linha) {
+    const campos = { tipo_movimento: linha.tipo_movimento || 'debito' };
+    // Escolhas da previa do novo aplicativo (recorrencia, compra comum, apelido)
+    if (linha.recorrencia_escolhida_id !== undefined && linha.recorrencia_escolhida_id !== null) {
+        campos.recorrencia_escolhida_id = linha.recorrencia_escolhida_id;
+    }
+    if (linha.salvar_apelido) campos.salvar_apelido = true;
+    // compra que a regra herdada retiraria, mantida pelo usuario como compra diferente
+    if (linha.manter_conciliada) campos.manter_conciliada = true;
+    if (linha.manter_duplicada) campos.manter_duplicada = true;
+    // numero no texto que pode ser parcela e a decisao do usuario (parcelada ou a vista)
+    if (linha.parcela_ambigua) campos.parcela_ambigua = linha.parcela_ambigua;
+    if (linha.natureza_parcela) campos.natureza_parcela = linha.natureza_parcela;
+    // cartao de origem: o final do arquivo e a escolha da previa (0 = sem cartao identificado)
+    if (linha.cartao_final) campos.cartao_final = linha.cartao_final;
+    if (linha.cartao_vinculado_escolhido_id !== undefined && linha.cartao_vinculado_escolhido_id !== null) {
+        campos.cartao_vinculado_escolhido_id = linha.cartao_vinculado_escolhido_id;
+    }
+    // credito da fatura: a compra original escolhida (0 = sem compra vinculada)
+    if (linhaCreditoNova(linha) && linha.credito_compra_id !== undefined && linha.credito_compra_id !== null) {
+        campos.credito_compra_id = linha.credito_compra_id;
+    }
+    return campos;
+}
+
 function montarPayloadImportacao() {
     const cartaoId = parseInt(document.getElementById('cartaoSelect').value, 10);
     const [mes, ano] = document.getElementById('competenciaInput').value.split('/');
@@ -3890,44 +3930,26 @@ function montarPayloadImportacao() {
                 payload.categoria_cartao_id = linha.categoria_cartao_id;
                 payload.categoria_cartao_origem = linha.categoria_cartao_origem;
             }
-            // Escolhas da previa do novo aplicativo (recorrencia, compra comum, apelido)
-            if (linha.recorrencia_escolhida_id !== undefined && linha.recorrencia_escolhida_id !== null) {
-                payload.recorrencia_escolhida_id = linha.recorrencia_escolhida_id;
-            }
-            if (linha.salvar_apelido) payload.salvar_apelido = true;
-            // compra que a regra herdada retiraria, mantida pelo usuario como compra diferente
-            if (linha.manter_conciliada) payload.manter_conciliada = true;
-            if (linha.manter_duplicada) payload.manter_duplicada = true;
-            // numero no texto que pode ser parcela e a decisao do usuario (parcelada ou a vista)
-            if (linha.parcela_ambigua) payload.parcela_ambigua = linha.parcela_ambigua;
-            if (linha.natureza_parcela) payload.natureza_parcela = linha.natureza_parcela;
-            // cartao de origem: o final do arquivo e a escolha da previa (0 = sem cartao identificado)
-            if (linha.cartao_final) payload.cartao_final = linha.cartao_final;
-            if (linha.cartao_vinculado_escolhido_id !== undefined && linha.cartao_vinculado_escolhido_id !== null) {
-                payload.cartao_vinculado_escolhido_id = linha.cartao_vinculado_escolhido_id;
-            }
-            // credito da fatura: o tipo e a compra original escolhida (0 = sem compra vinculada)
-            if (linhaCreditoNova(linha)) {
-                payload.tipo_movimento = 'credito';
-                if (linha.credito_compra_id !== undefined && linha.credito_compra_id !== null) {
-                    payload.credito_compra_id = linha.credito_compra_id;
-                }
-            }
 
-            return payload;
+            return { ...payload, ...camposPreviaLinha(linha) };
         };
+    // FIN-CARTAO-CREDITOS-01: a compra casada pelo valor com uma ja lancada vai junto, ignorada e primeiro: sem ela, a analise
+    // da confirmacao casaria a mesma compra lancada com outra linha de mesmo valor, que sairia em silencio.
+    const aConciliar = linhasConciliacaoConfirmaveis();
+    const contexto = estado.linhasMapeadas.filter((linha) => classificacaoNova(linha) && linha.status === 'conciliado' && !aConciliar.includes(linha))
+        .map((linha) => ({ ...paraPayload(linha), ignorar: true }));
     // Novos lancamentos; despesas fixas reconhecidas (realizam a previsao); compras ja lancadas a conciliar com a previsao;
     // compras parceladas (a parcela da fatura)
     const linhas = linhasNovasConfirmaveis().map(paraPayload)
         .concat(linhasFixasConfirmaveis().map(paraPayload))
-        .concat(linhasConciliacaoConfirmaveis().map((linha) => ({ ...paraPayload(linha), conciliar_previsao: true })))
+        .concat(aConciliar.map((linha) => ({ ...paraPayload(linha), conciliar_previsao: true })))
         .concat(linhasParceladasConfirmaveis().map(paraPayload))
         .concat(linhasCreditoConfirmaveis().map(paraPayload));  // creditos da fatura (abatem o valor a pagar)
 
     return {
         cartao_id: cartaoId,
         competencia,
-        linhas
+        linhas: contexto.concat(linhas)
     };
 }
 
@@ -4002,10 +4024,18 @@ function montarPayloadReconhecimento() {
             numero_parcela: linha.numero_parcela || 1,
             total_parcelas: linha.total_parcelas || 1,
             categoria_id: linha.categoria_id || linha.categoria_despesa_id,
-            categoria_cartao_id: linha.categoria_cartao_id
+            categoria_cartao_id: linha.categoria_cartao_id,
+            ...camposPreviaLinha(linha)
         }));
 
     return { cartao_id: cartaoId, competencia, linhas };
+}
+
+// FIN-CARTAO-CREDITOS-01: linhas que o banco ja classificou chegaram com o reconhecimento da analise do arquivo, feita com
+// todas as linhas. Repeti-lo so com as ativas julgaria a linha fora do contexto do arquivo; a confirmacao refaz a analise
+// sob trava. So o mapeamento manual e o Flask, sem essa classificacao, dependem do reconhecimento separado.
+function reconhecimentoSeparadoNecessario() {
+    return !estado.linhasMapeadas.some(classificacaoNova);
 }
 
 async function aplicarReconhecimentoFlexivel() {
@@ -4051,7 +4081,7 @@ async function previsualizarImportacao() {
         return;
     }
 
-    await aplicarReconhecimentoFlexivel();
+    if (reconhecimentoSeparadoNecessario()) await aplicarReconhecimentoFlexivel();
     estado.analiseConfronto = montarAnaliseConfronto();
     estado.faseImportacao = 'confronto';
     estado.resumoPrevia = null;
