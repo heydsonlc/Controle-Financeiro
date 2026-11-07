@@ -77,7 +77,7 @@ Nenhum arquivo de `supabase/` mudou. Os mesmos arquivos fictícios (Nubank e Cai
 
 ## 6. Pendências
 
-**Dependem de migration (não autorizada neste contrato).** Ambas em `xfail` estrito, para acusar quando forem corrigidas.
+**Dependiam de migration.** Corrigidas no FIN-CARTAO-CREDITOS-02 (migration `20261216090000`, `docs/FIN_CARTAO_CREDITOS_02.md`); os `xfail` viraram testes.
 
 1. **Mesmo crédito por outro tipo de arquivo abate duas vezes.** A chave do crédito usa o texto, e a trava `OUTRA_FONTE` só olha compras novas. Crédito importado de CSV e reimportado de PDF com outro texto: 100,00 − 20,00 − 20,00 = 60,00.
 2. **Estorno com "pagamento" no texto não abate.** `pagamento_fatura` é testado antes do estorno: `Estorno de "Pagamento Facil Loja"` fica retirado como pagamento recebido.

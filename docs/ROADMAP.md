@@ -49,7 +49,7 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 | IMPORT-3C | OCR para PDFs escaneados | Baixa |
 | IMPORT-3D | Melhorar assinatura de reconhecimento (histórico acumulativo) | Média |
 | P18 | Crédito na importação de cartão tratado como compra já existente, na prévia. Corrigida a divergência entre prévia e confirmação: a análise e a confirmação enviam os mesmos campos e crédito nunca é "já existe na fatura". Publicada no FIN-CARTAO-CREDITOS-01; as duas pendências de integridade seguem na linha abaixo. | Parcialmente concluído |
-| FIN-CARTAO-CREDITOS-02 | Integridade dos créditos, em contrato separado. (1) O mesmo crédito importado por outro tipo de arquivo, com texto diferente, abate duas vezes (risco crítico): demonstrar a necessidade da migration e como a identidade do crédito se preserva entre arquivos, sem depender só de descrição e valor. (2) Estorno com "pagamento" no texto é lido como pagamento da fatura e não abate. **A reconstrução das faturas de 11/2026 fica bloqueada até esta correção.** A migration precisa de versão posterior a `20261215090000` (MVP-MOB-01, pendente). | Crítica |
+| FIN-CARTAO-CREDITOS-02 | Integridade dos créditos da fatura: o mesmo crédito importado pela planilha e pelo PDF abate uma vez só (identidade por cartão, fatura, data e valor, primeiro pelo texto igual; créditos legítimos iguais contados um a um) e estorno com "pagamento" no texto abate. Migration `20261216090000` só de funções, gerada por `scripts/gerar_migration_cartao_creditos_integridade.py` (`docs/FIN_CARTAO_CREDITOS_02.md`). **A reconstrução das faturas de 11/2026 fica bloqueada até a publicação.** | Implementado localmente (07/11/2026); publicação aguarda autorização |
 
 ### Receitas
 
