@@ -25,6 +25,7 @@
 **Migration `20261218090000`, só uma função nova** (`pagar_despesas_lote`); nenhuma tabela, coluna ou valor muda.
 
 - **Necessidade da migration:** o lote só é transacional no banco. Cada ocorrência continua sendo paga por `pagar_despesa` (as mesmas regras do pagamento individual), todas na mesma transação e com a mesma conta. **Se qualquer uma é recusada, nenhuma é paga.**
+- **Escritor único primeiro:** a função começa por `exigir_escrita_novo`, como as demais escritas do novo aplicativo. Perfil ainda no Flask é recusado (`SISTEMA_FLASK`) antes de qualquer validação, sem gravar nada.
 - **Conferido de novo na confirmação:**
   - perfil;
   - conta ativa do perfil (antes de qualquer pagamento);
@@ -49,7 +50,7 @@
 
 Resultados na seção 4.
 
-**Banco** (`tests/test_supabase_pagamento_lote.py`, 17 casos), com duas recorrências "Diarista" semanais (fevereiro/2027: 4 terças e 4 sextas, como 11/2026), 2 pagas uma a uma:
+**Banco** (`tests/test_supabase_pagamento_lote.py`, 18 casos), com duas recorrências "Diarista" semanais (fevereiro/2027: 4 terças e 4 sextas, como 11/2026), 2 pagas uma a uma:
 - as 6 pendentes pagas na conta escolhida, com 6 débitos, R$ 1.200,00 e o saldo reduzido nesse valor;
 - as pagas antes intactas (despesas e movimentos);
 - recorrência intacta e nenhuma despesa nova;
@@ -62,6 +63,7 @@ Resultados na seção 4.
 - outro meio de pagamento (boleto) pagando em lote;
 - pagamento individual inalterado;
 - permissões;
+- perfil no Flask recusado pelo escritor único, com as pendentes e com a lista vazia, sem gravar nada;
 - reversão e reaplicação.
 
 **E2E** (`web/tests/e2e/despesas_pagamento_lote.spec.mjs`, usuário E com perfil próprio, duas recorrências "Diarista E" em 02/2030):
@@ -76,7 +78,7 @@ Resultados na seção 4.
 
 | Bateria | Resultado |
 |---|---|
-| Banco (lote) | 17/17 |
+| Banco (lote) | 18/18 |
 | E2E do lote | 3/3 |
 | Módulos relacionados (Despesas, Recorrências, Contas Bancárias, pagamentos, Dashboard, fixas do cartão) | 254/254 |
 | Regressão por impacto | 287 casos, 0 falhas, 0 pulados |
@@ -92,8 +94,20 @@ Resultados na seção 4.
 - **Repetição com a mesma chave:** nada mudou.
 - **Reversão:** função removida, nenhum dado alterado; reaplicação idem.
 
+**Conjunto integrado com o FIN-MOB-ABAST-LANCAMENTOS-01 (08/11/2026, ramo `publicacao-1217-1218`).** A primeira rodada achou um defeito desta função: começava só por `pode_gerir_perfil`, e o teste do escritor único (`test_i3` de `test_supabase_integracao_1123_1126.py`) exige a recusa `SISTEMA_FLASK` logo no início. Nada era gravado, porque cada pagamento passa por `pagar_despesa`. Corrigido no commit `f3ea0e0` (seção 2). Resultados depois da correção:
+
+| Bateria | Resultado |
+|---|---|
+| Módulos dos dois trabalhos e relacionados (Despesas, Lançamentos, Mobilidade, Recorrências, Cartões, Contas Bancárias, pagamentos, faturas, Dashboard) | 708/708 |
+| Regressão por impacto de todos os arquivos alterados | 1.588 casos, 0 falhas (22 pulados por ambiente, rodados à parte) |
+| Arquivos com PostgREST (RLS, perfis, contas do mês, segurança pública) | 162/162 |
+| Unitários do frontend | 92/92 |
+| E2E completo, sem novas tentativas | 137/137 |
+
+Ensaio em cópia fiel da produção com a 1217 e depois a 1218: nenhum dado mudou com as migrations; o lote simulado das 6 pendentes da Diarista deu o mesmo resultado de antes; repetição sem efeito; reversão exata.
+
 ## 5. Publicação
 
-Push, aplicação da migration `20261218090000` (antes do deploy, porque a tela chama a função nova) e deploy do frontend. A migration do FIN-MOB-ABAST-LANCAMENTOS-01 (`20261217090000`) está em outro ramo, ainda local: se esta for publicada primeiro, a do abastecimento precisa de versão posterior a `20261218090000` antes de ir para a produção.
+Publicação conjunta com o FIN-MOB-ABAST-LANCAMENTOS-01: a `20261217090000` primeiro e depois esta `20261218090000`, ambas antes do deploy, porque as telas chamam as funções novas. Um só deploy do frontend.
 
 Depois do deploy, o pagamento das 6 ocorrências reais da Diarista fica com o usuário, pela tela.
