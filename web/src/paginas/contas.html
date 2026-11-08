@@ -533,6 +533,38 @@
         </div>
     </div>
 
+    <!-- FIN-DESPESAS-PAGAMENTO-LOTE-01 (P20): pagamento em lote das ocorrencias pendentes de uma recorrencia semanal, com a
+         conta bancaria de debito (o confirm() do original nao a pedia). Preenchido por js/despesas-adaptacoes.js. -->
+    <div id="modal-pagar-lote" class="modal">
+        <div class="modal-content pagar-lote">
+            <div class="modal-header">
+                <h2>Pagamento em lote</h2>
+                <span class="close" id="pagar-lote-fechar" role="button" aria-label="Fechar">&times;</span>
+            </div>
+            <form id="form-pagar-lote">
+                <dl class="pagar-lote-resumo">
+                    <div><dt>Recorrência</dt><dd id="pagar-lote-nome"></dd></div>
+                    <div><dt>Competência</dt><dd id="pagar-lote-competencia"></dd></div>
+                    <div><dt>Meio de pagamento</dt><dd id="pagar-lote-meio"></dd></div>
+                    <div><dt>Ocorrências pendentes</dt><dd id="pagar-lote-quantidade"></dd></div>
+                    <div><dt>Valor total</dt><dd id="pagar-lote-total"></dd></div>
+                </dl>
+                <div class="form-group">
+                    <label for="pagar-lote-conta">Conta bancária de débito *</label>
+                    <select id="pagar-lote-conta" required>
+                        <option value="">Selecione...</option>
+                    </select>
+                    <small class="form-help">Cada ocorrência gera um débito nesta conta, com a data de hoje. A recorrência não muda.</small>
+                </div>
+                <div id="pagar-lote-mensagem" class="pagar-lote-mensagem" role="status" aria-live="polite" hidden></div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="pagar-lote-cancelar">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="pagar-lote-confirmar">Confirmar pagamento</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Modal: Tipo de Edição de Consórcio -->
     <div id="modal-tipo-edicao" class="modal">
         <div class="modal-content" style="max-width: 400px;">

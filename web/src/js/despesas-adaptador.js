@@ -378,6 +378,18 @@ async function pagar(id, corpo) {
         + `Saldo da conta: ${reais(centavos(r.saldo_conta))}.` });
 }
 
+// FIN-DESPESAS-PAGAMENTO-LOTE-01 (P20): as ocorrencias pendentes com a conta escolhida, numa so transacao no banco (cada uma
+// pelo pagamento individual). A chave vale para a mesma selecao: repetir a confirmacao devolve o resultado gravado.
+async function pagarLote(corpo) {
+    const itens = Array.isArray(corpo.itens) ? corpo.itens.map((i) => ({ conta_id: Number(i.conta_id), valor_devido: valorTexto(i.valor_devido) })) : [];
+    const dados = { itens, conta_bancaria_id: Number(corpo.conta_bancaria_id) || null, data_pagamento: corpo.data_pagamento || hojeBrasilia() };
+    const operacao = `pagar-lote:${JSON.stringify(dados)}`;
+    const { data, error } = await supabase.rpc('pagar_despesas_lote', { p_perfil_id: estado.perfilId, p_dados: dados, p_chave: chaves.de(operacao) });
+    if (error) return { status: 400, corpo: { success: false, error: mensagemDeErro(error), codigo: error.hint || null } };
+    chaves.esquecer(operacao);
+    return ok({ data });
+}
+
 async function pagarFatura(id, corpo) {
     const { data, error } = await supabase.rpc('dados_pagamento_fatura', { p_perfil_id: estado.perfilId, p_fatura_id: id });
     if (error) return falha(mensagemDeErro(error));
@@ -478,6 +490,7 @@ const ROTAS = [
     ['PUT', /^\/api\/despesas\/(\d+)$/, (m, p, corpo) => atualizar(Number(m[1]), corpo || {})],
     ['DELETE', /^\/api\/despesas\/(\d+)$/, (m, p) => excluir(Number(m[1]), p)],
     ['POST', /^\/api\/despesas\/(\d+)\/pagar$/, (m, p, corpo) => pagar(Number(m[1]), corpo || {})],
+    ['POST', /^\/api\/despesas\/pagar-lote$/, (m, p, corpo) => pagarLote(corpo || {})],
     ['POST', /^\/api\/despesas\/(\d+)\/estornar-pagamento$/, (m, p, corpo) => estornar(Number(m[1]), corpo || {})],
     ['GET', /^\/api\/categorias\/?$/, async () => ok({ data: await categoriasDeDespesa() })],
     ['GET', /^\/api\/contas\/?$/, async () => ok({ data: (await contasBancariasAtivas()).map((c) => ({ id: c.id, nome: c.nome, instituicao: c.instituicao })) })],

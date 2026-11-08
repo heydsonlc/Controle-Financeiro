@@ -169,6 +169,8 @@ const RPCS_DE_ESCRITA = new Map([
     // FIN-CARTOES-PAGAMENTO-1 (pagamento integral e estorno de fatura; debito/credito e saldo decididos no banco)
     // FIN-FIDELIDADE-CARTOES-1: so em Despesas, como no Flask (a tela original de Cartoes nao paga fatura).
     ['pagar_fatura', 'despesas-adaptador.js'],
+    // FIN-DESPESAS-PAGAMENTO-LOTE-01 (P20): ocorrencias pendentes com a conta escolhida; tudo ou nada, revalidado no banco
+    ['pagar_despesas_lote', 'despesas-adaptador.js'],
     ['estornar_pagamento_fatura', 'despesas-adaptador.js'],
     // FIN-FIDELIDADE-MOVIMENTACOES-1 (Contas Bancarias: cadastro com versao; ajuste e transferencia pelo escritor unico,
     // com chave; so AJUSTE editavel; saldo pelos movimentos, decidido no banco)

@@ -601,6 +601,23 @@ def semear_abastecimento_e2e(cur):
                     (perfil, cartao, nome, final, tipo))
 
 
+# FIN-DESPESAS-PAGAMENTO-LOTE-01 (despesas_pagamento_lote.spec.mjs): no perfil do usuario E, duas recorrencias semanais
+# "Diarista E" de R$ 200 (terca e sexta), Pix e sem conta bancaria, a partir de 02/2030 (4 tercas e 4 sextas; nenhum outro spec
+# abre esses meses), e mais duas contas bancarias: uma ativa e uma inativa. As despesas sao criadas pela geracao ao abrir o mes.
+DIARISTA_E2E = (('semanal_1_2', '2030-02-05'), ('semanal_1_5', '2030-02-01'))
+
+
+def semear_pagamento_lote_e2e(cur, categoria_id=201):
+    perfil = PERFIL_E['id']
+    for tipo, ancora in DIARISTA_E2E:
+        cur.execute("insert into public.item_despesa (nome, tipo, perfil_financeiro_id, categoria_id, ativo, recorrente, tipo_recorrencia, "
+                    "data_vencimento, valor, meio_pagamento, conta_bancaria_id) values ('Diarista E', 'Simples', %s, %s, true, true, %s, %s, "
+                    "200, 'pix', null)", (perfil, categoria_id, tipo, ancora))
+    for nome, status in (('Conta E2 (ficticia)', 'ATIVO'), ('Conta E inativa (ficticia)', 'INATIVO')):
+        cur.execute("insert into public.conta_bancaria (perfil_financeiro_id, nome, instituicao, tipo, status, cor_display) "
+                    "values (%s, %s, 'Banco ficticio', 'Conta Corrente', %s, '#3b82f6')", (perfil, nome, status))
+
+
 # FIN-RECEITAS-1 (E2E): receitas FICTICIAS de 11/2026 (previsoes; um recebimento parcial com movimento).
 RECEITAS_E2E = [  # nome, tipo, perfil, recorrente, valor_base, dia, valor previsto 11/2026
     ('Salário (A)', 'SALARIO_FIXO', 'PESSOAL', True, '5000.00', 5, '5000.00'),

@@ -172,6 +172,8 @@ test('filtros e busca da barra de acoes', async ({ page }) => {
 test('detalhe da fatura mostra as compras do mes, sem compras de outro mes', async ({ page }) => {
     await entrar(page, A);
     await abrirDespesas(page, '2026-11');
+    // a tela pode carregar o mes duas vezes ao abrir: a segunda renderizacao fecharia o detalhe aberto antes dela
+    await page.waitForLoadState('networkidle');
     await despesa(page, 'Fatura Cartao Azul').locator('[data-on-click^="toggleDetalhesFatura"]').click();
     const detalhe = despesa(page, 'Fatura Cartao Azul').locator('.fatura-detalhes');
     await expect(detalhe).toBeVisible();

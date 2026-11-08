@@ -126,4 +126,128 @@
             if (botao) botao.disabled = false;
         }
     };
+
+    // 4. Pagamento em lote (FIN-DESPESAS-PAGAMENTO-LOTE-01, P20). O original confirmava com confirm() e marcava cada ocorrencia
+    //    como paga pela edicao (PUT /api/despesas/<id> com pago=true), que o novo aplicativo recusa de proposito: o pagamento
+    //    escolhe a conta e registra o movimento. Aqui um modal com a conta de debito; o banco paga todas as pendentes pelo
+    //    pagamento individual, numa so transacao, e confere de novo quantidade, valores e situacao.
+    const lote = { ocorrencias: [], enviando: false, pago: false };
+    const reaisBR = (v) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const $ = (id) => document.getElementById(id);
+
+    function nomeDoMeio(meio) {
+        const forma = meio && window.FormasPagamentoUI && window.FormasPagamentoUI.resolverFormaPagamento(meio);
+        return (forma && forma.nome) || ({ pix: 'Pix', boleto: 'Boleto', debito: 'Débito', debito_automatico: 'Débito automático' }[meio]) || 'Não informado';
+    }
+
+    function mensagemLote(texto, tipo) {
+        const el = $('pagar-lote-mensagem');
+        el.textContent = texto || '';
+        el.className = `pagar-lote-mensagem${tipo ? ` ${tipo}` : ''}`;
+        el.hidden = !texto;
+    }
+
+    function fecharLote() {
+        $('modal-pagar-lote').style.display = 'none';
+        const recarregar = lote.pago;
+        lote.ocorrencias = [];
+        lote.pago = false;
+        if (recarregar) window.carregarDespesas();
+    }
+
+    async function contasDoLote(sugerida) {
+        const select = $('pagar-lote-conta');
+        let contas = [];
+        try {
+            const r = await fetch('/api/contas?status=ATIVO');
+            const j = await r.json();
+            contas = j.success ? (j.data || []) : [];
+        } catch (erro) {
+            contas = [];
+        }
+        const opcoes = [new Option('Selecione...', '')];
+        for (const c of contas) opcoes.push(new Option(c.instituicao ? `${c.nome} (${c.instituicao})` : c.nome, String(c.id)));
+        select.replaceChildren(...opcoes);
+        if (sugerida && contas.some((c) => c.id === sugerida)) select.value = String(sugerida);
+    }
+
+    window.pagarTodasOcorrencias = async function pagarTodasOcorrencias(index) {
+        // eslint-disable-next-line no-undef -- despesas e agruparDespesasSemanais sao do original (mesmo escopo global)
+        const agrupador = agruparDespesasSemanais(despesas)[index];
+        if (!agrupador || agrupador.tipo !== 'agrupador_semanal') {
+            alert('Erro: Agrupamento não encontrado');
+            return;
+        }
+        const pendentes = agrupador.ocorrencias.filter((o) => !o.pago && !o.cancelada);
+        if (pendentes.length === 0) {
+            alert('Todas as ocorrências já foram pagas!');
+            return;
+        }
+        lote.ocorrencias = pendentes;
+        lote.pago = false;
+        const total = pendentes.reduce((s, o) => s + Math.round(Number(o.valor) * 100), 0) / 100;
+        $('pagar-lote-nome').textContent = agrupador.nome;
+        $('pagar-lote-competencia').textContent = agrupador.mes_competencia ? window.formatarCompetencia(agrupador.mes_competencia) : '';
+        $('pagar-lote-meio').textContent = nomeDoMeio(pendentes[0].meio_pagamento);
+        $('pagar-lote-quantidade').textContent = String(pendentes.length);
+        $('pagar-lote-total').textContent = reaisBR(total);
+        mensagemLote('');
+        $('pagar-lote-confirmar').disabled = false;
+        $('pagar-lote-confirmar').hidden = false;
+        $('pagar-lote-cancelar').textContent = 'Cancelar';
+        // conta sugerida: a mesma ja vinculada a todas as ocorrencias, se houver (o usuario pode trocar)
+        const vinculadas = [...new Set(pendentes.map((o) => o.conta_bancaria_id).filter(Boolean))];
+        await contasDoLote(vinculadas.length === 1 ? vinculadas[0] : null);
+        $('modal-pagar-lote').style.display = 'block';
+    };
+
+    async function confirmarLote(event) {
+        event.preventDefault();
+        if (lote.enviando || lote.pago || !lote.ocorrencias.length) return;
+        const conta = $('pagar-lote-conta').value;
+        if (!conta) {
+            mensagemLote('Selecione a conta bancária de débito.', 'erro');
+            return;
+        }
+        lote.enviando = true;
+        $('pagar-lote-confirmar').disabled = true;
+        mensagemLote('Pagando...');
+        try {
+            const r = await fetch('/api/despesas/pagar-lote', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ conta_bancaria_id: Number(conta),
+                    itens: lote.ocorrencias.map((o) => ({ conta_id: o.id, valor_devido: Number(o.valor).toFixed(2) })) }),
+            });
+            const j = await r.json().catch(() => ({}));
+            if (!j.success) {
+                const recarregar = ['LOTE_DESATUALIZADO', 'VALOR_MUDOU', 'DESPESA_PAGA'].includes(j.codigo);
+                mensagemLote(`Nenhuma ocorrência foi paga.\n${String(j.error || 'Não foi possível pagar.').replace(/^Nenhuma ocorrência foi paga\.\s*/, '')}`
+                    + (recarregar ? '\nFeche e confira a lista atualizada antes de pagar de novo.' : ''), 'erro');
+                if (recarregar) lote.pago = true;  // fechar recarrega a lista
+                $('pagar-lote-confirmar').disabled = recarregar;
+                return;
+            }
+            const d = j.data;
+            lote.pago = true;
+            mensagemLote(`Pagamento em lote concluído\n${d.pagas} ocorrência(s) paga(s)\nValor total: ${reaisBR(d.valor_total)}\n`
+                + `Conta de débito: ${d.conta_nome}\nSaldo da conta: ${reaisBR(d.saldo_conta)}`, 'ok');
+            $('pagar-lote-confirmar').hidden = true;
+            $('pagar-lote-cancelar').textContent = 'Fechar';
+        } catch (erro) {
+            // resultado desconhecido: nada e repetido sozinho; a lista mostra o que foi gravado
+            lote.pago = true;
+            mensagemLote('Não foi possível confirmar o resultado. Feche e confira a lista antes de tentar de novo.', 'erro');
+        } finally {
+            lote.enviando = false;
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const form = $('form-pagar-lote');
+        if (!form) return;
+        form.addEventListener('submit', confirmarLote);
+        $('pagar-lote-cancelar').addEventListener('click', fecharLote);
+        $('pagar-lote-fechar').addEventListener('click', fecharLote);
+    });
 }());
