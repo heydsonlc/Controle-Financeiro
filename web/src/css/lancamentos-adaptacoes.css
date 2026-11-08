@@ -8,3 +8,42 @@ body.cf-somente-leitura [data-on-click^="excluirLancamento("],
 body.cf-somente-leitura [data-on-click^="abrirModalConfirmarReceita("] {
     display: none;
 }
+
+/* FIN-MOB-ABAST-LANCAMENTOS-01 — "Dados do Abastecimento" no formulario de Novo Lancamento: compacto, duas colunas quando ha
+   espaco, nos mesmos campos da tela. */
+.lanc-abastecimento {
+    margin: 4px 0 12px;
+    padding: 10px 12px 6px;
+    border: 1px solid var(--border-color, #e2e8f0);
+    border-radius: 8px;
+    min-width: 0;
+}
+.lanc-abastecimento legend {
+    padding: 0 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary, #475569);
+}
+.lanc-abast-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0 12px;
+}
+.lanc-abast-grid .form-group {
+    margin-bottom: 8px;
+    min-width: 0;
+}
+.lanc-abast-litros {
+    display: block;
+    padding: 9px 0;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+}
+.lanc-abast-aviso {
+    display: block;
+    font-size: 11px;
+    color: var(--text-secondary, #64748b);
+}
+.lanc-abast-aviso:empty {
+    display: none;
+}

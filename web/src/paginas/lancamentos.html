@@ -1,4 +1,4 @@
-<!-- moldura {"ativo": "lancamentos", "titulo": "Lançamentos", "documento": "Lançamentos - Controle Financeiro", "css": ["css/shared/lancamentos.css", "css/lancamentos-adaptacoes.css"], "classicos": ["js/original/ponte-permitidas.js", "js/ponte-csp.js", "js/ponte-api.js", "js/original/utils.js", "js/original/icons.js", "js/original/instituicoes.js", "js/original/formas_pagamento.js", "js/original/lancamentos.js", "js/lancamentos-adaptacoes.js"], "scripts": ["js/lancamentos-adaptador.js"]} -->
+<!-- moldura {"ativo": "lancamentos", "titulo": "Lançamentos", "documento": "Lançamentos - Controle Financeiro", "css": ["css/shared/lancamentos.css", "css/lancamentos-adaptacoes.css"], "classicos": ["js/original/ponte-permitidas.js", "js/ponte-csp.js", "js/ponte-api.js", "js/original/utils.js", "js/original/icons.js", "js/original/instituicoes.js", "js/original/formas_pagamento.js", "js/original/lancamentos.js", "js/lancamentos-adaptacoes.js", "js/lancamentos-abastecimento.js"], "scripts": ["js/lancamentos-adaptador.js"]} -->
 <!-- FIN-FIDELIDADE-MOVIMENTACOES-1: frontend/templates/lancamentos.html (barra de acoes e conteudo) sem alteracao.
      Atributos onclick/style convertidos no build (CSP sem inline). -->
 <!-- acao -->
@@ -267,6 +267,45 @@
                                 <input type="date" id="lancamento-data" required>
                             </div>
                         </div>
+
+                        <!-- FIN-MOB-ABAST-LANCAMENTOS-01: com a Categoria de Despesa Combustivel (codigo MOB_COMBUSTIVEL), os dados do
+                             abastecimento. Valor, data, cartao e descricao sao os do lancamento (nao se repetem aqui). -->
+                        <fieldset id="bloco-abastecimento" class="lanc-abastecimento" hidden>
+                            <legend>Dados do Abastecimento</legend>
+                            <div class="lanc-abast-grid">
+                                <div class="form-group" id="abast-existente-grupo" hidden>
+                                    <label for="abast-existente">Abastecimento j&aacute; registrado</label>
+                                    <select id="abast-existente"></select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="abast-veiculo">Ve&iacute;culo</label>
+                                    <select id="abast-veiculo">
+                                        <option value="">S&oacute; a despesa (sem abastecimento)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="abast-combustivel">Combust&iacute;vel</label>
+                                    <select id="abast-combustivel"></select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="abast-hodometro">Hod&ocirc;metro (km)</label>
+                                    <input type="number" id="abast-hodometro" min="0" step="0.1" inputmode="decimal">
+                                </div>
+                                <div class="form-group">
+                                    <label for="abast-preco">Pre&ccedil;o por litro</label>
+                                    <input type="number" id="abast-preco" min="0" step="0.001" inputmode="decimal" placeholder="0,000">
+                                </div>
+                                <div class="form-group">
+                                    <label for="abast-litros">Litros</label>
+                                    <output id="abast-litros" class="lanc-abast-litros" for="lancamento-valor abast-preco">&mdash;</output>
+                                </div>
+                                <div class="form-group" id="abast-cartao-fisico-grupo" hidden>
+                                    <label for="abast-cartao-fisico">Cart&atilde;o f&iacute;sico</label>
+                                    <select id="abast-cartao-fisico"></select>
+                                </div>
+                            </div>
+                            <small id="abast-aviso" class="lanc-abast-aviso" role="status" aria-live="polite"></small>
+                        </fieldset>
 
                         <div class="form-row">
                             <div class="form-group">

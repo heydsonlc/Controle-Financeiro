@@ -65,6 +65,7 @@ from tests.supabase_local import (  # noqa: E402
     semear_empresa_c_e2e,
     semear_empresa_vazia,
     semear_patrimonio_e2e,
+    semear_abastecimento_e2e,
     semear_debito_sem_conta_e2e,
     semear_pendencia_e2e,
     semear_receitas_e2e,
@@ -340,6 +341,7 @@ def main():
                 semear_cartoes_e2e(cur)  # FIN-CARTOES-1 e FIN-FIDELIDADE-CARTOES-1 (cartoes_tela.spec.mjs)
                 semear_pendencia_e2e(cur)  # FIN-CARTOES-RECORRENCIA-PENDENCIA-1 (pendencia.spec.mjs)
                 semear_debito_sem_conta_e2e(cur)  # FIN-DESPESAS-DEBITO-AUTOMATICO-01 (despesas.spec.mjs)
+                semear_abastecimento_e2e(cur)  # FIN-MOB-ABAST-LANCAMENTOS-01 (lancamentos_abastecimento.spec.mjs)
                 semear_financiamento_e2e(cur)  # FIN-FIDELIDADE-CONTRATOS-1 (financiamentos_tela.spec.mjs)
                 semear_patrimonio_e2e(cur)  # FIN-FIDELIDADE-PATRIMONIO-1 (patrimonio_tela.spec.mjs)
                 semear_documentos_fiscais_e2e(cur)  # FIN-FIDELIDADE-DOCUMENTOS-1 (documentos_fiscais_tela.spec.mjs)

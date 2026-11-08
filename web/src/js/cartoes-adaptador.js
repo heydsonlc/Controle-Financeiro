@@ -221,11 +221,44 @@ async function editarLancamento(id, corpo) {
         total_parcelas: corpo.total_parcelas,
     };
     if (corpo.categoria_id) dados.categoria_id = Number(corpo.categoria_id);
+    const decisao = await decisaoDoAbastecimento(id, dados);
+    if (decisao.cancelada) return falha('Alteração cancelada. Nada foi gravado.', 409);
     const { error } = await supabase.rpc('editar_lancamento_cartao', {
         p_perfil_id: estado.perfilId, p_lancamento_id: id, p_versao: estado.versoesLancamento[id] || null, p_dados: dados,
     });
     if (error) return falha(mensagemDeErro(error));
+    if (decisao.desvincular) {
+        const r = await supabase.rpc('desvincular_abastecimento', { p_perfil_id: estado.perfilId, p_id: decisao.abastecimento });
+        if (r.error) return falha(`Compra alterada, mas o abastecimento continua vinculado: ${mensagemDeErro(r.error)}`);
+    }
     return ok({ id });
+}
+
+// FIN-MOB-ABAST-LANCAMENTOS-01: compra com abastecimento vinculado. O abastecimento nunca e excluido; mudar o valor desfaz o
+// vinculo (ele exige o mesmo valor) e tirar a compra de Combustivel pede a decisao (manter ou desvincular).
+async function decisaoDoAbastecimento(id, dados) {
+    const leitura = await supabase.rpc('abastecimento_do_lancamento', { p_perfil_id: estado.perfilId, p_lancamento_id: id, p_conta_id: null });
+    const abastecimento = !leitura.error && leitura.data && leitura.data.abastecimento;
+    if (!abastecimento) return {};
+    if (dados.valor !== valorTexto(abastecimento.valor_total)) {
+        if (!window.confirm('Esta compra tem um abastecimento vinculado. Mudar o valor desvincula o abastecimento: ele continua no histórico do veículo, aguardando outra despesa. Continuar?')) {
+            return { cancelada: true };
+        }
+        return { desvincular: true, abastecimento: abastecimento.id };
+    }
+    if (!dados.categoria_id) return {};
+    const [formulario, compra] = await Promise.all([
+        supabase.rpc('formulario_abastecimento_lancamento', { p_perfil_id: estado.perfilId }),
+        supabase.rpc('compra_para_edicao', { p_perfil_id: estado.perfilId, p_lancamento_id: id }),
+    ]);
+    const combustivel = !formulario.error && formulario.data.categoria_combustivel_id;
+    const atual = !compra.error && compra.data.compra.categoria_id;
+    if (!combustivel || atual !== combustivel || dados.categoria_id === combustivel) return {};
+    if (!window.confirm('Esta compra tem um abastecimento vinculado e deixa de ser Combustível. O abastecimento continua no histórico do veículo. Continuar a alteração?')) {
+        return { cancelada: true };
+    }
+    return { desvincular: window.confirm('Desvincular o abastecimento desta compra?\nOK: desvincular (o abastecimento fica aguardando outra despesa).\nCancelar: manter vinculado.'),
+        abastecimento: abastecimento.id };
 }
 
 // Excluir: a compra a vista sai; da parcelada saem as parcelas em fatura aberta (regra do FIN-CARTOES-1), com a

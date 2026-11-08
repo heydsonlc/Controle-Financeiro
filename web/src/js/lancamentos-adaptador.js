@@ -6,6 +6,8 @@
 // - confirmar recebimento e entrada pontual sem conta bancaria: recusados (a receita e recebida em Receitas, com conta);
 // - editar compra de cartao aqui gravaria uma compra nova (o Flask duplica): recusado, a correcao fica na tela de Cartoes;
 // - "A partir de documento" (FIN-PRE-PRODUCAO-1): lista, sugestao e criacao do lancamento por js/documento-financeiro.js.
+// FIN-MOB-ABAST-LANCAMENTOS-01: com a categoria Combustivel e um veiculo, a despesa e o abastecimento sao gravados juntos
+// (salvar_lancamento_abastecimento, uma transacao); a compra ja lancada so recebe o abastecimento (ela nao muda aqui).
 
 import { supabase } from './cliente.js';
 import { contaDoDebito, criarChaves, emMigracao, falha, mensagemDeErro, ok, textoBloqueio, valorTexto } from './adaptador-comum.js';
@@ -28,6 +30,20 @@ async function rpc(funcao, args) {
 function avisar(mensagem, status = 400) {
     if (typeof window.mostrarErro === 'function') window.mostrarErro(mensagem);
     return falha(mensagem, status);
+}
+
+// FIN-MOB-ABAST-LANCAMENTOS-01: dados do bloco "Dados do Abastecimento" (js/lancamentos-abastecimento.js).
+const abastecimentoDoFormulario = () => (typeof window.dadosAbastecimentoDoFormulario === 'function'
+    ? window.dadosAbastecimentoDoFormulario() : { ativo: false, vinculado: null });
+
+// Despesa e abastecimento numa so operacao; a chave so e esquecida depois do sucesso (repetir nao duplica nada).
+async function salvarComAbastecimento(lancamento, abastecimento, operacao) {
+    const { data, error } = await supabase.rpc('salvar_lancamento_abastecimento', {
+        p_perfil_id: estado.perfilId, p_dados: { lancamento, abastecimento }, p_chave: chaves.de(operacao),
+    });
+    if (error) return { error };
+    chaves.esquecer(operacao);
+    return { data };
 }
 
 const hojeMes = () => `${new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date()).slice(0, 7)}-01`;
@@ -95,7 +111,10 @@ async function receitas(parte, parametros) {
 
 async function criarCompra(cartaoId, corpo) {
     const campoId = document.getElementById('lancamento-id');
+    const abastecimento = abastecimentoDoFormulario();
+    if (abastecimento.erro) return falha(abastecimento.erro);
     if (campoId && campoId.value && campoId.dataset.tipo === 'cartao') {
+        if (abastecimento.dados) return complementarCompra(Number(campoId.value), corpo, abastecimento.dados);
         return falha('Para corrigir uma compra no cartão, use a tela Cartões (editar lançamento). Salvar aqui criaria uma compra nova. Nada foi gravado.');
     }
     const valor = Number(corpo.valor);
@@ -107,9 +126,12 @@ async function criarCompra(cartaoId, corpo) {
         mes_fatura: `${String(corpo.mes_fatura).slice(0, 7)}-01`, categoria_id: Number(corpo.categoria_id),
         observacoes: String(corpo.observacoes || '').trim(),
     };
-    const operacao = `compra:${JSON.stringify(dados)}`;
+    const operacao = abastecimento.dados ? `compra-abastecimento:${JSON.stringify({ dados, abastecimento: abastecimento.dados })}`
+        : `compra:${JSON.stringify(dados)}`;
     if (Array.isArray(corpo.confirmar_consolidadas)) dados.confirmar_consolidadas = confirmacoes(corpo.confirmar_consolidadas);
-    const { data, error } = await supabase.rpc('criar_compra', { p_perfil_id: estado.perfilId, p_dados: dados, p_chave: chaves.de(operacao) });
+    const { data, error } = abastecimento.dados
+        ? await salvarComAbastecimento({ tipo: 'compra', dados }, abastecimento.dados, operacao)
+        : await supabase.rpc('criar_compra', { p_perfil_id: estado.perfilId, p_dados: dados, p_chave: chaves.de(operacao) });
     if (error) {
         if (consolidadaDoErro(error)) {
             // Mesma pergunta do Flask (409 CONFIRMAR_FATURA_CONSOLIDADA), com os totais da previa do banco.
@@ -122,6 +144,24 @@ async function criarCompra(cartaoId, corpo) {
     }
     chaves.esquecer(operacao);
     return { status: 201, corpo: { success: true, data } };
+}
+
+// FIN-MOB-ABAST-LANCAMENTOS-01: a compra ja lancada recebe o abastecimento e fica como esta. Valor, data, descricao, categoria e
+// fatura so mudam na tela Cartoes: se o formulario os alterou, nada e gravado.
+async function complementarCompra(id, corpo, abastecimento) {
+    const { data, error } = await supabase.rpc('compra_para_edicao', { p_perfil_id: estado.perfilId, p_lancamento_id: id });
+    if (error) return falha(mensagemDeErro(error));
+    const c = data.compra;
+    const mudou = valorTexto(corpo.valor) !== valorTexto(c.valor) || String(corpo.data_compra) !== String(c.data_compra)
+        || String(corpo.descricao || '').trim() !== String(c.descricao || '').trim() || Number(corpo.categoria_id) !== Number(c.categoria_id)
+        || String(corpo.mes_fatura || '').slice(0, 7) !== String(c.mes_fatura || '').slice(0, 7);
+    if (mudou) {
+        return falha('Aqui a compra já lançada só recebe os dados do abastecimento. Para corrigir valor, data, descrição, categoria ou fatura, use a tela Cartões. Nada foi gravado.');
+    }
+    const operacao = `complemento-compra:${JSON.stringify({ id, abastecimento })}`;
+    const r = await salvarComAbastecimento({ tipo: 'compra_existente', id }, abastecimento, operacao);
+    if (r.error) return falha(mensagemDeErro(r.error));
+    return { status: 201, corpo: { success: true, data: r.data } };
 }
 
 // Excluir compra: as parcelas em fatura aberta saem (regra do FIN-CARTOES-1), com a confirmacao das quantidades.
@@ -147,6 +187,8 @@ const PAGAR = 'Use a ação de pagamento em Despesas para marcar a despesa como 
 
 async function criarDespesa(corpo) {
     if (corpo.pago) return avisar(PAGAR);
+    const abastecimento = abastecimentoDoFormulario();
+    if (abastecimento.erro) return avisar(abastecimento.erro);
     if (!(Number(corpo.valor) > 0)) return avisar('Informe um valor válido.');
     if (!corpo.data_vencimento) return avisar('Informe a data.');
     const dados = {
@@ -154,6 +196,12 @@ async function criarDespesa(corpo) {
         categoria_id: corpo.categoria_id, data_vencimento: corpo.data_vencimento, debito_automatico: false, conta_bancaria_id: null,
     };
     if (MES.test(corpo.mes_competencia || '')) dados.competencia = `${String(corpo.mes_competencia).slice(0, 7)}-01`;
+    if (abastecimento.dados) {
+        const r = await salvarComAbastecimento({ tipo: 'despesa', dados }, abastecimento.dados,
+            `despesa-abastecimento:${JSON.stringify({ dados, abastecimento: abastecimento.dados })}`);
+        if (r.error) return avisar(mensagemDeErro(r.error));
+        return { status: 201, corpo: { success: true, message: 'Despesa e abastecimento salvos com sucesso' } };
+    }
     const operacao = `despesa:${JSON.stringify(dados)}`;
     const { error } = await supabase.rpc('criar_despesa', { p_perfil_id: estado.perfilId, p_dados: dados, p_chave: chaves.de(operacao) });
     if (error) return avisar(mensagemDeErro(error));
@@ -183,8 +231,29 @@ async function atualizarDespesa(id, corpo) {
         dados.data_vencimento = corpo.data_vencimento;
     }
     if (MES.test(corpo.mes_competencia || '')) dados.competencia = `${String(corpo.mes_competencia).slice(0, 7)}-01`;
+    const abastecimento = abastecimentoDoFormulario();
+    if (abastecimento.erro) return avisar(abastecimento.erro);
+    if (abastecimento.dados) {
+        const r = await salvarComAbastecimento({ tipo: 'despesa_existente', id, versao: edicao.versao, dados }, abastecimento.dados,
+            `despesa-abastecimento:${id}:${edicao.versao}:${JSON.stringify({ dados, abastecimento: abastecimento.dados })}`);
+        if (r.error) return avisar(mensagemDeErro(r.error));
+        return ok({ message: 'Despesa atualizada com sucesso' });
+    }
+    // FIN-MOB-ABAST-LANCAMENTOS-01: a despesa deixa de ser Combustivel e tem abastecimento: o registro nunca e excluido, e o
+    // vinculo so muda com a decisao do usuario.
+    let desvincular = false;
+    if (!abastecimento.ativo && abastecimento.vinculado) {
+        if (!window.confirm('Esta despesa tem um abastecimento vinculado e deixa de ser Combustível. O abastecimento continua no histórico do veículo. Continuar a alteração?')) {
+            return avisar('Alteração cancelada. Nada foi gravado.', 409);
+        }
+        desvincular = window.confirm('Desvincular o abastecimento desta despesa?\nOK: desvincular (o abastecimento fica aguardando outra despesa).\nCancelar: manter vinculado.');
+    }
     const { error } = await supabase.rpc('editar_despesa', { p_perfil_id: estado.perfilId, p_conta_id: id, p_versao: edicao.versao, p_dados: dados });
     if (error) return avisar(mensagemDeErro(error));
+    if (desvincular) {
+        const r = await supabase.rpc('desvincular_abastecimento', { p_perfil_id: estado.perfilId, p_id: abastecimento.vinculado });
+        if (r.error) return avisar(`Despesa atualizada, mas o abastecimento continua vinculado: ${mensagemDeErro(r.error)}`);
+    }
     return ok({ message: 'Despesa atualizada com sucesso' });
 }
 
@@ -210,6 +279,13 @@ const ROTAS = [
     ['GET', /^\/api\/categorias-cartao\/resolver$/, (m, c, p) => resolver(p)],
     ['GET', /^\/api\/cartoes\/(\d+)\/competencia-sugerida$/, (m, c, p) => competenciaSugerida(Number(m[1]), p)],
     ['GET', /^\/api\/cartoes\/(\d+)\/lancamentos$/, (m) => comprasDoCartao(Number(m[1]))],
+    // FIN-MOB-ABAST-LANCAMENTOS-01: categoria Combustivel, veiculos, cartoes fisicos e o abastecimento de uma despesa
+    ['GET', /^\/api\/lancamentos\/abastecimento\/formulario$/, async () => ok({ data: await rpc((a) => supabase.rpc('formulario_abastecimento_lancamento', a),
+        { p_perfil_id: estado.perfilId }) })],
+    ['GET', /^\/api\/lancamentos\/abastecimento$/, async (m, c, p) => ok({ data: await rpc((a) => supabase.rpc('abastecimento_do_lancamento', a), {
+        p_perfil_id: estado.perfilId, p_lancamento_id: Number(p.get('lancamento_id')) || null, p_conta_id: Number(p.get('conta_id')) || null }) })],
+    ['GET', /^\/api\/cartoes\/(\d+)\/vinculados$/, async (m) => ok({ data: await rpc((a) => supabase.rpc('cartoes_vinculados', a),
+        { p_perfil_id: estado.perfilId, p_contrato_id: Number(m[1]) }) })],
     ['POST', /^\/api\/cartoes\/(\d+)\/lancamentos$/, (m, corpo) => criarCompra(Number(m[1]), corpo || {})],
     ['DELETE', /^\/api\/cartoes\/lancamentos\/(\d+)$/, (m) => excluirCompra(Number(m[1]))],
     ['GET', /^\/api\/despesas\/?$/, () => despesas()],

@@ -580,6 +580,27 @@ def semear_debito_sem_conta_e2e(cur, categoria_id=201):
                     (iid, PERFIL_E['id'], mes, nome, valor, mes, status, pagamento))
 
 
+# FIN-MOB-ABAST-LANCAMENTOS-01 (lancamentos_abastecimento.spec.mjs): no perfil do usuario E, dois veiculos em uso (um flex e um
+# a gasolina) e um cartao com dois cartoes fisicos (titular e adicional). A compra ja lancada o spec cria pela funcao oficial.
+VEICULOS_ABASTECIMENTO_E2E = (('Flex E (ficticio)', 'flex'), ('Gasolina E (ficticio)', 'gasolina'))
+CARTAO_ABASTECIMENTO_E2E = (458, 'Cartao E (ficticio)')
+
+
+def semear_abastecimento_e2e(cur):
+    perfil = PERFIL_E['id']
+    for nome, combustivel in VEICULOS_ABASTECIMENTO_E2E:
+        cur.execute("insert into public.veiculo (perfil_financeiro_id, nome, tipo, combustivel, autonomia_km_l, status, data_inicio, "
+                    "combustivel_valor_mensal, preco_medio_combustivel, km_estimado_acumulado, criado_em, atualizado_em) "
+                    "values (%s, %s, 'Carro', %s, 10, 'ATIVO', current_date, 300, 5, 0, now(), now())", (perfil, nome, combustivel))
+    cartao, nome_cartao = CARTAO_ABASTECIMENTO_E2E
+    cur.execute("insert into public.item_despesa (id, nome, tipo, perfil_financeiro_id, categoria_id, ativo, recorrente) "
+                "values (%s, %s, 'Agregador', %s, 201, true, false)", (cartao, nome_cartao, perfil))
+    cur.execute('insert into public.config_agregador (item_despesa_id, dia_fechamento, dia_vencimento) values (%s, 25, 5)', (cartao,))
+    for nome, final, tipo in (('Titular E', '1111', 'FISICO'), ('Adicional E', '2222', 'ADICIONAL')):
+        cur.execute('insert into financeiro.cartao_vinculado (perfil_financeiro_id, contrato_id, nome, final, tipo) values (%s, %s, %s, %s, %s)',
+                    (perfil, cartao, nome, final, tipo))
+
+
 # FIN-RECEITAS-1 (E2E): receitas FICTICIAS de 11/2026 (previsoes; um recebimento parcial com movimento).
 RECEITAS_E2E = [  # nome, tipo, perfil, recorrente, valor_base, dia, valor previsto 11/2026
     ('Salário (A)', 'SALARIO_FIXO', 'PESSOAL', True, '5000.00', 5, '5000.00'),
