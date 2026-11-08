@@ -33,9 +33,7 @@ declare
     v_hint      text;
     v_resultado jsonb;
 begin
-    if not financeiro.pode_gerir_perfil(p_perfil_id) then
-        raise exception 'Perfil financeiro nao autorizado' using errcode = '42501';
-    end if;
+    perform financeiro.exigir_escrita_novo(p_perfil_id);  -- quem gere o perfil e perfil no novo aplicativo (escritor unico)
     if p_chave is null then
         raise exception 'Chave da operacao obrigatoria' using errcode = '22023';
     end if;

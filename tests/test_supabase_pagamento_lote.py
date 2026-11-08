@@ -242,6 +242,19 @@ def test_permissoes(banco):
     assert 'nao autorizado' in str(erro(lote, banco, pendentes, banco_id, usuario=USUARIO_B))
 
 
+def gravado(dsn):
+    return md5(dsn, 'public.conta'), md5(dsn, 'public.movimento_financeiro'), sql(dsn, 'select count(*) n from financeiro.operacao_despesa')[0]['n']
+
+
+def test_perfil_no_flask_e_recusado_antes_de_qualquer_validacao(banco):
+    itens, banco_id, todas, pendentes = preparar(banco)
+    antes = gravado(banco)
+    sql(banco, "update financeiro.gerador_recorrencia set gerador = 'FLASK' where perfil_financeiro_id = %s", (PESSOAL,))
+    for lista in (pendentes, []):  # com as pendentes e com a lista vazia: a recusa vem do escritor, nao da validacao
+        assert erro(lote, banco, lista, banco_id).diag.message_hint == 'SISTEMA_FLASK'
+    assert gravado(banco) == antes
+
+
 def test_reversao_remove_a_funcao_sem_mudar_os_pagamentos(banco):
     itens, banco_id, todas, pendentes = preparar(banco)
     lote(banco, pendentes, banco_id)
