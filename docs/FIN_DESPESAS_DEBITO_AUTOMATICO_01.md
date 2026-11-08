@@ -1,6 +1,6 @@
 # FIN-DESPESAS-DEBITO-AUTOMATICO-01 — Edição de despesa recorrente em débito automático (P19)
 
-**Situação (07/11/2026): implementado e testado localmente no ramo `despesas-debito-automatico-01`.** Sem migration: só a tela muda. Sem push e sem deploy. A produção só foi lida, em sessão somente leitura. A publicação depende de autorização.
+**Situação (07/11/2026): publicado (`0de5820`, deploy `c8220af1`), sem migration.** Auditoria somente leitura aprovada (seção 6). A edição da Energia Elétrica fica com o usuário.
 
 ## 1. Causa comprovada
 
@@ -19,7 +19,7 @@ A validação está certa. A falha é de mapeamento: `despesa_para_edicao` já d
 
 | Registro | Débito automático | Conta na recorrência | Conta nas despesas |
 |---|---|---|---|
-| Energia Elétrica (377) | Sim | 96 (Caixa), vinculada em 07/11/2026 | vazia nas 7 pendentes (10/2026 a 04/2027) e nas 3 pagas |
+| Energia Elétrica (377) | Sim | 96 (Caixa), vinculada em 07/11/2026 | vazia nas 7 pendentes (10/2026 a 04/2027) e nas 5 pagas (05 a 09/2026) |
 | Água (380) | Sim | 96 | 96 em todas |
 | Futebol | Sim | **nenhuma** | vazia nas 7 pendentes |
 
@@ -67,3 +67,12 @@ A validação está certa. A falha é de mapeamento: `despesa_para_edicao` já d
 ## 5. Publicação
 
 Deploy do frontend (sem migration). Depois dele, editar a Energia Elétrica de 11/2026 grava R$ 581,20 com a conta Caixa. O Futebol continua pedindo a conta na recorrência.
+
+## 6. Publicação e auditoria (07/11/2026)
+
+- **Commits:** `aafc752` (documentação do CREDITOS-02), `476cb7a` e `0de5820` (os da P19, reaplicados sobre ele; antes `7d77986` e `c867960`, mesmo conteúdo). Push `f94b207..0de5820`, em avanço direto.
+- **Antes:** unitários 89/89, banco de Despesas 56/56, E2E de Despesas, Lançamentos e Contas Bancárias 11/11.
+- **Deploy `c8220af1`:** 164 arquivos servidos iguais ao build; a correção está no JavaScript publicado; 17 páginas protegidas, sem erros de JavaScript ou de CSP.
+- **Dados:** 86 tabelas iguais antes e depois; as 36 despesas e as 3 recorrências de Energia Elétrica, Água e Futebol sem nenhuma alteração (as 7 pendentes da Energia continuam sem conta até serem editadas; as 5 pagas intactas); Clube dos Oficiais e Apple One iguais. Sem migration (57 no total).
+- **Atividade do app antes da publicação:** duas receitas de 11/2026 lançadas na conta 96 (saldo de R$ 68.015,34 para R$ 90.940,32, igual ao recalculado) e a Água de 11/2026 editada de R$ 300,00 para R$ 279,92.
+
