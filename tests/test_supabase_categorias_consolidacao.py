@@ -376,10 +376,12 @@ def test_cenario_efetivado_alterado_e_trocado_depois_da_consolidacao(banco, cat)
     assert sql(banco, 'select categoria_id from public.item_despesa where id = %s', (r2['recorrencia']['id'],)) == \
         [{'categoria_id': c['assin_veic']}]
     eliminadas = [c[k] for k in ('tapp', 'mveic', 'revisao', 'assin')]
-    for r in sql(banco, 'select t.relname tabela, a.attname coluna from pg_constraint k join pg_class t on t.oid = k.conrelid '
+    # todas as tabelas que apontam a categoria, em qualquer esquema (FIN-MVP-MOB-02: financeiro.veiculo_projecao)
+    for r in sql(banco, 'select n.nspname esquema, t.relname tabela, a.attname coluna from pg_constraint k '
+                        'join pg_class t on t.oid = k.conrelid join pg_namespace n on n.oid = t.relnamespace '
                         "join pg_attribute a on a.attrelid = k.conrelid and a.attnum = k.conkey[1] "
                         "where k.contype = 'f' and k.confrelid = 'public.categoria'::regclass"):
-        assert sql(banco, f"select count(*) n from public.{r['tabela']} where {r['coluna']} = any(%s)", (eliminadas,))[0]['n'] == 0
+        assert sql(banco, f"select count(*) n from {r['esquema']}.{r['tabela']} where {r['coluna']} = any(%s)", (eliminadas,))[0]['n'] == 0
 
 
 SCRIPT_FLASK = """

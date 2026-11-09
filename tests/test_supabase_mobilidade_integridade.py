@@ -22,7 +22,9 @@ from tests.test_supabase_mobilidade_escrita import (  # noqa: F401  (fixtures de
     M3,
     PESSOAL,
     REVERSAO_1215,
+    REVERSAO_1220,
     MIGRATION_1215,
+    MIGRATION_1220,
     VEICULO_1,
     VEICULO_2,
     banco,
@@ -474,11 +476,13 @@ def test_migration_so_preenche_a_identidade_e_reversao_preserva(banco):
     veic = ('select id, nome, tipo, combustivel, autonomia_km_l, status, data_inicio, combustivel_valor_mensal, preco_medio_combustivel, '
             'ipva_mes, ipva_valor, seguro_mes, seguro_valor, licenciamento_mes, licenciamento_valor, km_estimado_acumulado from public.veiculo order by id')
     antes, antes_v, base = sql(banco, consulta), sql(banco, veic), dados_financeiros(banco)
+    executar(banco, REVERSAO_1220)  # ordem de reversao: a mais nova primeiro
     executar(banco, REVERSAO_1215)
     assert sql(banco, "select to_regclass('public.ux_despesa_prevista_obrigacao_periodo') is null r")[0]['r']
     assert sql(banco, "select count(*) n from information_schema.columns where table_name = 'despesa_prevista' and column_name in ('obrigacao', 'conta_id')")[0]['n'] == 0
     assert sql(banco, consulta) == antes and sql(banco, veic) == antes_v
     executar(banco, MIGRATION_1215)
+    executar(banco, MIGRATION_1220)
     assert sql(banco, consulta) == antes and sql(banco, veic) == antes_v and dados_financeiros(banco) == base
     identidade = sql(banco, 'select obrigacao, periodo_referencia, data_original_prevista from public.despesa_prevista where origem_id = %s', (v,))
     assert all(i['obrigacao'] for i in identidade)
@@ -487,6 +491,7 @@ def test_migration_so_preenche_a_identidade_e_reversao_preserva(banco):
 
 
 def test_migration_recusa_duplicidade_e_reversao_recusa_perda_de_dados(banco):
+    executar(banco, REVERSAO_1220)  # ordem de reversao: a mais nova primeiro (os itens de projecao referenciam o veiculo)
     v = criar(banco, FLEX)
     assert 'veiculo Flex' in str(erro(executar, banco, REVERSAO_1215))
     sql(banco, 'delete from public.despesa_prevista where origem_id = %s', (v,))
