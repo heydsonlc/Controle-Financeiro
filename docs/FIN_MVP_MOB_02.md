@@ -1,6 +1,6 @@
 # FIN-MVP-MOB-02 — Projeções dinâmicas de veículos (P13)
 
-**Situação (09/11/2026): implementado e testado localmente no ramo `mob-02-projecoes`.** Sem push, sem deploy e sem migration em produção. A produção só foi lida, em sessão só de leitura e na cópia fiel descartável. A publicação depende de autorização expressa.
+**Situação (09/11/2026): publicado (`c3cf1a4`, migration `20261220090000`, deploy `702254dc`).** Auditoria somente leitura aprovada (seção 11).
 
 **Base de produção:** `de5bf20` (60 migrations, última `20261219090000`).
 
@@ -219,3 +219,29 @@ Pronto para homologação. Todas as baterias passaram e o ensaio na cópia fiel 
 3. build e deploy do frontend.
 
 A tela nova depende da migration, então a migration vem antes do deploy.
+
+## 11. Publicação e auditoria (09/11/2026)
+
+Autorizada pelo usuário em 09/11/2026 ("FIN-MVP-MOB-02 — Ordem de publicação").
+
+- **Conferências antes do push** (sessão somente leitura):
+  - `origin/main` em `de5bf20`; os commits publicados são `b0052a6` (só documentação da P21), `454c2fa`, `dc02e3e` e `c3cf1a4`;
+  - produção com 60 migrations, última `20261219090000`; a 1220 era a única pendente; md5 `ee12726b…` e só LF;
+  - as 7 funções substituídas estavam em produção idênticas aos textos que a reversão restaura; as 21 funções e as 2 tabelas novas ainda não existiam;
+  - veículo e ocorrências iguais aos do ensaio.
+- **Ensaio repetido** numa cópia nova e descartável da produção do dia: idêntico ao da seção 6 em todas as partes (geradores, migration, leituras, uso da lista, reversão e reaplicação).
+- **Testes antes do push:** 251/251, sem pulados, com o commit `c3cf1a4`. Incluem os 40 do MVP, a consolidação de categorias, a escrita e a integridade de Mobilidade, e os 20 testes de RLS e perfis por HTTP que a regressão por impacto tinha pulado. Nesta rodada eles usaram o PostgREST local.
+  - Os outros 2 pulados da regressão (`test_backup_banco`, que pede os binários do PostgreSQL 17) não envolvem projeções.
+- **Push** `de5bf20..c3cf1a4`, em avanço direto.
+- **Migration `20261220090000`:** aplicada sozinha, com o dry-run listando só o seu arquivo; produção com 61 migrations.
+  - Estrutura: 2 tabelas novas com RLS forçada e sem grants da API; 21 funções novas e as 7 substituídas, com os 28 corpos idênticos ao arquivo e `search_path` vazio. Só as 4 funções de tela são executáveis por `authenticated`, e nenhuma execução foi perdida.
+  - Dados: 4 itens convertidos, iguais ao ensaio (Combustível mensal, que segue o veículo; IPVA R$ 3.500,00 em 01/2027; Seguro R$ 3.999,00 em 12/2026; Licenciamento R$ 300,00 em 01/2027), e 4 registros CONVERSAO. Nenhum dado das tabelas existentes mudou.
+  - Segurança: sem bloqueios.
+- **As 15 ocorrências:** idênticas linha a linha (ids 1 a 15, mesmas competências, valores e situação PREVISTA), sem nenhuma adicional. O veículo, a recorrência de combustível e as telas de veículos, projeções e custos ficaram iguais. A lista mostra média mensal de R$ 1.449,92 e R$ 17.399,00 nos próximos 12 meses.
+- **Deploy `702254dc`** (build do `c3cf1a4`, Source `c3cf1a4` no Cloudflare): 165 arquivos servidos iguais ao build; navegação anônima sem problemas, com a CSP vigente.
+- **Dados (antes e depois, somente leitura):** das 86 tabelas existentes, nenhuma mudou; só as 2 novas têm dados.
+  - Contas, compras, 51 movimentos, conta 96 com R$ 84.112,08 e conta 97 com R$ 12.469,48;
+  - financiamento, faturas, créditos, abastecimentos e recorrências;
+  - Dashboard e contas do mês de 11/2026 a 01/2027 nos dois perfis.
+- **Fora do escopo, nada executado:** pagamentos, abastecimentos, reconstrução de faturas, regularizações, consolidação de categorias e a P22.
+
