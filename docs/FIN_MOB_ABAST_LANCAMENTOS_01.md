@@ -1,6 +1,6 @@
 # FIN-MOB-ABAST-LANCAMENTOS-01 — Abastecimento no formulário de Novo Lançamento
 
-**Situação (07/11/2026): implementado e testado localmente no ramo `mob-abast-lancamentos-01`.** Sem push, sem deploy e sem migration em produção. A produção só foi lida, em sessão somente leitura. A publicação depende de autorização expressa.
+**Situação (08/11/2026): publicado com a P20 (`5b5e4e8`, migration `20261217090000`, deploy `9e2982ab`).** Auditoria somente leitura aprovada (seção 8). O primeiro abastecimento real fica com o usuário.
 
 **Princípio:** uma despesa financeira e, no máximo, um registro operacional de abastecimento vinculado a ela. O abastecimento nunca é outra despesa.
 
@@ -123,3 +123,11 @@ Resultados na seção 6.
 ## 7. Publicação
 
 Push, aplicação da migration `20261217090000` (antes do deploy, porque a tela usa as funções novas) e deploy do frontend. Se a P20 (FIN-DESPESAS-PAGAMENTO-LOTE-01) for publicada antes com a sua migration, as versões precisam ficar em ordem crescente na produção.
+
+## 8. Publicação e auditoria (08/11/2026)
+
+- **Publicação conjunta com o FIN-DESPESAS-PAGAMENTO-LOTE-01 (P20):** commits `84635ae` e `909e65e` (este trabalho), `494f8a2`, `4e50fa9`, `f3ea0e0` e `5b5e4e8` (a P20), sobre `5b2e036` (documentação da P19). Push `0de5820..5b5e4e8`, em avanço direto.
+- **Migrations:** a `20261217090000` aplicada e conferida antes da `20261218090000`, cada uma sozinha e com o plano de teste listando só o seu arquivo. Nenhum dado existente mudou, nenhuma tabela nova, nenhuma função alterada ou removida; as 4 funções novas executáveis só por `authenticated`, com `search_path` fixo. A `pagar_despesas_lote` publicada começa por `exigir_escrita_novo`. Produção com 59 migrations, a última `20261218090000`.
+- **Deploy `9e2982ab`** (build do `5b5e4e8`): 165 arquivos servidos iguais ao build; as chamadas novas estão no JavaScript publicado; 17 páginas protegidas redirecionam ao login sem erros de JavaScript ou de CSP; cabeçalhos de segurança inalterados.
+- **Dados (antes e depois, somente leitura):** as 86 tabelas com os mesmos dados; contas (779, 198 pagas), compras, movimentos (35), saldos das contas 96 (R$ 85.812,08) e 97 (R$ 12.469,48), faturas de 11/2026 dos cartões 387 e 388, créditos (nenhum), recorrências, abastecimentos (nenhum), financiamento (saldo R$ 269.267,97), Clube dos Oficiais e Apple One, Dashboard e despesas de 11/2026 a 01/2027 dos dois perfis, todos iguais. As 6 ocorrências pendentes da Diarista continuam pendentes e as 2 pagas intactas.
+- **Testes:** os do conjunto integrado (`docs/FIN_DESPESAS_PAGAMENTO_LOTE_01.md`, "Conjunto integrado"), sem nova alteração de código depois deles.

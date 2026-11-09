@@ -1,6 +1,6 @@
 # FIN-DESPESAS-PAGAMENTO-LOTE-01 — Pagamento em lote com a conta bancária (P20)
 
-**Situação (07/11/2026): implementado e testado localmente no ramo `despesas-pagamento-lote-01`.** Sem push, sem deploy e sem migration em produção. A produção só foi lida, em sessão somente leitura; nenhuma ocorrência real foi paga. A publicação depende de autorização.
+**Situação (08/11/2026): publicado com o FIN-MOB-ABAST-LANCAMENTOS-01 (`5b5e4e8`, migration `20261218090000`, deploy `9e2982ab`).** Auditoria somente leitura aprovada (seção 6); nenhuma ocorrência real foi paga. O pagamento das 6 pendentes da Diarista fica com o usuário.
 
 ## 1. Causa comprovada
 
@@ -111,3 +111,11 @@ Ensaio em cópia fiel da produção com a 1217 e depois a 1218: nenhum dado mudo
 Publicação conjunta com o FIN-MOB-ABAST-LANCAMENTOS-01: a `20261217090000` primeiro e depois esta `20261218090000`, ambas antes do deploy, porque as telas chamam as funções novas. Um só deploy do frontend.
 
 Depois do deploy, o pagamento das 6 ocorrências reais da Diarista fica com o usuário, pela tela.
+
+## 6. Publicação e auditoria (08/11/2026)
+
+- **Publicação conjunta com o FIN-MOB-ABAST-LANCAMENTOS-01:** commits `494f8a2`, `4e50fa9` (este trabalho), `f3ea0e0` (escritor único, aprovado à parte) e `5b5e4e8`, depois de `84635ae` e `909e65e` (abastecimentos) e `5b2e036` (documentação da P19). Push `0de5820..5b5e4e8`, em avanço direto.
+- **Migrations:** a `20261217090000` aplicada e conferida antes da `20261218090000`, cada uma sozinha e com o plano de teste listando só o seu arquivo. Nenhum dado existente mudou, nenhuma tabela nova, nenhuma função alterada ou removida; as 4 funções novas executáveis só por `authenticated`, com `search_path` fixo. A `pagar_despesas_lote` publicada começa por `exigir_escrita_novo`. Produção com 59 migrations, a última `20261218090000`.
+- **Deploy `9e2982ab`** (build do `5b5e4e8`): 165 arquivos servidos iguais ao build; as chamadas novas estão no JavaScript publicado; 17 páginas protegidas redirecionam ao login sem erros de JavaScript ou de CSP; cabeçalhos de segurança inalterados.
+- **Dados (antes e depois, somente leitura):** as 86 tabelas com os mesmos dados; contas (779, 198 pagas), compras, movimentos (35), saldos das contas 96 (R$ 85.812,08) e 97 (R$ 12.469,48), faturas de 11/2026 dos cartões 387 e 388, créditos (nenhum), recorrências, abastecimentos (nenhum), financiamento (saldo R$ 269.267,97), Clube dos Oficiais e Apple One, Dashboard e despesas de 11/2026 a 01/2027 dos dois perfis, todos iguais. As 6 ocorrências pendentes da Diarista continuam pendentes e as 2 pagas intactas.
+- **Testes:** os do conjunto integrado (seção 4, "Conjunto integrado"), sem nova alteração de código depois deles.
