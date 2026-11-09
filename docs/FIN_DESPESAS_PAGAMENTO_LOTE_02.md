@@ -1,6 +1,6 @@
 # FIN-DESPESAS-PAGAMENTO-LOTE-02 — Identidade do lote no pagamento em lote (P21)
 
-**Situação (08/11/2026): implementado e testado localmente no ramo `despesas-pagamento-lote-02`.** Sem push, sem deploy e sem migration em produção. A produção só foi lida, em sessão somente leitura. A publicação depende de autorização.
+**Situação (08/11/2026): publicado (`de5bf20`, migration `20261219090000`, deploy `04dd7c99`).** Auditoria somente leitura aprovada (seção 7). Os pagamentos da Passadeira foram confirmados pelo usuário como devidos e ficam como estão.
 
 **Problema:** depois da publicação da P20 (`5b5e4e8`, deploy `9e2982ab`), o botão "Pagar em lote" da Diarista abria o modal da Psicóloga, e o da Psicóloga abria o da Diarista.
 
@@ -102,3 +102,19 @@ Os 18 casos da P20 (`tests/test_supabase_pagamento_lote.py`) passam a enviar a i
 - **Depois do deploy, com o usuário:**
   - confirmar se o pagamento da Passadeira (2515, 2516) foi intencional;
   - pagar a Diarista pelo lote corrigido.
+
+## 7. Publicação e auditoria (08/11/2026)
+
+- **Commits:** `0edfe88` (documentação da publicação 1217 + 1218), `43a52d9` e `de5bf20`. Push `5b5e4e8..de5bf20`, em avanço direto.
+- **Migration `20261219090000`:** aplicada sozinha, com o plano de teste listando só o seu arquivo. A conferência:
+  - só `pagar_despesas_lote` alterada, nenhuma função criada ou removida, nenhum dado existente mudou;
+  - o corpo publicado é idêntico ao do arquivo (md5 `a1640a42…`), começa por `exigir_escrita_novo` e tem a conferência de identidade;
+  - executável só por `authenticated`, `security definer` e `search_path` fixo, sem bloqueios de segurança;
+  - produção com 60 migrations.
+- **Deploy `04dd7c99`** (build do `de5bf20`): 165 arquivos servidos iguais ao build; 17 páginas protegidas redirecionam ao login sem erros de JavaScript ou de CSP.
+- **Dados (antes e depois, somente leitura):** as 86 tabelas com os mesmos dados.
+  - 45 movimentos, conta 96 com R$ 85.312,08 e conta 97 com R$ 12.469,48;
+  - os pagamentos e estornos da Psicóloga, com cada débito e o seu estorno vinculados;
+  - a Passadeira paga, as 6 pendentes da Diarista e as recorrências;
+  - faturas, financiamento, Dashboard e despesas de 11/2026 a 01/2027 iguais.
+- **Testes:** os da seção 5, sem nova alteração de código depois deles.
