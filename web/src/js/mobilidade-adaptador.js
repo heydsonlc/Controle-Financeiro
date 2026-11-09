@@ -6,6 +6,8 @@
 // ainda no Flask e recusado sem gravar): veiculos (criar, editar, converter, excluir com seguranca, gerar projecoes),
 // regras e manutencao por km, financiamento projetivo do veiculo, previa e ativacao de modalidade (cenario ativo no
 // banco, por perfil), assinaturas, caminhos de transporte por app e confirmar/adiar/ignorar despesas previstas.
+// FIN-MVP-MOB-02 (migration 20261220090000): lista de Projecoes do veiculo (itens com tipo, valor e periodicidade):
+// consulta, criar e editar, ativar ou desativar e excluir sem historico. As ocorrencias continuam em despesa_prevista.
 // Categorias sistemicas MOB_* nunca sao criadas aqui. O arquivo global /api/veiculos/cenario-ativo do Flask nao e
 // reproduzido (a tela le a modalidade ativa do banco).
 
@@ -66,6 +68,14 @@ async function editarVeiculo(id, corpo) {
 async function converterVeiculo(id, corpo) {
     await chamar((a) => supabase.rpc('converter_veiculo', a), { p_veiculo_id: id, p_dados: corpo });
     return ok({ message: 'Veículo convertido para ATIVO', data: await veiculoLido(id) });
+}
+
+// Item novo com chave de repeticao (duplo clique nao duplica); editar (com id) nao precisa dela.
+async function salvarProjecao(id, corpo) {
+    const r = corpo.id
+        ? await chamar((a) => supabase.rpc('salvar_projecao_veiculo', a), { p_veiculo_id: id, p_dados: corpo, p_chave: null })
+        : await comChave(`projecao:${id}:${JSON.stringify(corpo)}`, (a) => supabase.rpc('salvar_projecao_veiculo', a), { p_veiculo_id: id, p_dados: corpo });
+    return corpo.id ? ok({ message: 'Projeção atualizada', data: r.projecao }) : criado({ message: 'Projeção criada', data: r.projecao });
 }
 
 async function gerarProjecoes(id, corpo) {
@@ -153,6 +163,18 @@ const ROTAS = [
         p_origem_tipo: 'VEICULO', p_origem_id: Number(m[1]), p_meses: inteiro(p, 'meses', 24),
     }))],
     ['POST', /^\/api\/veiculos\/(\d+)\/projecoes\/gerar$/, (m, c) => gerarProjecoes(Number(m[1]), c || {})],
+    ['GET', /^\/api\/veiculos\/(\d+)\/projecoes-itens$/, async (m) => ok({
+        data: await chamar((a) => supabase.rpc('projecoes_veiculo_tela', a), { p_veiculo_id: Number(m[1]) }),
+    })],
+    ['POST', /^\/api\/veiculos\/(\d+)\/projecoes-itens$/, (m, c) => salvarProjecao(Number(m[1]), c || {})],
+    ['POST', /^\/api\/veiculos\/projecoes-itens\/(\d+)\/situacao$/, async (m, c) => ok({
+        message: 'Projeção atualizada',
+        data: (await chamar((a) => supabase.rpc('alternar_projecao_veiculo', a), { p_projecao_id: Number(m[1]), p_ativo: Boolean((c || {}).ativo) })).projecao,
+    })],
+    ['DELETE', /^\/api\/veiculos\/projecoes-itens\/(\d+)$/, async (m) => ok({
+        message: 'Projeção excluída',
+        ...(await chamar((a) => supabase.rpc('excluir_projecao_veiculo', a), { p_projecao_id: Number(m[1]) })),
+    })],
     ['GET', /^\/api\/veiculos\/(\d+)\/uso$/, async (m, c, p) => ok({
         data: await chamar((a) => supabase.rpc('veiculo_uso_tela', a), { p_veiculo_id: Number(m[1]), p_janela: inteiro(p, 'janela_meses', 3) }),
     })],
@@ -206,6 +228,10 @@ function falhaDoBanco(erro) {
         return falha(PERFIL_NAO_HABILITADO, 409);
     }
     if (erro && erro.hint === 'NAO_ENCONTRADA') return falha(mensagemDeErro(erro), 404);
+    // FIN-MVP-MOB-02: regra de manutencao por km do mesmo servico; a tela pergunta e reenvia com a confirmacao
+    if (erro && erro.hint === 'PROJECAO_KM_EXISTENTE') {
+        return { status: 409, corpo: { success: false, error: mensagemDeErro(erro), codigo: 'PROJECAO_KM_EXISTENTE' } };
+    }
     return falha(mensagemDeErro(erro), erro && erro.code === '42501' ? 403 : 400);
 }
 

@@ -469,7 +469,8 @@
 
             <hr class="divider">
 
-            <h3>Projeções MVP (despesas previstas)</h3>
+            <h3>Combustível</h3>
+            <p class="hint">IPVA, seguro, licenciamento, pneus, revisões e outras despesas ficam na lista de Projeções do veículo (botão Projeções).</p>
             <div class="form-grid">
                 <div class="form-group">
                     <label for="custo_combustivel_modo">Custo do combustível</label>
@@ -492,32 +493,79 @@
                     <input type="number" step="0.01" id="preco_medio_combustivel" placeholder="Opcional (ex: 5.79)" oninput="atualizarCamposCombustivel()">
                     <small class="hint">Usado apenas para estimar km via consumo.</small>
                 </div>
-                <div class="form-group">
-                    <label>IPVA (anual)</label>
-                    <div class="inline">
-                        <select id="ipva_mes" class="small"></select>
-                        <input type="number" step="0.01" id="ipva_valor" placeholder="Valor">
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>Seguro (anual)</label>
-                    <div class="inline">
-                        <select id="seguro_mes" class="small"></select>
-                        <input type="number" step="0.01" id="seguro_valor" placeholder="Valor">
-                    </div>
-                </div>
-                <div class="form-group span-2">
-                    <label>Licenciamento (anual)</label>
-                    <div class="inline">
-                        <select id="licenciamento_mes" class="small"></select>
-                        <input type="number" step="0.01" id="licenciamento_valor" placeholder="Valor">
-                    </div>
-                </div>
             </div>
 
             <div class="form-actions">
                 <button type="button" class="btn btn-secondary" onclick="fecharModal()">Cancelar</button>
                 <button type="submit" class="btn btn-primary">Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- MODAL — Projecao do veiculo (FIN-MVP-MOB-02)                      -->
+<!-- ================================================================ -->
+<div id="modal-projecao" class="modal">
+    <div class="modal-content modal-projecao">
+        <div class="modal-header">
+            <h2 id="projecao-titulo">Adicionar projeção</h2>
+            <span class="close" onclick="fecharModalProjecao()">&times;</span>
+        </div>
+        <form id="form-projecao" onsubmit="salvarProjecao(event)">
+            <input type="hidden" id="projecao-id">
+            <input type="hidden" id="projecao-veiculo">
+            <div class="projecao-grid">
+                <div class="form-group" id="projecao-tipo-grupo">
+                    <label for="projecao-tipo">Tipo da despesa *</label>
+                    <select id="projecao-tipo" required onchange="atualizarCamposProjecao()">
+                        <option value="PNEUS">Pneus</option>
+                        <option value="REVISAO">Revisão programada</option>
+                        <option value="MANUTENCAO_PREVENTIVA">Manutenção preventiva</option>
+                        <option value="MANUTENCAO_CORRETIVA">Manutenção corretiva</option>
+                        <option value="IPVA">IPVA</option>
+                        <option value="SEGURO">Seguro</option>
+                        <option value="LICENCIAMENTO">Licenciamento</option>
+                        <option value="OUTRO">Outra despesa</option>
+                        <option value="COMBUSTIVEL" hidden>Combustível</option>
+                    </select>
+                </div>
+                <div class="form-group" id="projecao-nome-grupo">
+                    <label for="projecao-nome">Nome ou descrição</label>
+                    <input type="text" id="projecao-nome" maxlength="80" placeholder="Ex: Pneus dianteiros">
+                </div>
+                <div class="form-group">
+                    <label for="projecao-valor">Valor estimado *</label>
+                    <input type="number" step="0.01" min="0.01" id="projecao-valor" required placeholder="Ex: 1200,00">
+                </div>
+                <div class="form-group" id="projecao-categoria-grupo">
+                    <label for="projecao-categoria">Categoria financeira</label>
+                    <select id="projecao-categoria"></select>
+                </div>
+                <div class="form-group" id="projecao-frequencia-grupo">
+                    <label for="projecao-frequencia">Frequência *</label>
+                    <select id="projecao-frequencia" required onchange="atualizarCamposProjecao()">
+                        <option value="MENSAL">Mensal</option>
+                        <option value="SEMANAL">Semanal</option>
+                        <option value="TRIMESTRAL">Trimestral</option>
+                        <option value="SEMESTRAL">Semestral</option>
+                        <option value="ANUAL">Anual</option>
+                        <option value="DATA">Data programada</option>
+                    </select>
+                </div>
+                <div class="form-group" id="projecao-inicio-grupo">
+                    <label for="projecao-inicio" id="projecao-inicio-rotulo">Mês de início *</label>
+                    <input type="month" id="projecao-inicio" required>
+                </div>
+                <div class="form-group" id="projecao-fim-grupo">
+                    <label for="projecao-fim" id="projecao-fim-rotulo">Término (opcional)</label>
+                    <input type="month" id="projecao-fim">
+                </div>
+            </div>
+            <p class="hint" id="projecao-aviso" style="display:none;"></p>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="fecharModalProjecao()">Cancelar</button>
+                <button type="submit" class="btn btn-primary btn-sm" id="projecao-salvar">Salvar</button>
             </div>
         </form>
     </div>

@@ -47,7 +47,8 @@ function veiculosIcon(name) {
         clock: '<path d="M12 6v6l4 2"/><path d="M20 12a8 8 0 1 1-8-8"/>',
         fuel: '<path d="M5 20V5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v15"/><path d="M4 20h11M7 8h5"/><path d="M14 12h2a1 1 0 0 1 1 1v3a1.5 1.5 0 0 0 3 0V9l-3-3"/>',
         list: '<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>',
-        remove: '<path d="M6 6l12 12M18 6 6 18"/>'
+        remove: '<path d="M6 6l12 12M18 6 6 18"/>',
+        pause: '<path d="M9 6v12M15 6v12"/>'
     };
     return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="width:1em;height:1em;display:inline-block;vertical-align:-0.125em;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">${icons[name] || icons.eye}</svg>`;
 }
@@ -896,6 +897,7 @@ function renderVeiculoCard(v) {
             </div>
 
             <div class="projecoes-wrap" id="${projId}" style="display:none;">
+                <div class="projecoes-itens" id="projecoes-itens-${v.id}"></div>
                 <div class="projecoes-header">
                     <strong>Despesas previstas</strong>
                     <span class="small-note">N&atilde;o s&atilde;o lan&ccedil;amentos reais.</span>
@@ -1022,6 +1024,7 @@ function _ehEventoManutencao(p, tiposRegras) {
 }
 
 function _grupoPrevisaoParaItem(p, tiposRegras) {
+    if (p?.metadata?.projecao_id) return `PROJ:${p.metadata.projecao_id}`;  // FIN-MVP-MOB-02: um grupo por item
     const tipo = _normalizarTipoEvento(p);
     const grupoBase = _grupoPrevisaoPorTipoEvento(tipo);
     if (grupoBase !== 'OUTROS') return grupoBase;
@@ -1065,6 +1068,7 @@ function _keyMes(iso) {
 }
 
 function _rotuloDetalheTipo(p) {
+    if (p?.metadata?.nome) return p.metadata.nome;  // FIN-MVP-MOB-02: nome dado ao item
     const tipo = _normalizarTipoEvento(p);
     if (tipo === 'TRANSPORTE_APP') return 'Transporte por App';
     if (tipo === 'PARCELA_FINANCIAMENTO') {
@@ -1194,7 +1198,7 @@ function _consolidarProjecoes(projecoes, mesesResumo = 12, tiposRegras = new Set
 
         grupos.push({
             grupo,
-            label: _rotuloGrupoPrevisao(grupo),
+            label: grupo.startsWith('PROJ:') ? (itensOrdenados[0]?.metadata?.nome || 'Projeção') : _rotuloGrupoPrevisao(grupo),
             ordem: _ordemGrupoPrevisao(grupo),
             itens: itensOrdenados,
             valorResumo,
@@ -1217,7 +1221,8 @@ async function obterCustoMensalVeiculo(veiculoId) {
     const custoCadastral = veiculo ? calcularCustoMensalVeiculoLocal(veiculo, false) : 0;
     const tiposRegras = new Set((respMan?.success ? (respMan.data?.tipos_evento_regras || []) : []).map(t => String(t || '').toUpperCase()));
     const tiposDiretos = new Set(['COMBUSTIVEL', 'IPVA', 'SEGURO', 'LICENCIAMENTO', ...Array.from(tiposRegras)]);
-    const custoProjetivoComplementar = calcularCustoMensalEstimado(respProj.data || [], 12, tiposDiretos);
+    const ocorrenciasSemItem = (respProj.data || []).filter(p => !p?.metadata?.projecao_id);  // FIN-MVP-MOB-02: ja no total do veiculo
+    const custoProjetivoComplementar = calcularCustoMensalEstimado(ocorrenciasSemItem, 12, tiposDiretos);
     const impactoManut = respMan?.success ? Number(respMan.data?.impacto_mensal_total || 0) : 0;
     return custoCadastral + custoProjetivoComplementar + (Number.isFinite(impactoManut) ? impactoManut : 0);
 }
@@ -1348,14 +1353,16 @@ async function abrirModalEditar(id) {
             document.getElementById('custo_combustivel_modo').value = v.custo_combustivel_modo || 'MANUAL';
         }
 
-        document.getElementById('ipva_mes').value = v.ipva?.mes ?? '';
-        document.getElementById('ipva_valor').value = v.ipva?.valor ?? '';
+        if (document.getElementById('ipva_mes')) {  // formulario do Flask; no novo aplicativo, lista de Projecoes
+            document.getElementById('ipva_mes').value = v.ipva?.mes ?? '';
+            document.getElementById('ipva_valor').value = v.ipva?.valor ?? '';
 
-        document.getElementById('seguro_mes').value = v.seguro?.mes ?? '';
-        document.getElementById('seguro_valor').value = v.seguro?.valor ?? '';
+            document.getElementById('seguro_mes').value = v.seguro?.mes ?? '';
+            document.getElementById('seguro_valor').value = v.seguro?.valor ?? '';
 
-        document.getElementById('licenciamento_mes').value = v.licenciamento?.mes ?? '';
-        document.getElementById('licenciamento_valor').value = v.licenciamento?.valor ?? '';
+            document.getElementById('licenciamento_mes').value = v.licenciamento?.mes ?? '';
+            document.getElementById('licenciamento_valor').value = v.licenciamento?.valor ?? '';
+        }
 
         toggleDataInicio();
         atualizarCamposCombustivel();
@@ -1380,16 +1387,17 @@ async function salvarVeiculo(event) {
 
         combustivel_valor_mensal: document.getElementById('combustivel_valor_mensal').value || null,
         preco_medio_combustivel: document.getElementById('preco_medio_combustivel').value || null,
-
-        ipva_mes: document.getElementById('ipva_mes').value || null,
-        ipva_valor: document.getElementById('ipva_valor').value || null,
-
-        seguro_mes: document.getElementById('seguro_mes').value || null,
-        seguro_valor: document.getElementById('seguro_valor').value || null,
-
-        licenciamento_mes: document.getElementById('licenciamento_mes').value || null,
-        licenciamento_valor: document.getElementById('licenciamento_valor').value || null,
     };
+    if (document.getElementById('ipva_mes')) {  // formulario do Flask; no novo aplicativo, lista de Projecoes
+        Object.assign(payload, {
+            ipva_mes: document.getElementById('ipva_mes').value || null,
+            ipva_valor: document.getElementById('ipva_valor').value || null,
+            seguro_mes: document.getElementById('seguro_mes').value || null,
+            seguro_valor: document.getElementById('seguro_valor').value || null,
+            licenciamento_mes: document.getElementById('licenciamento_mes').value || null,
+            licenciamento_valor: document.getElementById('licenciamento_valor').value || null,
+        });
+    }
     if (document.getElementById('em_uso_paralelo')) {
         payload.em_uso_paralelo = status === 'ATIVO' && document.getElementById('em_uso_paralelo').checked;
     }
@@ -1472,7 +1480,14 @@ async function toggleProjecoes(id) {
     const mostrando = wrap.style.display !== 'none';
     wrap.style.display = mostrando ? 'none' : 'block';
     if (mostrando) return;
+    carregarItensProjecao(id);
+    await carregarOcorrenciasProjecao(id);
+}
 
+// Despesas previstas do veiculo (as ocorrencias geradas pelos itens, financiamento e manutencao por km).
+async function carregarOcorrenciasProjecao(id) {
+    const wrap = document.getElementById(`projecoes-${id}`);
+    if (!wrap) return;
     const body = wrap.querySelector('.projecoes-body');
     body.innerHTML = '<p class="loading">Carregando projeções...</p>';
 
@@ -1491,7 +1506,7 @@ async function toggleProjecoes(id) {
             projecoesIndex[p.id] = { tipo_evento: p.tipo_evento || (p.metadata?.tipo_evento ?? null) };
             const mes = formatarMesAno(p.data_atual_prevista || p.data_prevista);
             const categoria = p.categoria?.nome || `Categoria #${p.categoria_id}`;
-            const tipo = p.tipo_evento || (p.metadata?.tipo_evento ?? '');
+            const tipo = p.metadata?.nome || p.tipo_evento || (p.metadata?.tipo_evento ?? '');
             const valor = formatarMoeda(p.valor_previsto);
             const isPrevista = p.status === 'PREVISTA';
             const actions = isPrevista ? `
@@ -2150,7 +2165,7 @@ async function salvarFinanciamento(event) {
         const veiculo = finVeiculoCache[Number(veiculoId)];
         const usoComb = Number(veiculo?.projecao_combustivel?.valor_mensal || 0) * 12;
         const usoAnual = Number(veiculo?.ipva?.valor || 0) + Number(veiculo?.seguro?.valor || 0) + Number(veiculo?.licenciamento?.valor || 0);
-        const custoUso = usoComb + usoAnual;
+        const custoUso = Array.isArray(veiculo?.projecoes) ? Number(veiculo.total_mensal_estimado || 0) * 12 : usoComb + usoAnual;
         const custoUsoFmt = custoUso.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
         const custoTotalVeiculoFmt = (custoUso + Number(res.custo_total_financiamento || 0)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -2309,6 +2324,7 @@ function calcularCustoMensalVeiculoLocal(v, usarCache = true) {
     const cached = Number(custoMensalConsolidado?.VEICULO?.[v.id] || 0);
     if (usarCache && cached > 0) return cached;
     const totalApi = Number(v.total_mensal_estimado || 0);
+    if (Array.isArray(v.projecoes)) return totalApi;  // FIN-MVP-MOB-02: total pelos itens da lista de Projecoes
     let soma = 0;
     if (v.projecao_combustivel?.valor_mensal) soma += Number(v.projecao_combustivel.valor_mensal);
     if (v.ipva?.valor) soma += Number(v.ipva.valor) / 12;
@@ -2324,10 +2340,17 @@ async function construirTodosOsCenarios(veiculos, apps) {
     for (const v of (veiculos || [])) {
         const custo = calcularCustoMensalVeiculoLocal(v);
         const itens = [];
-        if (v.projecao_combustivel?.valor_mensal) itens.push({ nome: 'Combustível/mês', valor: Number(v.projecao_combustivel.valor_mensal) });
-        if (v.ipva?.valor) itens.push({ nome: 'IPVA (diluído)', valor: Number(v.ipva.valor) / 12 });
-        if (v.seguro?.valor) itens.push({ nome: 'Seguro (diluído)', valor: Number(v.seguro.valor) / 12 });
-        if (v.licenciamento?.valor) itens.push({ nome: 'Licenciamento (diluído)', valor: Number(v.licenciamento.valor) / 12 });
+        if (Array.isArray(v.projecoes)) {
+            // FIN-MVP-MOB-02: um item por projecao ativa; nao mensal entra pela media (informativa)
+            v.projecoes.filter(i => i.ativo && Number(i.media_mensal) > 0).forEach(i => itens.push({
+                nome: i.frequencia === 'MENSAL' ? `${i.nome}/mês` : `${i.nome} (diluído)`, valor: Number(i.media_mensal),
+            }));
+        } else {
+            if (v.projecao_combustivel?.valor_mensal) itens.push({ nome: 'Combustível/mês', valor: Number(v.projecao_combustivel.valor_mensal) });
+            if (v.ipva?.valor) itens.push({ nome: 'IPVA (diluído)', valor: Number(v.ipva.valor) / 12 });
+            if (v.seguro?.valor) itens.push({ nome: 'Seguro (diluído)', valor: Number(v.seguro.valor) / 12 });
+            if (v.licenciamento?.valor) itens.push({ nome: 'Licenciamento (diluído)', valor: Number(v.licenciamento.valor) / 12 });
+        }
 
         todos.push({
             tipo: 'VEICULO',
@@ -3141,7 +3164,7 @@ function renderConfVeiculos() {
                     <div class="conf-item-nome">${escapeHtml(v.nome)} <span class="card-badge ${v.status === 'ATIVO' ? 'status-ativo' : 'status-simulado'}">${escapeHtml(v.status)}</span></div>
                     <div class="conf-item-sub">${escapeHtml(v.tipo)} · ${escapeHtml(rotuloCombustivel(v))} · ${v.autonomia_km_l} km/L${v.km_real !== undefined ? ` · ${formatarKm(v.km_real)}` : ''}</div>
                 </div>
-                <div class="conf-item-custo">${formatarMoeda(custo)}/mês</div>
+                <div class="conf-item-custo" id="conf-custo-${v.id}">${formatarMoeda(custo)}/mês</div>
                 <div class="conf-item-acoes">
                     <button class="row-action-button" onclick="abrirModalAbastecimento(${v.id})" title="Abastecer" aria-label="Abastecer">${veiculosIcon('fuel')}</button>
                     <button class="row-action-button" onclick="abrirHistoricoAbastecimentos(${v.id})" title="Abastecimentos" aria-label="Abastecimentos">${veiculosIcon('list')}</button>
@@ -3153,6 +3176,7 @@ function renderConfVeiculos() {
                 </div>
             </div>
             <div id="projecoes-${v.id}" class="projecoes-wrap" style="display:none;">
+                <div class="projecoes-itens" id="projecoes-itens-${v.id}"></div>
                 <div class="projecoes-header">
                     <strong>Despesas previstas</strong>
                     <span class="small-note">Não são lançamentos reais.</span>
@@ -4104,5 +4128,303 @@ async function renderCustosVeiculos() {
     } catch (e) {
         console.error(e);
         el.innerHTML = '';
+    }
+}
+
+// =====================================================================================================================
+// FIN-MVP-MOB-02: lista de Projecoes do veiculo. Cada item (tipo, valor, periodicidade) gera as despesas previstas pelo
+// mesmo motor; editar ou desativar so muda o que ainda e PREVISTA. O combustivel segue o cadastro do veiculo.
+// =====================================================================================================================
+const PROJECAO_FREQUENCIAS = {
+    SEMANAL: 'Semanal', MENSAL: 'Mensal', TRIMESTRAL: 'Trimestral', SEMESTRAL: 'Semestral', ANUAL: 'Anual', DATA: 'Data programada',
+};
+const PROJECAO_POR_DATA = new Set(['SEMANAL', 'DATA']);
+const projecoesItens = {};
+
+function rotuloPeriodicidade(item) {
+    const base = PROJECAO_FREQUENCIAS[item.frequencia] || item.frequencia || '—';
+    if (item.frequencia === 'ANUAL' && item.data_inicio) {
+        const mes = new Date(`${item.data_inicio.slice(0, 7)}-15T12:00:00`).toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
+        return `${base} (${mes})`;
+    }
+    return base;
+}
+
+function rotuloProximaOcorrencia(item) {
+    if (!item.proxima_ocorrencia) return '—';
+    return PROJECAO_POR_DATA.has(item.frequencia) ? formatarData(item.proxima_ocorrencia) : formatarMesAno(item.proxima_ocorrencia);
+}
+
+function situacaoProjecao(item, coberto) {
+    if (item.provisorio) return '<span class="projecao-situacao provisoria" title="Salve o veículo para organizar as projeções">Provisória</span>';
+    if (!item.ativo) return '<span class="projecao-situacao inativa">Inativa</span>';
+    if (item.tipo === 'COMBUSTIVEL' && (coberto || item.proxima_situacao === 'SUPRIMIDA')) {
+        return '<span class="projecao-situacao coberta" title="A recorrência do veículo lança o combustível">Recorrência</span>';
+    }
+    return '<span class="projecao-situacao">Ativa</span>';
+}
+
+// Botoes do mesmo tamanho; indisponivel fica visivel e desabilitado (sem onclick). O onclick e literal: o build so converte
+// " onclick=" e so libera na ponte de CSP as funcoes escritas no atributo.
+function botaoIndisponivel(icone, titulo, classe = '') {
+    return `<button type="button" class="row-action-button ${classe}" disabled title="${escapeAttr(titulo)}" aria-label="${escapeAttr(titulo)}">${veiculosIcon(icone)}</button>`;
+}
+
+function linhaItemProjecao(veiculoId, item, coberto) {
+    const valor = item.valor === null || item.valor === undefined ? '—' : formatarMoeda(item.valor);
+    const tituloValor = item.custo_calculado ? 'Calculado pela quilometragem (cadastro do veículo)' : (item.valor_segue_veiculo ? 'Segue o cadastro do veículo' : '');
+    let acoes;
+    if (item.provisorio) {
+        const motivo = 'Salve o veículo para organizar as projeções';
+        acoes = botaoIndisponivel('edit', motivo) + botaoIndisponivel('pause', motivo) + botaoIndisponivel('trash', motivo, 'danger');
+    } else {
+        const editar = `<button type="button" class="row-action-button" onclick="abrirModalProjecao(${veiculoId}, ${item.id})" title="Editar" aria-label="Editar">${veiculosIcon('edit')}</button>`;
+        const situacao = item.ativo
+            ? `<button type="button" class="row-action-button" onclick="alternarProjecao(${veiculoId}, ${item.id}, false)" title="Desativar" aria-label="Desativar">${veiculosIcon('pause')}</button>`
+            : `<button type="button" class="row-action-button success" onclick="alternarProjecao(${veiculoId}, ${item.id}, true)" title="Ativar" aria-label="Ativar">${veiculosIcon('check')}</button>`;
+        const excluir = item.pode_excluir
+            ? `<button type="button" class="row-action-button danger" onclick="excluirProjecao(${veiculoId}, ${item.id})" title="Excluir" aria-label="Excluir">${veiculosIcon('trash')}</button>`
+            : botaoIndisponivel('trash', item.motivo_exclusao || 'Exclusão indisponível', 'danger');
+        acoes = editar + situacao + excluir;
+    }
+    return `<tr class="${item.ativo ? '' : 'projecao-inativa'}" data-projecao-id="${item.id ?? ''}">
+        <td title="${escapeAttr(item.nome)}">${escapeHtml(item.nome)}</td>
+        <td class="right" title="${escapeAttr(tituloValor)}">${valor}</td>
+        <td>${escapeHtml(rotuloPeriodicidade(item))}</td>
+        <td>${escapeHtml(rotuloProximaOcorrencia(item))}</td>
+        <td>${situacaoProjecao(item, coberto)}</td>
+        <td><div class="projecao-acoes">${acoes}</div></td>
+    </tr>`;
+}
+
+// Regra de manutencao por km: so leitura aqui; o cadastro continua em Manutencao por km.
+function linhaRegraKm(veiculoId, regra) {
+    const gerir = 'Gerencie em Manutenção por km';
+    const acoes = `<button type="button" class="row-action-button" onclick="abrirModalManutencaoKm(${veiculoId})" title="Manutenção por km" aria-label="Manutenção por km">${veiculosIcon('clock')}</button>`
+        + botaoIndisponivel('pause', gerir) + botaoIndisponivel('trash', gerir, 'danger');
+    return `<tr class="${regra.ativo ? '' : 'projecao-inativa'}" data-regra-km-id="${regra.id}">
+        <td title="${escapeAttr(_labelTipoEvento(regra.tipo_evento))}">${escapeHtml(_labelTipoEvento(regra.tipo_evento))}</td>
+        <td class="right">${regra.custo_estimado ? formatarMoeda(regra.custo_estimado) : '—'}</td>
+        <td>A cada ${Number(regra.intervalo_km || 0).toLocaleString('pt-BR')} km</td>
+        <td>${regra.proxima_ocorrencia ? formatarMesAno(regra.proxima_ocorrencia) : '—'}</td>
+        <td><span class="projecao-situacao ${regra.ativo ? 'km' : 'inativa'}">${regra.ativo ? 'Por km' : 'Inativa'}</span></td>
+        <td><div class="projecao-acoes">${acoes}</div></td>
+    </tr>`;
+}
+
+function renderItensProjecao(veiculoId, dados) {
+    const totais = dados.totais || {};
+    const linhas = (dados.itens || []).map(i => linhaItemProjecao(veiculoId, i, dados.combustivel_coberto))
+        .concat((dados.regras_km || []).map(r => linhaRegraKm(veiculoId, r)));
+    return `
+        <div class="projecoes-itens-cabecalho">
+            <strong>Projeções</strong>
+            <span class="small-note">Média mensal ${formatarMoeda(totais.media_mensal || 0)} · próximos 12 meses ${formatarMoeda(totais.proximos_12_meses || 0)}</span>
+            <button type="button" class="btn btn-primary btn-sm btn-adicionar-projecao" onclick="abrirModalProjecao(${veiculoId})">+ Adicionar projeção</button>
+        </div>
+        <div class="projecoes-itens-tabela">
+            <table class="tabela-projecoes-itens">
+                <colgroup><col><col class="col-valor"><col class="col-periodicidade"><col class="col-proxima"><col class="col-situacao"><col class="col-acoes"></colgroup>
+                <thead><tr><th>Despesa</th><th class="right">Valor</th><th>Periodicidade</th><th>Próxima ocorrência</th><th>Situação</th><th class="right">Ações</th></tr></thead>
+                <tbody>${linhas.join('') || '<tr><td colspan="6" class="small-note">Nenhuma projeção cadastrada.</td></tr>'}</tbody>
+            </table>
+        </div>
+    `;
+}
+
+async function carregarItensProjecao(veiculoId) {
+    const el = document.getElementById(`projecoes-itens-${veiculoId}`);
+    if (!el) return;
+    try {
+        const resp = await fetch(`${API_VEICULOS}/${veiculoId}/projecoes-itens`);
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'Falha ao carregar as projeções');
+        projecoesItens[veiculoId] = data.data;
+        el.innerHTML = renderItensProjecao(veiculoId, data.data);
+    } catch (e) {
+        console.error(e);
+        el.innerHTML = '';  // tela do Flask: sem a lista de itens
+    }
+}
+
+// O veiculo relido traz os totais pelos itens; o custo mensal da lista acompanha.
+async function atualizarVeiculoEmCache(veiculoId) {
+    try {
+        const resp = await fetch(`${API_VEICULOS}/${veiculoId}`);
+        const data = await resp.json();
+        const i = (caminhosVeiculos || []).findIndex(v => Number(v.id) === Number(veiculoId));
+        if (data.success && i >= 0) caminhosVeiculos[i] = data.data;
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+async function recarregarProjecoesVeiculo(veiculoId) {
+    await Promise.all([carregarItensProjecao(veiculoId), carregarOcorrenciasProjecao(veiculoId), atualizarVeiculoEmCache(veiculoId)]);
+    await atualizarCustosMensais([veiculoId]);
+    const custo = document.getElementById(`conf-custo-${veiculoId}`);
+    if (custo) custo.textContent = `${formatarMoeda(custoMensalConsolidado.VEICULO[veiculoId] || 0)}/mês`;
+}
+
+function preencherCategoriasProjecao(selecionada) {
+    const sel = document.getElementById('projecao-categoria');
+    const ativas = (categorias || []).filter(c => c.ativo !== false).sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
+    sel.innerHTML = '<option value="">Padrão do tipo</option>' + ativas.map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
+    sel.value = selecionada ? String(selecionada) : '';
+}
+
+// Valor do campo de inicio/termino quando o tipo do campo muda (mes <-> data).
+function converterCampoData(campo, tipo) {
+    const valor = campo.value;
+    campo.type = tipo;
+    if (!valor) return;
+    campo.value = tipo === 'month' ? valor.slice(0, 7) : (valor.length === 7 ? `${valor}-01` : valor);
+}
+
+function atualizarCamposProjecao() {
+    const tipo = document.getElementById('projecao-tipo').value;
+    const freqSel = document.getElementById('projecao-frequencia');
+    const combustivel = tipo === 'COMBUSTIVEL';
+    if (['IPVA', 'LICENCIAMENTO'].includes(tipo)) freqSel.value = 'ANUAL';
+    freqSel.disabled = ['IPVA', 'LICENCIAMENTO'].includes(tipo);
+    const freq = freqSel.value;
+    const porData = PROJECAO_POR_DATA.has(freq);
+    const inicio = document.getElementById('projecao-inicio');
+    const fim = document.getElementById('projecao-fim');
+    converterCampoData(inicio, porData ? 'date' : 'month');
+    converterCampoData(fim, porData ? 'date' : 'month');
+    const rotulos = { SEMANAL: 'Primeira data', MENSAL: 'Mês de início', TRIMESTRAL: 'Primeira competência',
+                      SEMESTRAL: 'Primeira competência', ANUAL: 'Mês de cobrança', DATA: 'Data programada' };
+    document.getElementById('projecao-inicio-rotulo').textContent = `${rotulos[freq] || 'Início'} *`;
+    const mostrar = (id, visivel) => { document.getElementById(id).style.display = visivel ? '' : 'none'; };
+    mostrar('projecao-tipo-grupo', !combustivel);
+    mostrar('projecao-nome-grupo', !combustivel);
+    mostrar('projecao-categoria-grupo', !combustivel);
+    mostrar('projecao-frequencia-grupo', !combustivel);
+    mostrar('projecao-inicio-grupo', !combustivel);
+    mostrar('projecao-fim-grupo', !combustivel && freq !== 'DATA');
+    inicio.required = !combustivel;
+    const aviso = document.getElementById('projecao-aviso');
+    const avisos = [];
+    if (combustivel) avisos.push('O combustível segue o cadastro do veículo (Flex, custo calculado e recorrência). Aqui muda só o valor mensal informado.');
+    if (freq === 'ANUAL' && !combustivel) avisos.push('O valor integral entra no mês de cobrança; a média mensal é só informativa.');
+    if (freq === 'DATA') avisos.push('Uma única ocorrência na data informada.');
+    aviso.textContent = avisos.join(' ');
+    aviso.style.display = avisos.length ? '' : 'none';
+}
+
+function abrirModalProjecao(veiculoId, itemId = null) {
+    const item = itemId ? (projecoesItens[veiculoId]?.itens || []).find(i => Number(i.id) === Number(itemId)) : null;
+    document.getElementById('form-projecao').reset();
+    document.getElementById('projecao-id').value = item ? item.id : '';
+    document.getElementById('projecao-veiculo').value = veiculoId;
+    document.getElementById('projecao-titulo').textContent = item ? `Editar projeção — ${item.nome}` : 'Adicionar projeção';
+    const tipo = document.getElementById('projecao-tipo');
+    tipo.value = item ? item.tipo : 'PNEUS';
+    tipo.disabled = Boolean(item);  // o tipo e fixo depois de criado
+    preencherCategoriasProjecao(item?.categoria_id);
+    document.getElementById('projecao-nome').value = item?.nome || '';
+    const valor = document.getElementById('projecao-valor');
+    valor.value = item?.valor ?? '';
+    valor.readOnly = Boolean(item?.custo_calculado);
+    document.getElementById('projecao-frequencia').value = item?.frequencia || 'MENSAL';
+    const inicio = document.getElementById('projecao-inicio');
+    const fim = document.getElementById('projecao-fim');
+    inicio.type = 'date';
+    fim.type = 'date';
+    const hoje = new Date();
+    inicio.value = item?.data_inicio || `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-01`;
+    fim.value = item?.data_fim || '';
+    atualizarCamposProjecao();
+    if (item?.custo_calculado) {
+        const aviso = document.getElementById('projecao-aviso');
+        aviso.textContent = 'Custo calculado pela quilometragem: altere a quilometragem, a autonomia ou o preço no cadastro do veículo.';
+        aviso.style.display = '';
+    }
+    document.getElementById('modal-projecao').style.display = 'block';
+}
+
+function fecharModalProjecao() {
+    document.getElementById('modal-projecao').style.display = 'none';
+}
+
+async function enviarProjecao(veiculoId, payload) {
+    const resp = await fetch(`${API_VEICULOS}/${veiculoId}/projecoes-itens`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    });
+    return resp.json();
+}
+
+async function salvarProjecao(event) {
+    event.preventDefault();
+    const veiculoId = Number(document.getElementById('projecao-veiculo').value);
+    const id = document.getElementById('projecao-id').value;
+    const tipo = document.getElementById('projecao-tipo').value;
+    const botao = document.getElementById('projecao-salvar');
+    let payload;
+    if (tipo === 'COMBUSTIVEL') {
+        payload = { id: Number(id), valor: document.getElementById('projecao-valor').value || null };
+    } else {
+        const porData = PROJECAO_POR_DATA.has(document.getElementById('projecao-frequencia').value);
+        const data = (campo) => {
+            const v = document.getElementById(campo).value;
+            return v ? (porData || v.length > 7 ? v : `${v}-01`) : null;
+        };
+        payload = {
+            nome: document.getElementById('projecao-nome').value.trim(),
+            valor: document.getElementById('projecao-valor').value || null,
+            categoria_id: document.getElementById('projecao-categoria').value ? Number(document.getElementById('projecao-categoria').value) : null,
+            frequencia: document.getElementById('projecao-frequencia').value,
+            data_inicio: data('projecao-inicio'),
+            data_fim: document.getElementById('projecao-frequencia').value === 'DATA' ? null : data('projecao-fim'),
+        };
+        if (id) payload.id = Number(id); else payload.tipo = tipo;
+        if (!id && !payload.nome) delete payload.nome;
+        if (!id && payload.categoria_id === null) delete payload.categoria_id;
+    }
+    botao.disabled = true;
+    try {
+        let data = await enviarProjecao(veiculoId, payload);
+        if (!data.success && data.codigo === 'PROJECAO_KM_EXISTENTE') {
+            if (!confirm(`${data.error}\n\nManter as duas previsões?`)) return;
+            data = await enviarProjecao(veiculoId, { ...payload, confirmar_km: true });
+        }
+        if (!data.success) throw new Error(data.error || 'Falha ao salvar a projeção');
+        fecharModalProjecao();
+        await recarregarProjecoesVeiculo(veiculoId);
+    } catch (e) {
+        console.error(e);
+        alert('Erro ao salvar: ' + e.message);
+    } finally {
+        botao.disabled = false;
+    }
+}
+
+async function alternarProjecao(veiculoId, itemId, ativo) {
+    if (!ativo && !confirm('Desativar esta projeção?\n\nAs previsões futuras ainda não confirmadas saem. O que já foi confirmado, pago ou adiado fica.')) return;
+    try {
+        const resp = await fetch(`${API_VEICULOS}/projecoes-itens/${itemId}/situacao`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ativo }),
+        });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'Falha ao alterar a projeção');
+        await recarregarProjecoesVeiculo(veiculoId);
+    } catch (e) {
+        console.error(e);
+        alert('Erro: ' + e.message);
+    }
+}
+
+async function excluirProjecao(veiculoId, itemId) {
+    const item = (projecoesItens[veiculoId]?.itens || []).find(i => Number(i.id) === Number(itemId));
+    if (!confirm(`Excluir a projeção "${item?.nome || ''}"?\n\nSaem o item e as previsões ainda não confirmadas.`)) return;
+    try {
+        const resp = await fetch(`${API_VEICULOS}/projecoes-itens/${itemId}`, { method: 'DELETE' });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'Falha ao excluir a projeção');
+        await recarregarProjecoesVeiculo(veiculoId);
+    } catch (e) {
+        console.error(e);
+        alert('Erro: ' + e.message);
     }
 }

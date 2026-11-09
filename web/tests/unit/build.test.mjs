@@ -109,6 +109,7 @@ const RPCS_DE_LEITURA = new Set(['meus_perfis', 'contas_bancarias_do_perfil', 'c
     'registrar_abastecimento', 'corrigir_abastecimento', 'anular_abastecimento', 'abastecimentos_veiculo_tela', 'custos_veiculos_tela',
     'veiculo_manutencoes_km_tela', 'veiculo_financiamento_tela', 'mobilidade_ativa_tela', 'mobilidade_assinaturas_tela',
     'transporte_app_tela', 'previa_mobilidade',  // FIN-MOBILIDADE-2: previa da ativacao (so le)
+    'projecoes_veiculo_tela',  // FIN-MVP-MOB-02: lista de Projecoes do veiculo (so le)
     'consorcios_tela',  // FIN-FIDELIDADE-CONTRATOS-1 (Consorcios, so leitura)
     // FIN-FIDELIDADE-RECEITAS-CATEGORIAS-1 (so leitura)
     'receitas_fontes_tela', 'receitas_orcamentos_tela', 'receitas_realizadas_tela', 'categorias_tela', 'palavras_chave_tela',
@@ -245,6 +246,10 @@ const RPCS_DE_ESCRITA = new Map([
     ['confirmar_despesa_prevista', 'mobilidade-adaptador.js'],
     ['adiar_despesa_prevista', 'mobilidade-adaptador.js'],
     ['ignorar_despesa_prevista', 'mobilidade-adaptador.js'],
+    // FIN-MVP-MOB-02 (itens da lista de Projecoes do veiculo; escritor unico)
+    ['salvar_projecao_veiculo', 'mobilidade-adaptador.js'],
+    ['alternar_projecao_veiculo', 'mobilidade-adaptador.js'],
+    ['excluir_projecao_veiculo', 'mobilidade-adaptador.js'],
     // FIN-DOCUMENTOS-2 (envio e guarda do arquivo no banco, revisao, vinculos e despesa a partir do documento)
     ['enviar_comprovante', 'documentos-fiscais-adaptador.js'],
     ['atualizar_comprovante', 'documentos-fiscais-adaptador.js'],
