@@ -131,7 +131,33 @@
     //    como paga pela edicao (PUT /api/despesas/<id> com pago=true), que o novo aplicativo recusa de proposito: o pagamento
     //    escolhe a conta e registra o movimento. Aqui um modal com a conta de debito; o banco paga todas as pendentes pelo
     //    pagamento individual, numa so transacao, e confere de novo quantidade, valores e situacao.
-    const lote = { ocorrencias: [], enviando: false, pago: false };
+    //    FIN-DESPESAS-PAGAMENTO-LOTE-02 (P21): o botao do original passa a POSICAO do agrupador na lista desenhada (ja
+    //    filtrada por situacao, forma, vencimento ou busca), mas o original procurava essa posicao na lista inteira do mes;
+    //    com um filtro a ordem muda e o modal abria outra recorrencia (Diarista abria Psicologa). Agora cada desenho guarda a
+    //    identidade (nome e competencia) de cada posicao desenhada; o lote acha as ocorrencias por ela, confere de novo na
+    //    confirmacao e envia a identidade, que o banco compara com as ocorrencias (LOTE_IDENTIDADE).
+    const lote = { ocorrencias: [], identidade: null, enviando: false, pago: false };
+    const desenhados = new Map();  // posicao do botao no ultimo desenho -> { nome, competencia }
+    const desenharOriginal = window.renderizarDespesas;
+    window.renderizarDespesas = function renderizarDespesas(lista) {
+        desenhados.clear();  // o desenho troca a lista inteira: so valem as posicoes dele
+        return desenharOriginal(lista);
+    };
+    const agrupadorOriginal = window.renderizarAgrupadorSemanal;
+    window.renderizarAgrupadorSemanal = function renderizarAgrupadorSemanal(agrupador, index) {
+        desenhados.set(index, { nome: agrupador.nome, competencia: agrupador.mes_competencia });
+        return agrupadorOriginal(agrupador, index);
+    };
+
+    // Ocorrencias pendentes do agrupador com esta identidade, na lista inteira do mes (o banco exige todas as pendentes das
+    // recorrencias na competencia, mesmo as escondidas por um filtro).
+    function pendentesDoAgrupador(identidade) {
+        // eslint-disable-next-line no-undef -- despesas e agruparDespesasSemanais sao do original (mesmo escopo global)
+        const agrupador = agruparDespesasSemanais(despesas).find((a) => a.tipo === 'agrupador_semanal'
+            && a.nome === identidade.nome && a.mes_competencia === identidade.competencia);
+        return agrupador ? agrupador.ocorrencias.filter((o) => !o.pago && !o.cancelada) : null;
+    }
+    const idsDe = (ocorrencias) => ocorrencias.map((o) => o.id).sort((a, b) => a - b).join(',');
     const reaisBR = (v) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const $ = (id) => document.getElementById(id);
 
@@ -151,6 +177,7 @@
         $('modal-pagar-lote').style.display = 'none';
         const recarregar = lote.pago;
         lote.ocorrencias = [];
+        lote.identidade = null;
         lote.pago = false;
         if (recarregar) window.carregarDespesas();
     }
@@ -172,22 +199,22 @@
     }
 
     window.pagarTodasOcorrencias = async function pagarTodasOcorrencias(index) {
-        // eslint-disable-next-line no-undef -- despesas e agruparDespesasSemanais sao do original (mesmo escopo global)
-        const agrupador = agruparDespesasSemanais(despesas)[index];
-        if (!agrupador || agrupador.tipo !== 'agrupador_semanal') {
-            alert('Erro: Agrupamento não encontrado');
+        const identidade = desenhados.get(index);
+        const pendentes = identidade && pendentesDoAgrupador(identidade);
+        if (!pendentes) {
+            alert('Erro: Agrupamento não encontrado. Atualize a lista e tente de novo.');
             return;
         }
-        const pendentes = agrupador.ocorrencias.filter((o) => !o.pago && !o.cancelada);
         if (pendentes.length === 0) {
             alert('Todas as ocorrências já foram pagas!');
             return;
         }
         lote.ocorrencias = pendentes;
+        lote.identidade = identidade;
         lote.pago = false;
         const total = pendentes.reduce((s, o) => s + Math.round(Number(o.valor) * 100), 0) / 100;
-        $('pagar-lote-nome').textContent = agrupador.nome;
-        $('pagar-lote-competencia').textContent = agrupador.mes_competencia ? window.formatarCompetencia(agrupador.mes_competencia) : '';
+        $('pagar-lote-nome').textContent = identidade.nome;
+        $('pagar-lote-competencia').textContent = identidade.competencia ? window.formatarCompetencia(identidade.competencia) : '';
         $('pagar-lote-meio').textContent = nomeDoMeio(pendentes[0].meio_pagamento);
         $('pagar-lote-quantidade').textContent = String(pendentes.length);
         $('pagar-lote-total').textContent = reaisBR(total);
@@ -209,6 +236,15 @@
             mensagemLote('Selecione a conta bancária de débito.', 'erro');
             return;
         }
+        // a lista pode ter sido recarregada com o modal aberto: as pendentes desta recorrencia tem de ser as que o modal mostra
+        const agora = pendentesDoAgrupador(lote.identidade);
+        if (!agora || idsDe(agora) !== idsDe(lote.ocorrencias)) {
+            lote.pago = true;  // fechar recarrega a lista
+            $('pagar-lote-confirmar').disabled = true;
+            mensagemLote('Nenhuma ocorrência foi paga.\nA lista mudou desde a abertura. Feche e confira a lista atualizada antes de pagar de novo.', 'erro');
+            return;
+        }
+        const total = lote.ocorrencias.reduce((s, o) => s + Math.round(Number(o.valor) * 100), 0);
         lote.enviando = true;
         $('pagar-lote-confirmar').disabled = true;
         mensagemLote('Pagando...');
@@ -217,11 +253,15 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ conta_bancaria_id: Number(conta),
-                    itens: lote.ocorrencias.map((o) => ({ conta_id: o.id, valor_devido: Number(o.valor).toFixed(2) })) }),
+                    itens: lote.ocorrencias.map((o) => ({ conta_id: o.id, valor_devido: Number(o.valor).toFixed(2) })),
+                    // o que o modal mostrou: o banco recusa se as ocorrencias nao forem desta recorrencia e competencia
+                    lote: { descricao: lote.identidade.nome, competencia: lote.identidade.competencia,
+                        recorrencias: [...new Set(lote.ocorrencias.map((o) => o.item_despesa_id))].sort((a, b) => a - b),
+                        quantidade: lote.ocorrencias.length, valor_total: (total / 100).toFixed(2) } }),
             });
             const j = await r.json().catch(() => ({}));
             if (!j.success) {
-                const recarregar = ['LOTE_DESATUALIZADO', 'VALOR_MUDOU', 'DESPESA_PAGA'].includes(j.codigo);
+                const recarregar = ['LOTE_DESATUALIZADO', 'LOTE_IDENTIDADE', 'VALOR_MUDOU', 'DESPESA_PAGA'].includes(j.codigo);
                 mensagemLote(`Nenhuma ocorrência foi paga.\n${String(j.error || 'Não foi possível pagar.').replace(/^Nenhuma ocorrência foi paga\.\s*/, '')}`
                     + (recarregar ? '\nFeche e confira a lista atualizada antes de pagar de novo.' : ''), 'erro');
                 if (recarregar) lote.pago = true;  // fechar recarrega a lista

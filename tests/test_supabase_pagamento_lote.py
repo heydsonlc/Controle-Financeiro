@@ -6,6 +6,7 @@ Cenario como o real: duas recorrencias semanais "Diarista" (terca e sexta), Pix 
 algumas ocorrencias pagas uma a uma e as demais no lote. Cada ocorrencia e paga pelo pagamento individual, todas na mesma
 transacao e com a mesma conta: ou todas, ou nenhuma. O lote que a tela mostrou e conferido com o de agora.
 """
+import re
 import uuid
 from decimal import Decimal
 from pathlib import Path
@@ -49,9 +50,21 @@ def pagar_uma(dsn, conta, banco_id):
                str(uuid.uuid4()))
 
 
+def identidade(dsn, pendentes):
+    """O que o modal mostra (P21, migration 20261219090000): nome da recorrencia, competencia, recorrencias, quantidade e total."""
+    if not pendentes:
+        return {'descricao': 'Diarista', 'competencia': MES[:7], 'recorrencias': [1], 'quantidade': 0, 'valor_total': '0.00'}
+    linhas = sql(dsn, 'select descricao, item_despesa_id, mes_referencia from public.conta where id = %s', (pendentes[0]['id'],))
+    recs = sql(dsn, 'select array_agg(distinct item_despesa_id order by item_despesa_id) r from public.conta '
+                    'where id = any(%s) and item_despesa_id is not null', ([c['id'] for c in pendentes],))[0]['r'] or [1]
+    return {'descricao': re.sub(r'\s*-\s*\d{2}/\d{2}$', '', linhas[0]['descricao']).strip(), 'competencia': str(linhas[0]['mes_referencia'])[:7],
+            'recorrencias': recs, 'quantidade': len(pendentes),
+            'valor_total': f"{sum(Decimal(str(c['valor'])) for c in pendentes):.2f}"}
+
+
 def lote(dsn, pendentes, banco_id, chave=None, usuario=USUARIO_A, perfil=PESSOAL, **extra):
     dados = {'itens': [{'conta_id': c['id'], 'valor_devido': f"{Decimal(str(c['valor'])):.2f}"} for c in pendentes],
-             'conta_bancaria_id': banco_id, 'data_pagamento': '2027-02-27', **extra}
+             'conta_bancaria_id': banco_id, 'data_pagamento': '2027-02-27', 'lote': identidade(dsn, pendentes), **extra}
     return rpc(dsn, 'pagar_despesas_lote', perfil, dados, chave or str(uuid.uuid4()), usuario=usuario)
 
 

@@ -70,6 +70,7 @@ function linhaDoFlask(c, mes, edicao, categoriasPorNome, meios = new Map()) {
         mes_competencia: mes,
         recorrente: !fatura && Boolean(item && item.recorrente),
         tipo_recorrencia: !fatura && item && item.recorrente ? item.tipo_recorrencia : null,
+        item_despesa_id: !fatura && item ? item.id : null,  // identidade da recorrencia no pagamento em lote (P21)
         meio_pagamento: fatura ? 'cartao' : (c.debito_automatico ? 'debito_automatico' : (item && meios.get(item.id)) || null),
         debito_automatico: Boolean(c.debito_automatico),
         numero_parcela: c.numero_parcela,
@@ -382,7 +383,8 @@ async function pagar(id, corpo) {
 // pelo pagamento individual). A chave vale para a mesma selecao: repetir a confirmacao devolve o resultado gravado.
 async function pagarLote(corpo) {
     const itens = Array.isArray(corpo.itens) ? corpo.itens.map((i) => ({ conta_id: Number(i.conta_id), valor_devido: valorTexto(i.valor_devido) })) : [];
-    const dados = { itens, conta_bancaria_id: Number(corpo.conta_bancaria_id) || null, data_pagamento: corpo.data_pagamento || hojeBrasilia() };
+    const dados = { itens, conta_bancaria_id: Number(corpo.conta_bancaria_id) || null, data_pagamento: corpo.data_pagamento || hojeBrasilia(),
+        lote: corpo.lote || null };  // identidade que o modal mostrou (P21): o banco confere com as ocorrencias
     const operacao = `pagar-lote:${JSON.stringify(dados)}`;
     const { data, error } = await supabase.rpc('pagar_despesas_lote', { p_perfil_id: estado.perfilId, p_dados: dados, p_chave: chaves.de(operacao) });
     if (error) return { status: 400, corpo: { success: false, error: mensagemDeErro(error), codigo: error.hint || null } };

@@ -1,6 +1,8 @@
 // FIN-DESPESAS-PAGAMENTO-LOTE-01 (P20) — pagamento em lote das ocorrencias pendentes de uma recorrencia semanal, com a conta
 // bancaria de debito escolhida no modal. Usuario E (perfil proprio): duas recorrencias "Diarista E" de R$ 200 (terca e sexta),
 // Pix e sem conta, em 02/2030 (8 ocorrencias); duas pagas uma a uma antes. Dados FICTICIOS; grava no banco descartavel.
+// FIN-DESPESAS-PAGAMENTO-LOTE-02 (P21): e uma "Psicologa E" de R$ 250 (segundas); com o filtro "Pendentes" a ordem dos
+// agrupadores muda, e cada botao tem de abrir (e pagar) a propria recorrencia.
 import { expect, test } from '@playwright/test';
 
 import { abrirDespesas, chamarRpc, despesa, perfilAtivoId, registrarDialogos } from './despesas.mjs';
@@ -44,7 +46,35 @@ async function contaBancaria(page, perfil, nome) {
 }
 
 const modal = (page) => page.locator('#modal-pagar-lote');
-const abrirLote = (page) => despesa(page, 'Diarista E').locator('[data-on-click^="pagarTodasOcorrencias"]').click();
+const abrirLoteDe = (page, nome) => despesa(page, nome).locator('[data-on-click^="pagarTodasOcorrencias"]').click();
+const abrirLote = (page) => abrirLoteDe(page, 'Diarista E');
+
+async function doMes(page, perfil, padrao, mes = MES) {
+    return (await chamarRpc(page, 'contas_do_mes', { p_perfil_id: perfil, p_mes: `${mes}-01` })).corpo.filter((c) => padrao.test(c.nome));
+}
+
+// O modal aberto pelo botao da recorrencia: nome, quantidade e total; cancelar fecha sem pagar.
+async function conferirModal(page, nome, quantidade, total) {
+    await abrirLoteDe(page, nome);
+    await expect(modal(page)).toBeVisible();
+    await expect(page.locator('#pagar-lote-nome')).toHaveText(nome);
+    await expect(page.locator('#pagar-lote-quantidade')).toHaveText(String(quantidade));
+    await expect(page.locator('#pagar-lote-total')).toHaveText(total);
+    await page.click('#pagar-lote-cancelar');
+    await expect(modal(page)).toBeHidden();
+}
+
+// Guarda o corpo de cada pedido de pagamento em lote (o adaptador atende o fetch da tela dentro da pagina).
+async function capturarLotes(page) {
+    await page.evaluate(() => {
+        const original = window.fetch;
+        window.cfLotes = [];
+        window.fetch = function (url, opcoes) {
+            if (String(url).includes('/api/despesas/pagar-lote')) window.cfLotes.push(JSON.parse(opcoes.body));
+            return original.apply(this, arguments);
+        };
+    });
+}
 
 test('modal com a recorrencia, as pendentes, o total e so as contas ativas do perfil; cancelar nao paga', async ({ page }) => {
     await entrar(page);
@@ -78,6 +108,68 @@ test('modal com a recorrencia, as pendentes, o total e so as contas ativas do pe
     await page.click('#pagar-lote-cancelar');
     await expect(modal(page)).toBeHidden();
     expect((await diaristas(page, perfil)).filter((c) => c.status_pagamento === 'Pago').length).toBe(2);
+});
+
+test('P21: cada botao abre o lote da propria recorrencia com filtros e ordem trocada; paga so a mostrada', async ({ page }) => {
+    registrarDialogos(page);
+    await entrar(page);
+    await abrirDespesas(page, MES);
+    const perfil = await perfilAtivoId(page);
+    expect((await doMes(page, perfil, /^Psicologa E - /)).length).toBe(4);  // 4 segundas
+    const agrupadores = page.locator('#despesas-lista .agrupador-semanal > .despesa-linha-principal > .despesa-cell-nome');
+    const conferirAmbos = async () => {
+        await conferirModal(page, 'Diarista E', 6, 'R$ 1.200,00');
+        await conferirModal(page, 'Psicologa E', 4, 'R$ 1.000,00');
+    };
+
+    // sem filtro: Diarista antes (vencimento mais recente, ja pago); com "Pendentes" a Psicologa vem antes. O original
+    // procurava a posicao do botao na lista sem filtro e trocava as duas.
+    await expect(agrupadores.nth(0)).toContainText('Diarista E');
+    await page.selectOption('#filtro-status', 'pendente');
+    await expect(agrupadores.nth(0)).toContainText('Psicologa E');
+    await expect(agrupadores.nth(1)).toContainText('Diarista E');
+    for (let i = 0; i < 3; i += 1) await conferirAmbos();  // alternando entre os dois modais
+
+    // "vencimento ate" esconde ocorrencias: o lote continua com todas as pendentes da recorrencia no mes
+    await page.fill('#filtro-vencimento-ate', '2030-02-12');
+    await page.locator('#filtro-vencimento-ate').dispatchEvent('change');
+    await conferirAmbos();
+    await page.fill('#filtro-vencimento-ate', '');
+    await page.locator('#filtro-vencimento-ate').dispatchEvent('change');
+    // busca: so a Psicologa desenhada (na primeira posicao, que na lista inteira e a Diarista)
+    await page.fill('#despesas-busca', 'Psicologa');
+    await expect(agrupadores).toHaveCount(1);
+    await conferirModal(page, 'Psicologa E', 4, 'R$ 1.000,00');
+    await page.fill('#despesas-busca', '');
+    await page.selectOption('#filtro-status', '');
+    await conferirAmbos();
+    // cancelar nao pagou nada
+    expect((await diaristas(page, perfil)).filter((c) => c.status_pagamento === 'Pago').length).toBe(2);
+    expect((await doMes(page, perfil, /^Psicologa E - /)).filter((c) => c.status_pagamento === 'Pago').length).toBe(0);
+
+    // confirmar a Psicologa com "Pendentes" (ordem trocada): o pedido leva as ocorrencias e a identidade dela
+    const contaE = await contaBancaria(page, perfil, 'Conta E (ficticia)');
+    const psicologa = (await chamarRpc(page, 'recorrencias_do_perfil', { p_perfil_id: perfil })).corpo.find((r) => r.nome === 'Psicologa E');
+    const idsPsicologa = (await doMes(page, perfil, /^Psicologa E - /)).map((c) => c.id).sort((a, b) => a - b);
+    await page.selectOption('#filtro-status', 'pendente');
+    await capturarLotes(page);
+    await abrirLoteDe(page, 'Psicologa E');
+    await expect(page.locator('#pagar-lote-nome')).toHaveText('Psicologa E');
+    await page.selectOption('#pagar-lote-conta', String(contaE.id));
+    await page.click('#pagar-lote-confirmar');
+    await expect(page.locator('#pagar-lote-mensagem')).toContainText('4 ocorrência(s) paga(s)');
+    await expect(page.locator('#pagar-lote-mensagem')).toContainText('R$ 1.000,00');
+    await expect(page.locator('#pagar-lote-mensagem')).toContainText('Conta E (ficticia)');
+    const [pedido] = await page.evaluate(() => window.cfLotes);
+    expect(pedido.conta_bancaria_id).toBe(contaE.id);
+    expect(pedido.itens.map((i) => i.conta_id).sort((a, b) => a - b)).toEqual(idsPsicologa);
+    expect(pedido.lote).toEqual({ descricao: 'Psicologa E', competencia: MES, recorrencias: [psicologa.id], quantidade: 4, valor_total: '1000.00' });
+    await page.click('#pagar-lote-cancelar');  // "Fechar"
+    await expect(modal(page)).toBeHidden();
+    expect((await doMes(page, perfil, /^Psicologa E - /)).every((c) => c.status_pagamento === 'Pago')).toBe(true);
+    expect((await diaristas(page, perfil)).filter((c) => c.status_pagamento === 'Pago').length).toBe(2);  // Diarista intacta
+    const conta = await contaBancaria(page, perfil, 'Conta E (ficticia)');
+    expect(Number(conta.saldo_atual) - Number(contaE.saldo_atual)).toBeCloseTo(-1000, 2);
 });
 
 test('confirmar exige a conta; paga as 6 pendentes na conta escolhida, sem tocar nas pagas nem na recorrencia', async ({ page }) => {
@@ -145,5 +237,36 @@ test('valor alterado com o modal aberto: nada e pago, o motivo aparece e a lista
     await expect(page.locator('#despesas-lista')).toHaveAttribute('data-competencia-carregada', '03/2030');
     await abrirLote(page);
     await expect(page.locator('#pagar-lote-total')).toHaveText('R$ 1.830,00');  // 8 x 200 + 230
+    await page.click('#pagar-lote-cancelar');
+});
+
+test('P21: lista recarregada com o modal aberto e outras pendentes: a tela recusa antes de enviar', async ({ page }) => {
+    registrarDialogos(page);
+    await entrar(page);
+    await abrirDespesas(page, '2030-03');
+    const perfil = await perfilAtivoId(page);
+    const contaE = await contaBancaria(page, perfil, 'Conta E (ficticia)');
+    const marco = (await doMes(page, perfil, /^Diarista E - /, '2030-03')).sort((a, b) => String(a.data_vencimento).localeCompare(String(b.data_vencimento)));
+    await capturarLotes(page);
+    await abrirLote(page);
+    await expect(page.locator('#pagar-lote-quantidade')).toHaveText('9');
+    await page.selectOption('#pagar-lote-conta', String(contaE.id));
+    // outra aba paga uma ocorrencia e a tela recarrega o mes (como na segunda carga ao abrir) com o modal aberto
+    const r = await chamarRpc(page, 'pagar_despesa', { p_perfil_id: perfil, p_conta_id: marco[0].id, p_chave: crypto.randomUUID(),
+        p_dados: { conta_bancaria_id: contaE.id, data_pagamento: marco[0].data_vencimento, valor_pago: '200.00', valor_devido: '200.00' } });
+    expect(r.status).toBe(200);
+    await page.locator('#despesas-lista').evaluate((el) => { delete el.dataset.competenciaCarregada; });
+    await page.evaluate(() => window.carregarDespesas());
+    await expect(page.locator('#despesas-lista')).toHaveAttribute('data-competencia-carregada', '03/2030');
+    await page.click('#pagar-lote-confirmar');
+    await expect(page.locator('#pagar-lote-mensagem')).toContainText('Nenhuma ocorrência foi paga.');
+    await expect(page.locator('#pagar-lote-mensagem')).toContainText('A lista mudou desde a abertura');
+    await expect(page.locator('#pagar-lote-confirmar')).toBeDisabled();
+    expect(await page.evaluate(() => window.cfLotes.length)).toBe(0);  // nada enviado ao banco
+    expect((await doMes(page, perfil, /^Diarista E - /, '2030-03')).filter((c) => c.status_pagamento === 'Pago').map((c) => c.id)).toEqual([marco[0].id]);
+    await page.click('#pagar-lote-cancelar');
+    await expect(page.locator('#despesas-lista')).toHaveAttribute('data-competencia-carregada', '03/2030');
+    await abrirLote(page);
+    await expect(page.locator('#pagar-lote-quantidade')).toHaveText('8');
     await page.click('#pagar-lote-cancelar');
 });
