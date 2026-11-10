@@ -146,6 +146,21 @@ async function criarCompra(cartaoId, corpo) {
     return { status: 201, corpo: { success: true, data } };
 }
 
+// FIN-MVP-LANCAMENTOS-03 (P14): previa das parcelas (js/lancamentos-parcelas.js) pelo mesmo plano que criar_compra grava.
+// Descricao e categoria nao mudam as parcelas (valores e faturas), so a validacao: ainda vazias no formulario, a previa usa
+// um texto provisorio e a primeira categoria ativa; ao salvar valem as do formulario, como sempre.
+async function previaParcelas(p) {
+    let categoria = Number(p.get('categoria_id')) || null;
+    if (!categoria) categoria = ((await rpc((a) => supabase.rpc('categorias_de_despesa', a), {})) || [])[0]?.id || null;
+    const dados = { cartao_id: Number(p.get('cartao_id')), valor: valorTexto(Number(p.get('valor'))), total_parcelas: Number(p.get('total_parcelas')) || 1,
+        data_compra: p.get('data_compra'), mes_fatura: p.get('mes_fatura'), categoria_id: categoria,
+        descricao: String(p.get('descricao') || '').trim().slice(0, 200) || 'Prévia das parcelas' };
+    if (!(dados.cartao_id > 0) || !MES.test(String(dados.mes_fatura || ''))) return falha('Escolha o cartão e o mês da fatura.');
+    const { data, error } = await supabase.rpc('previa_compra', { p_perfil_id: estado.perfilId, p_dados: dados });
+    if (error) return falha(mensagemDeErro(error));
+    return ok({ data });
+}
+
 // FIN-MOB-ABAST-LANCAMENTOS-01: a compra ja lancada recebe o abastecimento e fica como esta. Valor, data, descricao, categoria e
 // fatura so mudam na tela Cartoes: se o formulario os alterou, nada e gravado.
 async function complementarCompra(id, corpo, abastecimento) {
@@ -287,6 +302,7 @@ const ROTAS = [
     ['GET', /^\/api\/cartoes\/(\d+)\/vinculados$/, async (m) => ok({ data: await rpc((a) => supabase.rpc('cartoes_vinculados', a),
         { p_perfil_id: estado.perfilId, p_contrato_id: Number(m[1]) }) })],
     ['POST', /^\/api\/cartoes\/(\d+)\/lancamentos$/, (m, corpo) => criarCompra(Number(m[1]), corpo || {})],
+    ['GET', /^\/api\/lancamentos\/previa-parcelas$/, (m, c, p) => previaParcelas(p)],  // FIN-MVP-LANCAMENTOS-03 (P14)
     ['DELETE', /^\/api\/cartoes\/lancamentos\/(\d+)$/, (m) => excluirCompra(Number(m[1]))],
     ['GET', /^\/api\/despesas\/?$/, () => despesas()],
     ['POST', /^\/api\/despesas\/?$/, (m, corpo) => criarDespesa(corpo || {})],

@@ -47,3 +47,67 @@ body.cf-somente-leitura [data-on-click^="abrirModalConfirmarReceita("] {
 .lanc-abast-aviso:empty {
     display: none;
 }
+
+/* FIN-MVP-LANCAMENTOS-03 (P14): previa das parcelas, compacta, abaixo de Parcelas e Mes da fatura. */
+.lanc-previa-parcelas {
+    margin: 2px 0 10px;
+    font-size: 0.8125rem;
+}
+
+.lanc-previa-titulo {
+    margin-bottom: 4px;
+    color: #4b5563;
+    font-weight: 600;
+}
+
+.lanc-previa-rolagem {
+    max-height: 168px;
+    overflow-y: auto;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+}
+
+.lanc-previa-tabela {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.lanc-previa-tabela th,
+.lanc-previa-tabela td {
+    height: 26px;
+    padding: 2px 10px;
+    border-bottom: 1px solid #f1f5f9;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.lanc-previa-tabela thead th,
+.lanc-previa-tabela tfoot td {
+    position: sticky;
+    background: #f8fafc;
+    color: #4b5563;
+    font-weight: 600;
+}
+
+.lanc-previa-tabela thead th {
+    top: 0;
+}
+
+.lanc-previa-tabela tfoot td {
+    bottom: 0;
+    border-top: 1px solid #e5e7eb;
+}
+
+.lanc-previa-tabela .direita {
+    text-align: right;
+}
+
+.lanc-previa-nota {
+    margin-top: 4px;
+    color: #6b7280;
+}
+
+.lanc-previa-nota.erro {
+    color: #b91c1c;
+}
+
