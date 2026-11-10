@@ -594,7 +594,10 @@ function converterLinhaIntermediaria(linha) {
         // Cartao vinculado de origem (pelo final do arquivo ou escolhido na previa)
         cartao_vinculado: linha.cartao_vinculado || null,
         cartao_vinculado_arquivo: linha.cartao_origem === 'ARQUIVO' ? (linha.cartao_vinculado || null) : null,
-        cartao_vinculado_escolhido_id: linha.cartao_vinculado_escolhido_id ?? undefined
+        cartao_vinculado_escolhido_id: linha.cartao_vinculado_escolhido_id ?? undefined,
+        // Abastecimento compativel (previa do novo aplicativo) e o escolhido pelo usuario
+        abastecimento: linha.abastecimento || null,
+        abastecimento_id: linha.abastecimento_id ?? undefined
     };
 }
 
@@ -1522,6 +1525,48 @@ function escolherRecorrenciaLinha(index, valor) {
         };
     }
     recalcularConfrontoAtual();
+}
+
+// FIN-MVP-LANCAMENTOS-03: abastecimento registrado na Mobilidade que corresponde a compra (previa do novo aplicativo).
+// Nunca e vinculado sozinho: a sugestao precisa ser marcada e, com varios compativeis, a escolha e manual. Ja vinculado a
+// compra reconhecida, ou compativel mas vinculado a outra despesa, so informa. Nada e gravado antes da confirmacao.
+function rotuloAbastecimento(a) {
+    const litros = a.litros ? ` · ${Number(a.litros).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} L` : '';
+    const data = String(a.data || '').slice(0, 10).split('-').reverse().join('/');
+    return `${a.veiculo_nome || 'Veículo'} · ${data} · ${formatarMoeda(a.valor)}${litros}`;
+}
+
+function seletorAbastecimentoLinha(linha, index) {
+    const s = linha.abastecimento;
+    if (!s) return '';
+    if (s.situacao === 'CONFIRMADA') {
+        return `<span class="import-abast confirmada" title="${escapeAttr(rotuloAbastecimento(s.abastecimento))}">Abastecimento já vinculado: ${escapeHtml(rotuloAbastecimento(s.abastecimento))}</span>`;
+    }
+    if (s.situacao === 'CONFLITO') {
+        const despesa = s.abastecimento.despesa || {};
+        return `<span class="import-abast conflito" title="${escapeAttr(`Vinculado a ${despesa.descricao || 'outra despesa'}`)}">Abastecimento compatível já vinculado a outra despesa</span>`;
+    }
+    const atual = linha.abastecimento_id ? String(linha.abastecimento_id) : '';
+    if (s.situacao === 'SUGERIDA') {
+        const a = s.candidatas[0];
+        return `<label class="import-abast sugerida" title="${escapeAttr(rotuloAbastecimento(a))}"><input type="checkbox" ${atual === String(a.id) ? 'checked' : ''} onchange="alternarAbastecimentoLinha(${index}, ${Number(a.id)}, this.checked)"> Vincular ao abastecimento: ${escapeHtml(rotuloAbastecimento(a))}</label>`;
+    }
+    const opcoes = ['<option value="">Abastecimento: escolher…</option>']
+        .concat(s.candidatas.map((a) => `<option value="${escapeAttr(a.id)}" ${atual === String(a.id) ? 'selected' : ''}>${escapeHtml(rotuloAbastecimento(a))}</option>`))
+        .concat(['<option value="0">Sem abastecimento</option>']);
+    return `<select class="form-control form-control-sm import-inline-select import-abast-select" aria-label="Abastecimento da compra" onchange="escolherAbastecimentoLinha(${index}, this.value)">${opcoes.join('')}</select>`;
+}
+
+function escolherAbastecimentoLinha(index, valor) {
+    const linha = estado.linhasMapeadas[index];
+    if (!linha) return;
+    const id = Number(valor);
+    if (id > 0 && (linha.abastecimento?.candidatas || []).some((a) => Number(a.id) === id)) linha.abastecimento_id = id;
+    else delete linha.abastecimento_id;
+}
+
+function alternarAbastecimentoLinha(index, id, marcado) {
+    escolherAbastecimentoLinha(index, marcado ? id : 0);
 }
 
 function alternarApelidoLinha(index, marcado) {
@@ -2533,6 +2578,7 @@ function renderizarLinhaOperacional(item) {
             <td class="import-description-cell one-line">
                 <span class="import-raw-description" title="${escapeAttr(descricaoOriginal)}">${escapeHtml(descricaoOriginal || '-')}</span>
                 ${seletorCartaoLinha(linha, index)}
+                ${seletorAbastecimentoLinha(linha, index)}
             </td>
             <td><span class="import-raw-value">${formatarValorLinha(linha)}</span></td>
             <td>${escapeHtml(item.tipo || '—')}</td>
@@ -3702,6 +3748,7 @@ function renderizarLinhaRetirada(linha, index) {
             <td>${escapeHtml(linha.data_compra || '-')}</td>
             <td class="import-description-cell one-line">
                 <span class="import-raw-description" title="${escapeAttr(descricaoOriginal)}">${escapeHtml(descricaoOriginal || '-')}</span>
+                ${seletorAbastecimentoLinha(linha, index)}
             </td>
             <td>${formatarValorLinha(linha)}</td>
             <td class="import-description-cell one-line">
@@ -3896,6 +3943,8 @@ function camposPreviaLinha(linha) {
     if (linha.cartao_vinculado_escolhido_id !== undefined && linha.cartao_vinculado_escolhido_id !== null) {
         campos.cartao_vinculado_escolhido_id = linha.cartao_vinculado_escolhido_id;
     }
+    // abastecimento confirmado (o banco vincula na confirmacao; compra a vista ou a ja lancada reconhecida)
+    if (Number(linha.abastecimento_id) > 0) campos.abastecimento_id = Number(linha.abastecimento_id);
     // credito da fatura: a compra original escolhida (0 = sem compra vinculada)
     if (linhaCreditoNova(linha) && linha.credito_compra_id !== undefined && linha.credito_compra_id !== null) {
         campos.credito_compra_id = linha.credito_compra_id;

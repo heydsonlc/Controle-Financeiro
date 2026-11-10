@@ -48,7 +48,9 @@ function veiculosIcon(name) {
         fuel: '<path d="M5 20V5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v15"/><path d="M4 20h11M7 8h5"/><path d="M14 12h2a1 1 0 0 1 1 1v3a1.5 1.5 0 0 0 3 0V9l-3-3"/>',
         list: '<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>',
         remove: '<path d="M6 6l12 12M18 6 6 18"/>',
-        pause: '<path d="M9 6v12M15 6v12"/>'
+        pause: '<path d="M9 6v12M15 6v12"/>',
+        link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+        unlink: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/><path d="M4 4l16 16"/>'
     };
     return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="width:1em;height:1em;display:inline-block;vertical-align:-0.125em;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">${icons[name] || icons.eye}</svg>`;
 }
@@ -4022,13 +4024,111 @@ async function carregarHistoricoAbastecimentos() {
                     <td>${formatarMoeda(a.valor_total)}</td>
                     <td>${formatarLitros(a.litros)}</td>
                     <td>${escapeHtml(a.cartao_nome ? `${a.cartao_nome}${a.cartao_final ? ` ${a.cartao_final}` : ''}` : (MEIOS_ABASTECIMENTO[a.meio_pagamento] || '—'))}</td>
-                    <td>${a.anulado ? 'Anulado' : (a.situacao_vinculo === 'VINCULADO' ? 'Vinculada' : 'Aguardando')}</td>
+                    <td>${despesaDoAbastecimento(a)}</td>
                     <td>${a.anulado ? '' : `<div class="row-actions">
                         <button class="row-action-button" onclick="corrigirAbastecimento(${a.id})" title="Corrigir" aria-label="Corrigir">${veiculosIcon('edit')}</button>
+                        ${botaoVinculoAbastecimento(a)}
                         <button class="row-action-button danger" onclick="anularAbastecimento(${a.id})" title="Anular" aria-label="Anular">${veiculosIcon('remove')}</button>
                     </div>`}</td>
                 </tr>`).join('')}</tbody>
         </table></div>`;
+}
+
+// FIN-MVP-LANCAMENTOS-03: a despesa vinculada (compra do cartao ou conta) e o vinculo pela Mobilidade. Sem o campo
+// "despesa" (Flask), fica o texto de antes e nenhuma acao nova.
+function despesaDoAbastecimento(a) {
+    if (a.anulado) return 'Anulado';
+    if (a.despesa === undefined) return a.situacao_vinculo === 'VINCULADO' ? 'Vinculada' : 'Aguardando';
+    const d = a.despesa;
+    if (!d) return '<span class="abast-vinculo aguardando">Aguardando compra</span>';
+    const fatura = d.mes_fatura ? ` · fatura ${String(d.mes_fatura).slice(5, 7)}/${String(d.mes_fatura).slice(0, 4)}` : '';
+    const titulo = `${d.descricao} · ${formatarData(d.data)} · ${formatarMoeda(d.valor)}${fatura}${d.importada ? ' · importada' : ''}`;
+    return `<span class="abast-vinculo vinculada" title="${escapeAttr(titulo)}">${escapeHtml(d.descricao || 'Despesa')}${escapeHtml(fatura)}</span>`;
+}
+
+function botaoVinculoAbastecimento(a) {
+    if (a.despesa === undefined) return '';
+    return a.despesa
+        ? `<button class="row-action-button" onclick="desvincularCompraAbastecimento(${a.id})" title="Desvincular compra" aria-label="Desvincular compra">${veiculosIcon('unlink')}</button>`
+        : `<button class="row-action-button" onclick="abrirVinculoAbastecimento(${a.id})" title="Vincular compra" aria-label="Vincular compra">${veiculosIcon('link')}</button>`;
+}
+
+let vinculoAbastecimentoId = null;
+
+async function abrirVinculoAbastecimento(id) {
+    const a = abastecimentosCache.find(x => x.id === id);
+    if (!a) return;
+    vinculoAbastecimentoId = id;
+    document.getElementById('vinculo-abast-resumo').textContent =
+        `${formatarData(a.data_abastecimento)} · ${formatarMoeda(a.valor_total)} · ${formatarLitros(a.litros)} L${a.cartao_nome ? ` · ${a.cartao_nome}${a.cartao_final ? ` ${a.cartao_final}` : ''}` : ''}`;
+    const lista = document.getElementById('vinculo-abast-lista');
+    lista.innerHTML = '<p class="loading">Procurando compras...</p>';
+    document.getElementById('vinculo-abast-confirmar').disabled = true;
+    document.getElementById('modal-vinculo-abastecimento').style.display = 'block';
+    const resp = await fetch(`${API_VEICULOS}/abastecimentos/${id}/candidatas`);
+    const data = await resp.json();
+    if (!data.success) {
+        lista.innerHTML = `<p class="small-note">${escapeHtml(data.error)}</p>`;
+        return;
+    }
+    const candidatas = data.data.candidatas || [];
+    if (!candidatas.length) {
+        lista.innerHTML = '<p class="small-note">Nenhuma compra ou conta compatível (mesmo valor, de 3 dias antes a 10 depois, mesmo cartão). Importe a fatura ou lance a despesa e volte aqui.</p>';
+        return;
+    }
+    lista.innerHTML = `
+        ${data.data.ambigua ? '<p class="small-note">Mais de uma compra compatível: escolha a que pertence a este abastecimento.</p>' : ''}
+        <div class="abast-tabela-wrap"><table class="abast-tabela vinculo-abast-tabela">
+            <thead><tr><th></th><th>Data</th><th>Descrição</th><th>Valor</th><th>Indícios</th></tr></thead>
+            <tbody>${candidatas.map((c, i) => `
+                <tr>
+                    <td><input type="radio" name="vinculo-abast-candidata" id="vinculo-abast-c${i}" value="${escapeAttr(`${c.natureza}:${c.id}`)}" ${candidatas.length === 1 ? 'checked' : ''}></td>
+                    <td><label for="vinculo-abast-c${i}">${formatarData(c.data)}</label></td>
+                    <td title="${escapeAttr(c.descricao || '')}">${escapeHtml(c.descricao || '—')}</td>
+                    <td>${formatarMoeda(c.valor)}</td>
+                    <td class="small-note">${[c.mesmo_cartao_fisico ? 'mesmo cartão físico' : '', c.estabelecimento_confere ? 'estabelecimento' : '',
+                        `${c.dias >= 0 ? '+' : ''}${c.dias} dia(s)`].filter(Boolean).join(' · ')}</td>
+                </tr>`).join('')}</tbody>
+        </table></div>`;
+    const confirmar = document.getElementById('vinculo-abast-confirmar');
+    confirmar.disabled = !lista.querySelector('input[name="vinculo-abast-candidata"]:checked');
+    lista.querySelectorAll('input[name="vinculo-abast-candidata"]').forEach((r) => r.addEventListener('change', () => { confirmar.disabled = false; }));
+}
+
+function fecharVinculoAbastecimento() {
+    document.getElementById('modal-vinculo-abastecimento').style.display = 'none';
+    vinculoAbastecimentoId = null;
+}
+
+async function confirmarVinculoAbastecimento() {
+    const escolhida = document.querySelector('#vinculo-abast-lista input[name="vinculo-abast-candidata"]:checked');
+    if (!vinculoAbastecimentoId || !escolhida) return;
+    const [natureza, id] = escolhida.value.split(':');
+    const corpo = natureza === 'CONTA' ? { conta_id: Number(id) } : { lancamento_id: Number(id) };
+    const botao = document.getElementById('vinculo-abast-confirmar');
+    botao.disabled = true;
+    const resp = await fetch(`${API_VEICULOS}/abastecimentos/${vinculoAbastecimentoId}/vincular`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo),
+    });
+    const data = await resp.json();
+    if (!data.success) {
+        botao.disabled = false;
+        alert(`Erro: ${data.error}`);
+        return;
+    }
+    fecharVinculoAbastecimento();
+    await carregarHistoricoAbastecimentos();
+}
+
+async function desvincularCompraAbastecimento(id) {
+    if (!confirm('Desvincular a compra deste abastecimento? A compra e o abastecimento continuam registrados.')) return;
+    const resp = await fetch(`${API_VEICULOS}/abastecimentos/${id}/desvincular`, { method: 'POST' });
+    const data = await resp.json();
+    if (!data.success) {
+        alert(`Erro: ${data.error}`);
+        return;
+    }
+    await carregarHistoricoAbastecimentos();
 }
 
 async function abrirHistoricoAbastecimentos(veiculoId) {

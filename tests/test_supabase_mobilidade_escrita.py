@@ -52,6 +52,8 @@ REVERSAO_1215 = ROOT / 'supabase' / 'reversao' / '20261215090000_mobilidade_inte
 MIGRATION_1215 = ROOT / 'supabase' / 'migrations' / '20261215090000_financeiro_mobilidade_integridade.sql'
 REVERSAO_1220 = ROOT / 'supabase' / 'reversao' / '20261220090000_mobilidade_projecoes_anterior.sql'
 MIGRATION_1220 = ROOT / 'supabase' / 'migrations' / '20261220090000_financeiro_mobilidade_projecoes.sql'
+REVERSAO_1222 = ROOT / 'supabase' / 'reversao' / '20261222090000_lancamentos_abastecimento_anterior.sql'
+MIGRATION_1222 = ROOT / 'supabase' / 'migrations' / '20261222090000_financeiro_lancamentos_abastecimento.sql'
 HOJE = dt.date.today()
 M2, M3 = (HOJE + relativedelta(months=2)).month, (HOJE + relativedelta(months=3)).month
 SEM_HORA = {'criado_em', 'atualizado_em', 'created_at', 'updated_at', 'km_estimado_ultimo_calculo_em', 'registrado_em'}
@@ -490,7 +492,8 @@ def test_reversao_remove_as_funcoes_e_preserva_os_dados(banco):
     conn = psycopg2.connect(banco)
     conn.autocommit = True
     with conn.cursor() as cur:
-        cur.execute(REVERSAO_1220.read_text(encoding='utf-8'))  # ordem de reversao: a mais nova primeiro
+        cur.execute(REVERSAO_1222.read_text(encoding='utf-8'))  # ordem de reversao: a mais nova primeiro
+        cur.execute(REVERSAO_1220.read_text(encoding='utf-8'))
         cur.execute(REVERSAO_1215.read_text(encoding='utf-8'))
     conn.close()
     dados = sql(banco, "select md5(string_agg(x::text, '|' order by x.id)) h from public.despesa_prevista x where origem_id = %s", (v,))
@@ -510,5 +513,6 @@ def test_reversao_remove_as_funcoes_e_preserva_os_dados(banco):
         cur.execute(MIGRATION.read_text(encoding='utf-8'))  # reaplica
         cur.execute(MIGRATION_1215.read_text(encoding='utf-8'))
         cur.execute(MIGRATION_1220.read_text(encoding='utf-8'))
+        cur.execute(MIGRATION_1222.read_text(encoding='utf-8'))
     conn.close()
     assert rpc(banco, 'criar_veiculo', PESSOAL, VEICULO_2, chave())['veiculo_id']

@@ -147,6 +147,19 @@ const ROTAS = [
         message: 'Abastecimento anulado',
         data: (await chamar((a) => supabase.rpc('anular_abastecimento', a), { p_id: Number(m[1]), p_dados: c || {} })).abastecimento,
     })],
+    // FIN-MVP-LANCAMENTOS-03: compra do abastecimento (as regras de vincular_abastecimento; nada cria ou altera a compra)
+    ['GET', /^\/api\/veiculos\/abastecimentos\/(\d+)\/candidatas$/, async (m) => ok({
+        data: await chamar((a) => supabase.rpc('candidatas_abastecimento', a), { p_id: Number(m[1]) }),
+    })],
+    ['POST', /^\/api\/veiculos\/abastecimentos\/(\d+)\/vincular$/, async (m, c) => ok({
+        message: 'Compra vinculada ao abastecimento',
+        data: (await chamar((a) => supabase.rpc('vincular_abastecimento', a), { p_id: Number(m[1]), p_dados: {
+            lancamento_id: Number(c && c.lancamento_id) || null, conta_id: Number(c && c.conta_id) || null } })).abastecimento,
+    })],
+    ['POST', /^\/api\/veiculos\/abastecimentos\/(\d+)\/desvincular$/, async (m) => ok({
+        message: 'Compra desvinculada: o abastecimento continua registrado, aguardando a despesa',
+        data: (await chamar((a) => supabase.rpc('desvincular_abastecimento', a), { p_id: Number(m[1]) })).abastecimento,
+    })],
     ['GET', /^\/api\/veiculos\/(\d+)\/abastecimentos$/, async (m) => ok({
         data: await chamar((a) => supabase.rpc('abastecimentos_veiculo_tela', a), { p_veiculo_id: Number(m[1]) }),
     })],

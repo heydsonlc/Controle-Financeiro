@@ -4,3 +4,36 @@
 body.cf-somente-leitura #btnImportar {
     display: none;
 }
+
+/* FIN-MVP-LANCAMENTOS-03: abastecimento compativel com a compra (sugerido, a escolher, ja vinculado ou em conflito). */
+.import-abast {
+    display: block;
+    margin-top: 2px;
+    overflow: hidden;
+    font-size: 0.75rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.import-abast.sugerida {
+    color: #1d4ed8;
+    cursor: pointer;
+}
+
+.import-abast.sugerida input {
+    margin: 0 4px 0 0;
+    vertical-align: -2px;
+}
+
+.import-abast.confirmada {
+    color: #166534;
+}
+
+.import-abast.conflito {
+    color: #b45309;
+}
+
+.import-abast-select {
+    margin-top: 2px;
+    max-width: 100%;
+}

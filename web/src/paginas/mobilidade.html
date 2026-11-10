@@ -960,6 +960,24 @@
 <!-- ================================================================ -->
 <!-- MODAL — Historico de abastecimentos e quilometragem do veiculo    -->
 <!-- ================================================================ -->
+<!-- FIN-MVP-LANCAMENTOS-03: vincular a compra (importada ou lancada) ao abastecimento, sem criar despesa -->
+<div id="modal-vinculo-abastecimento" class="modal">
+    <div class="modal-content modal-vinculo-abast">
+        <div class="modal-header">
+            <h2>Vincular compra</h2>
+            <span class="close" onclick="fecharVinculoAbastecimento()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <p class="small-note">Abastecimento: <strong id="vinculo-abast-resumo"></strong></p>
+            <div id="vinculo-abast-lista"></div>
+        </div>
+        <div class="modal-footer vinculo-abast-acoes">
+            <button type="button" class="btn btn-secondary" onclick="fecharVinculoAbastecimento()">Cancelar</button>
+            <button type="button" class="btn btn-primary" id="vinculo-abast-confirmar" onclick="confirmarVinculoAbastecimento()" disabled>Vincular</button>
+        </div>
+    </div>
+</div>
+
 <div id="modal-abastecimentos" class="modal">
     <div class="modal-content modal-lg">
         <div class="modal-header">

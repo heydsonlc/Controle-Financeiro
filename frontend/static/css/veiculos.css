@@ -2286,3 +2286,52 @@
         flex-wrap: wrap;
     }
 }
+
+/* FIN-MVP-LANCAMENTOS-03: compra vinculada ao abastecimento e o modal de vinculo. */
+.abast-vinculo {
+    display: inline-block;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+}
+
+.abast-vinculo.aguardando {
+    color: #92400e;
+}
+
+.abast-vinculo.vinculada {
+    color: #166534;
+}
+
+/* Abre sobre o historico de abastecimentos (os dois sao .modal, z-index 1100). */
+#modal-vinculo-abastecimento {
+    z-index: 1150;
+}
+
+.modal-vinculo-abast {
+    max-width: 640px;
+}
+
+.vinculo-abast-tabela td,
+.vinculo-abast-tabela th {
+    white-space: nowrap;
+}
+
+.vinculo-abast-tabela td:nth-child(3) {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.vinculo-abast-acoes {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 20px;
+}
+
+.vinculo-abast-acoes .btn {
+    min-width: 110px;
+}

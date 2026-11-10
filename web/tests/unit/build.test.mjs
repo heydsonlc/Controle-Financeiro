@@ -89,6 +89,7 @@ const RPCS_DE_LEITURA = new Set(['meus_perfis', 'contas_bancarias_do_perfil', 'c
     'analisar_importacao_cartao', 'sugerir_categorias_importacao', 'resolver_categoria_cartao_tela',
     'cartoes_vinculados',  // FIN-CARTOES-MULTIPLOS-01 (so leitura)
     'formulario_abastecimento_lancamento', 'abastecimento_do_lancamento',  // FIN-MOB-ABAST-LANCAMENTOS-01 (so leitura)
+    'abastecimentos_da_importacao', 'candidatas_abastecimento',  // FIN-MVP-LANCAMENTOS-03 (so leem: sugestao e candidatas)
     // FIN-FIDELIDADE-MOVIMENTACOES-1 (so leitura; a conferencia de saldo nao altera nada)
     'contas_bancarias_tela', 'conta_bancaria_tela', 'extrato_conta_bancaria', 'conferir_saldo_conta',
     'compras_do_cartao_tela', 'despesas_diretas_tela', 'receitas_lancamentos_tela',
@@ -153,7 +154,9 @@ const RPCS_DE_ESCRITA = new Map([
     ['criar_compra', ['lancamentos-adaptador.js']],  // FIN-FIDELIDADE-MOVIMENTACOES-1: Lancamentos
     // FIN-MOB-ABAST-LANCAMENTOS-01: despesa e abastecimento numa transacao; desvincular so com a decisao do usuario
     ['salvar_lancamento_abastecimento', 'lancamentos-adaptador.js'],
-    ['desvincular_abastecimento', ['lancamentos-adaptador.js', 'cartoes-adaptador.js']],
+    ['desvincular_abastecimento', ['lancamentos-adaptador.js', 'cartoes-adaptador.js', 'mobilidade-adaptador.js']],
+    // FIN-MVP-LANCAMENTOS-03: vincular a compra ao abastecimento pela Mobilidade (as regras e o historico no banco)
+    ['vincular_abastecimento', 'mobilidade-adaptador.js'],
     ['excluir_compra', ['cartoes-adaptador.js', 'lancamentos-adaptador.js']],
     ['criar_cartao', 'cartoes-adaptador.js'],
     ['editar_cartao', 'cartoes-adaptador.js'],

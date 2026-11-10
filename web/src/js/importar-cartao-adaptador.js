@@ -103,6 +103,8 @@ function linhaParaBanco(l, indice) {
         ...(l.cartao_final ? { cartao_final: String(l.cartao_final) } : {}),
         ...(l.cartao_vinculado_escolhido_id === undefined || l.cartao_vinculado_escolhido_id === null ? {}
             : { cartao_vinculado_escolhido_id: Number(l.cartao_vinculado_escolhido_id) }),
+        // FIN-MVP-LANCAMENTOS-03: abastecimento confirmado pelo usuario (o banco vincula na mesma transacao da importacao)
+        ...(Number(l.abastecimento_id) > 0 ? { abastecimento_id: Number(l.abastecimento_id) } : {}),
     };
 }
 
@@ -112,6 +114,18 @@ async function analisar(cartaoId, mes, linhas) {
     });
     if (error) throw error;
     return data;
+}
+
+// FIN-MVP-LANCAMENTOS-03: abastecimento compativel de cada linha da analise (sugerida, varias para escolher, ja vinculada a
+// compra reconhecida ou em conflito). So leitura; o vinculo so acontece na confirmacao, com o abastecimento escolhido. Sem a
+// resposta, a importacao segue como antes (sem sugestao).
+async function comAbastecimentos(cartaoId, analise) {
+    const { data, error } = await supabase.rpc('abastecimentos_da_importacao', {
+        p_perfil_id: estado.perfilId, p_cartao_id: Number(cartaoId), p_linhas: analise.linhas,
+    });
+    if (error || !Array.isArray(data) || !data.length) return analise;
+    const porLinha = new Map(data.map((s) => [s.linha_id, s]));
+    return { ...analise, linhas: analise.linhas.map((l) => (porLinha.has(l.linha_id) ? { ...l, abastecimento: porLinha.get(l.linha_id) } : l)) };
 }
 
 // Conciliacao do banco -> reconhecimento no formato do Flask (reconhecer_linhas_flexivel): a tela original retira da
@@ -164,7 +178,7 @@ async function analisarArquivo(formData) {
             linhas_dados: conv.linhas_dados, linhas_amostra: conv.linhas_amostra, total_linhas: conv.total_linhas, delimitador: conv.delimitador } });
     }
     if (!conv.linhas.length) return falha('Nenhuma linha de compra encontrada no arquivo.');
-    const analise = await analisar(cartaoId, mes, conv.linhas);
+    const analise = await comAbastecimentos(cartaoId, await analisar(cartaoId, mes, conv.linhas));
     return ok({ data: { ...base, linhas: analise.linhas.map(linhaParaTela), requer_mapeamento: false, confronto_executado: true,
         situacao_fatura: analise.situacao_fatura, recorrencias_cartao: analise.recorrencias_cartao || [],
         cartoes_contrato: analise.cartoes_contrato || [],
@@ -183,7 +197,7 @@ async function analisarPdf(lido, cartaoId, mes) {
     }
     const linhas = r.linhas.map((l) => ({ ...l, valor: Number(l.valor).toFixed(2),
         descricao_classificacao: normalizarClassificacao(l.descricao_normalizada) }));
-    const analise = await analisar(cartaoId, mes, linhas);
+    const analise = await comAbastecimentos(cartaoId, await analisar(cartaoId, mes, linhas));
     const total = r.fatura.valor_total || 0;
     const diferenca = Math.round((total - Number(analise.validacoes.total_importavel || 0)) * 100) / 100;
     return ok({ data: { origem: 'pdf', arquivo_nome: lido.arquivo.name, cartao_id: Number(cartaoId), competencia: mes.slice(0, 7),
