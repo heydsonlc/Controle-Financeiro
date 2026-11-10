@@ -254,7 +254,9 @@ def test_ambiguidade_resolvida_pela_escolha(banco):
 def test_recorrencia_inativada_reconhece_a_previsao_pendente(banco):
     ids = assinaturas(banco)
     versao = next(r['versao'] for r in tabela(banco, 'recorrencias_do_perfil', PESSOAL) if r['id'] == ids['Netflix'])
-    rpc(banco, 'definir_situacao_recorrencia_cartao', PESSOAL, ids['Netflix'], versao, False)
+    # P22 (20261221090000): inativar interrompe a partir da competencia seguinte. Inativada durante 05/2029 (efeito 06/2029),
+    # a previsao de 05 continua e a importacao a reconhece; as seguintes deixam de existir.
+    rpc(banco, 'interromper_recorrencia', PESSOAL, ids['Netflix'], versao, '2029-06-01', None, None)
     r = previa(banco, linha(1, 'NETFLIX.COM', '44.90', categoria=None))['linhas'][0]
     assert (r['classificacao_importacao'], r['despesa_fixa']['realiza_lancamento_id']) == \
         ('DESPESA_FIXA', ocorrencia(banco, ids['Netflix'])['id'])

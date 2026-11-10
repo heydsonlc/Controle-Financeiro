@@ -305,15 +305,19 @@ def test_exclusao_de_avulsa_remove_conta_e_item_sem_tocar_o_resto(banco):
 def test_inativacao_para_a_geracao_e_mantem_o_historico(banco):
     r = criar(banco, {**AVULSA, 'nome': 'Academia', 'data_vencimento': '2029-05-08', 'recorrente': True})
     gerar(banco, previa(banco, mes='2029-05-01')['a_gerar'], mes='2029-05-01')
-    historico = sql(banco, 'select md5(t::text) as h from public.conta t where item_despesa_id = %s order by id',
-                    (r['item_id'],))
-    versao = edicao(banco, da_recorrencia(banco, '2029-05-01', 'Academia'))['versao_recorrencia']
+    maio = da_recorrencia(banco, '2029-05-01', 'Academia')
+    # P22: a paga e historico (fica igual); a pendente futura deixa de ser exigivel (antes ficava, era o defeito).
+    sql(banco, "update public.conta set status_pagamento = 'Pago', data_pagamento = '2029-05-08' where id = %s", (maio,))
+    historico = sql(banco, 'select md5(t::text) as h from public.conta t where id = %s', (maio,))
+    versao = edicao(banco, maio)['versao_recorrencia']
     rpc(banco, 'inativar_recorrencia', ID['PESSOAL'], r['item_id'], versao)
     assert item(banco, r['item_id'])['ativo'] is False
     assert r['item_id'] not in {x['item_id'] for x in previa(banco, mes='2029-09-01')['itens']}
     assert sql(banco, 'select md5(t::text) as h from public.conta t where item_despesa_id = %s order by id',
                (r['item_id'],)) == historico
-    assert edicao(banco, da_recorrencia(banco, '2029-05-01', 'Academia'))['pode_inativar_recorrencia'] is False
+    assert [x['situacao'] for x in sql(banco, "select situacao from financeiro.recorrencia_competencia where item_despesa_id = %s "
+                                               "and competencia = '2029-06-01'", (r['item_id'],))] == ['DISPENSADA']
+    assert edicao(banco, maio)['pode_inativar_recorrencia'] is False
 
 
 # ---------------------------------------------------------------------------
