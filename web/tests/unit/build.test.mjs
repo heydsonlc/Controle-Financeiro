@@ -110,6 +110,7 @@ const RPCS_DE_LEITURA = new Set(['meus_perfis', 'contas_bancarias_do_perfil', 'c
     'veiculo_manutencoes_km_tela', 'veiculo_financiamento_tela', 'mobilidade_ativa_tela', 'mobilidade_assinaturas_tela',
     'transporte_app_tela', 'previa_mobilidade',  // FIN-MOBILIDADE-2: previa da ativacao (so le)
     'projecoes_veiculo_tela',  // FIN-MVP-MOB-02: lista de Projecoes do veiculo (so le)
+    'previa_interrupcao_recorrencia', 'previa_retomada_recorrencia',  // FIN-RECORRENCIAS-INATIVACAO-01 (P22, so leem)
     'consorcios_tela',  // FIN-FIDELIDADE-CONTRATOS-1 (Consorcios, so leitura)
     // FIN-FIDELIDADE-RECEITAS-CATEGORIAS-1 (so leitura)
     'receitas_fontes_tela', 'receitas_orcamentos_tela', 'receitas_realizadas_tela', 'categorias_tela', 'palavras_chave_tela',
@@ -127,7 +128,10 @@ const RPCS_DE_ESCRITA = new Map([
     ['criar_despesa', ['despesas-adaptador.js', 'recorrencias-adaptador.js', 'lancamentos-adaptador.js']],
     ['editar_despesa', ['despesas-adaptador.js', 'lancamentos-adaptador.js']],
     ['excluir_despesa', ['despesas-adaptador.js', 'lancamentos-adaptador.js']],
-    ['inativar_recorrencia', ['despesas-adaptador.js', 'recorrencias-adaptador.js']],
+    ['inativar_recorrencia', 'recorrencias-adaptador.js'],
+    // FIN-RECORRENCIAS-INATIVACAO-01 (P22): interromper (Recorrencias e "esta e as futuras" de Despesas) e retomar
+    ['interromper_recorrencia', ['despesas-adaptador.js', 'recorrencias-adaptador.js']],
+    ['retomar_recorrencia', 'recorrencias-adaptador.js'],
     // FIN-FIDELIDADE-RECORRENCIAS-1 (tela de Recorrencias; o banco exige gestao do perfil e a versao)
     ['editar_recorrencia', 'recorrencias-adaptador.js'],
     ['reativar_recorrencia', 'recorrencias-adaptador.js'],

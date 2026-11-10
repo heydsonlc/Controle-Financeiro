@@ -15,6 +15,10 @@
 //   (migration 20261121090000): cadastro, edicao e inativacao pelo escritor do perfil; as parcelas efetivadas nunca
 //   sao apagadas (regeneracao e exclusao seguras no banco);
 //   o que a tela ainda nao faz responde que nao esta disponivel nesta versao (a lista avisa).
+// - FIN-RECORRENCIAS-INATIVACAO-01 (P22, migration 20261221090000): inativar interrompe a recorrencia a partir de uma
+//   data (as ocorrencias ja geradas e elegiveis deixam de ser exigiveis) e reativar retoma sem gerar o periodo inativo.
+//   A tela mostra a previa antes (js/recorrencias-adaptacoes.js): previa_interrupcao_recorrencia / interromper_recorrencia
+//   e previa_retomada_recorrencia / retomar_recorrencia, com a versao e a quantidade conferidas no banco.
 
 import { supabase } from './cliente.js';
 import { criarChaves, emMigracao, falha, mensagemDeErro, ok, PERFIL_NAO_HABILITADO, valorTexto } from './adaptador-comum.js';
@@ -127,6 +131,71 @@ async function definirAtivo(id, ativo) {
 }
 
 const ehCartao = (meio) => meio === 'cartao';
+const DIA_UM = /^\d{4}-(0[1-9]|1[0-2])-01$/;
+const mesAno = (iso) => `${String(iso).slice(5, 7)}/${String(iso).slice(0, 4)}`;
+
+// Troca de situacao pelo formulario (P22): com a previa (js/interrupcao-recorrencia.js) quando a tela a tem; o que nao foi
+// confirmado nao muda. Ja dentro de uma rota: o modal chama as funcoes daqui direto (a ponte atende uma rota por vez, um
+// fetch aqui dentro esperaria esta mesma rota terminar).
+async function alterarSituacao(id, ativo) {
+    const item = await atual(id);
+    if (!item || item.ativo === ativo) return null;
+    const modal = window.CFInterrupcao;
+    if (!modal) return ehCartao(item.meio_pagamento) ? situacaoCartao(id, ativo) : definirAtivo(id, ativo);
+    const parametros = (chave, valor) => new URLSearchParams(valor ? { [chave]: valor } : {});
+    const feito = ativo
+        ? await modal.retomar({
+            buscar: async (retomada) => (await previaRetomada(id, parametros('retomada', retomada))).corpo,
+            executar: async (p, restaurar) => (await retomar(id, { versao: p.versao, retomada: p.retomada, restaurar })).corpo,
+        })
+        : await modal.interromper({
+            incluirAtual: true,
+            buscar: async (efeito) => (await previaInterrupcao(id, parametros('efeito', efeito))).corpo,
+            executar: async (p) => (await interromper(id, { versao: p.versao, efeito: p.efeito, esperadas: p.quantidade })).corpo,
+        });
+    return feito ? null : { message: ativo ? 'a reativação não foi confirmada' : 'a inativação não foi confirmada' };
+}
+
+async function previaInterrupcao(id, parametros) {
+    const efeito = parametros && parametros.get('efeito');
+    const { data, error } = await supabase.rpc('previa_interrupcao_recorrencia', {
+        p_perfil_id: estado.perfilId, p_item_id: id, p_efeito: DIA_UM.test(efeito || '') ? efeito : null, p_conta_id: null,
+    });
+    if (error) return falha(mensagemDeErro(error));
+    return ok({ data });
+}
+
+async function interromper(id, corpo) {
+    const { data, error } = await supabase.rpc('interromper_recorrencia', {
+        p_perfil_id: estado.perfilId, p_item_id: id, p_versao: corpo.versao || null,
+        p_efeito: DIA_UM.test(corpo.efeito || '') ? corpo.efeito : null,
+        p_esperadas: Number.isInteger(corpo.esperadas) ? corpo.esperadas : null, p_conta_id: null,
+    });
+    if (error) return falha(mensagemDeErro(error));
+    const preservadas = data.preservadas ? ` ${data.preservadas} protegida(s) (paga, com movimento, vencida ou cobrança real) continuam.` : '';
+    avisar(`Recorrência inativada a partir de ${mesAno(data.efeito)}: ${data.canceladas} ocorrência(s) deixaram de ser exigíveis.${preservadas}`);
+    return ok({ data, message: 'Recorrencia inativada com sucesso' });
+}
+
+async function previaRetomada(id, parametros) {
+    const retomada = parametros && parametros.get('retomada');
+    const { data, error } = await supabase.rpc('previa_retomada_recorrencia', {
+        p_perfil_id: estado.perfilId, p_item_id: id, p_retomada: DIA_UM.test(retomada || '') ? retomada : null,
+    });
+    if (error) return falha(mensagemDeErro(error));
+    return ok({ data });
+}
+
+async function retomar(id, corpo) {
+    const { data, error } = await supabase.rpc('retomar_recorrencia', {
+        p_perfil_id: estado.perfilId, p_item_id: id, p_versao: corpo.versao || null,
+        p_retomada: DIA_UM.test(corpo.retomada || '') ? corpo.retomada : null, p_restaurar: corpo.restaurar === true,
+    });
+    if (error) return falha(mensagemDeErro(error));
+    avisar(`Recorrência reativada${data.retomada ? ` a partir de ${mesAno(data.retomada)}` : ''}. `
+        + `${data.restauradas ? `${data.restauradas} ocorrência(s) restaurada(s). ` : ''}${MENSAGEM_GERACAO}`);
+    return ok({ data, message: 'Recorrencia reativada com sucesso' });
+}
 
 function dadosCartao(corpo) {
     return { nome: String(corpo.nome || '').trim(), valor: valorTexto(corpo.valor), categoria_id: Number(corpo.categoria_id),
@@ -166,7 +235,7 @@ async function atualizarNoCartao(id, item, corpo) {
         return falha(mensagemDeErro(error));
     }
     if (typeof corpo.ativo === 'boolean') {
-        const erroAtivo = await situacaoCartao(id, corpo.ativo);
+        const erroAtivo = await alterarSituacao(id, corpo.ativo);
         if (erroAtivo) return falha(`Recorrência salva, mas a situação não: ${mensagemDeErro(erroAtivo)}`);
     }
     avisar(`Recorrência no cartão atualizada. Vale para as próximas compras; as já geradas não mudam. ${MENSAGEM_GERACAO}`);
@@ -235,7 +304,7 @@ async function atualizar(id, corpo) {
         if (erroMeio) return falha(`Recorrência salva, mas o meio de pagamento não: ${mensagemDeErro(erroMeio)}`);
     }
     if (typeof corpo.ativo === 'boolean') {
-        const erroAtivo = await definirAtivo(id, corpo.ativo);
+        const erroAtivo = await alterarSituacao(id, corpo.ativo);
         if (erroAtivo) return falha(`Recorrência salva, mas a situação não: ${mensagemDeErro(erroAtivo)}`);
     }
     avisar(`Recorrência atualizada. Vale para as próximas contas; as já geradas não mudam. ${MENSAGEM_GERACAO}`);
@@ -248,7 +317,7 @@ async function inativar(id) {
     if (!item.gerenciavel && !ehCartao(item.meio_pagamento)) return falha('Recorrência de outro módulo: altere no módulo de origem.', 409);
     const erro = ehCartao(item.meio_pagamento) ? await situacaoCartao(id, false) : await definirAtivo(id, false);
     if (erro) return falha(mensagemDeErro(erro));
-    avisar('Recorrência inativada: nenhuma conta nova será gerada; as já geradas continuam.');
+    avisar('Recorrência inativada a partir da próxima competência: as ocorrências futuras pendentes deixaram de ser exigíveis.');
     return ok({ message: 'Recorrencia inativada com sucesso' });
 }
 
@@ -335,6 +404,10 @@ const ROTAS = [
     ['POST', /^\/api\/recorrencias\/?$/, (m, corpo) => criar(corpo || {})],
     ['PUT', /^\/api\/recorrencias\/(\d+)$/, (m, corpo) => atualizar(Number(m[1]), corpo || {})],
     ['DELETE', /^\/api\/recorrencias\/(\d+)$/, (m) => inativar(Number(m[1]))],
+    ['GET', /^\/api\/recorrencias\/(\d+)\/previa-interrupcao$/, (m, corpo, p) => previaInterrupcao(Number(m[1]), p)],
+    ['POST', /^\/api\/recorrencias\/(\d+)\/interromper$/, (m, corpo) => interromper(Number(m[1]), corpo || {})],
+    ['GET', /^\/api\/recorrencias\/(\d+)\/previa-retomada$/, (m, corpo, p) => previaRetomada(Number(m[1]), p)],
+    ['POST', /^\/api\/recorrencias\/(\d+)\/retomar$/, (m, corpo) => retomar(Number(m[1]), corpo || {})],
     ['GET', /^\/api\/categorias\/?$/, () => categorias()],
     ['GET', /^\/api\/cartoes\/?$/, () => cartoes()],
     ['GET', /^\/api\/contas\/?$/, () => contasBancarias()],

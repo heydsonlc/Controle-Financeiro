@@ -70,6 +70,15 @@ async function preencher(page, d) {
 
 const salvar = (page) => page.click('button[type="submit"][form="form-recorrencia"]');
 
+// FIN-RECORRENCIAS-INATIVACAO-01 (P22): inativar e reativar mostram a previa (js/interrupcao-recorrencia.js) e so
+// gravam na confirmacao.
+async function confirmarModal(page) {
+    const modal = page.locator('.cf-int-caixa');
+    await expect(modal.locator('.cf-int-resumo')).toBeVisible();
+    await modal.locator('.cf-int-rodape .cf-int-botao:not(.secundario)').click();
+    await expect(page.locator('.cf-int-fundo')).toHaveCount(0);
+}
+
 test('tela original: menu, indicadores, lista, filtros e aviso de consorcios', async ({ page }) => {
     await entrar(page, B);
     await itemDoMenu(page, 'recorrencias').click();
@@ -194,9 +203,9 @@ test('conta paga preservada quando a recorrencia muda; inativar e reativar', asy
 
     await abrirRecorrencias(page);
     await linha(page, NOME).locator('[data-on-click^="inativarRecorrencia"]').click();
-    await expect.poll(() => dialogos.at(-1)).toBe('Inativar recorrencia?');
+    await confirmarModal(page);  // P22: previa da interrupcao no lugar do confirm()
     await expect(linha(page, NOME)).toContainText('Inativa');
-    await expect(page.locator('#recorrencias-resultado')).toContainText('nenhuma conta nova será gerada');
+    await expect(page.locator('#recorrencias-resultado')).toContainText('deixaram de ser exigíveis');
     const previa = await chamarRpc(page, 'previa_geracao', { p_perfil_id: await perfilAtivoId(page), p_mes: '2031-03-01' });
     expect(previa.corpo.itens.map((i) => i.nome)).not.toContain(NOME);
 
@@ -204,6 +213,7 @@ test('conta paga preservada quando a recorrencia muda; inativar e reativar', asy
     await expect(page.locator('#recorrencia-ativa')).not.toBeChecked();
     await page.check('#recorrencia-ativa');
     await salvar(page);
+    await confirmarModal(page);  // P22: previa da retomada
     await expect(linha(page, NOME)).toContainText('Ativa');
     const depois = await chamarRpc(page, 'previa_geracao', { p_perfil_id: await perfilAtivoId(page), p_mes: '2031-03-01' });
     expect(depois.corpo.itens.map((i) => i.nome)).toContain(NOME);
@@ -332,7 +342,7 @@ test('a cada 2 semanas: cadastrar, gerar uma conta por ocorrencia em Despesas e 
 
     await abrirRecorrencias(page);
     await linha(page, nome).locator('[data-on-click^="inativarRecorrencia"]').click();
-    await expect.poll(() => dialogos.at(-1)).toBe('Inativar recorrencia?');
+    await confirmarModal(page);  // P22: previa da interrupcao no lugar do confirm()
     await expect(linha(page, nome)).toContainText('Inativa');
 });
 
@@ -396,6 +406,6 @@ test('semanal: abrir Despesas gera uma conta por ocorrencia ate o mes seguinte, 
 
     await abrirRecorrencias(page);
     await linha(page, nome).locator('[data-on-click^="inativarRecorrencia"]').click();
-    await expect.poll(() => dialogos.at(-1)).toBe('Inativar recorrencia?');
+    await confirmarModal(page);  // P22: previa da interrupcao no lugar do confirm()
     await expect(linha(page, nome)).toContainText('Inativa');
 });

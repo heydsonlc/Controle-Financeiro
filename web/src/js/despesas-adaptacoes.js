@@ -198,6 +198,51 @@
         if (sugerida && contas.some((c) => c.id === sugerida)) select.value = String(sugerida);
     }
 
+    // FIN-RECORRENCIAS-INATIVACAO-01 (P22): exclusao de despesa recorrente.
+    //    - Ao abrir a escolha, cada opcao que o banco recusaria fica visivel e desabilitada, com o motivo.
+    //    - "Esta e as futuras" mostra antes o que deixa de ser exigivel e o que fica (js/interrupcao-recorrencia.js) e so
+    //      entao interrompe a recorrencia (ativa ou ja inativa), com a quantidade da previa conferida no banco.
+    const previaFuturas = async (id) => (await fetch(`/api/despesas/${id}/previa-futuras`)).json();
+
+    const abrirExclusaoOriginal = window.deletarDespesaModal;
+    window.deletarDespesaModal = function deletarDespesaModal() {
+        abrirExclusaoOriginal();
+        const id = window.despesaExcluindo;
+        if (!id || window.tipoDespesaExcluindo !== 'recorrente') return;
+        const botoes = [...document.querySelectorAll('#modal-tipo-exclusao [data-on-click^="confirmarTipoExclusao"]')];
+        const botao = (tipo) => botoes.find((b) => b.dataset.onClick.includes(`'${tipo}'`));
+        botoes.forEach((b) => { b.disabled = false; b.title = ''; });
+        previaFuturas(id).then((r) => {
+            if (!r.success || window.despesaExcluindo !== id) return;
+            const motivo = r.data.motivo || '';
+            if (!r.data.pode_excluir) {
+                ['unica', 'futuras'].forEach((tipo) => { const b = botao(tipo); if (b) { b.disabled = true; b.title = motivo; } });
+            } else if (!r.data.pode) {
+                const b = botao('futuras');
+                if (b) { b.disabled = true; b.title = motivo; }
+            }
+        }).catch(() => {});
+    };
+
+    const confirmarExclusaoOriginal = window.confirmarTipoExclusao;
+    window.confirmarTipoExclusao = async function confirmarTipoExclusao(tipo) {
+        const id = window.despesaExcluindo;
+        if (tipo !== 'futuras' || window.tipoDespesaExcluindo !== 'recorrente' || !id) return confirmarExclusaoOriginal(tipo);
+        window.fecharModalTipoExclusao();
+        const r = await previaFuturas(id);
+        if (!r.success) { alert(r.error || 'Não foi possível conferir as ocorrências futuras.'); return undefined; }
+        if (!r.data.pode) { alert(`Não é possível excluir as futuras: ${r.data.motivo}`); return undefined; }
+        const feito = await window.CFInterrupcao.interromper({
+            titulo: 'Excluir esta e as futuras', rotulo: 'Excluir', previa: r.data, contaEscolhida: true,
+            executar: async (p) => (await fetch(`/api/despesas/${id}?tipo_exclusao=futuras&esperadas=${p.quantidade}`, { method: 'DELETE' })).json(),
+        });
+        if (feito) {
+            alert(feito.message);
+            window.carregarDespesas();
+        }
+        return undefined;
+    };
+
     window.pagarTodasOcorrencias = async function pagarTodasOcorrencias(index) {
         const identidade = desenhados.get(index);
         const pendentes = identidade && pendentesDoAgrupador(identidade);

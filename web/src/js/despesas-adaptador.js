@@ -337,18 +337,42 @@ async function excluir(id, parametros) {
         return falha(mensagemDeErro(erro), 404);
     }
     if (!edicao.pode_excluir) return falha(edicao.bloqueio ? textoBloqueio(edicao.bloqueio) : 'Esta despesa não pode ser excluída.', 409);
-    // "Esta e as futuras" de uma recorrencia: inativa a recorrencia (nenhuma conta nova) e exclui esta conta.
+    // FIN-RECORRENCIAS-INATIVACAO-01 (P22): "esta e as futuras" interrompe a recorrencia a partir da competencia desta conta
+    // (ativa ou ja inativa), numa so transacao: esta conta e as futuras elegiveis deixam de ser exigiveis; pagas, com
+    // movimento e vencidas (fora esta) ficam. A tela mostra a previa antes e manda a quantidade (o banco confere).
     if (parametros.get('tipo_exclusao') === 'futuras' && edicao.item.recorrente) {
-        if (!edicao.pode_inativar_recorrencia) return falha('A recorrência não pode ser inativada por aqui.');
-        const inativada = await supabase.rpc('inativar_recorrencia', {
+        const esperadas = parametros.get('esperadas');
+        const { data, error } = await supabase.rpc('interromper_recorrencia', {
             p_perfil_id: estado.perfilId, p_item_id: edicao.item.id, p_versao: edicao.versao_recorrencia,
+            p_efeito: edicao.conta.competencia, p_esperadas: /^\d+$/.test(esperadas || '') ? Number(esperadas) : null, p_conta_id: id,
         });
-        if (inativada.error) return falha(mensagemDeErro(inativada.error));
-        edicao = await edicaoAtual(id);
+        if (error) return falha(mensagemDeErro(error));
+        const ficam = data.preservadas ? ` ${data.preservadas} protegida(s) continuam.` : '';
+        return ok({ message: `Recorrência interrompida: ${data.canceladas} ocorrência(s) deixaram de ser exigíveis.${ficam}` });
     }
     const { error } = await supabase.rpc('excluir_despesa', { p_perfil_id: estado.perfilId, p_conta_id: id, p_versao: edicao.versao });
     if (error) return falha(mensagemDeErro(error));
     return ok({ message: 'Despesa excluída com sucesso' });
+}
+
+// P22: previa de "esta e as futuras" (o que deixa de ser exigivel e o que fica), antes de a tela oferecer a acao.
+async function previaFuturas(id) {
+    let edicao;
+    try {
+        edicao = await edicaoAtual(id);
+    } catch (erro) {
+        return falha(mensagemDeErro(erro), 404);
+    }
+    if (!edicao.pode_excluir) {
+        return ok({ data: { pode: false, pode_excluir: false,
+            motivo: edicao.bloqueio ? textoBloqueio(edicao.bloqueio) : 'Esta despesa não pode ser excluída.' } });
+    }
+    if (!edicao.item.recorrente) return ok({ data: { pode: false, pode_excluir: true, motivo: 'Despesa sem recorrência.' } });
+    const { data, error } = await supabase.rpc('previa_interrupcao_recorrencia', {
+        p_perfil_id: estado.perfilId, p_item_id: edicao.item.id, p_efeito: edicao.conta.competencia, p_conta_id: id,
+    });
+    if (error) return falha(mensagemDeErro(error));
+    return ok({ data: { ...data, pode: data.pode_interromper, pode_excluir: true } });
 }
 
 function motivoSemPagamento(dados, bloqueio) {
@@ -491,6 +515,7 @@ const ROTAS = [
     ['GET', /^\/api\/despesas\/(\d+)$/, (m) => obter(Number(m[1]))],
     ['PUT', /^\/api\/despesas\/(\d+)$/, (m, p, corpo) => atualizar(Number(m[1]), corpo || {})],
     ['DELETE', /^\/api\/despesas\/(\d+)$/, (m, p) => excluir(Number(m[1]), p)],
+    ['GET', /^\/api\/despesas\/(\d+)\/previa-futuras$/, (m) => previaFuturas(Number(m[1]))],  // P22
     ['POST', /^\/api\/despesas\/(\d+)\/pagar$/, (m, p, corpo) => pagar(Number(m[1]), corpo || {})],
     ['POST', /^\/api\/despesas\/pagar-lote$/, (m, p, corpo) => pagarLote(corpo || {})],
     ['POST', /^\/api\/despesas\/(\d+)\/estornar-pagamento$/, (m, p, corpo) => estornar(Number(m[1]), corpo || {})],
