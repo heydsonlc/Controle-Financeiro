@@ -1,8 +1,9 @@
 # FIN-MVP-LANCAMENTOS-03 — Conciliação de abastecimentos e prévia de parcelamento
 
-**Situação (09/11/2026): implementado e testado localmente no ramo `lancamentos-03`.**
-- Sem push, sem deploy e sem migration em produção. A produção só foi lida, em sessão somente leitura e numa cópia fiel descartável.
-- As duas partes são independentes e têm commits separados: a publicação pode ser parcial.
+**Situação (09/11/2026): publicado em conjunto (partes A e B).**
+- Commit `080e26b`, migration `20261222090000` (63 migrations), deploy `d7073ff5`.
+- Auditoria somente leitura aprovada (seção C.9).
+- A associação de abastecimentos será homologada na interface quando houver um abastecimento real e a compra correspondente.
 
 **Base de produção:** `cd244b7` (62 migrations, última `20261221090000`).
 
@@ -237,3 +238,35 @@ As duas partes estão prontas para homologação e podem ser publicadas separada
 - **A:** push, aplicar só `20261222090000`, build e deploy.
   - A tela publicada continua funcionando entre a migration e o deploy: as funções novas só são chamadas pela tela nova, e a importação sem `abastecimento_id` segue igual.
 - **B:** só build e deploy, sem migration.
+
+## C.9 Publicação e auditoria (09/11/2026)
+
+Publicação conjunta das partes A e B, autorizada pelo usuário em 09/11/2026.
+
+- **Conferências antes do push:**
+  - `origin/main` em `cd244b7`; os commits publicados são `736cad4` (documentação da P22), `6ff3379` (A), `db5dc7d` (B) e `080e26b` (documentação);
+  - produção com 62 migrations, última `20261221090000`; a 1222 era a única pendente; md5 `bc9291b0…` e só LF;
+  - as 2 funções substituídas estavam iguais ao texto da reversão; as 3 novas não existiam;
+  - 0 abastecimentos, 0 registros de histórico e 0 cartões físicos;
+  - nenhuma tabela com dados diferentes desde o fim da regularização da P22 (e do ensaio).
+- **Push** `cd244b7..080e26b`, em avanço direto.
+- **Migration `20261222090000`:** aplicada sozinha, com o dry-run listando só o seu arquivo; 63 migrations.
+  - Estrutura: nenhuma tabela nova ou removida; 3 funções novas e as 2 substituídas, com os 5 corpos idênticos ao arquivo e `search_path` vazio.
+  - Execução: só `abastecimentos_da_importacao` executável por `authenticated`, e nenhuma execução perdida.
+  - Dados e segurança: nenhum dado existente mudou e não há bloqueios de segurança.
+- **Deploy `d7073ff5`** (Source `080e26b`): 169 arquivos servidos iguais ao build, sem segredos; navegação anônima sem problemas.
+- **Homologação** em sessão somente leitura, como o titular, sem nenhuma compra, importação ou abastecimento:
+  - **parte A:**
+    - a sugestão, sem abastecimentos reais, vem vazia: nenhum vínculo sem confirmação;
+    - a Mobilidade responde com a despesa vinculada;
+    - os índices únicos (uma compra ou conta por abastecimento) estão ativos;
+    - a importação sem vínculo segue o corpo publicado (o mesmo homologado nos testes);
+  - **parte B:** `previa_compra` no Master Card - Black:
+    - 3× R$ 100,00 = R$ 33,34 + 2× R$ 33,33;
+    - 12× R$ 1.000,00 de 11/2026 a 10/2027;
+    - 4× R$ 500,00 = 4× R$ 125,00;
+    - soma exata em todos.
+- **Dados (antes e depois, somente leitura):** as 88 tabelas com os mesmos dados.
+  - Contas, compras, movimentos, saldos, faturas, créditos, financiamento, recorrências, abastecimentos e Dashboard iguais;
+  - a regularização da P22 (contas, competências e totais) idêntica.
+- **Testes:** os da seção C.4, sem alteração de código depois deles.
