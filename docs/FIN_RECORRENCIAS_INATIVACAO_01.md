@@ -1,9 +1,9 @@
 # FIN-RECORRENCIAS-INATIVACAO-01 — P22: inativação de recorrências
 
-**Situação (09/11/2026): implementado e testado localmente no ramo `recorrencias-inativacao-01`.**
-- Sem push, sem deploy e sem migration em produção.
-- A produção só foi lida, em sessão somente leitura e numa cópia fiel descartável.
-- Nenhuma conta real foi cancelada. A publicação e a regularização de Telefonia e USP - MBA dependem de autorização.
+**Situação (09/11/2026): publicado e regularizado.**
+- Publicação: `cd244b7`, migration `20261221090000` (62 migrations), deploy `03ed0f18`.
+- Regularização autorizada: as 10 contas futuras de Telefonia e USP - MBA, R$ 2.890,50.
+- Auditoria somente leitura aprovada (seção 12).
 
 **Base de produção:** `c3cf1a4` (61 migrations, última `20261220090000`).
 **Nível de impacto:** N4 (integridade financeira).
@@ -210,3 +210,70 @@ Pronto para homologação.
   - "Excluir esta e as futuras" numa recorrência inativa continua recusada até o deploy;
   - na tela antiga, "Excluir esta e as futuras" numa recorrência ativa inativa primeiro, o que agora já cancela as futuras elegíveis, e depois tenta excluir a conta escolhida. Se ela for de uma competência posterior à atual, já terá saído, e a tela mostra um erro sem nada a desfazer. Por isso, o deploy deve vir logo depois da migration.
 - **Regularização de Telefonia e USP:** só com autorização própria, depois da publicação.
+
+## 12. Publicação e regularização (09/11/2026)
+
+Autorizadas pelo usuário em 09/11/2026, em duas etapas separadas e nesta ordem.
+
+### Etapa 1 — publicação
+
+- **Conferências antes do push:**
+  - `origin/main` em `c3cf1a4`; os commits publicados são `c59ca8d` (documentação do MOB-02), `17484a4`, `d082378` e `cd244b7`;
+  - produção com 61 migrations, última `20261220090000`; a 1221 era a única pendente; md5 `64b95537…` e só LF;
+  - as 4 funções substituídas estavam iguais aos textos da reversão; as 10 novas não existiam;
+  - as 12 contas de Telefonia e USP a partir de 10/2026 estavam como no ensaio.
+- **Push** `c3cf1a4..cd244b7`, em avanço direto.
+- **Migration `20261221090000`:** aplicada sozinha, com o dry-run listando só o seu arquivo; 62 migrations.
+  - Estrutura: nenhuma tabela nova ou removida; 10 funções novas e as 4 substituídas, com os 14 corpos idênticos ao arquivo e `search_path` vazio.
+  - Execução: só as 4 de tela executáveis por `authenticated`, e nenhuma execução perdida.
+  - Dados e segurança: nenhum dado existente mudou e não há bloqueios de segurança.
+- **Deploy `03ed0f18`** (Source `cd244b7`): 168 arquivos servidos iguais ao build; navegação anônima sem problemas.
+- **Homologação** em sessão somente leitura, como o titular:
+  - as prévias publicadas listaram exatamente as contas 2538, 2565, 2591, 2619 e 2649 (Telefonia, R$ 350,00) e 2542, 2569, 2595, 2623 e 2653 (USP, R$ 2.540,50), sem protegidas;
+  - X Premium sem nada; uma recorrência ativa (Diarista) com prévia normal; as retomadas sem lacunas.
+  - Nenhuma operação financeira.
+- **Dados depois da Etapa 1:** as 88 tabelas iguais (86 anteriores à MOB-02 e as 2 dela), e o retrato da P22 idêntico.
+
+### Etapa 2 — regularização controlada
+
+Foi feita numa única transação (`regularizar_p22.py`), pelo fluxo aprovado, `interromper_recorrencia` como o titular. Qualquer divergência faria rollback.
+
+1. **Reconsulta:** as 10 contas existiam, eram das recorrências, competências e valores autorizados, estavam pendentes, sem pagamento, sem movimento e sem bloqueio, e eram do perfil Pessoal. As duas recorrências estavam inativas.
+2. **Prévia:** a de cada recorrência (efeito 12/2026) listou exatamente as 5 autorizadas, sem protegidas.
+3. **Interrupção:** feita com 5 esperadas: Telefonia com 5 canceladas (R$ 350,00) e USP com 5 canceladas (R$ 2.540,50), sem preservadas.
+4. **Conferência ainda na transação:**
+   - as 10 contas saíram;
+   - as 10 competências ficaram DISPENSADAS, com a conta no motivo e o titular como autor;
+   - não mudaram as demais contas, as competências das outras recorrências e as de 10 e 11/2026 destas, as ocorrências semanais, os movimentos, os saldos, as compras, os cadastros, as faturas, as contas 2480 e 2484 e as recorrências.
+   - COMMIT.
+
+| Conta | Recorrência | Competência | Valor | Registro histórico |
+| --- | --- | --- | --- | --- |
+| 2538 | Telefonia (381) | 12/2026 | R$ 70,00 | DISPENSADA: "conta #2538 de R$ 70.00, vencimento 15/12/2026" |
+| 2565 | Telefonia (381) | 01/2027 | R$ 70,00 | DISPENSADA: "conta #2565 …, vencimento 15/01/2027" |
+| 2591 | Telefonia (381) | 02/2027 | R$ 70,00 | DISPENSADA: "conta #2591 …, vencimento 15/02/2027" |
+| 2619 | Telefonia (381) | 03/2027 | R$ 70,00 | DISPENSADA: "conta #2619 …, vencimento 15/03/2027" |
+| 2649 | Telefonia (381) | 04/2027 | R$ 70,00 | DISPENSADA: "conta #2649 …, vencimento 15/04/2027" |
+| 2542 | USP - MBA (385) | 12/2026 | R$ 508,10 | DISPENSADA: "conta #2542 de R$ 508.10, vencimento 05/12/2026" |
+| 2569 | USP - MBA (385) | 01/2027 | R$ 508,10 | DISPENSADA: "conta #2569 …, vencimento 05/01/2027" |
+| 2595 | USP - MBA (385) | 02/2027 | R$ 508,10 | DISPENSADA: "conta #2595 …, vencimento 05/02/2027" |
+| 2623 | USP - MBA (385) | 03/2027 | R$ 508,10 | DISPENSADA: "conta #2623 …, vencimento 05/03/2027" |
+| 2653 | USP - MBA (385) | 04/2027 | R$ 508,10 | DISPENSADA: "conta #2653 …, vencimento 05/04/2027" |
+
+### Auditoria posterior (somente leitura)
+
+| Competência | Despesas antes | Despesas depois | Diferença | Previstas no Dashboard (antes → depois) |
+| --- | --- | --- | --- | --- |
+| 11/2026 | R$ 22.615,08 | R$ 22.615,08 | — | R$ 10.704,02 → R$ 10.704,02 |
+| 12/2026 | R$ 17.216,21 | R$ 16.638,11 | −R$ 578,10 | R$ 11.513,14 → R$ 10.935,04 |
+| 01/2027 | R$ 16.965,22 | R$ 16.387,12 | −R$ 578,10 | R$ 11.262,15 → R$ 10.684,05 |
+| 02/2027 | R$ 11.061,14 | R$ 10.483,04 | −R$ 578,10 | R$ 11.061,14 → R$ 10.483,04 |
+| 03/2027 | R$ 17.139,72 | R$ 16.561,62 | −R$ 578,10 | R$ 11.760,12 → R$ 11.182,02 |
+| 04/2027 | R$ 16.638,68 | R$ 16.060,58 | −R$ 578,10 | R$ 11.259,08 → R$ 10.680,98 |
+
+- **Contas:** 779 → 769, com valor total menor em exatamente R$ 2.890,50. Executado (R$ 9.790,25) e pagas (206) iguais.
+- **Tabelas:** só `public.conta` e `financeiro.recorrencia_competencia` mudaram. As outras 86 das 88 ficaram iguais, entre elas movimentos, contas bancárias (saldos), compras, faturas, créditos, financiamento, abastecimentos e cadastros.
+- **Preservados:** as contas 2480 e 2484 (10/2026, vencidas e pendentes), as 10 pagas de 05 a 09/2026, as competências de 11/2026 ("Conta excluida pelo usuario") e o X Premium.
+- **Sem novas cobranças:** a prévia de geração de 12/2026 a 06/2027 não tem nada a gerar de Telefonia ou USP.
+- **Dashboard e telas:** diferem só no perfil Pessoal, nos meses afetados. A Empresa ficou igual.
+- **Testes:** os da seção 8, sem alteração de código depois deles. O código publicado é o homologado (`cd244b7`).
