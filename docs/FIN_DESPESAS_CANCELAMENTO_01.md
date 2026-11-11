@@ -1,6 +1,6 @@
 # FIN-DESPESAS-CANCELAMENTO-01 (P23): cancelar a obrigação com pagamento estornado
 
-**Situação:** implementada e validada no ramo `despesas-cancelamento-02`, sobre `78b3df2` (já com a 1224 e a 1225). Migration `20261226090000`. A publicação foi autorizada pelo titular, condicionada às verificações abaixo. O cancelamento real da sessão de 03/11/2026 depende de autorização própria.
+**Situação:** publicada em 11/11/2026 (push até `7870a2e`, migration `20261226090000` = 66, deploy `a504e217`). O cancelamento real da sessão de 03/11/2026 depende de autorização própria.
 **Testes:** nível N4 (integridade financeira).
 
 ## 1. Problema
@@ -94,3 +94,21 @@ Script `scratchpad/p23b/ensaio_1226.py`. Cópia da produção em PostgreSQL loca
 | Pagamento | recusado: “Obrigação cancelada: nada a pagar” |
 | Geração | o plano de 11/2026 não recria a sessão (0 a gerar) |
 | Reversão depois do cancelamento | recusada, sem alterar nada |
+
+## 6. Publicação (11/11/2026)
+
+Autorizada pelo titular, condicionada às verificações técnicas, que foram aprovadas: banco 538/538; ensaio correto; E2E sem falha atribuível à P23.
+
+| Etapa | Resultado |
+|---|---|
+| Pré-condições | remoto em `feca20e`, avanço direto; `f844795` (1223 antiga) fora; 65 migrations, pendente só a 1226; MD5 `76f6606e…`, LF (o arquivo da pasta de trabalho foi restaurado aos bytes do commit depois de uma troca de ramo que o recriara em CRLF); as 11 substituídas iguais ao texto da reversão; nenhuma conta `Dispensada` |
+| Push | `feca20e..7870a2e` (`78b3df2`, `577138a`, `7870a2e`) |
+| Migration 1226 | **APLICADA E CONFERIDA** (66): simulação só com ela; 4 novas, 11 substituídas, 15 corpos iguais ao arquivo; acesso novo de authenticated só a `cancelar_despesa` e `previa_cancelamento_despesa`; nenhum dado alterado; segurança sem bloqueios |
+| Deploy | Cloudflare `a504e217` (Production, `producao`, origem `7870a2e`, rótulo com o hash completo); 169 arquivos servidos iguais ao build; navegação sem login: 0 problemas |
+| Auditoria (retrato antes e depois) | 88 tabelas idênticas; Despesas e Dashboard idênticos (nada foi cancelado) |
+
+**Homologação de leitura (como o titular, nada gravado):**
+- 03/11 (2501): elegível, pagamento [188] e estorno [193].
+- 10/11 (2499, paga): bloqueada, “Pagamento ainda válido”.
+- Psicóloga pendente em 11/2026: 3 sessões, R$ 750,00.
+- 17/11 (2502) e 24/11 (2500) também foram pagas no lote e estornadas, e por isso também são elegíveis. O lápis delas abre só para consulta, com “Cancelar obrigação”. Elas podem ser pagas normalmente pelo botão de pagar, mas não editadas.
