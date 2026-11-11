@@ -126,7 +126,9 @@ def test_tratar_como_compra_comum(banco):
     assert (r['classificacao_importacao'], r['recorrencia_id'], r['realiza_lancamento_id']) == ('COMPRA', None, None)
     importar(banco, linha(1, 'NETFLIX.COM', '44.90', recorrencia_escolhida_id=0))
     assert situacao(banco, ids['Netflix']) == 'PREVISTA'
-    assert executado(banco) == D('44.90')  # a compra comum; a previsao segue fora
+    # FIN-CARTOES-EXECUTADO-01: a compra comum (escolha do usuario) + as 4 previsoes no executado consolidado; a da
+    # Netflix continua ate ser conciliada (decisao explicita do usuario, nao duplicidade automatica)
+    assert executado(banco) == D('374.50')
 
 
 def test_escolha_invalida_pede_revisao(banco):
@@ -150,7 +152,7 @@ def test_compra_ja_lancada_conciliada_na_confirmacao(banco):
     assert (s['previsto_id'], s['cobranca_id'], s['recorrencia_nome'], s['valor_previsto'], s['valor_cobrado'], s['diferenca']) == \
         (previsto, cobranca, 'Netflix', 59.9, 44.9, -15.0)
     assert falha(banco, 'importar_fatura_cartao', PESSOAL, CARTAO, MES, [l], str(uuid.uuid4()))[1] == 'Nenhuma linha para importar'
-    assert executado(banco) == D('44.90')
+    assert executado(banco) == D('104.80')  # FIN-CARTOES-EXECUTADO-01: compra comum + previsao, ate a conciliacao
     res = importar(banco, {**l, 'conciliar_previsao': True})
     assert (res['conciliadas'], res['inseridos'], res['realizadas']) == (1, 0, 0)
     assert situacao(banco, item) == 'CONFIRMADA'
@@ -195,7 +197,7 @@ def test_reimportacao_integral_e_complementar(banco):
     assert md5_compras(banco) == antes  # reimportacao integral: nada muda
     complementar = importar(banco, *arquivo, linha(3, 'FARMACIA', '25.00'))
     assert (complementar['inseridos'], complementar['realizadas'], complementar['duplicados']) == (1, 0, 2)
-    assert executado(banco) == D('81.90')  # 44,90 + 12 + 25; as outras previsoes seguem fora
+    assert executado(banco) == D('351.60')  # 44,90 + 12 + 25 + as outras 3 previsoes (269,70); a Netflix uma vez
     assert situacao(banco, ids['Claude']) == 'PREVISTA'
 
 
@@ -233,7 +235,7 @@ def test_duas_cobrancas_do_mesmo_servico_nao_somem(banco):
     assert 'Segunda cobranca de "Netflix"' in ' '.join(r[1]['mensagens'])
     importar(banco, a, {**b, 'recorrencia_escolhida_id': 0, 'categoria_id': ASSINATURAS})
     assert situacao(banco, ids['Netflix']) == 'CONFIRMADA'
-    assert executado(banco) == D('75.80')  # as duas cobrancas reais
+    assert executado(banco) == D('345.50')  # as duas cobrancas reais + as outras 3 previsoes (269,70)
     # depois de cobrada, outra linha diferente da Netflix tambem pede revisao (nao e descartada)
     c = previa(banco, linha(3, 'NETFLIX.COM', '9.90', data='2029-05-25', categoria=None))['linhas'][0]
     assert (c['status'], c['ignorar']) == ('revisar', False)

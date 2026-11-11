@@ -323,9 +323,10 @@ def test_custo_novo_no_cartao_atualiza_a_previsao_e_a_fatura(banco):
     atual, *futuras = compras
     assert atual['mes_fatura'] == MES and depois[atual['id']] == Decimal('200.00')
     assert all(depois[c['id']] == Decimal('275.00') for c in futuras)
-    # Na fatura, a previsao continua pendente: fora do executado e no previsto com o valor novo.
+    # Na fatura, a previsao continua pendente (informada como prevista) e, pelo FIN-CARTOES-EXECUTADO-01, ja entra no
+    # executado consolidado com o valor novo.
     resumo = rpc(banco, 'fatura_por_categoria', PESSOAL, CARTAO, futuras[0]['mes_fatura'])
-    assert resumo['total_fatura'] == 0 and resumo['total_previsto_pendente'] == 275
+    assert resumo['total_fatura'] == 275 and resumo['total_previsto_pendente'] == 275
 
 
 def test_veiculo_sem_recorrencia_nao_toca_em_despesa_alguma(banco):

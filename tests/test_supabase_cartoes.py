@@ -364,9 +364,9 @@ def test_recorrencia_do_cartao_nao_e_editada_aqui_e_convive_com_a_compra(banco):
     gerar(banco, previa(banco)['a_gerar'])  # gera o streaming de 03/2027 no mesmo cartao
     assert fatura(banco, CARTAO, D(2027, 3, 1)) is not None  # uma so (o indice impede outra)
     f = faturas(banco, '2027-03-01')[CARTAO]
-    # FIN-CARTAO-PREVISTO-EXECUTADO-01: a compra gerada pela recorrencia (39,90, sem cobranca real) e prevista: fica fora
-    # do executado (so os 15,00 da compra); as duas continuam na fatura
-    assert Decimal(str(f['valor_executado'])) == Decimal('15.00') and f['compras'] == 2
+    # FIN-CARTOES-EXECUTADO-01: a compra gerada pela recorrencia (39,90, sem cobranca real) entra no executado consolidado
+    # pelo valor previsto: 15,00 da compra + 39,90; as duas na fatura, uma vez cada
+    assert Decimal(str(f['valor_executado'])) == Decimal('54.90') and f['compras'] == 2
 
 
 def test_compra_concorrente_com_a_geracao_de_recorrencias(banco):
@@ -385,8 +385,8 @@ def test_compra_concorrente_com_a_geracao_de_recorrencias(banco):
                    "group by 1 having count(*) > 1")
     assert n == []
     f = faturas(banco, '2027-03-01')[CARTAO]
-    # 7,50 da compra; os 39,90 da recorrencia sao previstos, fora do executado (FIN-CARTAO-PREVISTO-EXECUTADO-01)
-    assert Decimal(str(f['valor_executado'])) == Decimal('7.50')
+    # 7,50 da compra + 39,90 da recorrencia prevista (FIN-CARTOES-EXECUTADO-01: no executado consolidado), uma vez cada
+    assert Decimal(str(f['valor_executado'])) == Decimal('47.40')
 
 
 # ---------------------------------------------------------------------------
