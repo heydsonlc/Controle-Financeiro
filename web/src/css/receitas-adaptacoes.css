@@ -18,3 +18,13 @@ body.cf-somente-leitura [data-on-click^="cancelarReceitaLinha("],
 body.cf-somente-leitura #btn-inativar-fonte {
     display: none !important;
 }
+
+/* FIN-RECEITAS-SALDO-01 — previa da atualizacao das previsoes pelo valor-base. */
+.receitas-atualizar-box { max-width: 560px; }
+.receitas-atualizar-corpo { padding: 0 24px 8px; display: grid; gap: 12px; max-height: 60vh; overflow-y: auto; }
+.receitas-atualizar-resumo { margin: 0; color: #374151; font-size: 0.9rem; }
+.receitas-atualizar-tabela { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+.receitas-atualizar-tabela th, .receitas-atualizar-tabela td { padding: 6px 8px; border-bottom: 1px solid #e5e7eb; text-align: left; }
+.receitas-atualizar-tabela th:not(:first-child), .receitas-atualizar-tabela td:not(:first-child) { text-align: right; }
+.receitas-atualizar-preservadas { font-size: 0.85rem; color: #4b5563; }
+.receitas-atualizar-preservadas ul { margin: 4px 0 0; padding-left: 18px; }

@@ -75,3 +75,6 @@ body.cf-somente-leitura .despesa-actions .row-action-button:not([data-on-click^=
     white-space: nowrap;
 }
 
+/* FIN-RECEITAS-SALDO-01: saldo do mes com a cor do sinal (o tema claro forca "div { color: ... !important }"). */
+#saldo-mes.saldo-negativo { color: #ff3b30 !important; }
+#saldo-mes.saldo-positivo { color: #34c759 !important; }

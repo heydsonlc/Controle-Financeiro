@@ -186,6 +186,30 @@ async function estornar(id, corpo) {
     return ok({ message: 'Recebimento estornado com sucesso.', data: r });
 }
 
+// FIN-RECEITAS-SALDO-01 (migration 20261224090000): previsoes ja gravadas pelo valor-base novo, a partir de uma
+// competencia. A tela mostra a previa (o que muda e o que fica, com o motivo) e so confirma com a versao da fonte e a
+// quantidade da previa; o banco preserva recebidas, parciais e alteradas manualmente e registra em operacao_receita.
+const MES_ANO = /^\d{4}-\d{2}$/;
+async function previaAtualizacao(id, parametros) {
+    const aPartir = parametros.get('a_partir');
+    const data = await rpc((a) => supabase.rpc('previa_atualizacao_previsoes', a), {
+        p_perfil_id: estado.perfilId, p_item_id: id, p_a_partir: MES_ANO.test(aPartir || '') ? `${aPartir}-01` : null,
+    });
+    return ok({ data });
+}
+
+async function atualizarPrevisoes(id, corpo) {
+    if (!MES_ANO.test(corpo.a_partir || '')) return falha('Informe a competência inicial.');
+    if (!Number.isInteger(corpo.esperadas) || !corpo.versao) return falha('Confira a prévia antes de confirmar.');
+    const operacao = `atualizar-previsoes-${id}-${corpo.a_partir}-${corpo.esperadas}`;
+    const r = await rpc((a) => supabase.rpc('atualizar_previsoes_fonte', a), {
+        p_perfil_id: estado.perfilId, p_item_id: id, p_versao: corpo.versao, p_a_partir: `${corpo.a_partir}-01`,
+        p_esperadas: corpo.esperadas, p_chave: chaves.de(operacao),
+    });
+    chaves.esquecer(operacao);
+    return ok({ message: `${r.atualizadas} previsão(ões) atualizada(s) para o valor-base.`, data: r });
+}
+
 async function excluirRecebimento(id) {
     const recebimento = (await realizadas(new URLSearchParams())).find((r) => r.id === id);
     if (recebimento && recebimento.conta_bancaria_id) {
@@ -201,6 +225,8 @@ const ROTAS = [
     ['POST', /^\/api\/receitas\/itens\/?$/, (m, corpo) => criarFonte(corpo || {})],
     ['PUT', /^\/api\/receitas\/itens\/(\d+)$/, (m, corpo) => editarFonte(Number(m[1]), corpo || {})],
     ['DELETE', /^\/api\/receitas\/itens\/(\d+)$/, (m) => inativarFonte(Number(m[1]))],
+    ['GET', /^\/api\/receitas\/itens\/(\d+)\/previa-atualizacao$/, (m, c, p) => previaAtualizacao(Number(m[1]), p)],
+    ['POST', /^\/api\/receitas\/itens\/(\d+)\/atualizar-previsoes$/, (m, corpo) => atualizarPrevisoes(Number(m[1]), corpo || {})],
     ['GET', /^\/api\/receitas\/orcamento\/?$/, async (m, c, p) => {
         const ano = Number(p.get('ano'));
         if (!ano) return falha('Parâmetro ano é obrigatório');

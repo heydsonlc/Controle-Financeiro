@@ -204,6 +204,21 @@
     //      entao interrompe a recorrencia (ativa ou ja inativa), com a quantidade da previa conferida no banco.
     const previaFuturas = async (id) => (await fetch(`/api/despesas/${id}/previa-futuras`)).json();
 
+    // FIN-RECEITAS-SALDO-01: o saldo do mes negativo aparece com o sinal (antes so a cor vermelha, com o valor absoluto).
+    const renderizarSidebarOriginal = window.renderizarSidebar;
+    window.renderizarSidebar = function renderizarSidebar(sidebar) {
+        renderizarSidebarOriginal(sidebar);
+        const elSaldo = document.getElementById('saldo-mes');
+        if (!sidebar || !elSaldo) return;
+        const saldo = Number(sidebar.saldo_mes ?? 0);
+        elSaldo.textContent = saldo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        // A cor do original (style.color) perde para o "color: ... !important" do tema claro: classe propria no CSS.
+        elSaldo.classList.toggle('saldo-negativo', saldo < 0);
+        elSaldo.classList.toggle('saldo-positivo', saldo >= 0);
+        elSaldo.title = `Receitas do mês ${Number(sidebar.receitas_mes || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
+            + ` − despesas do mês ${Number(sidebar.total_mes || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
+    };
+
     const abrirExclusaoOriginal = window.deletarDespesaModal;
     window.deletarDespesaModal = function deletarDespesaModal() {
         abrirExclusaoOriginal();

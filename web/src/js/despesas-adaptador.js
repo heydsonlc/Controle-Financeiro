@@ -181,7 +181,8 @@ async function listar(parametros) {
     // As contas sao lidas depois da geracao (lista, cards e barra lateral ja com o que foi gerado).
     const [preparo, receitas, categorias, , recorrentes] = await Promise.all([
         prepararGeracao(mes),
-        supabase.rpc('receitas_do_mes', { p_perfil_id: estado.perfilId, p_mes: `${mes}-01` }),
+        // FIN-RECEITAS-SALDO-01: o total de receitas pela regra unica do banco (a mesma do Dashboard e de Receitas do mes)
+        supabase.rpc('receitas_totais_do_mes', { p_perfil_id: estado.perfilId, p_mes: `${mes}-01` }),
         categoriasDeDespesa(), contasBancariasAtivas(),
         supabase.rpc('recorrencias_do_perfil', { p_perfil_id: estado.perfilId }),
     ]);
@@ -201,10 +202,8 @@ async function listar(parametros) {
     const vizinhas = [[anterior, deslocarMes(mes, -1)], [seguinte, deslocarMes(mes, 1)]]
         .flatMap(([r, m]) => (r.error ? [] : r.data || []).map((c) => linhaDoFlask(c, m, null, categoriasPorNome)));
     estado.linhas = new Map(linhas.map((l) => [l.id, l]));
-    const receitasMes = (receitas.error ? [] : receitas.data || []).reduce((s, r) => {
-        const recebido = centavos(r.valor_recebido);
-        return s + (recebido > 0 ? recebido : centavos(r.valor_previsto));
-    }, 0) / 100;
+    // Estorno nao conta; parcial conta o previsto; recebido acima do previsto conta o recebido (receitas_totais_do_mes).
+    const receitasMes = receitas.error || !receitas.data ? 0 : centavos(receitas.data.previstas) / 100;
     return ok({ data: linhas, sidebar: barraLateral(linhas, [...linhas, ...vizinhas], receitasMes) });
 }
 
