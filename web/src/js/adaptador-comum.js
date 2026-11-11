@@ -51,6 +51,18 @@ const BLOQUEIOS = {
     'Gerada por recorrencia: edite a recorrencia': 'Gerada por recorrência: altere a recorrência.',
     'Fatura paga: correcao so por estorno': 'Fatura paga: para corrigir, estorne o pagamento da fatura.',
     'Fatura fechada (consolidada)': 'Fatura fechada (consolidada).',
+    // FIN-DESPESAS-CANCELAMENTO-01 (P23): cancelamento da obrigacao com pagamento estornado.
+    'Obrigacao cancelada: nada a pagar': 'Obrigação cancelada: nada a pagar.',
+    'Obrigacao ja cancelada': 'Obrigação já cancelada.',
+    'Sem pagamento estornado: use Excluir': 'Sem pagamento estornado: use Excluir.',
+    'Pagamento ainda valido: estorne antes de cancelar': 'Pagamento ainda válido: estorne o pagamento antes de cancelar.',
+    'Pagamento parcialmente estornado: ha valor pago residual': 'Pagamento parcialmente estornado: há valor pago residual.',
+    'Movimento financeiro nao conciliado com o pagamento e o estorno': 'Movimento financeiro não conciliado com o pagamento e o estorno.',
+    'Protegida por outro vinculo financeiro: abastecimento': 'Protegida por outro vínculo financeiro: abastecimento.',
+    'Protegida por outro vinculo financeiro: despesa prevista': 'Protegida por outro vínculo financeiro: despesa prevista.',
+    'Protegida por outro vinculo financeiro: regularizacao historica': 'Protegida por outro vínculo financeiro: regularização histórica.',
+    'Protegida por outro vinculo financeiro: parcela historica': 'Protegida por outro vínculo financeiro: parcela histórica.',
+    'Protegida por outro vinculo financeiro: troca de Mobilidade': 'Protegida por outro vínculo financeiro: troca de Mobilidade.',
 };
 export const textoBloqueio = (motivo) => BLOQUEIOS[motivo] || `${motivo}.`;
 

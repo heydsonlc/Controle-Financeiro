@@ -222,7 +222,16 @@ async function obter(id) {
     }
     if (!edicao.pode_gerir) return falha('Você tem acesso somente de leitura a este perfil.', 403);
     if (edicao.bloqueio && /consorcio/i.test(edicao.bloqueio)) return emMigracao('Parcelas de consórcio');
-    if (edicao.bloqueio && !edicao.pode_editar) return falha(`Esta despesa não pode ser editada. ${textoBloqueio(edicao.bloqueio)}`, 409);
+    // FIN-DESPESAS-CANCELAMENTO-01 (P23): com o pagamento integralmente estornado, o formulario abre so para consulta e para
+    // "Cancelar obrigacao" (a edicao continua recusada no banco); com pagamento ativo ou estorno incompleto, nao abre.
+    let somenteCancelamento = false;
+    if (edicao.bloqueio === 'Possui movimento financeiro vinculado') {
+        const { data, error } = await supabase.rpc('previa_cancelamento_despesa', { p_perfil_id: estado.perfilId, p_conta_id: id });
+        somenteCancelamento = !error && Boolean(data && data.elegivel);
+    }
+    if (edicao.bloqueio && !edicao.pode_editar && !somenteCancelamento) {
+        return falha(`Esta despesa não pode ser editada. ${textoBloqueio(edicao.bloqueio)}`, 409);
+    }
     const linha = estado.linhas.get(id);
     return ok({ data: {
         id,
@@ -238,6 +247,7 @@ async function obter(id) {
         mes_competencia: String(edicao.conta.competencia || '').slice(0, 7),
         meio_pagamento: edicao.conta.debito_automatico ? 'debito' : '',
         tipo: 'Simples',
+        somente_cancelamento: somenteCancelamento,  // P23
     } });
 }
 
@@ -335,6 +345,13 @@ async function excluir(id, parametros) {
     } catch (erro) {
         return falha(mensagemDeErro(erro), 404);
     }
+    // FIN-DESPESAS-CANCELAMENTO-01 (P23): com o pagamento integralmente estornado, a obrigacao e cancelada (a conta fica,
+    // fora das pendencias, com o pagamento e o estorno); o banco confere a elegibilidade e a versao.
+    if (parametros.get('tipo_exclusao') === 'cancelar') {
+        const { error } = await supabase.rpc('cancelar_despesa', { p_perfil_id: estado.perfilId, p_conta_id: id, p_versao: edicao.versao });
+        if (error) return falha(mensagemDeErro(error));
+        return ok({ message: 'Obrigação cancelada. A despesa deixou de ser exigível; o pagamento e o estorno continuam no histórico.' });
+    }
     if (!edicao.pode_excluir) return falha(edicao.bloqueio ? textoBloqueio(edicao.bloqueio) : 'Esta despesa não pode ser excluída.', 409);
     // FIN-RECORRENCIAS-INATIVACAO-01 (P22): "esta e as futuras" interrompe a recorrencia a partir da competencia desta conta
     // (ativa ou ja inativa), numa so transacao: esta conta e as futuras elegiveis deixam de ser exigiveis; pagas, com
@@ -363,8 +380,15 @@ async function previaFuturas(id) {
         return falha(mensagemDeErro(erro), 404);
     }
     if (!edicao.pode_excluir) {
-        return ok({ data: { pode: false, pode_excluir: false,
-            motivo: edicao.bloqueio ? textoBloqueio(edicao.bloqueio) : 'Esta despesa não pode ser excluída.' } });
+        const motivo = edicao.bloqueio ? textoBloqueio(edicao.bloqueio) : 'Esta despesa não pode ser excluída.';
+        // P23: a despesa com pagamento integralmente estornado nao se exclui, mas a obrigacao pode ser cancelada.
+        if (edicao.pode_gerir && edicao.bloqueio === 'Possui movimento financeiro vinculado') {
+            const { data, error } = await supabase.rpc('previa_cancelamento_despesa', { p_perfil_id: estado.perfilId, p_conta_id: id });
+            if (error) return falha(mensagemDeErro(error));
+            if (data.elegivel) return ok({ data: { pode: false, pode_excluir: false, pode_cancelar: true, motivo, cancelamento: data } });
+            return ok({ data: { pode: false, pode_excluir: false, pode_cancelar: false, motivo: textoBloqueio(data.motivo) } });
+        }
+        return ok({ data: { pode: false, pode_excluir: false, motivo } });
     }
     if (!edicao.item.recorrente) return ok({ data: { pode: false, pode_excluir: true, motivo: 'Despesa sem recorrência.' } });
     const { data, error } = await supabase.rpc('previa_interrupcao_recorrencia', {

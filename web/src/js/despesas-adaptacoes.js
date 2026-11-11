@@ -253,29 +253,120 @@
             + ` − despesas do mês ${Number(sidebar.total_mes || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
     };
 
+    // FIN-DESPESAS-CANCELAMENTO-01 (P23): com o pagamento integralmente estornado, a exclusao fisica nao e segura (o
+    // historico ficaria sem a conta); o mesmo modal passa a oferecer so "Cancelar obrigacao", que encerra a obrigacao
+    // pendente e preserva o pagamento e o estorno. "Esta e as futuras" (P22) fica fora deste caso.
+    const botoesExclusao = () => [...document.querySelectorAll('#modal-tipo-exclusao [data-on-click^="confirmarTipoExclusao"]')];
+    const botaoExclusao = (tipo) => botoesExclusao().find((b) => b.dataset.onClick.includes(`'${tipo}'`));
+    const textosOriginais = new Map();
+    function restaurarModalExclusao() {
+        botoesExclusao().forEach((b) => {
+            if (textosOriginais.has(b)) b.textContent = textosOriginais.get(b);
+            b.style.display = '';
+            b.disabled = false;
+            b.title = '';
+        });
+    }
+    function abrirCancelamento(id) {
+        restaurarModalExclusao();
+        window.fecharModal();
+        window.despesaExcluindo = id;
+        window.tipoDespesaExcluindo = 'cancelamento';
+        document.getElementById('modal-exclusao-titulo').textContent = 'Cancelar obrigação';
+        document.getElementById('modal-exclusao-texto').textContent = 'Esta despesa possui um pagamento anteriormente estornado. '
+            + 'O cancelamento encerrará a obrigação pendente, preservando o histórico financeiro.';
+        const unica = botaoExclusao('unica');
+        const futuras = botaoExclusao('futuras');
+        if (unica) {
+            if (!textosOriginais.has(unica)) textosOriginais.set(unica, unica.textContent);
+            unica.textContent = 'Cancelar obrigação';
+        }
+        if (futuras) futuras.style.display = 'none';
+        document.getElementById('modal-tipo-exclusao').style.display = 'block';
+    }
+
+    // P23: o lapis da despesa com pagamento integralmente estornado abre o formulario para consulta: campos e Salvar
+    // bloqueados (a edicao continua recusada no banco) e o botao de excluir vira "Cancelar obrigacao", que leva a
+    // confirmacao. O estado do formulario volta ao normal ao abrir qualquer outra despesa.
+    const AVISO_CANCELAMENTO = 'Esta despesa possui um pagamento anteriormente estornado: não pode ser editada. '
+        + 'A obrigação pode ser cancelada, preservando o pagamento e o estorno no histórico.';
+    function restaurarFormulario() {
+        const form = document.getElementById('form-despesa');
+        if (!form) return;
+        form.querySelectorAll('[data-cf-bloqueado]').forEach((el) => { el.disabled = false; el.removeAttribute('data-cf-bloqueado'); });
+        form.querySelectorAll('.cf-aviso-cancelamento, #btn-cancelar-obrigacao').forEach((el) => el.remove());
+    }
+    function somenteCancelamento() {
+        const form = document.getElementById('form-despesa');
+        const excluir = document.getElementById('btn-deletar-modal');
+        if (!form || !excluir) return;
+        form.querySelectorAll('input, select, textarea, button').forEach((el) => {
+            if (el === excluir || el.disabled || el.type === 'hidden' || /fecharModal/.test(el.dataset.onClick || '')) return;
+            el.disabled = true;
+            el.setAttribute('data-cf-bloqueado', '');
+        });
+        form.prepend(Object.assign(document.createElement('p'), { className: 'cf-aviso-cancelamento', textContent: AVISO_CANCELAMENTO }));
+        // O icone de excluir da lugar ao botao "Cancelar obrigacao", que abre a confirmacao (deletarDespesaModal).
+        excluir.style.display = 'none';  // o original volta a mostra-lo ao abrir a proxima despesa
+        const cancelar = Object.assign(document.createElement('button'), { type: 'button', id: 'btn-cancelar-obrigacao',
+            className: 'btn btn-danger', textContent: 'Cancelar obrigação' });
+        cancelar.addEventListener('click', () => window.deletarDespesaModal());
+        excluir.after(cancelar);
+    }
+    const editarDespesaOriginal = window.editarDespesa;
+    window.editarDespesa = async function editarDespesa(id) {
+        restaurarFormulario();
+        let somente = false;
+        try {
+            const r = await (await fetch(`/api/despesas/${id}`)).json();
+            somente = Boolean(r.success && r.data && r.data.somente_cancelamento);
+        } catch (erro) {
+            somente = false;
+        }
+        await editarDespesaOriginal(id);
+        if (somente && String(document.getElementById('despesa-id')?.value) === String(id)) somenteCancelamento();
+    };
+
     const abrirExclusaoOriginal = window.deletarDespesaModal;
-    window.deletarDespesaModal = function deletarDespesaModal() {
+    window.deletarDespesaModal = async function deletarDespesaModal() {
+        const alvo = Number.parseInt(document.getElementById('despesa-id')?.value, 10);
+        let previa = null;
+        if (alvo) {
+            try {
+                previa = await previaFuturas(alvo);
+            } catch (erro) {
+                previa = null;
+            }
+        }
+        if (previa && previa.success && previa.data.pode_cancelar) {
+            abrirCancelamento(alvo);
+            return;
+        }
+        restaurarModalExclusao();
         abrirExclusaoOriginal();
         const id = window.despesaExcluindo;
-        if (!id || window.tipoDespesaExcluindo !== 'recorrente') return;
-        const botoes = [...document.querySelectorAll('#modal-tipo-exclusao [data-on-click^="confirmarTipoExclusao"]')];
-        const botao = (tipo) => botoes.find((b) => b.dataset.onClick.includes(`'${tipo}'`));
-        botoes.forEach((b) => { b.disabled = false; b.title = ''; });
-        previaFuturas(id).then((r) => {
-            if (!r.success || window.despesaExcluindo !== id) return;
-            const motivo = r.data.motivo || '';
-            if (!r.data.pode_excluir) {
-                ['unica', 'futuras'].forEach((tipo) => { const b = botao(tipo); if (b) { b.disabled = true; b.title = motivo; } });
-            } else if (!r.data.pode) {
-                const b = botao('futuras');
-                if (b) { b.disabled = true; b.title = motivo; }
-            }
-        }).catch(() => {});
+        if (!id || window.tipoDespesaExcluindo !== 'recorrente' || !previa || !previa.success) return;
+        const motivo = previa.data.motivo || '';
+        if (!previa.data.pode_excluir) {
+            ['unica', 'futuras'].forEach((tipo) => { const b = botaoExclusao(tipo); if (b) { b.disabled = true; b.title = motivo; } });
+        } else if (!previa.data.pode) {
+            const b = botaoExclusao('futuras');
+            if (b) { b.disabled = true; b.title = motivo; }
+        }
     };
 
     const confirmarExclusaoOriginal = window.confirmarTipoExclusao;
     window.confirmarTipoExclusao = async function confirmarTipoExclusao(tipo) {
         const id = window.despesaExcluindo;
+        if (window.tipoDespesaExcluindo === 'cancelamento') {
+            window.fecharModalTipoExclusao();
+            restaurarModalExclusao();
+            if (tipo !== 'unica' || !id) return undefined;
+            const r = await (await fetch(`/api/despesas/${id}?tipo_exclusao=cancelar`, { method: 'DELETE' })).json();
+            alert(r.success ? r.message : `Não foi possível cancelar a obrigação: ${r.error}`);
+            if (r.success) window.carregarDespesas();
+            return undefined;
+        }
         if (tipo !== 'futuras' || window.tipoDespesaExcluindo !== 'recorrente' || !id) return confirmarExclusaoOriginal(tipo);
         window.fecharModalTipoExclusao();
         const r = await previaFuturas(id);

@@ -113,6 +113,7 @@ const RPCS_DE_LEITURA = new Set(['meus_perfis', 'contas_bancarias_do_perfil', 'c
     'projecoes_veiculo_tela',  // FIN-MVP-MOB-02: lista de Projecoes do veiculo (so le)
     'previa_interrupcao_recorrencia', 'previa_retomada_recorrencia',  // FIN-RECORRENCIAS-INATIVACAO-01 (P22, so leem)
     'receitas_totais_do_mes', 'previa_atualizacao_previsoes',  // FIN-RECEITAS-SALDO-01 (so leem)
+    'previa_cancelamento_despesa',  // FIN-DESPESAS-CANCELAMENTO-01 (P23, so le)
     'consorcios_tela',  // FIN-FIDELIDADE-CONTRATOS-1 (Consorcios, so leitura)
     // FIN-FIDELIDADE-RECEITAS-CATEGORIAS-1 (so leitura)
     'receitas_fontes_tela', 'receitas_orcamentos_tela', 'receitas_realizadas_tela', 'categorias_tela', 'palavras_chave_tela',
@@ -136,6 +137,8 @@ const RPCS_DE_ESCRITA = new Map([
     ['retomar_recorrencia', 'recorrencias-adaptador.js'],
     // FIN-RECEITAS-SALDO-01: previsoes pendentes pelo valor-base, so com a confirmacao da previa (auditado no banco)
     ['atualizar_previsoes_fonte', 'receitas-adaptador.js'],
+    // FIN-DESPESAS-CANCELAMENTO-01 (P23): cancelar a obrigacao com pagamento estornado (elegibilidade e historico no banco)
+    ['cancelar_despesa', 'despesas-adaptador.js'],
     // FIN-FIDELIDADE-RECORRENCIAS-1 (tela de Recorrencias; o banco exige gestao do perfil e a versao)
     ['editar_recorrencia', 'recorrencias-adaptador.js'],
     ['reativar_recorrencia', 'recorrencias-adaptador.js'],

@@ -81,3 +81,8 @@ body.cf-somente-leitura .despesa-actions .row-action-button:not([data-on-click^=
 
 /* FIN-CARTOES-EXECUTADO-01: nota do executado consolidado no pagamento da fatura. */
 .aviso-fatura-cartao .cf-fatura-consolidado { margin: 10px 0 0; font-size: 0.85em; line-height: 1.45; }
+
+/* P23: aviso do formulario aberto so para cancelar a obrigacao (pagamento integralmente estornado). */
+#form-despesa .cf-aviso-cancelamento { margin: 0 0 12px; padding: 10px 12px; border-radius: 8px; background: #fff7ed;
+    color: #9a3412; font-size: 0.9em; line-height: 1.45; }
+#form-despesa [data-cf-bloqueado] { opacity: 0.55; cursor: not-allowed; }
