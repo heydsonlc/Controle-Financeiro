@@ -210,6 +210,31 @@ async function atualizarPrevisoes(id, corpo) {
     return ok({ message: `${r.atualizadas} previsão(ões) atualizada(s) para o valor-base.`, data: r });
 }
 
+// P24 (FIN-CONSORCIOS-INTEGRACAO-01): "Confirmar/realizar" da contemplacao de consorcio. O Flask completa o proprio
+// recebimento previsto (PUT /realizadas/:id com a conta), que passa a recebido e gera o credito; o banco faz o mesmo em
+// realizar_contemplacao_consorcio (uma vez, auditado). Valor, data e justificativa vem dos campos do modal de consolidar.
+// Editar outro recebimento continua indisponivel (corrigir = estornar e registrar de novo).
+async function atualizarRecebimento(id, corpo) {
+    const consolidando = document.getElementById('modal-consolidar-conta')?.getAttribute('aria-hidden') === 'false';
+    const data = (consolidando && document.getElementById('consolidar-data-recebimento')?.value) || corpo.data_recebimento || null;
+    const justificativa = (consolidando && document.getElementById('consolidar-justificativa')?.value.trim()) || null;
+    const operacao = `contemplacao-${id}`;
+    const { data: r, error } = await supabase.rpc('realizar_contemplacao_consorcio', {
+        p_perfil_id: estado.perfilId, p_receita_id: id, p_chave: chaves.de(operacao), p_dados: {
+            conta_bancaria_id: corpo.conta_bancaria_id || null, data_recebimento: data,
+            valor_recebido: corpo.valor_recebido === undefined ? null : (Number(corpo.valor_recebido) || 0).toFixed(2), justificativa,
+        },
+    });
+    if (error) {
+        if (error.hint === 'NAO_E_CONTEMPLACAO') {
+            return falha('Editar um recebimento ainda não está disponível nesta versão do aplicativo. Para corrigir, estorne e registre de novo. Nada foi gravado.');
+        }
+        return falha(mensagem(error), error.code === '42501' ? 403 : 400);
+    }
+    chaves.esquecer(operacao);
+    return ok({ message: 'Contemplação do consórcio recebida com sucesso.', data: r });
+}
+
 async function excluirRecebimento(id) {
     const recebimento = (await realizadas(new URLSearchParams())).find((r) => r.id === id);
     if (recebimento && recebimento.conta_bancaria_id) {
@@ -241,8 +266,7 @@ const ROTAS = [
     }],
     ['POST', /^\/api\/receitas\/realizadas\/?$/, (m, corpo) => receber(corpo || {})],
     ['POST', /^\/api\/receitas\/realizadas\/(\d+)\/estornar$/, (m, corpo) => estornar(Number(m[1]), corpo || {})],
-    ['PUT', /^\/api\/receitas\/realizadas\/(\d+)$/, async () => falha('Editar um recebimento ainda não está disponível nesta versão do aplicativo. '
-        + 'Para corrigir, estorne e registre de novo. Nada foi gravado.')],
+    ['PUT', /^\/api\/receitas\/realizadas\/(\d+)$/, (m, corpo) => atualizarRecebimento(Number(m[1]), corpo || {})],  // P24
     ['DELETE', /^\/api\/receitas\/realizadas\/(\d+)$/, (m) => excluirRecebimento(Number(m[1]))],
 ];
 

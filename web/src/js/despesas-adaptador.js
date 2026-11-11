@@ -221,7 +221,19 @@ async function obter(id) {
         return falha(mensagemDeErro(erro), 404);
     }
     if (!edicao.pode_gerir) return falha('Você tem acesso somente de leitura a este perfil.', 403);
-    if (edicao.bloqueio && /consorcio/i.test(edicao.bloqueio)) return emMigracao('Parcelas de consórcio');
+    // P24: parcela de consorcio pendente abre para editar valor e vencimento ("esta" ou "esta e as futuras", escolha da tela
+    // original); paga ou com movimento, nao (o banco confere de novo em editar_parcela_consorcio).
+    if (edicao.bloqueio && /consorcio/i.test(edicao.bloqueio)) {
+        if (edicao.conta.status_pagamento !== 'Pendente') {
+            return falha('Esta parcela já foi paga: o valor não pode ser alterado. Para corrigir, estorne o pagamento.', 409);
+        }
+        return ok({ data: {
+            id, nome: edicao.conta.nome, descricao: edicao.conta.descricao || '', valor: Number(edicao.conta.valor),
+            categoria_id: edicao.item.categoria_id, data_vencimento: edicao.conta.data_vencimento, data_pagamento: null, pago: false,
+            recorrente: false, tipo_recorrencia: 'mensal', mes_competencia: String(edicao.conta.competencia || '').slice(0, 7),
+            meio_pagamento: edicao.conta.debito_automatico ? 'debito' : '', tipo: 'Consorcio',
+        } });
+    }
     // FIN-DESPESAS-CANCELAMENTO-01 (P23): com o pagamento integralmente estornado, o formulario abre so para consulta e para
     // "Cancelar obrigacao" (a edicao continua recusada no banco); com pagamento ativo ou estorno incompleto, nao abre.
     let somenteCancelamento = false;
@@ -298,12 +310,26 @@ async function criar(corpo) {
     return ok({ message });
 }
 
-async function atualizar(id, corpo) {
+async function atualizar(id, corpo, parametros) {
     let edicao;
     try {
         edicao = await edicaoAtual(id);
     } catch (erro) {
         return falha(mensagemDeErro(erro), 404);
+    }
+    // P24: parcela de consorcio (valor e vencimento; "esta e as futuras" leva o valor as seguintes do contrato).
+    if (edicao.bloqueio && /consorcio/i.test(edicao.bloqueio)) {
+        if (!(Number(corpo.valor) > 0)) return falha('Informe um valor válido.');
+        const escopo = parametros && parametros.get('tipo_edicao') === 'futuras' ? 'futuras' : 'unica';
+        const { data, error } = await supabase.rpc('editar_parcela_consorcio', {
+            p_perfil_id: estado.perfilId, p_conta_id: id, p_versao: edicao.versao, p_escopo: escopo,
+            p_dados: { valor: valorTexto(corpo.valor), data_vencimento: corpo.data_vencimento || edicao.conta.data_vencimento },
+        });
+        if (error) return falha(mensagemDeErro(error));
+        const ficam = (data.preservadas || []).length ? ` ${data.preservadas.length} parcela(s) paga(s) ou com movimento ficaram como estavam.` : '';
+        return ok({ message: escopo === 'futuras'
+            ? `Parcela e ${Math.max(data.atualizadas - 1, 0)} parcela(s) futura(s) atualizadas com sucesso.${ficam}`
+            : 'Parcela atualizada com sucesso.' });
     }
     if (!edicao.pode_editar) return falha(edicao.bloqueio ? textoBloqueio(edicao.bloqueio) : 'Operação não autorizada para este perfil.', 409);
     if (corpo.pago && edicao.conta.status_pagamento !== 'Pago') {
@@ -545,7 +571,7 @@ const ROTAS = [
     ['GET', /^\/api\/despesas\/?$/, (m, p) => listar(p)],
     ['POST', /^\/api\/despesas\/?$/, (m, p, corpo) => criar(corpo)],
     ['GET', /^\/api\/despesas\/(\d+)$/, (m) => obter(Number(m[1]))],
-    ['PUT', /^\/api\/despesas\/(\d+)$/, (m, p, corpo) => atualizar(Number(m[1]), corpo || {})],
+    ['PUT', /^\/api\/despesas\/(\d+)$/, (m, p, corpo) => atualizar(Number(m[1]), corpo || {}, p)],
     ['DELETE', /^\/api\/despesas\/(\d+)$/, (m, p) => excluir(Number(m[1]), p)],
     ['GET', /^\/api\/despesas\/(\d+)\/previa-futuras$/, (m) => previaFuturas(Number(m[1]))],  // P22
     ['POST', /^\/api\/despesas\/(\d+)\/pagar$/, (m, p, corpo) => pagar(Number(m[1]), corpo || {})],

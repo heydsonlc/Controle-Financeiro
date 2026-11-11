@@ -135,6 +135,9 @@ const RPCS_DE_ESCRITA = new Map([
     // FIN-RECORRENCIAS-INATIVACAO-01 (P22): interromper (Recorrencias e "esta e as futuras" de Despesas) e retomar
     ['interromper_recorrencia', ['despesas-adaptador.js', 'recorrencias-adaptador.js']],
     ['retomar_recorrencia', 'recorrencias-adaptador.js'],
+    // P24 (FIN-CONSORCIOS-INTEGRACAO-01): realizar a contemplacao prevista e editar parcela de consorcio pendente
+    ['realizar_contemplacao_consorcio', 'receitas-adaptador.js'],
+    ['editar_parcela_consorcio', 'despesas-adaptador.js'],
     // FIN-RECEITAS-SALDO-01: previsoes pendentes pelo valor-base, so com a confirmacao da previa (auditado no banco)
     ['atualizar_previsoes_fonte', 'receitas-adaptador.js'],
     // FIN-DESPESAS-CANCELAMENTO-01 (P23): cancelar a obrigacao com pagamento estornado (elegibilidade e historico no banco)

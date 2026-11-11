@@ -39,3 +39,46 @@
         return undefined;
     };
 })();
+
+// P24 (FIN-CONSORCIOS-INTEGRACAO-01): consorcio ja em andamento. No cadastro (nao na edicao), o contrato e informado
+// inteiro (Data inicial = mes da 1a parcela, numero total de parcelas) e o campo abaixo diz quantas das primeiras ja foram
+// pagas antes do cadastro: elas ficam pagas no historico, sem debito bancario, e a numeracao segue a do contrato (5/10).
+(function () {
+    function campo() {
+        const grupo = document.getElementById('campos-consorcio');
+        if (!grupo || document.getElementById('parcelas-pagas-anteriores')) return;
+        const caixa = document.createElement('div');
+        caixa.className = 'form-group';
+        caixa.id = 'grupo-parcelas-pagas-anteriores';
+        const rotulo = Object.assign(document.createElement('label'), { textContent: 'Parcelas já pagas antes do cadastro' });
+        rotulo.htmlFor = 'parcelas-pagas-anteriores';
+        const entrada = Object.assign(document.createElement('input'), { type: 'number', id: 'parcelas-pagas-anteriores', min: '0', step: '1',
+            placeholder: '0' });
+        const ajuda = Object.assign(document.createElement('small'), { id: 'parcelas-pagas-anteriores-ajuda',
+            textContent: 'Contrato em andamento: informe o mês da 1ª parcela e o total do contrato. As primeiras parcelas pagas '
+                + 'ficam no histórico como pagas, sem débito bancário.' });
+        entrada.setAttribute('aria-describedby', ajuda.id);
+        caixa.append(rotulo, entrada, ajuda);
+        grupo.appendChild(caixa);
+    }
+    function ajustar() {
+        campo();
+        const caixa = document.getElementById('grupo-parcelas-pagas-anteriores');
+        if (!caixa) return;
+        const editando = Boolean(document.getElementById('recorrencia-id')?.value);
+        caixa.hidden = editando;  // so no cadastro
+        if (editando) document.getElementById('parcelas-pagas-anteriores').value = '';
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ajustar);
+    else ajustar();
+    ['prepararFormularioNovaRecorrencia', 'editarRecorrencia', 'alternarTipoCadastro'].forEach((nome) => {
+        const original = window[nome];
+        if (typeof original !== 'function') return;
+        window[nome] = function (...args) {
+            const r = original.apply(this, args);
+            Promise.resolve(r).then(ajustar);
+            ajustar();
+            return r;
+        };
+    });
+}());
