@@ -1,6 +1,6 @@
 # FIN-CARTOES-EXECUTADO-01 — executado consolidado da fatura do cartão
 
-**Situação:** implementado localmente no ramo `cartoes-executado-01`, sobre `receitas-saldo-01`. Migration `20261225090000`, que depende da `20261224090000`. Nada aplicado em produção. Publicação só com autorização expressa.
+**Situação:** publicado em 11/11/2026, depois da 1224 (push até `feca20e`, migration `20261225090000` = 65, deploy `a82961cc`).
 **Testes:** nível N4 (integridade financeira).
 
 ## 1. Diagnóstico (11/11/2026, somente leitura)
@@ -139,3 +139,26 @@ Cada valor novo está decomposto no próprio teste.
 - **Cobrança importada não reconhecida** como a recorrência (descrição diferente, sem apelido) aparece junto da previsão no executado até ser conciliada. A importação já sinaliza as pendências de recorrência, e conciliar resolve.
 - **Fixa que o banco não cobrou:** continua no executado consolidado da fatura paga. A diferença fica registrada no pagamento, com classificação e justificativa. Se for preciso tirá-la do consolidado, isso fica para uma operação própria de “marcar como não cobrada”, que não existe na tela hoje.
 - **Ordem de publicação:** 1224 → 1225. A P23 (`f844795`, migration 1223) altera `contas_do_mes` e `dashboard_resumo_tela`: precisa ser regenerada sobre o texto vigente e renumerada antes de publicar.
+
+## 8. Publicação (11/11/2026)
+
+Publicada logo depois da 1224, por autorização expressa do titular. As etapas comuns estão em `docs/FIN_RECEITAS_SALDO_01.md`: pré-condições, push `080e26b..feca20e`, deploy `a82961cc` e auditoria.
+
+- **Migration 1225:** APLICADA E CONFERIDA (65 migrations).
+  - As 9 funções eram iguais ao texto da reversão.
+  - 1 função nova e 9 substituídas, com os 10 corpos iguais ao arquivo.
+  - Nenhum acesso novo ou perdido; nenhum dado alterado; segurança sem bloqueios.
+
+**Homologação de leitura (como o titular, nada gravado):**
+
+| Critério | Resultado |
+|---|---|
+| Visa 12/2026 | previsto **R$ 729,60**, executado **R$ 329,60**; por categoria: fixas 329,60, parceladas 0, Assinaturas com o limite de 400 inteiro (o orçamento não é executado) |
+| Master Black 12/2026 | previsto R$ 5.613,31; executado R$ 1.525,62, sendo R$ 323,47 de fixas previstas |
+| Despesas × Dashboard | faturas em aberto iguais: 12/2026 R$ 6.342,91; 01/2027 R$ 5.860,10; 11/2026 R$ 0,00 |
+| Faturas pagas 11/2026 | Master R$ 9.599,80 e Visa R$ 3.928,91, como antes; pagamento com o executado gravado |
+| Conciliação | nenhuma recorrência com mais de um lançamento na mesma competência |
+| Pagamento | sugerido = executado consolidado; parte prevista informada (Visa 329,60; Master 323,47) |
+| Marcas de não cobrada | as 7 de 11/2026, vigentes e intactas |
+
+**Exceção registrada (E2E):** `web/tests/e2e/recorrencia.spec.mjs`, “excluir só esta e esta e as futuras”. O teste espera o alerta anterior à P22 (`d082378`), mas desde então “esta e as futuras” abre a prévia da interrupção. O arquivo não muda desde `646912c` (30/10). A falha é anterior e alheia às 1224/1225. O teste continua no repositório, sem ser ocultado; corrigi-lo é uma pendência própria.

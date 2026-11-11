@@ -1,6 +1,6 @@
 # FIN-RECEITAS-SALDO-01 — previsões de receita pelo valor-base e saldo do mês
 
-**Situação:** implementado localmente no ramo `receitas-saldo-01`, sobre `d69dddd`. Migration `20261224090000`, não aplicada em produção. Publicação só com autorização.
+**Situação:** publicado em 11/11/2026 (push até `feca20e`, migration `20261224090000` = 64, deploy `a82961cc`).
 **Testes:** nível N4 (integridade financeira).
 
 ## 1. Diagnóstico (11/11/2026, somente leitura)
@@ -159,3 +159,21 @@ Script `scratchpad/rec01/ensaio_1224.py`, executado em 11/11/2026. Cópia da pro
 
 - A P23 (`f844795`, ramo `despesas-cancelamento-01`) também tem migration 1223 e altera `dashboard_resumo_tela`. Quem for publicado depois precisa ser regenerado a partir do texto de produção daquele momento e, se for o caso, renumerado.
 - O E2E deixa no usuário E fictício previsões de 11/2026 a 10/2027 da fonte de teste, criadas pela regra do Flask (os 12 meses a partir de hoje). A fonte de teste fica inativa.
+
+## Publicação (11/11/2026)
+
+Publicada em conjunto com o FIN-CARTOES-EXECUTADO-01, por autorização expressa do titular, em sequência: 1224 e depois 1225.
+
+| Etapa | Resultado |
+|---|---|
+| Pré-condições | remoto em `080e26b`, avanço direto, P23 (`f844795`) fora; 63 migrations, pendentes só 1224 e 1225; MD5 conferidos (1224 `cabee6fa…`, 1225 `4df82b0f…`), LF; funções substituídas iguais ao texto da reversão; coluna `valor_manual` inexistente |
+| Push | `080e26b..feca20e` (7 commits: `d69dddd`, `e9b3b71`, `b85927b`, `541fa5e`, `e38235d`, `cd89ff6`, `feca20e`; 25 arquivos, só os autorizados) |
+| Migration 1224 | **APLICADA E CONFERIDA** (64): simulação só com a 1224; 4 funções novas, 2 substituídas, 6 corpos iguais ao arquivo; acesso novo de authenticated só às 3 previstas; nenhum dado alterado; segurança sem bloqueios |
+| Migration 1225 | **APLICADA E CONFERIDA** (65): antes, as 9 funções iguais ao texto da reversão (Dashboard = texto da 1224); 1 nova, 9 substituídas, 10 corpos iguais; nenhum acesso novo ou perdido; nenhum dado alterado; segurança sem bloqueios |
+| Deploy | Cloudflare `a82961cc` (Production, `producao`, origem `feca20e`); build de `git archive feca20e`; 169 arquivos servidos iguais ao build; navegação sem login: 0 problemas. Ressalva: o rótulo de commit enviado foi `feca20e1` (o hash completo é `feca20e3…`) |
+| Auditoria (retrato antes e depois) | 88 tabelas; só `receita_orcamento` difere pela coluna nova, e, sem ela, o md5 é idêntico (48 linhas, nenhuma `valor_manual`); contas, compras, movimentos, saldos, financiamento, recorrências e abastecimentos idênticos |
+
+**Homologação de leitura (como o titular, nada gravado):**
+- Receitas de 11/2026: R$ 24.860,83 (previstas = recebidas). Saldo do mês: −R$ 1.093,77.
+- Prévia a partir de 12/2026: Cargo em Comissão, 5 previsões (12/2026 a 04/2027, +948,70); Salário CBMGO, 5 (+3.730,55); AC-5, nada a mudar. Nenhuma foi executada.
+- O titular confere na tela: o sinal e a cor do saldo e a janela de atualização das previsões.
