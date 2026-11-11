@@ -78,3 +78,6 @@ body.cf-somente-leitura .despesa-actions .row-action-button:not([data-on-click^=
 /* FIN-RECEITAS-SALDO-01: saldo do mes com a cor do sinal (o tema claro forca "div { color: ... !important }"). */
 #saldo-mes.saldo-negativo { color: #ff3b30 !important; }
 #saldo-mes.saldo-positivo { color: #34c759 !important; }
+
+/* FIN-CARTOES-EXECUTADO-01: nota do executado consolidado no pagamento da fatura. */
+.aviso-fatura-cartao .cf-fatura-consolidado { margin: 10px 0 0; font-size: 0.85em; line-height: 1.45; }

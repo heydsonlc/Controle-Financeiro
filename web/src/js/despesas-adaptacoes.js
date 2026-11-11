@@ -51,7 +51,10 @@
         caixa.hidden = diferenca === 0;
         const opcoes = diferenca > 0 ? ['JUROS', 'AJUSTE'] : ['DESCONTO', 'AJUSTE'];
         const atual = tipo.value;
-        tipo.replaceChildren(new Option('Selecione...', ''), ...opcoes.map((t) => new Option(AJUSTES[t], t)));
+        // FIN-CARTOES-EXECUTADO-01: na fatura, o ajuste e a cobranca do banco diferente do executado consolidado
+        const fatura = document.getElementById('pagar-despesa-id')?.dataset.isFaturaCartao === 'true';
+        const rotulo = (t) => (fatura && t === 'AJUSTE' ? 'Valor cobrado pelo banco diferente do consolidado' : AJUSTES[t]);
+        tipo.replaceChildren(new Option('Selecione...', ''), ...opcoes.map((t) => new Option(rotulo(t), t)));
         if (opcoes.includes(atual)) tipo.value = atual;
     }
 
@@ -66,6 +69,37 @@
         fecharPagarOriginal();
         document.getElementById('pagar-ajuste').hidden = true;
         document.getElementById('pagar-ajuste-justificativa').value = '';
+    };
+
+    // FIN-CARTOES-EXECUTADO-01: no pagamento da fatura, o executado consolidado (compras, parcelas e despesas fixas,
+    // inclusive as previstas ainda sem cobranca) e o valor sugerido, identificado como tal, com a parte prevista. O valor
+    // cobrado pelo banco pode ser outro ("Pagar outro valor", classificado e justificado); nenhuma recorrencia e marcada
+    // como nao cobrada e a conciliacao posterior continua possivel.
+    const moedaBR = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const marcarComoPagoOriginal = window.marcarComoPago;
+    window.marcarComoPago = function marcarComoPago(id) {
+        // O original cria o quadro da fatura uma vez so (ficava com os valores da primeira fatura aberta).
+        document.querySelector('#form-pagar .aviso-fatura-cartao')?.remove();
+        marcarComoPagoOriginal(id);
+        if (document.getElementById('pagar-despesa-id')?.dataset.isFaturaCartao !== 'true') return;
+        const aviso = document.querySelector('#form-pagar .aviso-fatura-cartao');
+        const rotuloExecutado = [...(aviso?.querySelectorAll('div') || [])].find((d) => d.children.length === 0 && /Executado \(Gasto Real\)/.test(d.textContent));
+        if (rotuloExecutado) rotuloExecutado.textContent = '💳 Executado consolidado';
+        fetch(`/api/despesas/${id}/composicao-fatura`).then((r) => r.json()).then((r) => {
+            if (!r.success || document.getElementById('pagar-despesa-id').value !== String(id)) return;
+            const span = document.querySelector('input[name="tipo-pagamento"][value="total"]')?.closest('label')?.querySelector('span');
+            if (span) span.replaceChildren('Executado consolidado (valor sugerido): ', Object.assign(document.createElement('strong'),
+                { textContent: moedaBR(r.data.valor_executado) }));
+            const quadro = document.querySelector('#form-pagar .aviso-fatura-cartao');
+            if (!quadro) return;
+            quadro.querySelector('.cf-fatura-consolidado')?.remove();
+            const nota = Object.assign(document.createElement('p'), { className: 'cf-fatura-consolidado' });
+            nota.textContent = (r.data.previsto_sem_cobranca > 0
+                ? `Inclui ${moedaBR(r.data.previsto_sem_cobranca)} de despesas fixas previstas, ainda sem cobrança importada. ` : '')
+                + 'Se o banco cobrou outro valor, escolha “Pagar outro valor”, informe o valor efetivamente cobrado e justifique a '
+                + 'diferença. Nenhuma recorrência é marcada como não cobrada; a conciliação posterior continua possível.';
+            quadro.appendChild(nota);
+        }).catch(() => {});
     };
 
     // Copia de confirmarPagamento do original; acrescimos marcados com "Ajuste".

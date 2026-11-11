@@ -443,6 +443,15 @@ async function pagarFatura(id, corpo) {
         + `Saldo da conta: ${reais(centavos(r.saldo_conta))}.` });
 }
 
+// FIN-CARTOES-EXECUTADO-01: o executado consolidado e o valor sugerido do pagamento; a parte que sao despesas fixas
+// previstas, ainda sem cobranca importada, aparece no modal (o banco pode cobrar outro valor).
+async function composicaoFatura(id) {
+    const { data, error } = await supabase.rpc('dados_pagamento_fatura', { p_perfil_id: estado.perfilId, p_fatura_id: id });
+    if (error) return falha(mensagemDeErro(error));
+    return ok({ data: { valor_executado: Number(data.fatura.valor_executado || 0),
+        previsto_sem_cobranca: Number(data.fatura.previsto_sem_cobranca || 0), paga: Boolean(data.fatura.paga) } });
+}
+
 async function estornar(id, corpo) {
     const linha = estado.linhas.get(id);
     const fatura = Boolean(linha && linha.is_fatura_cartao);
@@ -516,6 +525,7 @@ const ROTAS = [
     ['DELETE', /^\/api\/despesas\/(\d+)$/, (m, p) => excluir(Number(m[1]), p)],
     ['GET', /^\/api\/despesas\/(\d+)\/previa-futuras$/, (m) => previaFuturas(Number(m[1]))],  // P22
     ['POST', /^\/api\/despesas\/(\d+)\/pagar$/, (m, p, corpo) => pagar(Number(m[1]), corpo || {})],
+    ['GET', /^\/api\/despesas\/(\d+)\/composicao-fatura$/, (m) => composicaoFatura(Number(m[1]))],  // FIN-CARTOES-EXECUTADO-01
     ['POST', /^\/api\/despesas\/pagar-lote$/, (m, p, corpo) => pagarLote(corpo || {})],
     ['POST', /^\/api\/despesas\/(\d+)\/estornar-pagamento$/, (m, p, corpo) => estornar(Number(m[1]), corpo || {})],
     ['GET', /^\/api\/categorias\/?$/, async () => ok({ data: await categoriasDeDespesa() })],

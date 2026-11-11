@@ -154,7 +154,7 @@ test('fatura: recorrencia prevista, excedente da categoria, previsto igual ao da
     const detalhe = fatura.locator('.fatura-detalhes');
     await expect(detalhe.locator('.fatura-container')).toBeVisible();
 
-    // P01: a linha mostra o valor da recorrencia; o executado continua sem ele.
+    // P01: a linha mostra o valor da recorrencia (FIN-CARTOES-EXECUTADO-01: ele ja entra no executado consolidado).
     const fixas = bloco(detalhe, 'Despesas Fixas');
     await expect(fixas.locator('.linha-simples')).toHaveCount(1);
     await expect(fixas.locator('.linha-prevista .linha-valor')).toHaveText('R$ 60,00');
@@ -176,9 +176,9 @@ test('fatura: recorrencia prevista, excedente da categoria, previsto igual ao da
     expect(espaco1920, 'espaco flexivel antes de Executado').toBeGreaterThan(espaco1366);
     await page.setViewportSize({ width: 1366, height: 900 });
 
-    // P03: previsto do detalhe = previsto da lista (o do banco): 60 + 350; executado sem a previsao.
+    // P03: previsto do detalhe = previsto da lista (o do banco): 60 + 350; FIN-CARTOES-EXECUTADO-01: executado com a fixa
     const totais = (await detalhe.locator('.fatura-totais .total-valor').allTextContents()).map(normal);
-    expect(totais).toEqual(['R$ 410,00', 'R$ 350,00']);
+    expect(totais).toEqual(['R$ 410,00', 'R$ 410,00']);
     await expect(fatura.locator('.despesa-cell-valor')).toHaveText(/R\$ 410,00/);
 
     // P04: uma linha so, 28 a 32 px, DATA | DESCRICAO | VALOR, inclusive com descricao longa e em tela estreita.
