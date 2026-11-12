@@ -16,6 +16,24 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 
 ---
 
+## Situação final do MVP (FIN-MVP-SANEAMENTO-FINAL-01, 11/11/2026)
+
+| Item | Situação |
+|---|---|
+| P14 (prévia de parceladas) | Concluída |
+| P20 (pagamento em lote) | Concluída |
+| P21 (identidade do lote) | Concluída |
+| P22 (inativação de recorrências) | Concluída |
+| P23 (cancelamento com pagamento estornado) | Concluída; o cancelamento real da conta 2501 aguarda autorização própria |
+| P24 (consórcios em moeda) | Concluída; contratos 18/19 regularizados |
+| MVP-MOB-02 (P13) | Concluído |
+| FIN-MVP-LANCAMENTOS-03 | Concluído |
+| Reconstrução das faturas de 11/2026 | Encerrada por decisão do titular, sem execução |
+| Consórcios legados (13 e 14) | Sem nenhum vínculo financeiro; exclusão pronta no manifesto (`docs/FIN_MVP_SANEAMENTO_FINAL_01.md`) |
+| Receitas históricas (até 10/2026) | Inventário fechado; 44 sem efeito no saldo; 40–43 (R$ 20.000,00 com crédito, absorvidos na conciliação de 11/11) e 5 previsões pendentes aguardam decisão |
+| Consolidação de categorias | Módulo íntegro; restam só as 4 incorporações aprovadas e não executadas, com autorização própria |
+| Importação de 12/2026 | Validação operacional futura, com os arquivos reais (critérios no documento do saneamento) |
+
 ## Pendências por Módulo
 
 ### Financiamentos
@@ -60,6 +78,7 @@ Para detalhes de priorização completa, ver `README_TECNICO.md`.
 | FIN-CARTOES-EXECUTADO-01 (executado consolidado da fatura) | As despesas fixas do cartão ainda sem cobrança ficavam fora do executado (Visa 12/2026: executado R$ 0,00 com R$ 329,60 de assinaturas). Agora o executado consolidado soma compras, parcelas e fixas uma vez (a cobrança importada substitui a previsão), o previsto não muda (R$ 729,60), Despesas e Dashboard usam o mesmo valor de fatura (`previsto_fatura`) e o pagamento sugere o consolidado, aceita o valor cobrado pelo banco com a diferença justificada e não marca nada como não cobrado (a cobrança tardia pede revisão). Migration `20261225090000`, depois da 1224 (`docs/FIN_CARTOES_EXECUTADO_01.md`). Testes por impacto N4. | Publicado em 11/11/2026, depois da 1224 (push até `feca20e`, migration `20261225090000` = 65, deploy `a82961cc`); Visa 12/2026 = 729,60 / 329,60 |
 | P23 (FIN-DESPESAS-CANCELAMENTO-01) | Uma ocorrência com pagamento integralmente estornado (Psicóloga 03/11/2026, R$ 250,00) não podia ser cancelada: o lápis recusava abrir a despesa (“Possui movimento financeiro vinculado”) e o banco recusava excluí-la. Agora o lápis abre a despesa só para consulta, com “Cancelar obrigação” e confirmação; a conta fica `Dispensada` (fora dos totais e pendências de Despesas e Dashboard), pagamento e estorno preservados, ocorrência dispensada sem recriar, recorrência ativa, auditoria em `operacao_despesa`. Pagamento ativo, estorno parcial e movimento não conciliado continuam bloqueados. Migration `20261226090000`, retomada sobre a 1224 e a 1225 (`docs/FIN_DESPESAS_CANCELAMENTO_01.md`). Testes por impacto N4. | Publicada em 11/11/2026 (push até `7870a2e`, migration `20261226090000` = 66, deploy `a504e217`); cancelamento real da sessão de 03/11 depende de autorização própria |
 | P24 (FIN-CONSORCIOS-INTEGRACAO-01) | Consórcio em moeda (natureza, fórmula e geração mantidas). **A:** o "Confirmar/realizar" da contemplação prevista era recusado ("Editar um recebimento ainda não está disponível"); agora `realizar_contemplacao_consorcio` recebe uma vez, com crédito, saldo e auditoria (valor diferente exige justificativa). **B:** a parcela pendente abre para editar valor e vencimento ("esta" ou "esta e as futuras"; paga, histórica ou com movimento fica). **C:** contrato em andamento — o cadastro aceita "Parcelas já pagas antes do cadastro": as primeiras ficam pagas no histórico sem débito bancário, a numeração segue o contrato (5/10) e o prêmio usa o contrato inteiro. Diego 1/2 (18/19): prêmio 3.420 → 5.700 (diferença 2.280 cada), correção proposta e ensaiada só em cópia. Migration `20261227090000` (`docs/FIN_CONSORCIOS_INTEGRACAO_01.md`). Testes por impacto N4. | Publicada em 11/11/2026 (push até `cbd6db7`, migration `20261227090000` = 67, deploy `4613d3af`); contratos 18/19 regularizados (10 parcelas desde 07/2026, contemplação 12/2026, prêmio R$ 5.500,00) |
+| FIN-MVP-SANEAMENTO-FINAL-01 | Encerramento das pendências: contratos legados 13/14 (sem vínculos) prontos para exclusão; inventário das receitas até 10/2026 (4 recebidas legítimas mantidas; 44 a excluir; 40–43 com crédito absorvido na conciliação de 11/11, opção recomendada exclui receitas e créditos e reduz os ajustes 207/208, saldos idênticos; 5 previsões pendentes de 07, 09 e 10/2026 para decisão); categorias íntegras, com as 4 incorporações pendentes de autorização; correção da tela: previsão removida (valor 0) não é atrasada. Ensaio em cópia fiel com reversão e idempotência (`docs/FIN_MVP_SANEAMENTO_FINAL_01.md`). | Pronto para homologação; execução em produção depende da aprovação do manifesto |
 
 ### Receitas
 
