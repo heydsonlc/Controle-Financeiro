@@ -175,3 +175,15 @@
         };
     }
 }());
+
+// FIN-MVP-SANEAMENTO-FINAL-01: "Remover previsao" de fonte recorrente grava a previsao com valor 0 ("Removido pelo
+// usuario"), para o valor-base da fonte nao reaparecer naquele mes (como o Flask). Sem recebimento, ela nao e receita
+// pendente: sai da lista do mes e das atrasadas (o Flask a mostrava como "Prevista R$ 0,00" e atrasada).
+(function () {
+    const original = window.montarReceitasMes;
+    if (typeof original !== 'function') return;
+    window.montarReceitasMes = function montarReceitasMes(...args) {
+        return original.apply(this, args).filter((r) => !(r.origem === 'orcamento'
+            && Number(r.valor_previsto || 0) === 0 && Number(r.valor_realizado || 0) === 0));
+    };
+}());
