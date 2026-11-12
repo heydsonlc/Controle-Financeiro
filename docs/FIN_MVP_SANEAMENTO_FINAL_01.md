@@ -179,27 +179,29 @@ Os saldos projetados de 07, 09 e 10/2026 ficam negativos se as previsões forem 
 - Contratos 18 e 19 e receitas 50 e 51.
 - Tudo de 11/2026 em diante.
 
-**Categorias:** nenhuma alteração neste manifesto.
+**Categorias:** nenhuma alteração neste manifesto (as 4 incorporações foram aprovadas depois e executadas em transação própria; seção 11).
 
 **Auditoria da execução:**
 - `operacao_despesa` / `operacao_receita` com a operação `saneamento_final` e as linhas inteiras de antes, num só lote.
 - `reverter(lote)` devolve tudo.
 
-## 8. Decisões do titular
+## 8. Decisões do titular (12/11/2026)
 
-1. **Receitas 40–43:** opção B (recomendada), C ou manter (seção 3).
-2. **Previsões 211, 201, 213, 202 e 214** (salário e comissão de 07, 09 e 10/2026 sem recebimento registrado):
-   - dispensar (recomendada; nenhum crédito é criado);
-   - ou manter como pendentes.
-   - Registrá-las como recebidas não é feito sem comprovante, e criaria créditos que o saldo conciliado não comporta.
-3. **Categorias:** autorizar ou não as 4 incorporações da seção 4.
+| Item | Decisão |
+|---|---|
+| Contratos 13 e 14 | excluir |
+| Receita 44 | excluir |
+| Receitas 40–43 | opção B, **condicionada** à prova de que os créditos 152–155 são redundantes e já absorvidos pela conciliação (8 condições; sem opção C automática) |
+| Previsões 211, 201, 213, 202, 214 | dispensar pela operação existente de remover previsão, sem recebimento fictício |
+| Receitas 38, 39, 45, 46; contratos 18/19; receitas 50/51 | preservar |
+| Previsões de valor zero 198, 199, 210 | manter, ocultas na tela (correção da seção 5) |
+| 4 incorporações de categorias | aprovar, em transação própria |
+| Conta 2501 | já cancelada e validada; não repetir |
 
 ## 9. Encerramento técnico
 
-**Commits não publicados:**
-- `e747613`: documentação final da P24.
-- `16179bf`: correção da tela de Receitas.
-- O commit da documentação deste MVP.
+**Publicados em 12/11/2026** (push `cbd6db7..7e035c5`, deploy `5d608ca5`, sem migration): `e747613` (documentação final da P24), `16179bf` (correção da tela de Receitas) e `7e035c5` (este documento).
+
 - Ramos antigos à frente da `main`, **substituídos e que não devem ser publicados**: `despesas-cancelamento-01` (`f844795`, P23 pausada, trocada pela 1226) e `despesas-pagamento-lote-01` (`fa671a2`, `1d7f7fa`, P20 publicada por outro caminho).
 
 **Situação final das pendências:**
@@ -209,10 +211,10 @@ Os saldos projetados de 07, 09 e 10/2026 ficam negativos se as previsões forem 
 | P14, P20, P21, P22, P23, P24 | concluídas |
 | MVP-MOB-02, FIN-MVP-LANCAMENTOS-03 | concluídos |
 | Reconstrução das faturas de 11/2026 | encerrada por decisão do titular, sem execução |
-| Consórcios legados | 13 e 14 sem vínculos; exclusão pronta (manifesto) |
-| Receitas históricas | inventário fechado; 1 exclusão sem efeito no saldo (44), 4 com decisão (40–43), 5 previsões com decisão |
-| Consolidação de categorias | módulo íntegro; só restam as 4 incorporações aprovadas e não executadas |
-| Cancelamento da conta 2501 (P23) | aguarda autorização própria |
+| Consórcios legados | 13 e 14 excluídos (12/11/2026); ativos só 18 e 19 |
+| Receitas históricas | saneadas (12/11/2026): 44 e 40–43 excluídas, 5 previsões dispensadas, saldos idênticos |
+| Consolidação de categorias | concluída (12/11/2026): as 4 incorporações executadas |
+| Cancelamento da conta 2501 (P23) | feito em 11/11/2026 e validado pelo titular |
 
 ## 10. Validação futura: importação de dezembro/2026
 
@@ -224,3 +226,99 @@ O titular decidiu não reconstruir as faturas de 11/2026; as compras de novembro
 - **Parceladas:** a prévia mostra a parcela do mês e as futuras (P14), sem recriar parcelas já existentes.
 - **Abastecimentos:** a compra de combustível sugere o abastecimento compatível (FIN-MVP-LANCAMENTOS-03), sem vínculo automático.
 - **Conferência final:** o total da fatura importada é igual ao do arquivo, e o executado da fatura e as Despesas do mês ficam coerentes.
+
+## 11. Execução (12/11/2026)
+
+Autorização condicionada do titular de 12/11/2026. Três transações independentes, cada uma com lote, auditoria e reversão próprias, todas ensaiadas antes numa cópia fiel e descartável da produção: aplicação, repetição (para sozinha), reversão na ordem inversa (banco idêntico, fora a auditoria marcada como revertida) e reaplicação.
+
+### 11.1 Publicação técnica
+
+- Push `cbd6db7..7e035c5` em avanço direto; nenhuma migration (continuam 67).
+- Build de `7e035c5`, diferente do deploy anterior só em `js/receitas-adaptacoes.js`; deploy único `5d608ca5`.
+- 169 arquivos servidos iguais ao build; navegação anônima sem problemas; unitários 92/92.
+
+### 11.2 Etapa 3: registros sem vínculo (lote `01a62386`)
+
+| Registro | Operação |
+|---|---|
+| Contratos 13 e 14 | excluídos |
+| Receita 44 (R$ 5.220,00, 06/2026) | excluída |
+| Previsões 211 (07), 201 e 213 (09), 202 e 214 (10/2026), R$ 64.321,24 | dispensadas pela função oficial `excluir_receita` como o titular (resposta `ZERADA`: valor 0, "Removido pelo usuário"); nenhum crédito criado |
+
+### 11.3 Etapa 4: opção B (lote `863ffa1a`)
+
+**Prova da redundância** (conferida dentro da transação, antes de qualquer alteração):
+
+| Condição | Evidência |
+|---|---|
+| 1. Natureza, sinal e conta | 152 e 154: créditos de 5.000,00 na Caixa (96); 153 e 155: créditos de 5.000,00 no Nubank (97), origem RECEITA, de 11/05/2026, não ajustáveis. 207 e 208: débitos de AJUSTE "Ajuste por conciliação", de 11/11/2026 |
+| 2 e 5. Equação por conta | ver tabela abaixo: o saldo real informado na conciliação é recomposto no centavo, antes e depois |
+| 3. Não é recebimento legítimo | 40/42 e 41/43 são a mesma contemplação (ID 3 e ID 4) lançada duas vezes no mesmo dia; os contratos 3 e 4 não existem; o consórcio real (Diego 1/2, contratos 18/19) começa em 07/2026 e é contemplado em 12/2026, então não houve contemplação recebida em 05/2026 |
+| 4. Trilha auditável | `operacao_receita` `saneamento_final`: linha inteira de cada receita, crédito e ajuste, com motivo, valor anterior e posterior e as duas equações |
+| 6. Vínculos protegidos | nenhuma chave estrangeira aponta para 152–155, 207 ou 208 (pagamento e estorno de fatura, estornos); das receitas, só os 4 próprios créditos |
+| 7. Atômica e reversível | uma transação; `reverter(lote)` ensaiado |
+| 8. Outros ajustes | os ajustes 210, 212, 217, 220, 223, 225, 226 e 229 ficaram idênticos (tabela de movimentos igual fora dos 6 ids) |
+
+**Equação da conciliação de 11/11/2026** (saldo do sistema no instante do ajuste − ajuste = saldo real informado, gravado por `ajustar_saldo_conta`):
+
+| Conta | Saldo inicial | Movimentos anteriores ao ajuste | Alterações posteriores auditadas | Sistema no ajuste | Ajuste | Saldo real |
+|---|---|---|---|---|---|---|
+| Caixa, antes | 20.000,99 | 53: +49.826,28 | −935,85 (créditos 173/174 corrigidos depois); −279,92 (débito 177 da Água, apagado depois) | 68.611,50 | 67.788,55 | **822,95** |
+| Caixa, depois | 20.000,99 | 51: +39.826,28 | idem | 58.611,50 | 57.788,55 | **822,95** |
+| Nubank, antes | 2.609,48 | 4: +9.860,00 | nenhuma | 12.469,48 | 12.376,41 | **93,07** |
+| Nubank, depois | 2.609,48 | 2: −140,00 | nenhuma | 2.469,48 | 2.376,41 | **93,07** |
+
+Os saldos atuais (Caixa 600,92, Nubank 93,07) são o saldo real conciliado mais os movimentos posteriores, que não foram tocados. O extrato continua explicando o saldo: o ajuste de conciliação passa a cobrir só a diferença real.
+
+| Registro | Operação |
+|---|---|
+| Receitas 40, 41, 42, 43 (R$ 20.000,00, 01/2026) | excluídas |
+| Créditos 152, 153, 154, 155 | excluídos |
+| Ajuste 207 (Caixa) | 67.788,55 → 57.788,55 |
+| Ajuste 208 (Nubank) | 12.376,41 → 2.376,41 |
+
+### 11.4 Etapa 5: categorias (lote `5f84f0fd`)
+
+- Prévia conferida: hash `ec77b2ae89889fb6d1a9bdf680af2878`, igual ao do diagnóstico.
+- Executada pelas funções oficiais (`previa_incorporacao_categoria`, `incorporar_categoria`) com o plano de `scripts/consolidar_categorias.py`.
+- Antes, na mesma transação, retrato exato das linhas tocadas gravado em `operacao_despesa` (`saneamento_final_categorias`), para a reversão exata.
+
+| Origem | Destino | Reapontados | Palavras-chave | Categoria do Cartão |
+|---|---|---|---|---|
+| 96 Transporte por App | 8 Transporte por Aplicativo | nenhum | 6 | vínculo movido |
+| 98 Manutenção de Veículo | 5 Manutenção Veicular | 1 item de despesa, 4 lançamentos agregados | 11 ("pneu" → Pneus, "lavajato" → Lavagem Veicular) | 2 vínculos criados (Pneus, Lavagem), 1 movido |
+| 4 Revisão | 5 Manutenção Veicular | nenhum | nenhuma | nenhum |
+| 99 Assinaturas | 100, renomeada "Assinaturas" | 1 item de despesa, 7 lançamentos agregados | 14 | vínculo unido |
+
+Em 76 tabelas, só a coluna da categoria mudou: valores, pagamentos, compras, faturas e recorrências estão idênticos. Na tela de Despesas de 11/2026, 12/2026 e 01/2027, só mudaram o nome e a cor da categoria de 2, 1 e 1 linhas. Recalculada com as categorias antigas, a tela reproduz o hash de antes.
+
+### 11.5 Auditoria final
+
+- Retrato completo antes e depois (88 tabelas): mudaram só as 12 previstas (`contrato_consorcio`, `receita_realizada`, `receita_orcamento`, `movimento_financeiro`, `categoria`, `categoria_palavra_chave`, `categoria_cartao_despesa`, `item_despesa`, `lancamento_agregado` e as auditorias `operacao_despesa`, `operacao_receita`, `operacao_catalogo`).
+- Idênticos: saldos, contas e pagamentos, compras, faturas, recorrências, financiamento, veículos, abastecimentos, Dashboard de despesas, contratos 18/19, receitas 50/51 e conta 2501.
+- Consórcios ativos: 18 e 19.
+
+| Mês | Receitas (prevista / recebida) | Saldo projetado |
+|---|---|---|
+| 01/2026 | 20.000,00 / 20.000,00 → 0 / 0 | 15.675,55 → −4.324,45 |
+| 06/2026 | 5.220,00 / 0 → 0 / 0 | −7.743,64 → −12.963,64 |
+| 07/2026 | 18.471,28 / 0 → 0 / 0 | 4.927,00 → −13.544,28 |
+| 09/2026 | 22.924,98 / 0 → 0 / 0 | 9.109,43 → −13.815,55 |
+| 10/2026 | 22.924,98 / 0 → 0 / 0 | 11.292,07 → −11.632,91 |
+| 11/2026 e 12/2026 | inalteradas | inalterados |
+
+### 11.6 Testes por impacto
+
+| Nível | Selecionados | Resultado |
+|---|---|---|
+| Interface | unitários do `web` | 92/92 |
+| Banco (categorias) | `test_supabase_categorias_consolidacao`, `test_supabase_categorias_recorrencias`, `test_supabase_mobilidade_escrita`, `test_supabase_cartoes_multiplos`, `test_categorias_sistemicas_mobilidade` | 80/80 |
+| Operações financeiras | ensaio em cópia fiel: atomicidade, integridade referencial, rastreabilidade, saldos, recálculo da conciliação, contratos válidos, idempotência, reversão e reaplicação | aprovado |
+
+Dispensados: a suíte completa, porque não há migration nem função alterada; e os E2E, porque a correção da tela já foi validada antes do push (11/11).
+
+**Ressalva da cópia:** os binários de `ir_comprovante_arquivo` ficaram fora da cópia, porque o `pg_dump` caía por SSL nessa tabela; ela está fora do escopo. Na cópia, o hash da prévia das categorias difere do da produção só pela ordenação das palavras-chave (collation do cluster local); o conteúdo é igual.
+
+**Ensaio:** duas correções do roteiro foram feitas antes da produção, e as duas travas funcionaram como esperado (nada foi gravado):
+- sinal do débito apagado 177 na equação;
+- ordem da reversão das categorias (o nome do destino volta antes de reinserir a origem).
