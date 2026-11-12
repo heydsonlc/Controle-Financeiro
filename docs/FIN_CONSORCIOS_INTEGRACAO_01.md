@@ -1,6 +1,6 @@
 # FIN-CONSORCIOS-INTEGRACAO-01 (P24): consórcio em moeda — contemplação, edição de parcelas e contrato em andamento
 
-**Situação:** implementada localmente (ramo `consorcios-p24`, migration `20261227090000`). Publicação e correção dos contratos reais dependem de autorização própria.
+**Situação:** publicada em 11/11/2026 (push até `cbd6db7`, migration `20261227090000` = 67, deploy `4613d3af`). Contratos 18 e 19 regularizados em 11/11/2026, com contemplação em 12/2026 (seção 7).
 **Testes:** nível N4 (integridade financeira).
 
 **Escopo (retificação + Adendo 02):** o consórcio continua em moeda, com a mesma natureza, a mesma fórmula do prêmio e a mesma geração de parcelas. Nada de carta de crédito, novas condições de contemplação ou mudança de contabilização.
@@ -107,3 +107,48 @@ Uma transação por contrato, com conferência do estado esperado e auditoria em
 - **Correção dos contratos 18 e 19:** o roteiro da seção 4, depois de o titular confirmar início 07/2026, R$ 500,00 e reajuste de R$ 10,00. Executar só depois da publicação, porque usa `registrar_parcelas_anteriores_consorcio`.
 - **Contratos legados 13 e 14** (ativos, sem parcelas): manter ou inativar.
 - **A realização da contemplação** fica com o titular, pela tela, quando o valor entrar.
+
+## 6. Publicação (11/11/2026)
+
+Autorizada pelo titular como publicação técnica, sem regularização financeira.
+
+| Etapa | Resultado |
+|---|---|
+| Pré-condições (só leitura) | remoto em `7870a2e`, avanço direto; 66 migrations, pendente só a 1227; MD5 `ada79312…`, LF (migration e reversão); `criar_consorcio` publicado igual ao texto da reversão; reversão com 4 `drop`; nenhuma função nova já existente; leituras do titular (Despesas 07/2026 a 04/2027, consórcios, receitas 50/51) iguais às do ensaio |
+| Push | `7870a2e..cbd6db7` (`689bb74`, `19f3f8a`, `92763a5`, `cbd6db7`; 12 arquivos, só os autorizados) |
+| Migration 1227 | **APLICADA E CONFERIDA** (67): simulação só com ela; 4 novas, 1 substituída, 5 corpos iguais ao arquivo, `search_path` vazio; acesso novo de authenticated só a `editar_parcela_consorcio` e `realizar_contemplacao_consorcio`; nenhum para anon; nenhum dado alterado; segurança sem bloqueios |
+| Deploy | Cloudflare `4613d3af` (Production, `producao`, origem `cbd6db7`, rótulo com o hash completo); 169 arquivos servidos iguais ao build; navegação sem login: 0 problemas |
+| Auditoria (retrato antes e depois) | 88 tabelas idênticas; contratos, parcelas, contas, movimentos, saldos, receitas previstas, recorrências e Dashboard idênticos; nenhuma despesa ou recebimento novo |
+| Arquivos não rastreados | os 24 preservados |
+
+## 7. Regularização dos contratos 18 e 19 (11/11/2026)
+
+Autorizada pelo titular depois da publicação validada.
+
+**Competência:** o titular informou depois que a competência correta da contemplação é **12/2026**, e não 02/2027.
+- Pela fórmula original, que não muda, a contemplação em 12/2026 é a 6ª parcela do contrato iniciado em 07/2026: 550 × 10 = **R$ 5.500,00**.
+- O titular escolheu essa opção em vez de manter R$ 5.700,00 em 02/2027.
+- A seção 1 e a seção 4 usam a hipótese inicial de 02/2027 / R$ 5.700,00.
+
+**Roteiro:** `scratchpad/p24/regularizar_18_19.py`, uma transação para os dois contratos, com conferência do estado e parada em qualquer divergência.
+- Antes da produção, rodou numa cópia fiel nova, já com a 1227: resultado idêntico, e uma segunda execução parou sozinha.
+- Na cópia, os dados de `ir_comprovante_arquivo` (binários de IR, fora do escopo) ficaram de fora, porque o `pg_dump` caía por queda de SSL nessa tabela.
+
+| Por contrato (18 Diego 1, 19 Diego 2) | Antes | Depois |
+|---|---|---|
+| Contrato | 6 parcelas, início 11/2026, R$ 540,00 + 10, contemplação 02/2027, prêmio R$ 3.420,00 | **10 parcelas, início 07/2026, R$ 500,00 + 10, contemplação 12/2026, prêmio R$ 5.500,00** |
+| Parcelas 1–4 (07 a 10/2026: 500, 510, 520, 530) | não existiam | pagas no histórico (data = vencimento), **sem movimento**, num lote reversível de `regularizacao_historica` (4 registros) |
+| As 6 parcelas cadastradas (contas 2686–2691 e 2692–2697) | 1/6 a 6/6 | **5/10 a 10/10**; mesma identidade, valor, vencimento e pagamento; a 5/10 continua paga em 11/11 com o seu movimento; só mudaram nome, descrição, número e total |
+| Receita prevista (50 e 51) | R$ 3.420,00 em 02/2027, sem conta | **R$ 5.500,00 em 12/2026**, mesmo id, sem conta, não realizada |
+| Auditoria | — | `corrigir_consorcio_retroativo` em `operacao_despesa` (estado anterior completo) |
+
+**Impacto (os dois contratos):**
+- Despesas pagas de 07/2026 +1.000,00; 08 +1.020,00; 09 +1.040,00; 10 +1.060,00. Total **R$ 4.120,00**, só histórico, sem débito.
+- Despesas de 11/2026 em diante: sem alteração.
+- Receitas previstas de contemplação: 12/2026 **+R$ 11.000,00**; 02/2027 **−R$ 6.840,00**.
+
+**Auditoria (retrato antes e depois):**
+- Só 6 tabelas mudaram: `item_despesa` 120→128, `conta` 803→811, `receita_realizada` (14, as 2 linhas atualizadas), `contrato_consorcio` (os 2 contratos), `regularizacao_historica` 173→181 e `operacao_despesa` 77→79.
+- Movimentos, saldos, `pagamento_fatura`, compras, cartões, financiamento, recorrências e receitas previstas de orçamento: idênticos.
+- Contratos 13 e 14, receitas 42 e 43 e todas as demais contas, itens, receitas e contratos: idênticos.
+- Nenhuma contemplação foi realizada e nenhum movimento foi criado.
