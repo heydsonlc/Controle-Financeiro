@@ -11,11 +11,20 @@ import { supabase } from './cliente.js';
 const PAGINAS_PERMITIDAS = new Set(['contas.html', 'categorias.html', 'receitas.html', 'cartoes.html',
     'configuracoes.html', 'ajuda.html', 'dashboard.html', 'lancamentos.html', 'recorrencias.html',
     'contas-bancarias.html', 'financiamentos.html', 'patrimonio.html', 'documentos-fiscais.html',
-    'mobilidade.html', 'importar-cartao.html']);
+    'mobilidade.html', 'importar-cartao.html', 'inicio.html']);
 const PAGINA_INICIAL = 'contas.html';
+// FIN-MVP-MOB-08: no celular a pagina inicial e a pagina principal mobile (inicio.html); tablet e desktop seguem em
+// contas.html. Um destino pedido (?next=, acesso direto a uma URL interna) continua valendo em qualquer largura.
+export const CELULAR_INICIO = '(max-width: 767px)';
+const PAGINA_INICIAL_CELULAR = 'inicio.html';
 
-export function destinoSeguro(next) {
-    return PAGINAS_PERMITIDAS.has(next) ? next : PAGINA_INICIAL;
+export function ehCelular() {
+    return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(CELULAR_INICIO).matches;
+}
+
+export function destinoSeguro(next, celular = ehCelular()) {
+    if (PAGINAS_PERMITIDAS.has(next)) return next;
+    return celular ? PAGINA_INICIAL_CELULAR : PAGINA_INICIAL;
 }
 
 // O Cloudflare Pages tambem serve /contas (sem .html): o destino depois do login e o mesmo.

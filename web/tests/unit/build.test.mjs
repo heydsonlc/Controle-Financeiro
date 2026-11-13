@@ -341,7 +341,8 @@ test('todas as paginas usam a moldura do Flask com o mesmo menu, sem pagina queb
         const arquivos = (await readdir(destino, { recursive: true })).map((a) => a.split(path.sep).join('/'));
         assert.ok(!arquivos.some((a) => /^(moldura|paginas)(\/|$)/.test(a)), 'fontes da moldura fora do dist');
         assert.ok(arquivos.includes('css/shared/layout.css') && arquivos.includes('js/original/ajuda.js'));
-        const paginas = arquivos.filter((a) => a.endsWith('.html') && a !== 'index.html');
+        // index.html (login) e inicio.html (pagina principal mobile, FIN-MVP-MOB-08) ficam fora da moldura do desktop.
+        const paginas = arquivos.filter((a) => a.endsWith('.html') && a !== 'index.html' && a !== 'inicio.html');
         assert.equal(paginas.length, 16);  // + indexadores.html (FIN-PRE-PRODUCAO-1)
         for (const pagina of paginas) {
             const html = await readFile(path.join(destino, pagina), 'utf8');
@@ -378,4 +379,34 @@ test('montagem escapa titulos e falha com marcador nao resolvido', () => {
     assert.match(html, /<span>&lt;b&gt;<\/span>/);
     assert.throws(() => montarPagina(`${base}{{outro}}`, { arquivo: 'x.html', titulo: 't', conteudo: '' }, new Set()),
         /nao resolvido/);
+});
+
+// FIN-MVP-MOB-08: pagina principal mobile, fora da moldura; atalhos visiveis e desabilitados; so Inicio navega.
+test('pagina principal mobile: protegida, sem moldura, 8 atalhos desabilitados e so Inicio ativo', async () => {
+    const destino = await mkdtemp(path.join(os.tmpdir(), 'cf-web-mob08-'));
+    try {
+        await construir({ url: URL_OK, chave: 'sb_publishable_abc123', destino });
+        const html = await readFile(path.join(destino, 'inicio.html'), 'utf8');
+        assert.ok(!(await readdir(destino)).some((n) => /previa/i.test(n)), 'pre-visualizacao local fora do dist');
+        assert.match(html, /<body class="mob-inicio" data-protegido hidden>/);
+        assert.doesNotMatch(html, /\{\{|<script>|\sstyle=|\son[a-z]+=/i, 'sem marcador, script ou estilo inline');
+        assert.doesNotMatch(html, /app-sidebar|app-shell-body|css\/shared\//, 'sem moldura nem CSS do desktop');
+        assert.match(html, /<link rel="stylesheet" href="css\/inicio-mobile.css">/);
+        const atalhos = [...html.matchAll(/<a class="mob-atalho" data-modulo="(\w+)" data-destino="([\w.-]+)" aria-disabled="true">[\s\S]*?<span class="mob-atalho-nome">([^<]+)<\/span>/g)]
+            .map((m) => m[3]);
+        assert.deepEqual(atalhos, ['Receita', 'Despesa', 'Lançamento', 'Resumo', 'Pagamentos', 'Recorrências', 'Cartões', 'Contas']);
+        assert.doesNotMatch(html.slice(html.indexOf('mob-grade'), html.indexOf('mob-barra')), /href=/, 'atalhos sem link');
+        const barra = [...html.matchAll(/<a class="mob-barra-item([^"]*)"([^>]*)>[\s\S]*?<span>([^<]+)<\/span>/g)]
+            .map((m) => [m[3], /href=/.test(m[2])]);
+        assert.deepEqual(barra, [['Início', true], ['Lançar', false], ['Resumo', false], ['Mais', false]]);
+        const css = await readFile(path.join(destino, 'css', 'inicio-mobile.css'), 'utf8');
+        for (const regra of css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/(^|\})\s*([^{}@]+)\{/g)) {
+            for (const seletor of regra[2].split(',')) assert.match(seletor.trim(), /^body\.mob-inicio(\[|\s|$)/, `regra restrita: ${seletor.trim()}`);
+        }
+        const script = await readFile(path.join(destino, 'js', 'inicio-mobile.js'), 'utf8');
+        assert.match(script, /export const MODULOS_ATIVOS = new Set\(\[\]\);/, 'nenhum modulo ativo neste MVP');
+        assert.doesNotMatch(script, /\.rpc\s*\(|\.from\s*\(/, 'nenhum dado financeiro lido ou gravado');
+    } finally {
+        await rm(destino, { recursive: true, force: true });
+    }
 });

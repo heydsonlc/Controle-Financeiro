@@ -26,7 +26,8 @@ test.afterEach(async ({}, testInfo) => {
 const normal = (texto) => (texto || '').replace(/\s+/g, ' ').trim();
 
 async function entrar(page, conta) {
-    await page.goto('/index.html');
+    // FIN-MVP-MOB-08: no celular o login leva a pagina principal mobile; estes testes abrem Despesas explicitamente.
+    await page.goto('/index.html?next=contas.html');
     await page.fill('#email', conta.email);
     await page.fill('#senha', conta.senha);
     await page.click('#login-enviar');

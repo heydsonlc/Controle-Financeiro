@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<!-- FIN-MVP-MOB-08 — pre-visualizacao mobile. So no ambiente local (run_e2e.py --previa), com banco descartavel e contas
+     ficticias; fora do dist e do deploy. Mostra a mesma pagina em varios tamanhos de celular, tablet e desktop. -->
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pré-visualização mobile — Controle Financeiro</title>
+    <link rel="stylesheet" href="previa.css">
+</head>
+<body>
+    <header class="pv-barra">
+        <div class="pv-titulo">
+            <strong>Pré-visualização mobile</strong>
+            <span>ambiente local · dados fictícios · nada é publicado</span>
+        </div>
+        <label class="pv-campo">Página
+            <input id="pv-rota" type="text" value="index.html" spellcheck="false" title="index.html = página inicial de cada aparelho">
+        </label>
+        <label class="pv-campo">Zoom
+            <select id="pv-zoom">
+                <option value="1">100%</option>
+                <option value="0.85">85%</option>
+                <option value="0.75" selected>75%</option>
+                <option value="0.6">60%</option>
+                <option value="0.5">50%</option>
+            </select>
+        </label>
+        <button type="button" id="pv-recarregar">Recarregar</button>
+        <button type="button" id="pv-reconstruir">Recompilar e recarregar</button>
+        <span class="pv-status" id="pv-status" role="status"></span>
+    </header>
+
+    <section class="pv-aparelhos" aria-label="Tamanhos">
+        <span class="pv-aparelhos-rotulo">Tamanhos:</span>
+        <div id="pv-opcoes"></div>
+    </section>
+
+    <p class="pv-dica">
+        Página <code>index.html</code> = página inicial de cada aparelho (celular: início mobile; tablet e desktop: Despesas). Entre uma vez em qualquer quadro (a sessão vale para todos) e use <em>Recarregar</em>. Depois de alterar
+        arquivos em <code>web/src</code>, use <em>Recompilar e recarregar</em>. No Firefox, o Modo de Design Responsivo
+        (Ctrl+Shift+M) também funciona direto em <code>/inicio.html</code>.
+    </p>
+
+    <main class="pv-quadros" id="pv-quadros"></main>
+
+    <script src="previa.js"></script>
+</body>
+</html>

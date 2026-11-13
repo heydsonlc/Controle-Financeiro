@@ -15,6 +15,11 @@ Sobe, so em 127.0.0.1 e com dados ficticios:
      da Empresa D, escritor do catalogo, gestor do catalogo so para o usuario D) e o retrato do perfil da Empresa D.
 Depois roda `playwright test` e derruba tudo, mesmo em caso de falha.
 
+Pre-visualizacao (--previa, FIN-MVP-MOB-08): o mesmo ambiente isolado, sem rodar testes, mais a pagina /__previa__/
+(web/previa, fora do dist e do deploy) com a tela em varios tamanhos de celular, tablet e desktop lado a lado, e um botao
+que recompila o dist depois de cada ajuste. So neste modo e so neste servidor local as paginas podem ser emolduradas pela
+propria origem (frame-ancestors 'self'); o _headers do deploy nao muda.
+
 Uso (da raiz do repositorio):
   set POSTGREST_BIN=C:\\caminho\\postgrest.exe
   venv\\Scripts\\python.exe web\\tests\\e2e\\run_e2e.py            # roda os testes
@@ -110,7 +115,7 @@ def verificar_jwt(token, segredo):
         return None
 
 
-def criar_handler(dist, postgrest_url, segredo, headers_seguranca, consolidar=None, administrar=None):
+def criar_handler(dist, postgrest_url, segredo, headers_seguranca, consolidar=None, administrar=None, previa=None):
     refresh_tokens = {}
     trava = threading.Lock()
 
@@ -145,8 +150,36 @@ def criar_handler(dist, postgrest_url, segredo, headers_seguranca, consolidar=No
         def end_headers(self):
             if not self.path.startswith(('/auth/', '/rest/')):
                 for nome, valor in headers_seguranca.items():
+                    if previa and nome == 'Content-Security-Policy':
+                        valor = valor.replace("frame-ancestors 'none'", "frame-ancestors 'self'")
+                    elif previa and nome == 'X-Frame-Options':
+                        valor = 'SAMEORIGIN'
                     self.send_header(nome, valor)
             super().end_headers()
+
+        def _previa(self, metodo):
+            """Pagina de pre-visualizacao (web/previa) e recompilacao do dist. So existe com --previa."""
+            if metodo == 'POST' and self.path == '/__previa__/reconstruir':
+                try:
+                    previa['reconstruir']()
+                except Exception as falha:  # noqa: BLE001
+                    return self._json(500, {'ok': False, 'erro': str(falha)[:300]})
+                return self._json(200, {'ok': True})
+            if metodo != 'GET':
+                return self._json(405, {'msg': 'metodo nao permitido'})
+            nome = self.path.split('?')[0][len('/__previa__/'):] or 'index.html'
+            caminho = (previa['pasta'] / nome).resolve()
+            try:
+                caminho.relative_to(previa['pasta'].resolve())
+                dados = caminho.read_bytes()
+            except (ValueError, OSError):
+                return self._json(404, {'msg': 'nao encontrado'})
+            self.send_response(200)
+            self.send_header('Content-Type', self.guess_type(str(caminho)))
+            self.send_header('Content-Length', str(len(dados)))
+            self.send_header('Cache-Control', 'no-store')
+            self.end_headers()
+            self.wfile.write(dados)
 
         def _json(self, status, corpo):
             dados = json.dumps(corpo).encode()
@@ -270,6 +303,14 @@ def criar_handler(dist, postgrest_url, segredo, headers_seguranca, consolidar=No
                 return self._consolidar()
             if metodo == 'POST' and self.path == '/__e2e__/admin' and administrar:
                 return self._administrar()
+            if previa and self.path.startswith('/__previa__'):
+                if self.path == '/__previa__':
+                    self.send_response(302)
+                    self.send_header('Location', '/__previa__/')
+                    self.send_header('Content-Length', '0')
+                    self.end_headers()
+                    return None
+                return self._previa(metodo)
             if metodo == 'GET':
                 return self._estatico()
             self._json(405, {'msg': 'metodo nao permitido'})
@@ -320,6 +361,7 @@ def construir_dist(origem):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--servir', action='store_true', help='so sobe o ambiente (Ctrl+C para sair)')
+    parser.add_argument('--previa', action='store_true', help='pre-visualizacao mobile em /__previa__/ (Ctrl+C para sair)')
     args, extras = parser.parse_known_args()
 
     pg_bin, postgrest_bin = encontrar_pg_bin(), encontrar_postgrest()
@@ -328,6 +370,11 @@ def main():
         return 0
 
     porta = porta_livre()
+    if args.previa:  # endereco fixo para o navegador (http://127.0.0.1:8790/__previa__/), se a porta estiver livre
+        import socket
+        with socket.socket() as teste:
+            if teste.connect_ex(('127.0.0.1', 8790)) != 0:
+                porta = 8790
     origem = f'http://127.0.0.1:{porta}'
     segredo = secrets.token_urlsafe(48)
     dist = construir_dist(origem)
@@ -409,15 +456,19 @@ def main():
                     conn.close()
 
             with PostgrestLocal(postgrest_bin, cluster, segredo, tmp) as postgrest:
-                handler = criar_handler(dist, postgrest.url, segredo, ler_headers(dist), consolidar, administrar)
+                previa = {'pasta': WEB / 'previa', 'reconstruir': lambda: construir_dist(origem)} if args.previa else None
+                handler = criar_handler(dist, postgrest.url, segredo, ler_headers(dist), consolidar, administrar, previa)
                 # Fila de conexoes maior que o padrao (5): o Chrome abre ~6 em paralelo.
                 ThreadingHTTPServer.request_queue_size = 64
                 ThreadingHTTPServer.daemon_threads = True
                 servidor = ThreadingHTTPServer(('127.0.0.1', porta), handler)
                 threading.Thread(target=servidor.serve_forever, daemon=True).start()
                 print(f'E2E_PRONTO {origem}', flush=True)
+                if args.previa:
+                    print(f'PREVIA_PRONTA {origem}/__previa__/', flush=True)
+                    print(f'  conta ficticia: {USUARIO_A["email"]} / {CONTAS[USUARIO_A["email"]]["senha"]} (so neste ambiente)', flush=True)
                 try:
-                    if args.servir:
+                    if args.servir or args.previa:
                         while True:
                             time.sleep(1)
                     npx = shutil.which('npx') or 'npx'

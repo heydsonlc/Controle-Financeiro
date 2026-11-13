@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<!-- FIN-MVP-MOB-08: pagina principal mobile (area de trabalho simplificada). Pagina propria, fora da moldura do desktop:
+     nenhuma tela, CSS global ou regra do desktop muda. Os atalhos ficam visiveis e desabilitados ate cada modulo mobile ser
+     homologado; a ativacao e feita em js/inicio-mobile.js (MODULOS_ATIVOS). Nenhum dado financeiro e lido ou gravado. -->
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#ffffff">
+    <title>Financeiro</title>
+    <link rel="stylesheet" href="css/inicio-mobile.css">
+</head>
+<body class="mob-inicio" data-protegido hidden>
+    <header class="mob-cabecalho">
+        <div class="mob-cabecalho-miolo">
+        <div class="mob-marca">
+            <span class="mob-marca-icone" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M4 7.5C4 5.57 5.57 4 7.5 4h9C18.43 4 20 5.57 20 7.5v9c0 1.93-1.57 3.5-3.5 3.5h-9A3.5 3.5 0 0 1 4 16.5v-9Z"/>
+                    <path d="M8 15.5h8M8 11.5h8M8 7.5h4"/>
+                </svg>
+            </span>
+            <h1 class="mob-titulo">Financeiro</h1>
+        </div>
+        <button type="button" class="mob-notificacoes" aria-label="Notificações (em breve)" aria-disabled="true">
+            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                <path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15L6 16Z"/>
+                <path d="M10 20.5a2 2 0 0 0 4 0"/>
+            </svg>
+        </button>
+        </div>
+    </header>
+
+    <main class="mob-conteudo">
+        <nav class="mob-competencia" aria-label="Competência">
+            <button type="button" class="mob-competencia-seta" id="mob-mes-anterior" aria-label="Mês anterior">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+            </button>
+            <span class="mob-competencia-centro">
+                <span class="mob-competencia-calendario" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>
+                </span>
+                <output class="mob-competencia-mes" id="mob-competencia" aria-live="polite"></output>
+            </span>
+            <button type="button" class="mob-competencia-seta" id="mob-mes-seguinte" aria-label="Mês seguinte">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+            </button>
+        </nav>
+
+        <section class="mob-grade" aria-label="Módulos">
+            <a class="mob-atalho" data-modulo="receita" data-destino="receitas.html" aria-disabled="true">
+                <span class="mob-atalho-icone" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                        <ellipse cx="9" cy="7" rx="5.5" ry="2.5"/>
+                        <path d="M3.5 7v4c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5V7"/>
+                        <path d="M3.5 11v4c0 1.4 2.5 2.5 5.5 2.5 1 0 2-.1 2.8-.4"/>
+                        <ellipse cx="15.5" cy="14" rx="5" ry="2.3"/>
+                        <path d="M10.5 14v3.7c0 1.3 2.2 2.3 5 2.3s5-1 5-2.3V14"/>
+                    </svg>
+                </span>
+                <span class="mob-atalho-nome">Receita</span>
+            </a>
+            <a class="mob-atalho" data-modulo="despesa" data-destino="contas.html" aria-disabled="true">
+                <span class="mob-atalho-icone" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="12" r="8.5"/><path d="M8 12h8"/></svg>
+                </span>
+                <span class="mob-atalho-nome">Despesa</span>
+            </a>
+            <a class="mob-atalho" data-modulo="lancamento" data-destino="lancamentos.html" aria-disabled="true">
+                <span class="mob-atalho-icone" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M15.5 4.5l4 4L9 19H5v-4L15.5 4.5Z"/>
+                        <path d="M13 7l4 4"/>
+                    </svg>
+                </span>
+                <span class="mob-atalho-nome">Lançamento</span>
+            </a>
+            <a class="mob-atalho" data-modulo="resumo" data-destino="dashboard.html" aria-disabled="true">
+                <span class="mob-atalho-icone" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false"><path d="M6 20v-8M12 20V4M18 20v-11"/></svg>
+                </span>
+                <span class="mob-atalho-nome">Resumo</span>
+            </a>
+            <a class="mob-atalho" data-modulo="pagamentos" data-destino="contas.html" aria-disabled="true">
+                <span class="mob-atalho-icone" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                        <rect x="3" y="6" width="18" height="12" rx="2"/>
+                        <path d="M3 10h18M7 14.5h4"/>
+                    </svg>
+                </span>
+                <span class="mob-atalho-nome">Pagamentos</span>
+            </a>
+            <a class="mob-atalho" data-modulo="recorrencias" data-destino="recorrencias.html" aria-disabled="true">
+                <span class="mob-atalho-icone" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M19.5 9A8 8 0 0 0 5.2 7.6L4 9"/>
+                        <path d="M4 4.5V9h4.5"/>
+                        <path d="M4.5 15a8 8 0 0 0 14.3 1.4L20 15"/>
+                        <path d="M20 19.5V15h-4.5"/>
+                    </svg>
+                </span>
+                <span class="mob-atalho-nome">Recorrências</span>
+            </a>
+            <a class="mob-atalho" data-modulo="cartoes" data-destino="cartoes.html" aria-disabled="true">
+                <span class="mob-atalho-icone" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                        <rect x="3" y="6" width="18" height="12" rx="2"/>
+                        <rect x="6" y="9.5" width="4" height="3" rx=".6"/>
+                        <path d="M6 15h2.5M10.5 15H13M15 15h3"/>
+                    </svg>
+                </span>
+                <span class="mob-atalho-nome">Cartões</span>
+            </a>
+            <a class="mob-atalho" data-modulo="contas" data-destino="contas-bancarias.html" aria-disabled="true">
+                <span class="mob-atalho-icone" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false"><path d="M4 10h16M6 10v7M10 10v7M14 10v7M18 10v7M4 19.5h16M12 4l8 4H4l8-4Z"/></svg>
+                </span>
+                <span class="mob-atalho-nome">Contas</span>
+            </a>
+        </section>
+    </main>
+
+    <nav class="mob-barra" aria-label="Navegação">
+        <div class="mob-barra-miolo">
+        <a class="mob-barra-item ativo" href="inicio.html" aria-current="page">
+            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20.5h-5.8v-5.8H9.3v5.8H3.5v-9.3Z"/></svg>
+            <span>Início</span>
+        </a>
+        <a class="mob-barra-item" data-modulo="lancar" aria-disabled="true">
+            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M12 4.5v15M4.5 12h15"/></svg>
+            <span>Lançar</span>
+        </a>
+        <a class="mob-barra-item" data-modulo="resumo" aria-disabled="true">
+            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M6 20v-7M12 20V5M18 20v-10"/></svg>
+            <span>Resumo</span>
+        </a>
+        <a class="mob-barra-item" data-modulo="mais" aria-disabled="true">
+            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><circle cx="5.5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="18.5" cy="12" r="1.4" fill="currentColor"/></svg>
+            <span>Mais</span>
+        </a>
+        </div>
+    </nav>
+
+    <script src="config.js"></script>
+    <script src="vendor/supabase.js"></script>
+    <script type="module" src="js/inicio-mobile.js"></script>
+</body>
+</html>

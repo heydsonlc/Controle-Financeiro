@@ -1,0 +1,271 @@
+/* FIN-MVP-MOB-08 — pagina principal mobile (inicio.html). Folha propria, carregada so por inicio.html e restrita a
+   body.mob-inicio: nenhuma tela do desktop e afetada. Medidas do mockup aprovado (tela de 390 pt); o azul do mockup
+   foi trocado pelo preto do menu lateral do desktop (#1d1d1f). */
+
+body.mob-inicio {
+    --mob-preto: #1d1d1f;
+    --mob-texto: #1d1d1f;
+    --mob-inativo: #3a3a3c;
+    --mob-linha: #e5e5ea;
+    --mob-borda: #dedee4;
+    --mob-fundo: #f9f9fb;
+    --mob-fundo-botao: #f2f2f5;
+    --mob-lateral: 17px;
+    --mob-largura: 480px;
+    --mob-barra-altura: 64px;
+    margin: 0;
+    min-height: 100vh;
+    min-height: 100dvh;
+    background: var(--mob-fundo);
+    color: var(--mob-texto);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    padding-bottom: calc(var(--mob-barra-altura) + env(safe-area-inset-bottom, 0px));
+    box-sizing: border-box;
+    overflow-x: hidden;
+}
+
+body.mob-inicio *,
+body.mob-inicio *::before,
+body.mob-inicio *::after {
+    box-sizing: inherit;
+}
+
+body.mob-inicio svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* Cabecalho: icone da aplicacao + "Financeiro"; sino a direita; linha divisoria em toda a largura */
+body.mob-inicio .mob-cabecalho {
+    border-bottom: 1px solid var(--mob-linha);
+    background: var(--mob-fundo);
+}
+
+body.mob-inicio .mob-cabecalho-miolo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    max-width: var(--mob-largura);
+    margin: 0 auto;
+    padding: calc(12px + env(safe-area-inset-top, 0px)) var(--mob-lateral) 12px;
+}
+
+body.mob-inicio .mob-marca {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+body.mob-inicio .mob-marca-icone {
+    width: 46px;
+    height: 46px;
+    padding: 9px;
+    border-radius: 12px;
+    background: var(--mob-preto);
+    color: #ffffff;
+    flex: 0 0 auto;
+}
+
+body.mob-inicio .mob-marca-icone svg {
+    stroke-width: 1.8;
+}
+
+body.mob-inicio .mob-titulo {
+    margin: 0;
+    font-size: 1.85rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    white-space: nowrap;
+}
+
+body.mob-inicio .mob-notificacoes {
+    width: 44px;
+    height: 44px;
+    padding: 8px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--mob-texto);
+    cursor: default;
+    flex: 0 0 auto;
+}
+
+/* Competencia: pilula com setas nas pontas, calendario + "Nov/2026" ao centro */
+body.mob-inicio .mob-conteudo {
+    max-width: var(--mob-largura);
+    margin: 0 auto;
+    padding: 15px var(--mob-lateral) 28px;
+}
+
+body.mob-inicio .mob-competencia {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 46px;
+    margin: 0 0 20px;
+    padding: 0 6px;
+    border: 1px solid var(--mob-borda);
+    border-radius: 23px;
+    background: var(--mob-fundo-botao);
+}
+
+body.mob-inicio .mob-competencia-seta {
+    width: 40px;
+    height: 36px;
+    padding: 7px 9px;
+    border: 0;
+    border-radius: 18px;
+    background: transparent;
+    color: var(--mob-texto);
+    cursor: pointer;
+    flex: 0 0 auto;
+}
+
+body.mob-inicio .mob-competencia-seta:active {
+    background: rgba(0, 0, 0, 0.06);
+}
+
+body.mob-inicio .mob-competencia-centro {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+body.mob-inicio .mob-competencia-calendario {
+    width: 24px;
+    height: 24px;
+    flex: 0 0 auto;
+}
+
+body.mob-inicio .mob-competencia-mes {
+    font-size: 1.2rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* Grade de modulos: 2 colunas x 4 linhas */
+body.mob-inicio .mob-grade {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 11px;
+}
+
+body.mob-inicio .mob-atalho {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    min-height: 92px;
+    padding: 14px 8px;
+    border: 1px solid var(--mob-borda);
+    border-radius: 14px;
+    background: var(--mob-fundo-botao);
+    color: var(--mob-texto);
+    text-decoration: none;
+    text-align: center;
+}
+
+body.mob-inicio .mob-atalho[href]:active {
+    background: #e9e9ee;
+}
+
+/* Desabilitado: mesma aparencia, sem navegar ("Em breve" no title) */
+body.mob-inicio .mob-atalho[aria-disabled="true"] {
+    cursor: default;
+}
+
+body.mob-inicio .mob-atalho-icone {
+    width: 34px;
+    height: 34px;
+    color: var(--mob-preto);
+}
+
+body.mob-inicio .mob-atalho-nome {
+    font-size: 1.06rem;
+    font-weight: 600;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+}
+
+/* Barra inferior fixa */
+body.mob-inicio .mob-barra {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    height: calc(var(--mob-barra-altura) + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: var(--mob-fundo);
+    border-top: 1px solid var(--mob-linha);
+}
+
+body.mob-inicio .mob-barra-miolo {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    height: 100%;
+    max-width: var(--mob-largura);
+    margin: 0 auto;
+    padding: 0 8px;
+}
+
+body.mob-inicio .mob-barra-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-width: 0;
+    color: var(--mob-inativo);
+    font-size: 0.86rem;
+    font-weight: 500;
+    text-decoration: none;
+}
+
+body.mob-inicio .mob-barra-item svg {
+    width: 24px;
+    height: 24px;
+}
+
+body.mob-inicio .mob-barra-item.ativo {
+    color: var(--mob-preto);
+    font-weight: 600;
+}
+
+body.mob-inicio .mob-barra-item.ativo svg {
+    fill: currentColor;
+}
+
+body.mob-inicio .mob-barra-item circle[fill] {
+    fill: currentColor;
+    stroke: none;
+}
+
+body.mob-inicio .mob-barra-item[aria-disabled="true"] {
+    cursor: default;
+}
+
+body.mob-inicio .mob-barra-item:focus-visible,
+body.mob-inicio .mob-atalho:focus-visible,
+body.mob-inicio .mob-competencia-seta:focus-visible {
+    outline: 2px solid var(--mob-preto);
+    outline-offset: 2px;
+}
+
+body.mob-inicio[hidden] {
+    display: none;
+}
