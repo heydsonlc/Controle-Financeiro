@@ -2,7 +2,7 @@
 
 Primeiro MVP da versão mobile: área de trabalho simplificada, com atalhos para os módulos. Os 8 atalhos ficam visíveis e desabilitados até cada módulo mobile ser homologado. O desktop não muda.
 
-**Situação:** implementado no ramo local `mob-08-inicio`, em homologação no ambiente de pré-visualização. Publicação só depois da aprovação do titular (adendo de 13/11/2026).
+**Situação:** implementado no ramo local `mob-08-inicio`. Layout aprovado com ressalvas na homologação de 13/11/2026, e os ajustes foram feitos (botões mais baixos, menos espaço abaixo da competência, Sair no Mais). Publicação só depois da aprovação final do titular.
 
 ## 1. O que foi feito
 
@@ -23,7 +23,9 @@ Primeiro MVP da versão mobile: área de trabalho simplificada, com atalhos para
 - **Tablet e desktop:** o login segue levando a Despesas (`contas.html`), com a moldura de sempre.
 - **Sem sessão:** `inicio.html` leva ao login e volta para ela depois.
 - **Competência:** mês e ano correntes no formato do mockup (`Nov/2026`). As setas trocam o mês só na interface; o mês fica no endereço (`?mes=`), então atualizar a página o mantém. Mês inválido volta ao corrente.
-- **Atalhos e barra:** os 8 atalhos e os itens Lançar, Resumo e Mais ficam com a aparência original, desabilitados (`aria-disabled`, sem link, "Em breve" no título) e não navegam. Só Início funciona, destacado em preto. O sino não tem função.
+- **Atalhos e barra:** os 8 atalhos e os itens Lançar e Resumo ficam com a aparência original, desabilitados (`aria-disabled`, sem link, "Em breve" no título) e não navegam. O sino não tem função.
+- **Início:** destacado em preto; recarrega a página principal mantendo o mês escolhido.
+- **Mais:** abre um menu com **Sair**, que encerra a sessão (aprovado na homologação de 13/11/2026). O menu fecha com Esc, com toque fora ou com a escolha.
 - **Ativação gradual:** cada MVP homologado entra em `MODULOS_ATIVOS` pelo `data-modulo`. O atalho passa a apontar para o seu `data-destino` com a competência aberta.
 
 ## 2. Mockup e divergências para decisão do titular
@@ -31,8 +33,9 @@ Primeiro MVP da versão mobile: área de trabalho simplificada, com atalhos para
 O layout segue as medidas do mockup aprovado:
 - tela de 390 pt e margens de 17 pt;
 - competência em pílula de 46 pt, com calendário;
-- botões de 92 pt, espaço de 10 a 11 pt entre eles e cantos de 14 pt;
+- botões de 92 pt, espaço de 10 a 11 pt entre eles e cantos de 14 pt; na homologação, reduzidos para 80 px, com ícones de 32 px;
 - ícones de 34 pt e nomes em semi-negrito;
+- espaço entre a competência e a grade reduzido de 20 para 12 px na homologação;
 - título grande, com linha divisória;
 - barra inferior com a casa preenchida no item ativo.
 
@@ -74,8 +77,8 @@ Abrir no Firefox: `http://127.0.0.1:8790/__previa__/`. Conta fictícia: `usuario
 
 | Nível | Selecionados | Resultado |
 |---|---|---|
-| Unitários (`web`) | todos, com um teste novo: página protegida, fora da moldura, 8 atalhos desabilitados, só Início com link, CSS restrito a `body.mob-inicio`, nenhuma leitura de dados, pré-visualização fora do `dist` | 93/93 |
-| E2E (ambiente isolado) | `mob08_inicio` (7: sem sessão, celular, competência, larguras de 320 a 430 sem rolagem horizontal nem corte, destino pedido, tablet, desktop) e a regressão afetada pelo novo destino no celular: `acesso`, `moldura`, `contas`, `movimentacoes`, `pendencia` | 40/40 |
+| Unitários (`web`) | todos, com um teste novo (incluindo o menu Sair): página protegida, fora da moldura, 8 atalhos desabilitados, só Início com link, CSS restrito a `body.mob-inicio`, nenhuma leitura de dados, pré-visualização fora do `dist` | 93/93 |
+| E2E (ambiente isolado) | `mob08_inicio` (8: sem sessão, celular com botões de 80 px e espaço de 12 px, competência e Início mantendo o mês, Mais e Sair, larguras de 320 a 430 sem rolagem horizontal nem corte, destino pedido, tablet, desktop) e a regressão afetada pelo novo destino no celular: `acesso`, `moldura`, `contas`, `movimentacoes`, `pendencia` | 40/40; depois dos ajustes, `mob08_inicio` + `acesso` + `moldura`: 25/25 |
 
 Ajuste nos specs existentes: `moldura`, `contas`, `movimentacoes` e `pendencia` entravam pelo login com viewport de celular e esperavam Despesas. Agora pedem esse destino explicitamente (`?next=contas.html`), porque no celular o login leva à página mobile, como pede o contrato. Nenhuma asserção de comportamento do desktop mudou.
 
@@ -86,4 +89,3 @@ Dispensados: testes de banco e a regressão financeira completa, porque não há
 - Decidir as divergências da seção 2.
 - Homologação visual do titular no Firefox, pela pré-visualização.
 - Publicação (push e deploy) só depois da aprovação.
-- Logout no celular: a página mobile ainda não tem "Sair" (o item Mais está desabilitado). Previsto para o MVP que ativar o Mais.

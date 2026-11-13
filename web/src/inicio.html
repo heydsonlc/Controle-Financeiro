@@ -134,10 +134,16 @@
             <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M6 20v-7M12 20V5M18 20v-10"/></svg>
             <span>Resumo</span>
         </a>
-        <a class="mob-barra-item" data-modulo="mais" aria-disabled="true">
+        <button type="button" class="mob-barra-item" id="mob-mais" aria-haspopup="menu" aria-expanded="false" aria-controls="mob-menu-mais">
             <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><circle cx="5.5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="18.5" cy="12" r="1.4" fill="currentColor"/></svg>
             <span>Mais</span>
-        </a>
+        </button>
+        </div>
+        <div class="mob-menu-mais" id="mob-menu-mais" role="menu" aria-label="Mais opções" hidden>
+            <button type="button" class="mob-menu-item" id="mob-sair" role="menuitem">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/><path d="M10 16l-4-4 4-4M6 12h10"/></svg>
+                <span>Sair</span>
+            </button>
         </div>
     </nav>
 

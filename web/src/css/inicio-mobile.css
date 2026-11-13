@@ -105,7 +105,7 @@ body.mob-inicio .mob-notificacoes {
 body.mob-inicio .mob-conteudo {
     max-width: var(--mob-largura);
     margin: 0 auto;
-    padding: 15px var(--mob-lateral) 28px;
+    padding: 12px var(--mob-lateral) 28px;
 }
 
 body.mob-inicio .mob-competencia {
@@ -113,7 +113,7 @@ body.mob-inicio .mob-competencia {
     align-items: center;
     justify-content: space-between;
     height: 46px;
-    margin: 0 0 20px;
+    margin: 0 0 12px;
     padding: 0 6px;
     border: 1px solid var(--mob-borda);
     border-radius: 23px;
@@ -168,9 +168,9 @@ body.mob-inicio .mob-atalho {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 9px;
-    min-height: 92px;
-    padding: 14px 8px;
+    gap: 6px;
+    min-height: 80px;
+    padding: 10px 8px;
     border: 1px solid var(--mob-borda);
     border-radius: 14px;
     background: var(--mob-fundo-botao);
@@ -189,8 +189,8 @@ body.mob-inicio .mob-atalho[aria-disabled="true"] {
 }
 
 body.mob-inicio .mob-atalho-icone {
-    width: 34px;
-    height: 34px;
+    width: 32px;
+    height: 32px;
     color: var(--mob-preto);
 }
 
@@ -224,6 +224,12 @@ body.mob-inicio .mob-barra-miolo {
 }
 
 body.mob-inicio .mob-barra-item {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-family: inherit;
+    cursor: pointer;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -259,7 +265,51 @@ body.mob-inicio .mob-barra-item[aria-disabled="true"] {
     cursor: default;
 }
 
+/* Menu do "Mais" (Sair), aberto acima da barra */
+body.mob-inicio .mob-menu-mais {
+    position: absolute;
+    right: max(8px, calc((100% - var(--mob-largura)) / 2 + 8px));
+    bottom: calc(100% + 8px);
+    min-width: 168px;
+    padding: 6px;
+    border: 1px solid var(--mob-borda);
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+body.mob-inicio .mob-menu-mais[hidden] {
+    display: none;
+}
+
+body.mob-inicio .mob-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 11px 12px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--mob-texto);
+    font: inherit;
+    font-size: 1rem;
+    font-weight: 550;
+    text-align: left;
+    cursor: pointer;
+}
+
+body.mob-inicio .mob-menu-item:active {
+    background: rgba(0, 0, 0, 0.06);
+}
+
+body.mob-inicio .mob-menu-item svg {
+    width: 22px;
+    height: 22px;
+}
+
 body.mob-inicio .mob-barra-item:focus-visible,
+body.mob-inicio .mob-menu-item:focus-visible,
 body.mob-inicio .mob-atalho:focus-visible,
 body.mob-inicio .mob-competencia-seta:focus-visible {
     outline: 2px solid var(--mob-preto);

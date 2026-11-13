@@ -82,6 +82,12 @@ test('celular: login leva a pagina principal mobile, com atalhos e barra desabil
         await expect(atalhos.nth(i)).toHaveAttribute('aria-disabled', 'true');
         await expect(atalhos.nth(i)).not.toHaveAttribute('href', /.*/);
     }
+    // ajustes da homologacao: botoes mais baixos (80 px) e menos espaco entre a competencia e a grade (12 px)
+    const medidas = await page.evaluate(() => ({
+        altura: Math.round(document.querySelector('.mob-atalho').getBoundingClientRect().height),
+        espaco: Math.round(document.querySelector('.mob-grade').getBoundingClientRect().top - document.querySelector('.mob-competencia').getBoundingClientRect().bottom),
+    }));
+    expect(medidas).toEqual({ altura: 80, espaco: 12 });
     // 2 colunas x 4 linhas
     const caixas = await atalhos.evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top)]; }));
     expect(new Set(caixas.map(([x]) => x)).size).toBe(2);
@@ -91,14 +97,16 @@ test('celular: login leva a pagina principal mobile, com atalhos e barra desabil
     // desabilitados: o clique (forcado, como o toque) nao navega
     await atalhos.nth(1).click({ force: true });
     await page.locator('.mob-barra-item').nth(1).click({ force: true });
+    await page.locator('.mob-barra-item').nth(2).click({ force: true });
     await page.locator('.mob-notificacoes').click({ force: true });
     expect(page.url()).toBe(antes);
 
     const barra = page.locator('.mob-barra .mob-barra-item');
     await expect(barra).toHaveText(['Início', 'Lançar', 'Resumo', 'Mais']);
-    await expect(barra.nth(0)).toHaveAttribute('href', 'inicio.html');
+    await expect(barra.nth(0)).toHaveAttribute('href', `inicio.html?mes=${mesAtual().chave}`);
     await expect(barra.nth(0)).toHaveAttribute('aria-current', 'page');
-    for (const i of [1, 2, 3]) {
+    await expect(barra.nth(3)).toHaveAttribute('aria-haspopup', 'menu');
+    for (const i of [1, 2]) {
         await expect(barra.nth(i)).toHaveAttribute('aria-disabled', 'true');
         await expect(barra.nth(i)).not.toHaveAttribute('href', /.*/);
     }
@@ -119,8 +127,34 @@ test('celular: competencia navega entre meses so na interface', async ({ page })
     await expect(page.locator('#mob-competencia')).toHaveText(mesAtual(-1).rotulo);
     await page.reload();
     await expect(page.locator('#mob-competencia')).toHaveText(mesAtual(-1).rotulo);  // atualizar a pagina mantem o mes
+    await page.click('.mob-barra-item.ativo');  // Inicio recarrega a pagina principal mantendo o mes escolhido
+    await page.waitForURL(new RegExp(`inicio\\.html\\?mes=${mesAtual(-1).chave}$`));
+    await expect(page.locator('#mob-competencia')).toHaveText(mesAtual(-1).rotulo);
     await page.goto('/inicio.html?mes=2026-13');
     await expect(page.locator('#mob-competencia')).toHaveText(mesAtual().rotulo);  // mes invalido: competencia atual
+});
+
+test('celular: Mais abre o menu com Sair, que encerra a sessao', async ({ page }) => {
+    await page.setViewportSize(CELULAR);
+    await entrar(page);
+    await page.waitForURL(/\/inicio\.html/);
+    const menu = page.locator('#mob-menu-mais');
+    await expect(menu).toBeHidden();
+    await page.click('#mob-mais');
+    await expect(menu).toBeVisible();
+    await expect(page.locator('#mob-mais')).toHaveAttribute('aria-expanded', 'true');
+    await evidencia(page, 'celular-390x844-mais');
+    await page.keyboard.press('Escape');  // Esc fecha
+    await expect(menu).toBeHidden();
+    await page.click('#mob-mais');
+    await page.click('.mob-titulo');  // toque fora fecha
+    await expect(menu).toBeHidden();
+    await page.click('#mob-mais');
+    await page.click('#mob-sair');
+    await page.waitForURL(/\/index\.html$/);
+    expect(await page.evaluate(() => localStorage.getItem('cf-financeiro-auth'))).toBeNull();
+    await page.goto('/inicio.html');
+    await page.waitForURL(/index\.html\?next=inicio\.html$/);  // sem sessao, volta a exigir login
 });
 
 test('celular: sem rolagem horizontal nem corte nas larguras moveis', async ({ page }) => {

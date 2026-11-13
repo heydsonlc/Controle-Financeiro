@@ -395,10 +395,12 @@ test('pagina principal mobile: protegida, sem moldura, 8 atalhos desabilitados e
         const atalhos = [...html.matchAll(/<a class="mob-atalho" data-modulo="(\w+)" data-destino="([\w.-]+)" aria-disabled="true">[\s\S]*?<span class="mob-atalho-nome">([^<]+)<\/span>/g)]
             .map((m) => m[3]);
         assert.deepEqual(atalhos, ['Receita', 'Despesa', 'Lançamento', 'Resumo', 'Pagamentos', 'Recorrências', 'Cartões', 'Contas']);
-        assert.doesNotMatch(html.slice(html.indexOf('mob-grade'), html.indexOf('mob-barra')), /href=/, 'atalhos sem link');
-        const barra = [...html.matchAll(/<a class="mob-barra-item([^"]*)"([^>]*)>[\s\S]*?<span>([^<]+)<\/span>/g)]
-            .map((m) => [m[3], /href=/.test(m[2])]);
-        assert.deepEqual(barra, [['Início', true], ['Lançar', false], ['Resumo', false], ['Mais', false]]);
+        assert.doesNotMatch(html.slice(html.indexOf('mob-grade'), html.indexOf('class="mob-barra"')), /href=/, 'atalhos sem link');
+        const barra = [...html.matchAll(/<(a|button) (?:type="button" )?class="mob-barra-item([^"]*)"([^>]*)>[\s\S]*?<span>([^<]+)<\/span>/g)]
+            .map((m) => [m[4], /href=/.test(m[3]) ? 'link' : (m[1] === 'button' ? 'botao' : 'desabilitado')]);
+        // "Mais" abre o menu com Sair (homologacao de 13/11/2026); Lancar e Resumo seguem desabilitados.
+        assert.deepEqual(barra, [['Início', 'link'], ['Lançar', 'desabilitado'], ['Resumo', 'desabilitado'], ['Mais', 'botao']]);
+        assert.match(html, /<div class="mob-menu-mais" id="mob-menu-mais" role="menu"[^>]*hidden>[\s\S]*?id="mob-sair"[\s\S]*?<span>Sair<\/span>/);
         const css = await readFile(path.join(destino, 'css', 'inicio-mobile.css'), 'utf8');
         for (const regra of css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/(^|\})\s*([^{}@]+)\{/g)) {
             for (const seletor of regra[2].split(',')) assert.match(seletor.trim(), /^body\.mob-inicio(\[|\s|$)/, `regra restrita: ${seletor.trim()}`);

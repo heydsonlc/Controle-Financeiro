@@ -5,7 +5,7 @@
 // ganha o link do seu destino com a competencia aberta; os demais ficam visiveis, desabilitados e sem navegar.
 
 import { MES_VALIDO, deslocarMes, mesAtualBrasilia } from './comum.js';
-import { exigirUsuario } from './sessao.js';
+import { exigirUsuario, sair } from './sessao.js';
 
 export const MODULOS_ATIVOS = new Set([]);
 
@@ -32,6 +32,7 @@ function aplicarCompetencia(mes) {
         endereco.searchParams.set('mes', mes);
         window.history.replaceState(null, '', endereco);
     }
+    document.querySelector('.mob-barra-item.ativo').setAttribute('href', `inicio.html?mes=${mes}`);  // Inicio mantem o mes
     for (const atalho of document.querySelectorAll('[data-modulo][data-destino]')) {
         if (MODULOS_ATIVOS.has(atalho.dataset.modulo)) atalho.setAttribute('href', `${atalho.dataset.destino}?mes=${mes}`);
     }
@@ -50,10 +51,29 @@ function prepararAtalhos() {
     }
 }
 
+// "Mais": menu com Sair (aprovado na homologacao de 13/11/2026); fecha com Esc, toque fora ou escolha.
+function prepararMais() {
+    const botao = $('mob-mais');
+    const menu = $('mob-menu-mais');
+    const abrir = (aberto) => {
+        menu.hidden = !aberto;
+        botao.setAttribute('aria-expanded', aberto ? 'true' : 'false');
+        if (aberto) $('mob-sair').focus();
+    };
+    botao.addEventListener('click', (evento) => { evento.stopPropagation(); abrir(menu.hidden); });
+    document.addEventListener('click', (evento) => { if (!menu.hidden && !menu.contains(evento.target)) abrir(false); });
+    document.addEventListener('keydown', (evento) => { if (evento.key === 'Escape' && !menu.hidden) { abrir(false); botao.focus(); } });
+    $('mob-sair').addEventListener('click', async () => {
+        $('mob-sair').disabled = true;
+        await sair();
+    });
+}
+
 const usuario = await exigirUsuario();
 if (usuario) {
     let mes = competenciaInicial();
     prepararAtalhos();
+    prepararMais();
     aplicarCompetencia(mes);
     $('mob-mes-anterior').addEventListener('click', () => { mes = deslocarMes(mes, -1); aplicarCompetencia(mes); });
     $('mob-mes-seguinte').addEventListener('click', () => { mes = deslocarMes(mes, 1); aplicarCompetencia(mes); });
