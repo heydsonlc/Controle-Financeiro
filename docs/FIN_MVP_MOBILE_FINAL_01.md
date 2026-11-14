@@ -124,8 +124,9 @@ O mesmo domínio no desktop continua como está, porque o desktop não carrega o
 |---|---|---|---|---|
 | Publicado (`7e035c5`, referência) | 44 | 157 | 1 | 0 |
 | Consolidado (`mobile-final-01`) | 52 | 223 | 1 | 0 |
+| Consolidado, depois da atualização do teste da P22 (autorizada em 14/11/2026) | 52 | **224** | **0** | **0** |
 
-A única reprovação, **nos dois**, é `recorrencia.spec:262`. **Nenhuma falha foi introduzida pela versão mobile.** As telas do desktop que passaram a gravar pelos serviços comuns (Despesas, Cartões, Receitas, Lançamentos e Contas Bancárias) passaram inteiras.
+Na comparação, a única reprovação, **nos dois**, era `recorrencia.spec:262`. **Nenhuma falha foi introduzida pela versão mobile.** As telas do desktop que passaram a gravar pelos serviços comuns (Despesas, Cartões, Receitas, Lançamentos e Contas Bancárias) passaram inteiras.
 
 **As três falhas conhecidas: o que eram.** A investigação desta etapa reproduziu cada uma no código publicado e encontrou duas causas, **ambas dos testes, nenhuma do aplicativo**:
 
@@ -139,13 +140,14 @@ A única reprovação, **nos dois**, é `recorrencia.spec:262`. **Nenhuma falha 
    - Desde então, "Excluir esta e as futuras" abre a prévia da interrupção, pede confirmação e termina com "Recorrência interrompida: N ocorrência(s)…".
    - O teste antigo espera a mensagem do Flask e não confirma a prévia; a mensagem que ele lê é a do passo anterior ("apenas esta").
    - O fluxo da P22 tem cobertura própria, que passa (`recorrencias_inativacao`: "Excluir esta e as futuras" em Despesas, com confirmação e a mensagem nova).
+   - **Atualizado com autorização do titular (14/11/2026), só o teste:** o trecho final agora confirma a prévia da interrupção ("Excluir esta e as futuras", 2 ocorrências que deixam de ser exigíveis, R$ 1.000,00: abrir abril gera até maio), espera "Recorrência interrompida: 2 ocorrência(s) deixaram de ser exigíveis.", confere abril e maio sem a conta e a recorrência fora da prévia de geração. O aplicativo não mudou. Passa isolado (com `recorrencias_inativacao`, 12/12) e na suíte completa.
 
 **Decisão técnica sobre a criticidade:**
 
 | Falha | Risco para as operações financeiras | Decisão |
 |---|---|---|
 | Colisão de ids no ambiente de teste | Nenhum. Só acontece no banco descartável, porque o cenário grava ids fixos. Em produção as funções sempre usam a sequência, e o cenário remoto usa `ids_fixos=False`. Mesmo se acontecesse, a gravação é atômica (nada pela metade) e a tela avisa ("Recarregue a página para tentar de novo") | **Não bloqueadora.** Corrigida no executor dos testes |
-| `recorrencia.spec:262` desatualizado | Nenhum. A interrupção de recorrência (P22) está coberta e funciona; sem duplicidade, sem divergência de saldo, sem obrigação gerada a mais | **Não bloqueadora.** **Proposta (aguarda autorização):** atualizar o trecho final do teste para o fluxo da P22 (confirmar a prévia e esperar "Recorrência interrompida"), sem mudar o aplicativo |
+| `recorrencia.spec:262` desatualizado | Nenhum. A interrupção de recorrência (P22) está coberta e funciona; sem duplicidade, sem divergência de saldo, sem obrigação gerada a mais | **Não bloqueadora.** Teste atualizado para o fluxo da P22 com autorização do titular (14/11/2026), sem mudar o aplicativo |
 
 **Correções de testes desta etapa** (nenhuma do aplicativo):
 - `mobile06_registrar_lancamento`: nome próprio "Fibra G (lancamento)". O nome antigo, "Internet G", coincidia com a recorrência do spec do MOBILE-05, gerada quando outro spec abria um mês posterior. Os hodômetros do abastecimento passaram a partir da última leitura do veículo.
@@ -167,7 +169,7 @@ Eram colisões de dados entre specs, sem duplicidade real.
 
 | # | Pendência | Análise | Classificação |
 |---|---|---|---|
-| 1 | Três falhas dos testes de recorrência | Ver a seção 5. As três se reproduzem no código publicado (`7e035c5`), na suíte completa, com as mesmas mensagens. Nenhuma foi introduzida pelo mobile. Duas eram colisão de ids do ambiente de teste (corrigida no executor); a terceira é um teste desatualizado desde a P22, com o fluxo coberto por outro teste. Nenhuma oferece risco às operações financeiras | **Não bloqueadora** (decisão técnica na seção 5) |
+| 1 | Três falhas dos testes de recorrência | Ver a seção 5. As três se reproduzem no código publicado (`7e035c5`), na suíte completa, com as mesmas mensagens. Nenhuma foi introduzida pelo mobile. Duas eram colisão de ids do ambiente de teste (corrigida no executor); a terceira era um teste desatualizado desde a P22, atualizado com autorização. Nenhuma oferece risco às operações financeiras. Suíte completa: 224/0/0 | **Resolvida** (classificada como não bloqueadora pelo titular; decisão técnica na seção 5) |
 | 2 | Totalização diferente entre Receitas, Despesas e Dashboard | O "total de receitas" da tela Despesas e do Dashboard (`receitas_totais_do_mes`) conta, por exemplo, o recebido acima do previsto; a tela Receitas mostra Previsto e Recebido das linhas. O mobile segue cada tela do desktop (Receitas como Receitas, Despesas como Despesas), sem cálculo próprio. Afeta só a apresentação dos totais, nunca saldo, pagamento ou geração | **Não bloqueadora** (comportamento do desktop, conhecido); unificação dos critérios como **melhoria futura** |
 | 3 | Contas recorrentes geradas ao abrir a competência | É o gerador do desktop (`gerar_mes`, idempotente, com chave e trava por perfil): as contas de uma recorrência nascem quando a competência é aberta na Lista, no desktop ou no mobile. Se a geração falhar, a tela avisa ("Recarregue a página para tentar de novo") e nada é gravado. Previsões de competências nunca abertas não aparecem em relatórios até alguém abri-las | **Não bloqueadora** (regra existente, sem duplicidade); geração agendada como **melhoria futura** |
 | 4 | Competência de vencimentos entre os dias 29 e 31 no desktop | O formulário de Despesas do desktop calcula "mês anterior ao vencimento" com `Date.setMonth`: com vencimento em 29 a 31 e mês anterior mais curto, cai no próprio mês (31/03 → competência 03 em vez de 02). O usuário vê e pode corrigir a competência antes de salvar; o banco aceita até 12 meses de distância. O mobile calcula certo, por mês | **Não bloqueadora**; correção no desktop como **melhoria futura** (exige autorização: muda uma tela homologada) |
@@ -180,7 +182,8 @@ Eram colisões de dados entre specs, sem duplicidade real.
 ## 8. Plano de publicação (para autorização)
 
 **Versão candidata:**
-- ramo `mobile-final-01`, o último commit do ramo (código em `5832de9` PWA e `4a1432e` testes, mais este documento);
+- ramo `mobile-final-01`, o último commit do ramo (código em `5832de9` PWA e `4a1432e` testes, a atualização do teste da P22 e este documento);
+- aprovada tecnicamente pelo titular em 14/11/2026; push e deploy aguardam a autorização expressa de publicação;
 - avanço rápido de `origin/main` (`7e035c5`) até ele;
 - sem migration e sem dependência nova (o `package.json` não mudou).
 
