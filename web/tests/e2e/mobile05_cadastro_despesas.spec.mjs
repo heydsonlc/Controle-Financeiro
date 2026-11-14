@@ -87,12 +87,12 @@ async function linhaNaListaMobile(page, mes, nome) {
 
 // ---------------------------------------------------------------------------------------------------------------
 
-test('atalho Despesa abre a Nova Despesa na competencia da pagina principal; Lancar continua desabilitado', async ({ page }) => {
+test('atalho Despesa abre a Nova Despesa na competencia da pagina principal; Lancar abre o Registrar Lancamento', async ({ page }) => {
     await entrar(page, G);
     await page.goto(`/inicio.html?mes=${MES}`);
     const atalho = page.locator('.mob-atalho[data-modulo="despesa"]');
     await expect(atalho).toHaveAttribute('href', `despesa-nova-mobile.html?mes=${MES}`);
-    await expect(page.locator('.mob-barra-item[data-modulo="lancar"]')).toHaveAttribute('aria-disabled', 'true');
+    await expect(page.locator('.mob-barra-item[data-modulo="lancar"]')).toHaveAttribute('href', `lancamento-mobile.html?mes=${MES}`);  // FIN-MVP-MOBILE-06
     await atalho.click();
     await page.waitForURL(`**/despesa-nova-mobile.html?mes=${MES}`);
     await expect(page.locator('#mob-cadastro')).toHaveAttribute('aria-busy', 'false');

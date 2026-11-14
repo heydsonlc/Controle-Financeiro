@@ -6,13 +6,15 @@
 // (aria-disabled, "Em breve" no titulo) e sem navegar.
 
 import { MES_VALIDO, mesAtualBrasilia } from './comum.js';
+import { carregarPerfis, escolherPerfilAtivo, podeGerirPerfil } from './perfil.js';
 import { sair } from './sessao.js';
 
 // FIN-MVP-MOB-01: Resumo (atalho da pagina principal e item da barra) abre a Lista de Despesas mobile.
 // FIN-MVP-MOBILE-03: o atalho Cartoes abre os Cartoes mobile (sem item novo na barra).
 // FIN-MVP-MOBILE-04: o atalho Receita abre as Receitas mobile (sem item novo na barra).
-// FIN-MVP-MOBILE-05: o atalho Despesa abre a Nova Despesa mobile (cadastro rapido); Lancar continua reservado ao MOBILE-06.
-export const MODULOS_ATIVOS = new Set(['resumo', 'cartoes', 'receita', 'despesa']);
+// FIN-MVP-MOBILE-05: o atalho Despesa abre a Nova Despesa mobile (cadastro rapido).
+// FIN-MVP-MOBILE-06: o atalho Lancamento e o Lancar da barra abrem a mesma pagina, Registrar Lancamento.
+export const MODULOS_ATIVOS = new Set(['resumo', 'cartoes', 'receita', 'despesa', 'lancamento', 'lancar']);
 
 const $ = (id) => document.getElementById(id);
 
@@ -67,6 +69,23 @@ export function desabilitarModulo(modulo, motivo) {
         item.setAttribute('aria-disabled', 'true');
         item.title = motivo;
         item.addEventListener('click', (evento) => evento.preventDefault());
+    }
+}
+
+// FIN-MVP-MOBILE-06: atalhos e itens de cadastro (Despesa, Lancamento e o Lancar da barra) so para quem gere o perfil
+// ativo (a permissao do banco, pela mesma pode_gerir_perfil). E so apresentacao: as paginas de cadastro e o banco recusam.
+// Devolve true (gere), false (so le) ou null (sem perfil ou falha na consulta: os itens ficam como estao).
+export const MODULOS_DE_CADASTRO = ['despesa', 'lancamento', 'lancar'];
+export async function ajustarCadastrosPelaPermissao(usuarioId) {
+    try {
+        const perfil = escolherPerfilAtivo(await carregarPerfis(), usuarioId);
+        if (!perfil) return null;
+        if (await podeGerirPerfil(perfil.id)) return true;
+        for (const modulo of MODULOS_DE_CADASTRO) desabilitarModulo(modulo, 'Somente leitura neste perfil');
+        return false;
+    } catch (erro) {
+        console.error('Mobile: permissao do perfil', erro);
+        return null;
     }
 }
 

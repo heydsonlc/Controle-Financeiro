@@ -2,10 +2,13 @@
 // js/original/contas_bancarias.js chama (ponte-api.js), no formato do Flask, com as funcoes do Supabase (20261109090000).
 // Regras no banco: gestao do perfil, conta do perfil, saldo pelos movimentos, saldo inicial so sem movimentos, so AJUSTE
 // editavel, transferencia pareada, escritor unico do perfil para movimentos, chave contra reenvio, versao do cadastro.
+// FIN-MVP-MOBILE-06: a gravacao da transferencia (transferir_entre_contas) fica em js/contas-servico.js, comum a esta tela e
+// ao Registrar Lancamento mobile; o comportamento desta tela nao muda.
 
 import { supabase } from './cliente.js';
 import { criarChaves, emMigracao, falha, mensagemDeErro, ok } from './adaptador-comum.js';
 import { iniciarMoldura } from './moldura.js';
+import { gravarTransferencia } from './contas-servico.js';
 
 const estado = { perfilId: null, versoes: {} };
 const chaves = criarChaves();
@@ -101,8 +104,7 @@ async function excluirAjuste(id, movimento) {
 }
 
 async function transferir(corpo) {
-    const r = await comChave(`transferir:${JSON.stringify(corpo)}`, (chave) => rpc((a) => supabase.rpc('transferir_entre_contas', a),
-        { p_perfil_id: estado.perfilId, p_dados: corpo, p_chave: chave }));
+    const r = await comChave(`transferir:${JSON.stringify(corpo)}`, (chave) => gravarTransferencia(estado.perfilId, corpo, chave));
     return {
         status: 201,
         corpo: { success: true, message: 'Transferência realizada', data: { transferencia_id: r.transferencia_id, debito: r.debito, credito: r.credito } },

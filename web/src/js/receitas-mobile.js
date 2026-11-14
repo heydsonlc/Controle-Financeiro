@@ -7,16 +7,17 @@
 import { centavos, dataCurta, deslocarMes, el, reais } from './comum.js';
 import { hojeBrasilia } from './adaptador-comum.js';
 import { formatarCompetencia } from './despesas-grupos.js';
-import { aplicarCompetencia, competenciaInicial, prepararMais, prepararModulos } from './mobile-comum.js';
+import { ajustarCadastrosPelaPermissao, aplicarCompetencia, competenciaInicial, prepararMais, prepararModulos } from './mobile-comum.js';
 import {
     FALHA_GERAL, SETA, abrirFolha, botao, campo, detalhes, entrada, fecharFolha, folhaDeErro, icone, limparAoEditar,
     mensagem, mostrarAviso, mostrarMensagem, prepararFolha, seletor, texto,
 } from './mobile-ui.js';
 import { carregarPerfis, escolherPerfilAtivo, salvarPerfilAtivo } from './perfil.js';
 import {
-    SITUACOES, TIPOS_DA_FONTE, TIPOS_DO_FILTRO, acoesDaReceita, faltaReceber, formatarTipo, legendaDaReceita,
+    SITUACOES, TIPOS_DO_FILTRO, acoesDaReceita, faltaReceber, formatarTipo, legendaDaReceita,
     montarDataPrevista, montarReceitasMes, recebimentosDaLinha, separarReceitas, totaisDaLista, valorDaLinha,
 } from './receitas-lista.js';
+import { formularioFonte, lerValor, opcoesDaConta, valorParaCampo } from './receita-formulario.js';
 import { configurarReceitas, podeGerirPerfil, responderReceitas } from './receitas-servico.js';
 import { exigirUsuario } from './sessao.js';
 
@@ -60,25 +61,7 @@ function api(metodo, caminho, corpo = null) {
 
 const anoMes = () => `${estado.mes}-01`;
 const reaisDe = (valor) => reais(centavos(valor));
-const opcoesDeConta = () => [['', 'Selecione...'], ...estado.contas.map((c) => [c.id, `${c.nome} (${c.instituicao || 'Instituição'})`])];
-const OPCOES_DIA = [['', 'Selecione o dia'], ...[...Array(31).keys()].map((i) => [i + 1, String(i + 1)])];
-
-// Valor digitado ("1.234,56" ou "1234.56") como o parseMoeda do desktop.
-function lerValor(textoValor) {
-    const limpo = String(textoValor || '').replace(/[^\d,.-]/g, '').trim();
-    if (!limpo) return 0;
-    const normalizado = limpo.includes(',') ? limpo.replace(/\./g, '').replace(',', '.') : limpo;
-    return Number.parseFloat(normalizado) || 0;
-}
-const valorParaCampo = (valor) => Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-function caixaDeMarcar(rotulo, marcado) {
-    const caixa = el('label', 'mob-opcao');
-    const input = entrada('checkbox');
-    input.checked = Boolean(marcado);
-    caixa.append(input, el('span', null, rotulo));
-    return { caixa, input };
-}
+const opcoesDeConta = () => opcoesDaConta(estado.contas);
 
 // Resultado de uma operacao concluida: fecha o painel, mostra a mensagem e rele a competencia (lista e totais).
 async function concluir(conteudo) {
@@ -410,58 +393,15 @@ function abrirCancelamento(linha) {
 
 function abrirFonte(fonte = null) {
     const nova = !fonte;
-    const form = el('form', 'mob-form');
-    form.noValidate = true;
-    const nome = entrada('text', fonte ? fonte.nome : '', { maxlength: '100', placeholder: 'Ex: Salário, Gratificação' });
-    const tipo = seletor([['', 'Selecione...'], ...TIPOS_DA_FONTE], fonte ? fonte.tipo : '');
-    const descricao = el('textarea');
-    descricao.maxLength = 200;
-    descricao.rows = 2;
-    descricao.value = (fonte && fonte.descricao) || '';
-    const valor = entrada('text', fonte && fonte.valor_base_mensal ? valorParaCampo(fonte.valor_base_mensal) : '',
-        { inputmode: 'decimal', autocomplete: 'off', placeholder: '0,00' });
-    const recorrente = caixaDeMarcar('Receita recorrente (mensal)', fonte ? fonte.recorrente : true);
-    const dia = seletor(OPCOES_DIA, (fonte && fonte.dia_previsto_pagamento) || '');
-    const conta = seletor(opcoesDeConta(), (fonte && fonte.conta_bancaria_id) || '');
-    const ativa = caixaDeMarcar('Fonte ativa', fonte ? fonte.ativo : true);
-    const campoDia = campo('Dia previsto do recebimento', dia);
-    const ajustarDia = () => { dia.disabled = !recorrente.input.checked; };
-    recorrente.input.addEventListener('change', ajustarDia);
-    ajustarDia();
-    const m = mensagem();
-    form.append(campo('Nome', nome), campo('Tipo', tipo), campo('Descrição', descricao), campo('Valor base mensal', valor),
-        recorrente.caixa, campoDia, campo('Conta bancária', conta));
-    if (!nova) form.append(ativa.caixa);
-    form.append(texto(nova
-        ? `Competência ${formatarCompetencia(estado.mes)}: a receita nasce prevista neste mês; recorrente, nos 12 meses a partir dele.`
-        : 'As previsões já gravadas não mudam ao salvar; havendo previsões pendentes com outro valor, você poderá atualizá-las.', 'discreto'), m);
-    limparAoEditar(form, m);
-    const salvar = acoesDoFormulario(form, 'Salvar');
-    form.addEventListener('submit', async (evento) => {
-        evento.preventDefault();
-        // O mesmo corpo do desktop (salvarFonte).
-        const corpo = {
-            nome: nome.value.trim(), tipo: tipo.value, descricao: descricao.value.trim() || '',
-            valor_base_mensal: lerValor(valor.value),
-            dia_previsto_pagamento: recorrente.input.checked ? (parseInt(dia.value || '0', 10) || null) : null,
-            conta_bancaria_id: conta.value ? parseInt(conta.value, 10) : null,
-            recorrente: recorrente.input.checked, ativo: nova ? true : ativa.input.checked,
-        };
-        if (!corpo.nome || !corpo.tipo) { mostrarMensagem(m, 'Informe nome e tipo da fonte.', 'erro'); return; }
-        salvar.disabled = true;
-        mostrarMensagem(m, 'Salvando...');
-        const r = await api(nova ? 'POST' : 'PUT', nova ? '/api/receitas/itens' : `/api/receitas/itens/${fonte.id}`, corpo);
-        if (!r.success) {
-            mostrarMensagem(m, r.error || 'Erro ao salvar fonte.', 'erro');
-            salvar.disabled = false;
-            return;
-        }
-        if (nova) {
-            await concluir(r.message || 'Fonte salva com sucesso.');
-            return;
-        }
-        await oferecerAtualizacao(fonte.id, r.message || 'Fonte salva com sucesso.');
-    });
+    // FIN-MVP-MOBILE-06: o formulario e o de js/receita-formulario.js (comum ao Registrar Lancamento), sem mudanca.
+    const form = formularioFonte({ api, mes: estado.mes, contas: estado.contas, fonte, aoCancelar: fecharFolha,
+        aoSalvo: async (r) => {
+            if (nova) {
+                await concluir(r.message || 'Fonte salva com sucesso.');
+                return;
+            }
+            await oferecerAtualizacao(fonte.id, r.message || 'Fonte salva com sucesso.');
+        } });
     abrirFolha(nova ? 'Nova receita' : `Editar: ${fonte.nome}`, form);
 }
 
@@ -574,6 +514,7 @@ const usuario = await exigirUsuario();
 if (usuario) {
     estado.mes = competenciaInicial();
     prepararModulos();
+    ajustarCadastrosPelaPermissao(usuario.id);  // FIN-MVP-MOBILE-06: quem so le recebe o Lancar desabilitado
     prepararMais();
     prepararFolha();
     aplicarCompetencia(estado.mes);

@@ -16,7 +16,7 @@ import {
     FALHA_GERAL, SETA, abrirFolha, botao, campo, detalhes, diaMes, entrada, fecharFolha, folhaDeErro, icone, limparAoEditar,
     mensagem, mostrarAviso, mostrarMensagem, prepararFolha, seletor, texto,
 } from './mobile-ui.js';
-import { aplicarCompetencia, competenciaInicial, prepararMais, prepararModulos } from './mobile-comum.js';
+import { ajustarCadastrosPelaPermissao, aplicarCompetencia, competenciaInicial, prepararMais, prepararModulos } from './mobile-comum.js';
 import { carregarPerfis, escolherPerfilAtivo, salvarPerfilAtivo } from './perfil.js';
 import { exigirUsuario } from './sessao.js';
 
@@ -591,6 +591,7 @@ const usuario = await exigirUsuario();
 if (usuario) {
     estado.mes = competenciaInicial();
     prepararModulos();
+    ajustarCadastrosPelaPermissao(usuario.id);  // FIN-MVP-MOBILE-06: quem so le recebe o Lancar desabilitado
     prepararMais();
     prepararFolha();
     aplicarCompetencia(estado.mes);

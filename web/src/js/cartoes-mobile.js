@@ -14,7 +14,7 @@ import {
 import { configurarCartoes, podeGerirPerfil, responderCartoes } from './cartoes-servico.js';
 import { formatarCompetencia } from './despesas-grupos.js';
 import { configurarDespesas, responderDespesas } from './despesas-servico.js';
-import { aplicarCompetencia, competenciaInicial, prepararMais, prepararModulos, rotuloCompetencia } from './mobile-comum.js';
+import { ajustarCadastrosPelaPermissao, aplicarCompetencia, competenciaInicial, prepararMais, prepararModulos, rotuloCompetencia } from './mobile-comum.js';
 import { abrirEstorno, abrirPagamento } from './mobile-pagamento.js';
 import {
     FALHA_GERAL, SETA, abrirFolha, botao, campo, detalhes, diaMes, entrada, fecharFolha, folhaDeErro, icone, limparAoEditar,
@@ -593,6 +593,7 @@ const usuario = await exigirUsuario();
 if (usuario) {
     estado.mes = competenciaInicial();
     prepararModulos();
+    ajustarCadastrosPelaPermissao(usuario.id);  // FIN-MVP-MOBILE-06: quem so le recebe o Lancar desabilitado
     prepararMais();
     prepararFolha();
     aplicarCompetencia(estado.mes);

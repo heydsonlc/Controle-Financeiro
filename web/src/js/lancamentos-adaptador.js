@@ -10,6 +10,8 @@
 // (salvar_lancamento_abastecimento, uma transacao); a compra ja lancada so recebe o abastecimento (ela nao muda aqui).
 // FIN-MVP-MOBILE-05: cartoes, fatura sugerida, previa das parcelas e a gravacao da compra (criar_compra) ficam em
 // js/compras-servico.js, comum a esta tela e a Nova Despesa mobile; o comportamento desta tela nao muda.
+// FIN-MVP-MOBILE-06: a gravacao da despesa com o abastecimento (salvar_lancamento_abastecimento) e o corpo da despesa direta
+// ficam em js/abastecimento-servico.js, comum a esta tela e ao Registrar Lancamento mobile; o comportamento nao muda.
 
 import { supabase } from './cliente.js';
 import { contaDoDebito, criarChaves, emMigracao, falha, mensagemDeErro, ok, textoBloqueio, valorTexto } from './adaptador-comum.js';
@@ -17,6 +19,7 @@ import { confirmacoes } from './fechamento.js';
 import { cartoesAtivos, competenciaSugerida as sugerirCompetencia, gravarCompra, montarCompra, previaParcelas as previaDasParcelas,
     respostaDaCompra } from './compras-servico.js';
 import { responderDocumentoFinanceiro } from './documento-financeiro.js';
+import { dadosDaDespesaDireta, gravarLancamentoAbastecimento } from './abastecimento-servico.js';
 import { iniciarMoldura } from './moldura.js';
 
 const estado = { perfilId: null };
@@ -42,9 +45,7 @@ const abastecimentoDoFormulario = () => (typeof window.dadosAbastecimentoDoFormu
 
 // Despesa e abastecimento numa so operacao; a chave so e esquecida depois do sucesso (repetir nao duplica nada).
 async function salvarComAbastecimento(lancamento, abastecimento, operacao) {
-    const { data, error } = await supabase.rpc('salvar_lancamento_abastecimento', {
-        p_perfil_id: estado.perfilId, p_dados: { lancamento, abastecimento }, p_chave: chaves.de(operacao),
-    });
+    const { data, error } = await gravarLancamentoAbastecimento(estado.perfilId, { lancamento, abastecimento }, chaves.de(operacao));
     if (error) return { error };
     chaves.esquecer(operacao);
     return { data };
@@ -179,11 +180,7 @@ async function criarDespesa(corpo) {
     if (abastecimento.erro) return avisar(abastecimento.erro);
     if (!(Number(corpo.valor) > 0)) return avisar('Informe um valor válido.');
     if (!corpo.data_vencimento) return avisar('Informe a data.');
-    const dados = {
-        nome: String(corpo.nome || '').trim(), valor: valorTexto(corpo.valor), descricao: String(corpo.descricao || '').trim(),
-        categoria_id: corpo.categoria_id, data_vencimento: corpo.data_vencimento, debito_automatico: false, conta_bancaria_id: null,
-    };
-    if (MES.test(corpo.mes_competencia || '')) dados.competencia = `${String(corpo.mes_competencia).slice(0, 7)}-01`;
+    const dados = dadosDaDespesaDireta(corpo);
     if (abastecimento.dados) {
         const r = await salvarComAbastecimento({ tipo: 'despesa', dados }, abastecimento.dados,
             `despesa-abastecimento:${JSON.stringify({ dados, abastecimento: abastecimento.dados })}`);

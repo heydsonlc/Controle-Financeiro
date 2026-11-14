@@ -71,7 +71,8 @@ test('sem sessao, inicio.html leva ao login e volta para ela', async ({ page }) 
 // FIN-MVP-MOB-01: so o Resumo (atalho e barra) ficou habilitado, para a Lista de Despesas mobile; os demais seguem desabilitados.
 // FIN-MVP-MOBILE-03: Cartoes tambem habilitado (Cartoes mobile); os demais seguem desabilitados.
 // FIN-MVP-MOBILE-04: Receita tambem habilitado (Receitas mobile). FIN-MVP-MOBILE-05: Despesa (Nova Despesa mobile).
-test('celular: login leva a pagina principal mobile, com so Resumo, Cartoes, Receita e Despesa habilitados entre os atalhos e Inicio ativo', async ({ page }) => {
+// FIN-MVP-MOBILE-06: Lancamento e o Lancar da barra (Registrar Lancamento, a mesma pagina).
+test('celular: login leva a pagina principal mobile, com so Resumo, Cartoes, Receita, Despesa e Lancamento habilitados entre os atalhos e Inicio ativo', async ({ page }) => {
     await page.setViewportSize(CELULAR);
     await entrar(page);
     await page.waitForURL(/\/inicio\.html\?mes=\d{4}-\d{2}$/);
@@ -85,7 +86,7 @@ test('celular: login leva a pagina principal mobile, com so Resumo, Cartoes, Rec
     for (let i = 0; i < ATALHOS.length; i += 1) {
         await expect(atalhos.nth(i)).toBeVisible();
         const destino = { Resumo: 'despesas-mobile.html', Cartões: 'cartoes-mobile.html', Receita: 'receitas-mobile.html',
-            Despesa: 'despesa-nova-mobile.html' }[ATALHOS[i]];
+            Despesa: 'despesa-nova-mobile.html', Lançamento: 'lancamento-mobile.html' }[ATALHOS[i]];
         if (destino) {
             await expect(atalhos.nth(i)).not.toHaveAttribute('aria-disabled', 'true');
             await expect(atalhos.nth(i)).toHaveAttribute('href', `${destino}?mes=${mesAtual().chave}`);
@@ -107,8 +108,7 @@ test('celular: login leva a pagina principal mobile, com so Resumo, Cartoes, Rec
 
     const antes = page.url();
     // desabilitados: o clique (forcado, como o toque) nao navega
-    await atalhos.nth(2).click({ force: true });  // Lancamento (desabilitado)
-    await page.locator('.mob-barra-item').nth(1).click({ force: true });
+    await atalhos.nth(4).click({ force: true });  // Pagamentos (desabilitado)
     await page.locator('.mob-notificacoes').click({ force: true });
     expect(page.url()).toBe(antes);
 
@@ -117,8 +117,8 @@ test('celular: login leva a pagina principal mobile, com so Resumo, Cartoes, Rec
     await expect(barra.nth(0)).toHaveAttribute('href', `inicio.html?mes=${mesAtual().chave}`);
     await expect(barra.nth(0)).toHaveAttribute('aria-current', 'page');
     await expect(barra.nth(3)).toHaveAttribute('aria-haspopup', 'menu');
-    await expect(barra.nth(1)).toHaveAttribute('aria-disabled', 'true');
-    await expect(barra.nth(1)).not.toHaveAttribute('href', /.*/);
+    await expect(barra.nth(1)).not.toHaveAttribute('aria-disabled', 'true');  // Lancar: Registrar Lancamento (FIN-MVP-MOBILE-06)
+    await expect(barra.nth(1)).toHaveAttribute('href', `lancamento-mobile.html?mes=${mesAtual().chave}`);
     await expect(barra.nth(2)).not.toHaveAttribute('aria-disabled', 'true');
     await expect(barra.nth(2)).toHaveAttribute('href', `despesas-mobile.html?mes=${mesAtual().chave}`);
     const corInicio = await barra.nth(0).evaluate((e) => getComputedStyle(e).color);

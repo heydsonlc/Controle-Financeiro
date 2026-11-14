@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<!-- FIN-MVP-MOBILE-06: Registrar Lancamento mobile (atalho Lancamento da pagina principal e Lancar da barra: a mesma pagina).
+     Pagina propria, fora da moldura do desktop, com a identidade visual aprovada (css/mobile-base.css e css/mobile-modulo.css).
+     Um seletor compacto de operacoes e, abaixo, o formulario ja existente de cada uma (Receita, Despesa, Compra no cartao,
+     Transferencia e Abastecimento), pelos servicos do desktop. Os formularios usam os estilos da Nova Despesa
+     (css/despesa-nova-mobile.css, pela classe mob-despesa-nova). O desktop nao muda. -->
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#ffffff">
+    <title>Registrar Lançamento — Financeiro</title>
+    <link rel="stylesheet" href="css/mobile-base.css">
+    <link rel="stylesheet" href="css/mobile-modulo.css">
+    <link rel="stylesheet" href="css/despesa-nova-mobile.css">
+    <link rel="stylesheet" href="css/lancamento-mobile.css">
+</head>
+<body class="mob mob-modulo mob-despesa-nova mob-lancamento" data-protegido hidden>
+    <header class="mob-cabecalho">
+        <div class="mob-cabecalho-miolo">
+        <span class="mob-cabecalho-lado">
+            <a class="mob-icone-botao" id="mob-voltar" href="inicio.html" data-inicio aria-label="Voltar à página principal">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+            </a>
+        </span>
+        <div class="mob-titulo-bloco">
+            <h1 class="mob-titulo">Registrar Lançamento</h1>
+            <span class="mob-subtitulo" id="mob-perfil"></span>
+        </div>
+        <span class="mob-cabecalho-lado direita"></span>
+        </div>
+    </header>
+
+    <main class="mob-conteudo">
+        <p class="mob-aviso" id="mob-aviso" role="status" hidden></p>
+        <div class="mob-tipos" id="mob-tipos" role="group" aria-label="Tipo de lançamento" hidden>
+            <button type="button" class="mob-tipo" data-tipo="receita" aria-pressed="false">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
+                <span>Receita</span>
+            </button>
+            <button type="button" class="mob-tipo" data-tipo="despesa" aria-pressed="false">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg>
+                <span>Despesa</span>
+            </button>
+            <button type="button" class="mob-tipo" data-tipo="cartao" aria-pressed="false">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="M3.5 10h17"/></svg>
+                <span>Compra no cartão</span>
+            </button>
+            <button type="button" class="mob-tipo" data-tipo="transferencia" aria-pressed="false">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M5 8h13M14 4l4 4-4 4M19 16H6M10 12l-4 4 4 4"/></svg>
+                <span>Transferência</span>
+            </button>
+            <button type="button" class="mob-tipo" data-tipo="abastecimento" aria-pressed="false">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M5 20V5.5A1.5 1.5 0 0 1 6.5 4h6A1.5 1.5 0 0 1 14 5.5V20M4 20h11M14 9h2a2 2 0 0 1 2 2v5a1.5 1.5 0 0 0 3 0V9l-3-3M7.5 8h4"/></svg>
+                <span>Abastecimento</span>
+            </button>
+        </div>
+        <section class="mob-cadastro" id="mob-cadastro" aria-label="Registro do lançamento" aria-busy="true"></section>
+    </main>
+
+    <nav class="mob-barra" aria-label="Navegação">
+        <div class="mob-barra-miolo">
+        <a class="mob-barra-item" href="inicio.html" data-inicio>
+            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20.5h-5.8v-5.8H9.3v5.8H3.5v-9.3Z"/></svg>
+            <span>Início</span>
+        </a>
+        <a class="mob-barra-item ativo" data-modulo="lancar" data-destino="lancamento-mobile.html" aria-current="page">
+            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M12 4.5v15M4.5 12h15"/></svg>
+            <span>Lançar</span>
+        </a>
+        <a class="mob-barra-item" data-modulo="resumo" data-destino="despesas-mobile.html" aria-disabled="true">
+            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M6 20v-7M12 20V5M18 20v-10"/></svg>
+            <span>Resumo</span>
+        </a>
+        <button type="button" class="mob-barra-item" id="mob-mais" aria-haspopup="menu" aria-expanded="false" aria-controls="mob-menu-mais">
+            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><circle cx="5.5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="18.5" cy="12" r="1.4" fill="currentColor"/></svg>
+            <span>Mais</span>
+        </button>
+        </div>
+        <div class="mob-menu-mais" id="mob-menu-mais" role="menu" aria-label="Mais opções" hidden>
+            <button type="button" class="mob-menu-item" id="mob-sair" role="menuitem">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/><path d="M10 16l-4-4 4-4M6 12h10"/></svg>
+                <span>Sair</span>
+            </button>
+        </div>
+    </nav>
+
+    <script src="config.js"></script>
+    <script src="vendor/supabase.js"></script>
+    <script type="module" src="js/lancamento-mobile.js"></script>
+</body>
+</html>

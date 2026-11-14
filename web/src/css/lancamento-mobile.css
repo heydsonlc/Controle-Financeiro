@@ -1,0 +1,70 @@
+/* FIN-MVP-MOBILE-06 — Registrar Lancamento mobile (lancamento-mobile.html): so o seletor compacto de operacoes e a litragem
+   do abastecimento. Os formularios usam css/despesa-nova-mobile.css (classe mob-despesa-nova) e css/mobile-modulo.css.
+   Restrita a body.mob-lancamento: nenhuma tela do desktop nem outra tela mobile e afetada. */
+
+/* Seletor de operacoes: grade de botoes pequenos, tres por linha, icone monocromatico sobre o rotulo */
+body.mob-lancamento .mob-tipos {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+body.mob-lancamento .mob-tipos[hidden] {
+    display: none;
+}
+
+body.mob-lancamento .mob-tipo {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-height: 56px;
+    padding: 6px 4px;
+    border: 1px solid var(--mob-borda);
+    border-radius: 10px;
+    background: #ffffff;
+    color: var(--mob-texto);
+    font: inherit;
+    font-size: 0.74rem;
+    font-weight: 500;
+    line-height: 1.15;
+    text-align: center;
+    cursor: pointer;
+}
+
+body.mob-lancamento .mob-tipo svg {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+body.mob-lancamento .mob-tipo[aria-pressed="true"] {
+    border-color: var(--mob-preto);
+    background: var(--mob-preto);
+    color: #ffffff;
+}
+
+body.mob-lancamento .mob-tipo:focus-visible {
+    outline: 2px solid var(--mob-preto);
+    outline-offset: 2px;
+}
+
+body.mob-lancamento .mob-tipo:disabled {
+    color: var(--mob-cinza);
+    cursor: default;
+}
+
+/* Litros do abastecimento (calculados): mesmo alinhamento dos campos, sem caixa de digitacao */
+body.mob-lancamento .mob-litros {
+    display: flex;
+    align-items: center;
+    min-height: 40px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}

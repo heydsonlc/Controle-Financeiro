@@ -55,7 +55,10 @@ ROTAS_LOCAIS = {'js/ponte-api.js', 'js/despesas-adaptador.js', 'js/recorrencias-
                 'js/despesas-servico.js', 'js/despesas-mobile.js',  # FIN-MVP-MOB-01: rotas de Despesas no servico comum
                 'js/cartoes-servico.js', 'js/cartoes-mobile.js', 'js/mobile-pagamento.js',  # FIN-MVP-MOBILE-03
                 'js/receitas-servico.js', 'js/receitas-mobile.js',  # FIN-MVP-MOBILE-04
-                'js/despesa-nova-mobile.js', 'js/compras-servico.js'}  # FIN-MVP-MOBILE-05
+                'js/despesa-nova-mobile.js', 'js/compras-servico.js',  # FIN-MVP-MOBILE-05
+                # FIN-MVP-MOBILE-06: formularios e servicos comuns e o Registrar Lancamento
+                'js/despesa-formulario.js', 'js/mobile-cartao.js', 'js/receita-formulario.js', 'js/abastecimento-servico.js',
+                'js/abastecimento-formulario.js', 'js/contas-servico.js', 'js/transferencia-formulario.js', 'js/lancamento-mobile.js'}
 
 
 def projeto():

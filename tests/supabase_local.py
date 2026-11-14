@@ -1047,6 +1047,21 @@ def semear_compras_mobile_e2e(cur):
     assert cur.rowcount == 1
 
 
+# FIN-MVP-MOBILE-06 (E2E e pre-visualizacao): Registrar Lancamento no Perfil G. Uma segunda conta bancaria ("Reserva G",
+# para a transferencia) e um veiculo flex ("Flex G", sem abastecimentos, para o abastecimento com a despesa). Cadastros
+# FICTICIOS como os demais cenarios de veiculo e conta (so no banco descartavel); os lancamentos sao o proprio teste.
+CONTA_RESERVA_G = 'Reserva G (ficticia)'
+VEICULO_G = 'Flex G (ficticio)'
+
+
+def semear_lancamento_mobile_e2e(cur):
+    cur.execute("insert into public.conta_bancaria (perfil_financeiro_id, nome, instituicao, tipo, status, cor_display) "
+                "values (%s, %s, 'Banco ficticio', 'Poupança', 'ATIVO', '#1d1d1f')", (PERFIL_G['id'], CONTA_RESERVA_G))
+    cur.execute("insert into public.veiculo (perfil_financeiro_id, nome, tipo, combustivel, autonomia_km_l, status, data_inicio, "
+                "combustivel_valor_mensal, preco_medio_combustivel, km_estimado_acumulado, criado_em, atualizado_em) "
+                "values (%s, %s, 'Carro', 'flex', 11, 'ATIVO', current_date, 300, 5.9, 0, now(), now())", (PERFIL_G['id'], VEICULO_G))
+
+
 # FIN-MVP-MOBILE-04 (E2E e pre-visualizacao): receitas FICTICIAS do "Perfil G (ficticio)" (o mesmo login dos Cartoes
 # mobile), gravadas pelas funcoes oficiais (criar_receita, receber_receita). Mes atual (Brasilia), para a homologacao
 # abrir com dados: "Salario G" recorrente desde o mes anterior (o do mes anterior fica atrasado), "Aluguel Sala G"
