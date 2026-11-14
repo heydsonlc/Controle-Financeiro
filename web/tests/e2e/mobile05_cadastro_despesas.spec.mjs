@@ -1,5 +1,6 @@
 // FIN-MVP-MOBILE-05 — Nova Despesa mobile (cadastro rapido pelo atalho Despesa). Usuario G, titular do "Perfil G (ficticio)"
-// (o mesmo dos Cartoes e das Receitas mobile; gerador NOVO); somente leitura: usuario H. Todo cadastro e em 06/2031 e 07/2031,
+// (o mesmo dos Cartoes e das Receitas mobile; gerador NOVO); somente leitura: usuario H. Conta a pagar em 06/2031 e 07/2031
+// e compra no cartao (ajuste final) no Nubank Master G em 05 a 12/2031,
 // competencias sem outro dado do Perfil G, e e conferido no banco (contas_do_mes, recorrencias_do_perfil), na Lista de
 // Despesas mobile e na tela Despesas do desktop no mesmo banco. Dados FICTICIOS; grava so no banco descartavel.
 import { mkdirSync } from 'node:fs';
@@ -184,7 +185,7 @@ test('recorrente mensal e semanal: o mesmo mecanismo do desktop (recorrencia gra
     await expect(page.locator('#mob-recorrencia')).toBeVisible();
     await expect(campo(page, 'Competência')).toBeHidden();  // na recorrencia, o mes de cada vencimento (banco)
     await expect(campo(page, 'Dia da semana')).toBeHidden();
-    await controle(page, 'Meio de pagamento').selectOption('pix');
+    await controle(page, 'Pagamento da conta').selectOption('pix');
     await evidencia(page, 'recorrente-mensal', false);
     await page.locator('#mob-salvar').dblclick();
     await expect(page.locator('#mob-confirmacao')).toContainText('Recorrência cadastrada.');
@@ -237,6 +238,173 @@ test('somente leitura (usuario H): atalho Despesa desabilitado; sem formulario; 
     const r = await chamarRpc(page, 'criar_despesa', { p_perfil_id: PERFIL_G, p_chave: crypto.randomUUID(), p_dados: {
         nome: 'Tentativa do leitor H', valor: '10.00', categoria_id: 201, data_vencimento: '2031-06-10', descricao: '' } });
     expect(r.status).not.toBe(200);
+    // A compra no cartao tambem: o banco recusa a quem so le.
+    const compra = await chamarRpc(page, 'criar_compra', { p_perfil_id: PERFIL_G, p_chave: crypto.randomUUID(), p_dados: {
+        cartao_id: (await rpc(page, 'cartoes_do_perfil', { p_perfil_id: PERFIL_G }))[0].id, descricao: 'Tentativa do leitor H', valor: '10.00',
+        total_parcelas: 1, data_compra: '2031-06-10', mes_fatura: '2031-06-01', categoria_id: 201 } });
+    expect(compra.status).not.toBe(200);
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// Ajuste final (Proposta A): "Meio de pagamento" com Conta a pagar ou Cartao de credito (a compra da tela Lancamentos do
+// desktop, criar_compra). Cartao "Nubank Master G (ficticio)": fecha dia 15, vence dia 25, fechamento confirmado; fatura
+// 09/2031 paga e 12/2031 consolidada (semear_compras_mobile_e2e). Compras em 05 a 12/2031, meses sem outro dado do Master.
+
+const VISA = 'Itau Visa G (ficticio)';
+const MASTER = 'Nubank Master G (ficticio)';
+const idDoCartao = async (page, nome) => (await rpc(page, 'cartoes_do_perfil', { p_perfil_id: PERFIL_G })).find((c) => c.nome === nome).id;
+const comprasDaFatura = (page, cartao, mes, descricao) => rpc(page, 'compras_da_fatura', { p_perfil_id: PERFIL_G, p_cartao_id: cartao, p_mes: `${mes}-01` })
+    .then((l) => l.filter((c) => c.descricao === descricao));
+const faturaDoMes = (page, cartao, mes) => rpc(page, 'contas_do_mes', { p_perfil_id: PERFIL_G, p_mes: `${mes}-01` })
+    .then((l) => l.filter((c) => c.grupo === 'FATURA' && c.cartao_id === cartao));
+
+async function compraNoCartao(page, { nome, valor, categoria = 'Moradia', cartao = MASTER, data, parcelas }) {
+    await preencher(page, { nome, valor, categoria });
+    await controle(page, 'Meio de pagamento').selectOption('cartao');
+    await expect(controle(page, 'Cartão').locator('option')).toHaveCount(3);
+    await controle(page, 'Cartão').selectOption({ label: cartao });
+    await controle(page, 'Data da compra').fill(data);
+    await controle(page, 'Data da compra').dispatchEvent('change');
+    if (parcelas) await controle(page, 'Parcelas').fill(String(parcelas));
+}
+
+test('meio de pagamento: conta a pagar por padrao; no cartao, cartao, data, parcelas e fatura sugerida; recorrencia desabilitada', async ({ page }) => {
+    await entrar(page, G);
+    await abrirCadastro(page);
+    // Logo apos descricao, valor e categoria; "Conta a pagar" mantem o fluxo de antes.
+    const ordem = await page.locator('#mob-cadastro form > .mob-campo > span:first-child, #mob-cadastro form > .mob-par .mob-campo > span:first-child')
+        .allTextContents();
+    expect(ordem.slice(0, 4).map((t) => t.replace(' *', ''))).toEqual(['Descrição', 'Valor', 'Categoria', 'Meio de pagamento']);
+    await expect(controle(page, 'Meio de pagamento')).toHaveValue('conta');
+    await expect(controle(page, 'Meio de pagamento').locator('option')).toHaveText(['Conta a pagar', 'Cartão de crédito']);
+    await expect(controle(page, 'Vencimento')).toBeVisible();
+    await expect(page.locator('#mob-cartao')).toBeHidden();
+    const marcaRecorrente = page.locator('#mob-cadastro .mob-opcao', { hasText: 'Despesa recorrente' }).locator('input');
+    await marcaRecorrente.check();
+    await expect(controle(page, 'Pagamento da conta').locator('option')).toHaveText(['Não informado', 'Boleto', 'Débito', 'PIX']);
+
+    // Cartao de credito: vencimento e competencia saem; recorrencia desmarcada e desabilitada, com a orientacao.
+    await controle(page, 'Meio de pagamento').selectOption('cartao');
+    await expect(page.locator('#mob-cartao')).toBeVisible();
+    await expect(controle(page, 'Vencimento')).toBeHidden();
+    await expect(marcaRecorrente).not.toBeChecked();
+    await expect(marcaRecorrente).toBeDisabled();
+    await expect(page.locator('#mob-recorrencia')).toBeHidden();
+    await expect(page.locator('#mob-recorrencia-cartao')).toHaveText('O cadastro de despesas recorrentes no cartão de crédito será disponibilizado em uma etapa posterior.');
+    await expect(controle(page, 'Cartão').locator('option')).toHaveText(['Selecione...', VISA, MASTER]);
+    await expect(controle(page, 'Parcelas')).toHaveValue('1');
+
+    // Fatura sugerida pelo fechamento (07/2031 para 10/07); o mes escolhido pelo usuario prevalece ate "Usar a fatura sugerida".
+    await controle(page, 'Cartão').selectOption({ label: MASTER });
+    await controle(page, 'Data da compra').fill('2031-07-10');
+    await controle(page, 'Data da compra').dispatchEvent('change');
+    await expect(controle(page, 'Fatura')).toHaveValue('2031-07');
+    await expect(page.locator('#mob-fatura-sugestao')).toHaveText('Sugerida pelo fechamento: fatura 07/2031 (fecha 15/07, vence 25/07).');
+    await expect(page.locator('#mob-usar-sugerida')).toBeHidden();
+    await controle(page, 'Fatura').fill('2031-08');
+    await expect(page.locator('#mob-fatura-sugestao')).toContainText('Mês escolhido: 08/2031.');
+    await page.click('#mob-usar-sugerida');
+    await expect(controle(page, 'Fatura')).toHaveValue('2031-07');
+    await evidencia(page, 'cartao-formulario', false);
+    // Cartao sem fechamento confirmado: aviso, e o mes volta ao da pagina principal (como no desktop).
+    await controle(page, 'Cartão').selectOption({ label: VISA });
+    await expect(page.locator('#mob-fatura-sugestao')).toHaveText('Fechamento deste cartão ainda não confirmado: confira o mês da fatura.');
+    await expect(controle(page, 'Fatura')).toHaveValue(MES);
+    // Validacoes do cartao junto ao campo.
+    await controle(page, 'Cartão').selectOption('');
+    await controle(page, 'Parcelas').fill('49');
+    await page.click('#mob-salvar');
+    await expect(erroDe(page, 'Descrição')).toHaveText('Informe a descrição.');
+    await expect(erroDe(page, 'Cartão')).toHaveText('Selecione o cartão.');
+    await expect(erroDe(page, 'Parcelas')).toHaveText('Parcelas: de 1 a 48.');
+    // Volta a "Conta a pagar": o fluxo de antes, recorrencia habilitada.
+    await controle(page, 'Meio de pagamento').selectOption('conta');
+    await expect(controle(page, 'Vencimento')).toBeVisible();
+    await expect(page.locator('#mob-cartao')).toBeHidden();
+    await expect(marcaRecorrente).toBeEnabled();
+    await expect(page.locator('#mob-recorrencia-cartao')).toBeHidden();
+});
+
+test('compra a vista no cartao: grava uma vez (toque duplo) na fatura sugerida; aparece no Cartoes mobile e so a fatura na Lista', async ({ page }) => {
+    await entrar(page, G);
+    const master = await idDoCartao(page, MASTER);
+    await abrirCadastro(page);
+    await compraNoCartao(page, { nome: 'Tenis G', valor: '250.00', data: '2031-07-10' });
+    await expect(controle(page, 'Fatura')).toHaveValue('2031-07');
+    await expect(page.locator('#mob-previa-parcelas')).toBeHidden();  // a vista: sem previa
+    await page.locator('#mob-salvar').dblclick();
+    await expect(page.locator('#mob-confirmacao')).toContainText('“Tenis G” lançada no cartão');
+    await expect(page.locator('#mob-confirmacao')).toContainText(`Compra lançada na fatura 07/2031 do cartão ${MASTER}.`);
+    await expect(page.locator('#mob-ver-cartao')).toHaveAttribute('href', `cartoes-mobile.html?mes=2031-07&cartao=${master}`);
+    await evidencia(page, 'cartao-confirmacao', false);
+    // No banco: uma compra na fatura (toque duplo nao duplica) e nenhuma conta a pagar com o nome da compra.
+    const compras = await comprasDaFatura(page, master, '2031-07', 'Tenis G');
+    expect(compras.map((c) => [Number(c.valor), c.data_compra, c.numero_parcela, c.total_parcelas])).toEqual([[250, '2031-07-10', 1, 1]]);
+    expect(await contasDoMes(page, '2031-07', 'Tenis G')).toEqual([]);
+    const fatura = await faturaDoMes(page, master, '2031-07');
+    expect(fatura.map((f) => Number(f.valor_executado))).toEqual([250]);
+    // Cartoes mobile (pelo link da confirmacao) e Lista de Despesas mobile: a compra na fatura; na lista, so a fatura.
+    await page.click('#mob-ver-cartao');
+    await page.waitForURL(`**/cartoes-mobile.html?mes=2031-07&cartao=${master}`);
+    await expect(page.locator('#mob-lista')).toContainText('Tenis G');
+    await expect(page.locator('#mob-cartao')).toHaveValue(String(master));
+    await expect(await linhaNaListaMobile(page, '2031-07', 'Tenis G')).toHaveCount(0);
+    const faturaNaLista = page.locator('#mob-lista .mob-linha', { has: page.locator('.mob-linha-nome', { hasText: 'Nubank Master G' }) });
+    await expect(faturaNaLista).toHaveCount(1);
+    await expect(faturaNaLista.locator('.mob-linha-valor')).toHaveText(reais(250));
+});
+
+test('compra parcelada: previa do parcelamento (o plano do banco) e uma parcela em cada fatura', async ({ page }) => {
+    await entrar(page, G);
+    const master = await idDoCartao(page, MASTER);
+    await abrirCadastro(page);
+    await compraNoCartao(page, { nome: 'Notebook G', valor: '900.00', data: '2031-05-10', parcelas: 3 });
+    await expect(controle(page, 'Fatura')).toHaveValue('2031-05');
+    const previa = page.locator('#mob-previa-parcelas');
+    await expect(previa.locator('tbody tr')).toHaveCount(3);
+    await expect(previa.locator('tbody tr')).toHaveText([/1\/305\/2031R\$\s300,00/, /2\/306\/2031R\$\s300,00/, /3\/307\/2031R\$\s300,00/]);
+    await expect(previa.locator('tfoot')).toContainText(reais(900));
+    await evidencia(page, 'cartao-parcelada', false);
+    await page.click('#mob-salvar');
+    await expect(page.locator('#mob-confirmacao')).toContainText(`Compra lançada em 3 parcelas no cartão ${MASTER}: faturas 05/2031 a 07/2031.`);
+    for (const [mes, n] of [['2031-05', 1], ['2031-06', 2], ['2031-07', 3]]) {
+        const parcela = await comprasDaFatura(page, master, mes, 'Notebook G');
+        expect(parcela.map((c) => [Number(c.valor), c.numero_parcela, c.total_parcelas]), mes).toEqual([[300, n, 3]]);
+    }
+    expect(await contasDoMes(page, '2031-05', 'Notebook G')).toEqual([]);
+});
+
+test('fatura paga: a compra vai para a proxima em aberto; fatura consolidada: so com a confirmacao do total', async ({ page }) => {
+    await entrar(page, G);
+    const master = await idDoCartao(page, MASTER);
+    await abrirCadastro(page);
+    // 20/08 -> fatura 09/2031, paga: o banco manda a compra para 10/2031 (a proxima em aberto).
+    await compraNoCartao(page, { nome: 'Livro G', valor: '60.00', data: '2031-08-20' });
+    await expect(controle(page, 'Fatura')).toHaveValue('2031-09');
+    await expect(page.locator('#mob-fatura-sugestao')).toContainText('Essa fatura já está paga: a compra vai para a próxima em aberto.');
+    await page.click('#mob-salvar');
+    await expect(page.locator('#mob-confirmacao')).toContainText(`Compra lançada na fatura 10/2031 do cartão ${MASTER}.`);
+    expect(await comprasDaFatura(page, master, '2031-09', 'Livro G')).toEqual([]);
+    expect((await comprasDaFatura(page, master, '2031-10', 'Livro G')).length).toBe(1);
+
+    // 20/11 -> fatura 12/2031, consolidada (total 200,00): a pergunta do desktop; sem confirmar, nada e gravado.
+    await page.click('#mob-outra');
+    await compraNoCartao(page, { nome: 'Presente G', valor: '80.00', data: '2031-11-20' });
+    await expect(controle(page, 'Fatura')).toHaveValue('2031-12');
+    await expect(page.locator('#mob-fatura-sugestao')).toContainText('Essa fatura está consolidada: a inclusão pede confirmação.');
+    await page.click('#mob-salvar');
+    const pergunta = page.locator('#mob-consolidada');
+    await expect(pergunta).toContainText(`Incluir na fatura consolidada 12/2031: total ${reais(200)} passa a ${reais(280)} (inclusão de ${reais(80)}).`);
+    await evidencia(page, 'cartao-consolidada', false);
+    await page.click('#mob-nao-incluir');
+    await expect(pergunta).toBeHidden();
+    await expect(page.locator('#mob-cadastro form')).toContainText('Compra não salva: a inclusão na fatura consolidada não foi confirmada.');
+    expect(await comprasDaFatura(page, master, '2031-12', 'Presente G')).toEqual([]);
+    await page.click('#mob-salvar');
+    await expect(pergunta).toBeVisible();
+    await page.locator('#mob-confirmar-inclusao').dblclick();  // toque duplo: uma compra so
+    await expect(page.locator('#mob-confirmacao')).toContainText(`Compra lançada na fatura 12/2031 do cartão ${MASTER}.`);
+    expect((await comprasDaFatura(page, master, '2031-12', 'Presente G')).map((c) => Number(c.valor))).toEqual([80]);
 });
 
 test('larguras de 320 a 430: sem rolagem horizontal, campos sem sobreposicao (recorrencia semanal aberta)', async ({ page }) => {
@@ -260,5 +428,29 @@ test('larguras de 320 a 430: sem rolagem horizontal, campos sem sobreposicao (re
         });
         expect(medidas, `largura ${largura}`).toEqual({ rolagem: false, fora: 0, sobrepostos: false });
         if ([320, 430].includes(largura)) await evidencia(page, `formulario-semanal-${largura}`);
+    }
+});
+
+test('larguras de 320 a 430 no cartao: sem rolagem horizontal, campos sem sobreposicao (previa do parcelamento aberta)', async ({ page }) => {
+    await entrar(page, G);
+    for (const largura of [320, 375, 390, 430]) {
+        await page.setViewportSize({ width: largura, height: 844 });
+        await abrirCadastro(page);
+        await compraNoCartao(page, { nome: 'Teste de largura G', valor: '1234.56', data: '2031-05-10', parcelas: 12 });
+        await expect(page.locator('#mob-previa-parcelas tbody tr')).toHaveCount(12);
+        const medidas = await page.evaluate(() => {
+            const caixas = [...document.querySelectorAll('#mob-cadastro .mob-campo')].filter((e) => e.offsetParent)
+                .map((e) => e.getBoundingClientRect());
+            const sobrepostos = caixas.some((a, i) => caixas.some((b, j) => j > i && a.left < b.right - 0.5 && b.left < a.right - 0.5
+                && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5));
+            return {
+                rolagem: document.documentElement.scrollWidth > window.innerWidth,
+                fora: [...document.querySelectorAll('#mob-cadastro *, .mob-cabecalho *, .mob-barra-item')]
+                    .filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && (r.left < -0.5 || r.right > window.innerWidth + 0.5); }).length,
+                sobrepostos,
+            };
+        });
+        expect(medidas, `largura ${largura}`).toEqual({ rolagem: false, fora: 0, sobrepostos: false });
+        if ([320, 430].includes(largura)) await evidencia(page, `cartao-parcelado-${largura}`);
     }
 });

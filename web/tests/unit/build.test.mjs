@@ -163,7 +163,9 @@ const RPCS_DE_ESCRITA = new Map([
     // rotas no servico cartoes-servico.js, comum ao desktop e aos Cartoes mobile, sem funcao nova); a compra
     // nova fica em Lancamentos (MVP-FIN-AJUSTES-01); editar_compra fica sem tela (a do Flask edita um lancamento por
     // editar_lancamento_cartao).
-    ['criar_compra', ['lancamentos-adaptador.js']],  // FIN-FIDELIDADE-MOVIMENTACOES-1: Lancamentos
+    // FIN-FIDELIDADE-MOVIMENTACOES-1: Lancamentos. FIN-MVP-MOBILE-05: a chamada fica no servico comum a tela Lancamentos e a
+    // Nova Despesa mobile (compras-servico.js), sem funcao nova
+    ['criar_compra', ['compras-servico.js']],
     // FIN-MOB-ABAST-LANCAMENTOS-01: despesa e abastecimento numa transacao; desvincular so com a decisao do usuario
     ['salvar_lancamento_abastecimento', 'lancamentos-adaptador.js'],
     ['desvincular_abastecimento', ['lancamentos-adaptador.js', 'cartoes-servico.js', 'mobilidade-adaptador.js']],
@@ -610,9 +612,18 @@ test('nova despesa mobile: protegida, sem moldura, CSS restrito e cadastro so pe
         assert.doesNotMatch(script, /\.rpc\s*\(|\.from\s*\(|supabase/, 'nenhuma consulta propria: so o servico do desktop');
         assert.ok(script.includes("from './despesas-servico.js'"), 'servico de Despesas do desktop');
         assert.match(script, /api\('POST', '\/api\/despesas', corpo\)/, 'a mesma rota do formulario do desktop');
-        // O que o servico do desktop recusa nao e oferecido: despesa ja paga, cartao, consorcio e parcelas.
+        // O que o servico do desktop recusa nao e oferecido: despesa ja paga e consorcio; o cartao nunca vai a /api/despesas.
         assert.match(script, /pago: false/);
-        assert.doesNotMatch(script, /'cartao'|e_consorcio|numero_parcelas|total_parcelas/, 'sem cartao, consorcio nem parcelas');
+        assert.doesNotMatch(script, /e_consorcio|meio_pagamento = 'cartao'|meio_pagamento: 'cartao'/, 'sem consorcio nem conta a pagar no cartao');
+        // Ajuste final (Proposta A): "Cartao de credito" grava so pela compra da tela Lancamentos (criar_compra no servico comum).
+        assert.ok(script.includes("from './compras-servico.js'"), 'compra no cartao pelo servico comum a tela Lancamentos');
+        assert.match(script, /api\('POST', `\/api\/cartoes\/\$\{corpo\.cartao_id\}\/lancamentos`, corpo, responderCompras\)/);
+        assert.ok(script.includes('O cadastro de despesas recorrentes no cartão de crédito será disponibilizado em uma etapa posterior.'));
+        const compras = await readFile(path.join(destino, 'js', 'compras-servico.js'), 'utf8');
+        assert.match(compras, /supabase\.rpc\('criar_compra'/);
+        const lancamentos = await readFile(path.join(destino, 'js', 'lancamentos-adaptador.js'), 'utf8');
+        assert.ok(lancamentos.includes("from './compras-servico.js'") && !/rpc\('criar_compra'/.test(lancamentos),
+            'a tela Lancamentos grava a compra pelo mesmo servico');
         assert.ok((await readFile(path.join(destino, 'js', 'sessao.js'), 'utf8')).includes("'despesa-nova-mobile.html'"));
     } finally {
         await rm(destino, { recursive: true, force: true });

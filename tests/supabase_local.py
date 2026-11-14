@@ -957,7 +957,8 @@ def semear_cartoes_mobile_e2e(cur):
         visa = chamar('select financeiro.criar_cartao(%s, %s::jsonb, gen_random_uuid())', p,
                       json.dumps({'nome': 'Itau Visa G (ficticio)', 'dia_fechamento': 10, 'dia_vencimento': 20}))['cartao_id']
         chamar('select financeiro.criar_cartao(%s, %s::jsonb, gen_random_uuid())', p,
-               json.dumps({'nome': 'Nubank Master G (ficticio)', 'dia_fechamento': 15, 'dia_vencimento': 25}))
+               # FIN-MVP-MOBILE-05: fechamento confirmado (a fatura da compra no cartao e sugerida pelo fechamento)
+               json.dumps({'nome': 'Nubank Master G (ficticio)', 'dia_fechamento': 15, 'dia_vencimento': 25, 'fechamento_confirmado': True}))
         limites = {}
         for cid, limite in ((360, '500.00'), (362, '300.00'), (361, '200.00')):
             limites[cid] = chamar('select financeiro.vincular_limite_cartao(%s, %s, %s::jsonb)', p, visa,
@@ -1005,6 +1006,45 @@ def semear_cartoes_mobile_e2e(cur):
                 "'Estorno parcial Padaria G', date '2031-04-09', 5.50, l.id, 'e2e-mobile03-estorno', 'csv' "
                 "from public.lancamento_agregado l where l.cartao_id = %s and l.descricao = 'Padaria G'",
                 (PERFIL_G['id'], visa, visa, visa))
+
+
+# FIN-MVP-MOBILE-05 (E2E e pre-visualizacao): compra no cartao pela Nova Despesa mobile. No "Nubank Master G (ficticio)"
+# (fecha dia 15, vence dia 25, fechamento confirmado; a fatura e a do mes do vencimento): fatura 09/2031 PAGA (compra de
+# 20/08 vai para a proxima em aberto) e fatura 12/2031 CONSOLIDADA (compra de 20/11 pede confirmacao). Gravadas pelas
+# funcoes oficiais como G; a consolidacao, como a importacao grava (so no banco descartavel, como nos testes do banco).
+def semear_compras_mobile_e2e(cur):
+    import json
+    from datetime import datetime, timedelta, timezone
+    hoje = datetime.now(timezone(timedelta(hours=-3))).date().isoformat()
+    cur.execute("select id from public.item_despesa where perfil_financeiro_id = %s and nome = 'Nubank Master G (ficticio)'", (PERFIL_G['id'],))
+    master = cur.fetchone()[0]
+    cur.execute("select id from public.conta_bancaria where perfil_financeiro_id = %s and nome = 'Conta G (ficticia)'", (PERFIL_G['id'],))
+    conta = cur.fetchone()[0]
+    cur.execute('set role authenticated')
+    cur.execute("select set_config('request.jwt.claims', %s, false)", (json.dumps(claims_usuario(USUARIO_G)),))
+    try:
+        def chamar(sql, *args):
+            cur.execute(sql, args)
+            return cur.fetchone()[0]
+        p = PERFIL_G['id']
+        for descricao, valor, data, mes in (('Base fatura paga G', '100.00', '2031-08-20', '2031-09-01'),
+                                            ('Base fatura consolidada G', '200.00', '2031-11-20', '2031-12-01')):
+            chamar('select financeiro.criar_compra(%s, %s::jsonb, gen_random_uuid())', p, json.dumps({
+                'cartao_id': master, 'descricao': descricao, 'valor': valor, 'total_parcelas': 1, 'data_compra': data,
+                'mes_fatura': mes, 'categoria_id': 201}))
+        paga = chamar("select id from financeiro.contas_do_mes(%s, %s) where grupo = 'FATURA' and cartao_id = %s",
+                      p, '2031-09-01', master)
+        executado = chamar('select financeiro.dados_pagamento_fatura(%s, %s)', p, paga)['fatura']['valor_executado']
+        chamar('select financeiro.pagar_fatura(%s, %s, %s::jsonb, gen_random_uuid())', p, paga, json.dumps({
+            'conta_bancaria_id': conta, 'data_pagamento': hoje, 'valor_pago': str(executado), 'valor_executado': str(executado)}))
+        consolidada = chamar("select id from financeiro.contas_do_mes(%s, %s) where grupo = 'FATURA' and cartao_id = %s",
+                             p, '2031-12-01', master)
+    finally:
+        cur.execute('reset role')
+        cur.execute("select set_config('request.jwt.claims', '', false)")
+    cur.execute("update public.conta set status_fatura = 'FECHADA', valor_consolidado = 200.00 where id = %s and is_fatura_cartao",
+                (consolidada,))
+    assert cur.rowcount == 1
 
 
 # FIN-MVP-MOBILE-04 (E2E e pre-visualizacao): receitas FICTICIAS do "Perfil G (ficticio)" (o mesmo login dos Cartoes

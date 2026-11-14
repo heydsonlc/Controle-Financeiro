@@ -110,3 +110,93 @@ body.mob-despesa-nova a.mob-botao {
     justify-content: center;
     text-decoration: none;
 }
+
+/* Ajuste final: "Cartao de credito" (compra no cartao da tela Lancamentos do desktop) */
+body.mob-despesa-nova .mob-cartao {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+body.mob-despesa-nova .mob-cartao[hidden],
+body.mob-despesa-nova .mob-sugestao[hidden],
+body.mob-despesa-nova .mob-previa[hidden],
+body.mob-despesa-nova .mob-consolidada[hidden],
+body.mob-despesa-nova .mob-ajuda[hidden],
+body.mob-despesa-nova .mob-botao[hidden] {
+    display: none;
+}
+
+body.mob-despesa-nova .mob-sugestao {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+}
+
+body.mob-despesa-nova .mob-ajuda.alerta {
+    color: var(--mob-perigo);
+}
+
+body.mob-despesa-nova .mob-botao.mob-botao-discreto {
+    min-height: 32px;
+    padding: 4px 10px;
+    font-size: 0.78rem;
+}
+
+body.mob-despesa-nova .mob-opcao.desabilitada {
+    color: var(--mob-cinza);
+}
+
+/* Previa do parcelamento: tabela compacta, sem rolagem horizontal */
+body.mob-despesa-nova .mob-previa {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px;
+    border-radius: 10px;
+    background: var(--mob-fundo-botao);
+}
+
+body.mob-despesa-nova .mob-previa-titulo {
+    font-size: 0.78rem;
+    font-weight: 650;
+}
+
+body.mob-despesa-nova .mob-previa-tabela {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+}
+
+body.mob-despesa-nova .mob-previa-tabela th,
+body.mob-despesa-nova .mob-previa-tabela td {
+    padding: 3px 4px;
+    border-bottom: 1px solid var(--mob-linha);
+    text-align: left;
+}
+
+body.mob-despesa-nova .mob-previa-tabela th {
+    color: var(--mob-cinza);
+    font-weight: 500;
+}
+
+body.mob-despesa-nova .mob-previa-tabela tfoot td {
+    border-bottom: 0;
+    font-weight: 650;
+}
+
+body.mob-despesa-nova .mob-previa-tabela .direita {
+    text-align: right;
+}
+
+/* Fatura consolidada: a pergunta do desktop no proprio formulario */
+body.mob-despesa-nova .mob-consolidada {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid var(--mob-preto);
+    border-radius: 10px;
+}

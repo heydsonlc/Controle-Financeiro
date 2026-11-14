@@ -68,6 +68,7 @@ from tests.supabase_local import (  # noqa: E402
     porta_livre,
     semear_cartoes_e2e,
     semear_cartoes_mobile_e2e,
+    semear_compras_mobile_e2e,
     semear_receitas_mobile_e2e,
     semear_financiamento_e2e,
     semear_mobilidade_e2e,
@@ -409,6 +410,7 @@ def main():
                 semear_despesas_mobile_e2e(cur)  # FIN-MVP-MOB-01 (mob01_despesas.spec.mjs)
                 semear_cartoes_mobile_e2e(cur)  # FIN-MVP-MOBILE-03 (mobile03_cartoes.spec.mjs)
                 semear_receitas_mobile_e2e(cur)  # FIN-MVP-MOBILE-04 (mobile04_receitas.spec.mjs), no mesmo Perfil G
+                semear_compras_mobile_e2e(cur)  # FIN-MVP-MOBILE-05 (compra no cartao: fatura paga e consolidada), Perfil G
             conn.close()
 
             def consolidar(cartao, competencia, criar_se_faltar=False):
