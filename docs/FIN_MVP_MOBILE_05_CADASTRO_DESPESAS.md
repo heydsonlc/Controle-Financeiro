@@ -10,7 +10,7 @@ O atalho **Despesa** da página principal mobile abre direto a **Nova Despesa**:
 
 E o atalho fica desabilitado para quem só lê o perfil (decisão 6).
 
-**Situação:** implementado no ramo local `mobile-05-cadastro-despesas`, a partir das Receitas (`d7bda9f`). Não houve push, deploy nem migration. Layout aprovado na homologação visual de 14/11/2026; os ajustes finais (cartão de crédito e atalho para quem só lê) aguardam a homologação final. A publicação será avaliada junto com os demais MVPs mobile.
+**Situação:** implementado no ramo local `mobile-05-cadastro-despesas`, a partir das Receitas (`d7bda9f`). Não houve push, deploy nem migration. Layout aprovado na homologação visual de 14/11/2026 e versão final (com compras à vista e parceladas no cartão de crédito e o atalho para quem só lê) **homologada pelo titular em 14/11/2026**. A publicação continua suspensa: os cinco MVPs mobile ficam no ambiente de desenvolvimento até a avaliação conjunta.
 
 ## 1. Análise do desktop (antes de implementar)
 
