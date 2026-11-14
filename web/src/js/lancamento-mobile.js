@@ -128,7 +128,9 @@ async function abrir(tipo, forcar = false) {
     } else if (tipo === 'transferencia') {
         const lista = await contas(true);  // saldos atuais
         if (pedido !== estado.pedido) return;
-        montarFormularioTransferencia(cadastro, { ...opcoesComuns(), contas: lista });
+        // FIN-MVP-MOBILE-07: aberta pelo atalho Transferir das Contas mobile, ja com a conta de origem.
+        const origem = Number(new URLSearchParams(window.location.search).get('origem')) || null;
+        montarFormularioTransferencia(cadastro, { ...opcoesComuns(), contas: lista, origem });
     } else {
         const formulario = await formularioAbastecimento();
         if (pedido !== estado.pedido) return;

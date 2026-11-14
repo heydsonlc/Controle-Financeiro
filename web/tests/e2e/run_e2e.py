@@ -70,6 +70,7 @@ from tests.supabase_local import (  # noqa: E402
     semear_cartoes_mobile_e2e,
     semear_compras_mobile_e2e,
     semear_lancamento_mobile_e2e,
+    semear_contas_mobile_e2e,
     semear_receitas_mobile_e2e,
     semear_financiamento_e2e,
     semear_mobilidade_e2e,
@@ -413,6 +414,7 @@ def main():
                 semear_receitas_mobile_e2e(cur)  # FIN-MVP-MOBILE-04 (mobile04_receitas.spec.mjs), no mesmo Perfil G
                 semear_compras_mobile_e2e(cur)  # FIN-MVP-MOBILE-05 (compra no cartao: fatura paga e consolidada), Perfil G
                 semear_lancamento_mobile_e2e(cur)  # FIN-MVP-MOBILE-06 (segunda conta e veiculo flex), Perfil G
+                semear_contas_mobile_e2e(cur)  # FIN-MVP-MOBILE-07 (pagamento, estorno, transferencia e ajuste), Perfil G
             conn.close()
 
             def consolidar(cartao, competencia, criar_se_faltar=False):

@@ -4,15 +4,15 @@
 // editavel, transferencia pareada, escritor unico do perfil para movimentos, chave contra reenvio, versao do cadastro.
 // FIN-MVP-MOBILE-06: a gravacao da transferencia (transferir_entre_contas) fica em js/contas-servico.js, comum a esta tela e
 // ao Registrar Lancamento mobile; o comportamento desta tela nao muda.
+// FIN-MVP-MOBILE-07: o extrato e a conferencia de saldo tambem (comuns as Contas mobile), sem mudanca.
 
 import { supabase } from './cliente.js';
 import { criarChaves, emMigracao, falha, mensagemDeErro, ok } from './adaptador-comum.js';
 import { iniciarMoldura } from './moldura.js';
-import { gravarTransferencia } from './contas-servico.js';
+import { conferirSaldo, extratoDaConta, gravarTransferencia } from './contas-servico.js';
 
 const estado = { perfilId: null, versoes: {} };
 const chaves = criarChaves();
-const DATA = /^\d{4}-\d{2}-\d{2}$/;
 
 async function rpc(funcao, args) {
     const { data, error } = await funcao(args);
@@ -63,26 +63,9 @@ async function editar(id, dados, mensagem) {
 // Extrato, conferencia e movimentos
 // ---------------------------------------------------------------------------------------------------------------
 
-async function extrato(id, parametros) {
-    const inicio = parametros.get('inicio') || null;
-    const fim = parametros.get('fim') || null;
-    if ((inicio && !DATA.test(inicio.slice(0, 10))) || (fim && !DATA.test(fim.slice(0, 10)))) {
-        return falha('Formato de data invalido. Use YYYY-MM-DD');
-    }
-    // Como o Flask (type=int): valor nao numerico = padrao.
-    const limite = Number.parseInt(parametros.get('limit') ?? '', 10);
-    const incluir = Number.parseInt(parametros.get('incluir_saldo') ?? '', 10);
-    const movimentos = await rpc((a) => supabase.rpc('extrato_conta_bancaria', a), {
-        p_perfil_id: estado.perfilId, p_conta_bancaria_id: id, p_inicio: inicio && inicio.slice(0, 10),
-        p_fim: fim && fim.slice(0, 10), p_limite: Number.isNaN(limite) ? 200 : limite,
-        p_incluir_saldo: Number.isNaN(incluir) ? true : incluir !== 0,
-    });
-    return ok({ data: movimentos || [] });
-}
-
-async function conferir(id) {
-    return ok({ data: await rpc((a) => supabase.rpc('conferir_saldo_conta', a), { p_perfil_id: estado.perfilId, p_conta_bancaria_id: id }) });
-}
+// FIN-MVP-MOBILE-07: extrato e conferencia pelo servico comum (js/contas-servico.js), com as mesmas validacoes de antes.
+const extrato = (id, parametros) => extratoDaConta(estado.perfilId, id, parametros);
+const conferir = (id) => conferirSaldo(estado.perfilId, id);
 
 async function ajustar(id, corpo) {
     const r = await comChave(`ajuste:${id}:${JSON.stringify(corpo)}`, (chave) => rpc((a) => supabase.rpc('ajustar_saldo_conta', a),

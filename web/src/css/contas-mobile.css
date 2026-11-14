@@ -1,0 +1,164 @@
+/* FIN-MVP-MOBILE-07 — Contas e Movimentacoes mobile (contas-mobile.html): so o que e proprio da tela (cabecalho com Filtros
+   e Transferir, seletor de conta, saldo e a coluna da data nas movimentacoes). Lista, painel, detalhes e formularios vem
+   de css/mobile-modulo.css. Restrita a body.mob-contas: nenhuma tela do desktop nem outra tela mobile e afetada. */
+
+/* Cabecalho: os dois lados com a mesma largura, para o titulo ficar no centro (Voltar | Contas | Filtros e Transferir) */
+body.mob-contas .mob-cabecalho-lado {
+    display: flex;
+    flex: 0 0 84px;
+    align-items: center;
+}
+
+body.mob-contas .mob-cabecalho-lado.direita {
+    justify-content: flex-end;
+    gap: 4px;
+}
+
+body.mob-contas .mob-icone-botao[hidden] {
+    display: none;
+}
+
+/* Seletor da conta (como o do cartao nos Cartoes mobile): nome do desktop e o que diferencia contas parecidas */
+body.mob-contas .mob-conta-seletor {
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: 44px;
+    margin: 0 0 10px;
+    border: 1px solid var(--mob-borda);
+    border-radius: 10px;
+    background: #ffffff;
+}
+
+body.mob-contas .mob-conta-seletor[hidden] {
+    display: none;
+}
+
+body.mob-contas .mob-conta-icone,
+body.mob-contas .mob-conta-abrir {
+    position: absolute;
+    top: 50%;
+    width: 20px;
+    height: 20px;
+    transform: translateY(-50%);
+    pointer-events: none;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+body.mob-contas .mob-conta-icone {
+    left: 12px;
+}
+
+body.mob-contas .mob-conta-abrir {
+    right: 12px;
+    width: 18px;
+    height: 18px;
+    color: var(--mob-cinza);
+}
+
+body.mob-contas .mob-conta-seletor select {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    margin: 0;
+    padding: 0 38px 0 42px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--mob-texto);
+    font: inherit;
+    font-size: 0.92rem;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+body.mob-contas .mob-conta-seletor select:focus-visible {
+    outline: 2px solid var(--mob-preto);
+    outline-offset: 1px;
+}
+
+/* Saldo da conta: o do banco (contas_bancarias_tela), um pouco maior que os demais valores, sem cartao alto */
+body.mob-contas .mob-saldo {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0 0 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--mob-borda);
+    border-radius: 12px;
+    background: #ffffff;
+}
+
+body.mob-contas .mob-saldo[hidden] {
+    display: none;
+}
+
+body.mob-contas .mob-saldo-rotulo {
+    color: var(--mob-cinza);
+    font-size: 0.72rem;
+}
+
+body.mob-contas .mob-saldo-valor {
+    overflow-wrap: anywhere;
+    font-size: 1.32rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+body.mob-contas .mob-saldo-valor.negativo {
+    color: var(--mob-perigo);
+}
+
+body.mob-contas .mob-saldo-info {
+    color: var(--mob-cinza);
+    font-size: 0.74rem;
+}
+
+body.mob-contas .mob-saldo-alerta {
+    color: var(--mob-perigo);
+    font-size: 0.74rem;
+}
+
+/* Titulo da lista */
+body.mob-contas .mob-secao-titulo {
+    margin: 0 2px 8px;
+    font-size: 0.86rem;
+    font-weight: 650;
+}
+
+/* Movimentacao: Data | Descricao | Valor | Detalhes */
+body.mob-contas .mob-linha.mob-movimento {
+    grid-template-columns: 38px minmax(0, 1fr) auto 14px;
+}
+
+body.mob-contas .mob-movimento-data {
+    color: var(--mob-cinza);
+    font-size: 0.74rem;
+    font-variant-numeric: tabular-nums;
+}
+
+body.mob-contas .mob-movimento.entrada .mob-linha-valor {
+    color: var(--mob-ok);
+}
+
+body.mob-contas .mob-limite {
+    margin: 8px 2px 0;
+}
+
+body.mob-contas .mob-limite[hidden] {
+    display: none;
+}
+
+body.mob-contas .mob-folha .mob-acoes a.mob-botao {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+}

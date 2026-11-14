@@ -1055,11 +1055,56 @@ VEICULO_G = 'Flex G (ficticio)'
 
 
 def semear_lancamento_mobile_e2e(cur):
-    cur.execute("insert into public.conta_bancaria (perfil_financeiro_id, nome, instituicao, tipo, status, cor_display) "
-                "values (%s, %s, 'Banco ficticio', 'Poupança', 'ATIVO', '#1d1d1f')", (PERFIL_G['id'], CONTA_RESERVA_G))
+    # FIN-MVP-MOBILE-07: saldo inicial de R$ 1.500,00 (cadastrado antes de qualquer movimento, como o desktop exige).
+    cur.execute("insert into public.conta_bancaria (perfil_financeiro_id, nome, instituicao, tipo, status, cor_display, saldo_inicial, "
+                "saldo_atual) values (%s, %s, 'Banco ficticio', 'Poupança', 'ATIVO', '#1d1d1f', 1500, 1500)", (PERFIL_G['id'], CONTA_RESERVA_G))
     cur.execute("insert into public.veiculo (perfil_financeiro_id, nome, tipo, combustivel, autonomia_km_l, status, data_inicio, "
                 "combustivel_valor_mensal, preco_medio_combustivel, km_estimado_acumulado, criado_em, atualizado_em) "
                 "values (%s, %s, 'Carro', 'flex', 11, 'ATIVO', current_date, 300, 5.9, 0, now(), now())", (PERFIL_G['id'], VEICULO_G))
+
+
+# FIN-MVP-MOBILE-07 (E2E e pre-visualizacao): movimentos FICTICIOS no mes atual (Brasilia) das contas do Perfil G, gravados
+# pelas funcoes oficiais como G: uma despesa paga ("Energia G") e uma paga e estornada ("Academia G") pela Conta G, uma
+# transferencia Conta G -> Reserva G e um ajuste de saldo na Reserva G. Somados aos recebimentos (MOBILE-04) e ao pagamento
+# da fatura do Master (MOBILE-05), as contas tem entradas, saidas, transferencia, estorno, fatura e ajuste.
+DESPESAS_CONTAS_G = (('Energia G (ficticia)', '180.00', 5, False), ('Academia G (ficticia)', '99.90', 6, True))
+
+
+def semear_contas_mobile_e2e(cur):
+    import json
+    from datetime import datetime, timedelta, timezone
+    hoje = datetime.now(timezone(timedelta(hours=-3))).date()
+    dia = lambda d: hoje.replace(day=min(d, hoje.day)).isoformat()  # noqa: E731 (movimentos ate hoje)
+    p = PERFIL_G['id']
+    cur.execute("select id, nome from public.conta_bancaria where perfil_financeiro_id = %s", (p,))
+    contas = {nome: cid for cid, nome in cur.fetchall()}
+    conta_g, reserva = contas['Conta G (ficticia)'], contas[CONTA_RESERVA_G]
+    cur.execute('set role authenticated')
+    cur.execute("select set_config('request.jwt.claims', %s, false)", (json.dumps(claims_usuario(USUARIO_G)),))
+    try:
+        def chamar(sql, *args):
+            cur.execute(sql, args)
+            return cur.fetchone()[0]
+        for nome, valor, d, estornar in DESPESAS_CONTAS_G:
+            criada = chamar('select financeiro.criar_despesa(%s, %s::jsonb, gen_random_uuid())', p, json.dumps({
+                'nome': nome, 'valor': valor, 'descricao': '', 'categoria_id': 201, 'data_vencimento': dia(d),
+                'competencia': hoje.replace(day=1).isoformat(), 'debito_automatico': False, 'conta_bancaria_id': None}))
+            chamar('select financeiro.pagar_despesa(%s, %s, %s::jsonb, gen_random_uuid())', p, criada['conta_id'], json.dumps({
+                'conta_bancaria_id': conta_g, 'data_pagamento': dia(d), 'valor_pago': valor, 'valor_devido': valor,
+                'tipo_ajuste': None, 'justificativa': None}))
+            if estornar:
+                dados = chamar('select financeiro.dados_pagamento_despesa(%s, %s)', p, criada['conta_id'])
+                vigente = next(x for x in dados['pagamentos'] if x['vigente'])
+                chamar('select financeiro.estornar_pagamento_despesa(%s, %s, %s, %s::jsonb, gen_random_uuid())', p, criada['conta_id'],
+                       vigente['movimento_id'], json.dumps({'motivo': 'Cobranca indevida (ficticio)', 'data_estorno': dia(7)}))
+        chamar('select financeiro.transferir_entre_contas(%s, %s::jsonb, gen_random_uuid())', p, json.dumps({
+            'conta_origem_id': conta_g, 'conta_destino_id': reserva, 'valor': '300.00', 'data_movimento': dia(8),
+            'descricao': 'Reserva do mes (ficticia)'}))
+        chamar('select financeiro.ajustar_saldo_conta(%s, %s, %s::jsonb, gen_random_uuid())', p, reserva, json.dumps({
+            'valor_do_ajuste': '12.34', 'data_movimento': dia(9), 'descricao': 'Rendimento conferido no extrato (ficticio)'}))
+    finally:
+        cur.execute('reset role')
+        cur.execute("select set_config('request.jwt.claims', '', false)")
 
 
 # FIN-MVP-MOBILE-04 (E2E e pre-visualizacao): receitas FICTICIAS do "Perfil G (ficticio)" (o mesmo login dos Cartoes

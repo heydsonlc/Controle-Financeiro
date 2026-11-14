@@ -3,6 +3,7 @@
 // gravacao (js/contas-servico.js -> transferir_entre_contas: movimentos pareados, saldo pelos movimentos, auditoria e chave
 // contra reenvio). Contas ativas do perfil; destino diferente da origem (regra do banco, conferida tambem na tela).
 // Nenhum saldo e alterado diretamente; sem innerHTML (CSP).
+// FIN-MVP-MOBILE-07: aberta pelas Contas mobile, ja vem com a conta de origem; a confirmacao leva de volta as Contas.
 
 import { el } from './comum.js';
 import { hojeBrasilia } from './adaptador-comum.js';
@@ -14,8 +15,8 @@ import { campoComErro, erroDoServico, moeda, mostrarErros, par } from './mobile-
 const dataBr = (iso) => String(iso).slice(0, 10).split('-').reverse().join('/');
 const rotuloConta = (c) => `${c.nome} · ${moeda(c.saldo_atual)}`;
 
-// opcoes: api (fila da tela), mes (competencia da pagina principal), contas (ativas do perfil, com o saldo), rotuloNovo e
-// aoRecomecar/aoConcluir (como os outros formularios).
+// opcoes: api (fila da tela), mes (competencia da pagina principal), contas (ativas do perfil, com o saldo), origem (conta
+// ja escolhida, quando aberta pelas Contas mobile), rotuloNovo e aoRecomecar/aoConcluir (como os outros formularios).
 export function montarFormularioTransferencia(container, opcoes) {
     const { api, mes, contas } = opcoes;
     if (contas.length < 2) {
@@ -49,6 +50,7 @@ export function montarFormularioTransferencia(container, opcoes) {
             ...contas.filter((c) => String(c.id) !== origem.value).map((c) => new Option(rotuloConta(c), String(c.id))));
         if ([...destino.options].some((o) => o.value === atual)) destino.value = atual;
     };
+    if (opcoes.origem && contas.some((c) => c.id === opcoes.origem)) origem.value = String(opcoes.origem);
     origem.addEventListener('change', atualizarDestinos);
     atualizarDestinos();
 
@@ -99,10 +101,11 @@ export function montarFormularioTransferencia(container, opcoes) {
         const saldoDe = (id) => { const c = atuais.find((x) => x.id === id); return c ? moeda(c.saldo_atual) : '—'; };
         const caixa = el('div', 'mob-confirmacao');
         caixa.id = 'mob-confirmacao';
-        const principal = el('a', 'mob-botao primario', 'Início');
-        principal.href = `inicio.html?mes=${mes}`;
+        // FIN-MVP-MOBILE-07: o extrato da conta de origem, nas Contas mobile (saldos relidos ao abrir).
+        const principal = el('a', 'mob-botao primario', 'Ver em Contas');
+        principal.id = 'mob-ver-contas';
+        principal.href = `contas-mobile.html?mes=${mes}&conta=${corpo.conta_origem_id}`;
         const acoesFim = acoesDaConfirmacao(container, opcoes, principal);
-        acoesFim.lastChild.remove();  // "Inicio" ja e o principal
         caixa.append(el('p', 'mob-confirmacao-titulo', 'Transferência realizada'),
             texto(`${moeda(corpo.valor)} de ${nomeDe(corpo.conta_origem_id)} para ${nomeDe(corpo.conta_destino_id)} em ${dataBr(corpo.data_movimento)}.`),
             texto(`Saldos: ${nomeDe(corpo.conta_origem_id)} ${saldoDe(corpo.conta_origem_id)} · ${nomeDe(corpo.conta_destino_id)} ${saldoDe(corpo.conta_destino_id)}.`, 'discreto'),

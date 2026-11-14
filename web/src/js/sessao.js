@@ -14,7 +14,8 @@ const PAGINAS_PERMITIDAS = new Set(['contas.html', 'categorias.html', 'receitas.
     'mobilidade.html', 'importar-cartao.html', 'inicio.html', 'despesas-mobile.html',  // FIN-MVP-MOB-01: Lista de Despesas mobile
     'cartoes-mobile.html',  // FIN-MVP-MOBILE-03: Cartoes mobile
     'receitas-mobile.html',  // FIN-MVP-MOBILE-04: Receitas mobile
-    'despesa-nova-mobile.html', 'lancamento-mobile.html']);  // FIN-MVP-MOBILE-05: Nova Despesa; FIN-MVP-MOBILE-06: Registrar Lancamento
+    'despesa-nova-mobile.html', 'lancamento-mobile.html',  // FIN-MVP-MOBILE-05: Nova Despesa; FIN-MVP-MOBILE-06: Registrar Lancamento
+    'contas-mobile.html']);  // FIN-MVP-MOBILE-07: Contas e Movimentacoes
 const PAGINA_INICIAL = 'contas.html';
 // FIN-MVP-MOB-08: no celular a pagina inicial e a pagina principal mobile (inicio.html); tablet e desktop seguem em
 // contas.html. Um destino pedido (?next=, acesso direto a uma URL interna) continua valendo em qualquer largura.

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<!-- FIN-MVP-MOBILE-07: Contas e Movimentacoes mobile (atalho Contas da pagina principal). Pagina propria, fora da moldura do
+     desktop, com a estrutura e a identidade visual aprovadas (css/mobile-base.css e css/mobile-modulo.css). Consulta: as
+     contas, o saldo e o extrato sao os da tela Contas Bancarias do desktop (js/contas-servico.js: contas_bancarias_tela,
+     extrato_conta_bancaria e conferir_saldo_conta), sem calculo de saldo na tela. A transferencia e a do Registrar
+     Lancamento (FIN-MVP-MOBILE-06). Sem cadastro, ajuste ou exclusao. O desktop nao muda. -->
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#ffffff">
+    <title>Contas — Financeiro</title>
+    <link rel="stylesheet" href="css/mobile-base.css">
+    <link rel="stylesheet" href="css/mobile-modulo.css">
+    <link rel="stylesheet" href="css/contas-mobile.css">
+</head>
+<body class="mob mob-modulo mob-contas" data-protegido hidden>
+    <header class="mob-cabecalho">
+        <div class="mob-cabecalho-miolo">
+        <span class="mob-cabecalho-lado">
+            <a class="mob-icone-botao" id="mob-voltar" href="inicio.html" data-inicio aria-label="Voltar à página principal">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+            </a>
+        </span>
+        <div class="mob-titulo-bloco">
+            <h1 class="mob-titulo">Contas</h1>
+            <span class="mob-subtitulo" id="mob-perfil"></span>
+        </div>
+        <span class="mob-cabecalho-lado direita">
+            <button type="button" class="mob-icone-botao" id="mob-filtros" aria-label="Filtros" aria-haspopup="dialog">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+                <span class="mob-filtro-marca" id="mob-filtro-marca" hidden></span>
+            </button>
+            <a class="mob-icone-botao" id="mob-transferir" aria-label="Transferir entre contas" hidden>
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M5 8h13M14 4l4 4-4 4M19 16H6M10 12l-4 4 4 4"/></svg>
+            </a>
+        </span>
+        </div>
+    </header>
+
+    <main class="mob-conteudo">
+        <label class="mob-conta-seletor" id="mob-conta-caixa" hidden>
+            <svg class="mob-conta-icone" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M3.5 9.5 12 4.5l8.5 5M5 10v7M9.5 10v7M14.5 10v7M19 10v7M3.5 19.5h17"/></svg>
+            <select id="mob-conta" aria-label="Conta"></select>
+            <svg class="mob-conta-abrir" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        </label>
+
+        <section class="mob-saldo" id="mob-saldo" aria-label="Saldo da conta" hidden></section>
+
+        <nav class="mob-competencia" aria-label="Período das movimentações">
+            <button type="button" class="mob-competencia-seta" id="mob-mes-anterior" aria-label="Mês anterior">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+            </button>
+            <span class="mob-competencia-centro">
+                <span class="mob-competencia-calendario" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>
+                </span>
+                <output class="mob-competencia-mes" id="mob-competencia" aria-live="polite"></output>
+            </span>
+            <button type="button" class="mob-competencia-seta" id="mob-mes-seguinte" aria-label="Mês seguinte">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+            </button>
+        </nav>
+
+        <p class="mob-aviso" id="mob-aviso" role="status" hidden></p>
+        <h2 class="mob-secao-titulo" id="mob-lista-titulo">Movimentações</h2>
+        <section class="mob-lista" id="mob-lista" aria-labelledby="mob-lista-titulo" aria-busy="true"></section>
+        <p class="mob-texto discreto mob-limite" id="mob-limite" hidden></p>
+    </main>
+
+    <nav class="mob-barra" aria-label="Navegação">
+        <div class="mob-barra-miolo">
+        <a class="mob-barra-item" href="inicio.html" data-inicio>
+            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20.5h-5.8v-5.8H9.3v5.8H3.5v-9.3Z"/></svg>
+            <span>Início</span>
+        </a>
+        <a class="mob-barra-item" data-modulo="lancar" data-destino="lancamento-mobile.html" aria-disabled="true">
+            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M12 4.5v15M4.5 12h15"/></svg>
+            <span>Lançar</span>
+        </a>
+        <a class="mob-barra-item" data-modulo="resumo" data-destino="despesas-mobile.html" aria-disabled="true">
+            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M6 20v-7M12 20V5M18 20v-10"/></svg>
+            <span>Resumo</span>
+        </a>
+        <button type="button" class="mob-barra-item" id="mob-mais" aria-haspopup="menu" aria-expanded="false" aria-controls="mob-menu-mais">
+            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><circle cx="5.5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="18.5" cy="12" r="1.4" fill="currentColor"/></svg>
+            <span>Mais</span>
+        </button>
+        </div>
+        <div class="mob-menu-mais" id="mob-menu-mais" role="menu" aria-label="Mais opções" hidden>
+            <button type="button" class="mob-menu-item" id="mob-sair" role="menuitem">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/><path d="M10 16l-4-4 4-4M6 12h10"/></svg>
+                <span>Sair</span>
+            </button>
+        </div>
+    </nav>
+
+    <div class="mob-folha-fundo" id="mob-folha-fundo" hidden>
+        <section class="mob-folha" id="mob-folha" role="dialog" aria-modal="true" aria-labelledby="mob-folha-titulo">
+            <header class="mob-folha-topo">
+                <h2 class="mob-folha-titulo" id="mob-folha-titulo"></h2>
+                <button type="button" class="mob-icone-botao mob-folha-fechar" id="mob-folha-fechar" aria-label="Fechar">
+                    <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                </button>
+            </header>
+            <div class="mob-folha-corpo" id="mob-folha-corpo"></div>
+        </section>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="vendor/supabase.js"></script>
+    <script type="module" src="js/contas-mobile.js"></script>
+</body>
+</html>
