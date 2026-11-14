@@ -4,7 +4,7 @@ Sexta etapa da versão mobile. Vem depois de cinco MVPs homologados em 14/11/202
 
 O atalho **Lançamento** da página principal e o botão **Lançar** da barra abrem **a mesma página**, Registrar Lançamento. No topo fica um seletor compacto de operações; abaixo aparece o formulário **já existente** de cada uma, gravando pelos serviços do desktop. Não há formulário duplicado nem mecanismo financeiro novo.
 
-**Situação:** implementado no ramo local `mobile-06-registrar-lancamento`, a partir do Cadastro de Despesas homologado (`ecb9080`). Não houve push, deploy nem migration. A publicação depende da homologação do titular e será avaliada junto com os demais MVPs mobile.
+**Situação:** implementado no ramo local `mobile-06-registrar-lancamento`, a partir do Cadastro de Despesas homologado (`ecb9080`). Não houve push, deploy nem migration. Decisões e testes aprovados pelo titular em 14/11/2026; aguardando a homologação visual. A publicação será avaliada junto com os demais MVPs mobile.
 
 ## 1. Inventário do desktop (antes de implementar)
 
@@ -167,6 +167,17 @@ As 3 reprovações são as **preexistentes de recorrência**, com as mesmas mens
 7. **Pendências fora do escopo:**
    - recorrência no cartão (Proposta B, contrato próprio; `criar_recorrencia_cartao` já existe na tela Recorrências);
    - a tela de Contas e Movimentações mobile (FIN-MVP-MOBILE-07), que poderá reaproveitar `contas-servico.js` e o formulário de transferência.
+
+**Avaliação do titular (14/11/2026):**
+- as decisões 1 a 4 foram **aprovadas**:
+  - Entrada / crédito fora deste MVP;
+  - abastecimento pelo fluxo de Lançamentos, à vista no cartão;
+  - abertura sem operação escolhida;
+  - Lançamento e Lançar desabilitados para quem só lê, em todas as páginas mobile;
+- os testes técnicos são satisfatórios, sem novos ajustes funcionais;
+- as 9 verificações que não rodaram (dependentes das 3 falhas) ficam registradas como cobertura incompleta;
+- as 3 falhas de recorrência continuam como pendência técnica anterior, fora deste escopo;
+- situação: aguardando a homologação visual no Firefox.
 
 ## 7. Homologação no Firefox
 
