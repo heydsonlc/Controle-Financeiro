@@ -27,6 +27,7 @@ Primeiro MVP da versão mobile: área de trabalho simplificada, com atalhos para
 - **Início:** destacado em preto; recarrega a página principal mantendo o mês escolhido.
 - **Mais:** abre um menu com **Sair**, que encerra a sessão (aprovado na homologação de 13/11/2026). O menu fecha com Esc, com toque fora ou com a escolha.
 - **Ativação gradual:** cada MVP homologado entra em `MODULOS_ATIVOS` pelo `data-modulo`. O atalho passa a apontar para o seu `data-destino` com a competência aberta.
+- **FIN-MVP-MOB-01 (Lista de Despesas mobile):** o Resumo (atalho e barra) ficou habilitado e abre `despesas-mobile.html`. A estrutura comum das páginas mobile passou para `css/mobile-base.css` e `js/mobile-comum.js`, sem mudar o layout (capturas idênticas pixel a pixel). Ver `docs/FIN_MVP_MOB_01_LISTA_DESPESAS.md`.
 
 ## 2. Mockup e divergências para decisão do titular
 
