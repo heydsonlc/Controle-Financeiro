@@ -20,7 +20,7 @@
 
 **Em relação à versão publicada:**
 - O `origin/main` (`7e035c5`, a versão do deploy de produção `5d608ca5`) é **ancestral** do ramo consolidado. A publicação é um **avanço rápido**, sem merge nem conflito.
-- O ramo tem 26 commits a mais: 2 de documentação que ainda estavam só locais (`434fd07` saneamento e `925e9df` domínio próprio), os 24 dos MVPs mobile e os desta etapa.
+- O ramo tem 29 commits a mais: 2 de documentação que ainda estavam só locais (`434fd07` saneamento e `925e9df` domínio próprio), 24 dos MVPs mobile e 3 desta etapa (`5832de9`, `4a1432e`, `940575d`).
 - **Sem migration:** nenhum arquivo em `supabase/` mudou. Nenhuma função, tabela ou política do banco é alterada pela publicação.
 - O `main` local está atrás do `origin/main` (`0de5820`): é só uma referência local desatualizada, sem efeito.
 
