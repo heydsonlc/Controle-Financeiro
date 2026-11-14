@@ -746,3 +746,59 @@ test('contas mobile: protegida, sem moldura, CSS restrito, consulta pelo servico
         await rm(destino, { recursive: true, force: true });
     }
 });
+
+// FIN-MVP-MOBILE-FINAL-01: aplicativo na tela de inicio (PWA/iOS). Manifesto valido (nome, inicio na pagina principal mobile,
+// standalone, cores), icones PNG nos tamanhos declarados, metadados iOS nas paginas mobile e no login; telas do desktop sem
+// manifesto; nenhum service worker nem cache (Cache API, IndexedDB); CSP inalterada (manifesto e icones do proprio site).
+test('pwa: manifesto, icones e metadados iOS so nas paginas mobile e no login; sem service worker nem cache de dados', async () => {
+    const destino = await mkdtemp(path.join(os.tmpdir(), 'cf-web-pwa-'));
+    const dimensoes = (png) => [png.readUInt32BE(16), png.readUInt32BE(20)];  // cabecalho IHDR
+    try {
+        await construir({ url: URL_OK, chave: 'sb_publishable_abc123', destino });
+        const manifesto = JSON.parse(await readFile(path.join(destino, 'manifest.webmanifest'), 'utf8'));
+        assert.equal(manifesto.name, 'Controle Financeiro');
+        assert.equal(manifesto.short_name, 'Financeiro');
+        assert.equal(manifesto.start_url, 'inicio.html', 'abre na pagina principal mobile (que exige a sessao)');
+        assert.equal(manifesto.scope, './');
+        assert.equal(manifesto.display, 'standalone');
+        assert.equal(manifesto.orientation, 'portrait');
+        assert.equal(manifesto.theme_color, '#1d1d1f', 'preto da identidade');
+        assert.equal(manifesto.background_color, '#ffffff');
+        assert.ok(manifesto.icons.some((i) => i.purpose === 'maskable'));
+        for (const icone of manifesto.icons) {
+            const png = await readFile(path.join(destino, icone.src));
+            assert.equal(png.subarray(1, 4).toString('latin1'), 'PNG', icone.src);
+            assert.deepEqual(dimensoes(png), icone.sizes.split('x').map(Number), icone.src);
+        }
+        assert.deepEqual(dimensoes(await readFile(path.join(destino, 'icones', 'apple-touch-icon.png'))), [180, 180]);
+        assert.deepEqual(dimensoes(await readFile(path.join(destino, 'icones', 'icone-32.png'))), [32, 32]);
+        const mobile = ['inicio.html', 'despesas-mobile.html', 'cartoes-mobile.html', 'receitas-mobile.html', 'despesa-nova-mobile.html',
+            'lancamento-mobile.html', 'contas-mobile.html'];
+        for (const pagina of [...mobile, 'index.html']) {
+            const html = await readFile(path.join(destino, pagina), 'utf8');
+            for (const marca of ['<link rel="manifest" href="manifest.webmanifest">', '<link rel="apple-touch-icon" href="icones/apple-touch-icon.png">',
+                '<meta name="apple-mobile-web-app-capable" content="yes">', '<meta name="apple-mobile-web-app-title" content="Financeiro">']) {
+                assert.ok(html.includes(marca), `${pagina}: ${marca}`);
+            }
+        }
+        for (const pagina of mobile) {
+            const html = await readFile(path.join(destino, pagina), 'utf8');
+            assert.match(html, /<meta name="viewport" content="width=device-width, initial-scale=1\.0, viewport-fit=cover">/, `${pagina}: areas seguras`);
+            assert.match(html, /<meta name="theme-color" content="#ffffff">/, `${pagina}: barra do navegador como a homologada`);
+        }
+        // Telas do desktop: sem manifesto nem metadados do aplicativo (o desktop nao muda).
+        for (const pagina of ['contas.html', 'cartoes.html', 'receitas.html', 'lancamentos.html', 'contas-bancarias.html', 'dashboard.html']) {
+            assert.doesNotMatch(await readFile(path.join(destino, pagina), 'utf8'), /manifest\.webmanifest|apple-mobile-web-app/, pagina);
+        }
+        // Nada de service worker, Cache API ou IndexedDB: nenhum dado financeiro fica no aparelho (so a sessao e o perfil ativo).
+        for (const arquivo of await readdir(path.join(destino, 'js'))) {
+            if (!arquivo.endsWith('.js')) continue;
+            assert.doesNotMatch(await readFile(path.join(destino, 'js', arquivo), 'utf8'), /serviceWorker|caches\.|indexedDB/, arquivo);
+        }
+        assert.ok(!(await readdir(destino)).some((n) => /^(sw|service-worker)\.js$/.test(n)), 'sem service worker');
+        const cabecalhos = await readFile(path.join(destino, '_headers'), 'utf8');
+        assert.match(cabecalhos, /default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:/, 'CSP inalterada');
+    } finally {
+        await rm(destino, { recursive: true, force: true });
+    }
+});
