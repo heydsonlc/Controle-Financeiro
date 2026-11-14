@@ -4,7 +4,7 @@ Sexta etapa da versão mobile. Vem depois de cinco MVPs homologados em 14/11/202
 
 O atalho **Lançamento** da página principal e o botão **Lançar** da barra abrem **a mesma página**, Registrar Lançamento. No topo fica um seletor compacto de operações; abaixo aparece o formulário **já existente** de cada uma, gravando pelos serviços do desktop. Não há formulário duplicado nem mecanismo financeiro novo.
 
-**Situação:** implementado no ramo local `mobile-06-registrar-lancamento`, a partir do Cadastro de Despesas homologado (`ecb9080`). Não houve push, deploy nem migration. Decisões e testes aprovados pelo titular em 14/11/2026; aguardando a homologação visual. A publicação será avaliada junto com os demais MVPs mobile.
+**Situação:** implementado no ramo local `mobile-06-registrar-lancamento`, a partir do Cadastro de Despesas homologado (`ecb9080`). Não houve push, deploy nem migration. Decisões e testes aprovados e versão mobile **homologada pelo titular em 14/11/2026** (receitas, despesas, compras no cartão, transferências e abastecimentos). A publicação continua suspensa até a avaliação conjunta dos módulos mobile.
 
 ## 1. Inventário do desktop (antes de implementar)
 
@@ -177,7 +177,7 @@ As 3 reprovações são as **preexistentes de recorrência**, com as mesmas mens
 - os testes técnicos são satisfatórios, sem novos ajustes funcionais;
 - as 9 verificações que não rodaram (dependentes das 3 falhas) ficam registradas como cobertura incompleta;
 - as 3 falhas de recorrência continuam como pendência técnica anterior, fora deste escopo;
-- situação: aguardando a homologação visual no Firefox.
+- homologação visual concluída: **MOBILE-06 homologado** em 14/11/2026.
 
 ## 7. Homologação no Firefox
 
