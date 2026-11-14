@@ -68,8 +68,8 @@ test('sem sessao, inicio.html leva ao login e volta para ela', async ({ page }) 
 
 // FIN-MVP-MOB-01: so o Resumo (atalho e barra) ficou habilitado, para a Lista de Despesas mobile; os demais seguem desabilitados.
 // FIN-MVP-MOBILE-03: Cartoes tambem habilitado (Cartoes mobile); os demais seguem desabilitados.
-// FIN-MVP-MOBILE-04: Receita tambem habilitado (Receitas mobile).
-test('celular: login leva a pagina principal mobile, com so Resumo, Cartoes e Receita habilitados entre os atalhos e Inicio ativo', async ({ page }) => {
+// FIN-MVP-MOBILE-04: Receita tambem habilitado (Receitas mobile). FIN-MVP-MOBILE-05: Despesa (Nova Despesa mobile).
+test('celular: login leva a pagina principal mobile, com so Resumo, Cartoes, Receita e Despesa habilitados entre os atalhos e Inicio ativo', async ({ page }) => {
     await page.setViewportSize(CELULAR);
     await entrar(page);
     await page.waitForURL(/\/inicio\.html\?mes=\d{4}-\d{2}$/);
@@ -82,7 +82,8 @@ test('celular: login leva a pagina principal mobile, com so Resumo, Cartoes e Re
     await expect(atalhos.locator('.mob-atalho-nome')).toHaveText(ATALHOS);
     for (let i = 0; i < ATALHOS.length; i += 1) {
         await expect(atalhos.nth(i)).toBeVisible();
-        const destino = { Resumo: 'despesas-mobile.html', Cartões: 'cartoes-mobile.html', Receita: 'receitas-mobile.html' }[ATALHOS[i]];
+        const destino = { Resumo: 'despesas-mobile.html', Cartões: 'cartoes-mobile.html', Receita: 'receitas-mobile.html',
+            Despesa: 'despesa-nova-mobile.html' }[ATALHOS[i]];
         if (destino) {
             await expect(atalhos.nth(i)).not.toHaveAttribute('aria-disabled', 'true');
             await expect(atalhos.nth(i)).toHaveAttribute('href', `${destino}?mes=${mesAtual().chave}`);
@@ -104,7 +105,7 @@ test('celular: login leva a pagina principal mobile, com so Resumo, Cartoes e Re
 
     const antes = page.url();
     // desabilitados: o clique (forcado, como o toque) nao navega
-    await atalhos.nth(1).click({ force: true });
+    await atalhos.nth(2).click({ force: true });  // Lancamento (desabilitado)
     await page.locator('.mob-barra-item').nth(1).click({ force: true });
     await page.locator('.mob-notificacoes').click({ force: true });
     expect(page.url()).toBe(antes);

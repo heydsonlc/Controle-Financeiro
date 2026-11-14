@@ -602,6 +602,13 @@ export function configurarDespesas(perfilId, ganchos = {}) {
     estado.ganchos = ganchos;
 }
 
+// FIN-MVP-MOBILE-05: se a conta pode gravar no perfil em uso (a Nova Despesa mobile nao abre o formulario para quem so le;
+// o banco recusa de qualquer forma). So leitura.
+export async function podeGerirPerfil() {
+    const { data } = await supabase.rpc('pode_gerir_perfil', { p_perfil_id: estado.perfilId });
+    return data === true;
+}
+
 // Responde um pedido no formato das rotas /api/... do Flask: { metodo, caminho, parametros (URLSearchParams), corpo }.
 export async function responderDespesas({ metodo, caminho, parametros, corpo }) {
     const documento = await responderDocumentoFinanceiro({ metodo, caminho, parametros, corpo }, estado.perfilId, chaves);

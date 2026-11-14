@@ -11,7 +11,8 @@ import { sair } from './sessao.js';
 // FIN-MVP-MOB-01: Resumo (atalho da pagina principal e item da barra) abre a Lista de Despesas mobile.
 // FIN-MVP-MOBILE-03: o atalho Cartoes abre os Cartoes mobile (sem item novo na barra).
 // FIN-MVP-MOBILE-04: o atalho Receita abre as Receitas mobile (sem item novo na barra).
-export const MODULOS_ATIVOS = new Set(['resumo', 'cartoes', 'receita']);
+// FIN-MVP-MOBILE-05: o atalho Despesa abre a Nova Despesa mobile (cadastro rapido); Lancar continua reservado ao MOBILE-06.
+export const MODULOS_ATIVOS = new Set(['resumo', 'cartoes', 'receita', 'despesa']);
 
 const $ = (id) => document.getElementById(id);
 

@@ -348,7 +348,7 @@ test('todas as paginas usam a moldura do Flask com o mesmo menu, sem pagina queb
         // Despesas mobile, FIN-MVP-MOB-01), cartoes-mobile.html (FIN-MVP-MOBILE-03) e receitas-mobile.html (FIN-MVP-MOBILE-04)
         // ficam fora da moldura do desktop.
         const paginas = arquivos.filter((a) => a.endsWith('.html') && !['index.html', 'inicio.html', 'despesas-mobile.html',
-            'cartoes-mobile.html', 'receitas-mobile.html'].includes(a));
+            'cartoes-mobile.html', 'receitas-mobile.html', 'despesa-nova-mobile.html'].includes(a));  // + FIN-MVP-MOBILE-05
         assert.equal(paginas.length, 16);  // + indexadores.html (FIN-PRE-PRODUCAO-1)
         for (const pagina of paginas) {
             const html = await readFile(path.join(destino, pagina), 'utf8');
@@ -391,7 +391,8 @@ test('montagem escapa titulos e falha com marcador nao resolvido', () => {
 // FIN-MVP-MOB-01: o atalho Resumo (e o Resumo da barra) navega, para a Lista de Despesas mobile.
 // FIN-MVP-MOBILE-03: o atalho Cartoes navega, para os Cartoes mobile (a barra nao ganha item).
 // FIN-MVP-MOBILE-04: o atalho Receita navega, para as Receitas mobile (a barra nao ganha item).
-test('pagina principal mobile: protegida, sem moldura, so Resumo, Cartoes e Receita habilitados entre os 8 atalhos', async () => {
+// FIN-MVP-MOBILE-05: o atalho Despesa navega, para a Nova Despesa mobile (Lancar continua desabilitado).
+test('pagina principal mobile: protegida, sem moldura, so Resumo, Cartoes, Receita e Despesa habilitados entre os 8 atalhos', async () => {
     const destino = await mkdtemp(path.join(os.tmpdir(), 'cf-web-mob08-'));
     try {
         await construir({ url: URL_OK, chave: 'sb_publishable_abc123', destino });
@@ -408,6 +409,7 @@ test('pagina principal mobile: protegida, sem moldura, so Resumo, Cartoes e Rece
         assert.deepEqual(atalhos.find((a) => a[0] === 'Resumo'), ['Resumo', 'resumo', 'despesas-mobile.html']);
         assert.deepEqual(atalhos.find((a) => a[0] === 'Cartões'), ['Cartões', 'cartoes', 'cartoes-mobile.html']);
         assert.deepEqual(atalhos.find((a) => a[0] === 'Receita'), ['Receita', 'receita', 'receitas-mobile.html']);
+        assert.deepEqual(atalhos.find((a) => a[0] === 'Despesa'), ['Despesa', 'despesa', 'despesa-nova-mobile.html']);
         assert.doesNotMatch(html.slice(html.indexOf('mob-grade'), html.indexOf('class="mob-barra"')), /href=/, 'atalhos sem link no HTML');
         const barra = [...html.matchAll(/<(a|button) (?:type="button" )?class="mob-barra-item([^"]*)"([^>]*)>[\s\S]*?<span>([^<]+)<\/span>/g)]
             .map((m) => [m[4], /href=/.test(m[3]) ? 'link' : (m[1] === 'button' ? 'botao' : 'desabilitado')]);
@@ -422,8 +424,8 @@ test('pagina principal mobile: protegida, sem moldura, so Resumo, Cartoes e Rece
         const script = await readFile(path.join(destino, 'js', 'inicio-mobile.js'), 'utf8');
         assert.doesNotMatch(script, /\.rpc\s*\(|\.from\s*\(|despesas-servico/, 'a pagina principal nao le nem grava dados');
         const comum = await readFile(path.join(destino, 'js', 'mobile-comum.js'), 'utf8');
-        assert.match(comum, /export const MODULOS_ATIVOS = new Set\(\['resumo', 'cartoes', 'receita'\]\);/,
-            'so Resumo, Cartoes e Receita ativos (FIN-MVP-MOBILE-04)');
+        assert.match(comum, /export const MODULOS_ATIVOS = new Set\(\['resumo', 'cartoes', 'receita', 'despesa'\]\);/,
+            'so Resumo, Cartoes, Receita e Despesa ativos (FIN-MVP-MOBILE-05); Lancar fica para o MOBILE-06');
         assert.doesNotMatch(comum, /\.rpc\s*\(|\.from\s*\(/);
     } finally {
         await rm(destino, { recursive: true, force: true });
@@ -569,6 +571,46 @@ test('receitas mobile: protegida, sem moldura, CSS restrito e dados so pelo serv
         assert.doesNotMatch(lista, /document\.|window\.|\.rpc\s*\(/, 'regras de leitura puras');
         // A pagina principal leva o atalho Receita a esta pagina (MODULOS_ATIVOS) e a sessao a aceita como destino.
         assert.ok((await readFile(path.join(destino, 'js', 'sessao.js'), 'utf8')).includes("'receitas-mobile.html'"));
+    } finally {
+        await rm(destino, { recursive: true, force: true });
+    }
+});
+
+// FIN-MVP-MOBILE-05: Nova Despesa mobile, fora da moldura; CSS restrito; grava so pelo servico de Despesas do desktop
+// (POST /api/despesas -> criar_despesa), sem consulta propria ao banco; sem campos que o servico recusa.
+test('nova despesa mobile: protegida, sem moldura, CSS restrito e cadastro so pelo servico do desktop', async () => {
+    const destino = await mkdtemp(path.join(os.tmpdir(), 'cf-web-mobile05-'));
+    const regrasRestritas = (css, padrao, nome) => {
+        for (const regra of css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/(^|\})\s*([^{}@]+)\{/g)) {
+            for (const seletor of regra[2].split(',')) assert.match(seletor.trim(), padrao, `${nome}: regra restrita: ${seletor.trim()}`);
+        }
+    };
+    try {
+        await construir({ url: URL_OK, chave: 'sb_publishable_abc123', destino });
+        const html = await readFile(path.join(destino, 'despesa-nova-mobile.html'), 'utf8');
+        assert.match(html, /<body class="mob mob-modulo mob-despesa-nova" data-protegido hidden>/);
+        assert.doesNotMatch(html, /\{\{|<script>|\sstyle=|\son[a-z]+=/i, 'sem marcador, script ou estilo inline');
+        assert.doesNotMatch(html, /app-sidebar|app-shell-body|css\/shared\//, 'sem moldura nem CSS do desktop');
+        assert.match(html, /<h1 class="mob-titulo">Nova Despesa<\/h1>/);
+        assert.match(html, /id="mob-voltar" href="inicio.html" data-inicio/, 'voltar a pagina principal');
+        for (const id of ['mob-perfil', 'mob-aviso', 'mob-cadastro', 'mob-sair']) assert.match(html, new RegExp(`id="${id}"`), id);
+        // A barra segue o padrao aprovado: Lancar continua desabilitado (FIN-MVP-MOBILE-06).
+        const barra = [...html.matchAll(/<(a|button) (?:type="button" )?class="mob-barra-item([^"]*)"([^>]*)>[\s\S]*?<span>([^<]+)<\/span>/g)]
+            .map((m) => [m[4], /href=/.test(m[3]) ? 'link' : (m[1] === 'button' ? 'botao' : 'desabilitado')]);
+        assert.deepEqual(barra, [['Início', 'link'], ['Lançar', 'desabilitado'], ['Resumo', 'desabilitado'], ['Mais', 'botao']]);
+        for (const arquivo of ['css/mobile-base.css', 'css/mobile-modulo.css', 'css/despesa-nova-mobile.css', 'js/despesa-nova-mobile.js']) {
+            assert.match(html, new RegExp(`(href|src)="${arquivo.replace(/[.]/g, '\\.')}"`), arquivo);
+        }
+        regrasRestritas(await readFile(path.join(destino, 'css', 'despesa-nova-mobile.css'), 'utf8'), /^body\.mob-despesa-nova(\[|\s|$)/,
+            'despesa-nova-mobile.css');
+        const script = await readFile(path.join(destino, 'js', 'despesa-nova-mobile.js'), 'utf8');
+        assert.doesNotMatch(script, /\.rpc\s*\(|\.from\s*\(|supabase/, 'nenhuma consulta propria: so o servico do desktop');
+        assert.ok(script.includes("from './despesas-servico.js'"), 'servico de Despesas do desktop');
+        assert.match(script, /api\('POST', '\/api\/despesas', corpo\)/, 'a mesma rota do formulario do desktop');
+        // O que o servico do desktop recusa nao e oferecido: despesa ja paga, cartao, consorcio e parcelas.
+        assert.match(script, /pago: false/);
+        assert.doesNotMatch(script, /'cartao'|e_consorcio|numero_parcelas|total_parcelas/, 'sem cartao, consorcio nem parcelas');
+        assert.ok((await readFile(path.join(destino, 'js', 'sessao.js'), 'utf8')).includes("'despesa-nova-mobile.html'"));
     } finally {
         await rm(destino, { recursive: true, force: true });
     }
