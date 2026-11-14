@@ -148,7 +148,8 @@ def criar_handler(dist, postgrest_url, segredo, headers_seguranca, consolidar=No
         # MIME fixo: o registro do Windows pode mapear .js para text/plain, e com
         # nosniff o navegador recusaria os modulos (o Cloudflare Pages serve certo).
         extensions_map = {**SimpleHTTPRequestHandler.extensions_map, '.js': 'text/javascript',
-                          '.mjs': 'text/javascript', '.css': 'text/css', '.html': 'text/html'}
+                          '.mjs': 'text/javascript', '.css': 'text/css', '.html': 'text/html',
+                          '.webmanifest': 'application/manifest+json', '.png': 'image/png'}  # + FIN-MVP-MOBILE-FINAL-01
         # HTTP/1.1 com keep-alive: no HTTP/1.0 cada resposta fecha o socket, e no
         # Windows isso gerava ERR_CONNECTION_RESET em arquivos maiores (supabase.js).
         protocol_version = 'HTTP/1.1'
@@ -342,6 +343,25 @@ def criar_handler(dist, postgrest_url, segredo, headers_seguranca, consolidar=No
     return Handler
 
 
+def alinhar_sequencias(cur):
+    """FIN-MVP-MOBILE-FINAL-01: o cenario ficticio grava ids fixos (por exemplo, semear_contas: contas 501 a 512) sem avancar as
+    sequencias. Na suite inteira, quando a sequencia alcancava esses ids, a gravacao seguinte colidia (chave duplicada) e falhava o
+    teste que estivesse gravando naquele momento, num lugar diferente a cada rodada. Aqui cada sequencia de id passa ao maior id
+    ja gravado. So o banco descartavel dos testes; nenhuma regra nem dado do aplicativo muda."""
+    cur.execute("""select format('%I.%I', n.nspname, c.relname), a.attname,
+                          pg_get_serial_sequence(format('%I.%I', n.nspname, c.relname), a.attname)
+                     from pg_attribute a
+                     join pg_class c on c.oid = a.attrelid
+                     join pg_namespace n on n.oid = c.relnamespace
+                    where n.nspname in ('public', 'financeiro') and c.relkind = 'r' and a.attnum > 0 and not a.attisdropped
+                      and pg_get_serial_sequence(format('%I.%I', n.nspname, c.relname), a.attname) is not null""")
+    for tabela, coluna, sequencia in cur.fetchall():
+        cur.execute(f'select max("{coluna}") from {tabela}')
+        maximo = cur.fetchone()[0]
+        if maximo is not None and maximo > 0:
+            cur.execute('select setval(%s, greatest(%s, (select last_value from ' + sequencia + ')), true)', (sequencia, maximo))
+
+
 def retrato_empresa_d(cur):
     """Linhas da Empresa D em cada tabela com perfil, execucoes de geracao, arquivos enviados e o catalogo."""
     cur.execute("""select table_schema, table_name from information_schema.columns where column_name = 'perfil_financeiro_id'
@@ -415,6 +435,7 @@ def main():
                 semear_compras_mobile_e2e(cur)  # FIN-MVP-MOBILE-05 (compra no cartao: fatura paga e consolidada), Perfil G
                 semear_lancamento_mobile_e2e(cur)  # FIN-MVP-MOBILE-06 (segunda conta e veiculo flex), Perfil G
                 semear_contas_mobile_e2e(cur)  # FIN-MVP-MOBILE-07 (pagamento, estorno, transferencia e ajuste), Perfil G
+                alinhar_sequencias(cur)  # FIN-MVP-MOBILE-FINAL-01: ids fixos do cenario sem colisao na suite inteira
             conn.close()
 
             def consolidar(cartao, competencia, criar_se_faltar=False):

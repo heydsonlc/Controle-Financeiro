@@ -148,14 +148,14 @@ test('despesa e compra no cartao: o formulario da Nova Despesa, ja em conta a pa
     await escolher(page, 'despesa');
     await expect(controle(page, 'Meio de pagamento')).toHaveValue('conta');
     await expect(controle(page, 'Competência')).toHaveValue(MES);
-    await controle(page, 'Descrição').fill('Internet G');
+    await controle(page, 'Descrição').fill('Fibra G (lancamento)');
     await controle(page, 'Valor').fill('99.90');
     await controle(page, 'Categoria').selectOption({ label: 'Moradia' });
     await controle(page, 'Vencimento').fill('2032-02-10');
     await expect(controle(page, 'Competência')).toHaveValue('2032-01');  // regra do desktop: mes anterior ao vencimento
     await page.locator('#mob-salvar').dblclick();
-    await expect(confirmacao(page)).toContainText('“Internet G” cadastrada');
-    expect((await contasDoMes(page, MES, 'Internet G')).map((c) => Number(c.valor))).toEqual([99.9]);
+    await expect(confirmacao(page)).toContainText('“Fibra G (lancamento)” cadastrada');
+    expect((await contasDoMes(page, MES, 'Fibra G (lancamento)')).map((c) => Number(c.valor))).toEqual([99.9]);
     // "Novo lancamento" recomeca a mesma operacao, vazia.
     await expect(page.locator('#mob-outra')).toHaveText('Novo lançamento');
     await page.click('#mob-outra');
@@ -235,7 +235,10 @@ test('abastecimento: veiculo, combustivel do cadastro e litros; conta a pagar e 
     await expect(erroDe(page, 'Hodômetro')).toHaveText('Informe o hodômetro.');
     await expect(erroDe(page, 'Preço por litro')).toHaveText('Informe o preço por litro.');
     await expect(erroDe(page, 'Valor total')).toHaveText('Informe o valor total.');
-    await controle(page, 'Hodômetro').fill('10000');
+    // Hodometros a partir da ultima leitura do veiculo (outro spec pode ter registrado um abastecimento antes).
+    const km0 = Number((await veiculoG(page)).ultimo_hodometro || 0);
+    const antesDeste = (await abastecimentos(page)).length;
+    await controle(page, 'Hodômetro').fill(String(km0 + 10000));
     await controle(page, 'Combustível').selectOption('etanol');
     await controle(page, 'Preço por litro').fill('5.899');
     await controle(page, 'Valor total').fill('200');
@@ -246,15 +249,15 @@ test('abastecimento: veiculo, combustivel do cadastro e litros; conta a pagar e 
     await expect(confirmacao(page)).toContainText('33,904 L de Etanol');  // os litros gravados pelo banco
     await expect(page.locator('#mob-ver-lista')).toHaveAttribute('href', `despesas-mobile.html?mes=${HOJE.slice(0, 7)}`);
     // No banco: um abastecimento vinculado a uma conta a pagar de R$ 200 (categoria Combustivel, competencia do mes da data).
-    let lista = await abastecimentos(page);
+    let lista = (await abastecimentos(page)).filter((a) => Number(a.hodometro_km) === km0 + 10000);
     expect(lista.map((a) => [Number(a.valor_total), Number(a.hodometro_km), a.combustivel, Boolean(a.conta_id), Boolean(a.lancamento_id)]))
-        .toEqual([[200, 10000, 'etanol', true, false]]);
+        .toEqual([[200, km0 + 10000, 'etanol', true, false]]);
     const conta = await contasDoMes(page, HOJE.slice(0, 7), `Abastecimento ${VEICULO}`);
     expect(conta.map((c) => [Number(c.valor), c.categoria_nome, c.data_vencimento])).toEqual([[200, 'Combustível', HOJE]]);
 
     // Compra a vista no cartao (sem parcelas), com a fatura sugerida; o abastecimento fica vinculado a compra.
     await page.click('#mob-outra');
-    await controle(page, 'Hodômetro').fill('9000');
+    await controle(page, 'Hodômetro').fill(String(km0 + 9000));
     await controle(page, 'Preço por litro').fill('5.799');
     await controle(page, 'Valor total').fill('150');
     await controle(page, 'Meio de pagamento').selectOption('cartao');
@@ -265,15 +268,15 @@ test('abastecimento: veiculo, combustivel do cadastro e litros; conta a pagar e 
     // Hodometro menor que a ultima leitura: o banco recusa (regra da Mobilidade), junto ao campo; nada e gravado.
     await page.click('#mob-salvar');
     await expect(erroDe(page, 'Hodômetro')).toContainText('Hodômetro menor que a leitura');
-    expect((await abastecimentos(page)).length).toBe(1);
-    await controle(page, 'Hodômetro').fill('10350');
+    expect((await abastecimentos(page)).length).toBe(antesDeste + 1);
+    await controle(page, 'Hodômetro').fill(String(km0 + 10350));
     await evidencia(page, 'abastecimento-cartao', false);
     await page.locator('#mob-salvar').dblclick();
     await expect(confirmacao(page)).toContainText(`Compra lançada na fatura ${fatura.slice(5, 7)}/${fatura.slice(0, 4)} do cartão ${MASTER}.`);
     await expect(confirmacao(page)).toContainText('Abastecimento registrado no veículo');
     lista = await abastecimentos(page);
-    expect(lista.length).toBe(2);
-    const doCartao = lista.find((a) => Number(a.hodometro_km) === 10350);
+    expect(lista.length).toBe(antesDeste + 2);
+    const doCartao = lista.find((a) => Number(a.hodometro_km) === km0 + 10350);
     expect([Number(doCartao.valor_total), Boolean(doCartao.lancamento_id), Boolean(doCartao.conta_id)]).toEqual([150, true, false]);
     expect((await comprasDaFatura(page, master, fatura, `Abastecimento ${VEICULO}`)).map((c) => [Number(c.valor), c.total_parcelas]))
         .toEqual([[150, 1]]);
