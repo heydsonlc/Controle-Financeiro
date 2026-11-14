@@ -6,6 +6,8 @@ Segunda etapa da versão mobile. O atalho **Resumo** da página principal mobile
 
 **Situação:** implementado no ramo local `mob-01-despesas` (a partir do MOB-08, `65bada2`). Sem push, deploy nem migration. Publicação só depois da homologação do titular, junto com o MOB-08, do qual depende.
 
+> **Atualização (14/11/2026):** aprovado pelo titular; a série passou a se chamar FIN-MVP-MOBILE-NN (esta etapa é a FIN-MVP-MOBILE-02). No FIN-MVP-MOBILE-03 (Cartões), `css/despesas-mobile.css` virou `css/mobile-modulo.css`, com o mesmo texto e o escopo `body.mob-modulo`. Os elementos, o painel e o formulário de pagamento foram para `js/mobile-ui.js` e `js/mobile-pagamento.js`, sem mudança. As capturas desta tela ficaram idênticas pixel a pixel (`docs/FIN_MVP_MOBILE_03_CARTOES.md`).
+
 ## 1. Análise da tela do desktop (antes de implementar)
 
 | Ponto | Onde está | Como o mobile reaproveita |
