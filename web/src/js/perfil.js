@@ -32,6 +32,14 @@ export function escolherPerfilAtivo(perfis, usuarioId) {
         || null;
 }
 
+// FIN-MVP-MOBILE-05: so a permissao (quem so le o perfil nao recebe atalhos de cadastro na pagina principal mobile).
+// E so apresentacao: toda gravacao revalida a gestao no banco.
+export async function podeGerirPerfil(perfilId) {
+    const { data, error } = await supabase.rpc('pode_gerir_perfil', { p_perfil_id: perfilId });
+    if (error) throw error;
+    return data === true;
+}
+
 export function salvarPerfilAtivo(usuarioId, perfilId) {
     try {
         localStorage.setItem(chave(usuarioId), String(perfilId));

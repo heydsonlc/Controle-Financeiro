@@ -37,6 +37,7 @@ O cadastro do desktop é o modal "Nova Despesa" da tela Despesas, composto por:
 | `web/src/despesa-nova-mobile.html`, `css/despesa-nova-mobile.css`, `js/despesa-nova-mobile.js` (novos) | Página fora da moldura: cabeçalho (voltar, "Nova Despesa" e perfil), formulário progressivo, confirmação e barra inferior. CSS restrito a `body.mob-despesa-nova`; campos, botões e mensagens de `mobile-modulo.css`. Grava só por `POST /api/despesas` no serviço do desktop, sem consulta própria ao banco |
 | `web/src/js/despesas-servico.js` | Só uma função de leitura nova, `podeGerirPerfil()` (a mesma `pode_gerir_perfil` que os outros serviços usam), para não abrir o formulário a quem só lê. Nenhuma regra mudou |
 | `web/src/inicio.html`, `js/mobile-comum.js`, `js/sessao.js` | O atalho Despesa aponta para `despesa-nova-mobile.html` e entra em `MODULOS_ATIVOS`; a página entra nas permitidas. Lançar continua desabilitado |
+| `web/src/js/inicio-mobile.js`, `js/mobile-comum.js`, `js/perfil.js` (ajuste final) | Página principal: consulta só a permissão do perfil ativo (`meus_perfis` + `pode_gerir_perfil`, em `perfil.js`); para quem só lê, o atalho Despesa fica visível e desabilitado (`desabilitarModulo`, sem link mesmo trocando o mês, título "Somente leitura neste perfil"). Nenhum dado financeiro é lido |
 | testes | Novo: `web/tests/e2e/mobile05_cadastro_despesas.spec.mjs`. Atualizados: `build.test.mjs` (teste novo da página e quatro atalhos), `mob08_inicio.spec.mjs` e `mob01_despesas.spec.mjs` |
 | `scripts/homologacao_real/lote_real.py` | O script novo, que cita `/api/`, entra nas rotas locais |
 
@@ -92,7 +93,7 @@ O cadastro do desktop é o modal "Nova Despesa" da tela Despesas, composto por:
 | Lista mobile e desktop | "Ver na Lista de Despesas" abre 06/2031 com a conta uma vez; a tela Despesas do desktop no mesmo banco também a mostra uma vez, com o mesmo valor. "Nova despesa" recomeça vazio |
 | Recorrente mensal | Duplo toque → **uma** recorrência (`mensal`, R$ 119,90, 15/07/2031, meio `pix`); a Lista de 07/2031 gera a conta uma vez (vencimento 15/07) |
 | Recorrente semanal | Sem dia da semana: erro junto ao campo; a cada 2 semanas na sexta → `semanal_2_5`, como o formulário do desktop |
-| Somente leitura | Usuário H: sem formulário; `criar_despesa` do leitor recusado pelo banco |
+| Somente leitura | Usuário H: atalho Despesa desabilitado na página principal (sem link, inclusive depois de trocar o mês; Receita, Cartões e Resumo seguem); acesso direto ao endereço sem formulário; `criar_despesa` do leitor recusado pelo banco |
 | Responsividade | 320, 375, 390 e 430 px com a recorrência semanal aberta: sem rolagem horizontal, nada fora da tela, campos sem sobreposição |
 | Segurança | Nenhuma chamada a `/api/` no servidor, nenhum erro de CSP ou de JS |
 
@@ -122,7 +123,7 @@ O cadastro do desktop é o modal "Nova Despesa" da tela Despesas, composto por:
 3. **Competência inicial = mês da página principal.** Ao escolher o vencimento, aplica-se a regra do desktop (mês anterior) até o usuário mudar a competência à mão. A data de 29 a 31 segue o mês, sem o defeito do desktop (seção 1).
 4. **Recorrência:** a competência some porque o banco usa o mês de cada vencimento. A conta nasce quando a competência é aberta na Lista; o link da confirmação já leva ao mês do primeiro vencimento. Na semanal, só "toda semana" e "a cada 2 semanas", porque o serviço recusa as outras frequências que o campo do desktop deixa digitar.
 5. **Periodicidade inicial "Mensal":** o desktop abre em "Semanal", a primeira opção da lista. É escolha de apresentação, sem efeito na regra.
-6. **Somente leitura:** o atalho Despesa da página principal continua visível, porque a página principal não consulta permissões e não foi alterada. A Nova Despesa não abre o formulário para quem só lê, e o banco recusa a gravação. Se quiser o atalho desabilitado para leitores, isso exige uma consulta na página principal (MOBILE-01).
+6. **Somente leitura (ajuste final, 14/11/2026):** a página principal passou a consultar só a permissão do perfil ativo, e o atalho Despesa fica visível e desabilitado para quem só lê. Receita, Cartões e Resumo continuam habilitados (têm consulta). Acesso direto ao endereço: a Nova Despesa não abre o formulário, e o banco recusa a gravação. A guarda do `mob08_inicio.spec.mjs` aceita só essas duas consultas de permissão.
 
 ## 7. Homologação no Firefox
 

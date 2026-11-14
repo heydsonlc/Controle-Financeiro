@@ -23,7 +23,9 @@ test.beforeEach(async ({ page }, testInfo) => {
     page.on('request', (r) => {
         const caminho = new URL(r.url()).pathname;
         if (caminho.startsWith('/api/')) problemas.push(`rede /api/: ${r.url()}`);
-        if (caminho.startsWith('/rest/v1') && /inicio\.html/.test(page.url())) dados.push(`${r.method()} ${caminho}`);
+        // FIN-MVP-MOBILE-05: so a permissao do perfil ativo (atalho Despesa desabilitado para quem so le); nenhum dado financeiro.
+        const permissao = /^\/rest\/v1\/rpc\/(meus_perfis|pode_gerir_perfil)$/.test(caminho);
+        if (caminho.startsWith('/rest/v1') && !permissao && /inicio\.html/.test(page.url())) dados.push(`${r.method()} ${caminho}`);
     });
     testInfo.problemas = problemas;
     testInfo.dados = dados;

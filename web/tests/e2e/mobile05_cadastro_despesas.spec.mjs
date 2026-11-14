@@ -213,8 +213,23 @@ test('recorrente mensal e semanal: o mesmo mecanismo do desktop (recorrencia gra
     expect(recorrencias.map((r) => r.tipo_recorrencia)).toEqual(['semanal_2_5']);
 });
 
-test('somente leitura (usuario H): sem formulario; o banco recusa a gravacao', async ({ page }) => {
+test('somente leitura (usuario H): atalho Despesa desabilitado; sem formulario; o banco recusa a gravacao', async ({ page }) => {
     await entrar(page, H);
+    // Pagina principal: o atalho de cadastro fica visivel e desabilitado (sem link, mesmo trocando o mes); as consultas seguem.
+    await page.goto(`/inicio.html?mes=${MES}`);
+    const atalho = page.locator('.mob-atalho[data-modulo="despesa"]');
+    await expect(atalho).toHaveAttribute('title', 'Somente leitura neste perfil');  // depois da consulta da permissao
+    await expect(atalho).toHaveAttribute('aria-disabled', 'true');
+    await expect(atalho).not.toHaveAttribute('href', /./);
+    await page.click('#mob-mes-seguinte');
+    await expect(atalho).not.toHaveAttribute('href', /./);
+    await atalho.click({ force: true });
+    await expect(page).toHaveURL(/inicio\.html/);
+    for (const modulo of ['receita', 'cartoes', 'resumo']) {
+        await expect(page.locator(`.mob-atalho[data-modulo="${modulo}"]`)).toHaveAttribute('href', /mobile\.html\?mes=/);
+    }
+    await evidencia(page, 'somente-leitura-inicio', false);
+    // Acesso direto ao endereco: a pagina explica e nao mostra o formulario.
     await abrirCadastro(page);
     await expect(page.locator('#mob-cadastro')).toContainText('Acesso somente de leitura a este perfil: não é possível cadastrar despesas.');
     await expect(page.locator('#mob-cadastro form')).toHaveCount(0);

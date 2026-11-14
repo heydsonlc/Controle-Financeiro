@@ -58,6 +58,18 @@ export function prepararModulos() {
     }
 }
 
+// FIN-MVP-MOBILE-05: modulo ativo que o perfil nao permite (cadastro em perfil somente leitura): visivel, desabilitado,
+// sem destino (aplicarCompetencia nao lhe devolve o link) e com o motivo no titulo.
+export function desabilitarModulo(modulo, motivo) {
+    for (const item of document.querySelectorAll(`[data-modulo="${modulo}"]`)) {
+        item.removeAttribute('href');
+        item.removeAttribute('data-destino');
+        item.setAttribute('aria-disabled', 'true');
+        item.title = motivo;
+        item.addEventListener('click', (evento) => evento.preventDefault());
+    }
+}
+
 // "Mais": menu com Sair (aprovado na homologacao de 13/11/2026); fecha com Esc, toque fora ou escolha.
 export function prepararMais() {
     const botao = $('mob-mais');

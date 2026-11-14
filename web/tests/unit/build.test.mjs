@@ -427,6 +427,9 @@ test('pagina principal mobile: protegida, sem moldura, so Resumo, Cartoes, Recei
         assert.match(comum, /export const MODULOS_ATIVOS = new Set\(\['resumo', 'cartoes', 'receita', 'despesa'\]\);/,
             'so Resumo, Cartoes, Receita e Despesa ativos (FIN-MVP-MOBILE-05); Lancar fica para o MOBILE-06');
         assert.doesNotMatch(comum, /\.rpc\s*\(|\.from\s*\(/);
+        // FIN-MVP-MOBILE-05: so a permissao do perfil ativo (perfil.js): quem so le recebe o atalho Despesa desabilitado.
+        assert.ok(script.includes("from './perfil.js'") && script.includes("desabilitarModulo('despesa', 'Somente leitura neste perfil')"));
+        assert.match(comum, /export function desabilitarModulo\(modulo, motivo\)/);
     } finally {
         await rm(destino, { recursive: true, force: true });
     }
