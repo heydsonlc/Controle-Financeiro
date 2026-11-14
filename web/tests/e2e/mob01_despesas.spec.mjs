@@ -140,7 +140,7 @@ test('Resumo abre a lista com a competencia da pagina principal; setas, voltar e
     const resumo = page.locator('.mob-atalho[data-modulo="resumo"]');
     await expect(resumo).toHaveAttribute('href', `despesas-mobile.html?mes=${MES}`);
     await expect(resumo).not.toHaveAttribute('aria-disabled', 'true');
-    await expect(page.locator('.mob-atalho[aria-disabled="true"]')).toHaveCount(7);
+    await expect(page.locator('.mob-atalho[aria-disabled="true"]')).toHaveCount(6);  // Resumo e Cartoes (FIN-MVP-MOBILE-03) habilitados
     await expect(page.locator('.mob-barra-item[data-modulo="resumo"]')).toHaveAttribute('href', `despesas-mobile.html?mes=${MES}`);
     await expect(page.locator('.mob-barra-item[data-modulo="lancar"]')).toHaveAttribute('aria-disabled', 'true');
 

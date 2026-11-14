@@ -158,28 +158,29 @@ const RPCS_DE_ESCRITA = new Map([
     ['excluir_receita', 'receitas-adaptador.js'],
     ['editar_fonte_receita', 'receitas-adaptador.js'],
     ['inativar_fonte_receita', 'receitas-adaptador.js'],
-    // FIN-CARTOES-1 (compras e cartoes). FIN-FIDELIDADE-CARTOES-1: tela original de Cartoes pelo adaptador; a compra
+    // FIN-CARTOES-1 (compras e cartoes). FIN-FIDELIDADE-CARTOES-1: tela original de Cartoes pelo adaptador (FIN-MVP-MOBILE-03:
+    // rotas no servico cartoes-servico.js, comum ao desktop e aos Cartoes mobile, sem funcao nova); a compra
     // nova fica em Lancamentos (MVP-FIN-AJUSTES-01); editar_compra fica sem tela (a do Flask edita um lancamento por
     // editar_lancamento_cartao).
     ['criar_compra', ['lancamentos-adaptador.js']],  // FIN-FIDELIDADE-MOVIMENTACOES-1: Lancamentos
     // FIN-MOB-ABAST-LANCAMENTOS-01: despesa e abastecimento numa transacao; desvincular so com a decisao do usuario
     ['salvar_lancamento_abastecimento', 'lancamentos-adaptador.js'],
-    ['desvincular_abastecimento', ['lancamentos-adaptador.js', 'cartoes-adaptador.js', 'mobilidade-adaptador.js']],
+    ['desvincular_abastecimento', ['lancamentos-adaptador.js', 'cartoes-servico.js', 'mobilidade-adaptador.js']],
     // FIN-MVP-LANCAMENTOS-03: vincular a compra ao abastecimento pela Mobilidade (as regras e o historico no banco)
     ['vincular_abastecimento', 'mobilidade-adaptador.js'],
-    ['excluir_compra', ['cartoes-adaptador.js', 'lancamentos-adaptador.js']],
-    ['criar_cartao', 'cartoes-adaptador.js'],
-    ['editar_cartao', 'cartoes-adaptador.js'],
-    ['inativar_cartao', 'cartoes-adaptador.js'],
+    ['excluir_compra', ['cartoes-servico.js', 'lancamentos-adaptador.js']],
+    ['criar_cartao', 'cartoes-servico.js'],
+    ['editar_cartao', 'cartoes-servico.js'],
+    ['inativar_cartao', 'cartoes-servico.js'],
     // FIN-FIDELIDADE-CARTOES-1 (limites, um lancamento e parcelas futuras; gestao, perfil, versao e bloqueios no banco)
-    ['vincular_limite_cartao', 'cartoes-adaptador.js'],
-    ['atualizar_limite_cartao', 'cartoes-adaptador.js'],
-    ['desativar_limite_cartao', 'cartoes-adaptador.js'],
-    ['editar_lancamento_cartao', 'cartoes-adaptador.js'],
-    ['editar_parcelas_futuras', 'cartoes-adaptador.js'],
-    ['cancelar_parcelas_futuras', 'cartoes-adaptador.js'],
+    ['vincular_limite_cartao', 'cartoes-servico.js'],
+    ['atualizar_limite_cartao', 'cartoes-servico.js'],
+    ['desativar_limite_cartao', 'cartoes-servico.js'],
+    ['editar_lancamento_cartao', 'cartoes-servico.js'],
+    ['editar_parcelas_futuras', 'cartoes-servico.js'],
+    ['cancelar_parcelas_futuras', 'cartoes-servico.js'],
     // FIN-CARTOES-MULTIPLOS-01 (cartao vinculado ao contrato: so os 4 ultimos digitos; versao, perfil e contrato no banco)
-    ['salvar_cartao_vinculado', 'cartoes-adaptador.js'],
+    ['salvar_cartao_vinculado', 'cartoes-servico.js'],
     // FIN-FIDELIDADE-CARTOES-1 (Importar Cartao: so depois da confirmacao na tela; tudo ou nada, analise refeita no banco)
     ['importar_fatura_cartao', 'importar-cartao-adaptador.js'],
     // FIN-CARTOES-RECORRENCIA-PENDENCIA-1 (so dispensa o aviso; nao muda recorrencia, compra nem fatura)
@@ -342,9 +343,10 @@ test('todas as paginas usam a moldura do Flask com o mesmo menu, sem pagina queb
         const arquivos = (await readdir(destino, { recursive: true })).map((a) => a.split(path.sep).join('/'));
         assert.ok(!arquivos.some((a) => /^(moldura|paginas)(\/|$)/.test(a)), 'fontes da moldura fora do dist');
         assert.ok(arquivos.includes('css/shared/layout.css') && arquivos.includes('js/original/ajuda.js'));
-        // index.html (login), inicio.html (pagina principal mobile, FIN-MVP-MOB-08) e despesas-mobile.html (Lista de
-        // Despesas mobile, FIN-MVP-MOB-01) ficam fora da moldura do desktop.
-        const paginas = arquivos.filter((a) => a.endsWith('.html') && !['index.html', 'inicio.html', 'despesas-mobile.html'].includes(a));
+        // index.html (login), inicio.html (pagina principal mobile, FIN-MVP-MOB-08), despesas-mobile.html (Lista de
+        // Despesas mobile, FIN-MVP-MOB-01) e cartoes-mobile.html (FIN-MVP-MOBILE-03) ficam fora da moldura do desktop.
+        const paginas = arquivos.filter((a) => a.endsWith('.html') && !['index.html', 'inicio.html', 'despesas-mobile.html',
+            'cartoes-mobile.html'].includes(a));
         assert.equal(paginas.length, 16);  // + indexadores.html (FIN-PRE-PRODUCAO-1)
         for (const pagina of paginas) {
             const html = await readFile(path.join(destino, pagina), 'utf8');
@@ -384,8 +386,9 @@ test('montagem escapa titulos e falha com marcador nao resolvido', () => {
 });
 
 // FIN-MVP-MOB-08: pagina principal mobile, fora da moldura; atalhos visiveis e desabilitados.
-// FIN-MVP-MOB-01: so o atalho Resumo (e o Resumo da barra) navega, para a Lista de Despesas mobile.
-test('pagina principal mobile: protegida, sem moldura, so Resumo habilitado entre os 8 atalhos', async () => {
+// FIN-MVP-MOB-01: o atalho Resumo (e o Resumo da barra) navega, para a Lista de Despesas mobile.
+// FIN-MVP-MOBILE-03: o atalho Cartoes navega, para os Cartoes mobile (a barra nao ganha item).
+test('pagina principal mobile: protegida, sem moldura, so Resumo e Cartoes habilitados entre os 8 atalhos', async () => {
     const destino = await mkdtemp(path.join(os.tmpdir(), 'cf-web-mob08-'));
     try {
         await construir({ url: URL_OK, chave: 'sb_publishable_abc123', destino });
@@ -400,6 +403,7 @@ test('pagina principal mobile: protegida, sem moldura, so Resumo habilitado entr
             .map((m) => [m[3], m[1], m[2]]);
         assert.deepEqual(atalhos.map((a) => a[0]), ['Receita', 'Despesa', 'Lançamento', 'Resumo', 'Pagamentos', 'Recorrências', 'Cartões', 'Contas']);
         assert.deepEqual(atalhos.find((a) => a[0] === 'Resumo'), ['Resumo', 'resumo', 'despesas-mobile.html']);
+        assert.deepEqual(atalhos.find((a) => a[0] === 'Cartões'), ['Cartões', 'cartoes', 'cartoes-mobile.html']);
         assert.doesNotMatch(html.slice(html.indexOf('mob-grade'), html.indexOf('class="mob-barra"')), /href=/, 'atalhos sem link no HTML');
         const barra = [...html.matchAll(/<(a|button) (?:type="button" )?class="mob-barra-item([^"]*)"([^>]*)>[\s\S]*?<span>([^<]+)<\/span>/g)]
             .map((m) => [m[4], /href=/.test(m[3]) ? 'link' : (m[1] === 'button' ? 'botao' : 'desabilitado')]);
@@ -414,7 +418,7 @@ test('pagina principal mobile: protegida, sem moldura, so Resumo habilitado entr
         const script = await readFile(path.join(destino, 'js', 'inicio-mobile.js'), 'utf8');
         assert.doesNotMatch(script, /\.rpc\s*\(|\.from\s*\(|despesas-servico/, 'a pagina principal nao le nem grava dados');
         const comum = await readFile(path.join(destino, 'js', 'mobile-comum.js'), 'utf8');
-        assert.match(comum, /export const MODULOS_ATIVOS = new Set\(\['resumo'\]\);/, 'so Resumo ativo (FIN-MVP-MOB-01)');
+        assert.match(comum, /export const MODULOS_ATIVOS = new Set\(\['resumo', 'cartoes'\]\);/, 'so Resumo e Cartoes ativos (FIN-MVP-MOBILE-03)');
         assert.doesNotMatch(comum, /\.rpc\s*\(|\.from\s*\(/);
     } finally {
         await rm(destino, { recursive: true, force: true });
@@ -433,7 +437,7 @@ test('lista de despesas mobile: protegida, sem moldura, CSS restrito e dados so 
     try {
         await construir({ url: URL_OK, chave: 'sb_publishable_abc123', destino });
         const html = await readFile(path.join(destino, 'despesas-mobile.html'), 'utf8');
-        assert.match(html, /<body class="mob mob-despesas" data-protegido hidden>/);
+        assert.match(html, /<body class="mob mob-modulo mob-despesas" data-protegido hidden>/);
         assert.doesNotMatch(html, /\{\{|<script>|\sstyle=|\son[a-z]+=/i, 'sem marcador, script ou estilo inline');
         assert.doesNotMatch(html, /app-sidebar|app-shell-body|css\/shared\//, 'sem moldura nem CSS do desktop');
         assert.match(html, /<h1 class="mob-titulo">Despesas<\/h1>/);
@@ -445,12 +449,13 @@ test('lista de despesas mobile: protegida, sem moldura, CSS restrito e dados so 
         const barra = [...html.matchAll(/<(a|button) (?:type="button" )?class="mob-barra-item([^"]*)"([^>]*)>[\s\S]*?<span>([^<]+)<\/span>/g)]
             .map((m) => [m[4], m[2].includes('ativo') ? 'ativo' : (/href=/.test(m[3]) ? 'link' : (m[1] === 'button' ? 'botao' : 'desabilitado'))]);
         assert.deepEqual(barra, [['Início', 'link'], ['Lançar', 'desabilitado'], ['Resumo', 'ativo'], ['Mais', 'botao']]);
-        for (const arquivo of ['css/mobile-base.css', 'css/despesas-mobile.css', 'css/interrupcao-recorrencia.css',
+        for (const arquivo of ['css/mobile-base.css', 'css/mobile-modulo.css', 'css/interrupcao-recorrencia.css',
             'js/original/formas_pagamento.js', 'js/interrupcao-recorrencia.js', 'js/despesas-mobile.js']) {
             assert.match(html, new RegExp(`(href|src)="${arquivo.replace(/[.]/g, '\.')}"`), arquivo);
         }
         regrasRestritas(await readFile(path.join(destino, 'css', 'mobile-base.css'), 'utf8'), /^body\.mob(\[|\s|$)/, 'mobile-base.css');
-        regrasRestritas(await readFile(path.join(destino, 'css', 'despesas-mobile.css'), 'utf8'), /^body\.mob-despesas(\[|\s|$)/, 'despesas-mobile.css');
+        // FIN-MVP-MOBILE-03: o CSS da lista (era despesas-mobile.css) e comum aos modulos mobile, restrito a body.mob-modulo.
+        regrasRestritas(await readFile(path.join(destino, 'css', 'mobile-modulo.css'), 'utf8'), /^body\.mob-modulo(\[|\s|$)/, 'mobile-modulo.css');
         const script = await readFile(path.join(destino, 'js', 'despesas-mobile.js'), 'utf8');
         assert.doesNotMatch(script, /\.rpc\s*\(|\.from\s*\(|supabase/, 'nenhuma consulta propria: so o servico comum');
         assert.match(script, /from '\.\/despesas-servico\.js'/);
@@ -460,6 +465,57 @@ test('lista de despesas mobile: protegida, sem moldura, CSS restrito e dados so 
         assert.match(adaptador, /import \{ configurarDespesas, responderDespesas \} from '\.\/despesas-servico\.js';/);
         const servico = await readFile(path.join(destino, 'js', 'despesas-servico.js'), 'utf8');
         assert.doesNotMatch(servico, /document\.|window\./, 'servico sem DOM');
+    } finally {
+        await rm(destino, { recursive: true, force: true });
+    }
+});
+
+// FIN-MVP-MOBILE-03: Cartoes mobile, fora da moldura; CSS restrito; dados so pelos servicos do desktop (Cartoes e a fatura em
+// Despesas), sem consulta propria ao banco nem botao de compra nova.
+test('cartoes mobile: protegida, sem moldura, CSS restrito e dados so pelos servicos do desktop', async () => {
+    const destino = await mkdtemp(path.join(os.tmpdir(), 'cf-web-mobile03-'));
+    const regrasRestritas = (css, padrao, nome) => {
+        for (const regra of css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/(^|\})\s*([^{}@]+)\{/g)) {
+            for (const seletor of regra[2].split(',')) assert.match(seletor.trim(), padrao, `${nome}: regra restrita: ${seletor.trim()}`);
+        }
+    };
+    try {
+        await construir({ url: URL_OK, chave: 'sb_publishable_abc123', destino });
+        const html = await readFile(path.join(destino, 'cartoes-mobile.html'), 'utf8');
+        assert.match(html, /<body class="mob mob-modulo mob-cartoes" data-protegido hidden>/);
+        assert.doesNotMatch(html, /\{\{|<script>|\sstyle=|\son[a-z]+=/i, 'sem marcador, script ou estilo inline');
+        assert.doesNotMatch(html, /app-sidebar|app-shell-body|css\/shared\//, 'sem moldura nem CSS do desktop');
+        assert.match(html, /<h1 class="mob-titulo">Cartões<\/h1>/);
+        assert.match(html, /id="mob-voltar" href="inicio.html" data-inicio/, 'voltar a pagina principal');
+        assert.doesNotMatch(html, /Nova compra|Novo lan/i, 'sem botao de compra nova (FIN-MVP-MOBILE-06)');
+        for (const id of ['mob-mes-anterior', 'mob-competencia', 'mob-mes-seguinte', 'mob-cartao', 'mob-fatura', 'mob-lista',
+            'mob-filtros', 'mob-folha', 'mob-sair']) {
+            assert.match(html, new RegExp(`id="${id}"`), id);
+        }
+        // A barra segue o padrao aprovado: nenhum item novo (Cartoes nao e item da barra).
+        const barra = [...html.matchAll(/<(a|button) (?:type="button" )?class="mob-barra-item([^"]*)"([^>]*)>[\s\S]*?<span>([^<]+)<\/span>/g)]
+            .map((m) => [m[4], m[2].includes('ativo') ? 'ativo' : (/href=/.test(m[3]) ? 'link' : (m[1] === 'button' ? 'botao' : 'desabilitado'))]);
+        assert.deepEqual(barra, [['Início', 'link'], ['Lançar', 'desabilitado'], ['Resumo', 'desabilitado'], ['Mais', 'botao']]);
+        for (const arquivo of ['css/mobile-base.css', 'css/mobile-modulo.css', 'css/cartoes-mobile.css', 'js/cartoes-mobile.js']) {
+            assert.match(html, new RegExp(`(href|src)="${arquivo.replace(/[.]/g, '\\.')}"`), arquivo);
+        }
+        regrasRestritas(await readFile(path.join(destino, 'css', 'cartoes-mobile.css'), 'utf8'), /^body\.mob-cartoes(\[|\s|$)/, 'cartoes-mobile.css');
+        const script = await readFile(path.join(destino, 'js', 'cartoes-mobile.js'), 'utf8');
+        assert.doesNotMatch(script, /\.rpc\s*\(|\.from\s*\(|supabase/, 'nenhuma consulta propria: so os servicos do desktop');
+        for (const modulo of ['cartoes-servico', 'despesas-servico', 'cartoes-grupos', 'mobile-pagamento']) {
+            assert.ok(script.includes(`from './${modulo}.js'`), modulo);
+        }
+        // O desktop usa o mesmo servico de Cartoes (as mesmas rotas e funcoes do banco); servicos e regras sem DOM.
+        const adaptador = await readFile(path.join(destino, 'js', 'cartoes-adaptador.js'), 'utf8');
+        assert.ok(adaptador.includes("import { configurarCartoes, podeGerirPerfil, responderCartoes } from './cartoes-servico.js';"));
+        assert.doesNotMatch(adaptador, /\.rpc\s*\(/, 'o adaptador do desktop so registra o servico');
+        const servico = await readFile(path.join(destino, 'js', 'cartoes-servico.js'), 'utf8');
+        assert.doesNotMatch(servico, /document\./, 'servico sem DOM');
+        assert.ok(servico.includes('window.confirm(texto)'), 'desktop: as mesmas confirmacoes (window.confirm)');
+        const grupos = await readFile(path.join(destino, 'js', 'cartoes-grupos.js'), 'utf8');
+        assert.doesNotMatch(grupos, /document\.|window\.|\.rpc\s*\(/, 'regras de leitura puras');
+        // A pagina principal leva o atalho Cartoes a esta pagina (MODULOS_ATIVOS) e a sessao a aceita como destino.
+        assert.ok((await readFile(path.join(destino, 'js', 'sessao.js'), 'utf8')).includes("'cartoes-mobile.html'"));
     } finally {
         await rm(destino, { recursive: true, force: true });
     }

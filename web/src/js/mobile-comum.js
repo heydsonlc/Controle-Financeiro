@@ -9,7 +9,8 @@ import { MES_VALIDO, mesAtualBrasilia } from './comum.js';
 import { sair } from './sessao.js';
 
 // FIN-MVP-MOB-01: Resumo (atalho da pagina principal e item da barra) abre a Lista de Despesas mobile.
-export const MODULOS_ATIVOS = new Set(['resumo']);
+// FIN-MVP-MOBILE-03: o atalho Cartoes abre os Cartoes mobile (sem item novo na barra).
+export const MODULOS_ATIVOS = new Set(['resumo', 'cartoes']);
 
 const $ = (id) => document.getElementById(id);
 

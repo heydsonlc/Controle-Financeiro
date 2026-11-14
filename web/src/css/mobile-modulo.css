@@ -1,19 +1,20 @@
-/* FIN-MVP-MOB-01 — Lista de Despesas mobile (despesas-mobile.html). Folha propria, carregada so por essa pagina e
-   restrita a body.mob-despesas: nenhuma tela do desktop e afetada. Segue o padrao do FIN-MVP-MOB-08 (css/mobile-base.css):
-   destaques em preto, fundo neutro, icones monocromaticos, bordas discretas e tipografia compacta. */
+/* FIN-MVP-MOB-01 — Lista de Despesas mobile; FIN-MVP-MOBILE-03 — comum aos modulos mobile (Despesas e Cartoes). Era
+   css/despesas-mobile.css, com o mesmo texto: so o escopo passou de body.mob-modulo para body.mob-modulo (classe das paginas
+   de modulo mobile), com a mesma especificidade. Nenhuma tela do desktop e afetada. Segue o padrao do FIN-MVP-MOB-08
+   (css/mobile-base.css): destaques em preto, fundo neutro, icones monocromaticos, bordas discretas e tipografia compacta. */
 
-body.mob-despesas {
+body.mob-modulo {
     --mob-cinza: #6e6e73;
     --mob-perigo: #c62828;
     --mob-ok: #1e7d32;
 }
 
 /* Cabecalho: voltar | Despesas (perfil em uso) | filtros */
-body.mob-despesas .mob-cabecalho-miolo {
+body.mob-modulo .mob-cabecalho-miolo {
     gap: 8px;
 }
 
-body.mob-despesas .mob-icone-botao {
+body.mob-modulo .mob-icone-botao {
     position: relative;
     width: 40px;
     height: 40px;
@@ -26,11 +27,11 @@ body.mob-despesas .mob-icone-botao {
     flex: 0 0 auto;
 }
 
-body.mob-despesas .mob-icone-botao:active {
+body.mob-modulo .mob-icone-botao:active {
     background: rgba(0, 0, 0, 0.06);
 }
 
-body.mob-despesas .mob-titulo-bloco {
+body.mob-modulo .mob-titulo-bloco {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -38,11 +39,11 @@ body.mob-despesas .mob-titulo-bloco {
     min-width: 0;
 }
 
-body.mob-despesas .mob-titulo {
+body.mob-modulo .mob-titulo {
     font-size: 1.45rem;
 }
 
-body.mob-despesas .mob-subtitulo {
+body.mob-modulo .mob-subtitulo {
     max-width: 100%;
     overflow: hidden;
     color: var(--mob-cinza);
@@ -51,7 +52,7 @@ body.mob-despesas .mob-subtitulo {
     white-space: nowrap;
 }
 
-body.mob-despesas .mob-filtro-marca {
+body.mob-modulo .mob-filtro-marca {
     position: absolute;
     top: 7px;
     right: 7px;
@@ -61,12 +62,12 @@ body.mob-despesas .mob-filtro-marca {
     background: var(--mob-preto);
 }
 
-body.mob-despesas .mob-filtro-marca[hidden] {
+body.mob-modulo .mob-filtro-marca[hidden] {
     display: none;
 }
 
 /* Aviso do resultado da ultima operacao */
-body.mob-despesas .mob-aviso {
+body.mob-modulo .mob-aviso {
     margin: 0 0 10px;
     padding: 9px 12px;
     border: 1px solid var(--mob-borda);
@@ -77,28 +78,28 @@ body.mob-despesas .mob-aviso {
     white-space: pre-line;
 }
 
-body.mob-despesas .mob-aviso.erro {
+body.mob-modulo .mob-aviso.erro {
     border-color: #f1c4c4;
     color: var(--mob-perigo);
 }
 
-body.mob-despesas .mob-aviso[hidden] {
+body.mob-modulo .mob-aviso[hidden] {
     display: none;
 }
 
 /* Lista agrupada (accordion): grupos do desktop, recolhidos ao abrir */
-body.mob-despesas .mob-lista {
+body.mob-modulo .mob-lista {
     overflow: hidden;
     border: 1px solid var(--mob-borda);
     border-radius: 12px;
     background: #ffffff;
 }
 
-body.mob-despesas .mob-lista:empty {
+body.mob-modulo .mob-lista:empty {
     display: none;
 }
 
-body.mob-despesas .mob-vazio {
+body.mob-modulo .mob-vazio {
     margin: 0;
     padding: 18px 14px;
     color: var(--mob-cinza);
@@ -106,11 +107,11 @@ body.mob-despesas .mob-vazio {
     text-align: center;
 }
 
-body.mob-despesas .mob-grupo + .mob-grupo {
+body.mob-modulo .mob-grupo + .mob-grupo {
     border-top: 1px solid var(--mob-linha);
 }
 
-body.mob-despesas .mob-grupo-cabecalho {
+body.mob-modulo .mob-grupo-cabecalho {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto 18px;
     align-items: center;
@@ -127,7 +128,7 @@ body.mob-despesas .mob-grupo-cabecalho {
     cursor: pointer;
 }
 
-body.mob-despesas .mob-grupo-nome {
+body.mob-modulo .mob-grupo-nome {
     overflow-wrap: anywhere;
     font-size: 0.76rem;
     font-weight: 650;
@@ -135,39 +136,39 @@ body.mob-despesas .mob-grupo-nome {
     line-height: 1.25;
 }
 
-body.mob-despesas .mob-grupo-qtd {
+body.mob-modulo .mob-grupo-qtd {
     color: var(--mob-cinza);
     font-weight: 500;
 }
 
-body.mob-despesas .mob-grupo-total,
-body.mob-despesas .mob-linha-valor,
-body.mob-despesas .mob-total-valor {
+body.mob-modulo .mob-grupo-total,
+body.mob-modulo .mob-linha-valor,
+body.mob-modulo .mob-total-valor {
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
 
-body.mob-despesas .mob-grupo-total {
+body.mob-modulo .mob-grupo-total {
     font-size: 0.92rem;
     font-weight: 650;
 }
 
-body.mob-despesas .mob-seta {
+body.mob-modulo .mob-seta {
     width: 18px;
     height: 18px;
     color: var(--mob-cinza);
 }
 
-body.mob-despesas .mob-grupo-cabecalho[aria-expanded="true"] .mob-seta {
+body.mob-modulo .mob-grupo-cabecalho[aria-expanded="true"] .mob-seta {
     transform: rotate(90deg);
 }
 
-body.mob-despesas .mob-grupo-itens[hidden] {
+body.mob-modulo .mob-grupo-itens[hidden] {
     display: none;
 }
 
 /* Linha: Descricao (vencimento discreto) | Valor | seta */
-body.mob-despesas .mob-linha {
+body.mob-modulo .mob-linha {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto 14px;
     align-items: center;
@@ -185,25 +186,25 @@ body.mob-despesas .mob-linha {
     cursor: pointer;
 }
 
-body.mob-despesas .mob-lista > .mob-linha:first-child {
+body.mob-modulo .mob-lista > .mob-linha:first-child {
     border-top: 0;
 }
 
-body.mob-despesas .mob-linha:active {
+body.mob-modulo .mob-linha:active {
     background: #f4f4f7;
 }
 
-body.mob-despesas .mob-linha-sub-itens .mob-linha {
+body.mob-modulo .mob-linha-sub-itens .mob-linha {
     padding-left: 24px;
 }
 
-body.mob-despesas .mob-linha-texto {
+body.mob-modulo .mob-linha-texto {
     display: flex;
     flex-direction: column;
     min-width: 0;
 }
 
-body.mob-despesas .mob-linha-nome {
+body.mob-modulo .mob-linha-nome {
     overflow: hidden;
     font-size: 0.92rem;
     font-weight: 500;
@@ -212,7 +213,7 @@ body.mob-despesas .mob-linha-nome {
     white-space: nowrap;
 }
 
-body.mob-despesas .mob-linha-data {
+body.mob-modulo .mob-linha-data {
     overflow: hidden;
     color: var(--mob-cinza);
     font-size: 0.74rem;
@@ -221,22 +222,22 @@ body.mob-despesas .mob-linha-data {
     white-space: nowrap;
 }
 
-body.mob-despesas .mob-linha-valor {
+body.mob-modulo .mob-linha-valor {
     font-size: 0.92rem;
     font-weight: 550;
 }
 
-body.mob-despesas .mob-linha.paga .mob-linha-valor {
+body.mob-modulo .mob-linha.paga .mob-linha-valor {
     color: var(--mob-cinza);
 }
 
-body.mob-despesas .mob-linha .mob-seta {
+body.mob-modulo .mob-linha .mob-seta {
     width: 14px;
     height: 14px;
 }
 
 /* Total consolidado (o mesmo do desktop: total, pendentes e pagas da lista mostrada) */
-body.mob-despesas .mob-total {
+body.mob-modulo .mob-total {
     margin-top: 10px;
     padding: 10px 12px;
     border: 1px solid var(--mob-borda);
@@ -244,28 +245,28 @@ body.mob-despesas .mob-total {
     background: #ffffff;
 }
 
-body.mob-despesas .mob-total[hidden] {
+body.mob-modulo .mob-total[hidden] {
     display: none;
 }
 
-body.mob-despesas .mob-total-linha {
+body.mob-modulo .mob-total-linha {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
     gap: 8px;
 }
 
-body.mob-despesas .mob-total-rotulo {
+body.mob-modulo .mob-total-rotulo {
     font-size: 0.9rem;
     font-weight: 650;
 }
 
-body.mob-despesas .mob-total-valor {
+body.mob-modulo .mob-total-valor {
     font-size: 1rem;
     font-weight: 700;
 }
 
-body.mob-despesas .mob-total-detalhe {
+body.mob-modulo .mob-total-detalhe {
     margin-top: 2px;
     color: var(--mob-cinza);
     font-size: 0.78rem;
@@ -273,7 +274,7 @@ body.mob-despesas .mob-total-detalhe {
 }
 
 /* Painel inferior (detalhes, pagamento, edicao, estorno, exclusao e filtros) */
-body.mob-despesas .mob-folha-fundo {
+body.mob-modulo .mob-folha-fundo {
     position: fixed;
     inset: 0;
     z-index: 20;
@@ -283,11 +284,11 @@ body.mob-despesas .mob-folha-fundo {
     background: rgba(0, 0, 0, 0.35);
 }
 
-body.mob-despesas .mob-folha-fundo[hidden] {
+body.mob-modulo .mob-folha-fundo[hidden] {
     display: none;
 }
 
-body.mob-despesas .mob-folha {
+body.mob-modulo .mob-folha {
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -300,7 +301,7 @@ body.mob-despesas .mob-folha {
     box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.12);
 }
 
-body.mob-despesas .mob-folha-topo {
+body.mob-modulo .mob-folha-topo {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -308,7 +309,7 @@ body.mob-despesas .mob-folha-topo {
     border-bottom: 1px solid var(--mob-linha);
 }
 
-body.mob-despesas .mob-folha-titulo {
+body.mob-modulo .mob-folha-titulo {
     flex: 1 1 auto;
     min-width: 0;
     margin: 0;
@@ -318,65 +319,65 @@ body.mob-despesas .mob-folha-titulo {
     line-height: 1.25;
 }
 
-body.mob-despesas .mob-folha-corpo {
+body.mob-modulo .mob-folha-corpo {
     overflow-y: auto;
     padding: 10px 16px 16px;
     overscroll-behavior: contain;
 }
 
-body.mob-despesas .mob-folha-valor {
+body.mob-modulo .mob-folha-valor {
     margin: 0 0 8px;
     font-size: 1.35rem;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
 }
 
-body.mob-despesas .mob-detalhes {
+body.mob-modulo .mob-detalhes {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
     margin: 0 0 12px;
     font-size: 0.88rem;
 }
 
-body.mob-despesas .mob-detalhes dt,
-body.mob-despesas .mob-detalhes dd {
+body.mob-modulo .mob-detalhes dt,
+body.mob-modulo .mob-detalhes dd {
     margin: 0;
     padding: 7px 0;
     border-bottom: 1px solid var(--mob-linha);
 }
 
-body.mob-despesas .mob-detalhes dt {
+body.mob-modulo .mob-detalhes dt {
     color: var(--mob-cinza);
 }
 
-body.mob-despesas .mob-detalhes dd {
+body.mob-modulo .mob-detalhes dd {
     padding-left: 12px;
     overflow-wrap: anywhere;
     text-align: right;
 }
 
-body.mob-despesas .mob-texto {
+body.mob-modulo .mob-texto {
     margin: 0 0 10px;
     font-size: 0.88rem;
     line-height: 1.4;
 }
 
-body.mob-despesas .mob-texto.discreto {
+body.mob-modulo .mob-texto.discreto {
     color: var(--mob-cinza);
     font-size: 0.8rem;
 }
 
-body.mob-despesas .mob-acoes {
+body.mob-modulo .mob-acoes {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
 }
 
-body.mob-despesas .mob-acoes-espaco {
+body.mob-modulo .mob-acoes-espaco {
     margin-top: 10px;
 }
 
-body.mob-despesas .mob-botao {
+body.mob-modulo .mob-botao {
     flex: 1 1 auto;
     min-width: 0;
     height: 38px;
@@ -391,29 +392,29 @@ body.mob-despesas .mob-botao {
     cursor: pointer;
 }
 
-body.mob-despesas .mob-botao.primario {
+body.mob-modulo .mob-botao.primario {
     border-color: var(--mob-preto);
     background: var(--mob-preto);
     color: #ffffff;
 }
 
-body.mob-despesas .mob-botao.perigo {
+body.mob-modulo .mob-botao.perigo {
     color: var(--mob-perigo);
 }
 
-body.mob-despesas .mob-botao:disabled {
+body.mob-modulo .mob-botao:disabled {
     opacity: 0.45;
     cursor: default;
 }
 
 /* Formularios compactos */
-body.mob-despesas .mob-form {
+body.mob-modulo .mob-form {
     display: flex;
     flex-direction: column;
     gap: 10px;
 }
 
-body.mob-despesas .mob-campo {
+body.mob-modulo .mob-campo {
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -422,9 +423,9 @@ body.mob-despesas .mob-campo {
     color: #3a3a3c;
 }
 
-body.mob-despesas .mob-campo input,
-body.mob-despesas .mob-campo select,
-body.mob-despesas .mob-campo textarea {
+body.mob-modulo .mob-campo input,
+body.mob-modulo .mob-campo select,
+body.mob-modulo .mob-campo textarea {
     width: 100%;
     min-height: 40px;
     padding: 8px 10px;
@@ -437,18 +438,18 @@ body.mob-despesas .mob-campo textarea {
     font-weight: 400;
 }
 
-body.mob-despesas .mob-campo textarea {
+body.mob-modulo .mob-campo textarea {
     min-height: 64px;
     resize: vertical;
 }
 
-body.mob-despesas .mob-campo input:disabled,
-body.mob-despesas .mob-campo select:disabled {
+body.mob-modulo .mob-campo input:disabled,
+body.mob-modulo .mob-campo select:disabled {
     background: var(--mob-fundo-botao);
     color: var(--mob-cinza);
 }
 
-body.mob-despesas .mob-opcoes {
+body.mob-modulo .mob-opcoes {
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -457,21 +458,21 @@ body.mob-despesas .mob-opcoes {
     border: 0;
 }
 
-body.mob-despesas .mob-opcao {
+body.mob-modulo .mob-opcao {
     display: flex;
     align-items: center;
     gap: 8px;
     font-size: 0.9rem;
 }
 
-body.mob-despesas .mob-opcao input {
+body.mob-modulo .mob-opcao input {
     width: 18px;
     height: 18px;
     margin: 0;
     accent-color: var(--mob-preto);
 }
 
-body.mob-despesas .mob-mensagem {
+body.mob-modulo .mob-mensagem {
     margin: 0;
     padding: 8px 10px;
     border-radius: 10px;
@@ -481,25 +482,25 @@ body.mob-despesas .mob-mensagem {
     white-space: pre-line;
 }
 
-body.mob-despesas .mob-mensagem.erro {
+body.mob-modulo .mob-mensagem.erro {
     background: #fdecec;
     color: var(--mob-perigo);
 }
 
-body.mob-despesas .mob-mensagem.ok {
+body.mob-modulo .mob-mensagem.ok {
     background: #e9f5ec;
     color: var(--mob-ok);
 }
 
-body.mob-despesas .mob-mensagem[hidden],
-body.mob-despesas [hidden].mob-campo {
+body.mob-modulo .mob-mensagem[hidden],
+body.mob-modulo [hidden].mob-campo {
     display: none;
 }
 
-body.mob-despesas .mob-grupo-cabecalho:focus-visible,
-body.mob-despesas .mob-linha:focus-visible,
-body.mob-despesas .mob-icone-botao:focus-visible,
-body.mob-despesas .mob-botao:focus-visible {
+body.mob-modulo .mob-grupo-cabecalho:focus-visible,
+body.mob-modulo .mob-linha:focus-visible,
+body.mob-modulo .mob-icone-botao:focus-visible,
+body.mob-modulo .mob-botao:focus-visible {
     outline: 2px solid var(--mob-preto);
     outline-offset: -2px;
 }

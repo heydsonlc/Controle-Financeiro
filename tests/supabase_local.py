@@ -896,3 +896,94 @@ def semear_despesas_mobile_e2e(cur, categoria_id=201):
         cur.execute("insert into public.item_despesa (nome, tipo, perfil_financeiro_id, categoria_id, ativo, recorrente, tipo_recorrencia, "
                     "data_vencimento, valor, meio_pagamento, conta_bancaria_id) values (%s, 'Simples', %s, %s, true, true, %s, %s, %s, %s, null)",
                     (nome, PERFIL_F['id'], categoria_id, tipo, ancora, valor, meio))
+
+
+# FIN-MVP-MOBILE-03 (mobile03_cartoes.spec.mjs e pre-visualizacao): usuario G, titular de um perfil FICTICIO so deste cenario
+# (gerador NOVO), com dois cartoes e a fatura de 04/2031 do "Visa G" montada pelas funcoes oficiais (como o usuario G):
+# limites de duas Categorias do Cartao (e uma terceira cujo limite foi desativado depois da compra), compras a vista, uma
+# parcelada em 6x, uma sem Categoria do Cartao e uma despesa fixa do cartao (gerada pelo gerador do mes). Cartoes do contrato (fisico e virtual) e um credito de estorno vem como na
+# importacao (gravados aqui, no banco descartavel). "Master G" nao tem compras em 04/2031. Usuario H: so leitor do Perfil G.
+# Perfis proprios: os pagamentos e estornos do spec nao mudam saldos nem listas de outro spec. A a F nao mudam.
+USUARIO_G = {'id': str(uuid.UUID('99999999-0000-4000-8000-000000000009')), 'email': 'usuario.g@teste.local'}
+USUARIO_H = {'id': str(uuid.UUID('88888888-0000-4000-8000-000000000008')), 'email': 'usuario.h@teste.local'}
+PERFIL_G = {'id': 160, 'nome': 'Perfil G (ficticio)'}
+CATEGORIAS_CARTAO_G = ((360, 'Mercado G', 201), (361, 'Restaurantes G', 202), (362, 'Viagem G', None))
+COMPRAS_G = (  # descricao, valor, parcelas, data, categoria de despesa, cartao do contrato
+    ('Mercado Online G', '240.00', 1, '2031-04-02', 201, '1234'),
+    ('Loja Eletronicos G', '540.00', 6, '2031-04-03', 201, '1234'),
+    ('Padaria G', '35.50', 1, '2031-04-05', 201, None),
+    ('Restaurante Centro G', '120.00', 1, '2031-04-06', 202, '9876'),
+    ('Farmacia G', '45.90', 1, '2031-04-07', 203, None),
+)
+
+
+def semear_cartoes_mobile_e2e(cur):
+    import json
+    for usuario in (USUARIO_G, USUARIO_H):
+        cur.execute('insert into auth.users (id, email) values (%s, %s)', (usuario['id'], usuario['email']))
+    cur.execute("insert into public.perfil_financeiro (id, nome, tipo, cor, ativo, padrao) values (%s, %s, 'PESSOAL', '#1d1d1f', true, false)",
+                (PERFIL_G['id'], PERFIL_G['nome']))
+    cur.execute("insert into financeiro.perfil_acesso (user_id, perfil_financeiro_id, papel, pode_gerir) values (%s, %s, 'TITULAR', true), "
+                "(%s, %s, 'LEITOR', false)", (USUARIO_G['id'], PERFIL_G['id'], USUARIO_H['id'], PERFIL_G['id']))
+    cur.execute('select financeiro.definir_gerador_recorrencia(%s, %s, %s, %s)',
+                (PERFIL_G['id'], 'NOVO', 'administrador de teste', 'cenario ficticio E2E (FIN-MVP-MOBILE-03)'))
+    cur.execute("insert into public.conta_bancaria (perfil_financeiro_id, nome, instituicao, tipo, status, cor_display) "
+                "values (%s, 'Conta G (ficticia)', 'Banco ficticio', 'Conta Corrente', 'ATIVO', '#3b82f6')", (PERFIL_G['id'],))
+    for cid, nome, categoria in CATEGORIAS_CARTAO_G:
+        cur.execute('insert into public.categoria_cartao (id, nome, ativo, perfil_financeiro_id, cor, icone) '
+                    "values (%s, %s, true, %s, '#1d1d1f', 'shopping-cart')", (cid, nome, PERFIL_G['id']))
+        if categoria:
+            cur.execute('insert into public.categoria_cartao_despesa (categoria_cartao_id, categoria_id, ativo, perfil_financeiro_id) '
+                        'values (%s, %s, true, %s)', (cid, categoria, PERFIL_G['id']))
+
+    # Como o usuario G (as funcoes oficiais conferem perfil, gestao e regras)
+    cur.execute('set role authenticated')
+    cur.execute("select set_config('request.jwt.claims', %s, false)", (json.dumps(claims_usuario(USUARIO_G)),))
+    try:
+        def chamar(sql, *args):
+            cur.execute(sql, args)
+            return cur.fetchone()[0]
+        p = PERFIL_G['id']
+        visa = chamar('select financeiro.criar_cartao(%s, %s::jsonb, gen_random_uuid())', p,
+                      json.dumps({'nome': 'Visa G (ficticio)', 'dia_fechamento': 10, 'dia_vencimento': 20}))['cartao_id']
+        chamar('select financeiro.criar_cartao(%s, %s::jsonb, gen_random_uuid())', p,
+               json.dumps({'nome': 'Master G (ficticio)', 'dia_fechamento': 15, 'dia_vencimento': 25}))
+        limites = {}
+        for cid, limite in ((360, '500.00'), (362, '300.00'), (361, '200.00')):
+            limites[cid] = chamar('select financeiro.vincular_limite_cartao(%s, %s, %s::jsonb)', p, visa,
+                                  json.dumps({'categoria_cartao_id': cid, 'limite_mensal': limite}))['limite_id']
+        vinculados = {}
+        for nome, final, tipo in (('Titular G', '1234', 'FISICO'), ('Virtual G', '9876', 'VIRTUAL')):
+            vinculados[final] = chamar('select financeiro.salvar_cartao_vinculado(%s, %s, null, %s::jsonb, null)', p, visa,
+                                       json.dumps({'nome': nome, 'final': final, 'tipo': tipo, 'situacao': 'ATIVO'}))['id']
+        for descricao, valor, parcelas, data, categoria, _final in COMPRAS_G:
+            chamar('select financeiro.criar_compra(%s, %s::jsonb, gen_random_uuid())', p, json.dumps({
+                'cartao_id': visa, 'descricao': descricao, 'valor': valor, 'total_parcelas': parcelas, 'data_compra': data,
+                'mes_fatura': '2031-04-01', 'categoria_id': categoria}))
+        # "Restaurantes G" deixa de ter limite depois da compra: a compra fica com a categoria (grupo "categoria sem limite").
+        chamar('select financeiro.desativar_limite_cartao(%s, %s, %s)', p, visa, limites[361])
+        chamar('select financeiro.criar_recorrencia_cartao(%s, %s::jsonb, gen_random_uuid())', p, json.dumps({
+            'nome': 'Streaming G', 'valor': '39.90', 'categoria_id': 201, 'data_vencimento': '2031-04-08', 'cartao_id': visa,
+            'tipo_recorrencia': 'mensal', 'descricao': ''}))
+        previa = chamar('select financeiro.previa_geracao(%s, %s)', p, '2031-04-01')
+        if previa.get('a_gerar'):
+            chamar("select financeiro.gerar_mes(%s, %s, %s, '[]'::jsonb)", p, '2031-04-01', previa['a_gerar'])
+    finally:
+        cur.execute('reset role')
+        cur.execute("select set_config('request.jwt.claims', '', false)")
+
+    # Como a importacao grava (so no banco descartavel): o final de 4 digitos do contrato, o cartao de origem das compras
+    # e um credito de estorno parcial da padaria, abatido da fatura de 04/2031.
+    cur.execute("update public.config_agregador set numero_cartao = '1234' where item_despesa_id = %s", (visa,))
+    cur.execute("update public.config_agregador c set numero_cartao = '5678' from public.item_despesa i "
+                "where i.id = c.item_despesa_id and i.nome = 'Master G (ficticio)'")
+    for descricao, _v, _p, _d, _c, final in COMPRAS_G:
+        if final:
+            cur.execute('update public.lancamento_agregado set cartao_vinculado_id = %s where cartao_id = %s and descricao like %s',
+                        (vinculados[final], visa, descricao + '%'))
+    cur.execute("insert into financeiro.credito_fatura (perfil_financeiro_id, cartao_id, fatura_id, mes_fatura, natureza, descricao, "
+                "data_credito, valor, lancamento_id, chave, origem_importacao) "
+                "select %s, %s, financeiro.fatura_do_mes(%s, date '2031-04-01'), date '2031-04-01', 'ESTORNO', "
+                "'Estorno parcial Padaria G', date '2031-04-09', 5.50, l.id, 'e2e-mobile03-estorno', 'csv' "
+                "from public.lancamento_agregado l where l.cartao_id = %s and l.descricao = 'Padaria G'",
+                (PERFIL_G['id'], visa, visa, visa))

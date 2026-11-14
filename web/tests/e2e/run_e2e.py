@@ -56,6 +56,8 @@ from tests.supabase_local import (  # noqa: E402
     USUARIO_D,
     USUARIO_E,
     USUARIO_F,
+    USUARIO_G,
+    USUARIO_H,
     EMPRESA_D,
     ClusterLocal,
     PostgrestLocal,
@@ -65,6 +67,7 @@ from tests.supabase_local import (  # noqa: E402
     encontrar_postgrest,
     porta_livre,
     semear_cartoes_e2e,
+    semear_cartoes_mobile_e2e,
     semear_financiamento_e2e,
     semear_mobilidade_e2e,
     semear_documentos_fiscais_e2e,
@@ -89,6 +92,8 @@ CONTAS = {
     USUARIO_D['email']: {**USUARIO_D, 'senha': 'Senha-ficticia-D-2026'},  # FIN-MIGRACAO-P0P1-01 (Empresa D vazia)
     USUARIO_E['email']: {**USUARIO_E, 'senha': 'Senha-ficticia-E-2026'},  # FIN-DESPESAS-DEBITO-AUTOMATICO-01 (Perfil E)
     USUARIO_F['email']: {**USUARIO_F, 'senha': 'Senha-ficticia-F-2026'},  # FIN-MVP-MOB-01 (Perfil F)
+    USUARIO_G['email']: {**USUARIO_G, 'senha': 'Senha-ficticia-G-2026'},  # FIN-MVP-MOBILE-03 (Perfil G, titular)
+    USUARIO_H['email']: {**USUARIO_H, 'senha': 'Senha-ficticia-H-2026'},  # FIN-MVP-MOBILE-03 (Perfil G, leitor)
 }
 HOP_BY_HOP = {'connection', 'keep-alive', 'transfer-encoding', 'content-length', 'server', 'date'}
 
@@ -401,6 +406,7 @@ def main():
                 semear_empresa_c_e2e(cur)  # FIN-PRE-PRODUCAO-1 (documentos_financeiro_tela.spec.mjs)
                 semear_empresa_vazia(cur)  # FIN-MIGRACAO-P0P1-01 (migracao_p0p1.spec.mjs)
                 semear_despesas_mobile_e2e(cur)  # FIN-MVP-MOB-01 (mob01_despesas.spec.mjs)
+                semear_cartoes_mobile_e2e(cur)  # FIN-MVP-MOBILE-03 (mobile03_cartoes.spec.mjs)
             conn.close()
 
             def consolidar(cartao, competencia, criar_se_faltar=False):
@@ -473,6 +479,8 @@ def main():
                     print(f'  conta ficticia: {USUARIO_A["email"]} / {CONTAS[USUARIO_A["email"]]["senha"]} (so neste ambiente)', flush=True)
                     # FIN-MVP-MOB-01: perfil com recorrencias (semanal, mensal e debito automatico) a partir de 04/2031
                     print(f'  despesas mobile: {USUARIO_F["email"]} / {CONTAS[USUARIO_F["email"]]["senha"]} (competencia 04/2031)', flush=True)
+                    # FIN-MVP-MOBILE-03: dois cartoes, fatura de 04/2031 com compras, parcelada, fixa e credito
+                    print(f'  cartoes mobile: {USUARIO_G["email"]} / {CONTAS[USUARIO_G["email"]]["senha"]} (competencia 04/2031)', flush=True)
                 try:
                     if args.servir or args.previa:
                         while True:
@@ -484,7 +492,9 @@ def main():
                            'CF_EMAIL_C': USUARIO_C['email'], 'CF_SENHA_C': CONTAS[USUARIO_C['email']]['senha'],
                            'CF_EMAIL_D': USUARIO_D['email'], 'CF_SENHA_D': CONTAS[USUARIO_D['email']]['senha'],
                            'CF_EMAIL_E': USUARIO_E['email'], 'CF_SENHA_E': CONTAS[USUARIO_E['email']]['senha'],
-                           'CF_EMAIL_F': USUARIO_F['email'], 'CF_SENHA_F': CONTAS[USUARIO_F['email']]['senha']}
+                           'CF_EMAIL_F': USUARIO_F['email'], 'CF_SENHA_F': CONTAS[USUARIO_F['email']]['senha'],
+                           'CF_EMAIL_G': USUARIO_G['email'], 'CF_SENHA_G': CONTAS[USUARIO_G['email']]['senha'],
+                           'CF_EMAIL_H': USUARIO_H['email'], 'CF_SENHA_H': CONTAS[USUARIO_H['email']]['senha']}
                     return subprocess.run([npx, 'playwright', 'test', '-c', 'playwright.config.mjs', *extras],
                                           cwd=WEB, env=env).returncode
                 except KeyboardInterrupt:

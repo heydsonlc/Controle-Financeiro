@@ -11,7 +11,8 @@ import { supabase } from './cliente.js';
 const PAGINAS_PERMITIDAS = new Set(['contas.html', 'categorias.html', 'receitas.html', 'cartoes.html',
     'configuracoes.html', 'ajuda.html', 'dashboard.html', 'lancamentos.html', 'recorrencias.html',
     'contas-bancarias.html', 'financiamentos.html', 'patrimonio.html', 'documentos-fiscais.html',
-    'mobilidade.html', 'importar-cartao.html', 'inicio.html', 'despesas-mobile.html']);  // FIN-MVP-MOB-01: Lista de Despesas mobile
+    'mobilidade.html', 'importar-cartao.html', 'inicio.html', 'despesas-mobile.html',  // FIN-MVP-MOB-01: Lista de Despesas mobile
+    'cartoes-mobile.html']);  // FIN-MVP-MOBILE-03: Cartoes mobile
 const PAGINA_INICIAL = 'contas.html';
 // FIN-MVP-MOB-08: no celular a pagina inicial e a pagina principal mobile (inicio.html); tablet e desktop seguem em
 // contas.html. Um destino pedido (?next=, acesso direto a uma URL interna) continua valendo em qualquer largura.

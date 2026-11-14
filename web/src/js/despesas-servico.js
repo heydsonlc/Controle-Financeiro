@@ -487,9 +487,10 @@ async function composicaoFatura(id) {
         previsto_sem_cobranca: Number(data.fatura.previsto_sem_cobranca || 0), paga: Boolean(data.fatura.paga) } });
 }
 
-async function estornar(id, corpo) {
+// fatura: pela linha da lista (tela Despesas) ou pela rota propria da fatura (/api/faturas/..., Cartoes mobile).
+async function estornar(id, corpo, faturaDaRota = false) {
     const linha = estado.linhas.get(id);
-    const fatura = Boolean(linha && linha.is_fatura_cartao);
+    const fatura = faturaDaRota || Boolean(linha && linha.is_fatura_cartao);
     const consulta = fatura
         ? await supabase.rpc('dados_pagamento_fatura', { p_perfil_id: estado.perfilId, p_fatura_id: id })
         : await supabase.rpc('dados_pagamento_despesa', { p_perfil_id: estado.perfilId, p_conta_id: id });
@@ -510,6 +511,19 @@ async function estornar(id, corpo) {
     chaves.esquecer(operacao);
     return ok({ message: `Pagamento estornado: ${reais(centavos(resposta.data.valor_estornado))} devolvidos a `
         + `${vigente.conta_nome}. Saldo da conta: ${reais(centavos(resposta.data.saldo_conta))}.` });
+}
+
+// FIN-MVP-MOBILE-03: as faturas da competencia (vencimento, previsto, executado e situacao), as mesmas linhas de fatura da
+// lista de Despesas (contas_do_mes + linhaDoFlask), sem a geracao das recorrencias que a lista faz antes de ler o mes
+// (a tela de Cartoes do desktop tambem nao gera). So leitura.
+async function faturasDoMes(parametros) {
+    const mes = String(parametros.get('mes_referencia') || '').slice(0, 7);
+    if (!MES.test(mes)) return falha('Competência inválida.');
+    await contasBancariasAtivas();
+    const { data, error } = await supabase.rpc('contas_do_mes', { p_perfil_id: estado.perfilId, p_mes: `${mes}-01` });
+    if (error) return falha(mensagemDeErro(error), 403);
+    const linhas = (data || []).filter((c) => c.grupo === 'FATURA').map((c) => linhaDoFlask(c, mes, null, new Map()));
+    return ok({ data: linhas });
 }
 
 // Detalhe da fatura (lancamentos do cartao na competencia), so leitura.
@@ -563,6 +577,10 @@ const ROTAS = [
     ['GET', /^\/api\/despesas\/(\d+)\/composicao-fatura$/, (m) => composicaoFatura(Number(m[1]))],  // FIN-CARTOES-EXECUTADO-01
     ['POST', /^\/api\/despesas\/pagar-lote$/, (m, p, corpo) => pagarLote(corpo || {})],
     ['POST', /^\/api\/despesas\/(\d+)\/estornar-pagamento$/, (m, p, corpo) => estornar(Number(m[1]), corpo || {})],
+    // FIN-MVP-MOBILE-03 (Cartoes mobile): a fatura sem passar pela lista do mes; pagamento e estorno pelas mesmas funcoes.
+    ['GET', /^\/api\/faturas\/?$/, (m, p) => faturasDoMes(p)],
+    ['POST', /^\/api\/faturas\/(\d+)\/pagar$/, (m, p, corpo) => pagarFatura(Number(m[1]), corpo || {})],
+    ['POST', /^\/api\/faturas\/(\d+)\/estornar-pagamento$/, (m, p, corpo) => estornar(Number(m[1]), corpo || {}, true)],
     ['GET', /^\/api\/categorias\/?$/, async () => ok({ data: await categoriasDeDespesa() })],
     ['GET', /^\/api\/contas\/?$/, async () => ok({ data: (await contasBancariasAtivas()).map((c) => ({ id: c.id, nome: c.nome, instituicao: c.instituicao })) })],
     ['GET', /^\/api\/cartoes\/(\d+)\/lancamentos$/, (m, p) => comprasDaFatura(Number(m[1]), p)],

@@ -1,0 +1,236 @@
+/* FIN-MVP-MOBILE-03 — Cartoes de Credito mobile (cartoes-mobile.html): so o que e proprio da tela (seletor do cartao e
+   resumo da fatura). Lista, grupos, painel e formularios vem de css/mobile-modulo.css. Restrita a body.mob-cartoes:
+   nenhuma tela do desktop e afetada. */
+
+/* Seletor do cartao: compacto, nome do desktop e final (nunca o numero completo) */
+body.mob-cartoes .mob-cartao-seletor {
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: 44px;
+    margin: 0 0 12px;
+    border: 1px solid var(--mob-borda);
+    border-radius: 10px;
+    background: #ffffff;
+}
+
+body.mob-cartoes .mob-cartao-seletor[hidden] {
+    display: none;
+}
+
+body.mob-cartoes .mob-cartao-icone,
+body.mob-cartoes .mob-cartao-abrir {
+    position: absolute;
+    top: 50%;
+    width: 20px;
+    height: 20px;
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
+body.mob-cartoes .mob-cartao-icone {
+    left: 12px;
+}
+
+body.mob-cartoes .mob-cartao-abrir {
+    right: 12px;
+    width: 18px;
+    height: 18px;
+    color: var(--mob-cinza);
+}
+
+body.mob-cartoes .mob-cartao-seletor select {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    margin: 0;
+    padding: 0 38px 0 42px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--mob-texto);
+    font: inherit;
+    font-size: 0.92rem;
+    font-weight: 550;
+    text-overflow: ellipsis;
+    -webkit-appearance: none;
+    appearance: none;
+    cursor: pointer;
+}
+
+body.mob-cartoes .mob-cartao-seletor select:focus-visible {
+    outline: 2px solid var(--mob-preto);
+    outline-offset: 1px;
+}
+
+/* Resumo da fatura: situacao, e Vencimento | Previsto | Executado (os mesmos valores da fatura em Despesas) */
+body.mob-cartoes .mob-fatura {
+    margin: 0 0 14px;
+    border: 1px solid var(--mob-borda);
+    border-radius: 12px;
+    background: #ffffff;
+    overflow: hidden;
+}
+
+body.mob-cartoes .mob-fatura[hidden] {
+    display: none;
+}
+
+body.mob-cartoes .mob-fatura-topo {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 9px 12px 0;
+}
+
+body.mob-cartoes .mob-fatura-titulo {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 0.8rem;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+body.mob-cartoes .mob-fatura-situacao {
+    flex: none;
+    color: var(--mob-cinza);
+    font-size: 0.74rem;
+    font-weight: 550;
+}
+
+body.mob-cartoes .mob-fatura-situacao.vencida {
+    color: var(--mob-perigo);
+}
+
+body.mob-cartoes .mob-fatura-valores {
+    display: grid;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr) minmax(0, 1fr);
+    margin: 0;
+    padding: 6px 0 9px;
+}
+
+body.mob-cartoes .mob-fatura-valores div {
+    min-width: 0;
+    padding: 0 6px;
+    text-align: center;
+}
+
+body.mob-cartoes .mob-fatura-valores div + div {
+    border-left: 1px solid var(--mob-linha);
+}
+
+body.mob-cartoes .mob-fatura-valores dt {
+    margin: 0 0 2px;
+    color: var(--mob-cinza);
+    font-size: 0.68rem;
+}
+
+body.mob-cartoes .mob-fatura-valores dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+    font-size: 0.88rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 650;
+}
+
+body.mob-cartoes .mob-fatura-nota {
+    margin: 0;
+    padding: 0 12px 8px;
+    color: var(--mob-cinza);
+    font-size: 0.74rem;
+    line-height: 1.35;
+    text-align: center;
+}
+
+body.mob-cartoes .mob-fatura-acoes {
+    display: flex;
+    gap: 8px;
+    padding: 9px 12px;
+    border-top: 1px solid var(--mob-linha);
+}
+
+body.mob-cartoes .mob-fatura-acoes .mob-botao {
+    flex: 1 1 0;
+}
+
+/* Titulo da lista (como o mockup: "Compras da fatura") */
+body.mob-cartoes .mob-secao-titulo {
+    margin: 0 2px 8px;
+    font-size: 0.86rem;
+    font-weight: 650;
+}
+
+body.mob-cartoes .mob-secao-titulo[hidden] {
+    display: none;
+}
+
+/* Grupo: nome (quantidade) e, nas Categorias do Cartao com limite, o limite e o disponivel em linha discreta */
+body.mob-cartoes .mob-grupo-nome {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+body.mob-cartoes .mob-grupo-limite {
+    color: var(--mob-cinza);
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0;
+}
+
+body.mob-cartoes .mob-grupo-limite.negativo {
+    color: var(--mob-perigo);
+}
+
+body.mob-cartoes .mob-grupo-vazio {
+    margin: 0;
+    padding: 10px 12px;
+    border-top: 1px solid var(--mob-linha);
+    background: #ffffff;
+    color: var(--mob-cinza);
+    font-size: 0.8rem;
+}
+
+/* Credito da fatura: valor negativo na cor padrao, sinal explicito */
+body.mob-cartoes .mob-linha.credito .mob-linha-valor {
+    color: var(--mob-ok);
+}
+
+/* Lista de parcelas no painel de parcelamento */
+body.mob-cartoes .mob-parcelas {
+    margin: 0 0 12px;
+    border: 1px solid var(--mob-linha);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+body.mob-cartoes .mob-parcela {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    padding: 7px 10px;
+    font-size: 0.82rem;
+}
+
+body.mob-cartoes .mob-parcela + .mob-parcela {
+    border-top: 1px solid var(--mob-linha);
+}
+
+body.mob-cartoes .mob-parcela-situacao {
+    color: var(--mob-cinza);
+    font-size: 0.74rem;
+}
+
+body.mob-cartoes .mob-parcela-valor {
+    font-variant-numeric: tabular-nums;
+    font-weight: 550;
+    white-space: nowrap;
+}
+
+/* Confirmacoes com mais de uma linha (os textos do desktop, com quebras) */
+body.mob-cartoes .mob-texto.quebras {
+    white-space: pre-line;
+}
