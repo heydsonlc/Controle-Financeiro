@@ -2,7 +2,7 @@
 
 Última etapa da primeira versão mobile. Ela consolida os sete MVPs homologados em 14/11/2026, valida a integração com o desktop, configura a instalação no iPhone (PWA) e prepara a publicação conjunta.
 
-**Situação:** executado no ramo local `mobile-final-01`. Não houve push, deploy nem migration, e nenhum dado real foi alterado. A publicação depende da autorização expressa do titular.
+**Situação:** PUBLICADO em 14/11/2026 pelo contrato FIN-MVP-MOBILE-PUBLICACAO-01 (push `7e035c5..9056a4a` em avanço direto, deploy Cloudflare `1307bf18`, sem migration; seção 11). Nenhum dado real foi alterado.
 
 ## 1. Consolidação dos sete MVPs
 
@@ -235,3 +235,33 @@ Nenhum lançamento real só para demonstrar.
 6. Sem rede (modo avião): aparece a mensagem padrão do iPhone de falta de conexão; ao voltar a rede, o app abre normalmente.
 
 **Limitação registrada:** a instalação no iOS exige HTTPS. A prévia local é `http://127.0.0.1` e o Firefox não instala PWA, então a instalação e o modo independente **não foram comprovados localmente**. Para conferir antes da produção sem expor dados reais, a única via segura seria um deploy de avaliação no Cloudflare (ramo `avaliacao`). Ele também é um deploy e, como usa o mesmo Supabase de produção, mostraria dados reais a quem entrasse. Por isso essa conferência fica reservada para a homologação logo depois do deploy autorizado, ou para um deploy de avaliação se você o autorizar expressamente.
+
+## 11. Publicação (14/11/2026, FIN-MVP-MOBILE-PUBLICACAO-01)
+
+Autorização expressa do titular pelo contrato FIN-MVP-MOBILE-PUBLICACAO-01.
+
+**Verificações anteriores ao push:**
+- Repositório `heydsonlc/Controle-Financeiro`; ramo `mobile-final-01`; commit `9056a4a240c84de845f03bcc7c63217e527c6de4`, sem alterações locais (24 arquivos não rastreados preservados).
+- `origin/main` depois do `fetch`: `7e035c5`, sem avanço remoto; 32 commits à frente e 0 atrás; nada em `supabase/`.
+- Banco remoto: 67 migrations aplicadas, 67 no repositório, nenhuma pendente (`supabase_migrations.py status`, só leitura).
+- Depois da suíte completa (224/0/0) só mudou documentação; unitários repetidos no commit exato: 117/117.
+
+**GitHub:** `git push origin 9056a4a…:refs/heads/main` → `7e035c5..9056a4a`, avanço direto, sem força. `origin/main` = `9056a4a240c84de845f03bcc7c63217e527c6de4`.
+
+**Build:** gerado numa pasta separada (o `web/dist` da prévia não foi tocado), com a URL e a chave publicável do `config.js` já servido em produção. Resultado:
+- 217 arquivos; `config.js` idêntico ao anterior; `_headers` (CSP e cabeçalhos de segurança) idêntico aos cabeçalhos servidos.
+- Comparado arquivo por arquivo com a produção anterior: 161 com o mesmo conteúdo (alguns só com final de linha diferente) e 56 diferentes, exatamente os 47 novos e os 9 alterados do `git diff 7e035c5..9056a4a` em `web/src`.
+
+**Cloudflare:** `wrangler pages deploy … --project-name controle-financeiro --branch producao --commit-hash 9056a4a…` → deploy **`1307bf18-b2e8-43fd-a8e7-a7648463487c`** (Production, `producao`, origem `9056a4a`). Domínios `financas.kortexbrasil.com` e `controle-financeiro-jah.pages.dev` sem mudança de configuração.
+
+**Verificações em produção (somente leitura, sem login):**
+- Os 216 arquivos servidos pelo domínio oficial são idênticos ao build.
+- Manifesto (`application/manifest+json`) e os cinco ícones (`image/png`) respondem nos dois domínios; metadados PWA/iOS presentes em `inicio.html`.
+- Sem sessão, as 7 páginas mobile e 9 do desktop (Despesas, Receitas, Cartões, Lançamentos, Contas Bancárias, Recorrências, Dashboard, Mobilidade, Configurações) voltam ao login com `next=`; 0 erros de JS; sem service worker, cache ou `localStorage`. Único aviso: o beacon do Web Analytics da zona bloqueado pela CSP (pendência conhecida desde 13/11/2026).
+- Banco sem login: leituras recusadas (401) e funções de gravação inacessíveis (404); nada executado.
+- Migrations depois do push: 67/67, nenhuma aplicada.
+
+**Pendente com o titular (com login, somente leitura):** desktop e os sete módulos com os dados reais, perfil somente leitura e instalação no iPhone (seção 10). Nenhum lançamento real para demonstrar.
+
+**Rollback disponível:** "Rollback" no Cloudflare Pages para o deploy `5d608ca5` (versão `7e035c5`). Não foi necessário.
+
