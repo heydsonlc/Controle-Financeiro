@@ -301,12 +301,21 @@ test('recorrencia pela tela original: cadastrar, gerar, editar a conta, excluir 
     await expect(escolaB(page)).toHaveCount(0);           // nao volta
     await expect(page.locator('#gerar-contas')).toHaveCount(0);
 
-    // Esta e as futuras (abril): a recorrencia e inativada e a conta excluida; nada novo e gerado.
+    // Esta e as futuras (abril): desde a P22 (FIN-RECORRENCIAS-INATIVACAO-01) a escolha abre a previa da interrupcao
+    // (ocorrencias que deixam de ser exigiveis) e so grava na confirmacao; a recorrencia e inativada e as contas saem.
+    // Abrir abril gera ate maio (o mes seguinte): abril e maio deixam de ser exigiveis.
     await abrirMes(page, '2029-04');
     await abrirEdicaoEscola(page);
     await page.click('#btn-deletar-modal');
     await page.locator('#modal-tipo-exclusao button', { hasText: 'futuras' }).click();
-    await expect.poll(() => dialogos.at(-1)).toBe('Despesa e todas as futuras foram excluídas com sucesso!');
+    const interrupcao = page.locator('.cf-int-caixa');
+    await expect(interrupcao.locator('h3')).toHaveText('Excluir esta e as futuras');
+    await expect(interrupcao.locator('.cf-int-resumo')).toHaveText(/^2 ocorrência\(s\) deixam de ser exigíveis: R\$\s1\.000,00$/);
+    await interrupcao.locator('.cf-int-botao.perigo').click();
+    await expect(page.locator('.cf-int-fundo')).toHaveCount(0);
+    await expect.poll(() => dialogos.at(-1)).toBe('Recorrência interrompida: 2 ocorrência(s) deixaram de ser exigíveis.');
+    await expect(escolaB(page)).toHaveCount(0);
+    await abrirMes(page, '2029-05');
     await expect(escolaB(page)).toHaveCount(0);
     const plano = await page.evaluate(async () => {
         const token = JSON.parse(localStorage.getItem('cf-financeiro-auth')).access_token;
