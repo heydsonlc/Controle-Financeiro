@@ -1005,3 +1005,68 @@ def semear_cartoes_mobile_e2e(cur):
                 "'Estorno parcial Padaria G', date '2031-04-09', 5.50, l.id, 'e2e-mobile03-estorno', 'csv' "
                 "from public.lancamento_agregado l where l.cartao_id = %s and l.descricao = 'Padaria G'",
                 (PERFIL_G['id'], visa, visa, visa))
+
+
+# FIN-MVP-MOBILE-04 (E2E e pre-visualizacao): receitas FICTICIAS do "Perfil G (ficticio)" (o mesmo login dos Cartoes
+# mobile), gravadas pelas funcoes oficiais (criar_receita, receber_receita). Mes atual (Brasilia), para a homologacao
+# abrir com dados: "Salario G" recorrente desde o mes anterior (o do mes anterior fica atrasado), "Aluguel Sala G"
+# parcialmente recebido, "Gratificacao G" recebida e "Rendimento G" previsto. 04/2031 (testes): as mesmas fontes com
+# previsoes avulsas; salario de 02 recebido e o de 03 atrasado.
+RECEITAS_G = (  # nome, tipo, recorrente, valor, dia previsto, descricao
+    ('Salario G (ficticio)', 'SALARIO_FIXO', True, '6500.00', 5, 'Salario mensal ficticio'),
+    ('Aluguel Sala G (ficticio)', 'ALUGUEL', True, '1200.00', 10, ''),
+    ('Rendimento G (ficticio)', 'RENDIMENTO_FINANCEIRO', True, '45.30', 1, ''),
+    ('Gratificacao G (ficticio)', 'GRATIFICACAO', False, '800.00', None, 'Gratificacao semestral ficticia'),
+)
+RECEITAS_G_2031 = (  # fonte, competencia, valor previsto, recebimento (data, valor) ou None
+    ('Salario G (ficticio)', '2031-02-01', '6500.00', ('2031-02-05', '6500.00')),
+    ('Salario G (ficticio)', '2031-03-01', '6500.00', None),
+    ('Salario G (ficticio)', '2031-04-01', '6500.00', None),
+    ('Aluguel Sala G (ficticio)', '2031-04-01', '1200.00', ('2031-04-10', '500.00')),
+    ('Gratificacao G (ficticio)', '2031-04-01', '800.00', ('2031-04-12', '800.00')),
+    ('Rendimento G (ficticio)', '2031-04-01', '45.30', None),
+)
+
+
+def semear_receitas_mobile_e2e(cur):
+    import json
+    from datetime import datetime, timedelta, timezone
+    hoje = datetime.now(timezone(timedelta(hours=-3))).date()
+    mes_atual = hoje.replace(day=1)
+    mes_anterior = (mes_atual - timedelta(days=1)).replace(day=1)
+    cur.execute("select id from public.conta_bancaria where perfil_financeiro_id = %s and nome = 'Conta G (ficticia)'", (PERFIL_G['id'],))
+    conta = cur.fetchone()[0]
+    cur.execute('set role authenticated')
+    cur.execute("select set_config('request.jwt.claims', %s, false)", (json.dumps(claims_usuario(USUARIO_G)),))
+    try:
+        def chamar(sql, *args):
+            cur.execute(sql, args)
+            return cur.fetchone()[0]
+        p = PERFIL_G['id']
+        fontes = {}
+        for nome, tipo, recorrente, valor, dia, descricao in RECEITAS_G:
+            inicio = mes_anterior if nome.startswith('Salario') else mes_atual
+            r = chamar('select financeiro.criar_receita(%s, %s::jsonb, gen_random_uuid())', p, json.dumps({
+                'nome': nome, 'tipo': tipo, 'valor': valor, 'competencia': inicio.isoformat(), 'recorrente': recorrente,
+                'dia_previsto': dia, 'conta_bancaria_id': conta, 'descricao': descricao or None}))
+            fontes[nome] = r['item_receita_id']
+
+        def receber(item_id, competencia, data, valor):
+            competencia = str(competencia)[:10]
+            orcamento = next(o['id'] for o in chamar('select financeiro.receitas_orcamentos_tela(%s, %s)', p, int(competencia[:4]))
+                             if o['item_receita_id'] == item_id and o['mes_referencia'] == competencia)
+            falta = chamar('select financeiro.dados_recebimento_receita(%s, %s)', p, orcamento)['receita']['falta']
+            chamar('select financeiro.receber_receita(%s, %s, %s::jsonb, gen_random_uuid())', p, orcamento, json.dumps({
+                'conta_bancaria_id': conta, 'data_recebimento': data, 'valor_recebido': valor, 'falta': falta, 'justificativa': None}))
+
+        dia = lambda d: mes_atual.replace(day=min(d, hoje.day)).isoformat()  # noqa: E731 (recebido ate hoje)
+        receber(fontes['Aluguel Sala G (ficticio)'], mes_atual, dia(10), '500.00')
+        receber(fontes['Gratificacao G (ficticio)'], mes_atual, dia(3), '800.00')
+        for nome, competencia, valor, recebimento in RECEITAS_G_2031:
+            chamar('select financeiro.criar_receita(%s, %s::jsonb, gen_random_uuid())', p, json.dumps({
+                'item_receita_id': fontes[nome], 'valor': valor, 'competencia': competencia}))
+            if recebimento:
+                receber(fontes[nome], competencia, *recebimento)
+    finally:
+        cur.execute('reset role')
+        cur.execute("select set_config('request.jwt.claims', '', false)")

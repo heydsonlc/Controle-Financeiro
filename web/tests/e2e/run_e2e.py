@@ -68,6 +68,7 @@ from tests.supabase_local import (  # noqa: E402
     porta_livre,
     semear_cartoes_e2e,
     semear_cartoes_mobile_e2e,
+    semear_receitas_mobile_e2e,
     semear_financiamento_e2e,
     semear_mobilidade_e2e,
     semear_documentos_fiscais_e2e,
@@ -407,6 +408,7 @@ def main():
                 semear_empresa_vazia(cur)  # FIN-MIGRACAO-P0P1-01 (migracao_p0p1.spec.mjs)
                 semear_despesas_mobile_e2e(cur)  # FIN-MVP-MOB-01 (mob01_despesas.spec.mjs)
                 semear_cartoes_mobile_e2e(cur)  # FIN-MVP-MOBILE-03 (mobile03_cartoes.spec.mjs)
+                semear_receitas_mobile_e2e(cur)  # FIN-MVP-MOBILE-04 (mobile04_receitas.spec.mjs), no mesmo Perfil G
             conn.close()
 
             def consolidar(cartao, competencia, criar_se_faltar=False):
@@ -481,6 +483,9 @@ def main():
                     print(f'  despesas mobile: {USUARIO_F["email"]} / {CONTAS[USUARIO_F["email"]]["senha"]} (competencia 04/2031)', flush=True)
                     # FIN-MVP-MOBILE-03: dois cartoes, fatura de 04/2031 com compras, parcelada, fixa e credito
                     print(f'  cartoes mobile: {USUARIO_G["email"]} / {CONTAS[USUARIO_G["email"]]["senha"]} (competencia 04/2031)', flush=True)
+                    # FIN-MVP-MOBILE-04: receitas no mesmo Perfil G (mes atual e 04/2031); somente leitura: usuario H
+                    print(f'  receitas mobile: {USUARIO_G["email"]} (mes atual e 04/2031); leitura: {USUARIO_H["email"]} / '
+                          f'{CONTAS[USUARIO_H["email"]]["senha"]}', flush=True)
                 try:
                     if args.servir or args.previa:
                         while True:

@@ -1,0 +1,137 @@
+/* FIN-MVP-MOBILE-04 — Receitas mobile (receitas-mobile.html): so o que e proprio da tela (cabecalho com Filtros e "+",
+   resumo Previsto | Recebido | Pendente e o bloco das atrasadas). Lista, grupos, painel e formularios vem de
+   css/mobile-modulo.css. Restrita a body.mob-receitas: nenhuma tela do desktop e afetada. */
+
+/* Cabecalho: os dois lados com a mesma largura, para o titulo ficar no centro (Voltar | Receitas | Filtros e +) */
+body.mob-receitas .mob-cabecalho-lado {
+    display: flex;
+    flex: 0 0 84px;
+    align-items: center;
+}
+
+body.mob-receitas .mob-cabecalho-lado.direita {
+    justify-content: flex-end;
+    gap: 4px;
+}
+
+body.mob-receitas .mob-icone-botao[hidden] {
+    display: none;
+}
+
+/* Resumo da competencia: Previsto | Recebido | Pendente (os criterios da tela do desktop), uma linha */
+body.mob-receitas .mob-resumo {
+    margin: 0 0 12px;
+    border: 1px solid var(--mob-borda);
+    border-radius: 12px;
+    background: #ffffff;
+}
+
+body.mob-receitas .mob-resumo[hidden] {
+    display: none;
+}
+
+body.mob-receitas .mob-resumo-valores {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin: 0;
+    padding: 8px 0;
+}
+
+body.mob-receitas .mob-resumo div {
+    min-width: 0;
+    padding: 0 6px;
+    text-align: center;
+}
+
+body.mob-receitas .mob-resumo div + div {
+    border-left: 1px solid var(--mob-linha);
+}
+
+body.mob-receitas .mob-resumo dt {
+    margin: 0 0 2px;
+    color: var(--mob-cinza);
+    font-size: 0.68rem;
+}
+
+body.mob-receitas .mob-resumo dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+    font-size: 0.88rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 650;
+}
+
+/* Titulo da lista ("Receitas do mes", como o painel do desktop) */
+body.mob-receitas .mob-secao-titulo {
+    margin: 0 2px 8px;
+    font-size: 0.86rem;
+    font-weight: 650;
+}
+
+body.mob-receitas .mob-secao-titulo[hidden] {
+    display: none;
+}
+
+/* Receita recebida: valor discreto, como a despesa paga */
+body.mob-receitas .mob-linha.recebida .mob-linha-valor {
+    color: var(--mob-cinza);
+}
+
+/* Atrasadas: bloco proprio abaixo da lista do mes (o painel "Receitas atrasadas" do desktop), recolhido ao abrir */
+body.mob-receitas .mob-atrasadas {
+    margin-top: 12px;
+}
+
+body.mob-receitas .mob-atrasadas[hidden] {
+    display: none;
+}
+
+body.mob-receitas .mob-grupo-nome {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+body.mob-receitas .mob-grupo-detalhe {
+    color: var(--mob-cinza);
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0;
+}
+
+/* Recebimentos e previa da atualizacao pelo valor-base (listas compactas no painel) */
+body.mob-receitas .mob-tabela {
+    margin: 0 0 12px;
+    border: 1px solid var(--mob-linha);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+body.mob-receitas .mob-tabela-linha {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: baseline;
+    padding: 7px 10px;
+    font-size: 0.82rem;
+}
+
+body.mob-receitas .mob-tabela-linha + .mob-tabela-linha {
+    border-top: 1px solid var(--mob-linha);
+}
+
+body.mob-receitas .mob-tabela-sub {
+    display: block;
+    color: var(--mob-cinza);
+    font-size: 0.74rem;
+}
+
+body.mob-receitas .mob-tabela-valor {
+    font-variant-numeric: tabular-nums;
+    font-weight: 550;
+    white-space: nowrap;
+}
+
+body.mob-receitas .mob-texto.quebras {
+    white-space: pre-line;
+}

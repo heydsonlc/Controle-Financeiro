@@ -137,10 +137,10 @@ const RPCS_DE_ESCRITA = new Map([
     ['interromper_recorrencia', ['despesas-servico.js', 'recorrencias-adaptador.js']],
     ['retomar_recorrencia', 'recorrencias-adaptador.js'],
     // P24 (FIN-CONSORCIOS-INTEGRACAO-01): realizar a contemplacao prevista e editar parcela de consorcio pendente
-    ['realizar_contemplacao_consorcio', 'receitas-adaptador.js'],
+    ['realizar_contemplacao_consorcio', 'receitas-servico.js'],
     ['editar_parcela_consorcio', 'despesas-servico.js'],
     // FIN-RECEITAS-SALDO-01: previsoes pendentes pelo valor-base, so com a confirmacao da previa (auditado no banco)
-    ['atualizar_previsoes_fonte', 'receitas-adaptador.js'],
+    ['atualizar_previsoes_fonte', 'receitas-servico.js'],
     // FIN-DESPESAS-CANCELAMENTO-01 (P23): cancelar a obrigacao com pagamento estornado (elegibilidade e historico no banco)
     ['cancelar_despesa', 'despesas-servico.js'],
     // FIN-FIDELIDADE-RECORRENCIAS-1 (tela de Recorrencias; o banco exige gestao do perfil e a versao)
@@ -152,12 +152,13 @@ const RPCS_DE_ESCRITA = new Map([
     ['editar_recorrencia_cartao', 'recorrencias-adaptador.js'],
     ['definir_situacao_recorrencia_cartao', 'recorrencias-adaptador.js'],
     // FIN-RECEITAS-1 (so previsoes; nenhum recebimento). FIN-FIDELIDADE-RECEITAS-CATEGORIAS-1: tela original de Receitas
-    // pelo adaptador (receitas-adaptador.js)
-    ['criar_receita', 'receitas-adaptador.js'],
-    ['editar_receita', 'receitas-adaptador.js'],
-    ['excluir_receita', 'receitas-adaptador.js'],
-    ['editar_fonte_receita', 'receitas-adaptador.js'],
-    ['inativar_fonte_receita', 'receitas-adaptador.js'],
+    // pelo adaptador. FIN-MVP-MOBILE-04: as chamadas ficam no servico comum ao desktop e as Receitas mobile
+    // (receitas-servico.js), sem funcao nova
+    ['criar_receita', 'receitas-servico.js'],
+    ['editar_receita', 'receitas-servico.js'],
+    ['excluir_receita', 'receitas-servico.js'],
+    ['editar_fonte_receita', 'receitas-servico.js'],
+    ['inativar_fonte_receita', 'receitas-servico.js'],
     // FIN-CARTOES-1 (compras e cartoes). FIN-FIDELIDADE-CARTOES-1: tela original de Cartoes pelo adaptador (FIN-MVP-MOBILE-03:
     // rotas no servico cartoes-servico.js, comum ao desktop e aos Cartoes mobile, sem funcao nova); a compra
     // nova fica em Lancamentos (MVP-FIN-AJUSTES-01); editar_compra fica sem tela (a do Flask edita um lancamento por
@@ -202,8 +203,8 @@ const RPCS_DE_ESCRITA = new Map([
     // FIN-MOVIMENTACOES-1 (pagamento/estorno de despesa comum, recebimento/estorno de receita; saldo no banco)
     ['pagar_despesa', 'despesas-servico.js'],
     ['estornar_pagamento_despesa', 'despesas-servico.js'],
-    ['receber_receita', 'receitas-adaptador.js'],
-    ['estornar_recebimento', 'receitas-adaptador.js'],
+    ['receber_receita', 'receitas-servico.js'],
+    ['estornar_recebimento', 'receitas-servico.js'],
     // FIN-FIDELIDADE-RECEITAS-CATEGORIAS-1 (Categorias do Cartao, por perfil: gestao e escritor unico no banco; as
     // categorias de despesa, globais, nao tem escrita no novo aplicativo)
     ['criar_categoria_cartao', 'categorias-adaptador.js'],
@@ -226,8 +227,8 @@ const RPCS_DE_ESCRITA = new Map([
     ['ajustar_saldo_devedor', 'financiamentos-adaptador.js'],
     // FIN-CATEGORIAS-RECORRENCIAS-2 (fonte: valor base, recorrencia e reativacao; recebimento sem previsao; catalogo
     // global de categorias, gravado so com escritor NOVO do catalogo e conta gestora)
-    ['redefinir_fonte_receita', 'receitas-adaptador.js'],
-    ['receber_sem_previsao', 'receitas-adaptador.js'],
+    ['redefinir_fonte_receita', 'receitas-servico.js'],
+    ['receber_sem_previsao', 'receitas-servico.js'],
     ['criar_categoria', 'categorias-adaptador.js'],
     ['editar_categoria', 'categorias-adaptador.js'],
     ['excluir_categoria', 'categorias-adaptador.js'],
@@ -344,9 +345,10 @@ test('todas as paginas usam a moldura do Flask com o mesmo menu, sem pagina queb
         assert.ok(!arquivos.some((a) => /^(moldura|paginas)(\/|$)/.test(a)), 'fontes da moldura fora do dist');
         assert.ok(arquivos.includes('css/shared/layout.css') && arquivos.includes('js/original/ajuda.js'));
         // index.html (login), inicio.html (pagina principal mobile, FIN-MVP-MOB-08), despesas-mobile.html (Lista de
-        // Despesas mobile, FIN-MVP-MOB-01) e cartoes-mobile.html (FIN-MVP-MOBILE-03) ficam fora da moldura do desktop.
+        // Despesas mobile, FIN-MVP-MOB-01), cartoes-mobile.html (FIN-MVP-MOBILE-03) e receitas-mobile.html (FIN-MVP-MOBILE-04)
+        // ficam fora da moldura do desktop.
         const paginas = arquivos.filter((a) => a.endsWith('.html') && !['index.html', 'inicio.html', 'despesas-mobile.html',
-            'cartoes-mobile.html'].includes(a));
+            'cartoes-mobile.html', 'receitas-mobile.html'].includes(a));
         assert.equal(paginas.length, 16);  // + indexadores.html (FIN-PRE-PRODUCAO-1)
         for (const pagina of paginas) {
             const html = await readFile(path.join(destino, pagina), 'utf8');
@@ -388,7 +390,8 @@ test('montagem escapa titulos e falha com marcador nao resolvido', () => {
 // FIN-MVP-MOB-08: pagina principal mobile, fora da moldura; atalhos visiveis e desabilitados.
 // FIN-MVP-MOB-01: o atalho Resumo (e o Resumo da barra) navega, para a Lista de Despesas mobile.
 // FIN-MVP-MOBILE-03: o atalho Cartoes navega, para os Cartoes mobile (a barra nao ganha item).
-test('pagina principal mobile: protegida, sem moldura, so Resumo e Cartoes habilitados entre os 8 atalhos', async () => {
+// FIN-MVP-MOBILE-04: o atalho Receita navega, para as Receitas mobile (a barra nao ganha item).
+test('pagina principal mobile: protegida, sem moldura, so Resumo, Cartoes e Receita habilitados entre os 8 atalhos', async () => {
     const destino = await mkdtemp(path.join(os.tmpdir(), 'cf-web-mob08-'));
     try {
         await construir({ url: URL_OK, chave: 'sb_publishable_abc123', destino });
@@ -404,6 +407,7 @@ test('pagina principal mobile: protegida, sem moldura, so Resumo e Cartoes habil
         assert.deepEqual(atalhos.map((a) => a[0]), ['Receita', 'Despesa', 'Lançamento', 'Resumo', 'Pagamentos', 'Recorrências', 'Cartões', 'Contas']);
         assert.deepEqual(atalhos.find((a) => a[0] === 'Resumo'), ['Resumo', 'resumo', 'despesas-mobile.html']);
         assert.deepEqual(atalhos.find((a) => a[0] === 'Cartões'), ['Cartões', 'cartoes', 'cartoes-mobile.html']);
+        assert.deepEqual(atalhos.find((a) => a[0] === 'Receita'), ['Receita', 'receita', 'receitas-mobile.html']);
         assert.doesNotMatch(html.slice(html.indexOf('mob-grade'), html.indexOf('class="mob-barra"')), /href=/, 'atalhos sem link no HTML');
         const barra = [...html.matchAll(/<(a|button) (?:type="button" )?class="mob-barra-item([^"]*)"([^>]*)>[\s\S]*?<span>([^<]+)<\/span>/g)]
             .map((m) => [m[4], /href=/.test(m[3]) ? 'link' : (m[1] === 'button' ? 'botao' : 'desabilitado')]);
@@ -418,7 +422,8 @@ test('pagina principal mobile: protegida, sem moldura, so Resumo e Cartoes habil
         const script = await readFile(path.join(destino, 'js', 'inicio-mobile.js'), 'utf8');
         assert.doesNotMatch(script, /\.rpc\s*\(|\.from\s*\(|despesas-servico/, 'a pagina principal nao le nem grava dados');
         const comum = await readFile(path.join(destino, 'js', 'mobile-comum.js'), 'utf8');
-        assert.match(comum, /export const MODULOS_ATIVOS = new Set\(\['resumo', 'cartoes'\]\);/, 'so Resumo e Cartoes ativos (FIN-MVP-MOBILE-03)');
+        assert.match(comum, /export const MODULOS_ATIVOS = new Set\(\['resumo', 'cartoes', 'receita'\]\);/,
+            'so Resumo, Cartoes e Receita ativos (FIN-MVP-MOBILE-04)');
         assert.doesNotMatch(comum, /\.rpc\s*\(|\.from\s*\(/);
     } finally {
         await rm(destino, { recursive: true, force: true });
@@ -516,6 +521,54 @@ test('cartoes mobile: protegida, sem moldura, CSS restrito e dados so pelos serv
         assert.doesNotMatch(grupos, /document\.|window\.|\.rpc\s*\(/, 'regras de leitura puras');
         // A pagina principal leva o atalho Cartoes a esta pagina (MODULOS_ATIVOS) e a sessao a aceita como destino.
         assert.ok((await readFile(path.join(destino, 'js', 'sessao.js'), 'utf8')).includes("'cartoes-mobile.html'"));
+    } finally {
+        await rm(destino, { recursive: true, force: true });
+    }
+});
+
+// FIN-MVP-MOBILE-04: Receitas mobile, fora da moldura; CSS restrito; dados so pelo servico do desktop (o mesmo da tela de
+// Receitas), sem consulta propria ao banco; "+" para nova receita no cabecalho (sem item novo na barra).
+test('receitas mobile: protegida, sem moldura, CSS restrito e dados so pelo servico do desktop', async () => {
+    const destino = await mkdtemp(path.join(os.tmpdir(), 'cf-web-mobile04-'));
+    const regrasRestritas = (css, padrao, nome) => {
+        for (const regra of css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/(^|\})\s*([^{}@]+)\{/g)) {
+            for (const seletor of regra[2].split(',')) assert.match(seletor.trim(), padrao, `${nome}: regra restrita: ${seletor.trim()}`);
+        }
+    };
+    try {
+        await construir({ url: URL_OK, chave: 'sb_publishable_abc123', destino });
+        const html = await readFile(path.join(destino, 'receitas-mobile.html'), 'utf8');
+        assert.match(html, /<body class="mob mob-modulo mob-receitas" data-protegido hidden>/);
+        assert.doesNotMatch(html, /\{\{|<script>|\sstyle=|\son[a-z]+=/i, 'sem marcador, script ou estilo inline');
+        assert.doesNotMatch(html, /app-sidebar|app-shell-body|css\/shared\//, 'sem moldura nem CSS do desktop');
+        assert.match(html, /<h1 class="mob-titulo">Receitas<\/h1>/);
+        assert.match(html, /id="mob-voltar" href="inicio.html" data-inicio/, 'voltar a pagina principal');
+        assert.match(html, /id="mob-nova" aria-label="Nova receita" aria-haspopup="dialog" hidden/, '"+" compacto, escondido ate saber se pode gravar');
+        for (const id of ['mob-mes-anterior', 'mob-competencia', 'mob-mes-seguinte', 'mob-resumo', 'mob-lista', 'mob-atrasadas',
+            'mob-filtros', 'mob-folha', 'mob-sair']) {
+            assert.match(html, new RegExp(`id="${id}"`), id);
+        }
+        // A barra segue o padrao aprovado: nenhum item novo (Receita nao e item da barra).
+        const barra = [...html.matchAll(/<(a|button) (?:type="button" )?class="mob-barra-item([^"]*)"([^>]*)>[\s\S]*?<span>([^<]+)<\/span>/g)]
+            .map((m) => [m[4], m[2].includes('ativo') ? 'ativo' : (/href=/.test(m[3]) ? 'link' : (m[1] === 'button' ? 'botao' : 'desabilitado'))]);
+        assert.deepEqual(barra, [['Início', 'link'], ['Lançar', 'desabilitado'], ['Resumo', 'desabilitado'], ['Mais', 'botao']]);
+        for (const arquivo of ['css/mobile-base.css', 'css/mobile-modulo.css', 'css/receitas-mobile.css', 'js/receitas-mobile.js']) {
+            assert.match(html, new RegExp(`(href|src)="${arquivo.replace(/[.]/g, '\\.')}"`), arquivo);
+        }
+        regrasRestritas(await readFile(path.join(destino, 'css', 'receitas-mobile.css'), 'utf8'), /^body\.mob-receitas(\[|\s|$)/, 'receitas-mobile.css');
+        const script = await readFile(path.join(destino, 'js', 'receitas-mobile.js'), 'utf8');
+        assert.doesNotMatch(script, /\.rpc\s*\(|\.from\s*\(|supabase/, 'nenhuma consulta propria: so o servico do desktop');
+        for (const modulo of ['receitas-servico', 'receitas-lista', 'mobile-ui', 'mobile-comum']) {
+            assert.ok(script.includes(`from './${modulo}.js'`), modulo);
+        }
+        // O desktop usa o mesmo servico (as mesmas rotas e funcoes do banco); servico sem DOM fora do modal do desktop.
+        const adaptador = await readFile(path.join(destino, 'js', 'receitas-adaptador.js'), 'utf8');
+        assert.ok(adaptador.includes("import { configurarReceitas, podeGerirPerfil, responderReceitas } from './receitas-servico.js';"));
+        assert.doesNotMatch(adaptador, /\.rpc\s*\(/, 'o adaptador do desktop so registra o servico');
+        const lista = await readFile(path.join(destino, 'js', 'receitas-lista.js'), 'utf8');
+        assert.doesNotMatch(lista, /document\.|window\.|\.rpc\s*\(/, 'regras de leitura puras');
+        // A pagina principal leva o atalho Receita a esta pagina (MODULOS_ATIVOS) e a sessao a aceita como destino.
+        assert.ok((await readFile(path.join(destino, 'js', 'sessao.js'), 'utf8')).includes("'receitas-mobile.html'"));
     } finally {
         await rm(destino, { recursive: true, force: true });
     }
