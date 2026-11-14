@@ -111,7 +111,7 @@ O cadastro do desktop é o modal "Nova Despesa" da tela Despesas, composto por:
 
 - **Banco descartável local** (`run_e2e.py`). Nenhuma escrita em produção; nenhuma migration.
 - **Usuário G (`usuario.g@teste.local`):** titular do "Perfil G (fictício)". É **o mesmo login dos Cartões e das Receitas**: uma conta só para homologar os três módulos.
-- **Categorias de despesa fictícias do ambiente:** Moradia, Saúde e Cartões.
+- **Categorias de despesa:** as do catálogo fictício do ambiente (Moradia, Saude, Cartoes, Combustível e as demais), em ordem alfabética, como no desktop.
 - **Usuário H (`usuario.h@teste.local`):** leitor do Perfil G.
 - Nenhum cenário novo foi semeado: o cadastro é o próprio teste.
 
