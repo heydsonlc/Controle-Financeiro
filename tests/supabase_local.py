@@ -899,10 +899,12 @@ def semear_despesas_mobile_e2e(cur, categoria_id=201):
 
 
 # FIN-MVP-MOBILE-03 (mobile03_cartoes.spec.mjs e pre-visualizacao): usuario G, titular de um perfil FICTICIO so deste cenario
-# (gerador NOVO), com dois cartoes e a fatura de 04/2031 do "Visa G" montada pelas funcoes oficiais (como o usuario G):
+# (gerador NOVO), com dois cartoes e a fatura de 04/2031 do "Itau Visa G" montada pelas funcoes oficiais (como o usuario G):
 # limites de duas Categorias do Cartao (e uma terceira cujo limite foi desativado depois da compra), compras a vista, uma
 # parcelada em 6x, uma sem Categoria do Cartao e uma despesa fixa do cartao (gerada pelo gerador do mes). Cartoes do contrato (fisico e virtual) e um credito de estorno vem como na
-# importacao (gravados aqui, no banco descartavel). "Master G" nao tem compras em 04/2031. Usuario H: so leitor do Perfil G.
+# importacao (gravados aqui, no banco descartavel). "Nubank Master G" nao tem compras. Para a homologacao comecar com dados
+# (a pagina principal abre no mes atual e o primeiro cartao, em ordem alfabetica, vem selecionado, como no desktop), o Visa
+# tambem tem compras na competencia atual (a vista, parcelada em 3x, sem Categoria do Cartao). Usuario H: so leitor do Perfil G.
 # Perfis proprios: os pagamentos e estornos do spec nao mudam saldos nem listas de outro spec. A a F nao mudam.
 USUARIO_G = {'id': str(uuid.UUID('99999999-0000-4000-8000-000000000009')), 'email': 'usuario.g@teste.local'}
 USUARIO_H = {'id': str(uuid.UUID('88888888-0000-4000-8000-000000000008')), 'email': 'usuario.h@teste.local'}
@@ -914,6 +916,14 @@ COMPRAS_G = (  # descricao, valor, parcelas, data, categoria de despesa, cartao 
     ('Padaria G', '35.50', 1, '2031-04-05', 201, None),
     ('Restaurante Centro G', '120.00', 1, '2031-04-06', 202, '9876'),
     ('Farmacia G', '45.90', 1, '2031-04-07', 203, None),
+)
+
+COMPRAS_G_MES_ATUAL = (  # descricao, valor, parcelas, dia, categoria de despesa
+    ('Supermercado G', '312.40', 1, 1, 201),
+    ('Celular G', '1200.00', 3, 2, 201),
+    ('Padaria Centro G', '28.90', 1, 3, 201),
+    ('Restaurante Bairro G', '86.00', 1, 4, 202),
+    ('Posto G', '150.00', 1, 5, 203),
 )
 
 
@@ -945,9 +955,9 @@ def semear_cartoes_mobile_e2e(cur):
             return cur.fetchone()[0]
         p = PERFIL_G['id']
         visa = chamar('select financeiro.criar_cartao(%s, %s::jsonb, gen_random_uuid())', p,
-                      json.dumps({'nome': 'Visa G (ficticio)', 'dia_fechamento': 10, 'dia_vencimento': 20}))['cartao_id']
+                      json.dumps({'nome': 'Itau Visa G (ficticio)', 'dia_fechamento': 10, 'dia_vencimento': 20}))['cartao_id']
         chamar('select financeiro.criar_cartao(%s, %s::jsonb, gen_random_uuid())', p,
-               json.dumps({'nome': 'Master G (ficticio)', 'dia_fechamento': 15, 'dia_vencimento': 25}))
+               json.dumps({'nome': 'Nubank Master G (ficticio)', 'dia_fechamento': 15, 'dia_vencimento': 25}))
         limites = {}
         for cid, limite in ((360, '500.00'), (362, '300.00'), (361, '200.00')):
             limites[cid] = chamar('select financeiro.vincular_limite_cartao(%s, %s, %s::jsonb)', p, visa,
@@ -960,6 +970,14 @@ def semear_cartoes_mobile_e2e(cur):
             chamar('select financeiro.criar_compra(%s, %s::jsonb, gen_random_uuid())', p, json.dumps({
                 'cartao_id': visa, 'descricao': descricao, 'valor': valor, 'total_parcelas': parcelas, 'data_compra': data,
                 'mes_fatura': '2031-04-01', 'categoria_id': categoria}))
+        # Competencia atual (Brasilia): compras para a homologacao abrir com dados.
+        from datetime import datetime, timedelta, timezone
+        hoje = datetime.now(timezone(timedelta(hours=-3))).date()
+        mes_atual = hoje.replace(day=1)
+        for descricao, valor, parcelas, dia, categoria in COMPRAS_G_MES_ATUAL:
+            chamar('select financeiro.criar_compra(%s, %s::jsonb, gen_random_uuid())', p, json.dumps({
+                'cartao_id': visa, 'descricao': descricao, 'valor': valor, 'total_parcelas': parcelas,
+                'data_compra': mes_atual.replace(day=dia).isoformat(), 'mes_fatura': mes_atual.isoformat(), 'categoria_id': categoria}))
         # "Restaurantes G" deixa de ter limite depois da compra: a compra fica com a categoria (grupo "categoria sem limite").
         chamar('select financeiro.desativar_limite_cartao(%s, %s, %s)', p, visa, limites[361])
         chamar('select financeiro.criar_recorrencia_cartao(%s, %s::jsonb, gen_random_uuid())', p, json.dumps({
@@ -976,7 +994,7 @@ def semear_cartoes_mobile_e2e(cur):
     # e um credito de estorno parcial da padaria, abatido da fatura de 04/2031.
     cur.execute("update public.config_agregador set numero_cartao = '1234' where item_despesa_id = %s", (visa,))
     cur.execute("update public.config_agregador c set numero_cartao = '5678' from public.item_despesa i "
-                "where i.id = c.item_despesa_id and i.nome = 'Master G (ficticio)'")
+                "where i.id = c.item_despesa_id and i.nome = 'Nubank Master G (ficticio)'")
     for descricao, _v, _p, _d, _c, final in COMPRAS_G:
         if final:
             cur.execute('update public.lancamento_agregado set cartao_vinculado_id = %s where cartao_id = %s and descricao like %s',

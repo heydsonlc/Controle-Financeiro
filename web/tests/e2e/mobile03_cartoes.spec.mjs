@@ -1,7 +1,7 @@
 // FIN-MVP-MOBILE-03 — Cartoes de Credito mobile. Usuario G, titular do "Perfil G (ficticio)" (so deste cenario; gerador NOVO):
-// "Visa G" (final 1234) com a fatura de 04/2031 montada pelas funcoes oficiais (limites de "Mercado G" e "Viagem G", compras a
+// "Itau Visa G" (final 1234) com a fatura de 04/2031 montada pelas funcoes oficiais (limites de "Mercado G" e "Viagem G", compras a
 // vista, uma parcelada em 6x, uma sem Categoria do Cartao, a despesa fixa "Streaming G" prevista, cartoes do contrato fisico
-// 1234 e virtual 9876, e um estorno parcial da padaria) e "Master G" (final 5678) sem compras. Somente leitura: usuario H, leitor
+// 1234 e virtual 9876, e um estorno parcial da padaria) e "Nubank Master G" (final 5678) sem compras (o Visa tambem tem compras no mes atual, so para a homologacao). Somente leitura: usuario H, leitor
 // do Perfil G. A fatura mobile e comparada com as telas do desktop no mesmo banco (Cartoes: grupos e executado; Despesas:
 // previsto) e com as funcoes do banco; pagamentos, estornos e compras sao conferidos no banco. Dados FICTICIOS; grava so no
 // banco descartavel.
@@ -19,8 +19,8 @@ const MES = '2031-04';
 const CELULAR = { width: 390, height: 844 };
 const DESKTOP = { width: 1366, height: 900 };
 const EVIDENCIAS = process.env.CF_MOBILE03_EVIDENCIAS || '';  // capturas da homologacao (opcional)
-const VISA = 'Visa G (ficticio)';
-const MASTER = 'Master G (ficticio)';
+const VISA = 'Itau Visa G (ficticio)';
+const MASTER = 'Nubank Master G (ficticio)';
 
 test.use({ viewport: CELULAR, isMobile: true, hasTouch: true });
 test.describe.configure({ mode: 'serial' });
@@ -130,10 +130,12 @@ test('atalho Cartoes da pagina principal abre a fatura na competencia; seletor d
     const visa = await idDoCartao(page, VISA);
     const master = await idDoCartao(page, MASTER);
     // Os cartoes ativos do perfil, na ordem da tela do desktop; o primeiro vem selecionado, como no desktop.
-    await esperarFatura(page, MES, master);
-    await expect(page.locator('#mob-cartao option')).toHaveText([`${MASTER} · final 5678`, `${VISA} · final 1234`]);
+    await esperarFatura(page, MES, visa);
+    await expect(page.locator('#mob-cartao option')).toHaveText([`${VISA} · final 1234`, `${MASTER} · final 5678`]);
     await expect(page.locator('h1.mob-titulo')).toHaveText('Cartões');
     await expect(page.locator('#mob-competencia')).toHaveText('Abr/2031');
+    await page.selectOption('#mob-cartao', String(master));
+    await esperarFatura(page, MES, master);
     await page.selectOption('#mob-cartao', String(visa));
     await esperarFatura(page, MES, visa);
     expect(new URL(page.url()).searchParams.get('cartao')).toBe(String(visa));

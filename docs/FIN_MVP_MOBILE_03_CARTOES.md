@@ -90,11 +90,12 @@ Terceira etapa da versão mobile, depois da Página Principal (FIN-MVP-MOBILE-01
 
 - **Banco descartável local** (`run_e2e.py`). Nenhuma escrita em produção; nenhuma migration.
 - **Usuário G (`usuario.g@teste.local`):** titular do "Perfil G (fictício)" (id 160, gerador NOVO), com "Conta G (fictícia)".
-  - "Visa G" (fechamento 10, vencimento 20, final 1234):
+  - "Itau Visa G" (fechamento 10, vencimento 20, final 1234):
     - limites de Mercado G (R$ 500) e Viagem G (R$ 300); Restaurantes G com o limite desativado depois da compra;
     - compras de 04/2031: Mercado Online G R$ 240,00; Loja Eletrônicos G R$ 540,00 em 6x; Padaria G R$ 35,50; Restaurante Centro G R$ 120,00; Farmácia G R$ 45,90 (sem Categoria do Cartão);
     - despesa fixa Streaming G R$ 39,90, prevista e gerada pelo gerador do mês.
-  - "Master G" (vencimento 25, final 5678): sem compras.
+  - Também no "Itau Visa G", na **competência atual** (a página principal abre no mês atual): Supermercado G, Celular G em 3x, Padaria Centro G, Restaurante Bairro G e Posto G. É só para a homologação começar com dados; o spec confere 04/2031.
+  - "Nubank Master G" (vencimento 25, final 5678): sem compras. Os nomes deixam o Visa em primeiro na ordem alfabética, porque o primeiro cartão vem selecionado, como no desktop.
   - Executado R$ 565,80 e previsto R$ 1.090,30.
   - Tudo isso foi criado pelas funções oficiais, como o usuário G. Os cartões do contrato (físico 1234, virtual 9876), o final dos contratos e um estorno parcial de R$ 5,50 da padaria foram gravados como a importação grava, só no banco descartável.
 - **Usuário H (`usuario.h@teste.local`):** leitor do Perfil G.
@@ -115,6 +116,6 @@ Terceira etapa da versão mobile, depois da Página Principal (FIN-MVP-MOBILE-01
 
 1. Prévia: `run_e2e.py --previa` → http://127.0.0.1:8790/__previa__/.
 2. Entrar com `usuario.g@teste.local` / `Senha-ficticia-G-2026`. Na página principal, ir a Abr/2031 e tocar em **Cartões**, ou abrir `cartoes-mobile.html?mes=2031-04`.
-3. Escolher "Visa G (ficticio) · final 1234". Conferir o resumo, abrir os grupos, tocar nas compras, usar os filtros, pagar e estornar a fatura, editar e excluir compras e abrir o parcelamento da Loja Eletrônicos G.
-4. "Master G": cartão sem compras. Somente leitura: `usuario.h@teste.local` / `Senha-ficticia-H-2026`.
+3. O "Itau Visa G (ficticio) · final 1234" já vem selecionado, com compras no mês atual (Abr/2031 tem o cenário completo, com despesa fixa e crédito). Conferir o resumo, abrir os grupos, tocar nas compras, usar os filtros, pagar e estornar a fatura, editar e excluir compras e abrir o parcelamento da Loja Eletrônicos G.
+4. "Nubank Master G": cartão sem compras. Somente leitura: `usuario.h@teste.local` / `Senha-ficticia-H-2026`.
 5. O banco é recriado a cada vez que a prévia sobe.
