@@ -1,0 +1,505 @@
+/* FIN-MVP-MOB-01 — Lista de Despesas mobile (despesas-mobile.html). Folha propria, carregada so por essa pagina e
+   restrita a body.mob-despesas: nenhuma tela do desktop e afetada. Segue o padrao do FIN-MVP-MOB-08 (css/mobile-base.css):
+   destaques em preto, fundo neutro, icones monocromaticos, bordas discretas e tipografia compacta. */
+
+body.mob-despesas {
+    --mob-cinza: #6e6e73;
+    --mob-perigo: #c62828;
+    --mob-ok: #1e7d32;
+}
+
+/* Cabecalho: voltar | Despesas (perfil em uso) | filtros */
+body.mob-despesas .mob-cabecalho-miolo {
+    gap: 8px;
+}
+
+body.mob-despesas .mob-icone-botao {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    padding: 8px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--mob-texto);
+    cursor: pointer;
+    flex: 0 0 auto;
+}
+
+body.mob-despesas .mob-icone-botao:active {
+    background: rgba(0, 0, 0, 0.06);
+}
+
+body.mob-despesas .mob-titulo-bloco {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+body.mob-despesas .mob-titulo {
+    font-size: 1.45rem;
+}
+
+body.mob-despesas .mob-subtitulo {
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--mob-cinza);
+    font-size: 0.78rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+body.mob-despesas .mob-filtro-marca {
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--mob-preto);
+}
+
+body.mob-despesas .mob-filtro-marca[hidden] {
+    display: none;
+}
+
+/* Aviso do resultado da ultima operacao */
+body.mob-despesas .mob-aviso {
+    margin: 0 0 10px;
+    padding: 9px 12px;
+    border: 1px solid var(--mob-borda);
+    border-radius: 10px;
+    background: #ffffff;
+    font-size: 0.86rem;
+    line-height: 1.35;
+    white-space: pre-line;
+}
+
+body.mob-despesas .mob-aviso.erro {
+    border-color: #f1c4c4;
+    color: var(--mob-perigo);
+}
+
+body.mob-despesas .mob-aviso[hidden] {
+    display: none;
+}
+
+/* Lista agrupada (accordion): grupos do desktop, recolhidos ao abrir */
+body.mob-despesas .mob-lista {
+    overflow: hidden;
+    border: 1px solid var(--mob-borda);
+    border-radius: 12px;
+    background: #ffffff;
+}
+
+body.mob-despesas .mob-lista:empty {
+    display: none;
+}
+
+body.mob-despesas .mob-vazio {
+    margin: 0;
+    padding: 18px 14px;
+    color: var(--mob-cinza);
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+body.mob-despesas .mob-grupo + .mob-grupo {
+    border-top: 1px solid var(--mob-linha);
+}
+
+body.mob-despesas .mob-grupo-cabecalho {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto 18px;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 44px;
+    margin: 0;
+    padding: 8px 10px 8px 12px;
+    border: 0;
+    background: var(--mob-fundo-botao);
+    color: var(--mob-texto);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+body.mob-despesas .mob-grupo-nome {
+    overflow-wrap: anywhere;
+    font-size: 0.76rem;
+    font-weight: 650;
+    letter-spacing: 0.03em;
+    line-height: 1.25;
+}
+
+body.mob-despesas .mob-grupo-qtd {
+    color: var(--mob-cinza);
+    font-weight: 500;
+}
+
+body.mob-despesas .mob-grupo-total,
+body.mob-despesas .mob-linha-valor,
+body.mob-despesas .mob-total-valor {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+body.mob-despesas .mob-grupo-total {
+    font-size: 0.92rem;
+    font-weight: 650;
+}
+
+body.mob-despesas .mob-seta {
+    width: 18px;
+    height: 18px;
+    color: var(--mob-cinza);
+}
+
+body.mob-despesas .mob-grupo-cabecalho[aria-expanded="true"] .mob-seta {
+    transform: rotate(90deg);
+}
+
+body.mob-despesas .mob-grupo-itens[hidden] {
+    display: none;
+}
+
+/* Linha: Descricao (vencimento discreto) | Valor | seta */
+body.mob-despesas .mob-linha {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto 14px;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 46px;
+    margin: 0;
+    padding: 6px 10px 6px 12px;
+    border: 0;
+    border-top: 1px solid var(--mob-linha);
+    background: #ffffff;
+    color: var(--mob-texto);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+body.mob-despesas .mob-lista > .mob-linha:first-child {
+    border-top: 0;
+}
+
+body.mob-despesas .mob-linha:active {
+    background: #f4f4f7;
+}
+
+body.mob-despesas .mob-linha-sub-itens .mob-linha {
+    padding-left: 24px;
+}
+
+body.mob-despesas .mob-linha-texto {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+body.mob-despesas .mob-linha-nome {
+    overflow: hidden;
+    font-size: 0.92rem;
+    font-weight: 500;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+body.mob-despesas .mob-linha-data {
+    overflow: hidden;
+    color: var(--mob-cinza);
+    font-size: 0.74rem;
+    line-height: 1.3;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+body.mob-despesas .mob-linha-valor {
+    font-size: 0.92rem;
+    font-weight: 550;
+}
+
+body.mob-despesas .mob-linha.paga .mob-linha-valor {
+    color: var(--mob-cinza);
+}
+
+body.mob-despesas .mob-linha .mob-seta {
+    width: 14px;
+    height: 14px;
+}
+
+/* Total consolidado (o mesmo do desktop: total, pendentes e pagas da lista mostrada) */
+body.mob-despesas .mob-total {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--mob-borda);
+    border-radius: 12px;
+    background: #ffffff;
+}
+
+body.mob-despesas .mob-total[hidden] {
+    display: none;
+}
+
+body.mob-despesas .mob-total-linha {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+body.mob-despesas .mob-total-rotulo {
+    font-size: 0.9rem;
+    font-weight: 650;
+}
+
+body.mob-despesas .mob-total-valor {
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+body.mob-despesas .mob-total-detalhe {
+    margin-top: 2px;
+    color: var(--mob-cinza);
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Painel inferior (detalhes, pagamento, edicao, estorno, exclusao e filtros) */
+body.mob-despesas .mob-folha-fundo {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.35);
+}
+
+body.mob-despesas .mob-folha-fundo[hidden] {
+    display: none;
+}
+
+body.mob-despesas .mob-folha {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: var(--mob-largura);
+    max-height: 88vh;
+    max-height: 88dvh;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    border-radius: 16px 16px 0 0;
+    background: #ffffff;
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.12);
+}
+
+body.mob-despesas .mob-folha-topo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 8px 6px 16px;
+    border-bottom: 1px solid var(--mob-linha);
+}
+
+body.mob-despesas .mob-folha-titulo {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+    font-size: 1.05rem;
+    font-weight: 650;
+    line-height: 1.25;
+}
+
+body.mob-despesas .mob-folha-corpo {
+    overflow-y: auto;
+    padding: 10px 16px 16px;
+    overscroll-behavior: contain;
+}
+
+body.mob-despesas .mob-folha-valor {
+    margin: 0 0 8px;
+    font-size: 1.35rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+body.mob-despesas .mob-detalhes {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    margin: 0 0 12px;
+    font-size: 0.88rem;
+}
+
+body.mob-despesas .mob-detalhes dt,
+body.mob-despesas .mob-detalhes dd {
+    margin: 0;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--mob-linha);
+}
+
+body.mob-despesas .mob-detalhes dt {
+    color: var(--mob-cinza);
+}
+
+body.mob-despesas .mob-detalhes dd {
+    padding-left: 12px;
+    overflow-wrap: anywhere;
+    text-align: right;
+}
+
+body.mob-despesas .mob-texto {
+    margin: 0 0 10px;
+    font-size: 0.88rem;
+    line-height: 1.4;
+}
+
+body.mob-despesas .mob-texto.discreto {
+    color: var(--mob-cinza);
+    font-size: 0.8rem;
+}
+
+body.mob-despesas .mob-acoes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+body.mob-despesas .mob-acoes-espaco {
+    margin-top: 10px;
+}
+
+body.mob-despesas .mob-botao {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 38px;
+    padding: 0 14px;
+    border: 1px solid var(--mob-borda);
+    border-radius: 10px;
+    background: var(--mob-fundo-botao);
+    color: var(--mob-texto);
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+body.mob-despesas .mob-botao.primario {
+    border-color: var(--mob-preto);
+    background: var(--mob-preto);
+    color: #ffffff;
+}
+
+body.mob-despesas .mob-botao.perigo {
+    color: var(--mob-perigo);
+}
+
+body.mob-despesas .mob-botao:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+/* Formularios compactos */
+body.mob-despesas .mob-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+body.mob-despesas .mob-campo {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #3a3a3c;
+}
+
+body.mob-despesas .mob-campo input,
+body.mob-despesas .mob-campo select,
+body.mob-despesas .mob-campo textarea {
+    width: 100%;
+    min-height: 40px;
+    padding: 8px 10px;
+    border: 1px solid var(--mob-borda);
+    border-radius: 10px;
+    background: #ffffff;
+    color: var(--mob-texto);
+    font: inherit;
+    font-size: 1rem;
+    font-weight: 400;
+}
+
+body.mob-despesas .mob-campo textarea {
+    min-height: 64px;
+    resize: vertical;
+}
+
+body.mob-despesas .mob-campo input:disabled,
+body.mob-despesas .mob-campo select:disabled {
+    background: var(--mob-fundo-botao);
+    color: var(--mob-cinza);
+}
+
+body.mob-despesas .mob-opcoes {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+body.mob-despesas .mob-opcao {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+}
+
+body.mob-despesas .mob-opcao input {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: var(--mob-preto);
+}
+
+body.mob-despesas .mob-mensagem {
+    margin: 0;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: var(--mob-fundo-botao);
+    font-size: 0.86rem;
+    line-height: 1.35;
+    white-space: pre-line;
+}
+
+body.mob-despesas .mob-mensagem.erro {
+    background: #fdecec;
+    color: var(--mob-perigo);
+}
+
+body.mob-despesas .mob-mensagem.ok {
+    background: #e9f5ec;
+    color: var(--mob-ok);
+}
+
+body.mob-despesas .mob-mensagem[hidden],
+body.mob-despesas [hidden].mob-campo {
+    display: none;
+}
+
+body.mob-despesas .mob-grupo-cabecalho:focus-visible,
+body.mob-despesas .mob-linha:focus-visible,
+body.mob-despesas .mob-icone-botao:focus-visible,
+body.mob-despesas .mob-botao:focus-visible {
+    outline: 2px solid var(--mob-preto);
+    outline-offset: -2px;
+}

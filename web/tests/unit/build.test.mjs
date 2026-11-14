@@ -127,25 +127,26 @@ const RPCS_DE_LEITURA = new Set(['meus_perfis', 'contas_bancarias_do_perfil', 'c
 const RPCS_DE_ESCRITA = new Map([
     ['gerar_mes', 'despesas-recorrencias.js'],  // FIN-FIDELIDADE-DESPESAS-1: extraido de contas.js
     // FIN-DESPESAS-1
-    // FIN-FIDELIDADE-DESPESAS-1: a tela original de Despesas chama pelo adaptador (despesas-adaptador.js)
-    ['criar_despesa', ['despesas-adaptador.js', 'recorrencias-adaptador.js', 'lancamentos-adaptador.js']],
-    ['editar_despesa', ['despesas-adaptador.js', 'lancamentos-adaptador.js']],
-    ['excluir_despesa', ['despesas-adaptador.js', 'lancamentos-adaptador.js']],
+    // FIN-FIDELIDADE-DESPESAS-1: a tela original de Despesas chama pelo adaptador; FIN-MVP-MOB-01: as chamadas ficam no servico
+    // comum ao desktop e a Lista de Despesas mobile (despesas-servico.js), sem funcao nova
+    ['criar_despesa', ['despesas-servico.js', 'recorrencias-adaptador.js', 'lancamentos-adaptador.js']],
+    ['editar_despesa', ['despesas-servico.js', 'lancamentos-adaptador.js']],
+    ['excluir_despesa', ['despesas-servico.js', 'lancamentos-adaptador.js']],
     ['inativar_recorrencia', 'recorrencias-adaptador.js'],
     // FIN-RECORRENCIAS-INATIVACAO-01 (P22): interromper (Recorrencias e "esta e as futuras" de Despesas) e retomar
-    ['interromper_recorrencia', ['despesas-adaptador.js', 'recorrencias-adaptador.js']],
+    ['interromper_recorrencia', ['despesas-servico.js', 'recorrencias-adaptador.js']],
     ['retomar_recorrencia', 'recorrencias-adaptador.js'],
     // P24 (FIN-CONSORCIOS-INTEGRACAO-01): realizar a contemplacao prevista e editar parcela de consorcio pendente
     ['realizar_contemplacao_consorcio', 'receitas-adaptador.js'],
-    ['editar_parcela_consorcio', 'despesas-adaptador.js'],
+    ['editar_parcela_consorcio', 'despesas-servico.js'],
     // FIN-RECEITAS-SALDO-01: previsoes pendentes pelo valor-base, so com a confirmacao da previa (auditado no banco)
     ['atualizar_previsoes_fonte', 'receitas-adaptador.js'],
     // FIN-DESPESAS-CANCELAMENTO-01 (P23): cancelar a obrigacao com pagamento estornado (elegibilidade e historico no banco)
-    ['cancelar_despesa', 'despesas-adaptador.js'],
+    ['cancelar_despesa', 'despesas-servico.js'],
     // FIN-FIDELIDADE-RECORRENCIAS-1 (tela de Recorrencias; o banco exige gestao do perfil e a versao)
     ['editar_recorrencia', 'recorrencias-adaptador.js'],
     ['reativar_recorrencia', 'recorrencias-adaptador.js'],
-    ['definir_meio_pagamento_recorrencia', ['recorrencias-adaptador.js', 'despesas-adaptador.js']],
+    ['definir_meio_pagamento_recorrencia', ['recorrencias-adaptador.js', 'despesas-servico.js']],
     // FIN-FIDELIDADE-CARTOES-2 (R2: recorrencia no cartao; gestao, perfil, cartao e versao conferidos no banco)
     ['criar_recorrencia_cartao', 'recorrencias-adaptador.js'],
     ['editar_recorrencia_cartao', 'recorrencias-adaptador.js'],
@@ -185,10 +186,10 @@ const RPCS_DE_ESCRITA = new Map([
     ['dispensar_aviso_recorrencia', 'despesas-recorrencias.js'],
     // FIN-CARTOES-PAGAMENTO-1 (pagamento integral e estorno de fatura; debito/credito e saldo decididos no banco)
     // FIN-FIDELIDADE-CARTOES-1: so em Despesas, como no Flask (a tela original de Cartoes nao paga fatura).
-    ['pagar_fatura', 'despesas-adaptador.js'],
+    ['pagar_fatura', 'despesas-servico.js'],
     // FIN-DESPESAS-PAGAMENTO-LOTE-01 (P20): ocorrencias pendentes com a conta escolhida; tudo ou nada, revalidado no banco
-    ['pagar_despesas_lote', 'despesas-adaptador.js'],
-    ['estornar_pagamento_fatura', 'despesas-adaptador.js'],
+    ['pagar_despesas_lote', 'despesas-servico.js'],
+    ['estornar_pagamento_fatura', 'despesas-servico.js'],
     // FIN-FIDELIDADE-MOVIMENTACOES-1 (Contas Bancarias: cadastro com versao; ajuste e transferencia pelo escritor unico,
     // com chave; so AJUSTE editavel; saldo pelos movimentos, decidido no banco)
     ['criar_conta_bancaria', 'contas-bancarias-adaptador.js'],
@@ -198,8 +199,8 @@ const RPCS_DE_ESCRITA = new Map([
     ['excluir_ajuste_conta', 'contas-bancarias-adaptador.js'],
     ['transferir_entre_contas', 'contas-bancarias-adaptador.js'],
     // FIN-MOVIMENTACOES-1 (pagamento/estorno de despesa comum, recebimento/estorno de receita; saldo no banco)
-    ['pagar_despesa', 'despesas-adaptador.js'],
-    ['estornar_pagamento_despesa', 'despesas-adaptador.js'],
+    ['pagar_despesa', 'despesas-servico.js'],
+    ['estornar_pagamento_despesa', 'despesas-servico.js'],
     ['receber_receita', 'receitas-adaptador.js'],
     ['estornar_recebimento', 'receitas-adaptador.js'],
     // FIN-FIDELIDADE-RECEITAS-CATEGORIAS-1 (Categorias do Cartao, por perfil: gestao e escritor unico no banco; as
@@ -341,8 +342,9 @@ test('todas as paginas usam a moldura do Flask com o mesmo menu, sem pagina queb
         const arquivos = (await readdir(destino, { recursive: true })).map((a) => a.split(path.sep).join('/'));
         assert.ok(!arquivos.some((a) => /^(moldura|paginas)(\/|$)/.test(a)), 'fontes da moldura fora do dist');
         assert.ok(arquivos.includes('css/shared/layout.css') && arquivos.includes('js/original/ajuda.js'));
-        // index.html (login) e inicio.html (pagina principal mobile, FIN-MVP-MOB-08) ficam fora da moldura do desktop.
-        const paginas = arquivos.filter((a) => a.endsWith('.html') && a !== 'index.html' && a !== 'inicio.html');
+        // index.html (login), inicio.html (pagina principal mobile, FIN-MVP-MOB-08) e despesas-mobile.html (Lista de
+        // Despesas mobile, FIN-MVP-MOB-01) ficam fora da moldura do desktop.
+        const paginas = arquivos.filter((a) => a.endsWith('.html') && !['index.html', 'inicio.html', 'despesas-mobile.html'].includes(a));
         assert.equal(paginas.length, 16);  // + indexadores.html (FIN-PRE-PRODUCAO-1)
         for (const pagina of paginas) {
             const html = await readFile(path.join(destino, pagina), 'utf8');
@@ -381,33 +383,83 @@ test('montagem escapa titulos e falha com marcador nao resolvido', () => {
         /nao resolvido/);
 });
 
-// FIN-MVP-MOB-08: pagina principal mobile, fora da moldura; atalhos visiveis e desabilitados; so Inicio navega.
-test('pagina principal mobile: protegida, sem moldura, 8 atalhos desabilitados e so Inicio ativo', async () => {
+// FIN-MVP-MOB-08: pagina principal mobile, fora da moldura; atalhos visiveis e desabilitados.
+// FIN-MVP-MOB-01: so o atalho Resumo (e o Resumo da barra) navega, para a Lista de Despesas mobile.
+test('pagina principal mobile: protegida, sem moldura, so Resumo habilitado entre os 8 atalhos', async () => {
     const destino = await mkdtemp(path.join(os.tmpdir(), 'cf-web-mob08-'));
     try {
         await construir({ url: URL_OK, chave: 'sb_publishable_abc123', destino });
         const html = await readFile(path.join(destino, 'inicio.html'), 'utf8');
         assert.ok(!(await readdir(destino)).some((n) => /previa/i.test(n)), 'pre-visualizacao local fora do dist');
-        assert.match(html, /<body class="mob-inicio" data-protegido hidden>/);
+        assert.match(html, /<body class="mob mob-inicio" data-protegido hidden>/);
         assert.doesNotMatch(html, /\{\{|<script>|\sstyle=|\son[a-z]+=/i, 'sem marcador, script ou estilo inline');
         assert.doesNotMatch(html, /app-sidebar|app-shell-body|css\/shared\//, 'sem moldura nem CSS do desktop');
-        assert.match(html, /<link rel="stylesheet" href="css\/inicio-mobile.css">/);
+        assert.match(html, /<link rel="stylesheet" href="css\/mobile-base.css">\s*<link rel="stylesheet" href="css\/inicio-mobile.css">/);
+        // No HTML todos comecam desabilitados e sem link; js/mobile-comum.js habilita os de MODULOS_ATIVOS.
         const atalhos = [...html.matchAll(/<a class="mob-atalho" data-modulo="(\w+)" data-destino="([\w.-]+)" aria-disabled="true">[\s\S]*?<span class="mob-atalho-nome">([^<]+)<\/span>/g)]
-            .map((m) => m[3]);
-        assert.deepEqual(atalhos, ['Receita', 'Despesa', 'Lançamento', 'Resumo', 'Pagamentos', 'Recorrências', 'Cartões', 'Contas']);
-        assert.doesNotMatch(html.slice(html.indexOf('mob-grade'), html.indexOf('class="mob-barra"')), /href=/, 'atalhos sem link');
+            .map((m) => [m[3], m[1], m[2]]);
+        assert.deepEqual(atalhos.map((a) => a[0]), ['Receita', 'Despesa', 'Lançamento', 'Resumo', 'Pagamentos', 'Recorrências', 'Cartões', 'Contas']);
+        assert.deepEqual(atalhos.find((a) => a[0] === 'Resumo'), ['Resumo', 'resumo', 'despesas-mobile.html']);
+        assert.doesNotMatch(html.slice(html.indexOf('mob-grade'), html.indexOf('class="mob-barra"')), /href=/, 'atalhos sem link no HTML');
         const barra = [...html.matchAll(/<(a|button) (?:type="button" )?class="mob-barra-item([^"]*)"([^>]*)>[\s\S]*?<span>([^<]+)<\/span>/g)]
             .map((m) => [m[4], /href=/.test(m[3]) ? 'link' : (m[1] === 'button' ? 'botao' : 'desabilitado')]);
-        // "Mais" abre o menu com Sair (homologacao de 13/11/2026); Lancar e Resumo seguem desabilitados.
+        // "Mais" abre o menu com Sair (homologacao de 13/11/2026); Resumo ganha o link no script (MODULOS_ATIVOS).
         assert.deepEqual(barra, [['Início', 'link'], ['Lançar', 'desabilitado'], ['Resumo', 'desabilitado'], ['Mais', 'botao']]);
+        assert.match(html, /<a class="mob-barra-item" data-modulo="resumo" data-destino="despesas-mobile.html" aria-disabled="true">/);
         assert.match(html, /<div class="mob-menu-mais" id="mob-menu-mais" role="menu"[^>]*hidden>[\s\S]*?id="mob-sair"[\s\S]*?<span>Sair<\/span>/);
         const css = await readFile(path.join(destino, 'css', 'inicio-mobile.css'), 'utf8');
         for (const regra of css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/(^|\})\s*([^{}@]+)\{/g)) {
             for (const seletor of regra[2].split(',')) assert.match(seletor.trim(), /^body\.mob-inicio(\[|\s|$)/, `regra restrita: ${seletor.trim()}`);
         }
         const script = await readFile(path.join(destino, 'js', 'inicio-mobile.js'), 'utf8');
-        assert.match(script, /export const MODULOS_ATIVOS = new Set\(\[\]\);/, 'nenhum modulo ativo neste MVP');
-        assert.doesNotMatch(script, /\.rpc\s*\(|\.from\s*\(/, 'nenhum dado financeiro lido ou gravado');
+        assert.doesNotMatch(script, /\.rpc\s*\(|\.from\s*\(|despesas-servico/, 'a pagina principal nao le nem grava dados');
+        const comum = await readFile(path.join(destino, 'js', 'mobile-comum.js'), 'utf8');
+        assert.match(comum, /export const MODULOS_ATIVOS = new Set\(\['resumo'\]\);/, 'so Resumo ativo (FIN-MVP-MOB-01)');
+        assert.doesNotMatch(comum, /\.rpc\s*\(|\.from\s*\(/);
+    } finally {
+        await rm(destino, { recursive: true, force: true });
+    }
+});
+
+// FIN-MVP-MOB-01: Lista de Despesas mobile, fora da moldura; CSS restrito as paginas mobile; dados so pelo servico comum
+// ao desktop (nenhuma consulta propria ao banco).
+test('lista de despesas mobile: protegida, sem moldura, CSS restrito e dados so pelo servico do desktop', async () => {
+    const destino = await mkdtemp(path.join(os.tmpdir(), 'cf-web-mob01-'));
+    const regrasRestritas = (css, padrao, nome) => {
+        for (const regra of css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/(^|\})\s*([^{}@]+)\{/g)) {
+            for (const seletor of regra[2].split(',')) assert.match(seletor.trim(), padrao, `${nome}: regra restrita: ${seletor.trim()}`);
+        }
+    };
+    try {
+        await construir({ url: URL_OK, chave: 'sb_publishable_abc123', destino });
+        const html = await readFile(path.join(destino, 'despesas-mobile.html'), 'utf8');
+        assert.match(html, /<body class="mob mob-despesas" data-protegido hidden>/);
+        assert.doesNotMatch(html, /\{\{|<script>|\sstyle=|\son[a-z]+=/i, 'sem marcador, script ou estilo inline');
+        assert.doesNotMatch(html, /app-sidebar|app-shell-body|css\/shared\//, 'sem moldura nem CSS do desktop');
+        assert.match(html, /<h1 class="mob-titulo">Despesas<\/h1>/);
+        assert.match(html, /id="mob-voltar" href="inicio.html" data-inicio/, 'voltar a pagina principal');
+        assert.match(html, /id="mob-filtros"/, 'filtros num painel (sem barra permanente)');
+        for (const id of ['mob-mes-anterior', 'mob-competencia', 'mob-mes-seguinte', 'mob-lista', 'mob-total', 'mob-folha', 'mob-sair']) {
+            assert.match(html, new RegExp(`id="${id}"`), id);
+        }
+        const barra = [...html.matchAll(/<(a|button) (?:type="button" )?class="mob-barra-item([^"]*)"([^>]*)>[\s\S]*?<span>([^<]+)<\/span>/g)]
+            .map((m) => [m[4], m[2].includes('ativo') ? 'ativo' : (/href=/.test(m[3]) ? 'link' : (m[1] === 'button' ? 'botao' : 'desabilitado'))]);
+        assert.deepEqual(barra, [['Início', 'link'], ['Lançar', 'desabilitado'], ['Resumo', 'ativo'], ['Mais', 'botao']]);
+        for (const arquivo of ['css/mobile-base.css', 'css/despesas-mobile.css', 'css/interrupcao-recorrencia.css',
+            'js/original/formas_pagamento.js', 'js/interrupcao-recorrencia.js', 'js/despesas-mobile.js']) {
+            assert.match(html, new RegExp(`(href|src)="${arquivo.replace(/[.]/g, '\.')}"`), arquivo);
+        }
+        regrasRestritas(await readFile(path.join(destino, 'css', 'mobile-base.css'), 'utf8'), /^body\.mob(\[|\s|$)/, 'mobile-base.css');
+        regrasRestritas(await readFile(path.join(destino, 'css', 'despesas-mobile.css'), 'utf8'), /^body\.mob-despesas(\[|\s|$)/, 'despesas-mobile.css');
+        const script = await readFile(path.join(destino, 'js', 'despesas-mobile.js'), 'utf8');
+        assert.doesNotMatch(script, /\.rpc\s*\(|\.from\s*\(|supabase/, 'nenhuma consulta propria: so o servico comum');
+        assert.match(script, /from '\.\/despesas-servico\.js'/);
+        assert.match(script, /from '\.\/despesas-grupos\.js'/);
+        // O desktop usa o mesmo servico (as mesmas rotas e funcoes do banco).
+        const adaptador = await readFile(path.join(destino, 'js', 'despesas-adaptador.js'), 'utf8');
+        assert.match(adaptador, /import \{ configurarDespesas, responderDespesas \} from '\.\/despesas-servico\.js';/);
+        const servico = await readFile(path.join(destino, 'js', 'despesas-servico.js'), 'utf8');
+        assert.doesNotMatch(servico, /document\.|window\./, 'servico sem DOM');
     } finally {
         await rm(destino, { recursive: true, force: true });
     }

@@ -866,3 +866,33 @@ def semear_empresa_vazia(cur):
                 (EMPRESA_D['id'], EMPRESA_D['nome']))
     cur.execute("insert into financeiro.perfil_acesso (user_id, perfil_financeiro_id, papel, pode_gerir) values (%s, %s, 'TITULAR', true)",
                 (USUARIO_D['id'], EMPRESA_D['id']))
+
+
+# FIN-MVP-MOB-01 (mob01_despesas.spec.mjs): usuario F, titular de um perfil FICTICIO so deste cenario (gerador NOVO), com duas
+# contas bancarias e tres recorrencias a partir de 04/2031: uma semanal ("Diarista F", tercas, Pix), uma mensal em boleto
+# ("Aluguel F") e uma mensal em debito automatico ("Internet F"). As despesas avulsas o spec cria pela funcao oficial.
+# Perfil proprio: os pagamentos e estornos do spec nao mudam saldos nem listas que outro spec confere. A, B, C, D e E nao mudam.
+USUARIO_F = {'id': str(uuid.UUID('ffffffff-0000-4000-8000-00000000000f')), 'email': 'usuario.f@teste.local'}
+PERFIL_F = {'id': 150, 'nome': 'Perfil F (ficticio)'}
+RECORRENCIAS_F = (  # nome, tipo_recorrencia, ancora, valor, meio
+    ('Diarista F', 'semanal_1_2', '2031-04-01', '200.00', 'pix'),
+    ('Aluguel F', 'mensal', '2031-04-05', '2500.00', 'boleto'),
+    ('Internet F', 'mensal', '2031-04-12', '129.90', 'debito_automatico'),
+)
+
+
+def semear_despesas_mobile_e2e(cur, categoria_id=201):
+    cur.execute('insert into auth.users (id, email) values (%s, %s)', (USUARIO_F['id'], USUARIO_F['email']))
+    cur.execute("insert into public.perfil_financeiro (id, nome, tipo, cor, ativo, padrao) values (%s, %s, 'PESSOAL', '#1d1d1f', true, false)",
+                (PERFIL_F['id'], PERFIL_F['nome']))
+    cur.execute("insert into financeiro.perfil_acesso (user_id, perfil_financeiro_id, papel, pode_gerir) values (%s, %s, 'TITULAR', true)",
+                (USUARIO_F['id'], PERFIL_F['id']))
+    cur.execute('select financeiro.definir_gerador_recorrencia(%s, %s, %s, %s)',
+                (PERFIL_F['id'], 'NOVO', 'administrador de teste', 'cenario ficticio E2E (FIN-MVP-MOB-01)'))
+    for nome in ('Conta F (ficticia)', 'Conta F2 (ficticia)'):
+        cur.execute("insert into public.conta_bancaria (perfil_financeiro_id, nome, instituicao, tipo, status, cor_display) "
+                    "values (%s, %s, 'Banco ficticio', 'Conta Corrente', 'ATIVO', '#3b82f6')", (PERFIL_F['id'], nome))
+    for nome, tipo, ancora, valor, meio in RECORRENCIAS_F:
+        cur.execute("insert into public.item_despesa (nome, tipo, perfil_financeiro_id, categoria_id, ativo, recorrente, tipo_recorrencia, "
+                    "data_vencimento, valor, meio_pagamento, conta_bancaria_id) values (%s, 'Simples', %s, %s, true, true, %s, %s, %s, %s, null)",
+                    (nome, PERFIL_F['id'], categoria_id, tipo, ancora, valor, meio))

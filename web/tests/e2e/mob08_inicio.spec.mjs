@@ -66,7 +66,8 @@ test('sem sessao, inicio.html leva ao login e volta para ela', async ({ page }) 
     await page.waitForURL(/\/inicio\.html\?mes=\d{4}-\d{2}$/);
 });
 
-test('celular: login leva a pagina principal mobile, com atalhos e barra desabilitados e so Inicio ativo', async ({ page }) => {
+// FIN-MVP-MOB-01: so o Resumo (atalho e barra) ficou habilitado, para a Lista de Despesas mobile; os demais seguem desabilitados.
+test('celular: login leva a pagina principal mobile, com so Resumo habilitado entre os atalhos e Inicio ativo', async ({ page }) => {
     await page.setViewportSize(CELULAR);
     await entrar(page);
     await page.waitForURL(/\/inicio\.html\?mes=\d{4}-\d{2}$/);
@@ -79,6 +80,11 @@ test('celular: login leva a pagina principal mobile, com atalhos e barra desabil
     await expect(atalhos.locator('.mob-atalho-nome')).toHaveText(ATALHOS);
     for (let i = 0; i < ATALHOS.length; i += 1) {
         await expect(atalhos.nth(i)).toBeVisible();
+        if (ATALHOS[i] === 'Resumo') {
+            await expect(atalhos.nth(i)).not.toHaveAttribute('aria-disabled', 'true');
+            await expect(atalhos.nth(i)).toHaveAttribute('href', `despesas-mobile.html?mes=${mesAtual().chave}`);
+            continue;
+        }
         await expect(atalhos.nth(i)).toHaveAttribute('aria-disabled', 'true');
         await expect(atalhos.nth(i)).not.toHaveAttribute('href', /.*/);
     }
@@ -97,7 +103,6 @@ test('celular: login leva a pagina principal mobile, com atalhos e barra desabil
     // desabilitados: o clique (forcado, como o toque) nao navega
     await atalhos.nth(1).click({ force: true });
     await page.locator('.mob-barra-item').nth(1).click({ force: true });
-    await page.locator('.mob-barra-item').nth(2).click({ force: true });
     await page.locator('.mob-notificacoes').click({ force: true });
     expect(page.url()).toBe(antes);
 
@@ -106,10 +111,10 @@ test('celular: login leva a pagina principal mobile, com atalhos e barra desabil
     await expect(barra.nth(0)).toHaveAttribute('href', `inicio.html?mes=${mesAtual().chave}`);
     await expect(barra.nth(0)).toHaveAttribute('aria-current', 'page');
     await expect(barra.nth(3)).toHaveAttribute('aria-haspopup', 'menu');
-    for (const i of [1, 2]) {
-        await expect(barra.nth(i)).toHaveAttribute('aria-disabled', 'true');
-        await expect(barra.nth(i)).not.toHaveAttribute('href', /.*/);
-    }
+    await expect(barra.nth(1)).toHaveAttribute('aria-disabled', 'true');
+    await expect(barra.nth(1)).not.toHaveAttribute('href', /.*/);
+    await expect(barra.nth(2)).not.toHaveAttribute('aria-disabled', 'true');
+    await expect(barra.nth(2)).toHaveAttribute('href', `despesas-mobile.html?mes=${mesAtual().chave}`);
     const corInicio = await barra.nth(0).evaluate((e) => getComputedStyle(e).color);
     expect(corInicio).toBe('rgb(29, 29, 31)');  // preto do menu lateral do desktop (#1d1d1f)
     await evidencia(page, 'celular-390x844');

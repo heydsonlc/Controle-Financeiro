@@ -1,0 +1,242 @@
+/* FIN-MVP-MOB-01 — estrutura comum das paginas mobile (padrao aprovado no FIN-MVP-MOB-08): corpo, cabecalho,
+   competencia, barra inferior e menu do "Mais". Carregada so pelas paginas mobile (inicio.html e despesas-mobile.html)
+   e restrita a body.mob: nenhuma tela do desktop e afetada. As regras vieram sem alteracao de css/inicio-mobile.css. */
+
+body.mob {
+    --mob-preto: #1d1d1f;
+    --mob-texto: #1d1d1f;
+    --mob-inativo: #3a3a3c;
+    --mob-linha: #e5e5ea;
+    --mob-borda: #dedee4;
+    --mob-fundo: #f9f9fb;
+    --mob-fundo-botao: #f2f2f5;
+    --mob-lateral: 17px;
+    --mob-largura: 480px;
+    --mob-barra-altura: 64px;
+    margin: 0;
+    min-height: 100vh;
+    min-height: 100dvh;
+    background: var(--mob-fundo);
+    color: var(--mob-texto);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    padding-bottom: calc(var(--mob-barra-altura) + env(safe-area-inset-bottom, 0px));
+    box-sizing: border-box;
+    overflow-x: hidden;
+}
+
+body.mob *,
+body.mob *::before,
+body.mob *::after {
+    box-sizing: inherit;
+}
+
+body.mob svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* Cabecalho: icone da aplicacao + "Financeiro"; sino a direita; linha divisoria em toda a largura */
+body.mob .mob-cabecalho {
+    border-bottom: 1px solid var(--mob-linha);
+    background: var(--mob-fundo);
+}
+
+body.mob .mob-cabecalho-miolo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    max-width: var(--mob-largura);
+    margin: 0 auto;
+    padding: calc(12px + env(safe-area-inset-top, 0px)) var(--mob-lateral) 12px;
+}
+
+body.mob .mob-titulo {
+    margin: 0;
+    font-size: 1.85rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    white-space: nowrap;
+}
+
+/* Competencia: pilula com setas nas pontas, calendario + "Nov/2026" ao centro */
+body.mob .mob-conteudo {
+    max-width: var(--mob-largura);
+    margin: 0 auto;
+    padding: 12px var(--mob-lateral) 28px;
+}
+
+body.mob .mob-competencia {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 46px;
+    margin: 0 0 12px;
+    padding: 0 6px;
+    border: 1px solid var(--mob-borda);
+    border-radius: 23px;
+    background: var(--mob-fundo-botao);
+}
+
+body.mob .mob-competencia-seta {
+    width: 40px;
+    height: 36px;
+    padding: 7px 9px;
+    border: 0;
+    border-radius: 18px;
+    background: transparent;
+    color: var(--mob-texto);
+    cursor: pointer;
+    flex: 0 0 auto;
+}
+
+body.mob .mob-competencia-seta:active {
+    background: rgba(0, 0, 0, 0.06);
+}
+
+body.mob .mob-competencia-centro {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+body.mob .mob-competencia-calendario {
+    width: 24px;
+    height: 24px;
+    flex: 0 0 auto;
+}
+
+body.mob .mob-competencia-mes {
+    font-size: 1.2rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* Barra inferior fixa */
+body.mob .mob-barra {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    height: calc(var(--mob-barra-altura) + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: var(--mob-fundo);
+    border-top: 1px solid var(--mob-linha);
+}
+
+body.mob .mob-barra-miolo {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    height: 100%;
+    max-width: var(--mob-largura);
+    margin: 0 auto;
+    padding: 0 8px;
+}
+
+body.mob .mob-barra-item {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-family: inherit;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-width: 0;
+    color: var(--mob-inativo);
+    font-size: 0.86rem;
+    font-weight: 500;
+    text-decoration: none;
+}
+
+body.mob .mob-barra-item svg {
+    width: 24px;
+    height: 24px;
+}
+
+body.mob .mob-barra-item.ativo {
+    color: var(--mob-preto);
+    font-weight: 600;
+}
+
+body.mob .mob-barra-item.ativo svg {
+    fill: currentColor;
+}
+
+body.mob .mob-barra-item circle[fill] {
+    fill: currentColor;
+    stroke: none;
+}
+
+body.mob .mob-barra-item[aria-disabled="true"] {
+    cursor: default;
+}
+
+/* Menu do "Mais" (Sair), aberto acima da barra */
+body.mob .mob-menu-mais {
+    position: absolute;
+    right: max(8px, calc((100% - var(--mob-largura)) / 2 + 8px));
+    bottom: calc(100% + 8px);
+    min-width: 168px;
+    padding: 6px;
+    border: 1px solid var(--mob-borda);
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+body.mob .mob-menu-mais[hidden] {
+    display: none;
+}
+
+body.mob .mob-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 11px 12px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--mob-texto);
+    font: inherit;
+    font-size: 1rem;
+    font-weight: 550;
+    text-align: left;
+    cursor: pointer;
+}
+
+body.mob .mob-menu-item:active {
+    background: rgba(0, 0, 0, 0.06);
+}
+
+body.mob .mob-menu-item svg {
+    width: 22px;
+    height: 22px;
+}
+
+body.mob .mob-barra-item:focus-visible,
+body.mob .mob-menu-item:focus-visible,
+body.mob .mob-competencia-seta:focus-visible {
+    outline: 2px solid var(--mob-preto);
+    outline-offset: 2px;
+}
+
+body.mob[hidden] {
+    display: none;
+}

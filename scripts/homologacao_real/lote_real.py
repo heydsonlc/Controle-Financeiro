@@ -51,7 +51,8 @@ ROTAS_LOCAIS = {'js/ponte-api.js', 'js/despesas-adaptador.js', 'js/recorrencias-
                 'js/importar-cartao-adaptador.js', 'js/contas-bancarias-adaptador.js', 'js/lancamentos-adaptador.js',
                 'js/financiamentos-adaptador.js', 'js/patrimonio-adaptador.js', 'js/documentos-fiscais-adaptador.js',
                 'js/dashboard-adaptador.js', 'js/mobilidade-adaptador.js', 'js/arquivo-comprovante.js',
-                'js/receitas-adaptador.js', 'js/categorias-adaptador.js'}
+                'js/receitas-adaptador.js', 'js/categorias-adaptador.js',
+                'js/despesas-servico.js', 'js/despesas-mobile.js'}  # FIN-MVP-MOB-01: rotas de Despesas no servico comum
 
 
 def projeto():

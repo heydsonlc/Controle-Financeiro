@@ -55,6 +55,7 @@ from tests.supabase_local import (  # noqa: E402
     USUARIO_C,
     USUARIO_D,
     USUARIO_E,
+    USUARIO_F,
     EMPRESA_D,
     ClusterLocal,
     PostgrestLocal,
@@ -72,6 +73,7 @@ from tests.supabase_local import (  # noqa: E402
     semear_patrimonio_e2e,
     semear_abastecimento_e2e,
     semear_debito_sem_conta_e2e,
+    semear_despesas_mobile_e2e,
     semear_pagamento_lote_e2e,
     semear_pendencia_e2e,
     semear_receitas_e2e,
@@ -86,6 +88,7 @@ CONTAS = {
     USUARIO_C['email']: {**USUARIO_C, 'senha': 'Senha-ficticia-C-2026'},  # FIN-PRE-PRODUCAO-1 (Empresa C)
     USUARIO_D['email']: {**USUARIO_D, 'senha': 'Senha-ficticia-D-2026'},  # FIN-MIGRACAO-P0P1-01 (Empresa D vazia)
     USUARIO_E['email']: {**USUARIO_E, 'senha': 'Senha-ficticia-E-2026'},  # FIN-DESPESAS-DEBITO-AUTOMATICO-01 (Perfil E)
+    USUARIO_F['email']: {**USUARIO_F, 'senha': 'Senha-ficticia-F-2026'},  # FIN-MVP-MOB-01 (Perfil F)
 }
 HOP_BY_HOP = {'connection', 'keep-alive', 'transfer-encoding', 'content-length', 'server', 'date'}
 
@@ -397,6 +400,7 @@ def main():
                 semear_mobilidade_e2e(cur)  # FIN-FIDELIDADE-PATRIMONIO-1 (mobilidade_tela.spec.mjs)
                 semear_empresa_c_e2e(cur)  # FIN-PRE-PRODUCAO-1 (documentos_financeiro_tela.spec.mjs)
                 semear_empresa_vazia(cur)  # FIN-MIGRACAO-P0P1-01 (migracao_p0p1.spec.mjs)
+                semear_despesas_mobile_e2e(cur)  # FIN-MVP-MOB-01 (mob01_despesas.spec.mjs)
             conn.close()
 
             def consolidar(cartao, competencia, criar_se_faltar=False):
@@ -467,6 +471,8 @@ def main():
                 if args.previa:
                     print(f'PREVIA_PRONTA {origem}/__previa__/', flush=True)
                     print(f'  conta ficticia: {USUARIO_A["email"]} / {CONTAS[USUARIO_A["email"]]["senha"]} (so neste ambiente)', flush=True)
+                    # FIN-MVP-MOB-01: perfil com recorrencias (semanal, mensal e debito automatico) a partir de 04/2031
+                    print(f'  despesas mobile: {USUARIO_F["email"]} / {CONTAS[USUARIO_F["email"]]["senha"]} (competencia 04/2031)', flush=True)
                 try:
                     if args.servir or args.previa:
                         while True:
@@ -477,7 +483,8 @@ def main():
                            'CF_SENHA_B': CONTAS[USUARIO_B['email']]['senha'],
                            'CF_EMAIL_C': USUARIO_C['email'], 'CF_SENHA_C': CONTAS[USUARIO_C['email']]['senha'],
                            'CF_EMAIL_D': USUARIO_D['email'], 'CF_SENHA_D': CONTAS[USUARIO_D['email']]['senha'],
-                           'CF_EMAIL_E': USUARIO_E['email'], 'CF_SENHA_E': CONTAS[USUARIO_E['email']]['senha']}
+                           'CF_EMAIL_E': USUARIO_E['email'], 'CF_SENHA_E': CONTAS[USUARIO_E['email']]['senha'],
+                           'CF_EMAIL_F': USUARIO_F['email'], 'CF_SENHA_F': CONTAS[USUARIO_F['email']]['senha']}
                     return subprocess.run([npx, 'playwright', 'test', '-c', 'playwright.config.mjs', *extras],
                                           cwd=WEB, env=env).returncode
                 except KeyboardInterrupt:
