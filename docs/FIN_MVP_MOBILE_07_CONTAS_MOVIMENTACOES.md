@@ -4,7 +4,7 @@ Sétima etapa da versão mobile. Vem depois de seis MVPs homologados em 14/11/20
 
 O atalho **Contas** da página principal abre a página **Contas**. Ela tem um seletor de conta, o saldo da conta escolhida e as movimentações do período, com o detalhe de cada uma. É **só consulta**: os dados e os cálculos são os da tela Contas Bancárias do desktop, e a única operação, a transferência, é a do Registrar Lançamento (MOBILE-06).
 
-**Situação:** implementado no ramo local `mobile-07-contas-movimentacoes`, a partir do Registrar Lançamento homologado (`345e012`). Não houve push, deploy nem migration. A publicação depende da homologação do titular e será avaliada junto com os demais MVPs mobile.
+**Situação:** implementado no ramo local `mobile-07-contas-movimentacoes`, a partir do Registrar Lançamento homologado (`345e012`). Não houve push, deploy nem migration. Decisões e testes aprovados pelo titular em 14/11/2026; aguardando a homologação visual. A publicação será avaliada junto com os demais MVPs mobile.
 
 ## 1. Inventário do desktop (antes de implementar)
 
@@ -166,6 +166,18 @@ As 9 que não rodaram continuam registradas como cobertura incompleta.
 6. **Seletor só com o nome** da conta; tipo e instituição entram apenas para nomes repetidos (o quadro do saldo já os mostra).
 7. **Confirmação da transferência (MOBILE-06)** passou a oferecer "Ver em Contas" como caminho principal, no lugar de "Início", que continua entre as ações.
 8. **Cores:** entrada em verde discreto, a cor de confirmação já usada na aplicação; saída na cor normal; sem outros indicadores.
+
+**Avaliação do titular (14/11/2026):**
+- as decisões 1 a 4 da seção 7 foram **aprovadas**:
+  - módulo só de consulta;
+  - filtros por período e tipo, sem busca por descrição;
+  - contas inativas no seletor, sem transferência;
+  - "Ver em Contas" como ação principal depois da transferência, com Início como alternativa;
+- os testes técnicos são satisfatórios, sem novos ajustes funcionais;
+- as 9 verificações que não rodaram ficam registradas como cobertura incompleta;
+- as 3 falhas de recorrência continuam como pendência técnica anterior;
+- situação: aguardando a homologação visual no Firefox;
+- próxima etapa: FIN-MVP-MOBILE-FINAL-01 (consolidação, regressão completa, PWA para iPhone e preparação da publicação conjunta).
 
 ## 8. Homologação no Firefox
 
