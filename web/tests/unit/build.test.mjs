@@ -856,6 +856,28 @@ test('recorrencias mobile: protegida, sem moldura, CSS restrito e as operacoes p
     }
 });
 
+// FIN-MVP-MOBILE-10: alternancia de perfis pelo icone de usuario ao lado do sino da pagina principal; a escolha e a mesma do
+// seletor do desktop (perfil.js), sem consulta propria; o restante da pagina nao muda.
+test('pagina principal mobile: icone de perfis ao lado do sino, menu dos perfis pelo perfil.js', async () => {
+    const destino = await mkdtemp(path.join(os.tmpdir(), 'cf-web-mobile10-'));
+    try {
+        await construir({ url: URL_OK, chave: 'sb_publishable_abc123', destino });
+        const html = await readFile(path.join(destino, 'inicio.html'), 'utf8');
+        const acoes = html.slice(html.indexOf('<div class="mob-cabecalho-acoes">'), html.indexOf('</header>'));
+        assert.match(acoes, /<button type="button" class="mob-perfis" id="mob-perfis"[^>]*aria-haspopup="menu"[^>]*>[\s\S]*?<button type="button" class="mob-notificacoes"/,
+            'icone de usuario antes do sino, no cabecalho');
+        assert.match(acoes, /<div class="mob-menu-perfis" id="mob-menu-perfis" role="menu"[^>]*hidden><\/div>/);
+        const script = await readFile(path.join(destino, 'js', 'inicio-mobile.js'), 'utf8');
+        assert.ok(script.includes("from './perfil.js'") && script.includes('salvarPerfilAtivo(usuario.id, perfil.id)'), 'a escolha do desktop');
+        assert.ok(script.includes('window.location.reload()'), 'recarrega no perfil novo, como o desktop');
+        assert.doesNotMatch(script, /\.rpc\s*\(|\.from\s*\(/, 'sem consulta propria');
+        const css = await readFile(path.join(destino, 'css', 'inicio-mobile.css'), 'utf8');
+        assert.match(css, /body\.mob-inicio \.mob-perfis \{[^}]*width: 44px;[^}]*height: 44px;/, 'mesmo tamanho do sino');
+    } finally {
+        await rm(destino, { recursive: true, force: true });
+    }
+});
+
 // FIN-MVP-MOBILE-FINAL-01: aplicativo na tela de inicio (PWA/iOS). Manifesto valido (nome, inicio na pagina principal mobile,
 // standalone, cores), icones PNG nos tamanhos declarados, metadados iOS nas paginas mobile e no login; telas do desktop sem
 // manifesto; nenhum service worker nem cache (Cache API, IndexedDB); CSP inalterada (manifesto e icones do proprio site).

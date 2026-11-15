@@ -32,12 +32,22 @@
             </span>
             <h1 class="mob-titulo">Financeiro</h1>
         </div>
+        <!-- FIN-MVP-MOBILE-10: alternancia de perfis (icone de usuario ao lado do sino); o restante da pagina nao muda. -->
+        <div class="mob-cabecalho-acoes">
+        <button type="button" class="mob-perfis" id="mob-perfis" aria-label="Perfil financeiro" aria-haspopup="menu" aria-expanded="false" aria-controls="mob-menu-perfis">
+            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                <circle cx="12" cy="8.5" r="3.5"/>
+                <path d="M5 19.5c.8-3.4 3.6-5.5 7-5.5s6.2 2.1 7 5.5"/>
+            </svg>
+        </button>
         <button type="button" class="mob-notificacoes" aria-label="Notificações (em breve)" aria-disabled="true">
             <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
                 <path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15L6 16Z"/>
                 <path d="M10 20.5a2 2 0 0 0 4 0"/>
             </svg>
         </button>
+        <div class="mob-menu-perfis" id="mob-menu-perfis" role="menu" aria-label="Perfil financeiro" hidden></div>
+        </div>
         </div>
     </header>
 

@@ -36,6 +36,96 @@ body.mob-inicio .mob-notificacoes {
     flex: 0 0 auto;
 }
 
+/* FIN-MVP-MOBILE-10: icone de usuario ao lado do sino (mesmo tamanho) e o menu dos perfis logo abaixo, no padrao do menu
+   do "Mais" (css/mobile-base.css). */
+body.mob-inicio .mob-cabecalho-acoes {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex: 0 0 auto;
+}
+
+body.mob-inicio .mob-perfis {
+    width: 44px;
+    height: 44px;
+    padding: 8px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--mob-texto);
+    cursor: pointer;
+    flex: 0 0 auto;
+}
+
+body.mob-inicio .mob-perfis[aria-expanded="true"],
+body.mob-inicio .mob-perfis:active {
+    background: rgba(0, 0, 0, 0.06);
+}
+
+/* Telas estreitas (320 px): o icone novo fica um pouco menor para o titulo "Financeiro" nao encostar nele (o resto igual) */
+@media (max-width: 359px) {
+    body.mob-inicio .mob-cabecalho-acoes {
+        gap: 0;
+    }
+
+    body.mob-inicio .mob-perfis {
+        width: 36px;
+        padding: 6px;
+    }
+}
+
+body.mob-inicio .mob-perfis:focus-visible {
+    outline: 2px solid var(--mob-preto);
+    outline-offset: 2px;
+}
+
+body.mob-inicio .mob-menu-perfis {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 20;
+    min-width: 220px;
+    max-width: min(300px, calc(100vw - 24px));
+    padding: 6px;
+    border: 1px solid var(--mob-borda);
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+body.mob-inicio .mob-menu-perfis[hidden] {
+    display: none;
+}
+
+body.mob-inicio .mob-menu-perfis-titulo {
+    margin: 4px 10px 6px;
+    color: #6e6e73;
+    font-size: 0.74rem;
+    font-weight: 600;
+}
+
+body.mob-inicio .mob-menu-perfis .mob-menu-item {
+    justify-content: space-between;
+    font-size: 0.95rem;
+    text-align: left;
+}
+
+body.mob-inicio .mob-menu-perfis .mob-menu-item span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+body.mob-inicio .mob-menu-perfis .mob-menu-item svg {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+}
+
+body.mob-inicio .mob-menu-perfis .mob-menu-item[aria-checked="false"] svg {
+    visibility: hidden;
+}
+
 /* Grade de modulos: 2 colunas x 4 linhas */
 body.mob-inicio .mob-grade {
     display: grid;
