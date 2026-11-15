@@ -45,6 +45,7 @@ python decifrar_cfbak.py <arquivo>.cfbak <arquivo>.chave <pasta protegida>
 python scripts/backup_banco.py verificar --manifesto <pasta>/manifesto_<data>.json
 ```
 
+- **Backups da rotina do FIN-REG-02** (a ficha traz `chave_id`; chave mestra anual `cf-<projeto>-mestra-<ano>.chave`): o primeiro comando é `python scripts/backup_rotina.py decifrar --arquivo <arquivo>.cfbak --saida <pasta protegida>`. O arquivo da chave do ano precisa estar na pasta de chaves; se o computador foi perdido, recoloque ali a cópia externa (o índice `chaves.json` não é necessário para decifrar). Detalhes em `docs/FIN_REG_02_ROTINA_BACKUP.md`.
 - O primeiro comando mostra o SHA-256 do pacote; compare com `sha256_pacote_claro` da ficha.
 - O segundo deve responder "Backup integro (SHA-256 conferidos)".
 - A pasta passa a ter dados reais em texto claro. Use um local fora do OneDrive e apague ao final.
@@ -94,6 +95,7 @@ O banco restaurado não basta. Faltam itens que ficam fora dele:
 - O backup é uma fotografia: o que foi gravado depois da data do backup não é recuperado por ele.
 - A restauração num projeto Supabase novo não foi ensaiada. O ensaio de 15/11/2026 foi num PostgreSQL 17.6 comum e saiu homologado.
 - Não há recuperação pontual (PITR).
+- A cópia do OneDrive é conferida na pasta sincronizada do disco local. Arquivo presente nessa pasta não significa arquivo já enviado à nuvem: antes de contar com a cópia externa, confira no cliente do OneDrive (ícone de sincronização concluída) ou em onedrive.com que o `.cfbak` e a ficha estão lá.
 - A configuração do projeto (Auth, API, chaves) não está no backup; mantenha-a anotada.
 - Apagar arquivos decifrados pelo sistema operacional não garante eliminação irrecuperável do disco.
 
