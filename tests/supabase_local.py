@@ -1148,6 +1148,21 @@ def semear_pagamentos_previa(cur):
 # homologacao das Recorrencias mobile, pelas funcoes oficiais (como o usuario G). Todas comecam no mes seguinte (a
 # competencia atual dos Pagamentos nao muda): mensal com boleto, mensal em debito automatico na Conta G, anual, assinatura
 # no cartao "Nubank Master G" (Assinatura Musica G) e uma inativa. A "Diarista G" semanal vem de semear_pagamentos_previa.
+# FIN-MVP-MOBILE-10 (so a pre-visualizacao): segundo perfil do usuario G, vazio, para a alternancia de perfis pelo icone da
+# pagina principal. meus_perfis ordena por padrao e nome: "Perfil G (ficticio)" continua o primeiro (abre nele).
+PERFIL_G_EMPRESA_PREVIA = {'id': 161, 'nome': 'Perfil G Empresa (ficticio)'}
+
+
+def semear_perfis_previa(cur):
+    p = PERFIL_G_EMPRESA_PREVIA
+    cur.execute("insert into public.perfil_financeiro (id, nome, tipo, cor, ativo, padrao) values (%s, %s, 'EMPRESA', '#1d1d1f', true, false)",
+                (p['id'], p['nome']))
+    cur.execute("insert into financeiro.perfil_acesso (user_id, perfil_financeiro_id, papel, pode_gerir) values (%s, %s, 'TITULAR', true)",
+                (USUARIO_G['id'], p['id']))
+    cur.execute('select financeiro.definir_gerador_recorrencia(%s, %s, %s, %s)',
+                (p['id'], 'NOVO', 'administrador de teste', 'cenario ficticio da previa (FIN-MVP-MOBILE-10)'))
+
+
 RECORRENCIAS_PREVIA_G = (  # nome, valor, dia, tipo, meio
     ('Aluguel G (ficticio)', '1850.00', 5, 'mensal', 'boleto'),
     ('Energia G (ficticia)', '210.00', 12, 'mensal', 'debito_automatico'),
