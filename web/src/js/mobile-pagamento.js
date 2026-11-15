@@ -9,7 +9,8 @@ import { hojeBrasilia } from './adaptador-comum.js';
 import { centavos, dataCurta, el, reais } from './comum.js';
 import { formatarCompetencia } from './despesas-grupos.js';
 import {
-    FALHA_GERAL, abrirFolha, botao, campo, entrada, fecharFolha, limparAoEditar, mensagem, mostrarMensagem, seletor, texto,
+    FALHA_GERAL, abrirFolha, botao, campo, detalhes, entrada, fecharFolha, folhaDeErro, limparAoEditar, mensagem, mostrarMensagem,
+    seletor, texto,
 } from './mobile-ui.js';
 
 // Pagamento (individual): os campos do desktop (data, conta, valor total ou outro valor com a diferenca classificada e
@@ -123,9 +124,93 @@ export async function abrirPagamento(d, ctx) {
             confirmar.disabled = false;
             return;
         }
-        await concluir(r.message || 'Despesa paga.');
+        // FIN-MVP-MOBILE-08: a conta e a data seguem para quem quiser oferecer "Ver em Contas" (as outras telas ignoram).
+        await concluir(r.message || 'Despesa paga.', { conta_bancaria_id: payload.conta_bancaria_id, data_pagamento: payload.data_pagamento });
     });
     abrirFolha(`${fatura ? 'Pagar fatura' : 'Pagar'}: ${d.nome}`, form);
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Pagamento em lote das ocorrencias pendentes de uma recorrencia semanal agrupada (P20/P21), como no desktop. Veio de
+// js/despesas-mobile.js (FIN-MVP-MOB-01) sem mudanca de texto nem de regra, para a Lista de Despesas e os Pagamentos
+// mobile usarem o mesmo painel. O banco paga todas as pendentes da recorrencia na competencia, numa so transacao (tudo
+// ou nada), e confere de novo as ocorrencias, os valores e a identidade do lote.
+//
+// ctx = { api, contasAtivas, concluir, recarregar, pendentesDoAgrupador, comData }: pendentesDoAgrupador(nome, competencia)
+// devolve as ocorrencias pendentes de agora (null se o agrupador nao existe mais); recarregar rele a lista ao fechar
+// quando ela mudou; comData mostra a data do pagamento (a de hoje, a que o servico usa no lote) no painel.
+
+function nomeDoMeio(meio) {
+    const forma = meio && window.FormasPagamentoUI && window.FormasPagamentoUI.resolverFormaPagamento(meio);
+    return (forma && forma.nome) || ({ pix: 'Pix', boleto: 'Boleto', debito: 'Débito', debito_automatico: 'Débito automático' }[meio]) || 'Não informado';
+}
+
+const idsDe = (ocorrencias) => ocorrencias.map((o) => o.id).sort((a, b) => a - b).join(',');
+const CODIGOS_RECARREGAR = ['LOTE_DESATUALIZADO', 'LOTE_IDENTIDADE', 'VALOR_MUDOU', 'DESPESA_PAGA'];
+
+export async function abrirLote(nome, competencia, ctx) {
+    const { api, contasAtivas, concluir, recarregar: reler, pendentesDoAgrupador, comData = false } = ctx;
+    const encontradas = pendentesDoAgrupador(nome, competencia);
+    const pendentes = encontradas || [];
+    if (!pendentes.length) {
+        folhaDeErro(nome, encontradas ? 'Todas as ocorrências já foram pagas!' : 'Agrupamento não encontrado. Atualize a lista e tente de novo.');
+        return;
+    }
+    const total = pendentes.reduce((s, o) => s + centavos(o.valor), 0);
+    const contas = await contasAtivas();
+    const vinculadas = [...new Set(pendentes.map((o) => o.conta_bancaria_id).filter(Boolean))];
+    const conta = opcoesDeConta(contas, vinculadas.length === 1 ? vinculadas[0] : null);
+    const m = mensagem();
+    const form = el('form', 'mob-form');
+    form.noValidate = true;
+    const pares = [
+        ['Recorrência', nome], ['Competência', formatarCompetencia(competencia)], ['Forma de pagamento', nomeDoMeio(pendentes[0].meio_pagamento)],
+        ['Ocorrências pendentes', String(pendentes.length)], ['Valor total', reais(total)],
+    ];
+    if (comData) pares.push(['Data do pagamento', dataCurta(hojeBrasilia())]);
+    form.append(detalhes(pares), campo('Conta bancária de débito', conta), m);
+    const cancelar = botao('Cancelar');
+    const confirmar = botao('Confirmar pagamento', 'primario');
+    confirmar.type = 'submit';
+    const acoes = el('div', 'mob-acoes');
+    acoes.append(cancelar, confirmar);
+    form.append(acoes);
+    let recarregar = false;  // no lote o aviso fica: ele diz se a lista mudou e precisa ser conferida
+    const fechar = async () => { fecharFolha(); if (recarregar) await reler(); };
+    cancelar.addEventListener('click', fechar);
+    form.addEventListener('submit', async (evento) => {
+        evento.preventDefault();
+        if (!conta.value) { mostrarMensagem(m, 'Selecione a conta bancária de débito.', 'erro'); return; }
+        const aindaPendentes = pendentesDoAgrupador(nome, competencia) || [];
+        if (idsDe(aindaPendentes) !== idsDe(pendentes)) {
+            recarregar = true;
+            confirmar.disabled = true;
+            mostrarMensagem(m, 'Nenhuma ocorrência foi paga.\nA lista mudou desde a abertura. Feche e confira a lista atualizada antes de pagar de novo.', 'erro');
+            return;
+        }
+        confirmar.disabled = true;
+        mostrarMensagem(m, 'Pagando...');
+        const r = await api('POST', '/api/despesas/pagar-lote', {
+            conta_bancaria_id: Number(conta.value),
+            itens: pendentes.map((o) => ({ conta_id: o.id, valor_devido: Number(o.valor).toFixed(2) })),
+            // o que o painel mostrou: o banco recusa se as ocorrencias nao forem desta recorrencia e competencia (P21)
+            lote: { descricao: nome, competencia, recorrencias: [...new Set(pendentes.map((o) => o.item_despesa_id))].sort((a, b) => a - b),
+                quantidade: pendentes.length, valor_total: (total / 100).toFixed(2) },
+        });
+        if (!r.success) {
+            const deveRecarregar = CODIGOS_RECARREGAR.includes(r.codigo);
+            mostrarMensagem(m, `Nenhuma ocorrência foi paga.\n${String(r.error || 'Não foi possível pagar.').replace(/^Nenhuma ocorrência foi paga\.\s*/, '')}`
+                + (deveRecarregar ? '\nFeche e confira a lista atualizada antes de pagar de novo.' : ''), 'erro');
+            if (deveRecarregar) recarregar = true;
+            confirmar.disabled = deveRecarregar;
+            return;
+        }
+        const resultado = r.data;
+        await concluir(`Pagamento em lote concluído\n${resultado.pagas} ocorrência(s) paga(s)\nValor total: ${reais(centavos(resultado.valor_total))}\n`
+            + `Conta de débito: ${resultado.conta_nome}\nSaldo da conta: ${reais(centavos(resultado.saldo_conta))}`,
+        { conta_bancaria_id: resultado.conta_bancaria_id, data_pagamento: resultado.data_pagamento });
+    });
+    abrirFolha(`Pagar ocorrências: ${nome}`, form);
 }
 
 // ---------------------------------------------------------------------------------------------------------------

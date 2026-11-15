@@ -15,7 +15,8 @@ import { sair } from './sessao.js';
 // FIN-MVP-MOBILE-05: o atalho Despesa abre a Nova Despesa mobile (cadastro rapido).
 // FIN-MVP-MOBILE-06: o atalho Lancamento e o Lancar da barra abrem a mesma pagina, Registrar Lancamento.
 // FIN-MVP-MOBILE-07: o atalho Contas abre as Contas mobile (sem item novo na barra).
-export const MODULOS_ATIVOS = new Set(['resumo', 'cartoes', 'receita', 'despesa', 'lancamento', 'lancar', 'contas']);
+// FIN-MVP-MOBILE-08: o atalho Pagamentos abre os Pagamentos mobile (sem item novo na barra; quem so le consulta).
+export const MODULOS_ATIVOS = new Set(['resumo', 'cartoes', 'receita', 'despesa', 'lancamento', 'lancar', 'contas', 'pagamentos']);
 
 const $ = (id) => document.getElementById(id);
 

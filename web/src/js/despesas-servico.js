@@ -526,6 +526,30 @@ async function faturasDoMes(parametros) {
     return ok({ data: linhas });
 }
 
+// FIN-MVP-MOBILE-08: as obrigacoes da competencia para a tela Pagamentos mobile, com as mesmas linhas da lista de Despesas
+// (contas_do_mes + despesa_para_edicao + linhaDoFlask), mas SEM a geracao das recorrencias que a lista faz antes de ler o
+// mes: consultar a tela nao grava nada (as ocorrencias ja materializadas aparecem; a geracao continua sendo a da Lista).
+// So leitura. Guarda as linhas para o pagamento distinguir a fatura (pagar -> pagarFatura), como a lista.
+async function obrigacoesDoMes(parametros) {
+    const mes = String(parametros.get('mes_referencia') || '').slice(0, 7);
+    if (!MES.test(mes)) return falha('Competência inválida.');
+    const [atual, categorias, , recorrentes] = await Promise.all([
+        supabase.rpc('contas_do_mes', { p_perfil_id: estado.perfilId, p_mes: `${mes}-01` }),
+        categoriasDeDespesa(), contasBancariasAtivas(),
+        supabase.rpc('recorrencias_do_perfil', { p_perfil_id: estado.perfilId }),
+    ]);
+    if (atual.error) return falha(mensagemDeErro(atual.error), 403);
+    const categoriasPorNome = new Map(categorias.map((c) => [c.nome, c]));
+    const edicoes = new Map(await Promise.all((atual.data || []).filter((c) => c.grupo === 'DESPESA').map(async (c) => {
+        const { data, error } = await supabase.rpc('despesa_para_edicao', { p_perfil_id: estado.perfilId, p_conta_id: c.id });
+        return [c.id, error ? null : data];
+    })));
+    const meios = new Map((recorrentes.error ? [] : recorrentes.data || []).map((r) => [r.id, r.meio_pagamento]));
+    const linhas = (atual.data || []).map((c) => linhaDoFlask(c, mes, edicoes.get(c.id), categoriasPorNome, meios));
+    estado.linhas = new Map(linhas.map((l) => [l.id, l]));
+    return ok({ data: linhas });
+}
+
 // Detalhe da fatura (lancamentos do cartao na competencia), so leitura.
 async function comprasDaFatura(cartaoId, parametros) {
     const mes = String(parametros.get('mes_fatura') || '').slice(0, 7);
@@ -581,6 +605,8 @@ const ROTAS = [
     ['GET', /^\/api\/faturas\/?$/, (m, p) => faturasDoMes(p)],
     ['POST', /^\/api\/faturas\/(\d+)\/pagar$/, (m, p, corpo) => pagarFatura(Number(m[1]), corpo || {})],
     ['POST', /^\/api\/faturas\/(\d+)\/estornar-pagamento$/, (m, p, corpo) => estornar(Number(m[1]), corpo || {}, true)],
+    // FIN-MVP-MOBILE-08 (Pagamentos mobile): as obrigacoes do mes sem gerar recorrencias; o pagamento e o das rotas acima.
+    ['GET', /^\/api\/pagamentos\/?$/, (m, p) => obrigacoesDoMes(p)],
     ['GET', /^\/api\/categorias\/?$/, async () => ok({ data: await categoriasDeDespesa() })],
     ['GET', /^\/api\/contas\/?$/, async () => ok({ data: (await contasBancariasAtivas()).map((c) => ({ id: c.id, nome: c.nome, instituicao: c.instituicao })) })],
     ['GET', /^\/api\/cartoes\/(\d+)\/lancamentos$/, (m, p) => comprasDaFatura(Number(m[1]), p)],

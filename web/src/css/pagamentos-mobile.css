@@ -1,0 +1,232 @@
+/* FIN-MVP-MOBILE-08 — Pagamentos mobile (pagamentos-mobile.html): so o que e proprio da tela (cabecalho centrado, resumo
+   Pendente | Selecionadas | Selecionado, a caixa de selecao a esquerda da linha e a barra da selecao). Lista, grupos,
+   painel e formularios vem de css/mobile-modulo.css. Restrita a body.mob-pagamentos: nenhuma tela do desktop e afetada. */
+
+/* Cabecalho: os dois lados com a mesma largura, para o titulo ficar no centro (Voltar | Pagamentos | vazio) */
+body.mob-pagamentos .mob-cabecalho-lado {
+    display: flex;
+    flex: 0 0 44px;
+    align-items: center;
+}
+
+body.mob-pagamentos .mob-cabecalho-lado.direita {
+    justify-content: flex-end;
+}
+
+/* Resumo da competencia, uma linha: Pendente | Selecionadas | Selecionado */
+body.mob-pagamentos .mob-resumo {
+    margin: 0 0 12px;
+    border: 1px solid var(--mob-borda);
+    border-radius: 12px;
+    background: #ffffff;
+}
+
+body.mob-pagamentos .mob-resumo[hidden] {
+    display: none;
+}
+
+body.mob-pagamentos .mob-resumo-valores {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin: 0;
+    padding: 8px 0;
+}
+
+body.mob-pagamentos .mob-resumo div {
+    min-width: 0;
+    padding: 0 6px;
+    text-align: center;
+}
+
+body.mob-pagamentos .mob-resumo div + div {
+    border-left: 1px solid var(--mob-linha);
+}
+
+body.mob-pagamentos .mob-resumo dt {
+    margin: 0 0 2px;
+    color: var(--mob-cinza);
+    font-size: 0.68rem;
+}
+
+body.mob-pagamentos .mob-resumo dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+    font-size: 0.88rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 650;
+}
+
+body.mob-pagamentos .mob-somente-leitura {
+    margin: -4px 2px 10px;
+    color: var(--mob-cinza);
+    font-size: 0.78rem;
+}
+
+body.mob-pagamentos .mob-somente-leitura[hidden] {
+    display: none;
+}
+
+/* Linha: Selecao | Descricao (vencimento discreto) | Valor | Detalhes. A caixa seleciona sem abrir os detalhes; o
+   restante da linha abre os detalhes (independente da selecao). */
+body.mob-pagamentos .mob-pag-linha {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr);
+    align-items: stretch;
+    border-top: 1px solid var(--mob-linha);
+    background: #ffffff;
+}
+
+body.mob-pagamentos .mob-lista.somente-leitura .mob-pag-linha {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+body.mob-pagamentos .mob-pag-marca {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 46px;
+    cursor: pointer;
+}
+
+body.mob-pagamentos .mob-pag-marca input {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: var(--mob-preto);
+    cursor: pointer;
+}
+
+body.mob-pagamentos .mob-pag-marca input:disabled {
+    cursor: not-allowed;
+}
+
+body.mob-pagamentos .mob-pag-abrir {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto 14px;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    min-height: 46px;
+    margin: 0;
+    padding: 6px 10px 6px 0;
+    border: 0;
+    background: transparent;
+    color: var(--mob-texto);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+body.mob-pagamentos .mob-lista.somente-leitura .mob-pag-abrir {
+    padding-left: 12px;
+}
+
+body.mob-pagamentos .mob-pag-abrir:active {
+    background: #f4f4f7;
+}
+
+body.mob-pagamentos .mob-pag-abrir .mob-seta {
+    width: 14px;
+    height: 14px;
+}
+
+/* Ocorrencias da recorrencia semanal, no painel */
+body.mob-pagamentos .mob-pag-ocorrencias {
+    margin-bottom: 4px;
+}
+
+body.mob-pagamentos .mob-pag-ocorrencias .mob-linha:first-child {
+    border-top: 0;
+}
+
+/* Barra da selecao: acompanha a rolagem logo acima da barra inferior (sem cobrir o fim da lista) */
+body.mob-pagamentos .mob-selecao {
+    position: sticky;
+    bottom: calc(var(--mob-barra-altura) + env(safe-area-inset-bottom, 0px) + 8px);
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 12px;
+    padding: 8px 10px 8px 12px;
+    border: 1px solid var(--mob-borda);
+    border-radius: 12px;
+    background: #ffffff;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+}
+
+body.mob-pagamentos .mob-selecao[hidden] {
+    display: none;
+}
+
+body.mob-pagamentos .mob-selecao-total {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+body.mob-pagamentos .mob-selecao-rotulo {
+    color: var(--mob-cinza);
+    font-size: 0.72rem;
+}
+
+body.mob-pagamentos .mob-selecao-valor {
+    font-size: 1rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+body.mob-pagamentos .mob-selecao-acoes {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 6px;
+}
+
+body.mob-pagamentos .mob-selecao-acoes .mob-botao {
+    min-width: 0;
+    padding-right: 12px;
+    padding-left: 12px;
+}
+
+/* Telas estreitas (320 px): o total em cima e os botoes embaixo, sem sobrepor o valor */
+@media (max-width: 359px) {
+    body.mob-pagamentos .mob-selecao {
+        flex-wrap: wrap;
+    }
+
+    body.mob-pagamentos .mob-selecao-total {
+        flex-direction: row;
+        flex: 1 1 100%;
+        align-items: baseline;
+        justify-content: space-between;
+    }
+
+    body.mob-pagamentos .mob-selecao-acoes {
+        flex: 1 1 100%;
+    }
+
+    body.mob-pagamentos .mob-selecao-acoes .mob-botao {
+        flex: 0 0 auto;
+        font-size: 0.86rem;
+        white-space: nowrap;
+    }
+
+    body.mob-pagamentos .mob-selecao-acoes #mob-pagar {
+        flex: 1 1 auto;
+    }
+}
+
+/* Links com aparencia de botao no painel (Ver em Contas, Ver na Lista de Despesas), como nas Contas mobile */
+body.mob-pagamentos .mob-folha .mob-acoes a.mob-botao {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+}
+
+/* Mensagem do resultado (o lote tem varias linhas) */
+body.mob-pagamentos .mob-texto.quebras {
+    white-space: pre-line;
+}
