@@ -177,3 +177,11 @@ A exclusão foi a comum do sistema de arquivos: em disco, não equivale a elimin
 | Situação final | **FIN-REG-01 — APROVADO COM RESSALVAS** |
 
 **Critérios de aceite:** atendidos os 12. O critério 5 (local autorizado) e o 12 (riscos identificados) carregam a ressalva da chave única.
+
+## Atualização de 15/11/2026 — ressalva da chave encerrada
+
+- A chave do backup `cf-fzjmgekasjrgvmfdkdog-20261115_150732` foi copiada para um pendrive USB do titular (pasta `CF-Backup-Chave`), com SHA-256 igual ao do arquivo original e ao `sha256_chave` da ficha.
+- O titular confirmou, em 15/11/2026, que o pendrive está guardado fora do computador.
+- **A ressalva da chave única está encerrada.** Permanecem as demais: confirmar o plano do Supabase no painel e a recomendação de uma segunda guarda da chave (cofre de senhas), porque a cópia externa é uma só.
+- As correções da ferramenta foram enviadas ao GitHub em `4a4c9ee`. A rotina periódica é a do FIN-REG-02 (`docs/FIN_REG_02_ROTINA_BACKUP.md`).
+

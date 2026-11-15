@@ -1,6 +1,6 @@
 # FIN-REG-02 — Rotina periódica de backup seguro
 
-**Situação em 15/11/2026:** implementação local homologada pelo titular (18 testes da rotina e 10 do FIN-REG-01). A chave mestra de 2026 (identificador `2026-4e98de1a`) foi criada localmente, com autorização, e copiada para um pendrive USB do titular; a rotina conferiu a cópia e registrou a guarda externa. A chave do backup do FIN-REG-01 foi copiada para o mesmo pendrive, com SHA-256 igual. **A rotina ainda não foi executada sobre a produção:** a primeira execução real depende de autorização específica. Commit só local, sem push; sem deploy, migration ou agendamento.
+**Situação em 15/11/2026:** implementação homologada pelo titular e **primeira execução real feita e verificada** (seção 12). A chave mestra de 2026 (`2026-4e98de1a`) e a chave do backup do FIN-REG-01 estão copiadas num pendrive USB que o titular confirmou guardar fora do computador. Commit só local, sem push; sem deploy, migration ou agendamento. Falta, para encerrar: o titular conferir que o arquivo chegou à nuvem do OneDrive.
 
 A rotina é manual assistida: o titular aciona um único comando. Ela não agenda nada e **não exclui backups**.
 
@@ -213,9 +213,32 @@ Consultas feitas com a configuração real, só de leitura local (`situacao`, `r
 - **A rotina não distingue arquivo presente na pasta sincronizada do OneDrive de arquivo efetivamente enviado à nuvem.** Ela confere o SHA-256 na pasta local; o envio é feito pelo cliente do OneDrive. Depois de cada backup, confira no cliente (sincronização concluída) ou em onedrive.com que o arquivo chegou.
 - O backup é uma fotografia. Não há recuperação pontual (PITR).
 
-## 12. Pendências para encerrar o FIN-REG-02
+## 12. Primeira execução real (15/11/2026)
 
-1. Confirmação, pelo titular, de que o pendrive com as duas chaves está guardado fora do computador. Recomenda-se uma segunda guarda num cofre de senhas (`chave confirmar-guarda --ano 2026 --digitar`), porque hoje as duas chaves externas estão no mesmo pendrive.
-2. Autorização da primeira execução real.
-3. Depois dela: `conferir`, conferência das duas cópias e dos hashes, verificação de que o arquivo chegou à nuvem do OneDrive e ensaio de recuperação.
-4. Push dos arquivos, quando autorizado.
+Autorizada pelo titular depois de confirmada a guarda externa das chaves.
+
+| Item | Resultado |
+|---|---|
+| Comando | `backup_rotina.py executar` (tipo `SEMANAL`), código de saída 0 |
+| Backup | `cf-fzjmgekasjrgvmfdkdog-20261115_201916` |
+| Conteúdo | 3.137 linhas em 88 tabelas; 67 migrations; 2 contas e 2 identidades do Auth |
+| Chave | `2026-4e98de1a` |
+| Arquivo cifrado | 6.512.876 bytes; SHA-256 `d1f9262b99090e5f55d25846dc4b5c7a7bb8b4aeb5365bca7634c5390776da91` |
+| Destino local (`D:\CF-Backups`) | VERIFICADO, mesmo SHA-256 |
+| Destino OneDrive (pasta sincronizada) | VERIFICADO, mesmo SHA-256 |
+| Texto claro | Removido; pasta de trabalho vazia |
+| `conferir` | Cópias íntegras nos dois destinos, decifragem e manifesto conferidos |
+| `ensaiar` | HOMOLOGADO: restauração idêntica ao backup num PostgreSQL 17 descartável; 2 de 2 documentos fiscais com o SHA-256 igual ao gravado; banco descartável removido |
+| `situacao` | Último backup válido: o desta execução; sem avisos |
+| `retencao` | 2 backups guardados, nenhum além da política; nada excluído |
+| Produção | Só leitura; nenhuma escrita no Supabase |
+| Backup do FIN-REG-01 | Intocado nos dois destinos |
+
+O registro `D:\CF-Backupsegistro_execucoes.jsonl` tem as três linhas (backup, conferência e ensaio), todas `CONCLUIDO`.
+
+### Pendências
+
+1. **Titular:** conferir no cliente do OneDrive ou em onedrive.com que o `.cfbak` e a ficha de 20:19 chegaram à nuvem. A rotina só confere a pasta local.
+2. Recomendado: segunda guarda das chaves num cofre de senhas, porque as duas cópias externas estão no mesmo pendrive.
+3. Push dos arquivos, quando autorizado.
+4. Próximo backup semanal: até 22/11/2026. Antes de qualquer migration: `executar --tipo PRE_MIGRATION`.
