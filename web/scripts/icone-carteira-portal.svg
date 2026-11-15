@@ -1,0 +1,10 @@
+<!-- FIN-MVP-MOBILE-ICON-01: icone de carteira do portal (kortex-site, sistemas/index.html, item "Controle Financeiro"),
+     copiado sem alteracao do desenho. No portal o currentColor e #ecebe8 (.system-item__icon) e o fundo e #0a0a0c
+     (--color-bg), cor que o fecho da carteira usa para cobrir o contorno. Fonte dos icones da PWA (gerar_icones_pwa.mjs). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" color="#ecebe8">
+  <path d="M14 21 40 9l4 9" fill="none" stroke="#c9a86a" stroke-width="4.2" stroke-linejoin="round"/>
+  <path d="M19 21 42 13l2.5 6" fill="none" stroke="#c9a86a" stroke-width="3" stroke-linejoin="round" opacity="0.7"/>
+  <rect x="6" y="21" width="48" height="34" rx="6" fill="none" stroke="currentColor" stroke-width="4.2"/>
+  <rect x="40" y="31" width="18" height="14" rx="4" fill="#0a0a0c" stroke="currentColor" stroke-width="4.2"/>
+  <circle cx="48" cy="38" r="2.5" fill="currentColor"/>
+</svg>
