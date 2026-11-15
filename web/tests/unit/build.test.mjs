@@ -765,8 +765,10 @@ test('pwa: manifesto, icones e metadados iOS so nas paginas mobile e no login; s
         assert.equal(manifesto.theme_color, '#1d1d1f', 'preto da identidade');
         assert.equal(manifesto.background_color, '#ffffff');
         assert.ok(manifesto.icons.some((i) => i.purpose === 'maskable'));
+        // FIN-MVP-MOBILE-ICON-01: icones da carteira do portal, com versao no endereco (as imagens ficam 4 h no cache do navegador).
         for (const icone of manifesto.icons) {
-            const png = await readFile(path.join(destino, icone.src));
+            assert.match(icone.src, /^icones\/[\w-]+\.png\?v=2$/, icone.src);
+            const png = await readFile(path.join(destino, icone.src.split('?')[0]));
             assert.equal(png.subarray(1, 4).toString('latin1'), 'PNG', icone.src);
             assert.deepEqual(dimensoes(png), icone.sizes.split('x').map(Number), icone.src);
         }
@@ -776,7 +778,7 @@ test('pwa: manifesto, icones e metadados iOS so nas paginas mobile e no login; s
             'lancamento-mobile.html', 'contas-mobile.html'];
         for (const pagina of [...mobile, 'index.html']) {
             const html = await readFile(path.join(destino, pagina), 'utf8');
-            for (const marca of ['<link rel="manifest" href="manifest.webmanifest">', '<link rel="apple-touch-icon" href="icones/apple-touch-icon.png">',
+            for (const marca of ['<link rel="manifest" href="manifest.webmanifest">', '<link rel="apple-touch-icon" href="icones/apple-touch-icon.png?v=2">',
                 '<meta name="apple-mobile-web-app-capable" content="yes">', '<meta name="apple-mobile-web-app-title" content="Financeiro">']) {
                 assert.ok(html.includes(marca), `${pagina}: ${marca}`);
             }
@@ -785,6 +787,7 @@ test('pwa: manifesto, icones e metadados iOS so nas paginas mobile e no login; s
             const html = await readFile(path.join(destino, pagina), 'utf8');
             assert.match(html, /<meta name="viewport" content="width=device-width, initial-scale=1\.0, viewport-fit=cover">/, `${pagina}: areas seguras`);
             assert.match(html, /<meta name="theme-color" content="#ffffff">/, `${pagina}: barra do navegador como a homologada`);
+            assert.ok(html.includes('<link rel="icon" type="image/png" sizes="32x32" href="icones/icone-32.png?v=2">'), `${pagina}: icone da aba`);
         }
         // Telas do desktop: sem manifesto nem metadados do aplicativo (o desktop nao muda).
         for (const pagina of ['contas.html', 'cartoes.html', 'receitas.html', 'lancamentos.html', 'contas-bancarias.html', 'dashboard.html']) {
