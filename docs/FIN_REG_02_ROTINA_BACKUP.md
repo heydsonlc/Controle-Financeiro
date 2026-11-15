@@ -1,6 +1,6 @@
 # FIN-REG-02 — Rotina periódica de backup seguro
 
-**Situação em 15/11/2026:** implementação homologada pelo titular e **primeira execução real feita e verificada** (seção 12). A chave mestra de 2026 (`2026-4e98de1a`) e a chave do backup do FIN-REG-01 estão copiadas num pendrive USB que o titular confirmou guardar fora do computador. Commit só local, sem push; sem deploy, migration ou agendamento. Falta, para encerrar: o titular conferir que o arquivo chegou à nuvem do OneDrive.
+**Situação em 15/11/2026:** implementação homologada pelo titular e **primeira execução real feita e verificada** (seção 12). A chave mestra de 2026 (`2026-4e98de1a`) e a chave do backup do FIN-REG-01 estão copiadas num pendrive USB que o titular confirmou guardar fora do computador. Rotina e documentação enviadas ao GitHub (`73c64b8`); sem deploy, migration ou agendamento. A sincronização com o OneDrive foi conferida em 15/11/2026 (seção 12). **Ciclo de implantação da rotina encerrado.**
 
 A rotina é manual assistida: o titular aciona um único comando. Ela não agenda nada e **não exclui backups**.
 
@@ -234,11 +234,19 @@ Autorizada pelo titular depois de confirmada a guarda externa das chaves.
 | Produção | Só leitura; nenhuma escrita no Supabase |
 | Backup do FIN-REG-01 | Intocado nos dois destinos |
 
-O registro `D:\CF-Backupsegistro_execucoes.jsonl` tem as três linhas (backup, conferência e ensaio), todas `CONCLUIDO`.
+O registro `D:\CF-Backups
+egistro_execucoes.jsonl` tem as três linhas (backup, conferência e ensaio), todas `CONCLUIDO`.
 
-### Pendências
+### Sincronização com o OneDrive (conferida em 15/11/2026)
 
-1. **Titular:** conferir no cliente do OneDrive ou em onedrive.com que o `.cfbak` e a ficha de 20:19 chegaram à nuvem. A rotina só confere a pasta local.
-2. Recomendado: segunda guarda das chaves num cofre de senhas, porque as duas cópias externas estão no mesmo pendrive.
-3. Push dos arquivos, quando autorizado.
-4. Próximo backup semanal: até 22/11/2026. Antes de qualquer migration: `executar --tipo PRE_MIGRATION`.
+- O cliente do OneDrive (conta pessoal, raiz `D:\OneDrive`) informa os cinco arquivos da pasta `Backups-Controle-Financeiro` como sincronizados, incluindo o `.cfbak` e a ficha desta execução. Nenhum aparece como envio pendente ou erro.
+- O titular confirmou pelo Explorador de Arquivos: os cinco com o visto verde na coluna "Status".
+- A conferência foi pelo estado declarado pelo cliente neste computador, não por consulta ao servidor. Recomenda-se, sem bloquear o encerramento, abrir a pasta em onedrive.com uma vez.
+
+### Rotina daqui em diante
+
+1. Backup semanal: `executar`. O próximo vence em 22/11/2026.
+2. Antes de qualquer migration ou manutenção de dados: `executar --tipo PRE_MIGRATION --migration <identificador>`.
+3. Depois de cada backup, conferir o visto verde do OneDrive.
+4. Mensal: `conferir`. Trimestral: `ensaiar`.
+5. Recomendado: segunda guarda das chaves num cofre de senhas, porque as duas cópias externas estão no mesmo pendrive.
