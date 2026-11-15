@@ -129,13 +129,13 @@ const RPCS_DE_ESCRITA = new Map([
     // FIN-DESPESAS-1
     // FIN-FIDELIDADE-DESPESAS-1: a tela original de Despesas chama pelo adaptador; FIN-MVP-MOB-01: as chamadas ficam no servico
     // comum ao desktop e a Lista de Despesas mobile (despesas-servico.js), sem funcao nova
-    ['criar_despesa', ['despesas-servico.js', 'recorrencias-adaptador.js', 'lancamentos-adaptador.js']],
+    ['criar_despesa', ['despesas-servico.js', 'recorrencias-servico.js', 'lancamentos-adaptador.js']],
     ['editar_despesa', ['despesas-servico.js', 'lancamentos-adaptador.js']],
     ['excluir_despesa', ['despesas-servico.js', 'lancamentos-adaptador.js']],
-    ['inativar_recorrencia', 'recorrencias-adaptador.js'],
+    ['inativar_recorrencia', 'recorrencias-servico.js'],
     // FIN-RECORRENCIAS-INATIVACAO-01 (P22): interromper (Recorrencias e "esta e as futuras" de Despesas) e retomar
-    ['interromper_recorrencia', ['despesas-servico.js', 'recorrencias-adaptador.js']],
-    ['retomar_recorrencia', 'recorrencias-adaptador.js'],
+    ['interromper_recorrencia', ['despesas-servico.js', 'recorrencias-servico.js']],
+    ['retomar_recorrencia', 'recorrencias-servico.js'],
     // P24 (FIN-CONSORCIOS-INTEGRACAO-01): realizar a contemplacao prevista e editar parcela de consorcio pendente
     ['realizar_contemplacao_consorcio', 'receitas-servico.js'],
     ['editar_parcela_consorcio', 'despesas-servico.js'],
@@ -144,13 +144,13 @@ const RPCS_DE_ESCRITA = new Map([
     // FIN-DESPESAS-CANCELAMENTO-01 (P23): cancelar a obrigacao com pagamento estornado (elegibilidade e historico no banco)
     ['cancelar_despesa', 'despesas-servico.js'],
     // FIN-FIDELIDADE-RECORRENCIAS-1 (tela de Recorrencias; o banco exige gestao do perfil e a versao)
-    ['editar_recorrencia', 'recorrencias-adaptador.js'],
-    ['reativar_recorrencia', 'recorrencias-adaptador.js'],
-    ['definir_meio_pagamento_recorrencia', ['recorrencias-adaptador.js', 'despesas-servico.js']],
+    ['editar_recorrencia', 'recorrencias-servico.js'],
+    ['reativar_recorrencia', 'recorrencias-servico.js'],
+    ['definir_meio_pagamento_recorrencia', ['recorrencias-servico.js', 'despesas-servico.js']],
     // FIN-FIDELIDADE-CARTOES-2 (R2: recorrencia no cartao; gestao, perfil, cartao e versao conferidos no banco)
-    ['criar_recorrencia_cartao', 'recorrencias-adaptador.js'],
-    ['editar_recorrencia_cartao', 'recorrencias-adaptador.js'],
-    ['definir_situacao_recorrencia_cartao', 'recorrencias-adaptador.js'],
+    ['criar_recorrencia_cartao', 'recorrencias-servico.js'],
+    ['editar_recorrencia_cartao', 'recorrencias-servico.js'],
+    ['definir_situacao_recorrencia_cartao', 'recorrencias-servico.js'],
     // FIN-RECEITAS-1 (so previsoes; nenhum recebimento). FIN-FIDELIDADE-RECEITAS-CATEGORIAS-1: tela original de Receitas
     // pelo adaptador. FIN-MVP-MOBILE-04: as chamadas ficam no servico comum ao desktop e as Receitas mobile
     // (receitas-servico.js), sem funcao nova
@@ -215,10 +215,10 @@ const RPCS_DE_ESCRITA = new Map([
     ['vincular_despesa_categoria_cartao', 'categorias-adaptador.js'],
     ['desvincular_despesa_categoria_cartao', 'categorias-adaptador.js'],
     // FIN-CONTRATOS-3 (consorcios: gestao, escritor unico, contrato travado; regeneracao e exclusao seguras no banco)
-    ['criar_consorcio', 'recorrencias-adaptador.js'],
-    ['editar_consorcio', 'recorrencias-adaptador.js'],
-    ['excluir_consorcio', 'recorrencias-adaptador.js'],
-    ['regenerar_parcelas_consorcio', 'recorrencias-adaptador.js'],
+    ['criar_consorcio', 'recorrencias-servico.js'],
+    ['editar_consorcio', 'recorrencias-servico.js'],
+    ['excluir_consorcio', 'recorrencias-servico.js'],
+    ['regenerar_parcelas_consorcio', 'recorrencias-servico.js'],
     // FIN-FINANCIAMENTOS-MOTOR-1 (motor SAC/TR: escritor unico, contrato travado, parcelas efetivadas e historicas intactas)
     ['criar_financiamento', 'financiamentos-adaptador.js'],
     ['registrar_amortizacao_extra', 'financiamentos-adaptador.js'],
@@ -353,7 +353,8 @@ test('todas as paginas usam a moldura do Flask com o mesmo menu, sem pagina queb
             'cartoes-mobile.html', 'receitas-mobile.html', 'despesa-nova-mobile.html',  // + FIN-MVP-MOBILE-05
             'lancamento-mobile.html',  // + FIN-MVP-MOBILE-06
             'contas-mobile.html',  // + FIN-MVP-MOBILE-07
-            'pagamentos-mobile.html'].includes(a));  // + FIN-MVP-MOBILE-08
+            'pagamentos-mobile.html',  // + FIN-MVP-MOBILE-08
+            'recorrencias-mobile.html'].includes(a));  // + FIN-MVP-MOBILE-09
         assert.equal(paginas.length, 16);  // + indexadores.html (FIN-PRE-PRODUCAO-1)
         for (const pagina of paginas) {
             const html = await readFile(path.join(destino, pagina), 'utf8');
@@ -400,7 +401,8 @@ test('montagem escapa titulos e falha com marcador nao resolvido', () => {
 // FIN-MVP-MOBILE-06: o atalho Lancamento e o Lancar da barra navegam, para o Registrar Lancamento (a mesma pagina).
 // FIN-MVP-MOBILE-07: o atalho Contas navega, para as Contas mobile.
 // FIN-MVP-MOBILE-08: o atalho Pagamentos navega, para os Pagamentos mobile.
-test('pagina principal mobile: protegida, sem moldura, so Recorrencias desabilitado entre os 8 atalhos', async () => {
+// FIN-MVP-MOBILE-09: o atalho Recorrencias navega, para as Recorrencias mobile (os 8 atalhos ativos).
+test('pagina principal mobile: protegida, sem moldura, os 8 atalhos ativos (Recorrencias no MOBILE-09)', async () => {
     const destino = await mkdtemp(path.join(os.tmpdir(), 'cf-web-mob08-'));
     try {
         await construir({ url: URL_OK, chave: 'sb_publishable_abc123', destino });
@@ -421,6 +423,7 @@ test('pagina principal mobile: protegida, sem moldura, so Recorrencias desabilit
         assert.deepEqual(atalhos.find((a) => a[0] === 'Lançamento'), ['Lançamento', 'lancamento', 'lancamento-mobile.html']);
         assert.deepEqual(atalhos.find((a) => a[0] === 'Contas'), ['Contas', 'contas', 'contas-mobile.html']);
         assert.deepEqual(atalhos.find((a) => a[0] === 'Pagamentos'), ['Pagamentos', 'pagamentos', 'pagamentos-mobile.html']);
+        assert.deepEqual(atalhos.find((a) => a[0] === 'Recorrências'), ['Recorrências', 'recorrencias', 'recorrencias-mobile.html']);
         assert.doesNotMatch(html.slice(html.indexOf('mob-grade'), html.indexOf('class="mob-barra"')), /href=/, 'atalhos sem link no HTML');
         const barra = [...html.matchAll(/<(a|button) (?:type="button" )?class="mob-barra-item([^"]*)"([^>]*)>[\s\S]*?<span>([^<]+)<\/span>/g)]
             .map((m) => [m[4], /href=/.test(m[3]) ? 'link' : (m[1] === 'button' ? 'botao' : 'desabilitado')]);
@@ -436,8 +439,8 @@ test('pagina principal mobile: protegida, sem moldura, so Recorrencias desabilit
         const script = await readFile(path.join(destino, 'js', 'inicio-mobile.js'), 'utf8');
         assert.doesNotMatch(script, /\.rpc\s*\(|\.from\s*\(|despesas-servico/, 'a pagina principal nao le nem grava dados');
         const comum = await readFile(path.join(destino, 'js', 'mobile-comum.js'), 'utf8');
-        assert.match(comum, /export const MODULOS_ATIVOS = new Set\(\['resumo', 'cartoes', 'receita', 'despesa', 'lancamento', 'lancar', 'contas', 'pagamentos'\]\);/,
-            'Resumo, Cartoes, Receita, Despesa, Lancamento, Lancar (FIN-MVP-MOBILE-06), Contas (FIN-MVP-MOBILE-07) e Pagamentos (FIN-MVP-MOBILE-08) ativos');
+        assert.match(comum, /export const MODULOS_ATIVOS = new Set\(\['resumo', 'cartoes', 'receita', 'despesa', 'lancamento', 'lancar', 'contas', 'pagamentos',\s*'recorrencias'\]\);/,
+            'Resumo, Cartoes, Receita, Despesa, Lancamento, Lancar (FIN-MVP-MOBILE-06), Contas (FIN-MVP-MOBILE-07), Pagamentos (FIN-MVP-MOBILE-08) e Recorrencias (FIN-MVP-MOBILE-09) ativos');
         assert.doesNotMatch(comum, /\.rpc\s*\(|\.from\s*\(/);
         // FIN-MVP-MOBILE-05/06: so a permissao do perfil ativo (perfil.js): quem so le recebe Despesa, Lancamento e Lancar desabilitados.
         assert.ok(script.includes('ajustarCadastrosPelaPermissao(usuario.id)'));
@@ -808,6 +811,51 @@ test('pagamentos mobile: protegida, sem moldura, CSS restrito, leitura sem gerac
     }
 });
 
+// FIN-MVP-MOBILE-09: Recorrencias mobile, pagina propria (fora da moldura) que usa o servico da tela Recorrencias do
+// desktop (js/recorrencias-servico.js, extraido do adaptador sem mudanca de regra): nenhuma consulta propria, nenhuma RPC.
+test('recorrencias mobile: protegida, sem moldura, CSS restrito e as operacoes pelo servico comum ao desktop', async () => {
+    const destino = await mkdtemp(path.join(os.tmpdir(), 'cf-web-mobile09-'));
+    const ler = (arquivo) => readFile(path.join(destino, 'js', arquivo), 'utf8');
+    try {
+        await construir({ url: URL_OK, chave: 'sb_publishable_abc123', destino });
+        const html = await readFile(path.join(destino, 'recorrencias-mobile.html'), 'utf8');
+        assert.match(html, /<body class="mob mob-modulo mob-recorrencias" data-protegido hidden>/);
+        assert.doesNotMatch(html, /\{\{|<script>|\sstyle=|\son[a-z]+=/i, 'sem marcador, script ou estilo inline');
+        assert.doesNotMatch(html, /app-sidebar|app-shell-body|css\/shared\//, 'sem moldura nem CSS do desktop');
+        assert.match(html, /<h1 class="mob-titulo">Recorrências<\/h1>/);
+        assert.match(html, /id="mob-voltar" href="inicio.html" data-inicio/, 'voltar a pagina principal');
+        for (const id of ['mob-perfil', 'mob-nova', 'mob-situacao', 'mob-busca', 'mob-resumo', 'mob-qtd-ativas', 'mob-mensal', 'mob-proximo',
+            'mob-lista', 'mob-folha', 'mob-sair']) {
+            assert.match(html, new RegExp(`id="${id}"`), id);
+        }
+        assert.match(html, /id="mob-nova"[^>]*hidden>/, '"+" so aparece para quem gere o perfil');
+        const barra = [...html.matchAll(/<(a|button) (?:type="button" )?class="mob-barra-item([^"]*)"([^>]*)>[\s\S]*?<span>([^<]+)<\/span>/g)].map((m) => m[4]);
+        assert.deepEqual(barra, ['Início', 'Lançar', 'Resumo', 'Mais']);
+        const css = await readFile(path.join(destino, 'css', 'recorrencias-mobile.css'), 'utf8');
+        for (const regra of css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/(^|\})\s*([^{}@]+)\{/g)) {
+            for (const seletor of regra[2].split(',')) assert.match(seletor.trim(), /^body\.mob-recorrencias(\[|\s|$)/, `regra restrita: ${seletor.trim()}`);
+        }
+        const pagina = await ler('recorrencias-mobile.js');
+        assert.doesNotMatch(pagina, /\.rpc\s*\(|\.from\s*\(|supabase/, 'nenhuma consulta propria: so o servico do desktop');
+        assert.ok(pagina.includes("from './recorrencias-servico.js'"));
+        for (const funcao of ['criarRecorrencia(corpo)', 'atualizarRecorrencia(r.id, corpo)', 'previaInterrupcao(r.id', 'interromperRecorrencia(r.id',
+            'previaRetomada(r.id', 'retomarRecorrencia(r.id', 'podeGerirRecorrencias()']) {
+            assert.ok(pagina.includes(funcao), funcao);
+        }
+        assert.doesNotMatch(pagina, /\/api\/consorcios|_consorcio|Consorcio\(/, 'consorcios continuam no desktop');
+        // O servico e o mesmo do desktop: o adaptador so registra responderRecorrencias na ponte.
+        const adaptador = await ler('recorrencias-adaptador.js');
+        assert.ok(adaptador.includes("from './recorrencias-servico.js'") && adaptador.includes('CF_REGISTRAR_ADAPTADOR(responderRecorrencias)'));
+        assert.doesNotMatch(adaptador, /\.rpc\('(criar|editar|interromper|retomar|definir)/, 'regras so no servico');
+        const servico = await ler('recorrencias-servico.js');
+        // Sem moldura, registro na ponte nem aviso do desktop (so o campo P24 do consorcio, lido como antes, se existir).
+        assert.doesNotMatch(servico.replace(/^\s*\/\/.*$/gm, ''), /window\.CF_REGISTRAR|iniciarMoldura|recorrencias-resultado/, 'servico sem tela');
+        assert.ok((await ler('sessao.js')).includes("'recorrencias-mobile.html'"));
+    } finally {
+        await rm(destino, { recursive: true, force: true });
+    }
+});
+
 // FIN-MVP-MOBILE-FINAL-01: aplicativo na tela de inicio (PWA/iOS). Manifesto valido (nome, inicio na pagina principal mobile,
 // standalone, cores), icones PNG nos tamanhos declarados, metadados iOS nas paginas mobile e no login; telas do desktop sem
 // manifesto; nenhum service worker nem cache (Cache API, IndexedDB); CSP inalterada (manifesto e icones do proprio site).
@@ -836,7 +884,7 @@ test('pwa: manifesto, icones e metadados iOS so nas paginas mobile e no login; s
         assert.deepEqual(dimensoes(await readFile(path.join(destino, 'icones', 'apple-touch-icon.png'))), [180, 180]);
         assert.deepEqual(dimensoes(await readFile(path.join(destino, 'icones', 'icone-32.png'))), [32, 32]);
         const mobile = ['inicio.html', 'despesas-mobile.html', 'cartoes-mobile.html', 'receitas-mobile.html', 'despesa-nova-mobile.html',
-            'lancamento-mobile.html', 'contas-mobile.html', 'pagamentos-mobile.html'];
+            'lancamento-mobile.html', 'contas-mobile.html', 'pagamentos-mobile.html', 'recorrencias-mobile.html'];
         for (const pagina of [...mobile, 'index.html']) {
             const html = await readFile(path.join(destino, pagina), 'utf8');
             for (const marca of ['<link rel="manifest" href="manifest.webmanifest">', '<link rel="apple-touch-icon" href="icones/apple-touch-icon.png?v=2">',

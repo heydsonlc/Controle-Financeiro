@@ -1,0 +1,214 @@
+/* FIN-MVP-MOBILE-09 — Recorrencias mobile (recorrencias-mobile.html): so o que e proprio da tela (cabecalho centrado,
+   situacao Ativas | Inativas | Todas com a busca, resumo, linha inativa, formulario e previa da interrupcao/retomada).
+   Lista, grupos, painel e campos vem de css/mobile-modulo.css. Restrita a body.mob-recorrencias: nenhuma tela do desktop e
+   afetada. */
+
+/* Cabecalho: os dois lados com a mesma largura, para o titulo ficar no centro (Voltar | Recorrencias | +) */
+body.mob-recorrencias .mob-cabecalho-lado {
+    display: flex;
+    flex: 0 0 44px;
+    align-items: center;
+}
+
+body.mob-recorrencias .mob-cabecalho-lado.direita {
+    justify-content: flex-end;
+}
+
+body.mob-recorrencias .mob-icone-botao[hidden] {
+    display: none;
+}
+
+/* Situacao e busca */
+body.mob-recorrencias .mob-rec-filtros {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0 0 12px;
+}
+
+body.mob-recorrencias .mob-rec-situacao {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding: 3px;
+    border-radius: 10px;
+    background: var(--mob-fundo-botao);
+}
+
+body.mob-recorrencias .mob-rec-situacao button {
+    min-height: 32px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--mob-cinza);
+    font: inherit;
+    font-size: 0.84rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+body.mob-recorrencias .mob-rec-situacao button[aria-pressed="true"] {
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    color: var(--mob-texto);
+}
+
+body.mob-recorrencias .mob-rec-busca {
+    width: 100%;
+    min-height: 38px;
+    box-sizing: border-box;
+    padding: 6px 12px;
+    border: 1px solid var(--mob-borda);
+    border-radius: 10px;
+    background: #ffffff;
+    color: var(--mob-texto);
+    font: inherit;
+    font-size: 0.9rem;
+}
+
+/* Resumo, uma linha: Ativas | Mensal estimado | Proximo vencimento */
+body.mob-recorrencias .mob-resumo {
+    margin: 0 0 12px;
+    border: 1px solid var(--mob-borda);
+    border-radius: 12px;
+    background: #ffffff;
+}
+
+body.mob-recorrencias .mob-resumo[hidden],
+body.mob-recorrencias .mob-somente-leitura[hidden] {
+    display: none;
+}
+
+body.mob-recorrencias .mob-resumo-valores {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin: 0;
+    padding: 8px 0;
+}
+
+body.mob-recorrencias .mob-resumo div {
+    min-width: 0;
+    padding: 0 6px;
+    text-align: center;
+}
+
+body.mob-recorrencias .mob-resumo div + div {
+    border-left: 1px solid var(--mob-linha);
+}
+
+body.mob-recorrencias .mob-resumo dt {
+    margin: 0 0 2px;
+    color: var(--mob-cinza);
+    font-size: 0.68rem;
+}
+
+body.mob-recorrencias .mob-resumo dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+    font-size: 0.88rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 650;
+}
+
+body.mob-recorrencias .mob-somente-leitura {
+    margin: -4px 2px 10px;
+    color: var(--mob-cinza);
+    font-size: 0.78rem;
+}
+
+/* Recorrencia inativa: mesma linha, discreta */
+body.mob-recorrencias .mob-linha.inativa .mob-linha-nome,
+body.mob-recorrencias .mob-linha.inativa .mob-linha-valor {
+    color: var(--mob-cinza);
+}
+
+/* Formulario (dois campos por linha, erro junto ao campo), como a Nova Despesa mobile */
+body.mob-recorrencias .mob-par {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+}
+
+body.mob-recorrencias .mob-par.um {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+@media (max-width: 359px) {
+    body.mob-recorrencias .mob-par.empilha {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+body.mob-recorrencias .mob-par[hidden],
+body.mob-recorrencias .mob-campo[hidden],
+body.mob-recorrencias .mob-ajuda[hidden],
+body.mob-recorrencias .mob-campo-erro[hidden] {
+    display: none;
+}
+
+body.mob-recorrencias .mob-campo input,
+body.mob-recorrencias .mob-campo select {
+    min-width: 0;
+}
+
+body.mob-recorrencias .mob-obrigatorio {
+    color: var(--mob-cinza);
+    font-weight: 500;
+}
+
+body.mob-recorrencias .mob-campo-erro {
+    color: var(--mob-perigo);
+    font-size: 0.74rem;
+    font-weight: 500;
+}
+
+body.mob-recorrencias [aria-invalid="true"] {
+    border-color: var(--mob-perigo) !important;
+}
+
+body.mob-recorrencias .mob-ajuda {
+    color: var(--mob-cinza);
+    font-size: 0.72rem;
+    font-weight: 400;
+    line-height: 1.3;
+}
+
+/* Acoes dos detalhes: quebram em duas linhas se nao couberem */
+body.mob-recorrencias .mob-rec-acoes {
+    flex-wrap: wrap;
+}
+
+body.mob-recorrencias .mob-folha .mob-acoes a.mob-botao {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+}
+
+/* Previa da interrupcao e da retomada */
+body.mob-recorrencias .mob-rec-resumo {
+    font-weight: 600;
+}
+
+body.mob-recorrencias .mob-rec-tabela {
+    max-height: 180px;
+    overflow-y: auto;
+    border: 1px solid var(--mob-linha);
+    border-radius: 8px;
+}
+
+body.mob-recorrencias .mob-rec-tabela-linha {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 6px 10px;
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+}
+
+body.mob-recorrencias .mob-rec-tabela-linha + .mob-rec-tabela-linha {
+    border-top: 1px solid var(--mob-linha);
+}
+
+body.mob-recorrencias .mob-rec-tabela-linha .direita {
+    text-align: right;
+}
