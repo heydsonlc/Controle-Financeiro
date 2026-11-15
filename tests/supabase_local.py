@@ -1144,6 +1144,55 @@ def semear_pagamentos_previa(cur):
         cur.execute("select set_config('request.jwt.claims', '', false)")
 
 
+# FIN-MVP-MOBILE-09 (so a pre-visualizacao, depois de semear_pagamentos_previa): recorrencias FICTICIAS do Perfil G para a
+# homologacao das Recorrencias mobile, pelas funcoes oficiais (como o usuario G). Todas comecam no mes seguinte (a
+# competencia atual dos Pagamentos nao muda): mensal com boleto, mensal em debito automatico na Conta G, anual, assinatura
+# no cartao "Nubank Master G" (Assinatura Musica G) e uma inativa. A "Diarista G" semanal vem de semear_pagamentos_previa.
+RECORRENCIAS_PREVIA_G = (  # nome, valor, dia, tipo, meio
+    ('Aluguel G (ficticio)', '1850.00', 5, 'mensal', 'boleto'),
+    ('Energia G (ficticia)', '210.00', 12, 'mensal', 'debito_automatico'),
+    ('Seguro Residencial G (ficticio)', '960.00', 20, 'anual', 'pix'),
+    ('Curso de Ingles G (ficticio)', '320.00', 8, 'mensal', None),
+)
+
+
+def semear_recorrencias_previa(cur):
+    import json
+    from datetime import datetime, timedelta, timezone
+    hoje = datetime.now(timezone(timedelta(hours=-3))).date()
+    seguinte = (hoje.replace(day=1) + timedelta(days=32)).replace(day=1)
+    p = PERFIL_G['id']
+    cur.execute("select id from public.conta_bancaria where perfil_financeiro_id = %s and nome = 'Conta G (ficticia)'", (p,))
+    conta = cur.fetchone()[0]
+    cur.execute("select id from public.item_despesa where perfil_financeiro_id = %s and nome = 'Nubank Master G (ficticio)'", (p,))
+    master = cur.fetchone()[0]
+    cur.execute('set role authenticated')
+    cur.execute("select set_config('request.jwt.claims', %s, false)", (json.dumps(claims_usuario(USUARIO_G)),))
+    try:
+        def chamar(sql, *args):
+            cur.execute(sql, args)
+            return cur.fetchone()[0]
+
+        def versao(item):
+            cur.execute('select versao from financeiro.recorrencias_do_perfil(%s) where id = %s', (p, item))
+            return cur.fetchone()[0]
+        for nome, valor, dia, tipo, meio in RECORRENCIAS_PREVIA_G:
+            debito = meio == 'debito_automatico'
+            item = chamar('select financeiro.criar_despesa(%s, %s::jsonb, gen_random_uuid())', p, json.dumps({
+                'nome': nome, 'valor': valor, 'descricao': '', 'categoria_id': 201, 'data_vencimento': seguinte.replace(day=dia).isoformat(),
+                'recorrente': True, 'tipo_recorrencia': tipo, 'debito_automatico': debito, 'conta_bancaria_id': conta if debito else None}))['item_id']
+            if meio in ('boleto', 'pix'):
+                chamar('select financeiro.definir_meio_pagamento_recorrencia(p_perfil_id => %s, p_item_id => %s, p_versao => %s, p_meio => %s)', p, item, versao(item), meio)
+            if meio is None:  # a inativa
+                chamar('select financeiro.inativar_recorrencia(p_perfil_id => %s, p_item_id => %s, p_versao => %s)', p, item, versao(item))
+        chamar('select financeiro.criar_recorrencia_cartao(p_perfil_id => %s, p_dados => %s::jsonb, p_chave => gen_random_uuid())', p, json.dumps({
+            'nome': 'Assinatura Musica G (ficticia)', 'valor': '21.90', 'categoria_id': 201, 'data_vencimento': seguinte.replace(day=10).isoformat(),
+            'cartao_id': master, 'descricao': 'Plano familiar ficticio', 'tipo_recorrencia': 'mensal'}))
+    finally:
+        cur.execute('reset role')
+        cur.execute("select set_config('request.jwt.claims', '', false)")
+
+
 # FIN-MVP-MOBILE-04 (E2E e pre-visualizacao): receitas FICTICIAS do "Perfil G (ficticio)" (o mesmo login dos Cartoes
 # mobile), gravadas pelas funcoes oficiais (criar_receita, receber_receita). Mes atual (Brasilia), para a homologacao
 # abrir com dados: "Salario G" recorrente desde o mes anterior (o do mes anterior fica atrasado), "Aluguel Sala G"

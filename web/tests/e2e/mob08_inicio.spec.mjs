@@ -88,7 +88,7 @@ test('celular: login leva a pagina principal mobile, com so Resumo, Cartoes, Rec
         await expect(atalhos.nth(i)).toBeVisible();
         const destino = { Resumo: 'despesas-mobile.html', Cartões: 'cartoes-mobile.html', Receita: 'receitas-mobile.html',
             Despesa: 'despesa-nova-mobile.html', Lançamento: 'lancamento-mobile.html', Contas: 'contas-mobile.html',
-            Pagamentos: 'pagamentos-mobile.html' }[ATALHOS[i]];
+            Pagamentos: 'pagamentos-mobile.html', Recorrências: 'recorrencias-mobile.html' }[ATALHOS[i]];
         if (destino) {
             await expect(atalhos.nth(i)).not.toHaveAttribute('aria-disabled', 'true');
             await expect(atalhos.nth(i)).toHaveAttribute('href', `${destino}?mes=${mesAtual().chave}`);
@@ -109,8 +109,7 @@ test('celular: login leva a pagina principal mobile, com so Resumo, Cartoes, Rec
     expect(new Set(caixas.map(([, y]) => y)).size).toBe(4);
 
     const antes = page.url();
-    // desabilitados: o clique (forcado, como o toque) nao navega
-    await atalhos.nth(5).click({ force: true });  // Recorrencias (desabilitado)
+    // desabilitado: o clique (forcado, como o toque) nao navega. FIN-MVP-MOBILE-09: os 8 atalhos ativos; fica o sino.
     await page.locator('.mob-notificacoes').click({ force: true });
     expect(page.url()).toBe(antes);
 

@@ -72,6 +72,7 @@ from tests.supabase_local import (  # noqa: E402
     semear_lancamento_mobile_e2e,
     semear_contas_mobile_e2e,
     semear_pagamentos_previa,
+    semear_recorrencias_previa,
     semear_receitas_mobile_e2e,
     semear_financiamento_e2e,
     semear_mobilidade_e2e,
@@ -439,6 +440,7 @@ def main():
                 alinhar_sequencias(cur)  # FIN-MVP-MOBILE-FINAL-01: ids fixos do cenario sem colisao na suite inteira
                 if args.previa:
                     semear_pagamentos_previa(cur)  # FIN-MVP-MOBILE-08: pendencias do mes atual no Perfil G (so a previa)
+                    semear_recorrencias_previa(cur)  # FIN-MVP-MOBILE-09: recorrencias do Perfil G a partir do mes seguinte (so a previa)
             conn.close()
 
             def consolidar(cartao, competencia, criar_se_faltar=False):
@@ -518,6 +520,7 @@ def main():
                           f'{CONTAS[USUARIO_H["email"]]["senha"]}', flush=True)
                     # FIN-MVP-MOBILE-08: pendencias do mes atual (avulsas, semanal e fatura) no mesmo Perfil G
                     print(f'  pagamentos mobile: {USUARIO_G["email"]} (mes atual); leitura: {USUARIO_H["email"]}', flush=True)
+                    print(f'  recorrencias mobile: {USUARIO_G["email"]} (atalho Recorrencias); leitura: {USUARIO_H["email"]}', flush=True)
                 try:
                     if args.servir or args.previa:
                         while True:
