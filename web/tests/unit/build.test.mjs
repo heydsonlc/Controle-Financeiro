@@ -921,9 +921,17 @@ test('pwa: manifesto, icones e metadados iOS so nas paginas mobile e no login; s
             assert.ok(html.includes('<link rel="icon" type="image/png" sizes="32x32" href="icones/icone-32.png?v=2">'), `${pagina}: icone da aba`);
         }
         // Telas do desktop: sem manifesto nem metadados do aplicativo (o desktop nao muda).
+        // FIN-MVP-MOBILE-ICON-03: o icone da aba (carteira) vale tambem para o login e o desktop, e /favicon.ico existe.
+        const ICONE_ABA = '<link rel="icon" type="image/png" sizes="32x32" href="icones/icone-32.png?v=2">';
         for (const pagina of ['contas.html', 'cartoes.html', 'receitas.html', 'lancamentos.html', 'contas-bancarias.html', 'dashboard.html']) {
-            assert.doesNotMatch(await readFile(path.join(destino, pagina), 'utf8'), /manifest\.webmanifest|apple-mobile-web-app/, pagina);
+            const html = await readFile(path.join(destino, pagina), 'utf8');
+            assert.doesNotMatch(html, /manifest\.webmanifest|apple-mobile-web-app/, pagina);
+            assert.ok(html.includes(ICONE_ABA), `${pagina}: icone da aba`);
         }
+        assert.ok((await readFile(path.join(destino, 'index.html'), 'utf8')).includes(ICONE_ABA), 'login: icone da aba');
+        const ico = await readFile(path.join(destino, 'favicon.ico'));
+        assert.deepEqual([...ico.subarray(0, 4)], [0, 0, 1, 0], 'favicon.ico e um icone');
+        assert.equal(ico.readUInt16LE(4), 3, '16, 32 e 48 px');
         // Nada de service worker, Cache API ou IndexedDB: nenhum dado financeiro fica no aparelho (so a sessao e o perfil ativo).
         for (const arquivo of await readdir(path.join(destino, 'js'))) {
             if (!arquivo.endsWith('.js')) continue;
