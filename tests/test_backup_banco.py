@@ -196,3 +196,55 @@ def test_pg17_backup_restaura_igual_e_recusa_banco_existente(ferramentas, tmp_pa
             with pytest.raises(SystemExit) as e:
                 B.main(['restaurar', '--manifesto', str(manifesto), '--dsn-env', 'CF_BACKUP_DESTINO'])
             assert 'nao esta vazio' in str(e.value)
+
+
+# FIN-REG-01: travas do destino, senha fora da linha de comando e identificacao do backup.
+SUPABASE_FICTICIO = 'postgresql://postgres.abcdefghijklmnopqrst:SENHA-FICTICIA-123@aws-0-us-east-2.pooler.supabase.com:6543/postgres'
+
+
+def test_restaurar_recusa_projeto_de_origem_e_supabase_sem_confirmacao(origem, tmp_path, monkeypatch):
+    monkeypatch.setenv('CF_BACKUP_ORIGEM', origem)
+    manifesto = Path(B.main(['exportar', '--dsn-env', 'CF_BACKUP_ORIGEM', '--saida', str(tmp_path)]))
+    monkeypatch.setenv('CF_BACKUP_DESTINO', SUPABASE_FICTICIO)
+    # outro projeto Supabase, sem a confirmacao do ref: recusado antes de conectar
+    with pytest.raises(SystemExit) as e:
+        B.main(['restaurar', '--manifesto', str(manifesto), '--dsn-env', 'CF_BACKUP_DESTINO'])
+    assert 'projeto Supabase' in str(e.value) and 'SENHA-FICTICIA' not in str(e.value)
+    with pytest.raises(SystemExit) as e:
+        B.main(['restaurar', '--manifesto', str(manifesto), '--dsn-env', 'CF_BACKUP_DESTINO', '--confirmar-projeto', 'outroprojeto'])
+    assert 'projeto Supabase' in str(e.value)
+    # o projeto de origem do backup: recusado mesmo com a confirmacao
+    dados = json.loads(manifesto.read_text(encoding='utf-8'))
+    dados['projeto_ref'] = 'abcdefghijklmnopqrst'
+    manifesto.write_text(json.dumps(dados), encoding='utf-8')
+    with pytest.raises(SystemExit) as e:
+        B.main(['restaurar', '--manifesto', str(manifesto), '--dsn-env', 'CF_BACKUP_DESTINO', '--confirmar-projeto', 'abcdefghijklmnopqrst'])
+    assert 'projeto de origem' in str(e.value)
+    # host do Supabase sem ref reconhecivel: tambem recusado
+    monkeypatch.setenv('CF_BACKUP_DESTINO', 'postgresql://postgres:x@algum.pooler.supabase.com:5432/postgres')
+    with pytest.raises(SystemExit) as e:
+        B.main(['restaurar', '--manifesto', str(manifesto), '--dsn-env', 'CF_BACKUP_DESTINO'])
+    assert 'projeto Supabase' in str(e.value)
+
+
+def test_senha_fora_da_linha_de_comando_e_das_mensagens():
+    conexao, ambiente, senha = B._sem_senha(SUPABASE_FICTICIO)
+    assert 'SENHA-FICTICIA-123' not in conexao and ambiente['PGPASSWORD'] == senha == 'SENHA-FICTICIA-123'
+    assert B._ref(SUPABASE_FICTICIO) == 'abcdefghijklmnopqrst' and B._ref('host=127.0.0.1 port=5 user=postgres dbname=x') is None
+    # ferramenta que falha repetindo o que recebeu (inclusive a conexao): a mensagem sai sem conexao nem senha
+    falha = B._executar([sys.executable, '-c',
+                         'import os, sys; sys.stderr.write(" ".join(sys.argv) + " " + os.environ["PGPASSWORD"] + " '
+                         + SUPABASE_FICTICIO + '"); sys.exit(3)', '--dbname={dsn}'], SUPABASE_FICTICIO)
+    with pytest.raises(SystemExit) as e:
+        B._exigir(falha, 'pg_dump (teste)', SUPABASE_FICTICIO)
+    texto = str(e.value)
+    assert 'pg_dump (teste) falhou (codigo 3)' in texto
+    assert 'SENHA-FICTICIA-123' not in texto and 'pooler.supabase.com' not in texto
+
+
+def test_manifesto_identifica_o_backup_e_a_ferramenta(origem, tmp_path, monkeypatch):
+    monkeypatch.setenv('CF_BACKUP_ORIGEM', origem)
+    manifesto = json.loads(Path(B.main(['exportar', '--dsn-env', 'CF_BACKUP_ORIGEM', '--saida', str(tmp_path)])).read_text(encoding='utf-8'))
+    assert manifesto['backup_id'].startswith('cf-local-')
+    assert manifesto['ferramenta']['arquivo'] == 'backup_banco.py' and len(manifesto['ferramenta']['sha256']) == 64
+    assert 'public.ir_comprovante_arquivo' in manifesto['retrato']['md5']  # o conteudo dos documentos entra na conferencia

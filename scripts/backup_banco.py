@@ -20,6 +20,11 @@ local. FIN-PRE-PRODUCAO-1: para o Supabase (PostgreSQL 17), usar as ferramentas 
 
 A conexao vem sempre de uma variavel de ambiente (--dsn-env) e nunca e impressa. Restauracao sobre banco existente e
 recusada; restaurar no Supabase de teste ou de producao exige autorizacao especifica (FIN-BLOCO-C-1, C4).
+
+FIN-REG-01: (1) `restaurar` recusa o projeto de origem do backup e qualquer destino Supabase que nao seja confirmado por
+--confirmar-projeto REF (o ensaio e sempre num banco local descartavel); (2) a senha vai ao pg_dump/pg_restore por
+PGPASSWORD, fora da linha de comando, e a falha deles e relatada sem o comando nem a conexao; (3) o manifesto leva a
+identificacao do backup e a da ferramenta (SHA-256 deste arquivo e commit, se houver).
 """
 import argparse
 import datetime as dt
@@ -149,6 +154,51 @@ def _dsn(variavel):
     return valor
 
 
+def _sem_senha(dsn):
+    """(conexao sem a senha, ambiente com PGPASSWORD): a senha nao aparece na linha de comando nem na lista de processos."""
+    from psycopg2.extensions import make_dsn, parse_dsn
+    partes = parse_dsn(dsn)
+    senha = partes.pop('password', None)
+    ambiente = dict(os.environ)
+    if senha is not None:
+        ambiente['PGPASSWORD'] = senha
+    return make_dsn(**partes), ambiente, senha
+
+
+def _executar(comando, dsn, texto=False):
+    """Roda pg_dump/pg_restore com a senha so no ambiente. Devolve o processo; quem chama decide o que e erro. Nenhuma
+    mensagem daqui leva o comando, a conexao ou a senha."""
+    conexao, ambiente, _senha = _sem_senha(dsn)
+    return subprocess.run([c.replace('{dsn}', conexao) for c in comando], capture_output=True, text=texto, env=ambiente)
+
+
+def _limpar_saida(saida, dsn):
+    """Saida de erro das ferramentas sem a conexao, a senha ou qualquer URL de banco."""
+    if isinstance(saida, bytes):
+        saida = saida.decode('utf-8', 'replace')
+    conexao, _ambiente, senha = _sem_senha(dsn)
+    for trecho in (dsn, conexao, senha):
+        if trecho:
+            saida = (saida or '').replace(trecho, '<oculto>')
+    return re.sub(r'postgres(ql)?://\S+', '<conexao>', saida or '')
+
+
+def _exigir(processo, etapa, dsn):
+    if processo.returncode != 0:
+        raise SystemExit(f'{etapa} falhou (codigo {processo.returncode}): ' + _limpar_saida(processo.stderr, dsn)[-1500:])
+
+
+def _identificacao_da_ferramenta():
+    arquivo = Path(__file__).resolve()
+    commit = None
+    try:
+        r = subprocess.run(['git', '-C', str(arquivo.parent), 'rev-parse', '--short', 'HEAD'], capture_output=True, text=True, timeout=10)
+        commit = r.stdout.strip() or None
+    except (OSError, subprocess.SubprocessError):
+        commit = None
+    return {'arquivo': arquivo.name, 'sha256': _sha256(arquivo), 'commit': commit}
+
+
 def _sha256(caminho):
     h = hashlib.sha256()
     with open(caminho, 'rb') as f:
@@ -186,10 +236,19 @@ def _existentes(cur, tabelas):
     return [t for t in tabelas if _consulta(cur, 'select to_regclass(%s) is not null', (t,))[0][0]]
 
 
-def _ref(dsn):
-    from urllib.parse import urlsplit
-    partes = urlsplit(dsn)
-    usuario, host = partes.username or '', partes.hostname or ''
+def _destino_supabase(dsn):
+    """O destino e um projeto Supabase (pelo usuario do pooler ou pelo host)?"""
+    from psycopg2.extensions import parse_dsn
+    partes = parse_dsn(dsn)
+    host = (partes.get('host') or '').lower()
+    return bool(_ref(dsn)) or host.endswith('.supabase.co') or host.endswith('.supabase.com')
+
+
+def _ref(dsn_ou_url):
+    """Ref do projeto Supabase pela conexao (URL ou chave=valor); None se nao for do Supabase."""
+    from psycopg2.extensions import parse_dsn
+    partes = parse_dsn(dsn_ou_url)
+    usuario, host = partes.get('user') or '', (partes.get('host') or '').lower()
     if usuario.startswith('postgres.'):
         return usuario.split('.', 1)[1]
     if host.startswith('db.') and host.endswith('.supabase.co'):
@@ -219,15 +278,15 @@ def exportar(args):
         esquemas = list(ESQUEMAS) + ([ESQUEMA_MIGRATIONS] if _consulta(
             cur, 'select to_regnamespace(%s) is not null', (ESQUEMA_MIGRATIONS,))[0][0] else [])
         auth = _existentes(cur, TABELAS_AUTH)
-        comuns = ['--format=custom', '--no-owner', f'--snapshot={snapshot}', f'--dbname={dsn}']
+        comuns = ['--format=custom', '--no-owner', f'--snapshot={snapshot}', '--dbname={dsn}']
         # Banco: estrutura, dados, funcoes, politicas e privilegios (GRANT/REVOKE) de public, financeiro e do historico.
-        subprocess.run([pg_dump, *comuns, *[f'--schema={e}' for e in esquemas], f'--file={banco}'], check=True, capture_output=True)
-        subprocess.run([pg_dump, *comuns, '--no-privileges', '--data-only', f'--table={TABELA_DOCUMENTOS}', f'--file={documentos}'],
-                       check=True, capture_output=True)
+        _exigir(_executar([pg_dump, *comuns, *[f'--schema={e}' for e in esquemas], f'--file={banco}'], dsn), 'pg_dump (banco)', dsn)
+        _exigir(_executar([pg_dump, *comuns, '--no-privileges', '--data-only', f'--table={TABELA_DOCUMENTOS}', f'--file={documentos}'],
+                          dsn), 'pg_dump (documentos)', dsn)
         # Contas do Auth com a estrutura (so usada se o destino nao tiver o schema auth do Supabase), sem os privilegios
         # internos da plataforma.
-        subprocess.run([pg_dump, *comuns, '--no-privileges', *[f'--table={t}' for t in auth], f'--file={usuarios}'],
-                       check=True, capture_output=True)
+        _exigir(_executar([pg_dump, *comuns, '--no-privileges', *[f'--table={t}' for t in auth], f'--file={usuarios}'], dsn),
+                'pg_dump (Auth)', dsn)
         linhas_auth = {t: _consulta(cur, f'select count(*) from {t}')[0][0] for t in auth}
         foto = retrato(conn, esquemas=esquemas)  # mesmo snapshot (a transacao segue aberta ate aqui)
     finally:
@@ -235,6 +294,7 @@ def exportar(args):
         conn.close()
     versao = subprocess.run([pg_dump, '--version'], capture_output=True, text=True).stdout.strip()
     manifesto = {
+        'backup_id': f'cf-{_ref(dsn) or "local"}-{carimbo}', 'ferramenta': _identificacao_da_ferramenta(),
         'gerado_em': dt.datetime.now().isoformat(timespec='seconds'), 'servidor': servidor, 'pg_dump': versao,
         'projeto_ref': _ref(dsn), 'esquemas': esquemas, 'auth': auth, 'snapshot_unico': True,
         'arquivos': {p.name: {'sha256': _sha256(p), 'bytes': p.stat().st_size} for p in (banco, documentos, usuarios)},
@@ -273,6 +333,13 @@ def restaurar(args):
     ter as mesmas linhas. Devolve o que foi restaurado e o que depende de configuracao do Supabase."""
     manifesto = verificar(args)
     dsn = _dsn(args.dsn_env)
+    # FIN-REG-01: nunca no projeto de origem do backup; outro projeto Supabase so com a confirmacao explicita do ref.
+    destino = _ref(dsn)
+    if destino and destino == manifesto.get('projeto_ref'):
+        raise SystemExit('Destino e o projeto de origem do backup (producao): restauracao recusada.')
+    if _destino_supabase(dsn) and (not destino or getattr(args, 'confirmar_projeto', None) != destino):
+        raise SystemExit('Destino e um projeto Supabase: restauracao recusada sem --confirmar-projeto <ref do destino>. '
+                         'O ensaio de restauracao e feito num banco local descartavel.')
     conn = conectar(dsn, leitura=False)
     try:
         cur = conn.cursor()
@@ -300,15 +367,14 @@ def restaurar(args):
     if auth_no_destino and set(auth_no_destino) != set(auth):
         raise SystemExit(f'Destino com so parte das tabelas do Auth ({auth_no_destino} de {auth}): restauracao recusada')
     so_dados = bool(auth_no_destino)
-    r = subprocess.run([pg_restore, '--no-owner', '--no-privileges', '--exit-on-error', *(['--data-only'] if so_dados else []),
-                        f'--dbname={dsn}', str(pasta / manifesto['usuarios'])], capture_output=True, text=True)
-    if r.returncode != 0:
-        raise SystemExit('pg_restore (Auth) falhou: ' + (r.stderr or '')[-1500:])
+    r = _executar([pg_restore, '--no-owner', '--no-privileges', '--exit-on-error', *(['--data-only'] if so_dados else []),
+                   '--dbname={dsn}', str(pasta / manifesto['usuarios'])], dsn, texto=True)
+    _exigir(r, 'pg_restore (Auth)', dsn)
     resultado['restaurado'].append(f'{", ".join(auth)}: dados' + ('' if so_dados else ', estrutura, chaves e indices (banco sem o Auth do Supabase)'))
-    r = subprocess.run([pg_restore, '--no-owner', f'--dbname={dsn}', str(pasta / manifesto['banco'])], capture_output=True, text=True)
+    r = _executar([pg_restore, '--no-owner', '--dbname={dsn}', str(pasta / manifesto['banco'])], dsn, texto=True)
     erros = _erros(r.stderr)
     if erros:
-        raise SystemExit('pg_restore falhou: ' + ' | '.join(erros)[-1500:])
+        raise SystemExit('pg_restore falhou: ' + _limpar_saida(' | '.join(erros), dsn)[-1500:])
     resultado['restaurado'].append(f'{", ".join(manifesto.get("esquemas", ESQUEMAS))}: estrutura, dados, funcoes, politicas '
                                    'e privilegios')
     resultado['depende_do_supabase'] = [
@@ -350,6 +416,7 @@ def main(argv=None):
     r = sub.add_parser('restaurar')
     r.add_argument('--manifesto', required=True)
     r.add_argument('--dsn-env', required=True)
+    r.add_argument('--confirmar-projeto', help='ref do projeto Supabase de destino (nunca o de origem do backup)')
     args = p.parse_args(argv)
     return {'exportar': exportar, 'verificar': verificar, 'restaurar': restaurar}[args.comando](args)
 
