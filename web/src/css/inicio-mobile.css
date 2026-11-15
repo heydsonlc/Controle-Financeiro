@@ -10,18 +10,20 @@ body.mob-inicio .mob-marca {
     min-width: 0;
 }
 
+/* FIN-MVP-MOBILE-ICON-02: a carteira do portal, nas cores do icone do aplicativo (fundo #0a0a0c, traco #ecebe8 e
+   dourado); o fecho da carteira usa a cor do fundo para cobrir o contorno. */
 body.mob-inicio .mob-marca-icone {
     width: 46px;
     height: 46px;
-    padding: 9px;
+    padding: 7px;
     border-radius: 12px;
-    background: var(--mob-preto);
-    color: #ffffff;
+    background: #0a0a0c;
+    color: #ecebe8;
     flex: 0 0 auto;
 }
 
 body.mob-inicio .mob-marca-icone svg {
-    stroke-width: 1.8;
+    stroke-linecap: butt;
 }
 
 body.mob-inicio .mob-notificacoes {
