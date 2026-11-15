@@ -352,7 +352,8 @@ test('todas as paginas usam a moldura do Flask com o mesmo menu, sem pagina queb
         const paginas = arquivos.filter((a) => a.endsWith('.html') && !['index.html', 'inicio.html', 'despesas-mobile.html',
             'cartoes-mobile.html', 'receitas-mobile.html', 'despesa-nova-mobile.html',  // + FIN-MVP-MOBILE-05
             'lancamento-mobile.html',  // + FIN-MVP-MOBILE-06
-            'contas-mobile.html'].includes(a));  // + FIN-MVP-MOBILE-07
+            'contas-mobile.html',  // + FIN-MVP-MOBILE-07
+            'pagamentos-mobile.html'].includes(a));  // + FIN-MVP-MOBILE-08
         assert.equal(paginas.length, 16);  // + indexadores.html (FIN-PRE-PRODUCAO-1)
         for (const pagina of paginas) {
             const html = await readFile(path.join(destino, pagina), 'utf8');
@@ -398,7 +399,8 @@ test('montagem escapa titulos e falha com marcador nao resolvido', () => {
 // FIN-MVP-MOBILE-05: o atalho Despesa navega, para a Nova Despesa mobile.
 // FIN-MVP-MOBILE-06: o atalho Lancamento e o Lancar da barra navegam, para o Registrar Lancamento (a mesma pagina).
 // FIN-MVP-MOBILE-07: o atalho Contas navega, para as Contas mobile.
-test('pagina principal mobile: protegida, sem moldura, so Resumo, Cartoes, Receita, Despesa, Lancamento e Contas habilitados entre os 8 atalhos', async () => {
+// FIN-MVP-MOBILE-08: o atalho Pagamentos navega, para os Pagamentos mobile.
+test('pagina principal mobile: protegida, sem moldura, so Recorrencias desabilitado entre os 8 atalhos', async () => {
     const destino = await mkdtemp(path.join(os.tmpdir(), 'cf-web-mob08-'));
     try {
         await construir({ url: URL_OK, chave: 'sb_publishable_abc123', destino });
@@ -418,6 +420,7 @@ test('pagina principal mobile: protegida, sem moldura, so Resumo, Cartoes, Recei
         assert.deepEqual(atalhos.find((a) => a[0] === 'Despesa'), ['Despesa', 'despesa', 'despesa-nova-mobile.html']);
         assert.deepEqual(atalhos.find((a) => a[0] === 'Lançamento'), ['Lançamento', 'lancamento', 'lancamento-mobile.html']);
         assert.deepEqual(atalhos.find((a) => a[0] === 'Contas'), ['Contas', 'contas', 'contas-mobile.html']);
+        assert.deepEqual(atalhos.find((a) => a[0] === 'Pagamentos'), ['Pagamentos', 'pagamentos', 'pagamentos-mobile.html']);
         assert.doesNotMatch(html.slice(html.indexOf('mob-grade'), html.indexOf('class="mob-barra"')), /href=/, 'atalhos sem link no HTML');
         const barra = [...html.matchAll(/<(a|button) (?:type="button" )?class="mob-barra-item([^"]*)"([^>]*)>[\s\S]*?<span>([^<]+)<\/span>/g)]
             .map((m) => [m[4], /href=/.test(m[3]) ? 'link' : (m[1] === 'button' ? 'botao' : 'desabilitado')]);
@@ -433,8 +436,8 @@ test('pagina principal mobile: protegida, sem moldura, so Resumo, Cartoes, Recei
         const script = await readFile(path.join(destino, 'js', 'inicio-mobile.js'), 'utf8');
         assert.doesNotMatch(script, /\.rpc\s*\(|\.from\s*\(|despesas-servico/, 'a pagina principal nao le nem grava dados');
         const comum = await readFile(path.join(destino, 'js', 'mobile-comum.js'), 'utf8');
-        assert.match(comum, /export const MODULOS_ATIVOS = new Set\(\['resumo', 'cartoes', 'receita', 'despesa', 'lancamento', 'lancar', 'contas'\]\);/,
-            'Resumo, Cartoes, Receita, Despesa, Lancamento, Lancar (FIN-MVP-MOBILE-06) e Contas (FIN-MVP-MOBILE-07) ativos');
+        assert.match(comum, /export const MODULOS_ATIVOS = new Set\(\['resumo', 'cartoes', 'receita', 'despesa', 'lancamento', 'lancar', 'contas', 'pagamentos'\]\);/,
+            'Resumo, Cartoes, Receita, Despesa, Lancamento, Lancar (FIN-MVP-MOBILE-06), Contas (FIN-MVP-MOBILE-07) e Pagamentos (FIN-MVP-MOBILE-08) ativos');
         assert.doesNotMatch(comum, /\.rpc\s*\(|\.from\s*\(/);
         // FIN-MVP-MOBILE-05/06: so a permissao do perfil ativo (perfil.js): quem so le recebe Despesa, Lancamento e Lancar desabilitados.
         assert.ok(script.includes('ajustarCadastrosPelaPermissao(usuario.id)'));
@@ -747,6 +750,64 @@ test('contas mobile: protegida, sem moldura, CSS restrito, consulta pelo servico
     }
 });
 
+// FIN-MVP-MOBILE-08: Pagamentos mobile, fora da moldura; CSS restrito; obrigacoes pelo servico de Despesas do desktop SEM gerar
+// recorrencias; pagamento so pelos fluxos existentes (individual e lote da recorrencia semanal, P20/P21), sem funcao nova.
+test('pagamentos mobile: protegida, sem moldura, CSS restrito, leitura sem geracao e pagamento pelos fluxos do desktop', async () => {
+    const destino = await mkdtemp(path.join(os.tmpdir(), 'cf-web-mobile08-'));
+    const ler = (arquivo) => readFile(path.join(destino, 'js', arquivo), 'utf8');
+    try {
+        await construir({ url: URL_OK, chave: 'sb_publishable_abc123', destino });
+        const html = await readFile(path.join(destino, 'pagamentos-mobile.html'), 'utf8');
+        assert.match(html, /<body class="mob mob-modulo mob-pagamentos" data-protegido hidden>/);
+        assert.doesNotMatch(html, /\{\{|<script>|\sstyle=|\son[a-z]+=/i, 'sem marcador, script ou estilo inline');
+        assert.doesNotMatch(html, /app-sidebar|app-shell-body|css\/shared\//, 'sem moldura nem CSS do desktop');
+        assert.match(html, /<h1 class="mob-titulo">Pagamentos<\/h1>/);
+        assert.match(html, /id="mob-voltar" href="inicio.html" data-inicio/, 'voltar a pagina principal');
+        for (const id of ['mob-perfil', 'mob-mes-anterior', 'mob-competencia', 'mob-mes-seguinte', 'mob-resumo', 'mob-total-pendente',
+            'mob-qtd-selecionadas', 'mob-total-selecionado', 'mob-lista', 'mob-selecao', 'mob-limpar', 'mob-pagar', 'mob-folha', 'mob-sair']) {
+            assert.match(html, new RegExp(`id="${id}"`), id);
+        }
+        // A barra nao ganha item: os mesmos quatro das paginas homologadas.
+        const barra = [...html.matchAll(/<(a|button) (?:type="button" )?class="mob-barra-item([^"]*)"([^>]*)>[\s\S]*?<span>([^<]+)<\/span>/g)].map((m) => m[4]);
+        assert.deepEqual(barra, ['Início', 'Lançar', 'Resumo', 'Mais']);
+        for (const arquivo of ['css/mobile-base.css', 'css/mobile-modulo.css', 'css/pagamentos-mobile.css', 'js/original/formas_pagamento.js',
+            'js/pagamentos-mobile.js']) {
+            assert.match(html, new RegExp(`(href|src)="${arquivo.replace(/[.]/g, '\\.')}"`), arquivo);
+        }
+        const css = await readFile(path.join(destino, 'css', 'pagamentos-mobile.css'), 'utf8');
+        for (const regra of css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/(^|\})\s*([^{}@]+)\{/g)) {
+            for (const seletor of regra[2].split(',')) assert.match(seletor.trim(), /^body\.mob-pagamentos(\[|\s|$)/, `regra restrita: ${seletor.trim()}`);
+        }
+        const pagina = await ler('pagamentos-mobile.js');
+        assert.doesNotMatch(pagina, /\.rpc\s*\(|\.from\s*\(|supabase/, 'nenhuma consulta propria: so o servico do desktop');
+        for (const modulo of ['despesas-servico', 'despesas-grupos', 'mobile-pagamento', 'mobile-ui', 'mobile-comum']) {
+            assert.ok(pagina.includes(`from './${modulo}.js'`), modulo);
+        }
+        assert.ok(pagina.includes("api('GET', `/api/pagamentos?mes_referencia=${mes}`)"), 'leitura pela rota sem geracao');
+        assert.doesNotMatch(pagina, /\/api\/despesas\?mes|gerar_mes|gerarRecorrencias/, 'a consulta nao gera recorrencias');
+        assert.doesNotMatch(pagina, /'(PUT|DELETE)'/, 'sem edicao nem exclusao: ficam na Lista de Despesas');
+        assert.ok(pagina.includes('abrirPagamento(d, { api, contasAtivas, concluir })'), 'pagamento individual comum');
+        assert.ok(pagina.includes('abrirLote(nome, competencia, {'), 'lote da recorrencia semanal comum');
+        assert.ok(pagina.includes("status_pagamento !== 'Dispensada'"), 'obrigacao cancelada (P23) fora das pendentes');
+        assert.ok(pagina.includes('podeGerirPerfil()'), 'permissao pela funcao do banco');
+        // O servico: rota de leitura sem a geracao; o lote e o individual sao as funcoes de sempre (nenhuma nova).
+        const servico = await ler('despesas-servico.js');
+        const leitura = servico.slice(servico.indexOf('async function obrigacoesDoMes'), servico.indexOf('// Detalhe da fatura'));
+        assert.ok(leitura.includes("supabase.rpc('contas_do_mes'") && !/gerarRecorrencias|prepararGeracao|gerar_mes/.test(leitura),
+            'obrigacoes do mes sem gerar');
+        assert.ok(servico.includes("['GET', /^\\/api\\/pagamentos\\/?$/, (m, p) => obrigacoesDoMes(p)]"), 'rota de leitura');
+        // Um painel de lote so: a Lista de Despesas mobile usa o mesmo de js/mobile-pagamento.js.
+        const comum = await ler('mobile-pagamento.js');
+        assert.ok(comum.includes('export async function abrirLote(nome, competencia, ctx)'));
+        assert.ok(comum.includes("api('POST', '/api/despesas/pagar-lote'"));
+        const lista = await ler('despesas-mobile.js');
+        assert.ok(lista.includes('abrirLote as loteComum') && !lista.includes("'/api/despesas/pagar-lote'"), 'lista usa o painel comum');
+        assert.ok((await ler('sessao.js')).includes("'pagamentos-mobile.html'"));
+    } finally {
+        await rm(destino, { recursive: true, force: true });
+    }
+});
+
 // FIN-MVP-MOBILE-FINAL-01: aplicativo na tela de inicio (PWA/iOS). Manifesto valido (nome, inicio na pagina principal mobile,
 // standalone, cores), icones PNG nos tamanhos declarados, metadados iOS nas paginas mobile e no login; telas do desktop sem
 // manifesto; nenhum service worker nem cache (Cache API, IndexedDB); CSP inalterada (manifesto e icones do proprio site).
@@ -773,7 +834,7 @@ test('pwa: manifesto, icones e metadados iOS so nas paginas mobile e no login; s
         assert.deepEqual(dimensoes(await readFile(path.join(destino, 'icones', 'apple-touch-icon.png'))), [180, 180]);
         assert.deepEqual(dimensoes(await readFile(path.join(destino, 'icones', 'icone-32.png'))), [32, 32]);
         const mobile = ['inicio.html', 'despesas-mobile.html', 'cartoes-mobile.html', 'receitas-mobile.html', 'despesa-nova-mobile.html',
-            'lancamento-mobile.html', 'contas-mobile.html'];
+            'lancamento-mobile.html', 'contas-mobile.html', 'pagamentos-mobile.html'];
         for (const pagina of [...mobile, 'index.html']) {
             const html = await readFile(path.join(destino, pagina), 'utf8');
             for (const marca of ['<link rel="manifest" href="manifest.webmanifest">', '<link rel="apple-touch-icon" href="icones/apple-touch-icon.png">',

@@ -1107,6 +1107,43 @@ def semear_contas_mobile_e2e(cur):
         cur.execute("select set_config('request.jwt.claims', '', false)")
 
 
+# FIN-MVP-MOBILE-08 (SO a pre-visualizacao, run_e2e.py --previa): obrigacoes FICTICIAS pendentes no mes atual (Brasilia) do
+# Perfil G, para a homologacao dos Pagamentos mobile abrir com o que selecionar e pagar: tres avulsas e uma recorrencia
+# semanal (as tercas do mes), gravadas pelas funcoes oficiais como G, e a geracao do mes pelo gerador do desktop (como a
+# Lista faria ao abrir). Fora da suite de testes: os specs do Perfil G conferem outras competencias e o mes atual sem elas.
+OBRIGACOES_PREVIA_G = (('IPTU G (ficticio)', '287.30', 15), ('Internet Casa G (ficticia)', '129.90', 18),
+                       ('Condominio G (ficticio)', '580.00', 20))
+
+
+def semear_pagamentos_previa(cur):
+    import json
+    from datetime import datetime, timedelta, timezone
+    hoje = datetime.now(timezone(timedelta(hours=-3))).date()
+    mes_atual = hoje.replace(day=1)
+    primeira_terca = mes_atual + timedelta(days=(1 - mes_atual.weekday()) % 7)
+    p = PERFIL_G['id']
+    cur.execute('set role authenticated')
+    cur.execute("select set_config('request.jwt.claims', %s, false)", (json.dumps(claims_usuario(USUARIO_G)),))
+    try:
+        def chamar(sql, *args):
+            cur.execute(sql, args)
+            return cur.fetchone()[0]
+        for nome, valor, dia in OBRIGACOES_PREVIA_G:
+            chamar('select financeiro.criar_despesa(%s, %s::jsonb, gen_random_uuid())', p, json.dumps({
+                'nome': nome, 'valor': valor, 'descricao': '', 'categoria_id': 201, 'data_vencimento': mes_atual.replace(day=dia).isoformat(),
+                'competencia': mes_atual.isoformat(), 'debito_automatico': False, 'conta_bancaria_id': None}))
+        chamar('select financeiro.criar_despesa(%s, %s::jsonb, gen_random_uuid())', p, json.dumps({
+            'nome': 'Diarista G (ficticia)', 'valor': '200.00', 'descricao': '', 'categoria_id': 201,
+            'data_vencimento': primeira_terca.isoformat(), 'recorrente': True, 'tipo_recorrencia': 'semanal_1_2',
+            'debito_automatico': False, 'conta_bancaria_id': None}))
+        previa = chamar('select financeiro.previa_geracao(%s, %s)', p, mes_atual.isoformat())
+        if previa.get('a_gerar'):
+            chamar("select financeiro.gerar_mes(%s, %s, %s, '[]'::jsonb)", p, mes_atual.isoformat(), previa['a_gerar'])
+    finally:
+        cur.execute('reset role')
+        cur.execute("select set_config('request.jwt.claims', '', false)")
+
+
 # FIN-MVP-MOBILE-04 (E2E e pre-visualizacao): receitas FICTICIAS do "Perfil G (ficticio)" (o mesmo login dos Cartoes
 # mobile), gravadas pelas funcoes oficiais (criar_receita, receber_receita). Mes atual (Brasilia), para a homologacao
 # abrir com dados: "Salario G" recorrente desde o mes anterior (o do mes anterior fica atrasado), "Aluguel Sala G"
