@@ -294,3 +294,140 @@ body.mob-documentos .mob-form textarea {
         font-size: 1.12rem;
     }
 }
+
+/* FIN-REG-08: incluir documento. Botao so com icone na linha do titulo da lista (a linha nao cresce); etapas no painel:
+   pre-visualizacao, leitura e conferencia com a situacao de cada campo. */
+body.mob-documentos .mob-doc-titulo-linha {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+body.mob-documentos .mob-doc-titulo-linha .mob-secao-titulo {
+    min-width: 0;
+}
+
+body.mob-documentos .mob-doc-incluir {
+    flex: 0 0 auto;
+    width: 36px;
+    height: 36px;
+    margin: 0 0 0 auto;
+    padding: 7px;
+}
+
+body.mob-documentos .mob-envio-previa {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 10px;
+    padding: 10px;
+    border: 1px solid var(--mob-borda);
+    border-radius: 12px;
+    background: #ffffff;
+}
+
+body.mob-documentos .mob-envio-previa img {
+    display: block;
+    max-width: 100%;
+    max-height: 38vh;
+    border-radius: 8px;
+    object-fit: contain;
+}
+
+body.mob-documentos .mob-envio-previa.pequena {
+    flex-direction: row;
+    align-items: center;
+    padding: 8px;
+}
+
+body.mob-documentos .mob-envio-previa.pequena img {
+    flex: 0 0 auto;
+    width: 48px;
+    height: 48px;
+    max-height: none;
+    object-fit: cover;
+}
+
+body.mob-documentos .mob-envio-tipo {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 56px;
+    border-radius: 8px;
+    background: var(--mob-preto);
+    color: #ffffff;
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+
+body.mob-documentos .mob-envio-dados {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    text-align: center;
+}
+
+body.mob-documentos .mob-envio-previa.pequena .mob-envio-dados {
+    text-align: left;
+}
+
+body.mob-documentos .mob-envio-dados strong {
+    overflow-wrap: anywhere;
+    font-size: 0.9rem;
+}
+
+body.mob-documentos .mob-envio-dados span {
+    color: var(--mob-cinza);
+    font-size: 0.76rem;
+}
+
+body.mob-documentos .mob-envio-resumo {
+    margin: 0;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: var(--mob-fundo-botao);
+    font-size: 0.82rem;
+    line-height: 1.35;
+}
+
+body.mob-documentos .mob-envio-situacao {
+    display: block;
+    margin-top: 3px;
+    color: var(--mob-cinza);
+    font-size: 0.72rem;
+    font-weight: 500;
+}
+
+body.mob-documentos .mob-envio-situacao.identificado {
+    color: #1d6b34;
+}
+
+body.mob-documentos .mob-envio-situacao.conferir {
+    color: #8a5a00;
+}
+
+body.mob-documentos .mob-envio-opcoes {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+    color: #8a5a00;
+    font-size: 0.74rem;
+}
+
+body.mob-documentos .mob-envio-opcoes .mob-botao {
+    flex: 0 0 auto;
+    height: 30px;
+    padding: 0 10px;
+    font-size: 0.8rem;
+}
+
+body.mob-documentos .mob-envio-form .mob-acoes {
+    flex-wrap: wrap;
+}

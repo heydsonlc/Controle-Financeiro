@@ -77,7 +77,17 @@
         <section class="mob-resumo" id="mob-resumo" aria-label="Resumo" hidden>
             <dl class="mob-resumo-valores" id="mob-resumo-valores"></dl>
         </section>
-        <h2 class="mob-secao-titulo" id="mob-lista-titulo">Documentos</h2>
+        <div class="mob-doc-titulo-linha">
+            <h2 class="mob-secao-titulo" id="mob-lista-titulo">Documentos</h2>
+            <!-- FIN-REG-08: incluir documento (fotografar ou selecionar arquivo), so para quem gere o perfil -->
+            <button type="button" class="mob-icone-botao mob-doc-incluir" id="mob-incluir" aria-label="Incluir documento" aria-haspopup="dialog" hidden>
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+        </div>
+        <!-- Seletores do navegador: camera do aparelho (capture) e arquivo. So os formatos que o banco aceita (o iPhone converte
+             HEIC para JPEG ao entregar a foto). Nada e enviado ao escolher: a pre-visualizacao e a conferencia vem antes. -->
+        <input type="file" id="mob-foto" class="mob-doc-seletor" accept="image/jpeg,image/png,image/webp" capture="environment" hidden>
+        <input type="file" id="mob-arquivo" class="mob-doc-seletor" accept="application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp" hidden>
         <section class="mob-lista" id="mob-lista" aria-labelledby="mob-lista-titulo" aria-busy="true"></section>
         <p class="mob-texto discreto mob-limite" id="mob-nota" hidden></p>
     </main>

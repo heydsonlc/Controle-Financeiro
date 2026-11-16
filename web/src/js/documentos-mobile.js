@@ -5,12 +5,14 @@
 // - quem gere o perfil: revisar (dados basicos), validar, vincular e desvincular; quem so le, consulta;
 // - Empresa: saidas sem documento do mes (resumo, lista, vincular documento e situacao manual);
 // - exportacoes do FIN-REG-03/04 (Excel, PDF e, na Empresa, o pacote ZIP), geradas no aparelho.
-// So no desktop: envio de arquivo, classificacao documental da Empresa, exclusao, "gerar financeiro" e patrimonio.
+// FIN-REG-08: incluir documento (fotografar ou selecionar, ler no aparelho, conferir e enviar) em js/documentos-mobile-envio.js.
+// So no desktop: classificacao documental da Empresa, exclusao, "gerar financeiro" e patrimonio.
 // Sem innerHTML (CSP): tudo por createElement.
 
 import { arquivoDoComprovante } from './arquivo-comprovante.js';
 import { dataCurta, deslocarMes, el } from './comum.js';
 import { configurarDocumentos, responderDocumentos } from './documentos-servico.js';
+import { criarEnvio } from './documentos-mobile-envio.js';
 import {
     ajustarCadastrosPelaPermissao, aplicarCompetencia, competenciaInicial, prepararMais, prepararModulos,
 } from './mobile-comum.js';
@@ -105,6 +107,7 @@ function desenharControles() {
     }));
     $('mob-busca').placeholder = saidas ? 'Buscar descrição, categoria ou origem' : 'Buscar prestador, CPF/CNPJ ou observação';
     $('mob-lista-titulo').textContent = saidas ? 'Saídas sem documento' : (estado.empresa ? 'Documentos da Empresa' : 'Comprovantes do Imposto de Renda');
+    $('mob-incluir').hidden = saidas || estado.somenteLeitura;  // FIN-REG-08
     const f = estado.filtros;
     $('mob-filtro-marca').hidden = !(saidas ? (f.origem || f.valorMinimo) : (f.categoria || f.tipo));
 }
@@ -662,6 +665,19 @@ if (usuario) {
             window.clearTimeout(espera);
             espera = window.setTimeout(() => { estado.busca = $('mob-busca').value.trim(); carregar(); }, 300);
         });
+        // FIN-REG-08: incluir documento. Depois do envio, a lista e recarregada no ano do documento (e o detalhe, se pedido).
+        const envio = criarEnvio({
+            perfil,
+            ano: () => ano(),
+            aoEnviado: async (id, abrirDetalhe) => {
+                const doc = (await api('GET', `/api/ir/comprovantes/${id}`)).data;
+                if (doc && doc.ano_calendario && String(doc.ano_calendario) !== ano()) estado.mes = `${doc.ano_calendario}-${estado.mes.slice(5, 7)}`;
+                await carregar();
+                const daLista = estado.documentos.find((d) => d.id === id);
+                if (abrirDetalhe && daLista) abrirDocumento(daLista);
+            },
+        });
+        $('mob-incluir').addEventListener('click', envio.abrir);
         $('mob-filtros').addEventListener('click', abrirFiltros);
         $('mob-exportar').addEventListener('click', abrirExportacao);
         $('mob-mes-anterior').addEventListener('click', () => trocarPeriodo(-1));

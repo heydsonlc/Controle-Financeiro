@@ -20,5 +20,10 @@ export default defineConfig({
         baseURL,
         trace: 'retain-on-failure',
     },
-    projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+    projects: [
+        { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+        // FIN-REG-08: ensaio APROXIMADO no motor WebKit do Playwright (Windows), so quando pedido (CF_E2E_WEBKIT=1 e
+        // --project webkit-aproximado). Nao equivale ao Safari de um iPhone real nem a camera do aparelho.
+        ...(process.env.CF_E2E_WEBKIT === '1' ? [{ name: 'webkit-aproximado', use: { ...devices['iPhone 13'] } }] : []),
+    ],
 });
