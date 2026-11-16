@@ -1,6 +1,6 @@
 # FIN-REG-07 — Simplificação do fluxo de faturas: retirada da consolidação manual
 
-**Data:** 15/11/2026. **Situação:** alteração local feita, testada e **tecnicamente homologada** (regressão completa sem falhas). Falta só a publicação, que depende de autorização específica. Sem migration, sem push e sem deploy.
+**Data:** 15/11/2026. **Situação:** alteração feita, testada, tecnicamente homologada e **publicada em 15/11/2026** (seção 9). Sem migration.
 
 **Classificação:** funcionalidade **dispensada por decisão do titular**. Não é pendência de migração.
 
@@ -63,7 +63,7 @@ Conferências do REG-07, na tela de Despesas com uma fatura em aberto:
 ## 6. Publicação e reversão
 
 - **Publicação:** só o site, dois arquivos de `web/src/js`. Sem migration. Depende de autorização específica do titular; o push e o deploy não foram autorizados nesta etapa.
-- **Reversão:** republicar o deploy anterior do Cloudflare Pages (`5c392a8a`). Não há mudança no banco.
+- **Reversão:** republicar o deploy anterior do Cloudflare Pages (`5c392a8a`), preservado e acessível. Não há mudança no banco.
 
 ## 7. Limpeza futura (não autorizada nesta etapa)
 
@@ -78,5 +78,29 @@ Ficam para uma decisão posterior, se o titular quiser:
 - **Decisão funcional encerrada:** o Controle Financeiro não usa consolidação manual de faturas.
 - **Homologação técnica:** regressão completa aprovada, 260 de 260, e unitários 120 de 120.
 - **Commits locais:** `1602ea6` (código e teste) e o desta documentação, no ramo `reg-07-retirar-consolidacao-fatura`.
-- **Pendente:** publicação (push e deploy), quando autorizada.
+- **Publicação:** feita em 15/11/2026, com autorização do titular (seção 9).
+
+## 9. Publicação (15/11/2026)
+
+| Verificação | Resultado |
+|---|---|
+| Commits | 3, no escopo: `a24aba2` (documentação da publicação do REG-03/04), `1602ea6` e `ce8ba64`. Só `docs/`, dois scripts de Despesas e um teste. Nada de `supabase/` nem de `backend/`; nenhum arquivo sensível |
+| `main` remoto antes do push | `f2992a4`, a própria base do ramo |
+| Push | Avanço rápido `f2992a4..ce8ba64`, sem `force` |
+| Testes finais | Unitários do site, com o build: 120 aprovados, 0 falhas |
+| Build de produção | 227 arquivos; configuração idêntica à de produção |
+| Diferença para o build anterior | 2 arquivos: `js/despesas-adaptacoes.js` e `js/despesas-servico.js` |
+| Deploy | Cloudflare Pages, `ed3ffcdc`, ramo `producao`, a partir de `ce8ba64`. 2 arquivos enviados |
+| Migration e Supabase | Nenhuma migration; nenhuma escrita |
+| Arquivos servidos x build | 226 de 226 iguais por SHA-256 no domínio (as 26 páginas HTML, descontado o script de métricas que a Cloudflare injeta) |
+| Reversão | Deploy `5c392a8a` preservado e acessível |
+
+Conferência depois da publicação, sem login:
+
+- O arquivo servido de Despesas contém a trava, e o serviço servido não tem mais a rota de consolidação.
+- A tela original de Despesas servida é a mesma de antes, byte a byte: os controles da fatura (detalhes, pagar e estornar) não foram tocados.
+- Despesas, Documentos Fiscais e a página inicial do celular continuam exigindo login.
+- Nenhum erro de console e nenhuma resposta de erro do site.
+
+A ausência do botão e a presença dos controles da fatura com sessão aberta foram comprovadas no navegador de teste, com o mesmo código publicado (cenário de fatura e suíte completa, 260 de 260). Na produção, com login, a conferência visual cabe ao titular.
 
