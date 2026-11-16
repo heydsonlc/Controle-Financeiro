@@ -5,7 +5,9 @@
 // FIN-DOCUMENTOS-2 (migration 20261128090000): envio de arquivo (guardado no banco, privado do perfil, com as validacoes
 // do Flask e duplicidade por hash), revisao, validacao, vinculos e despesa/lancamento a partir do documento, com o
 // escritor unico do perfil. O texto de PDF textual e extraido aqui (pdf.js, sem servico externo); sem ele, revisao
-// manual. Ainda nao disponiveis nesta versao: OCR de imagem, categorias IR e relatorios (Excel/PDF/ZIP).
+// manual. Ainda nao disponiveis nesta versao: OCR de imagem e categorias IR.
+// FIN-REG-03: relatorios de Imposto de Renda / Documentos Fiscais e de Saidas sem documento (Excel e PDF), gerados no
+// navegador (js/relatorio-fiscal.js) com as consultas ja publicadas; so leitura, sem migration.
 // FIN-MIGRACAO-LASTRO-EMPRESA-01 (migration 20261202090000): metadados empresariais (a revisao da tela original grava
 // tipo, categoria, numero, orgao, datas, situacao...), saidas sem documento (vincular documento e situacao manual) e
 // exclusao de documento pela lista (botao acrescentado; a tela original nao tinha), pelas funcoes do banco.
@@ -17,13 +19,15 @@
 import { supabase } from './cliente.js';
 import { criarChaves, falha, mensagemDeErro, NAO_DISPONIVEL, ok } from './adaptador-comum.js';
 import { textoDoPdf } from './importacao-pdf.js';
-import { instalarAberturaDeArquivos, recusarNavegacao } from './arquivo-comprovante.js';
+import { instalarAberturaDeArquivos } from './arquivo-comprovante.js';
 import { comprovanteDoPerfil, erroDeDocumento, responderDocumentoFinanceiro } from './documento-financeiro.js';
 import { iniciarMoldura } from './moldura.js';
+import { MIME_XLSX } from './exportacao-xlsx.js';
+import { ERRO_PERFIL_LASTRO, excelIr, excelSaidas, filtrarComprovantes, pdfIr, pdfSaidas, resumoIr, validarFiltrosSaidas } from './relatorio-fiscal.js';
 
-const estado = { perfilId: null };
+const estado = { perfilId: null, perfil: null, filtrosDaLista: null };
 const chaves = criarChaves();
-const NA_FASE_1 = `Documentos fiscais: esta ação (OCR de imagem, categorias IR ou relatórios) ${NAO_DISPONIVEL}`;
+const NA_FASE_1 = `Documentos fiscais: esta ação (OCR de imagem ou categorias IR) ${NAO_DISPONIVEL}`;
 
 async function rpc(funcao, args) {
     const { data, error } = await funcao(args);
@@ -46,6 +50,7 @@ async function categoriasDespesa(disponiveis) {
 }
 
 async function comprovantes(parametros, id = null) {
+    if (id === null) estado.filtrosDaLista = new URLSearchParams(parametros);  // os relatorios usam os filtros da lista em tela
     const r = await rpc((a) => supabase.rpc('ir_comprovantes_tela', a), {
         p_perfil_id: estado.perfilId, p_filtros: Object.fromEntries(parametros.entries()), p_id: id,
     });
@@ -263,7 +268,67 @@ async function saidas(parametros, resumo) {
     return resumo ? ok({ data: r }) : lista(r);
 }
 
+// ---- FIN-REG-03: relatorios (so leitura) -----------------------------------------------------------------------------
+function momento() {
+    const d = new Date();
+    const dois = (n) => String(n).padStart(2, '0');
+    return { anoAtual: d.getFullYear(),
+             agora: `${dois(d.getDate())}/${dois(d.getMonth() + 1)}/${d.getFullYear()} ${dois(d.getHours())}:${dois(d.getMinutes())}` };
+}
+
+const arquivo = (r, pdf) => ({ status: 200, arquivo: { conteudo: r.conteudo, nome: r.nome, mime: pdf ? 'application/pdf' : MIME_XLSX } });
+
+// Falha na montagem do arquivo: mensagem clara, sem detalhe interno (o detalhe fica so no console).
+function gerar(montar, descricao) {
+    try {
+        return montar();
+    } catch (erro) {
+        console.error('Relatorio:', descricao, erro);
+        return falha(`Não foi possível gerar ${descricao}. Nada foi alterado.`, 500);
+    }
+}
+
+// Lista completa do filtro (ir_comprovantes_tela nao pagina) com os vinculos ATIVOS de cada documento em ordem de id, como
+// o Flask os le; so quem tem vinculo e consultado, em grupos pequenos.
+async function comprovantesDoRelatorio(filtros) {
+    const r = await rpc((a) => supabase.rpc('ir_comprovantes_tela', a), { p_perfil_id: estado.perfilId, p_filtros: filtros, p_id: null });
+    const documentos = (r && r.data) || [];
+    const comVinculo = documentos.filter((c) => Number(c.vinculos_count) > 0);
+    for (let i = 0; i < comVinculo.length; i += 8) {
+        await Promise.all(comVinculo.slice(i, i + 8).map(async (c) => {
+            c.vinculos = [...(await vinculosAtivos(c.id) || [])].sort((x, y) => x.id - y.id);
+        }));
+    }
+    return documentos;
+}
+
+// GET /api/ir/relatorios/excel|pdf|resumo (IrRelatorioService).
+async function relatorioIr(tipo, parametros) {
+    const filtros = Object.fromEntries(parametros.entries());
+    if (filtros.ano && !/^\s*[+-]?\d+\s*$/.test(filtros.ano)) return falha('Ano do relatorio invalido', 400);
+    const documentos = filtrarComprovantes(await comprovantesDoRelatorio(filtros), filtros);
+    if (tipo === 'resumo') return ok({ data: resumoIr(documentos) });
+    const entrada = { perfilNome: estado.perfil.nome, empresa: estado.perfil.tipo === 'EMPRESA', comprovantes: documentos, filtros, ...momento() };
+    return gerar(() => arquivo(tipo === 'pdf' ? pdfIr(entrada) : excelIr(entrada), tipo === 'pdf'), 'o relatório');
+}
+
+// GET /api/ir/lastro/saidas-sem-documento/relatorio-excel|pdf (LastroRelatorioService): so no perfil Empresa.
+async function relatorioSaidas(tipo, parametros) {
+    if (estado.perfil.tipo !== 'EMPRESA') return falha(ERRO_PERFIL_LASTRO, 403);
+    const filtros = Object.fromEntries(parametros.entries());
+    try {
+        validarFiltrosSaidas(filtros);
+    } catch (erro) {
+        return falha(erro.message, 400);
+    }
+    const lidas = await rpc((a) => supabase.rpc('lastro_saidas_tela', a), { p_perfil_id: estado.perfilId, p_filtros: filtros, p_resumo: false });
+    const entrada = { perfilNome: estado.perfil.nome, saidas: lidas || [], filtros, ...momento() };
+    return gerar(() => arquivo(tipo === 'pdf' ? pdfSaidas(entrada) : excelSaidas(entrada), tipo === 'pdf'), 'o relatório');
+}
+
 const ROTAS = [
+    ['GET', /^\/api\/ir\/relatorios\/(excel|pdf|resumo)$/, (m, c, p) => relatorioIr(m[1], p)],
+    ['GET', /^\/api\/ir\/lastro\/saidas-sem-documento\/relatorio-(excel|pdf)$/, (m, c, p) => relatorioSaidas(m[1], p)],
     ['GET', /^\/api\/ir\/contexto$/, () => contexto()],
     ['GET', /^\/api\/ir\/categorias$/, () => categorias()],
     ['GET', /^\/api\/ir\/categorias-despesa$/, () => categoriasDespesa(false)],
@@ -456,15 +521,62 @@ async function instalarExclusao() {
     acrescentar();
 }
 
+// FIN-REG-03: "Exportar", "Excel" e "PDF" do relatorio de Imposto de Renda. A tela original navega para a rota do servidor
+// (window.location.href); aqui o clique gera o arquivo pela mesma rota (ponte-api) e o entrega como download, com os
+// filtros da lista em tela (toda mudanca de filtro recarrega a lista). Os demais botoes ja usam fetch na tela original.
+function nomeDoAnexo(resposta, padrao) {
+    const m = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(resposta.headers.get('Content-Disposition') || '');
+    return m ? m[1].replace(/"/g, '') : padrao;
+}
+
+async function baixarRelatorioIr(tipo, botao) {
+    const parametros = estado.filtrosDaLista || new URLSearchParams({ ano: String(new Date().getFullYear()) });
+    const original = botao.innerHTML;
+    botao.disabled = true;
+    botao.textContent = 'Gerando...';
+    try {
+        const resposta = await fetch(`/api/ir/relatorios/${tipo}?${parametros.toString()}`);
+        if (!resposta.ok) {
+            const erro = await resposta.json().catch(() => ({}));
+            throw new Error(erro.error || 'Não foi possível gerar o relatório.');
+        }
+        const url = URL.createObjectURL(await resposta.blob());
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = nomeDoAnexo(resposta, tipo === 'pdf' ? 'Relatorio_fiscal.pdf' : 'Relatorio_fiscal.xlsx');
+        document.body.append(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (erro) {
+        window.alert(erro.message || 'Não foi possível gerar o relatório.');
+    } finally {
+        botao.disabled = false;
+        botao.innerHTML = original;
+    }
+}
+
+function instalarRelatorioIr() {
+    const BOTOES = { 'ir-btn-exportar': 'excel', 'ir-btn-excel': 'excel', 'ir-btn-pdf': 'pdf' };
+    document.addEventListener('click', (evento) => {
+        const botao = evento.target.closest && evento.target.closest('#ir-btn-exportar, #ir-btn-excel, #ir-btn-pdf');
+        if (!botao) return;
+        evento.preventDefault();
+        evento.stopImmediatePropagation();  // a tela original navegaria para /api/ir/relatorios/...
+        if (!botao.disabled) baixarRelatorioIr(BOTOES[botao.id], botao);
+    }, true);
+}
+
 const contextoMoldura = await iniciarMoldura();
 if (contextoMoldura && contextoMoldura.perfil) {
     estado.perfilId = contextoMoldura.perfil.id;
+    estado.perfil = contextoMoldura.perfil;
     window.CF_REGISTRAR_ADAPTADOR(adaptador);
     instalarAberturaDeArquivos(estado.perfilId);  // "Abrir arquivo" (link /api/ir/comprovantes/<id>/arquivo)
     instalarDesvinculo();
     instalarRetornoDoEnvio();
     instalarExclusao();
-    recusarNavegacao(['#ir-btn-exportar', '#ir-btn-excel', '#ir-btn-pdf'], `Relatório de documentos fiscais (Excel/PDF): ${NAO_DISPONIVEL}`);
+    instalarRelatorioIr();
 } else if (contextoMoldura) {
     window.CF_REGISTRAR_ADAPTADOR(async () => falha('Nenhum perfil financeiro autorizado para esta conta.', 403));
 }

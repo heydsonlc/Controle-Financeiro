@@ -1,7 +1,7 @@
 // FIN-FIDELIDADE-DOCUMENTOS-1 (fase 1) — tela original de Imposto de Renda do Flask (frontend/templates/imposto_renda.html)
 // sobre o Supabase, SO CONSULTA, modo IRPF. Dados FICTICIOS do "Perfil B" (tests/supabase_local.py,
 // semear_documentos_fiscais_e2e). FIN-DOCUMENTOS-2: revisao e envio de arquivo gravam pelas funcoes do banco (Perfil B no
-// novo aplicativo); OCR de imagem, metadados da empresa e relatorios ainda nao estao disponiveis nesta versao.
+// novo aplicativo); OCR de imagem ainda nao esta disponivel nesta versao. FIN-REG-03: relatorios em Excel e PDF.
 import { expect, test } from '@playwright/test';
 
 import { chamarRpc, perfilAtivoId } from './despesas.mjs';
@@ -92,7 +92,7 @@ test('perfil Empresa: documentos da empresa, resumo e saidas sem documento, sem 
     expect(testInfo.avisos).toEqual([]);  // saidas sem documento carregaram (antes: "em migracao")
 });
 
-test('abrir arquivo do comprovante (nova aba com o arquivo do Supabase) e relatorio recusado sem navegar', async ({ page, context }, testInfo) => {
+test('abrir arquivo do comprovante (nova aba com o arquivo do Supabase) e relatorio baixado sem navegar', async ({ page, context }, testInfo) => {
     await entrar(page, B);
     await page.goto('/documentos-fiscais.html');
     const linha = page.locator('#ir-comprovantes-tbody tr', { hasText: 'Clinica E2E (ficticia)' });
@@ -103,7 +103,9 @@ test('abrir arquivo do comprovante (nova aba com o arquivo do Supabase) e relato
     await aba.close();
 
     const antes = page.url();
-    await page.locator('#ir-btn-exportar').click();  // "Exportar" da barra de acoes (Excel no Flask)
-    await expect.poll(() => testInfo.avisos.join(' | ')).toContain('ainda não está disponível nesta versão');
+    // FIN-REG-03: "Exportar" da barra de acoes (Excel no Flask) gera o relatorio no navegador, sem navegar nem avisar.
+    const [download] = await Promise.all([page.waitForEvent('download'), page.locator('#ir-btn-exportar').click()]);
+    expect(download.suggestedFilename()).toMatch(/^IRPF_\d{4}_Perfil_B\.xlsx$/);
     expect(page.url()).toBe(antes);
+    expect(testInfo.avisos).toEqual([]);
 });

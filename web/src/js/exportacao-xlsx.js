@@ -70,44 +70,65 @@ function textoPython(valor) {
 
 const textoFloat = (n) => (Number.isInteger(n) ? `${n}.0` : String(n));
 
-function planilha(linhas, monetarias) {
+// Estilos (cellXfs): 0 normal; 1 cabecalho azul centralizado; 2 moeda; 3 normal com quebra de linha e topo;
+// 4 cabecalho azul com quebra e topo; 5 moeda com quebra e topo; 6 cabecalho escuro centralizado.
+// FIN-REG-03/04 — variantes do _formatar_planilha do Flask, por aba (opcoes.estilo):
+//   'padrao'    PatrimonioRelatorioService: cabecalho so na linha 1, moeda pelas colunas `monetarias`.
+//   'relatorio' IrRelatorioService e LastroRelatorioService: quebra de linha e topo em toda celula; cabecalho na linha 1 e
+//               em toda celula cujo texto esteja em `rotulos`; moeda em toda celula float (objeto { numero }), nunca em
+//               inteiro (numero simples); autofiltro so com mais de uma linha e mais de uma coluna.
+//   'indice'    DocumentoZipService: cabecalho escuro centralizado na linha 1; moeda nas celulas float.
+const VARIANTES = {
+    padrao: { normal: null, cabecalho: 1, moeda: 2, moedaPorCelula: false },
+    relatorio: { normal: 3, cabecalho: 4, moeda: 5, moedaPorCelula: true },
+    indice: { normal: null, cabecalho: 6, moeda: 2, moedaPorCelula: true },
+};
+
+function planilha(linhas, monetarias, opcoes = {}) {
+    const v = VARIANTES[opcoes.estilo || 'padrao'];
+    const rotulos = opcoes.rotulos || null;
+    const [larguraMinima, larguraMaxima] = [opcoes.larguraMinima ?? 12, opcoes.larguraMaxima ?? 42];
     const largura = linhas.reduce((m, l) => Math.max(m, l.length), 0);
     const ultimaLinha = linhas.length;
     const larguras = [];
     for (let c = 0; c < largura; c += 1) {
         const maior = Math.max(...linhas.map((l) => textoPython(l[c] ?? null).length));
-        larguras.push(Math.min(Math.max(maior + 2, 12), 42));
+        larguras.push(Math.min(Math.max(maior + 2, larguraMinima), larguraMaxima));
     }
+    const s = (id) => (id === null ? '' : ` s="${id}"`);
     const corpo = [];
     linhas.forEach((linha, i) => {
         const celulas = [];
         const colunas = i === 0 ? Array.from({ length: largura }, (_, c) => linha[c] ?? null) : linha;
         colunas.forEach((valor, c) => {
             const ref = `${letra(c + 1)}${i + 1}`;
-            const estilo = i === 0 ? ' s="1"' : '';
+            const cabecalho = i === 0 || (rotulos !== null && typeof valor === 'string' && rotulos.has(valor));
+            const estilo = s(cabecalho ? v.cabecalho : v.normal);
             if (valor === null || valor === undefined || valor === '') {
-                if (i === 0) celulas.push(`<c r="${ref}" s="1"/>`);  // openpyxl estiliza toda a linha do cabecalho
+                if (i === 0) celulas.push(`<c r="${ref}"${s(v.cabecalho)}/>`);  // openpyxl estiliza toda a linha do cabecalho
                 return;
             }
             if (typeof valor === 'object' || typeof valor === 'number') {
                 const numero = typeof valor === 'number' ? valor : valor.numero;
                 const decimal = typeof valor === 'object' && valor.decimal;
-                const moeda = i > 0 && monetarias.has(c + 1) && !decimal ? ' s="2"' : estilo;
-                celulas.push(`<c r="${ref}" t="n"${moeda}><v>${numero}</v></c>`);
+                const emMoeda = v.moedaPorCelula ? typeof valor === 'object' && !decimal
+                    : i > 0 && monetarias.has(c + 1) && !decimal;
+                celulas.push(`<c r="${ref}" t="n"${emMoeda ? s(v.moeda) : estilo}><v>${numero}</v></c>`);
             } else {
-                celulas.push(`<c r="${ref}" t="inlineStr"${estilo}><is><t>${xml(valor)}</t></is></c>`);
+                celulas.push(`<c r="${ref}" t="inlineStr"${estilo}><is><t xml:space="preserve">${xml(valor)}</t></is></c>`);
             }
         });
         if (celulas.length) corpo.push(`<row r="${i + 1}">${celulas.join('')}</row>`);
     });
     const dimensao = `A1:${letra(largura)}${ultimaLinha}`;
+    const comFiltro = opcoes.estilo !== 'relatorio' || (ultimaLinha > 1 && largura > 1);
     return enc.encode('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
         + '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
         + `<dimension ref="${dimensao}"/>`
         + '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'
         + `<cols>${larguras.map((w, c) => `<col min="${c + 1}" max="${c + 1}" width="${w}" customWidth="1"/>`).join('')}</cols>`
         + `<sheetData>${corpo.join('')}</sheetData>`
-        + `<autoFilter ref="${dimensao}"/>`
+        + (comFiltro ? `<autoFilter ref="${dimensao}"/>` : '')
         + '</worksheet>');
 }
 
@@ -115,16 +136,22 @@ const ESTILOS = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
     + '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
     + '<numFmts count="1"><numFmt numFmtId="164" formatCode="R$ #,##0.00"/></numFmts>'
     + '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><color rgb="00FFFFFF"/><sz val="11"/><name val="Calibri"/></font></fonts>'
-    + '<fills count="3"><fill><patternFill/></fill><fill><patternFill patternType="gray125"/></fill>'
-    + '<fill><patternFill patternType="solid"><fgColor rgb="001D4ED8"/></patternFill></fill></fills>'
+    + '<fills count="4"><fill><patternFill/></fill><fill><patternFill patternType="gray125"/></fill>'
+    + '<fill><patternFill patternType="solid"><fgColor rgb="001D4ED8"/></patternFill></fill>'
+    + '<fill><patternFill patternType="solid"><fgColor rgb="001F2937"/></patternFill></fill></fills>'
     + '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
     + '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-    + '<cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+    + '<cellXfs count="7"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
     + '<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center"/></xf>'
-    + '<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs>'
+    + '<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
+    + '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>'
+    + '<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>'
+    + '<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>'
+    + '<xf numFmtId="0" fontId="1" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center"/></xf></cellXfs>'
     + '</styleSheet>';
 
 // abas: [{ nome, linhas: [[celula, ...], ...], monetarias: [numero da coluna, ...] }]
+// Opcionais por aba: estilo ('padrao' | 'relatorio' | 'indice'), rotulos (Set de textos de cabecalho), larguraMinima, larguraMaxima.
 export function gerarXlsx(abas) {
     const arquivos = [
         { nome: '[Content_Types].xml', conteudo: enc.encode('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
@@ -149,9 +176,12 @@ export function gerarXlsx(abas) {
             + `<Relationship Id="rId${abas.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>`
             + '</Relationships>') },
         { nome: 'xl/styles.xml', conteudo: enc.encode(ESTILOS) },
-        ...abas.map((a, i) => ({ nome: `xl/worksheets/sheet${i + 1}.xml`, conteudo: planilha(a.linhas, new Set(a.monetarias || [])) })),
+        ...abas.map((a, i) => ({ nome: `xl/worksheets/sheet${i + 1}.xml`, conteudo: planilha(a.linhas, new Set(a.monetarias || []), a) })),
     ];
     return zip(arquivos);
 }
+
+// FIN-REG-04: o mesmo empacotador ZIP (armazenado, sem compressao: os bytes dos arquivos ficam como estao).
+export { zip as empacotarZip, crc32 };
 
 export const MIME_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
