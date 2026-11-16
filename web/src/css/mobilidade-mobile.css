@@ -194,8 +194,10 @@ body.mob-mobilidade .mob-grafico {
     margin: 0 0 4px;
 }
 
+/* sem o traco que os icones usam (regra geral dos svg do mobile) */
 body.mob-mobilidade .mob-grafico-barra {
     fill: #c7c7cc;
+    stroke: none;
 }
 
 body.mob-mobilidade .mob-grafico-barra.atual {
@@ -204,5 +206,7 @@ body.mob-mobilidade .mob-grafico-barra.atual {
 
 body.mob-mobilidade .mob-grafico-rotulo {
     fill: var(--mob-cinza);
+    stroke: none;
     font-size: 10px;
+    font-weight: 500;
 }

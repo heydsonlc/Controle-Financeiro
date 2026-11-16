@@ -1163,6 +1163,48 @@ def semear_perfis_previa(cur):
                 (p['id'], 'NOVO', 'administrador de teste', 'cenario ficticio da previa (FIN-MVP-MOBILE-10)'))
 
 
+# FIN-MOBILE-11/12 (so a previa): documentos FICTICIOS do Perfil G (um com arquivo) e abastecimentos do "Flex G" nos ultimos
+# meses, para a homologacao visual dos Documentos e da Mobilidade no celular. Os testes automatizados nao usam estes dados.
+DOCUMENTOS_PREVIA_G = (  # prestador, valor, dias atras, status, dedutivel
+    ('Clinica G (ficticia)', '420.00', 6, 'VALIDADO', True),
+    ('Escola G (ficticia)', '1350.00', 18, 'PENDENTE_REVISAO', False),
+    ('Laboratorio G (ficticio)', '189.90', 33, 'PENDENTE_REVISAO', True),
+    ('Plano de Saude G (ficticio)', '760.00', 47, 'VALIDADO', True),
+)
+ABASTECIMENTOS_PREVIA_G = (  # dias atras, hodometro, combustivel, preco por litro, valor
+    (140, 41200.0, 'gasolina', '5.890', '250.00'),
+    (104, 41690.0, 'gasolina', '5.940', '262.00'),
+    (71, 42150.0, 'etanol', '3.990', '180.00'),
+    (38, 42630.0, 'gasolina', '6.050', '270.00'),
+    (9, 43110.0, 'gasolina', '6.090', '265.00'),
+)
+
+
+def semear_mobile_11_12_previa(cur):
+    import hashlib
+    perfil = PERFIL_G['id']
+    cur.execute("insert into public.ir_categoria (nome, descricao, dedutivel, ativo, ordem, tipo_contexto, natureza, created_at, updated_at) "
+                "values ('Saude (previa ficticia)', 'Categoria ficticia da previa', true, true, 95, 'PESSOAL', 'DESPESA_DEDUTIVEL', now(), now()) returning id")
+    categoria = cur.fetchone()[0]
+    conteudo = b'%PDF-1.4\nRecibo ficticio da previa (FIN-MOBILE-11). Sem dados reais.\n%%EOF'
+    for n, (prestador, valor, dias, status, dedutivel) in enumerate(DOCUMENTOS_PREVIA_G, start=1):
+        com_arquivo = n == 1
+        resumo = hashlib.sha256(conteudo).hexdigest() if com_arquivo else f'{n:064d}'
+        cur.execute("insert into public.ir_comprovante (perfil_financeiro_id, ano_calendario, data_documento, prestador_nome, valor, categoria_ir_id, "
+                    "dedutivel, status, hash_arquivo, created_at, updated_at) values (%s, extract(year from current_date - %s)::int, current_date - %s, "
+                    "%s, %s, %s, %s, %s, %s, now(), now()) returning id", (perfil, dias, dias, prestador, valor, categoria, dedutivel, status, resumo))
+        comprovante = cur.fetchone()[0]
+        if com_arquivo:
+            cur.execute("insert into public.ir_comprovante_arquivo (comprovante_id, nome_arquivo, mime_type, tamanho_bytes, hash_arquivo, conteudo, created_at) "
+                        "values (%s, 'recibo-previa-g.pdf', 'application/pdf', %s, %s, %s, now())", (comprovante, len(conteudo), resumo, conteudo))
+    cur.execute("select id from public.veiculo where perfil_financeiro_id = %s order by id limit 1", (perfil,))
+    veiculo = cur.fetchone()[0]
+    for dias, hodometro, combustivel, preco, valor in ABASTECIMENTOS_PREVIA_G:
+        cur.execute("insert into financeiro.abastecimento (perfil_financeiro_id, veiculo_id, data_abastecimento, hodometro_km, combustivel, preco_litro, "
+                    "valor_total, meio_pagamento, user_id) values (%s, %s, current_date - %s, %s, %s, %s, %s, 'pix', %s)",
+                    (perfil, veiculo, dias, hodometro, combustivel, preco, valor, USUARIO_G['id']))
+
+
 RECORRENCIAS_PREVIA_G = (  # nome, valor, dia, tipo, meio
     ('Aluguel G (ficticio)', '1850.00', 5, 'mensal', 'boleto'),
     ('Energia G (ficticia)', '210.00', 12, 'mensal', 'debito_automatico'),

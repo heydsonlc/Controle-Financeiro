@@ -74,6 +74,7 @@ from tests.supabase_local import (  # noqa: E402
     semear_pagamentos_previa,
     semear_recorrencias_previa,
     semear_perfis_previa,
+    semear_mobile_11_12_previa,
     semear_receitas_mobile_e2e,
     semear_financiamento_e2e,
     semear_mobilidade_e2e,
@@ -443,6 +444,7 @@ def main():
                     semear_pagamentos_previa(cur)  # FIN-MVP-MOBILE-08: pendencias do mes atual no Perfil G (so a previa)
                     semear_recorrencias_previa(cur)  # FIN-MVP-MOBILE-09: recorrencias do Perfil G a partir do mes seguinte (so a previa)
                     semear_perfis_previa(cur)  # FIN-MVP-MOBILE-10: segundo perfil do usuario G, vazio (so a previa)
+                    semear_mobile_11_12_previa(cur)  # FIN-MOBILE-11/12: documentos e abastecimentos do Perfil G (so a previa)
             conn.close()
 
             def consolidar(cartao, competencia, criar_se_faltar=False):
@@ -524,6 +526,8 @@ def main():
                     print(f'  pagamentos mobile: {USUARIO_G["email"]} (mes atual); leitura: {USUARIO_H["email"]}', flush=True)
                     print(f'  recorrencias mobile: {USUARIO_G["email"]} (atalho Recorrencias); leitura: {USUARIO_H["email"]}', flush=True)
                     print(f'  alternancia de perfis: {USUARIO_G["email"]} (icone ao lado do sino: Perfil G e Perfil G Empresa)', flush=True)
+                    print(f'  documentos e mobilidade mobile: {USUARIO_G["email"]} (atalhos Documentos e Mobilidade); leitura: {USUARIO_H["email"]}; '
+                          f'documentos da Empresa: {USUARIO_C["email"]} / {CONTAS[USUARIO_C["email"]]["senha"]}', flush=True)
                 try:
                     if args.servir or args.previa:
                         while True:
