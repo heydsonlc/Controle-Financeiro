@@ -1,6 +1,6 @@
 # FIN-REG-04 — Pacote ZIP dos documentos da Empresa
 
-**Situação em 15/11/2026:** implementado e testado localmente, com dados fictícios, em bancos descartáveis. Homologação técnica aprovada pelo titular. Nada foi publicado: sem push, sem deploy e sem migration (nenhuma foi necessária).
+**Situação em 15/11/2026:** implementado e testado localmente, com dados fictícios, em bancos descartáveis. Homologação técnica aprovada pelo titular. **Publicado em 15/11/2026** (deploy `5c392a8a`, sem migration; detalhes em `docs/FIN_REG_03_04_HOMOLOGACAO.md`, seção 15). Falta a homologação funcional do titular com dados reais.
 
 ## 1. O que foi entregue
 

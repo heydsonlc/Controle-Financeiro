@@ -1,6 +1,6 @@
 # FIN-REG-03/04 — Relatório integrado de homologação
 
-**Data:** 15/11/2026. **Situação:** os dois MVPs estão implementados e testados localmente. O titular aprovou a homologação técnica com três pontos; os três estão tratados (seção 9). Nada foi publicado: sem push, sem deploy, sem migration.
+**Data:** 15/11/2026. **Situação:** os dois MVPs estão implementados e testados localmente. O titular aprovou a homologação técnica com três pontos, todos tratados (seção 9), e autorizou a publicação. **Publicados em 15/11/2026** (seção 15), sem migration. A geração de relatórios com dados reais fica para a homologação funcional do titular.
 
 Detalhes de cada entrega: `docs/FIN_REG_03_RELATORIOS_FISCAIS.md` e `docs/FIN_REG_04_ZIP_EMPRESA.md`.
 
@@ -209,4 +209,36 @@ Fora o item 4, nenhuma diferença de conteúdo, agrupamento ou total nos relató
 
 Ramo local `reg-03-04-relatorios-fiscais`, a partir de `1386088` (documentação do encerramento do REG-02, também só local).
 
-Nenhum foi enviado ao GitHub.
+Enviados ao GitHub em 15/11/2026, na publicação (seção 15).
+
+## 15. Publicação (15/11/2026)
+
+Autorizada pelo titular depois da homologação dos ajustes.
+
+| Verificação | Resultado |
+|---|---|
+| Commits no escopo | 7: o encerramento documental do REG-02 e os 6 do REG-03/04. Só `docs/`, `tests/`, `web/src` (página, estilo e scripts de Documentos Fiscais) e `web/tests`. Nenhum arquivo de `supabase/` nem de `backend/` |
+| Arquivos sensíveis | Nenhum: sem chave, backup, credencial, registro de execuções ou temporário |
+| `main` remoto antes do push | `73c64b8`, a própria base do ramo; nenhuma alteração posterior |
+| Push | Avanço rápido `73c64b8..f2992a4`, sem `force` |
+| Testes finais | Unitários do site, com o build: 120 aprovados, 0 falhas |
+| Build de produção | 227 arquivos (eram 225). Configuração idêntica à que estava em produção. Sem padrão proibido |
+| Diferença para o build anterior | 4 arquivos alterados e 2 novos, todos de Documentos Fiscais |
+| Deploy | Cloudflare Pages, `5c392a8a`, ramo `producao`, a partir de `f2992a4`. 6 arquivos enviados; os demais já estavam lá |
+| Migration e Supabase | Nenhuma migration; nenhuma escrita |
+| Arquivos servidos x build | 226 de 226 iguais por SHA-256 no domínio `financas.kortexbrasil.com` (o 227º é o `_headers`, que configura o site e não é servido). Nas 26 páginas HTML, descontado o script de métricas que a Cloudflare injeta ao servir |
+| Reversão | Deploy `45e24f88` preservado e acessível |
+
+### Conferência depois da publicação, sem login
+
+- **Páginas protegidas:** Documentos Fiscais, Despesas, Patrimônio, Lançamentos e a página inicial do celular redirecionam para o login quando não há sessão.
+- **Controles de exportação no HTML servido:** "Exportar", "Excel", "PDF" e "ZIP" da lista, e "Excel" e "PDF" das saídas. O grupo de "Excel" e "PDF" já não é restrito à Empresa; "ZIP" e "Filtros avançados" continuam marcados como só da Empresa.
+- **Sem sessão, o banco recusa** as três consultas usadas pelos relatórios e pelo pacote (HTTP 401, código 42501); nenhum dado é devolvido.
+- Nenhum erro de console e nenhuma resposta de erro do site.
+
+Nenhum relatório foi gerado com dados reais e nenhuma conta foi usada nessa conferência.
+
+### Pendente com o titular
+
+- Homologação funcional com login: gerar o Excel e o PDF no perfil Pessoal e na Empresa, o relatório de saídas e o pacote ZIP, e conferir com os documentos reais.
+
