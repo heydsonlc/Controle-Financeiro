@@ -1,6 +1,6 @@
 # FIN-REG-08 — Leitura e classificação sugerida de documentos fiscais
 
-**Situação:** implementado no ramo local `reg-08-leitura-classificacao`. **Sem push, sem deploy e sem migration em produção.**
+**Situação:** **PUBLICADO em 16/11/2026** (push `2883f07..93bda10`, migration `20261228090000` aplicada = 68, deploy `34264964`, reversão `8685a983`).
 Homologação: `docs/FIN_REG_08_HOMOLOGACAO.md`. Correção de cache preparada à parte: `docs/FIN_CACHE_01_ATUALIZACAO_JS_CSS.md`.
 
 ## 1. Objetivo e regra central
@@ -142,7 +142,7 @@ sempre **pendente de revisão**; validar continua sendo uma ação do usuário.
 - Os testes usam somente documentos **fictícios** gerados no próprio teste (PDF montado e "foto" de texto desenhado numa página em
   branco). Nenhum documento real é usado.
 
-## 6. Migration (não aplicada em produção)
+## 6. Migration (aplicada em produção em 16/11/2026)
 
 `20261228090000_financeiro_documentos_leitura_ocr.sql`: `create or replace` só de `financeiro.enviar_comprovante`, com o corpo
 anterior preservado (inclusive as mensagens de erro originais) e estes acréscimos:
@@ -169,7 +169,7 @@ para gravar OCR de imagem e os dados conferidos. Portanto, na publicação, a mi
 - **Classificação documental da Empresa** (tipo, categoria documental, validade): continua na revisão do desktop.
 - **Safari real e câmera do iPhone:** não testados. O ensaio WebKit é aproximado (seção 3 da homologação).
 
-## 8. Plano de publicação (para quando o titular autorizar)
+## 8. Plano de publicação (executado em 16/11/2026; resultado em `FIN_REG_08_HOMOLOGACAO.md`)
 
 1. Backup `PRE_MIGRATION` (`scripts/backup_rotina.py executar --tipo PRE_MIGRATION`) e conferência.
 2. Aplicar a migration `20261228090000` em produção e conferir a função (assinatura, grants e uma chamada de leitura sem gravação).

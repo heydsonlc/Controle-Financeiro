@@ -1,7 +1,7 @@
 # FIN-CACHE-01 — Atualização garantida de JS e CSS após cada publicação
 
-**Situação:** preparado no ramo local `reg-08-leitura-classificacao`, em commit próprio, separado do FIN-REG-08. **Sem push e
-sem deploy.** Não depende de alterar a configuração da zona do Cloudflare.
+**Situação:** **PUBLICADO em 16/11/2026** junto com o FIN-REG-08 (commit próprio `347f0a8`, deploy `34264964`), com a conferência da
+seção 5 feita em produção. Não depende de alterar a configuração da zona do Cloudflare.
 
 ## 1. Ocorrência
 

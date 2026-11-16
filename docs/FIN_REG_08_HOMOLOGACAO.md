@@ -2,7 +2,7 @@
 
 Leitura e classificação sugerida de documentos (`docs/FIN_REG_08_LEITURA_CLASSIFICACAO_DOCUMENTAL.md`) e a correção de cache
 FIN-CACHE-01 (`docs/FIN_CACHE_01_ATUALIZACAO_JS_CSS.md`, em commit próprio). Ramo local `reg-08-leitura-classificacao`.
-**Sem push, sem deploy, sem migration em produção.** Prévia e testes só no banco descartável, com dados fictícios.
+**PUBLICADO em 16/11/2026** (seção "Publicação", no fim). Testes só no banco descartável, com dados fictícios.
 
 ## 1. Roteiro para o titular (prévia no Firefox, modo celular e desktop)
 
@@ -74,3 +74,20 @@ Observações do ensaio, que não são defeitos do REG-08:
 - [ ] Correção manual nunca é trocada pela leitura.
 - [ ] Desktop: envio com leitura e sugestões na revisão sem mudar o restante da tela.
 - [ ] Decisão sobre a publicação (migration antes do deploy) e sobre publicar o FIN-CACHE-01 junto.
+
+## Publicação (16/11/2026, autorizada pelo titular)
+
+| Etapa | Resultado |
+|---|---|
+| Backup `PRE_MIGRATION` | `cf-fzjmgekasjrgvmfdkdog-20261116_081319`, duas cópias verificadas (67 migrations no retrato) |
+| Migration `20261228090000` | Simulada (só ela pendente) e aplicada: 68/68; corpo da função em produção idêntico ao da migration; execução só para `authenticated` |
+| Push | `2883f07..93bda10` em `main` (avanço rápido) |
+| Deploy | `34264964` (Cloudflare Pages, `producao`); reversão: `8685a983` |
+| Arquivos servidos | 243/243 iguais ao build (215 arquivos por SHA-256 e 28 páginas HTML, descontado o script de métricas da Cloudflare) |
+| CSP em produção | `'wasm-unsafe-eval'` só em `/documentos-fiscais`, `/documentos-mobile` e `/vendor/tesseract-7.0.0/*`; demais caminhos com `script-src 'self'` |
+| Cache em produção | HTML `max-age=0, must-revalidate`; pasta do OCR `max-age=31536000, immutable`; toda referência a JS/CSS com `?v=<hash>` |
+| OCR em produção (sem login, imagem fictícia desenhada no teste) | Funciona sob a CSP real no Chromium e no WebKit aproximado (cerca de 1 s); nenhum pedido a endereço externo |
+| Acesso sem sessão | Consultas continuam recusadas (HTTP 401); sem erros de console |
+
+Nenhum dado financeiro ou documento real foi lido ou alterado na publicação. **Falta a homologação funcional do titular no
+iPhone real** (fotografar, conferir, enviar): Safari e câmera continuam não testados.
