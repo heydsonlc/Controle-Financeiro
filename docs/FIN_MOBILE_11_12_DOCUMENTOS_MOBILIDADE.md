@@ -1,6 +1,6 @@
 # FIN-MOBILE-11 e FIN-MOBILE-12 — Documentos Fiscais e Mobilidade no celular
 
-**Data:** 15/11/2026. **Situação:** implementado e testado localmente, com dados fictícios, em banco descartável. **Aguarda a homologação do titular.** Sem push, sem deploy e sem migration (nenhuma foi necessária).
+**Data:** 15/11/2026. **Situação:** implementado e testado localmente, com dados fictícios, em banco descartável. **Homologação visual aprovada pelo titular em 15/11/2026**, pela prévia local. Falta só a autorização de publicação. Sem push, sem deploy e sem migration (nenhuma foi necessária).
 
 **Identificação.** O contrato conjunto chamava as entregas de "FIN-REG-08/09 + MOBILE-10/11". Por decisão do titular, ficaram assim:
 
@@ -52,7 +52,8 @@ A grade passou de 2 colunas por 4 linhas para 2 colunas por 5 linhas. Os atalhos
 
 1. **Segmentação "Todos / IR / Empresa".** No sistema, cada perfil é pessoal ou Empresa; a mesma lista nunca mistura os dois. A tela mostra, portanto, o contexto do perfil ativo: "Comprovantes do Imposto de Renda" no perfil pessoal e "Documentos da Empresa" na Empresa. A segmentação visível é por situação (Todos, Pendentes, Validados) e, na Empresa, entre Documentos e Saídas sem documento.
 2. **Documentos por ano, saídas por mês.** É como o desktop consulta: documentos pelo ano-calendário e saídas pelo mês. As setas mudam o ano numa visão e o mês na outra.
-3. **Novo abastecimento reaproveitado.** O formulário de abastecimento do Registrar Lançamento já estava homologado no celular, com conta ou cartão. A Mobilidade abre esse mesmo formulário com o veículo escolhido. A única mudança nele foi aceitar o veículo já selecionado.
+3. **Novo abastecimento reaproveitado.** O formulário de abastecimento do Registrar Lançamento já estava homologado no celular, com conta ou cartão. A Mobilidade abre esse mesmo formulário com o veículo escolhido. As únicas mudanças nele foram aceitar o veículo já selecionado e o destino do retorno.
+   - **Retorno pela origem** (pedido do titular na avaliação da prévia): aberto pela Mobilidade, o Voltar do cabeçalho e o Cancelar devolvem à Mobilidade, na mesma competência. Aberto pelo Registrar Lançamento, o mesmo formulário continua voltando à Página Principal. A origem vai marcada no endereço; o formulário não foi duplicado e as regras financeiras não mudaram.
 4. **Indicadores do resumo** (aprovados pelo titular com ressalva, já atendida). São somas de apresentação sobre o histórico que o banco devolve; nenhum dado é alterado e nenhum campo novo foi criado.
    - **Consumo médio (estimado):** km rodados entre as leituras de hodômetro ÷ litros. Aparece como "≈ 10,0 km/L", com o rótulo "estimado", porque supõe o tanque completado a cada abastecimento, o que o sistema não registra.
    - **Custo por km (combustível):** valor pago ÷ km rodados. É indicador financeiro, mostrado em linha separada do consumo.
@@ -120,6 +121,8 @@ Executados em 15/11/2026.
 | Mobilidade no desktop depois da separação do serviço (Mobilidade, projeções e abastecimento em Lançamentos) | 15 aprovados, 0 falhas |
 | Unitários do site, com o build de produção | 122 aprovados, 0 falhas (eram 120; +2 das páginas novas) |
 | Suíte completa de navegador | 267 aprovados, 0 falhas (eram 260; +7 dos dois módulos) |
+| Depois da correção de estilo do gráfico e do ajuste do retorno: as 8 baterias afetadas (Mobilidade mobile e desktop, Registrar Lançamento, integrado mobile, Página Principal, Documentos mobile e abastecimento em Lançamentos) | 43 aprovados, 0 falhas |
+| Unitários, depois dos mesmos ajustes | 122 aprovados, 0 falhas |
 
 Uma rodada anterior da suíte completa teve 1 falha, do próprio teste: o cenário de Documentos da Empresa dependia de dados deixados por outros testes. Passou a usar um documento próprio, e a rodada seguinte foi limpa.
 
@@ -146,6 +149,7 @@ Uma rodada anterior da suíte completa teve 1 falha, do próprio teste: o cenár
 - Histórico na ordem do banco, com o filtro do mês.
 - Resumo conferido com números conhecidos: dois abastecimentos de 40 L, 400 km entre eles. Só o segundo tem leitura anterior, e dá "≈ 10,0 km/L" no consumo estimado e R$ 0,55 por km no custo. A nota da tela informa que é estimativa e que 1 abastecimento entrou na conta.
 - Troca de competência; perfil sem veículos.
+- Retorno pela origem: Voltar e Cancelar devolvem à Mobilidade quando o abastecimento foi aberto por ela, e à Página Principal quando aberto pelo Registrar Lançamento.
 
 **Somente leitura**
 - O leitor consulta, baixa e exporta. Não vê Revisar, Vincular, Desvincular, Situação nem Abastecer.
@@ -157,9 +161,9 @@ As capturas das telas em 320 e 390 px são geradas pelos testes quando a variáv
 
 ## 9. Pendências e sugestões
 
-1. **Homologação visual do titular**, pela prévia local, antes de qualquer publicação.
+1. **Publicação**, quando autorizada. A homologação visual já foi aprovada.
 2. **Enviar documento pelo celular** (fotografar o comprovante) não estava na lista de ações do contrato e ficou no desktop. É o uso de campo mais natural; pode entrar junto com o FIN-REG-08.
-3. **Depois de abastecer**, a confirmação é a do Registrar Lançamento e leva à Lista de Despesas ou à Página Principal. Um atalho "Ver na Mobilidade" nessa confirmação é possível, mas mexe numa tela homologada; depende de decisão.
+3. **Depois de salvar o abastecimento**, a tela de confirmação é a do Registrar Lançamento, com os atalhos de sempre (Lista de Despesas e Página Principal). O Voltar do cabeçalho, nessa tela, já devolve à Mobilidade quando o formulário foi aberto por ela.
 4. **Desktop:** o contrato previa evoluções de navegação por situação e de organização. Não alterei nenhuma tela do desktop; a preparação feita foi a separação dos serviços. Se houver evolução específica desejada no desktop, precisa ser descrita.
 
 ## 10. Limitações
