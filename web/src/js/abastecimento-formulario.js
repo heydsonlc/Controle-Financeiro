@@ -28,7 +28,8 @@ const formatarLitros = (litros) => (litros === null || litros === undefined ? 'â
 const km = (v) => `${Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} km`;
 
 // opcoes: api (fila da tela), mes (competencia da pagina principal), formulario ({categoria_combustivel_id, veiculos}),
-// rotuloNovo e aoRecomecar/aoConcluir (como os outros formularios).
+// rotuloNovo e aoRecomecar/aoConcluir (como os outros formularios). FIN-MOBILE-12: veiculoId (opcional) abre o formulario
+// com o veiculo ja escolhido, quando ele esta na lista (atalho Abastecer da Mobilidade mobile); nada mais muda.
 export function montarFormularioAbastecimento(container, opcoes) {
     const { api, mes, formulario } = opcoes;
     const veiculos = (formulario && formulario.veiculos) || [];
@@ -48,7 +49,8 @@ export function montarFormularioAbastecimento(container, opcoes) {
     const form = el('form', 'mob-form');
     form.noValidate = true;
     const veiculo = seletor([['', 'Selecione...'], ...veiculos.map((v) => [v.id,
-        SITUACOES[v.situacao_uso] ? `${v.nome} (${SITUACOES[v.situacao_uso]})` : v.nome])], veiculos.length === 1 ? veiculos[0].id : '');
+        SITUACOES[v.situacao_uso] ? `${v.nome} (${SITUACOES[v.situacao_uso]})` : v.nome])],
+        veiculos.some((v) => v.id === opcoes.veiculoId) ? opcoes.veiculoId : (veiculos.length === 1 ? veiculos[0].id : ''));
     const data = entrada('date', hojeBrasilia(), { max: hojeBrasilia() });
     const hodometro = entrada('number', '', { step: '0.1', min: '0', inputmode: 'decimal', placeholder: 'km' });
     const combustivel = seletor([], '');

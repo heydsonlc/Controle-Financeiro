@@ -134,7 +134,9 @@ async function abrir(tipo, forcar = false) {
     } else {
         const formulario = await formularioAbastecimento();
         if (pedido !== estado.pedido) return;
-        montarFormularioAbastecimento(cadastro, { ...opcoesComuns(), formulario });
+        // FIN-MOBILE-12: aberto pelo atalho Abastecer da Mobilidade mobile, ja com o veiculo.
+        const veiculoId = Number(new URLSearchParams(window.location.search).get('veiculo')) || null;
+        montarFormularioAbastecimento(cadastro, { ...opcoesComuns(), formulario, veiculoId });
     }
     cadastro.setAttribute('aria-busy', 'false');
 }
