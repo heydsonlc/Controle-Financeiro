@@ -89,8 +89,14 @@ async function semRolagemHorizontal(page, nome) {
 async function abastecer(page, { data, hodometro, valor, preco, descricao }) {
     const veiculo = await veiculoG(page);
     await cartao(page, VEICULO).locator('[data-acao="abastecer"]').click();
-    await page.waitForURL(`**/lancamento-mobile.html?mes=*&tipo=abastecimento&veiculo=${veiculo.id}`);
+    await page.waitForURL(`**/lancamento-mobile.html?mes=*&tipo=abastecimento&veiculo=${veiculo.id}&retorno=mobilidade`);
     await expect(page.locator('#mob-cadastro')).toHaveAttribute('aria-busy', 'false');
+    // Aberto pela Mobilidade: Voltar e Cancelar devolvem a Mobilidade (com a competencia); o "Inicio" da barra nao muda.
+    const mes = new URL(page.url()).searchParams.get('mes');
+    await expect(page.locator('#mob-voltar')).toHaveAttribute('href', `mobilidade-mobile.html?mes=${mes}`);
+    await expect(page.locator('#mob-voltar')).toHaveAttribute('aria-label', 'Voltar à Mobilidade');
+    await expect(page.locator('#mob-cancelar')).toHaveAttribute('href', `mobilidade-mobile.html?mes=${mes}`);
+    await expect(page.locator('.mob-barra-item[data-inicio]')).toHaveAttribute('href', `inicio.html?mes=${mes}`);
     await expect(controle(page, 'Veículo')).toHaveValue(String(veiculo.id));
     await controle(page, 'Data').fill(data);
     await controle(page, 'Hodômetro').fill(String(hodometro));
@@ -186,8 +192,25 @@ test('veiculos, abastecer pelo formulario homologado, historico e resumo do veic
     await carregada(page);
     await expect(cartao(page, VEICULO).locator('.mob-veiculo-mes .mob-veiculo-nota')).toHaveText('0 abastecimentos');
     await page.click('#mob-abastecer');
-    await page.waitForURL('**/lancamento-mobile.html?mes=2024-02&tipo=abastecimento');
-    await page.goBack();
+    await page.waitForURL('**/lancamento-mobile.html?mes=2024-02&tipo=abastecimento&retorno=mobilidade');
+    await expect(page.locator('#mob-cadastro')).toHaveAttribute('aria-busy', 'false');
+    // O Voltar do abastecimento aberto pela Mobilidade devolve a Mobilidade, na mesma competencia.
+    await page.click('#mob-voltar');
+    await page.waitForURL('**/mobilidade-mobile.html?mes=2024-02');
+    await carregada(page);
+    // Cancelar tambem; trocar de tipo dentro da pagina nao perde o retorno.
+    await cartao(page, VEICULO).locator('[data-acao="abastecer"]').click();
+    await expect(page.locator('#mob-cadastro')).toHaveAttribute('aria-busy', 'false');
+    await page.click('#mob-cancelar');
+    await page.waitForURL('**/mobilidade-mobile.html?mes=2024-02');
+    await carregada(page);
+    // Aberto pelo Registrar Lancamento (sem a marca de retorno), o mesmo formulario segue voltando a pagina principal.
+    await page.goto('/lancamento-mobile.html?mes=2024-02&tipo=abastecimento');
+    await expect(page.locator('#mob-cadastro')).toHaveAttribute('aria-busy', 'false');
+    await expect(page.locator('#mob-voltar')).toHaveAttribute('href', 'inicio.html?mes=2024-02');
+    await expect(page.locator('#mob-voltar')).toHaveAttribute('aria-label', 'Voltar à página principal');
+    await expect(page.locator('#mob-cancelar')).toHaveAttribute('href', 'inicio.html?mes=2024-02');
+    await page.goto('/mobilidade-mobile.html?mes=2024-02');
     await carregada(page);
     await page.click('#mob-voltar');
     await page.waitForURL('**/inicio.html?mes=2024-02');

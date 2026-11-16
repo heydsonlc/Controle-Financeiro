@@ -3,7 +3,8 @@
 // - veiculos do perfil, com a quilometragem que o banco informa (leitura real do ultimo abastecimento ou estimativa) e o
 //   combustivel;
 // - Abastecer: abre o formulario de abastecimento ja homologado no Registrar Lancamento (FIN-MVP-MOBILE-06), com o veiculo
-//   escolhido; a despesa (conta a pagar ou compra no cartao) e o abastecimento sao gravados la, juntos;
+//   escolhido; a despesa (conta a pagar ou compra no cartao) e o abastecimento sao gravados la, juntos. O endereco leva
+//   retorno=mobilidade: o Voltar e o Cancelar de la devolvem a esta pagina (so navegacao);
 // - Historico: os abastecimentos do veiculo, como o banco devolve (mais recentes primeiro; anulados marcados);
 // - Resumo do veiculo na competencia: gasto do mes, consumo medio, custo por km, ultimos abastecimentos e o gasto dos
 //   ultimos meses. Sao somas de apresentacao sobre o historico; nada e calculado para gravar.
@@ -102,7 +103,7 @@ function cartaoDoVeiculo(v, h) {
         // O formulario homologado no Registrar Lancamento, com este veiculo: despesa e abastecimento gravados juntos.
         const abastecer = el('a', 'mob-botao primario', 'Abastecer');
         abastecer.dataset.acao = 'abastecer';
-        abastecer.href = `lancamento-mobile.html?mes=${estado.mes}&tipo=abastecimento&veiculo=${v.id}`;
+        abastecer.href = `lancamento-mobile.html?mes=${estado.mes}&tipo=abastecimento&veiculo=${v.id}&retorno=mobilidade`;
         acoes.append(abastecer);
     }
     const verHistorico = botao('Histórico');
@@ -287,7 +288,7 @@ if (usuario) {
         // "+" do cabecalho: novo abastecimento sem veiculo escolhido (o formulario pede o veiculo); so para quem gere.
         const novo = $('mob-abastecer');
         novo.hidden = estado.somenteLeitura || !estado.veiculos.length;
-        novo.addEventListener('click', () => { window.location.href = `lancamento-mobile.html?mes=${estado.mes}&tipo=abastecimento`; });
+        novo.addEventListener('click', () => { window.location.href = `lancamento-mobile.html?mes=${estado.mes}&tipo=abastecimento&retorno=mobilidade`; });
         $('mob-mes-anterior').addEventListener('click', () => trocarMes(-1));
         $('mob-mes-seguinte').addEventListener('click', () => trocarMes(1));
         await desenhar();

@@ -30,6 +30,7 @@ const km = (v) => `${Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 
 // opcoes: api (fila da tela), mes (competencia da pagina principal), formulario ({categoria_combustivel_id, veiculos}),
 // rotuloNovo e aoRecomecar/aoConcluir (como os outros formularios). FIN-MOBILE-12: veiculoId (opcional) abre o formulario
 // com o veiculo ja escolhido, quando ele esta na lista (atalho Abastecer da Mobilidade mobile); nada mais muda.
+// cancelarEm (opcional): para onde o Cancelar leva (a Mobilidade, quando o formulario foi aberto por ela); sem ele, a pagina principal.
 export function montarFormularioAbastecimento(container, opcoes) {
     const { api, mes, formulario } = opcoes;
     const veiculos = (formulario && formulario.veiculos) || [];
@@ -37,7 +38,7 @@ export function montarFormularioAbastecimento(container, opcoes) {
     if (!categoriaId || !veiculos.length) {
         const voltar = el('a', 'mob-botao', 'Cancelar');
         voltar.id = 'mob-cancelar';
-        voltar.href = `inicio.html?mes=${mes}`;
+        voltar.href = opcoes.cancelarEm || `inicio.html?mes=${mes}`;
         const acoes = el('div', 'mob-acoes');
         acoes.append(voltar);
         container.replaceChildren(texto(!categoriaId
@@ -143,7 +144,7 @@ export function montarFormularioAbastecimento(container, opcoes) {
     consolidada.hidden = true;
     const cancelar = el('a', 'mob-botao', 'Cancelar');
     cancelar.id = 'mob-cancelar';
-    cancelar.href = `inicio.html?mes=${mes}`;
+    cancelar.href = opcoes.cancelarEm || `inicio.html?mes=${mes}`;
     const salvar = botao('Salvar', 'primario');
     salvar.type = 'submit';
     salvar.id = 'mob-salvar';

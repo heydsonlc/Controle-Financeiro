@@ -325,7 +325,7 @@ for (const [modulo, titulo, classe, ids, servico, exigidos] of [
         'documentos-servico.js', ['responderDocumentos', 'configurarDocumentos(perfil)', "from './arquivo-comprovante.js'"]],
     ['mobilidade', 'Mobilidade', 'mob-mobilidade',
         ['mob-perfil', 'mob-abastecer', 'mob-somente-leitura', 'mob-lista', 'mob-folha', 'mob-sair'],
-        'mobilidade-servico.js', ['responderMobilidade', 'configurarMobilidade(perfil.id)', 'tipo=abastecimento&veiculo=']],
+        'mobilidade-servico.js', ['responderMobilidade', 'configurarMobilidade(perfil.id)', 'tipo=abastecimento&veiculo=', 'retorno=mobilidade']],
 ]) {
     test(`${modulo} mobile: protegida, sem moldura, CSS restrito e os dados so pelo servico comum ao desktop`, async () => {
         const destino = await mkdtemp(path.join(os.tmpdir(), `cf-web-${modulo}-mobile-`));

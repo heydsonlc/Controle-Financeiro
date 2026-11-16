@@ -70,6 +70,18 @@ async function formularioAbastecimento() {
     return estado.abastecimento;
 }
 
+// FIN-MOBILE-12: aberto pela Mobilidade mobile (?retorno=mobilidade), o Voltar do cabecalho e o Cancelar do abastecimento
+// devolvem a Mobilidade; aberto de qualquer outro lugar, tudo segue voltando a pagina principal. So navegacao.
+const veioDaMobilidade = () => new URLSearchParams(window.location.search).get('retorno') === 'mobilidade';
+const enderecoDaMobilidade = () => `mobilidade-mobile.html?mes=${estado.mes}`;
+function ligarRetorno() {
+    if (!veioDaMobilidade()) return;
+    const voltar = $('mob-voltar');
+    voltar.removeAttribute('data-inicio');
+    voltar.setAttribute('href', enderecoDaMobilidade());
+    voltar.setAttribute('aria-label', 'Voltar à Mobilidade');
+}
+
 function irParaInicio() {
     estado.sujo = false;
     window.location.href = `inicio.html?mes=${estado.mes}`;
@@ -136,7 +148,7 @@ async function abrir(tipo, forcar = false) {
         if (pedido !== estado.pedido) return;
         // FIN-MOBILE-12: aberto pelo atalho Abastecer da Mobilidade mobile, ja com o veiculo.
         const veiculoId = Number(new URLSearchParams(window.location.search).get('veiculo')) || null;
-        montarFormularioAbastecimento(cadastro, { ...opcoesComuns(), formulario, veiculoId });
+        montarFormularioAbastecimento(cadastro, { ...opcoesComuns(), formulario, veiculoId, cancelarEm: veioDaMobilidade() ? enderecoDaMobilidade() : null });
     }
     cadastro.setAttribute('aria-busy', 'false');
 }
@@ -147,6 +159,7 @@ if (usuario) {
     prepararModulos();
     prepararMais();
     ligarCompetencia(estado.mes);
+    ligarRetorno();
     let perfil = null;
     try {
         const perfis = await carregarPerfis();
