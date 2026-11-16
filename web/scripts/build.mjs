@@ -15,6 +15,8 @@ import { cp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { versionarRecursos } from './versionar.mjs';
+
 const WEB = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const RAIZ = path.resolve(WEB, '..');
 
@@ -102,7 +104,8 @@ export function validarChavePublica(chave) {
 // JavaScript nem script inline). A permissao vale SO nas paginas que leem documentos e nos arquivos do OCR (o worker recebe
 // a CSP da propria resposta); o resto do site continua com script-src 'self'. Regra conferida no emulador do Cloudflare
 // (wrangler pages dev): "! Content-Security-Policy" seguido da nova politica troca a do bloco "/*" so nesses caminhos.
-export const CAMINHOS_COM_OCR = ['/documentos-fiscais', '/documentos-mobile', '/vendor/tesseract-7.0.0/*'];
+export const PASTA_OCR = '/vendor/tesseract-7.0.0/*';
+export const CAMINHOS_COM_OCR = ['/documentos-fiscais', '/documentos-mobile', PASTA_OCR];
 
 export function cabecalhosSeguranca(origemSupabase) {
     const politica = (scripts) => [
@@ -125,7 +128,10 @@ export function cabecalhosSeguranca(origemSupabase) {
         '  Referrer-Policy: same-origin',
         '  Permissions-Policy: camera=(), microphone=(), geolocation=()',
         '',
-        ...CAMINHOS_COM_OCR.flatMap((caminho) => [caminho, '  ! Content-Security-Policy', `  Content-Security-Policy: ${ocr}`, '']),
+        ...CAMINHOS_COM_OCR.flatMap((caminho) => [caminho, '  ! Content-Security-Policy', `  Content-Security-Policy: ${ocr}`,
+            // FIN-CACHE-01: a pasta do OCR leva a versao no nome (o conteudo nunca muda no mesmo endereco): cache longo, os
+            // arquivos grandes (nucleos e modelo) nao sao baixados de novo a cada publicacao.
+            ...(caminho === PASTA_OCR ? ['  Cache-Control: public, max-age=31536000, immutable'] : []), '']),
     ].join('\n');
 }
 
@@ -341,6 +347,8 @@ export async function construir({ url, chave, destino = path.join(WEB, 'dist'), 
         path.join(destino, 'config.js'),
         `// Gerado por scripts/build.mjs. Somente valores publicos.\nwindow.CF_CONFIG = Object.freeze(${JSON.stringify(config)});\n`,
     );
+    // FIN-CACHE-01: "?v=<hash do conteudo>" em toda referencia a JS/CSS (HTML novo nunca usa JS antigo do cache).
+    await versionarRecursos(destino);
     await writeFile(path.join(destino, '_headers'), cabecalhosSeguranca(origem));
 
     await verificarDist(destino);

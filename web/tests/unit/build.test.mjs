@@ -1,11 +1,19 @@
 // Testes do build: o navegador so pode receber valores publicos do projeto certo.
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile as lerArquivo, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
 import { construir, montarPagina, validarChavePublica, validarUrl, verificarDist } from '../../scripts/build.mjs';
+
+// FIN-CACHE-01: o dist leva "?v=<hash do conteudo>" em toda referencia a JS/CSS (scripts/versionar.mjs, com testes proprios
+// em versionar.test.mjs). As verificacoes de estrutura daqui leem o dist sem essa versao.
+const semVersao = (texto) => texto.replace(/\?v=[0-9a-f]{12}(?=["'])/g, '');
+const readFile = async (...args) => {
+    const conteudo = await lerArquivo(...args);
+    return typeof conteudo === 'string' ? semVersao(conteudo) : conteudo;
+};
 
 const URL_OK = 'https://abcdefghijklmnopqrst.supabase.co';
 const jwt = (payload) => [
@@ -77,7 +85,8 @@ test('dist: CSP do OCR restrita aos caminhos de documentos e arquivos do Tessera
             .map((l) => /script-src ([^;]*)/.exec(l)[1]);
         assert.deepEqual(scriptSrc(blocos[0].linhas), ["'self'"]);
         for (const bloco of blocos.slice(1)) {
-            assert.deepEqual(bloco.linhas, ['! Content-Security-Policy', bloco.linhas[1]], bloco.caminho);
+            const cache = bloco.caminho === '/vendor/tesseract-7.0.0/*' ? ['Cache-Control: public, max-age=31536000, immutable'] : [];
+            assert.deepEqual(bloco.linhas, ['! Content-Security-Policy', bloco.linhas[1], ...cache], bloco.caminho);
             assert.deepEqual(scriptSrc(bloco.linhas), ["'self' 'wasm-unsafe-eval'"], bloco.caminho);
             // as demais diretivas iguais as do site
             assert.equal(bloco.linhas[1].replace(" 'wasm-unsafe-eval'", ''), blocos[0].linhas[0], bloco.caminho);
@@ -90,6 +99,39 @@ test('dist: CSP do OCR restrita aos caminhos de documentos e arquivos do Tessera
         assert.match(leitor, /new URL\('\.\.\/vendor\/tesseract-7\.0\.0\/', import\.meta\.url\)/);
         assert.doesNotMatch(leitor, /https?:\/\//);
         for (const opcao of ['workerPath', 'corePath', 'langPath', "cacheMethod: 'none'", 'workerBlobURL: false']) assert.ok(leitor.includes(opcao), opcao);
+    } finally {
+        await rm(destino, { recursive: true, force: true });
+    }
+});
+
+// FIN-CACHE-01: nenhuma referencia a JS/CSS do site sem a versao do conteudo (HTML e modulos), e a mesma versao em todo lugar.
+test('dist: toda referencia a JS/CSS do site leva a versao do conteudo', async () => {
+    const destino = await mkdtemp(path.join(os.tmpdir(), 'cf-web-build-'));
+    try {
+        await construir({ url: URL_OK, chave: 'sb_publishable_abc123', destino });
+        const arquivos = (await readdir(destino, { recursive: true })).map((a) => a.replaceAll('\\', '/'));
+        const versoes = new Map();
+        const anotar = (alvo, versao, onde) => {
+            assert.ok(!versoes.has(alvo) || versoes.get(alvo) === versao, `${alvo} com duas versoes (${onde})`);
+            versoes.set(alvo, versao);
+        };
+        for (const pagina of arquivos.filter((a) => a.endsWith('.html'))) {
+            const html = await lerArquivo(path.join(destino, pagina), 'utf8');
+            for (const m of html.matchAll(/\s(?:src|href)="(?!https?:|\/\/|data:)([^"]+?\.(?:m?js|css))(\?[^"]*)?"/g)) {
+                assert.match(m[2] || '', /^\?v=[0-9a-f]{12}$/, `${pagina}: ${m[1]}`);
+                anotar(path.posix.normalize(m[1]), m[2], pagina);
+            }
+        }
+        for (const modulo of arquivos.filter((a) => /^js\/.+\.m?js$/.test(a) && !a.startsWith('js/original/'))) {
+            const js = await lerArquivo(path.join(destino, modulo), 'utf8');
+            for (const m of js.matchAll(/(?:\bfrom\s*|\bimport\s*\(?\s*|new URL\(\s*)['"](\.{1,2}\/[^'"]+?\.m?js)(\?[^'"]*)?['"]/g)) {
+                assert.match(m[2] || '', /^\?v=[0-9a-f]{12}$/, `${modulo}: ${m[1]}`);
+                anotar(path.posix.join(path.posix.dirname(modulo), m[1]), m[2], modulo);
+            }
+        }
+        assert.ok(versoes.size > 50, `referencias versionadas: ${versoes.size}`);
+        // a pasta do OCR (versao no nome) nao recebe consulta: os caminhos internos do Tesseract ficam como estao
+        assert.match(await lerArquivo(path.join(destino, 'js', 'leitura-ocr.js'), 'utf8'), /new URL\('\.\.\/vendor\/tesseract-7\.0\.0\/', import\.meta\.url\)/);
     } finally {
         await rm(destino, { recursive: true, force: true });
     }

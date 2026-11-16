@@ -193,7 +193,7 @@ def criar_handler(dist, postgrest_url, segredo, headers_seguranca, consolidar=No
 
         def end_headers(self):
             if not self.path.startswith(('/auth/', '/rest/')):
-                for nome, valor in headers_seguranca(self.path).items():
+                for nome, valor in headers_seguranca(self.path.split('?', 1)[0]).items():  # como no Cloudflare: sem a consulta
                     if previa and nome == 'Content-Security-Policy':
                         valor = valor.replace("frame-ancestors 'none'", "frame-ancestors 'self'")
                     elif previa and nome == 'X-Frame-Options':
