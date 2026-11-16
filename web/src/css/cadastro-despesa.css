@@ -1,0 +1,638 @@
+/* FIN-MVP-CADASTRO-UNIFICADO-01 — modal unico de cadastro de despesas (js/cadastro-despesa.js).
+   O mesmo arquivo serve as telas do desktop (tema do Flask) e as paginas mobile: todas as regras ficam sob
+   .cad-fundo .cad-modal, com as propriedades declaradas por inteiro, para o modal ter a mesma aparencia em qualquer pagina
+   (os campos reaproveitam as pecas dos formularios mobile: .mob-campo, .mob-ajuda, .mob-previa...).
+   As cores levam !important porque o tema do desktop (theme-light.css) pinta "p, span, div, label" e "a" com !important. */
+
+html.cad-aberto,
+html.cad-aberto body {
+    overflow: hidden;
+}
+
+.cad-fundo {
+    --cad-azul: #2563eb;
+    --cad-azul-escuro: #1d4ed8;
+    --cad-texto: #1f2937;
+    --cad-cinza: #6b7280;
+    --cad-borda: #d5dae3;
+    --cad-linha: #e8ebf0;
+    --cad-suave: #f4f6fa;
+    --cad-perigo: #c62828;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 5000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: var(--cad-altura, 100dvh);
+    padding: 16px;
+    box-sizing: border-box;
+    background: rgba(15, 23, 42, 0.45);
+}
+
+.cad-fundo *,
+.cad-fundo *::before,
+.cad-fundo *::after {
+    box-sizing: border-box;
+}
+
+.cad-fundo .cad-modal [hidden] {
+    display: none !important;
+}
+
+.cad-fundo .cad-modal {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 640px;
+    max-height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 12px;
+    background: #ffffff;
+    box-shadow: 0 18px 50px rgba(15, 23, 42, 0.28);
+    color: var(--cad-texto) !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.35;
+    text-align: left;
+    overflow: hidden;
+}
+
+.cad-fundo .cad-cabecalho {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--cad-linha);
+    background: #ffffff;
+}
+
+.cad-fundo .cad-titulo {
+    margin: 0;
+    padding: 0;
+    color: var(--cad-texto) !important;
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.cad-fundo .cad-fechar {
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--cad-linha);
+    border-radius: 50%;
+    background: #ffffff;
+    color: var(--cad-texto) !important;
+    font: inherit;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.cad-fundo .cad-fechar:hover {
+    background: var(--cad-suave);
+}
+
+.cad-fundo .cad-form {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+}
+
+.cad-fundo .cad-corpo {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+    padding: 14px 20px 16px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+/* Grade de campos: duas colunas; .cad-inteiro ocupa a linha. Campo oculto nao deixa espaco reservado. */
+.cad-fundo .cad-grade {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px 14px;
+    align-items: start;
+}
+
+.cad-fundo .cad-inteiro {
+    grid-column: 1 / -1;
+}
+
+/* Campo (rotulo, controle, ajuda e erro) */
+.cad-fundo .cad-modal .mob-campo {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    color: #374151 !important;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.3;
+    cursor: default;
+}
+
+.cad-fundo .cad-modal .mob-obrigatorio {
+    color: var(--cad-cinza) !important;
+    font-weight: 600;
+}
+
+.cad-fundo .cad-modal .mob-campo input,
+.cad-fundo .cad-modal .mob-campo select,
+.cad-fundo .cad-modal .mob-campo textarea,
+.cad-fundo .cad-modal .cad-calculado {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    height: 36px;
+    min-height: 36px;
+    margin: 0;
+    padding: 6px 10px;
+    border: 1px solid var(--cad-borda);
+    border-radius: 8px;
+    background-color: #ffffff;
+    box-shadow: none;
+    color: var(--cad-texto) !important;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.3;
+}
+
+.cad-fundo .cad-modal .mob-campo textarea {
+    height: auto;
+    min-height: 60px;
+    resize: vertical;
+}
+
+.cad-fundo .cad-modal .mob-campo input:focus,
+.cad-fundo .cad-modal .mob-campo select:focus,
+.cad-fundo .cad-modal .mob-campo textarea:focus {
+    border-color: var(--cad-azul);
+    outline: 2px solid rgba(37, 99, 235, 0.25);
+    outline-offset: 0;
+}
+
+.cad-fundo .cad-modal .mob-campo input:disabled,
+.cad-fundo .cad-modal .mob-campo select:disabled {
+    background-color: var(--cad-suave);
+    color: var(--cad-cinza) !important;
+}
+
+.cad-fundo .cad-modal .mob-campo [aria-invalid="true"] {
+    border-color: var(--cad-perigo) !important;
+}
+
+.cad-fundo .cad-modal .cad-calculado {
+    display: flex;
+    align-items: center;
+    background-color: var(--cad-suave);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+.cad-fundo .cad-modal .cad-calculado.vazio {
+    color: var(--cad-cinza) !important;
+    font-weight: 400;
+}
+
+.cad-fundo .cad-modal .mob-ajuda {
+    margin: 0;
+    color: var(--cad-cinza) !important;
+    font-size: 11.5px;
+    font-weight: 400;
+    line-height: 1.3;
+}
+
+.cad-fundo .cad-modal .mob-ajuda.alerta {
+    color: var(--cad-perigo) !important;
+}
+
+.cad-fundo .cad-modal .mob-campo-erro {
+    color: var(--cad-perigo) !important;
+    font-size: 11.5px;
+    font-weight: 500;
+}
+
+.cad-fundo .cad-contador {
+    align-self: flex-end;
+    color: var(--cad-cinza) !important;
+    font-size: 11px;
+    font-weight: 400;
+}
+
+/* Competencia: informacao compacta, com a alteracao por uma acao discreta */
+.cad-fundo .cad-competencia-caixa {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.cad-fundo .cad-competencia {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 2px;
+    min-height: 56px;
+    padding-top: 16px;
+}
+
+.cad-fundo .cad-competencia-texto {
+    color: var(--cad-texto) !important;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+/* Acoes discretas (observacoes, opcoes adicionais, alterar competencia) */
+.cad-fundo .cad-modal .cad-link {
+    display: inline-block;
+    width: auto;
+    height: auto;
+    min-height: 0;
+    margin: 0;
+    padding: 2px 0;
+    border: 0;
+    border-radius: 4px;
+    background: none;
+    box-shadow: none;
+    color: var(--cad-azul) !important;
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+}
+
+.cad-fundo .cad-modal .cad-link:hover {
+    text-decoration: underline;
+}
+
+.cad-fundo .cad-recolhida {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    min-width: 0;
+}
+
+.cad-fundo .cad-recolhida > .cad-link {
+    align-self: flex-start;
+}
+
+.cad-fundo .cad-opcao {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    color: var(--cad-texto) !important;
+    font-size: 13px;
+    font-weight: 400;
+    cursor: pointer;
+}
+
+.cad-fundo .cad-modal .cad-opcao input {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    accent-color: var(--cad-azul);
+}
+
+/* Notas e mensagens */
+.cad-fundo .cad-nota {
+    margin: 0;
+    border: 0;
+    color: var(--cad-cinza) !important;
+    font-size: 12.5px;
+    line-height: 1.35;
+}
+
+.cad-fundo .cad-nota-info {
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: #eff4ff;
+    color: #1e3a8a !important;
+}
+
+.cad-fundo .cad-nota-leitura {
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: var(--cad-suave);
+    color: var(--cad-texto) !important;
+    font-size: 13.5px;
+}
+
+.cad-fundo .cad-modal .mob-mensagem {
+    margin: 0;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--cad-suave);
+    color: var(--cad-texto) !important;
+    font-size: 13px;
+    line-height: 1.35;
+    white-space: pre-line;
+}
+
+.cad-fundo .cad-modal .mob-mensagem.erro {
+    background: #fdecec;
+    color: var(--cad-perigo) !important;
+}
+
+/* Troca de tipo com dados preenchidos; fatura consolidada */
+.cad-fundo .cad-troca,
+.cad-fundo .cad-modal .mob-consolidada {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid #f1c96b;
+    border-radius: 8px;
+    background: #fff8e6;
+    color: var(--cad-texto) !important;
+    font-size: 13px;
+    text-align: left;
+}
+
+.cad-fundo .cad-troca p,
+.cad-fundo .cad-modal .mob-consolidada p {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.35;
+}
+
+.cad-fundo .cad-modal .mob-confirmacao-titulo {
+    font-weight: 700;
+}
+
+.cad-fundo .cad-modal .mob-texto.discreto {
+    color: var(--cad-cinza) !important;
+}
+
+.cad-fundo .cad-troca-acoes,
+.cad-fundo .cad-modal .mob-acoes {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+    margin: 0;
+}
+
+/* Fatura sugerida e previa das parcelas (pecas do bloco do cartao) */
+.cad-fundo .cad-modal .mob-sugestao {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+}
+
+.cad-fundo .cad-modal .mob-previa {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px;
+    border-radius: 8px;
+    background: var(--cad-suave);
+}
+
+.cad-fundo .cad-modal .mob-previa-titulo {
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.cad-fundo .cad-modal .mob-previa-tabela {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+    font-variant-numeric: tabular-nums;
+}
+
+.cad-fundo .cad-modal .mob-previa-tabela th,
+.cad-fundo .cad-modal .mob-previa-tabela td {
+    padding: 3px 4px;
+    border: 0;
+    border-bottom: 1px solid var(--cad-linha);
+    background: none;
+    text-align: left;
+}
+
+.cad-fundo .cad-modal .mob-previa-tabela th {
+    color: var(--cad-cinza) !important;
+    font-weight: 500;
+}
+
+.cad-fundo .cad-modal .mob-previa-tabela tfoot td {
+    border-bottom: 0;
+    font-weight: 700;
+}
+
+.cad-fundo .cad-modal .mob-previa-tabela .direita {
+    text-align: right;
+}
+
+/* Botoes */
+.cad-fundo .cad-modal .cad-botao,
+.cad-fundo .cad-modal .mob-botao {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    min-width: 96px;
+    height: 36px;
+    margin: 0;
+    padding: 0 16px;
+    border: 1px solid var(--cad-borda);
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: none;
+    color: var(--cad-texto) !important;
+    font: inherit;
+    font-size: 13.5px;
+    font-weight: 600;
+    line-height: 1;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.cad-fundo .cad-modal .cad-botao:hover,
+.cad-fundo .cad-modal .mob-botao:hover {
+    background: var(--cad-suave);
+}
+
+.cad-fundo .cad-modal .cad-botao.primario,
+.cad-fundo .cad-modal .mob-botao.primario {
+    border-color: var(--cad-azul);
+    background: var(--cad-azul);
+    color: #ffffff !important;
+}
+
+.cad-fundo .cad-modal .cad-botao.primario:hover,
+.cad-fundo .cad-modal .mob-botao.primario:hover {
+    border-color: var(--cad-azul-escuro);
+    background: var(--cad-azul-escuro);
+}
+
+.cad-fundo .cad-modal .cad-botao:disabled,
+.cad-fundo .cad-modal .mob-botao:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.cad-fundo .cad-modal .mob-botao.mob-botao-discreto {
+    min-width: 0;
+    height: 28px;
+    min-height: 28px;
+    padding: 0 10px;
+    font-size: 12px;
+}
+
+.cad-fundo .cad-modal .cad-botao:focus-visible,
+.cad-fundo .cad-modal .mob-botao:focus-visible,
+.cad-fundo .cad-modal .cad-link:focus-visible,
+.cad-fundo .cad-fechar:focus-visible {
+    outline: 2px solid var(--cad-azul);
+    outline-offset: 2px;
+}
+
+/* Rodape fixo */
+.cad-fundo .cad-rodape {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px;
+    margin: 0;
+    padding: 12px 20px;
+    border-top: 1px solid var(--cad-linha);
+    background: #ffffff;
+}
+
+/* Confirmacao depois de salvar */
+.cad-fundo .cad-confirmacao {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 6px 0;
+}
+
+.cad-fundo .cad-confirmacao-titulo {
+    margin: 0;
+    color: var(--cad-texto) !important;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.cad-fundo .cad-confirmacao-linha {
+    margin: 0;
+    color: #374151 !important;
+    font-size: 13.5px;
+    line-height: 1.4;
+}
+
+/* Celular: o modal ocupa a tela; cabecalho e rodape fixos, rolagem so no corpo; campos de toque */
+@media (max-width: 600px) {
+    .cad-fundo {
+        align-items: stretch;
+        padding: 0;
+    }
+
+    .cad-fundo .cad-modal {
+        max-width: none;
+        height: 100%;
+        border-radius: 0;
+    }
+
+    .cad-fundo .cad-cabecalho {
+        padding: 12px 16px;
+        padding-top: calc(12px + env(safe-area-inset-top, 0px));
+    }
+
+    .cad-fundo .cad-corpo {
+        padding: 12px 16px 16px;
+    }
+
+    /* Uma coluna; os pares curtos (valor e data, parcelas e fatura) continuam lado a lado */
+    .cad-fundo .cad-grade > * {
+        grid-column: 1 / -1;
+    }
+
+    .cad-fundo .cad-grade > .cad-meio {
+        grid-column: auto;
+    }
+
+    .cad-fundo .cad-modal .mob-campo input,
+    .cad-fundo .cad-modal .mob-campo select,
+    .cad-fundo .cad-modal .mob-campo textarea,
+    .cad-fundo .cad-modal .cad-calculado {
+        height: 44px;
+        min-height: 44px;
+        font-size: 16px;
+    }
+
+    .cad-fundo .cad-modal .mob-campo textarea {
+        height: auto;
+        min-height: 72px;
+    }
+
+    .cad-fundo .cad-modal .cad-opcao input {
+        width: 20px;
+        height: 20px;
+        min-height: 0;
+    }
+
+    .cad-fundo .cad-competencia {
+        min-height: 64px;
+    }
+
+    .cad-fundo .cad-rodape {
+        padding: 10px 16px;
+        padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .cad-fundo .cad-rodape .cad-botao {
+        flex: 1 1 0;
+        min-width: 0;
+        height: 44px;
+        font-size: 15px;
+    }
+
+    .cad-fundo .cad-modal .cad-link {
+        padding: 8px 0;
+        font-size: 13.5px;
+    }
+}
+
+@media (max-width: 339px) {
+    .cad-fundo .cad-grade > .cad-meio {
+        grid-column: 1 / -1;
+    }
+
+    .cad-fundo .cad-competencia {
+        min-height: 0;
+        padding-top: 0;
+    }
+}

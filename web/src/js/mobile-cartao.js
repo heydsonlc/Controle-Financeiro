@@ -38,15 +38,17 @@ function desenharPrevia(caixa, p) {
 // opcoes: api (fila da tela), mesPadrao (competencia da pagina principal), valor/descricao/categoria (leitura dos campos
 // da tela), ativo() (o bloco esta em uso), dataExterna (o campo de data da tela, quando a data da compra e a dela) e
 // comParcelas (a vista quando false: compra com abastecimento).
-export function blocoCartao({ api, mesPadrao, valor, descricao, categoria, ativo, dataExterna = null, comParcelas = true, aoTrocarCartao = null }) {
+// rotulos (FIN-MVP-CADASTRO-UNIFICADO-01): textos dos campos Cartao e Fatura, quando a tela usa outros (o resto nao muda).
+export function blocoCartao({ api, mesPadrao, valor, descricao, categoria, ativo, dataExterna = null, comParcelas = true, aoTrocarCartao = null,
+    rotulos = {} }) {
     const cartao = seletor([['', 'Selecione...']], '');
     const dataCompra = dataExterna || entrada('date', hojeBrasilia());
     const parcelas = entrada('number', '1', { min: '1', max: '48', step: '1', inputmode: 'numeric' });
     const fatura = entrada('month', '');
-    const cCartao = campoComErro('Cartão', cartao, { obrigatorio: true });
+    const cCartao = campoComErro(rotulos.cartao || 'Cartão', cartao, { obrigatorio: true });
     const cDataCompra = dataExterna ? null : campoComErro('Data da compra', dataCompra, { obrigatorio: true });
     const cParcelas = comParcelas ? campoComErro('Parcelas', parcelas) : null;
-    const cFatura = campoComErro('Fatura', fatura, { obrigatorio: true });
+    const cFatura = campoComErro(rotulos.fatura || 'Fatura', fatura, { obrigatorio: true });
 
     const elemento = el('div', 'mob-cartao');
     elemento.id = 'mob-cartao';
@@ -156,7 +158,7 @@ export function blocoCartao({ api, mesPadrao, valor, descricao, categoria, ativo
     }
 
     return {
-        elemento, cartao, dataCompra, parcelas, fatura, cCartao, cDataCompra, cParcelas, cFatura,
+        elemento, cartao, dataCompra, parcelas, fatura, cCartao, cDataCompra, cParcelas, cFatura, linhaSugestao, previa,
         ativar, validar, agendarPrevia, atualizarSugestao,
         totalParcelas: () => (comParcelas ? parseInt(parcelas.value, 10) || 1 : 1),
         nomeCartao: () => (cartao.selectedOptions[0] && cartao.value ? cartao.selectedOptions[0].textContent : ''),

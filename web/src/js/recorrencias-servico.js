@@ -379,7 +379,8 @@ function falhaConsorcio(error) {
 async function criarConsorcio(corpo) {
     // P24: contrato em andamento - o campo acrescentado ao formulario (recorrencias-adaptacoes.js) informa quantas das
     // primeiras parcelas ja foram pagas antes do cadastro; o banco as registra no historico, sem movimento bancario.
-    const anteriores = document.getElementById('parcelas-pagas-anteriores')?.value;
+    // FIN-MVP-CADASTRO-UNIFICADO-01: o cadastro unico manda o numero no proprio corpo (sem campo na pagina).
+    const anteriores = corpo.parcelas_pagas_anteriores ?? document.getElementById('parcelas-pagas-anteriores')?.value;
     if (anteriores && Number(anteriores) > 0) corpo = { ...corpo, parcelas_pagas_anteriores: Number(anteriores) };
     const { data, error } = await supabase.rpc('criar_consorcio', { p_perfil_id: estado.perfilId, p_dados: corpo, p_chave: chaves.de('consorcio') });
     if (error) return falhaConsorcio(error);

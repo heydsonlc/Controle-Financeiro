@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<!-- FIN-MVP-CADASTRO-UNIFICADO-01 — demonstracao do modal unico de cadastro de despesas (Etapas 2 e 3 do contrato).
+     So no ambiente local (run_e2e.py --previa): banco descartavel, contas ficticias, fora do dist e do deploy.
+     Os formularios das telas de producao ainda nao foram substituidos: esta pagina abre o componente sozinho. -->
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Cadastro unificado de despesas — prévia</title>
+    <link rel="stylesheet" href="/css/cadastro-despesa.css">
+    <link rel="stylesheet" href="cadastro.css">
+</head>
+<body>
+    <main class="demo">
+        <h1>Modal único de cadastro de despesas</h1>
+        <p class="demo-sub">FIN-MVP-CADASTRO-UNIFICADO-01 · prévia local · dados fictícios · nada é publicado</p>
+        <p class="demo-estado" id="demo-estado" role="status">Carregando…</p>
+
+        <section id="demo-painel" hidden>
+            <h2>Cenários da homologação visual</h2>
+            <div class="demo-cenarios" id="demo-cenarios"></div>
+
+            <h2>Pontos de entrada</h2>
+            <p class="demo-texto">O mesmo modal, aberto como cada módulo abrirá (muda só o tipo inicial).</p>
+            <div class="demo-cenarios" id="demo-origens"></div>
+
+            <label class="demo-marca"><input type="checkbox" id="demo-exemplo"> Abrir com nome, valor e categoria de exemplo</label>
+
+            <h2>Gravações desta sessão</h2>
+            <p class="demo-texto">Cada cadastro confirmado aparece aqui com o serviço usado e os campos enviados (banco descartável).</p>
+            <ol class="demo-registros" id="demo-registros"></ol>
+            <p class="demo-texto" id="demo-vazio">Nenhuma gravação ainda.</p>
+        </section>
+    </main>
+
+    <script src="/config.js"></script>
+    <script src="/vendor/supabase.js"></script>
+    <script type="module" src="cadastro.js"></script>
+</body>
+</html>

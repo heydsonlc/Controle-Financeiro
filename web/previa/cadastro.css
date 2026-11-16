@@ -1,0 +1,98 @@
+/* FIN-MVP-CADASTRO-UNIFICADO-01 — pagina de demonstracao do modal unico (so ambiente local). */
+body {
+    margin: 0;
+    background: #f3f5f9;
+    color: #1f2937;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.demo {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 20px 16px 48px;
+}
+
+.demo h1 {
+    margin: 0;
+    font-size: 20px;
+}
+
+.demo h2 {
+    margin: 22px 0 8px;
+    font-size: 15px;
+}
+
+.demo-sub,
+.demo-texto {
+    margin: 2px 0 8px;
+    color: #6b7280;
+    font-size: 12.5px;
+}
+
+.demo-estado {
+    margin: 12px 0 0;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: #ffffff;
+    border: 1px solid #e3e7ee;
+    font-size: 13px;
+}
+
+.demo-estado a {
+    color: #2563eb;
+    font-weight: 600;
+}
+
+.demo-cenarios {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 8px;
+}
+
+.demo-cenarios button {
+    min-height: 44px;
+    padding: 8px 12px;
+    border: 1px solid #d5dae3;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #1f2937;
+    font: inherit;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+}
+
+.demo-cenarios button:hover {
+    border-color: #2563eb;
+}
+
+.demo-marca {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 14px 0 0;
+    font-size: 13px;
+}
+
+.demo-registros {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.demo-registros li {
+    margin: 0 0 8px;
+}
+
+.demo-registros code {
+    display: block;
+    margin-top: 2px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: #ffffff;
+    border: 1px solid #e3e7ee;
+    font-size: 11.5px;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}

@@ -30,7 +30,8 @@
 
     function rotaSegura(texto) {
         const rota = String(texto || '').trim().replace(/^\/+/, '');
-        return /^[\w.-]+\.html(\?[\w=&%.-]*)?$/.test(rota) ? rota : 'index.html';
+        // FIN-MVP-CADASTRO-UNIFICADO-01: aceita tambem as paginas de demonstracao desta pasta (__previa__/cadastro.html?cenario=1).
+        return /^(__previa__\/)?[\w.-]+\.html(\?[\w=&%.-]*)?$/.test(rota) ? rota : 'index.html';
     }
 
     function montarOpcoes() {
