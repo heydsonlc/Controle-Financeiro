@@ -26,6 +26,13 @@ function blobDe(dados) {
     return new Blob([bytes], { type: dados.mime_type || 'application/octet-stream' });
 }
 
+// FIN-MOBILE-11: o arquivo de um documento, para baixar no celular (a mesma consulta de "Abrir arquivo", so leitura).
+export async function arquivoDoComprovante(perfilId, comprovanteId) {
+    const { data, error } = await supabase.rpc('arquivo_comprovante_tela', { p_perfil_id: perfilId, p_comprovante_id: comprovanteId });
+    if (error) throw error;
+    return { nome: data.nome_arquivo || `documento-${comprovanteId}`, blob: blobDe(data) };
+}
+
 // A aba e aberta ja no clique (sem bloqueio de pop-up) e recebe o arquivo quando ele chega.
 async function abrir(perfilId, comprovanteId, abrirJanela) {
     const janela = abrirJanela('about:blank', '_blank');
