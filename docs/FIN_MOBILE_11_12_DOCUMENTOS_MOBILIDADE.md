@@ -1,6 +1,6 @@
 # FIN-MOBILE-11 e FIN-MOBILE-12 — Documentos Fiscais e Mobilidade no celular
 
-**Data:** 15/11/2026. **Situação:** implementado e testado localmente, com dados fictícios, em banco descartável. **Homologação visual aprovada pelo titular em 15/11/2026**, pela prévia local. Falta só a autorização de publicação. Sem push, sem deploy e sem migration (nenhuma foi necessária).
+**Data:** 15/11/2026. **Situação:** implementado e testado localmente, com dados fictícios, em banco descartável. Homologação visual aprovada pelo titular e **publicado em 15/11/2026** (seção 13), sem migration. Falta a homologação funcional do titular com dados reais.
 
 **Identificação.** O contrato conjunto chamava as entregas de "FIN-REG-08/09 + MOBILE-10/11". Por decisão do titular, ficaram assim:
 
@@ -161,7 +161,7 @@ As capturas das telas em 320 e 390 px são geradas pelos testes quando a variáv
 
 ## 9. Pendências e sugestões
 
-1. **Publicação**, quando autorizada. A homologação visual já foi aprovada.
+1. **Homologação funcional do titular com dados reais**, no celular, depois da publicação.
 2. **Enviar documento pelo celular** (fotografar o comprovante) não estava na lista de ações do contrato e ficou no desktop. É o uso de campo mais natural; pode entrar junto com o FIN-REG-08.
 3. **Depois de salvar o abastecimento**, a tela de confirmação é a do Registrar Lançamento, com os atalhos de sempre (Lista de Despesas e Página Principal). O Voltar do cabeçalho, nessa tela, já devolve à Mobilidade quando o formulário foi aberto por ela.
 4. **Desktop:** o contrato previa evoluções de navegação por situação e de organização. Não alterei nenhuma tela do desktop; a preparação feita foi a separação dos serviços. Se houver evolução específica desejada no desktop, precisa ser descrita.
@@ -218,4 +218,39 @@ As capturas das telas em 320 e 390 px são geradas pelos testes quando a variáv
 ## 12. Publicação e reversão
 
 - **Publicação:** só o site, sem migration. Depende da homologação do titular e de autorização específica.
-- **Reversão:** republicar o deploy `ed3ffcdc` no Cloudflare Pages. Não há mudança no banco.
+- **Reversão:** republicar o deploy `ed3ffcdc` no Cloudflare Pages, preservado e acessível. Não há mudança no banco.
+
+## 13. Publicação (15/11/2026)
+
+Autorizada pelo titular depois da homologação visual.
+
+| Verificação | Resultado |
+|---|---|
+| Commits | 11, no escopo: a documentação da publicação do REG-07 (`0d0b25d`) e os 10 dos dois módulos. Só `docs/`, `tests/`, `web/src` e `web/tests`. Nada de `supabase/` nem de `backend/`; nenhum arquivo sensível |
+| `main` remoto antes do push | `ce8ba64`, a própria base do ramo |
+| Push | Avanço rápido `ce8ba64..2883f07`, sem `force` |
+| Testes finais | Unitários do site, com o build: 122 aprovados, 0 falhas |
+| Build de produção | 235 arquivos (eram 227): 8 novos e 9 alterados, todos dos dois módulos, da Página Principal e dos serviços compartilhados. Configuração idêntica à de produção; sem padrão proibido nem dado de teste |
+| Deploy | Cloudflare Pages, projeto `controle-financeiro`, `8685a983`, ramo `producao`, a partir de `2883f07`. 17 arquivos enviados |
+| Migration e Supabase | Nenhuma migration; nenhuma escrita |
+| Arquivos servidos x build | 234 de 234 iguais por SHA-256 no domínio `financas.kortexbrasil.com` (o 235º é o `_headers`, que não é servido). Nas 28 páginas HTML, descontado o script de métricas que a Cloudflare injeta |
+| Reversão | Deploy `ed3ffcdc` preservado e acessível |
+
+### Conferência depois da publicação, sem login
+
+| Funcionalidade | Verificado na produção | Verificado nos testes, com o mesmo código |
+|---|---|---|
+| Página Principal | O HTML servido tem os dez atalhos, com Documentos e Mobilidade ativos | Navegação e medidas (suíte 267 de 267) |
+| Documentos mobile | Página servida igual ao build, com filtros, exportar, situação e busca | Lista, detalhe, filtros e ações |
+| Documentos da Empresa | Idem | Lastro, saídas sem documento e exportações |
+| Mobilidade mobile | Página servida igual ao build; "Consumo médio (estimado)" e "Custo por km (combustível)" no código servido | Veículos, histórico, abastecimento e resumo |
+| Novo abastecimento | O código servido reconhece o retorno pela Mobilidade | Voltar e Cancelar devolvem à Mobilidade |
+| Registrar Lançamento | O retorno padrão à Página Principal continua no código servido | Retorno original preservado |
+| Desktop | Os adaptadores servidos usam os serviços comuns; Documentos Fiscais, Mobilidade e Despesas exigem login | 38 cenários do desktop dos dois módulos |
+
+- **Autenticação:** as duas páginas novas, a Página Principal, o Registrar Lançamento e as páginas do desktop redirecionam para o login quando não há sessão.
+- **Perfil ativo:** sem sessão, o banco recusa as cinco consultas usadas pelos módulos (HTTP 401). Com sessão, o isolamento por perfil e o modo somente leitura são os conferidos nos testes.
+- Nenhum erro de console e nenhuma resposta de erro do site.
+
+O uso com login na produção (telas, downloads e abastecimento real) é a homologação funcional do titular.
+
