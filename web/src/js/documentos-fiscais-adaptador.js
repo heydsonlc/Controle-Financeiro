@@ -23,7 +23,8 @@
 import { supabase } from './cliente.js';
 import { falha } from './adaptador-comum.js';
 import { instalarAberturaDeArquivos } from './arquivo-comprovante.js';
-import { configurarDocumentos, filtrosDaLista, responderDocumentos, vinculosAtivos } from './documentos-servico.js';
+import { comprovanteCompleto, configurarDocumentos, filtrosDaLista, responderDocumentos, sugestoesDoTexto, vinculosAtivos } from './documentos-servico.js';
+import { SITUACOES, TIPOS } from './leitura-fiscal.js';
 import { iniciarMoldura } from './moldura.js';
 
 let perfilId = null;
@@ -47,6 +48,25 @@ function retornoDoEnvio(enviados, resultados) {
     aviso.dataset.situacao = !falhas.length ? 'sucesso' : (enviados ? 'parcial' : 'erro');
     aviso.setAttribute('role', falhas.length ? 'alert' : 'status');
     aviso.hidden = false;
+    // FIN-REG-08: o que a leitura automatica obteve, numa linha propria (o retorno do envio fica como era).
+    const leitura = document.getElementById('cf-upload-leitura');
+    if (leitura) {
+        const lidos = resultados.filter((r) => r.success && r.data && r.data.comprovante && r.data.comprovante.texto_extraido && !r.data.duplicado);
+        leitura.textContent = lidos.length
+            ? `Texto lido automaticamente em ${lidos.length === 1 ? '1 documento' : `${lidos.length} documentos`}. Abra a revisão: os dados sugeridos aparecem lá para conferir.`
+            : '';
+        leitura.hidden = !lidos.length;
+    }
+}
+
+// FIN-REG-08: andamento da leitura (texto do PDF ou OCR) durante o envio, no mesmo lugar do retorno.
+function andamentoDaLeitura(texto) {
+    const aviso = document.getElementById('cf-upload-retorno');
+    if (!aviso) return;
+    aviso.textContent = texto;
+    aviso.dataset.situacao = 'lendo';
+    aviso.setAttribute('role', 'status');
+    aviso.hidden = false;
 }
 
 // A tela original marca o arquivo que falhou como "Erro de leitura"; aqui ele aparece como "Não enviado" (o motivo segue
@@ -60,6 +80,11 @@ function instalarRetornoDoEnvio() {
     aviso.className = 'cf-upload-retorno';
     aviso.hidden = true;
     lista.before(aviso);
+    const leitura = document.createElement('p');  // FIN-REG-08
+    leitura.id = 'cf-upload-leitura';
+    leitura.className = 'cf-upload-leitura';
+    leitura.hidden = true;
+    aviso.after(leitura);
     new MutationObserver(() => {
         for (const selo of lista.querySelectorAll('.ir-upload-card > div > .ir-status.erro')) {
             if (selo.textContent !== 'Não enviado') selo.textContent = 'Não enviado';  // sem laco: so muda uma vez
@@ -264,16 +289,168 @@ function instalarRelatorioIr() {
     }, true);
 }
 
+// FIN-REG-08: sugestoes da leitura automatica na revisao (tela original). Ao abrir a revisao, o texto guardado do documento
+// e interpretado (NFS-e de Goiania, cupom fiscal ou generico) e a categoria e sugerida. Modelo reconhecido (NFS-e ou cupom):
+// campo vazio recebe a sugestao, marcada para conferencia. Documento generico: nada e preenchido; cada sugestao aparece como
+// nota com o botao "Usar" (quem abre a revisao so para outro ajuste nao grava um palpite sem ver). Campo ja preenchido (dado
+// anterior ou correcao manual) NUNCA e trocado: a sugestao aparece so como nota. Valor ambiguo vira opcoes para escolher. Nada e gravado aqui: so o "Salvar revisao" grava, e "Validar" continua do
+// usuario.
+const CAMPOS_DA_REVISAO = [['data_documento', 'ir-review-data'], ['prestador_nome', 'ir-review-prestador'],
+                           ['prestador_cpf_cnpj', 'ir-review-doc'], ['valor', 'ir-review-valor']];
+const ORIGENS_DE_LEITURA = { TEXTO_PDF: 'texto do PDF', OCR_IMAGEM: 'OCR da imagem', OCR_PDF: 'OCR do PDF digitalizado' };
+const reais = (v) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const dataBr = (iso) => (/^\d{4}-\d{2}-\d{2}$/.test(iso || '') ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : iso);
+
+function limparSugestoes(modal) {
+    modal.querySelectorAll('.cf-leitura-nota, .cf-leitura-resumo, .cf-leitura-opcoes').forEach((e) => e.remove());
+    modal.querySelectorAll('.cf-sugerido').forEach((e) => e.classList.remove('cf-sugerido'));
+}
+
+function nota(campo, texto, classe = 'cf-leitura-nota') {
+    const n = document.createElement('small');
+    n.className = classe;
+    n.textContent = texto;
+    campo.closest('label').append(n);
+    return n;
+}
+
+// Sugestao que so entra no campo se o usuario tocar em "Usar".
+function notaComUsar(campo, texto, aplicar) {
+    const n = nota(campo, `${texto} `);
+    const usar = document.createElement('button');
+    usar.type = 'button';
+    usar.className = 'cf-leitura-opcao cf-leitura-usar';
+    usar.textContent = 'Usar';
+    usar.addEventListener('click', () => { n.remove(); aplicar(); });
+    n.append(usar);
+    return n;
+}
+
+function marcarSugerido(campo) {
+    campo.classList.add('cf-sugerido');
+    const desmarcar = () => {
+        campo.classList.remove('cf-sugerido');
+        campo.closest('label')?.querySelector('.cf-leitura-nota')?.remove();
+        campo.removeEventListener('input', desmarcar);
+    };
+    campo.addEventListener('input', desmarcar);
+}
+
+async function aplicarSugestoes(modal) {
+    const id = Number(document.getElementById('ir-review-id')?.value);
+    if (!id) return;
+    let item;
+    try {
+        item = await comprovanteCompleto(id);
+    } catch (_erro) {
+        return;
+    }
+    if (!item || !item.texto_extraido || Number(document.getElementById('ir-review-id')?.value) !== id) return;
+    const origem = ORIGENS_DE_LEITURA[item.origem_classificacao] ? item.origem_classificacao : 'TEXTO_PDF';
+    const { leitura, categoria } = await sugestoesDoTexto(item.texto_extraido, origem);
+    if (!modal.classList.contains('open') || Number(document.getElementById('ir-review-id')?.value) !== id) return;
+    limparSugestoes(modal);
+    const form = document.getElementById('ir-review-form');
+    const resumo = document.createElement('p');
+    resumo.className = 'cf-leitura-resumo';
+    resumo.id = 'cf-leitura-resumo';
+    const preencher = leitura.tipo === 'NFSE_GOIANIA' || leitura.tipo === 'CUPOM_FISCAL';
+    const partes = [`Leitura automática (${ORIGENS_DE_LEITURA[origem]}): ${TIPOS[leitura.tipo] || 'Documento'}.`];
+    partes.push(preencher ? 'Os campos marcados são sugestões: confira antes de salvar.'
+        : 'Documento sem modelo reconhecido: nada foi preenchido. Use "Usar" nas sugestões que estiverem corretas.');
+    if (leitura.avisos.length) partes.push(leitura.avisos.join(' '));
+    resumo.textContent = partes.join(' ');
+    form.before(resumo);
+    for (const [chave, idCampo] of CAMPOS_DA_REVISAO) {
+        const campo = document.getElementById(idCampo);
+        const sugerido = leitura.campos[chave];
+        if (!campo || !sugerido || sugerido.valor === null) continue;
+        const exibido = chave === 'valor' ? reais(sugerido.valor) : chave === 'data_documento' ? dataBr(sugerido.valor) : sugerido.valor;
+        if (!String(campo.value || '').trim() && preencher) {
+            campo.value = sugerido.valor;
+            marcarSugerido(campo);
+            nota(campo, SITUACOES[sugerido.situacao]);
+        } else if (!String(campo.value || '').trim()) {
+            notaComUsar(campo, `A leitura sugere: ${exibido}.`, () => {
+                campo.value = sugerido.valor;
+                marcarSugerido(campo);
+                const anoVazio = document.getElementById('ir-review-ano');
+                if (chave === 'data_documento' && anoVazio && !String(anoVazio.value || '').trim()) {
+                    anoVazio.value = sugerido.valor.slice(0, 4);
+                    marcarSugerido(anoVazio);
+                }
+            });
+        } else if (String(campo.value).trim() !== String(sugerido.valor)
+                   && !(chave === 'valor' && Math.abs(Number(campo.value) - Number(sugerido.valor)) < 0.005)) {
+            nota(campo, `A leitura sugere: ${exibido} (o valor atual foi mantido).`);
+        }
+    }
+    // Ano-calendario acompanha a data sugerida, so se estiver vazio.
+    const ano = document.getElementById('ir-review-ano');
+    if (preencher && ano && !String(ano.value || '').trim() && leitura.campos.data_documento.valor) {
+        ano.value = leitura.campos.data_documento.valor.slice(0, 4);
+        marcarSugerido(ano);
+    }
+    // Valor ambiguo: opcoes para escolher (nenhuma e aplicada sozinha).
+    const valor = document.getElementById('ir-review-valor');
+    if (valor && leitura.valoresCandidatos.length && !String(valor.value || '').trim()) {
+        const opcoes = document.createElement('span');
+        opcoes.className = 'cf-leitura-opcoes';
+        opcoes.append('Valores encontrados: ');
+        for (const candidato of leitura.valoresCandidatos) {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'cf-leitura-opcao';
+            b.textContent = reais(candidato);
+            b.addEventListener('click', () => { valor.value = candidato; valor.dispatchEvent(new Event('input', { bubbles: true })); });
+            opcoes.append(b);
+        }
+        valor.closest('label').append(opcoes);
+    }
+    const seletor = document.getElementById('ir-review-categoria');
+    if (seletor && categoria) {
+        const disponivel = categoria.categoria_id && !seletor.value && [...seletor.options].some((o) => Number(o.value) === categoria.categoria_id);
+        const escolher = () => {
+            seletor.value = String(categoria.categoria_id);
+            seletor.dispatchEvent(new Event('change', { bubbles: true }));  // a tela original resolve a Categoria IR
+            marcarSugerido(seletor);
+        };
+        if (disponivel && preencher) {
+            escolher();
+            nota(seletor, categoria.aviso);
+        } else if (disponivel) {
+            notaComUsar(seletor, `${categoria.aviso} (${categoria.categoria_nome})`, () => { escolher(); nota(seletor, categoria.aviso); });
+        } else if (!categoria.categoria_id && categoria.candidatas.length) {
+            nota(seletor, categoria.aviso);
+        } else if (categoria.categoria_id && seletor.value && Number(seletor.value) !== categoria.categoria_id) {
+            nota(seletor, `A leitura sugere a categoria ${categoria.categoria_nome} (a atual foi mantida).`);
+        }
+    }
+}
+
+function instalarSugestoesDaRevisao() {
+    const modal = document.getElementById('ir-review-modal');
+    if (!modal) return;
+    let aberto = false;
+    new MutationObserver(() => {
+        const agora = modal.classList.contains('open');
+        if (agora && !aberto) aplicarSugestoes(modal).catch(() => {});
+        if (!agora) limparSugestoes(modal);
+        aberto = agora;
+    }).observe(modal, { attributes: true, attributeFilter: ['class'] });
+}
+
 const contextoMoldura = await iniciarMoldura();
 if (contextoMoldura && contextoMoldura.perfil) {
     perfilId = contextoMoldura.perfil.id;
-    configurarDocumentos(contextoMoldura.perfil, { aoEnviar: retornoDoEnvio });
+    configurarDocumentos(contextoMoldura.perfil, { aoEnviar: retornoDoEnvio, aoLer: andamentoDaLeitura });
     window.CF_REGISTRAR_ADAPTADOR(responderDocumentos);
     instalarAberturaDeArquivos(perfilId);  // "Abrir arquivo" (link /api/ir/comprovantes/<id>/arquivo)
     instalarDesvinculo();
     instalarRetornoDoEnvio();
     instalarExclusao();
     instalarRelatorioIr();
+    instalarSugestoesDaRevisao();  // FIN-REG-08
 } else if (contextoMoldura) {
     window.CF_REGISTRAR_ADAPTADOR(async () => falha('Nenhum perfil financeiro autorizado para esta conta.', 403));
 }

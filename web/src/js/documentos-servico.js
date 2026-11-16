@@ -3,18 +3,22 @@
 // FIN-DOCUMENTOS-2, FIN-MIGRACAO-LASTRO-EMPRESA-01, FIN-PRE-PRODUCAO-1, FIN-REG-03 e FIN-REG-04), para a tela original do
 // desktop (pela ponte-api) e os Documentos mobile usarem as mesmas consultas, gravacoes, relatorios e pacote ZIP.
 // O que e da tela (moldura, avisos e botoes acrescentados) ficou no adaptador; o aviso do envio chega por gancho.
+// FIN-REG-08: leitura automatica no envio (texto do PDF digital ou OCR no navegador, js/leitura-ocr.js), guardada com a
+// origem; e as sugestoes de campos e de categoria para a conferencia (js/leitura-fiscal.js). Tudo e sugestao: nenhum
+// campo e preenchido no documento sem o usuario confirmar (revisao no desktop; conferencia antes do envio no celular).
 
 import { supabase } from './cliente.js';
 import { criarChaves, falha, mensagemDeErro, NAO_DISPONIVEL, ok } from './adaptador-comum.js';
-import { textoDoPdf } from './importacao-pdf.js';
+import { lerDocumento, sugerirCategoria } from './leitura-fiscal.js';
+import { criarLeitor, tipoDoArquivo } from './leitura-ocr.js';
 import { comprovanteDoPerfil, erroDeDocumento, responderDocumentoFinanceiro } from './documento-financeiro.js';
 import { MIME_XLSX } from './exportacao-xlsx.js';
 import { divergencia, ERRO_PERFIL_ZIP, ERRO_SEM_DOCUMENTOS, montarPacote, normalizarFiltros, recusaPorVolume } from './zip-documentos.js';
 import { ERRO_PERFIL_LASTRO, excelIr, excelSaidas, filtrarComprovantes, pdfIr, pdfSaidas, resumoIr, validarFiltrosSaidas } from './relatorio-fiscal.js';
 
-const estado = { perfilId: null, perfil: null, filtrosDaLista: null, aoEnviar: null };
+const estado = { perfilId: null, perfil: null, filtrosDaLista: null, aoEnviar: null, aoLer: null, classificacao: null };
 const chaves = criarChaves();
-const NA_FASE_1 = `Documentos fiscais: esta ação (OCR de imagem ou categorias IR) ${NAO_DISPONIVEL}`;
+const NA_FASE_1 = `Documentos fiscais: esta ação (reprocessar OCR de imagem ou categorias IR) ${NAO_DISPONIVEL}`;
 
 async function rpc(funcao, args) {
     const { data, error } = await funcao(args);
@@ -56,29 +60,27 @@ async function empresa(recurso, parametros = null, id = null) {
     }) });
 }
 
-// PDF.js carregado so quando um PDF e enviado (o worker tambem vem do proprio site).
-let pdfjsCarregado = null;
-async function pdfjs() {
-    if (!pdfjsCarregado) {
-        pdfjsCarregado = await import('../vendor/pdf.min.mjs');
-        pdfjsCarregado.GlobalWorkerOptions.workerSrc = new URL('../vendor/pdf.worker.min.mjs', import.meta.url).href;
-    }
-    return pdfjsCarregado;
-}
-
 function base64(bytes) {
     let binario = '';
     for (let i = 0; i < bytes.length; i += 0x8000) binario += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
     return btoa(binario);
 }
 
-// Texto do PDF textual (complementar: PDF escaneado ou invalido fica para revisao manual).
-async function textoExtraido(arquivo, bytes) {
-    if (!/\.pdf$/i.test(arquivo.name || '')) return null;
+// FIN-REG-08: leitura no navegador antes do envio. Falha ou ausencia de texto nao impede o envio (revisao manual).
+// Devolve os dados de leitura para enviar_comprovante: texto_extraido, texto_origem e o modelo reconhecido.
+async function leituraDoArquivo(leitor, arquivo) {
+    if (!tipoDoArquivo(arquivo) || tipoDoArquivo(arquivo) === 'heic') return {};
     try {
-        return (await textoDoPdf(bytes.buffer.slice(0), await pdfjs())).join('\n');
-    } catch (_erro) {
-        return null;
+        const lido = await leitor.ler(arquivo);
+        if (!lido || !lido.texto) return {};
+        const leitura = lerDocumento(lido.texto, { origem: lido.origem });
+        if (leitura.tipo === 'SEM_TEXTO') return {};
+        return { texto_extraido: leitura.texto, texto_origem: lido.origem,
+                 leitura: ['NFSE_GOIANIA', 'CUPOM_FISCAL'].includes(leitura.tipo) ? leitura.tipo : null };
+    } catch (erro) {
+        if (erro && erro.cancelada) throw erro;
+        console.warn('Leitura automatica nao concluida:', erro && erro.message);  // sem conteudo do documento
+        return {};
     }
 }
 
@@ -97,7 +99,9 @@ async function enviar(formData) {
     const ano = formData.get('ano_calendario') || formData.get('ano') || null;
     const resultados = [];
     let recusa = null;
-    for (const arquivo of arquivos) {
+    const leitor = criarLeitor({ aoProgredir: (texto) => { if (estado.aoLer) estado.aoLer(texto); } });
+    for (const [indice, arquivo] of arquivos.entries()) {
+        if (estado.aoLer) estado.aoLer(arquivos.length > 1 ? `Lendo o documento ${indice + 1} de ${arquivos.length}…` : 'Lendo o documento…');
         if (recusa) {
             resultados.push({ success: false, error: recusa, arquivo: arquivo.name });
             continue;
@@ -105,10 +109,10 @@ async function enviar(formData) {
         try {
             const bytes = new Uint8Array(await arquivo.arrayBuffer());
             const operacao = `upload:${arquivo.name}:${arquivo.size}:${arquivo.lastModified}`;
+            const leitura = await leituraDoArquivo(leitor, arquivo);
             const r = await rpc((a) => supabase.rpc('enviar_comprovante', a), {
                 p_perfil_id: estado.perfilId, p_conteudo: base64(bytes), p_chave: chaves.de(operacao),
-                p_dados: { nome_arquivo: arquivo.name, mime_type: arquivo.type || null, ano_calendario: ano,
-                           texto_extraido: await textoExtraido(arquivo, bytes) },
+                p_dados: { nome_arquivo: arquivo.name, mime_type: arquivo.type || null, ano_calendario: ano, ...leitura },
             });
             chaves.esquecer(operacao);
             // Gravado: uma falha so na releitura nao vira "nao enviado" (a lista do perfil, recarregada, mostra o documento).
@@ -354,6 +358,7 @@ const ROTAS = [
 ];
 
 export async function responderDocumentos({ metodo, caminho, parametros, corpo }) {
+    if (metodo !== 'GET') estado.classificacao = null;  // FIN-REG-08: gravacao muda o historico usado na sugestao de categoria
     const documentoFinanceiro = await responderDocumentoFinanceiro({ metodo, caminho, parametros, corpo }, estado.perfilId, chaves);
     if (documentoFinanceiro) return documentoFinanceiro;
     for (const [verbo, padrao, executar] of ROTAS) {
@@ -370,12 +375,72 @@ export async function responderDocumentos({ metodo, caminho, parametros, corpo }
 }
 
 // perfil: { id, nome, tipo } do perfil ativo. aoEnviar(enviados, resultados): aviso da tela depois de um envio (opcional).
-export function configurarDocumentos(perfil, { aoEnviar = null } = {}) {
+export function configurarDocumentos(perfil, { aoEnviar = null, aoLer = null } = {}) {
     estado.perfilId = perfil.id;
     estado.perfil = perfil;
     estado.aoEnviar = aoEnviar;
+    estado.aoLer = aoLer;
     estado.filtrosDaLista = null;
+    estado.classificacao = null;
 }
+
+// ---- FIN-REG-08: sugestoes para a conferencia (so leitura) ----------------------------------------------------------
+// O que a sugestao de categoria usa, lido uma vez por tela (e de novo depois de cada gravacao): as palavras-chave ativas, as categorias do perfil (com o vinculo
+// de Categoria IR / fiscal do perfil) e, do historico do perfil, so emitente e categoria. Nada de outro perfil.
+async function contextoDeClassificacao() {
+    if (!estado.classificacao) {
+        estado.classificacao = (async () => {
+            const [palavras, categorias, historico] = await Promise.all([
+                rpc((a) => supabase.rpc('palavras_chave_tela', a), { p_perfil_id: estado.perfilId }),
+                rpc((a) => supabase.rpc('ir_categorias_despesa_tela', a), { p_perfil_id: estado.perfilId, p_disponiveis: true }),
+                rpc((a) => supabase.rpc('ir_comprovantes_tela', a), { p_perfil_id: estado.perfilId, p_filtros: {}, p_id: null }),
+            ]);
+            return {
+                palavras: Object.values(palavras || {}).flat().filter((p) => p && p.ativo !== false),
+                categorias: (categorias || []).map((c) => ({ id: c.id, nome: c.nome, categoria_ir_id: c.categoria_ir_id ?? null })),
+                historico: ((historico && historico.data) || []).map((d) => ({ prestador_cpf_cnpj: d.prestador_cpf_cnpj, categoria_id: d.categoria_id })),
+            };
+        })().catch((erro) => { estado.classificacao = null; throw erro; });
+    }
+    return estado.classificacao;
+}
+
+// { leitura, categoria }: campos reconhecidos (com a situacao de cada um) e a categoria sugerida, ou nenhuma.
+export async function sugestoesDoTexto(texto, origem) {
+    const leitura = lerDocumento(texto, { origem });
+    let categoria = null;
+    try {
+        categoria = sugerirCategoria(leitura, await contextoDeClassificacao());
+    } catch (_erro) {
+        categoria = null;  // sem as listas, sem sugestao de categoria (o resto da conferencia continua)
+    }
+    return { leitura, categoria };
+}
+
+// Leitor do arquivo para a conferencia antes do envio (celular): aoProgredir recebe o andamento.
+export const novoLeitor = (aoProgredir) => criarLeitor({ aoProgredir });
+
+// Envio com os dados conferidos (celular): arquivo, leitura feita e os campos confirmados pelo usuario, numa so chamada (o
+// banco grava tudo ou nada). Arquivo repetido devolve o documento existente, sem alterar nada nele.
+export async function enviarConferido({ arquivo, ano, leitura, revisao }) {
+    const bytes = new Uint8Array(await arquivo.arrayBuffer());
+    estado.classificacao = null;  // o envio muda o historico do emitente
+    const operacao = `conferido:${arquivo.name}:${arquivo.size}:${arquivo.lastModified}`;
+    const dados = { nome_arquivo: arquivo.name, mime_type: arquivo.type || null, ano_calendario: ano, revisao };
+    if (leitura && leitura.tipo !== 'SEM_TEXTO' && leitura.texto) {
+        Object.assign(dados, { texto_extraido: leitura.texto, texto_origem: leitura.origem,
+                               leitura: ['NFSE_GOIANIA', 'CUPOM_FISCAL'].includes(leitura.tipo) ? leitura.tipo : null });
+    }
+    const r = await rpc((a) => supabase.rpc('enviar_comprovante', a), {
+        p_perfil_id: estado.perfilId, p_conteudo: base64(bytes), p_chave: chaves.de(operacao), p_dados: dados,
+    });
+    chaves.esquecer(operacao);
+    estado.classificacao = null;
+    return r;
+}
+
+// Comprovante do perfil (com o texto extraido), para as sugestoes da revisao no desktop.
+export const comprovanteCompleto = (id) => comprovanteLido(id);
 
 // Filtros da ultima lista pedida (os relatorios do desktop usam os filtros da lista em tela).
 export const filtrosDaLista = () => estado.filtrosDaLista;
