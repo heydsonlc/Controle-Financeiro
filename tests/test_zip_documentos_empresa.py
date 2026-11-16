@@ -348,7 +348,7 @@ def test_isolamento_entre_perfis_e_restricao_ao_perfil_empresa(base):
     flask = pelo_flask(dsn, PESSOAL, ['/api/ir/documentos-empresa/exportar-zip'])[0]
     fonte = (ROOT / 'web' / 'src' / 'js' / 'zip-documentos.js').read_text(encoding='utf-8')
     assert flask['status'] == 403 and flask['erro']['error'] in fonte
-    adaptador = (ROOT / 'web' / 'src' / 'js' / 'documentos-fiscais-adaptador.js').read_text(encoding='utf-8')
+    adaptador = (ROOT / 'web' / 'src' / 'js' / 'documentos-servico.js').read_text(encoding='utf-8')
     assert "if (estado.perfil.tipo !== 'EMPRESA') return falha(ERRO_PERFIL_ZIP, 403);" in adaptador
     # O pacote da Empresa so tem documentos da Empresa; o arquivo do perfil Pessoal nunca entra.
     documentos = pedido(dsn, {})['entrada']['documentos']

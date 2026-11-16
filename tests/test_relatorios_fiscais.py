@@ -389,6 +389,6 @@ def test_relatorio_usa_o_vinculo_ativo_mais_recente_como_a_lista_da_tela(base):
     da_nota_lastros = [l for l in lastros if l[0] == 'nf-servico.pdf']
     assert [(l[6], l[7]) for l in da_nota_lastros] == [('INVESTIMENTO', 'PENDENTE'), ('DESPESA_OPERACIONAL', 'VALIDADO')]
     # O adaptador da tela usa a ordem da consulta (sem reordenar por id), e nada foi gravado.
-    adaptador = (ROOT / 'web' / 'src' / 'js' / 'documentos-fiscais-adaptador.js').read_text(encoding='utf-8')
+    adaptador = (ROOT / 'web' / 'src' / 'js' / 'documentos-servico.js').read_text(encoding='utf-8')
     assert 'c.vinculos = await vinculosAtivos(c.id) || [];' in adaptador and 'sort((x, y) => x.id - y.id)' not in adaptador
     assert resumo_tabelas(base) == antes
