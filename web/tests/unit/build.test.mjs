@@ -62,6 +62,39 @@ test('dist gerado contem so valores publicos e CSP restrita', async () => {
     }
 });
 
+// FIN-REG-08: 'wasm-unsafe-eval' so nas paginas de documentos e nos arquivos do OCR (bloco com "! Content-Security-Policy"
+// para trocar a politica do "/*" so ali); nunca 'unsafe-eval' nem 'unsafe-inline'; Tesseract, nucleos e modelo no proprio site.
+test('dist: CSP do OCR restrita aos caminhos de documentos e arquivos do Tesseract hospedados no site', async () => {
+    const destino = await mkdtemp(path.join(os.tmpdir(), 'cf-web-build-'));
+    try {
+        await construir({ url: URL_OK, chave: 'sb_publishable_abc123', destino });
+        const headers = await readFile(path.join(destino, '_headers'), 'utf8');
+        assert.doesNotMatch(headers, /'unsafe-eval'|'unsafe-inline'/);
+        const blocos = headers.split(/\n(?=\S)/).map((b) => b.trim()).filter(Boolean)
+            .map((b) => { const [caminho, ...linhas] = b.split('\n').map((l) => l.trim()); return { caminho, linhas }; });
+        assert.deepEqual(blocos.map((b) => b.caminho), ['/*', '/documentos-fiscais', '/documentos-mobile', '/vendor/tesseract-7.0.0/*']);
+        const scriptSrc = (linhas) => linhas.filter((l) => l.startsWith('Content-Security-Policy:'))
+            .map((l) => /script-src ([^;]*)/.exec(l)[1]);
+        assert.deepEqual(scriptSrc(blocos[0].linhas), ["'self'"]);
+        for (const bloco of blocos.slice(1)) {
+            assert.deepEqual(bloco.linhas, ['! Content-Security-Policy', bloco.linhas[1]], bloco.caminho);
+            assert.deepEqual(scriptSrc(bloco.linhas), ["'self' 'wasm-unsafe-eval'"], bloco.caminho);
+            // as demais diretivas iguais as do site
+            assert.equal(bloco.linhas[1].replace(" 'wasm-unsafe-eval'", ''), blocos[0].linhas[0], bloco.caminho);
+        }
+        const ocr = (await readdir(path.join(destino, 'vendor', 'tesseract-7.0.0'))).sort();
+        assert.deepEqual(ocr, ['por.traineddata.gz', 'tesseract-core-lstm.wasm.js', 'tesseract-core-relaxedsimd-lstm.wasm.js',
+            'tesseract-core-simd-lstm.wasm.js', 'tesseract.esm.min.js', 'worker.min.js']);
+        // sem endereco de CDN no carregamento: worker, nucleo e modelo pelos caminhos locais
+        const leitor = await readFile(path.join(destino, 'js', 'leitura-ocr.js'), 'utf8');
+        assert.match(leitor, /new URL\('\.\.\/vendor\/tesseract-7\.0\.0\/', import\.meta\.url\)/);
+        assert.doesNotMatch(leitor, /https?:\/\//);
+        for (const opcao of ['workerPath', 'corePath', 'langPath', "cacheMethod: 'none'", 'workerBlobURL: false']) assert.ok(leitor.includes(opcao), opcao);
+    } finally {
+        await rm(destino, { recursive: true, force: true });
+    }
+});
+
 test('verificacao de dist detecta segredo injetado', async () => {
     const destino = await mkdtemp(path.join(os.tmpdir(), 'cf-web-scan-'));
     try {

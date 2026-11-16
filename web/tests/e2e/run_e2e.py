@@ -107,15 +107,42 @@ HOP_BY_HOP = {'connection', 'keep-alive', 'transfer-encoding', 'content-length',
 
 
 def ler_headers(dist):
-    """Cabecalhos de _headers (formato Cloudflare Pages, so o bloco '/*')."""
-    cabecalhos = {}
+    """Cabecalhos de _headers (formato Cloudflare Pages). FIN-REG-08: blocos por caminho, como o Cloudflare os aplica (conferido
+    no wrangler pages dev): todos os blocos que casam, em ordem; "! Nome" retira o cabecalho dos blocos anteriores e o bloco
+    pode defini-lo de novo. '/*' casa com tudo; '/x/*' com o prefixo; '/x' com /x e /x.html (o Cloudflare redireciona .html
+    para o caminho limpo, que recebe o bloco). Devolve a funcao caminho -> {nome: valor}."""
+    blocos = []
     arquivo = dist / '_headers'
     if arquivo.exists():
         for linha in arquivo.read_text(encoding='utf-8').splitlines():
-            if linha.startswith('  ') and ':' in linha:
+            if linha.startswith('/'):
+                blocos.append((linha.strip(), []))
+            elif linha.startswith('  ! ') and blocos:
+                blocos[-1][1].append(('retirar', linha.strip()[2:].strip(), None))
+            elif linha.startswith('  ') and ':' in linha and blocos:
                 nome, valor = linha.strip().split(':', 1)
-                cabecalhos[nome.strip()] = valor.strip()
-    return cabecalhos
+                blocos[-1][1].append(('definir', nome.strip(), valor.strip()))
+
+    def casa(padrao, caminho):
+        if padrao == '/*':
+            return True
+        if padrao.endswith('/*'):
+            return caminho.startswith(padrao[:-1])
+        return caminho in (padrao, padrao + '.html')
+
+    def para(caminho):
+        caminho = caminho.split('?', 1)[0].split('#', 1)[0]
+        cabecalhos = {}
+        for padrao, operacoes in blocos:
+            if not casa(padrao, caminho):
+                continue
+            for operacao, nome, valor in operacoes:
+                if operacao == 'retirar':
+                    cabecalhos.pop(nome, None)
+                else:
+                    cabecalhos[nome] = valor
+        return cabecalhos
+    return para
 
 
 def verificar_jwt(token, segredo):
@@ -166,7 +193,7 @@ def criar_handler(dist, postgrest_url, segredo, headers_seguranca, consolidar=No
 
         def end_headers(self):
             if not self.path.startswith(('/auth/', '/rest/')):
-                for nome, valor in headers_seguranca.items():
+                for nome, valor in headers_seguranca(self.path).items():
                     if previa and nome == 'Content-Security-Policy':
                         valor = valor.replace("frame-ancestors 'none'", "frame-ancestors 'self'")
                     elif previa and nome == 'X-Frame-Options':

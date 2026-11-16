@@ -98,10 +98,16 @@ export function validarChavePublica(chave) {
     throw new Error('Formato de chave nao reconhecido: use a chave publicavel (sb_publishable_...).');
 }
 
+// FIN-REG-08: o OCR (Tesseract.js) compila WebAssembly, o que a CSP so permite com 'wasm-unsafe-eval' (nao libera eval de
+// JavaScript nem script inline). A permissao vale SO nas paginas que leem documentos e nos arquivos do OCR (o worker recebe
+// a CSP da propria resposta); o resto do site continua com script-src 'self'. Regra conferida no emulador do Cloudflare
+// (wrangler pages dev): "! Content-Security-Policy" seguido da nova politica troca a do bloco "/*" so nesses caminhos.
+export const CAMINHOS_COM_OCR = ['/documentos-fiscais', '/documentos-mobile', '/vendor/tesseract-7.0.0/*'];
+
 export function cabecalhosSeguranca(origemSupabase) {
-    const csp = [
+    const politica = (scripts) => [
         "default-src 'self'",
-        "script-src 'self'",
+        scripts,
         "style-src 'self'",
         "img-src 'self' data:",
         `connect-src 'self' ${origemSupabase}`,
@@ -110,14 +116,16 @@ export function cabecalhosSeguranca(origemSupabase) {
         "form-action 'self'",
         "object-src 'none'",
     ].join('; ');
+    const ocr = politica("script-src 'self' 'wasm-unsafe-eval'");
     return [
         '/*',
-        `  Content-Security-Policy: ${csp}`,
+        `  Content-Security-Policy: ${politica("script-src 'self'")}`,
         '  X-Content-Type-Options: nosniff',
         '  X-Frame-Options: DENY',
         '  Referrer-Policy: same-origin',
         '  Permissions-Policy: camera=(), microphone=(), geolocation=()',
         '',
+        ...CAMINHOS_COM_OCR.flatMap((caminho) => [caminho, '  ! Content-Security-Policy', `  Content-Security-Policy: ${ocr}`, '']),
     ].join('\n');
 }
 
@@ -308,6 +316,22 @@ export async function construir({ url, chave, destino = path.join(WEB, 'dist'), 
     // (CSP inalterada). Build "legacy": navegadores um pouco mais antigos tambem leem.
     for (const nome of ['pdf.min.mjs', 'pdf.worker.min.mjs']) {
         await cp(path.join(WEB, 'node_modules', 'pdfjs-dist', 'legacy', 'build', nome), path.join(destino, 'vendor', nome));
+    }
+    // FIN-REG-08: Tesseract.js 7.0.0 (OCR no navegador), versoes fixadas no package.json, servido do proprio site e
+    // carregado sob demanda. So o necessario para o modo LSTM: a biblioteca, o worker, os tres nucleos LSTM (o worker escolhe
+    // pelo suporte a SIMD do aparelho) e o modelo de portugues "best_int". A pasta leva a versao no nome: arquivos novos a
+    // cada atualizacao da biblioteca (sem cache antigo) e os grandes ficam no cache entre publicacoes.
+    const ocr = path.join(destino, 'vendor', 'tesseract-7.0.0');
+    await mkdir(ocr, { recursive: true });
+    const modulos = path.join(WEB, 'node_modules');
+    for (const [origemOcr, nome] of [
+        [path.join(modulos, 'tesseract.js', 'dist', 'tesseract.esm.min.js'), 'tesseract.esm.min.js'],
+        [path.join(modulos, 'tesseract.js', 'dist', 'worker.min.js'), 'worker.min.js'],
+        ...['tesseract-core-lstm.wasm.js', 'tesseract-core-simd-lstm.wasm.js', 'tesseract-core-relaxedsimd-lstm.wasm.js']
+            .map((n) => [path.join(modulos, 'tesseract.js-core', n), n]),
+        [path.join(modulos, '@tesseract.js-data', 'por', '4.0.0_best_int', 'por.traineddata.gz'), 'por.traineddata.gz'],
+    ]) {
+        await cp(origemOcr, path.join(ocr, nome));
     }
     // FIN-FIDELIDADE-CONSOLIDACAO-1: Chart.js do proprio Flask (frontend/static/vendor, versionado), para o Dashboard.
     await cp(path.join(RAIZ, 'frontend', 'static', 'vendor', 'chart.umd.min.js'), path.join(destino, 'vendor', 'chart.umd.min.js'));
