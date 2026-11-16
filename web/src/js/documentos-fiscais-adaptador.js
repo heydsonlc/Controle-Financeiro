@@ -584,9 +584,9 @@ function nomeDoAnexo(resposta, padrao) {
 
 async function baixarRelatorioIr(tipo, botao) {
     const parametros = estado.filtrosDaLista || new URLSearchParams({ ano: String(new Date().getFullYear()) });
-    const original = botao.innerHTML;
+    const original = [...botao.childNodes];  // icone e rotulo do botao, repostos ao final
     botao.disabled = true;
-    botao.textContent = 'Gerando...';
+    botao.replaceChildren(document.createTextNode('Gerando...'));
     try {
         const resposta = await fetch(`/api/ir/relatorios/${tipo}?${parametros.toString()}`);
         if (!resposta.ok) {
@@ -605,7 +605,7 @@ async function baixarRelatorioIr(tipo, botao) {
         window.alert(erro.message || 'Não foi possível gerar o relatório.');
     } finally {
         botao.disabled = false;
-        botao.innerHTML = original;
+        botao.replaceChildren(...original);
     }
 }
 
