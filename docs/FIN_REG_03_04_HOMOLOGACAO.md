@@ -1,6 +1,6 @@
 # FIN-REG-03/04 — Relatório integrado de homologação
 
-**Data:** 15/11/2026. **Situação:** os dois MVPs estão implementados e testados localmente. **Aguardam a homologação do titular.** Nada foi publicado: sem push, sem deploy, sem migration.
+**Data:** 15/11/2026. **Situação:** os dois MVPs estão implementados e testados localmente. O titular aprovou a homologação técnica com três pontos; os três estão tratados (seção 9). Nada foi publicado: sem push, sem deploy, sem migration.
 
 Detalhes de cada entrega: `docs/FIN_REG_03_RELATORIOS_FISCAIS.md` e `docs/FIN_REG_04_ZIP_EMPRESA.md`.
 
@@ -9,7 +9,7 @@ Detalhes de cada entrega: `docs/FIN_REG_03_RELATORIOS_FISCAIS.md` e `docs/FIN_RE
 | Entrega | Situação | Comparação com o Flask |
 |---|---|---|
 | REG-03: Excel do Imposto de Renda | Funcional | Planilha idêntica |
-| REG-03: PDF do Imposto de Renda | Funcional, com ressalva (seção 9) | Byte a byte |
+| REG-03: PDF do Imposto de Renda | Funcional, com botão nos dois perfis | Byte a byte |
 | REG-03: Excel de saídas sem documento | Funcional | Planilha idêntica |
 | REG-03: PDF de saídas sem documento | Funcional | Byte a byte |
 | REG-04: ZIP dos documentos da Empresa | Funcional | Lista, pastas, bytes e índice idênticos |
@@ -29,9 +29,11 @@ Os dois MVPs têm código, testes e commits separados e podem ser homologados in
 | `web/tests/e2e/reg03_relatorios_fiscais.spec.mjs` | REG-03 | Novo: navegador |
 | `web/tests/e2e/reg04_zip_empresa.spec.mjs` | REG-04 | Novo: navegador |
 | `web/tests/e2e/documentos_fiscais_tela.spec.mjs` | REG-03 | Ajuste: "Exportar" agora baixa o relatório |
+| `web/src/paginas/documentos-fiscais.html` | REG-03 | Ajuste autorizado: "Excel" e "PDF" visíveis também no perfil Pessoal (três linhas) |
+| `web/src/css/documentos-fiscais-adaptacoes.css` | REG-03 | Ajuste autorizado: altura compacta dos dois botões no Pessoal (uma regra) |
 | `docs/FIN_REG_03_RELATORIOS_FISCAIS.md`, `docs/FIN_REG_04_ZIP_EMPRESA.md`, este arquivo, `docs/ROADMAP.md` | — | Documentação |
 
-**Não foram alterados:** páginas HTML, CSS, a tela original (`imposto_renda.js`), o Flask (`backend/`), as migrations (`supabase/`) e qualquer função de gravação.
+**Não foram alterados:** a tela original (`imposto_renda.js` e o CSS dela), as demais páginas, o Flask (`backend/`), as migrations (`supabase/`) e qualquer função de gravação. Na página de Documentos Fiscais mudou só a visibilidade dos dois botões, com autorização.
 
 ## 3. Funções reutilizadas
 
@@ -57,14 +59,17 @@ Os dois MVPs têm código, testes e commits separados e podem ser homologados in
 
 | Bateria | Selecionada por | Resultado |
 |---|---|---|
-| `tests/test_relatorios_fiscais.py` | REG-03 | 5 aprovados, 0 falhas |
+| `tests/test_relatorios_fiscais.py` | REG-03 | 6 aprovados, 0 falhas (um novo: vínculo mais recente) |
 | `tests/test_zip_documentos_empresa.py` | REG-04 | 5 aprovados, 0 falhas |
 | `tests/test_relatorios_patrimonio.py` | Regressão do gerador de planilhas | 2 aprovados, 0 falhas |
 | Testes unitários do site (`npm run test:unit`, inclui o build de produção) | Regressão | 120 aprovados, 0 falhas |
-| `reg03_relatorios_fiscais.spec.mjs` | REG-03 | 2 aprovados, 0 falhas |
+| `reg03_relatorios_fiscais.spec.mjs` | REG-03 | 2 aprovados, 0 falhas (agora com os botões do Pessoal e as medidas de posição) |
 | `reg04_zip_empresa.spec.mjs` | REG-04 | 3 aprovados, 0 falhas |
 | Suíte completa de navegador | Regressão integrada | 260 aprovados, 0 falhas (eram 255 antes; +5 dos dois MVPs) |
 | Documentos Fiscais, Lastro, Documento financeiro e Patrimônio, de novo, depois da correção do botão | Regressão | 20 aprovados, 0 falhas |
+| **Depois dos ajustes de 15/11/2026** (botões no Pessoal e vínculo mais recente): comparação com o Flask (relatórios, ZIP, patrimônio) | Ajustes | 13 aprovados, 0 falhas |
+| **Depois dos ajustes:** navegador, as 8 baterias afetadas (REG-03, REG-04, Documentos Fiscais, Lastro, Documento financeiro, Patrimônio, migração P0/P1 e moldura) | Ajustes | 33 aprovados, 0 falhas |
+| **Depois dos ajustes:** unitários do site, com o build de produção | Ajustes | 120 aprovados, 0 falhas |
 
 A suíte de navegador cobre Documentos Fiscais, Lastro da Empresa, Despesas, Lançamentos, Patrimônio, Financiamentos, autenticação, perfis e as telas do celular.
 
@@ -90,7 +95,9 @@ Diferenças, todas de forma e justificadas:
 2. No índice do pacote, documento sem classificação gravada sai como "Não classificado", e não "Outro" / "Sem categoria". É a classificação do novo aplicativo, já homologada na tela.
 3. Acréscimos pedidos pelo contrato, que o Flask não tinha: conferência de SHA-256 e tamanho, e limites de volume.
 
-Nenhuma diferença de conteúdo, agrupamento ou total nos relatórios.
+4. Documento com mais de um vínculo ativo: o relatório mostra o vínculo mais recente (decisão do titular); o Flask mostrava o primeiro gravado.
+
+Fora o item 4, nenhuma diferença de conteúdo, agrupamento ou total nos relatórios.
 
 ## 7. Evidências de que os dados não foram alterados
 
@@ -106,16 +113,34 @@ Nenhuma diferença de conteúdo, agrupamento ou total nos relatórios.
 | Arquivos novos no site | 2 (`relatorio-fiscal.js`, 21 KB; `zip-documentos.js`, 13 KB) |
 | Arquivos alterados no site | 2 |
 | Bibliotecas novas | Nenhuma |
-| Páginas, CSS, CSP | Sem mudança |
+| Páginas, CSS, CSP | Página de Documentos Fiscais: três linhas de HTML e uma regra de CSS (visibilidade dos botões). CSP sem mudança |
 | Carregamento | Os módulos novos só são carregados na página de Documentos Fiscais |
 | Teste do build de produção | Aprovado (dentro da suíte unitária) |
 
-## 9. Ressalvas e decisões pedidas ao titular
+## 9. Decisões do titular e ajustes feitos (15/11/2026)
 
-1. **PDF do IRPF no perfil Pessoal não tem botão.** Na tela original, "Excel" e "PDF" do painel só aparecem na Empresa; no Pessoal há apenas "Exportar" (Excel). O PDF está pronto e testado, mas inacessível pela tela nesse perfil, como no Flask. Decidir: manter assim, ou mostrar os dois botões já existentes também no perfil Pessoal (mudança pequena, de visibilidade).
-2. **Vínculo principal do relatório.** Com mais de um vínculo ativo no mesmo documento, o relatório usa o primeiro gravado (regra do Flask), e a lista da tela mostra o mais recente. Mantive a regra do relatório original.
-3. **Filtro por tipo documental.** Vale sobre a classificação gravada, como no Flask. Documento recém-enviado e não revisado não aparece nas abas por tipo, nem no pacote filtrado por tipo.
-4. **Sem registros, o relatório é gerado com totais zerados** (regra do Flask). O pacote ZIP, ao contrário, recusa com mensagem (também regra do Flask).
+| Ponto | Decisão | Situação |
+|---|---|---|
+| PDF do IRPF sem botão no perfil Pessoal | Disponibilizar "Excel" e "PDF" também no Pessoal, com os mesmos botões compactos, sem novas barras nem espaços | **Feito** |
+| Classificação dos documentos (filtro por tipo vale sobre a classificação gravada; "Não classificado" no índice do ZIP) | Manter por enquanto e documentar; a classificação automática no envio fica para o FIN-REG-08 | **Mantido e documentado** |
+| Documento com mais de um vínculo | O relatório deve usar o vínculo ativo mais recente, como a lista da tela | **Feito** |
+
+### Botões no perfil Pessoal
+
+- Mudança de visibilidade: três linhas no HTML da página e uma regra de estilo. Nenhum botão novo.
+- "Filtros avançados" e "ZIP" continuam só na Empresa.
+- Conferido no navegador, por medida: no Pessoal, "Excel" e "PDF" têm 32 x 32 px, ficam na mesma linha, dentro do cabeçalho do painel e à direita do título, e a altura do cabeçalho é a mesma com e sem os botões. Na Empresa, os quatro controles continuam na mesma linha e o cabeçalho mede 49 px, o mesmo valor medido antes da mudança.
+
+### Vínculo mais recente
+
+- Conferi antes de alterar, como pedido: **não existe no modelo de dados um vínculo marcado como "principal"**. O "principal" do relatório do Flask era apenas o primeiro que o banco devolvia. O mais recente já era o critério da lista da tela, da consulta do banco e do índice do ZIP. Não há, portanto, diferença entre "mais recente" e "principal" a apontar.
+- A alteração ficou restrita à ordem em que a tela entrega os vínculos ao gerador do relatório. O banco não mudou e os vínculos históricos seguem intactos; a aba "Lastros" continua listando todos.
+- Teste novo: em todos os documentos, a natureza e a situação do lastro do relatório são iguais às da lista da tela; no documento com dois vínculos, o relatório mostra o mais recente, e a ordem antiga mostraria o outro.
+- Para os documentos com um vínculo só, o relatório continua idêntico ao do Flask, byte a byte no PDF.
+
+### Comportamentos mantidos
+
+- Sem registros, o relatório é gerado com totais zerados (regra do Flask). O pacote ZIP, ao contrário, recusa com mensagem (também regra do Flask).
 
 ## 10. Limitações
 
@@ -145,7 +170,7 @@ Nenhuma diferença de conteúdo, agrupamento ou total nos relatórios.
 | Critério | Situação |
 |---|---|
 | Excel de Imposto de Renda funcional | Atendido |
-| PDF de Imposto de Renda funcional | Atendido; sem botão no perfil Pessoal (ressalva 1) |
+| PDF de Imposto de Renda funcional | Atendido, com botão nos dois perfis |
 | Excel de saídas sem documento funcional | Atendido |
 | PDF de saídas sem documento funcional | Atendido |
 | Filtros preservados | Atendido |
@@ -154,7 +179,7 @@ Nenhuma diferença de conteúdo, agrupamento ou total nos relatórios.
 | Isolamento entre perfis | Atendido |
 | Comparação com o Flask aprovada | Atendido |
 | Nenhuma alteração financeira | Atendido |
-| Interface preservada | Atendido: nenhum HTML ou CSS alterado |
+| Interface preservada | Atendido: só a visibilidade de "Excel" e "PDF" no Pessoal, autorizada |
 
 **REG-04**
 
@@ -179,7 +204,8 @@ Nenhuma diferença de conteúdo, agrupamento ou total nos relatórios.
 | `b974526` | REG-03: relatórios fiscais, testes |
 | `5c1c1ef` | REG-04: pacote ZIP, testes |
 | `191755d` | REG-03: botão do relatório sem `innerHTML` |
-| (seguinte) | Documentação dos dois MVPs e ROADMAP |
+| `9806c7f` | Documentação dos dois MVPs e ROADMAP |
+| (seguintes) | Ajustes de 15/11/2026: botões no Pessoal e vínculo mais recente; documentação dos ajustes |
 
 Ramo local `reg-03-04-relatorios-fiscais`, a partir de `1386088` (documentação do encerramento do REG-02, também só local).
 

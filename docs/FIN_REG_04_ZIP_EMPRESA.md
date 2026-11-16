@@ -1,6 +1,6 @@
 # FIN-REG-04 — Pacote ZIP dos documentos da Empresa
 
-**Situação em 15/11/2026:** implementado e testado localmente, com dados fictícios, em bancos descartáveis. **Aguarda a homologação do titular.** Nada foi publicado: sem push, sem deploy e sem migration (nenhuma foi necessária).
+**Situação em 15/11/2026:** implementado e testado localmente, com dados fictícios, em bancos descartáveis. Homologação técnica aprovada pelo titular. Nada foi publicado: sem push, sem deploy e sem migration (nenhuma foi necessária).
 
 ## 1. O que foi entregue
 
@@ -16,7 +16,7 @@ Nenhum controle foi criado. O botão "ZIP" do painel de saídas sem documento co
 - O pacote traz todos os documentos do filtro, não só a página visível.
 - Sem documentos para o filtro: "Nenhum documento encontrado para os filtros selecionados.", sem arquivo.
 
-Como no Flask, os filtros por tipo, categoria, validade e obrigatoriedade valem sobre a classificação **gravada** do documento. Um documento recém-enviado, ainda com a classificação sugerida, aparece na aba "Todos" mas não nas abas por tipo, até ser revisado. A lista da tela e o pacote seguem a mesma regra.
+Como no Flask, os filtros por tipo, categoria, validade e obrigatoriedade valem sobre a classificação **gravada** do documento. O titular decidiu manter esse comportamento por enquanto; a classificação automática no envio será tratada no FIN-REG-08. Um documento recém-enviado, ainda com a classificação sugerida, aparece na aba "Todos" mas não nas abas por tipo, até ser revisado. A lista da tela e o pacote seguem a mesma regra.
 
 ## 3. Estrutura do pacote
 
@@ -166,7 +166,7 @@ O resumo de todas as tabelas é idêntico antes e depois de gerar os pacotes.
 | O ZIP é gravado sem compressão | Preserva os bytes sem depender de biblioteca; PDFs e imagens já são comprimidos. O pacote fica um pouco maior |
 | Conferência de tamanho e SHA-256 antes de incluir cada arquivo | Acréscimo exigido pelo contrato; o Flask não conferia |
 | Limites de volume | O Flask montava no servidor; no navegador é preciso limitar |
-| Documento sem classificação gravada aparece como "Não classificado" no índice | No Flask saía "Outro" e "Sem categoria". É a classificação do novo aplicativo, já homologada na tela (FIN-MIGRACAO-LASTRO-EMPRESA-01). A pasta e o arquivo são os mesmos |
+| Documento sem classificação gravada aparece como "Não classificado" no índice | No Flask saía "Outro" e "Sem categoria". É a classificação do novo aplicativo, já homologada na tela (FIN-MIGRACAO-LASTRO-EMPRESA-01). A pasta e o arquivo são os mesmos. Diferença mantida por decisão do titular |
 
 ## 12. Limitações
 

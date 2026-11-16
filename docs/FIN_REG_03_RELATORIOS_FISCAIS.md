@@ -1,6 +1,6 @@
 # FIN-REG-03 — Relatórios fiscais em Excel e PDF
 
-**Situação em 15/11/2026:** implementado e testado localmente, com dados fictícios, em bancos descartáveis. **Aguarda a homologação do titular.** Nada foi publicado: sem push, sem deploy e sem migration (nenhuma foi necessária).
+**Situação em 15/11/2026:** implementado e testado localmente, com dados fictícios, em bancos descartáveis. Homologação técnica aprovada pelo titular com três pontos, já tratados (seção 2 e seção 4). Nada foi publicado: sem push, sem deploy e sem migration (nenhuma foi necessária).
 
 ## 1. O que foi entregue
 
@@ -14,12 +14,12 @@ Os arquivos são gerados no navegador. Não há chamada ao Flask nem a serviço 
 
 ## 2. Como usar na tela
 
-Nenhum controle foi criado. Os botões já existentes de Documentos Fiscais passaram a funcionar:
+Nenhum controle foi criado. Os botões já existentes de Documentos Fiscais passaram a funcionar, e "Excel" e "PDF" do painel passaram a aparecer também no perfil Pessoal:
 
 | Botão | Onde | O que gera |
 |---|---|---|
 | **Exportar** | Barra de ações, nos dois perfis | Excel do relatório, com os filtros da lista |
-| **Excel** e **PDF** | Painel da lista de documentos, perfil Empresa | Relatório de Documentos Fiscais e Lastro |
+| **Excel** e **PDF** | Painel da lista de documentos, nos dois perfis | Imposto de Renda (Pessoal) ou Documentos Fiscais e Lastro (Empresa) |
 | **Excel** e **PDF** | Painel "Saídas sem documento", perfil Empresa | Relatório de saídas sem documento |
 
 O relatório usa os filtros da lista em tela: ano, situação, categoria, busca e, na Empresa, tipo e categoria documental, validade e obrigatoriedade. As saídas usam os filtros do próprio painel: ano, mês, origem, situação, natureza, valor mínimo e busca.
@@ -30,9 +30,22 @@ Nomes dos arquivos, iguais aos do Flask:
 - `Documentos_Fiscais_<ano>_<perfil>.xlsx` e `.pdf`
 - `Saidas_sem_documento_<perfil>_<ano>[_<mês>].xlsx` e `.pdf`
 
-### Ressalva: PDF do Imposto de Renda no perfil Pessoal
+### Excel e PDF no perfil Pessoal
 
-Na tela original do Flask, os botões "Excel" e "PDF" do painel só aparecem no modo Empresa. No perfil Pessoal existe apenas "Exportar", que gera o Excel. **O PDF do IRPF está implementado e testado, mas não tem botão visível no perfil Pessoal**, exatamente como no Flask. O contrato proíbe acrescentar botões, por isso não acrescentei. Se o titular quiser o PDF acessível no perfil Pessoal, a mudança é pequena: mostrar ali os dois botões que já existem no painel. Depende de decisão.
+Na tela original do Flask, os botões "Excel" e "PDF" do painel só apareciam no modo Empresa; no perfil Pessoal havia apenas "Exportar". Com a autorização do titular, os dois botões aparecem agora também no perfil Pessoal.
+
+- São os mesmos dois botões compactos que já existiam, no mesmo lugar do painel. Nenhuma barra, painel ou espaço foi criado.
+- "Filtros avançados" e "ZIP" continuam só na Empresa.
+- A mudança é de visibilidade: no HTML da página, a marca "só Empresa" saiu do grupo de ações e ficou nos dois controles que são só da Empresa. No modo Empresa o resultado é o mesmo de antes.
+- Uma regra de estilo dá aos dois botões, no Pessoal, a altura compacta de 32 px que eles já tinham na Empresa.
+- As regras de acesso não mudaram: quem gera o relatório é a mesma consulta, com a conferência de perfil no banco.
+
+Posição conferida no navegador, por medida:
+
+| Perfil | Botões visíveis no grupo | Tamanho | Na mesma linha | Dentro do cabeçalho e à direita do título | Altura do cabeçalho |
+|---|---|---|---|---|---|
+| Pessoal | Excel, PDF | 32 x 32 px | Sim | Sim | Igual à de antes: a mesma com e sem os botões |
+| Empresa | Filtros avançados, Excel, PDF, ZIP | 32 x 32 px | Sim | Sim | 49 px, igual à medida antes da mudança |
 
 ## 3. Conteúdo dos relatórios
 
@@ -84,7 +97,13 @@ Consultas reutilizadas, todas já publicadas e só de leitura:
 
 **Paginação:** as três consultas devolvem o conjunto inteiro do filtro. A paginação da tela é só visual, feita no navegador. O relatório não fica limitado à primeira página.
 
-**Vínculo principal:** o relatório do Flask usa o primeiro vínculo ativo do documento na ordem de gravação. A lista da tela mostra o mais recente. Para manter a fidelidade ao relatório original, uso a ordem de gravação. Só há diferença quando um documento tem mais de um vínculo ativo.
+**Vínculo mostrado no relatório:** quando um documento tem mais de um vínculo ativo, o relatório usa o **vínculo ativo mais recente** para a natureza e a situação do lastro, como a lista da tela. É decisão do titular, de 15/11/2026.
+
+- O Flask usava o primeiro vínculo que o banco devolvesse, sem ordem definida; na prática, o primeiro gravado. A primeira versão desta entrega copiava isso.
+- Não existe, no modelo de dados, um campo que marque um vínculo como "principal". O mais recente é o critério que a lista da tela, a consulta do banco e o índice do ZIP já usavam; por isso não há conflito entre "mais recente" e "principal".
+- A mudança ficou restrita à ordem em que a tela entrega os vínculos ao gerador. Nada mudou no banco, e os vínculos históricos seguem intactos.
+- Efeitos: a linha do documento nas abas "Documentos" e no PDF, o agrupamento por natureza do resumo, a seção "Pendências" e os filtros do relatório por natureza, situação e tipo de entidade. A aba "Lastros" continua listando todos os vínculos ativos, agora com o mais recente primeiro.
+- Com um vínculo só, que é o caso comum, nada muda, e o relatório continua idêntico ao do Flask.
 
 ## 5. Tratamento de erros
 
@@ -105,7 +124,7 @@ Executados em 15/11/2026.
 
 | Bateria | Resultado |
 |---|---|
-| `tests/test_relatorios_fiscais.py` (comparação com o Flask) | 5 aprovados, 0 falhas |
+| `tests/test_relatorios_fiscais.py` (comparação com o Flask e regra do vínculo mais recente) | 6 aprovados, 0 falhas |
 | `web/tests/e2e/reg03_relatorios_fiscais.spec.mjs` (navegador) | 2 aprovados, 0 falhas |
 | `web/tests/e2e/documentos_fiscais_tela.spec.mjs` (ajustado: "Exportar" agora baixa) | aprovado |
 | `tests/test_relatorios_patrimonio.py` (regressão do gerador de planilhas) | 2 aprovados, 0 falhas |
@@ -147,13 +166,14 @@ Antes e depois de gerar todos os relatórios, o resumo de todas as tabelas (cont
 |---|---|
 | A planilha é gravada sem compressão interna | O gerador próprio do aplicativo não usa biblioteca. O conteúdo lido é idêntico; o arquivo fica um pouco maior |
 | Células vazias de texto não são gravadas | O Flask grava texto vazio. Ao abrir, o resultado é o mesmo |
-| Filtros da Empresa por tipo, categoria, validade e obrigatoriedade | Mesma regra do Flask: valem sobre a classificação gravada |
+| Filtros da Empresa por tipo, categoria, validade e obrigatoriedade | Mesma regra do Flask: valem sobre a classificação gravada. Mantido por decisão do titular; a classificação automática no envio fica para o FIN-REG-08 |
+| Documento com mais de um vínculo ativo mostra o vínculo mais recente | Decisão do titular: o relatório segue a lista da tela (seção 4) |
+| "Excel" e "PDF" visíveis no perfil Pessoal | Autorizado pelo titular; no Flask só apareciam na Empresa |
 
-Não há diferença de conteúdo, agrupamento ou total.
+Fora o vínculo mostrado em documento com mais de um vínculo ativo, não há diferença de conteúdo, agrupamento ou total.
 
 ## 8. Limitações
 
-- O PDF do IRPF não tem botão no perfil Pessoal (seção 2).
 - O PDF é um relatório textual simples, igual ao do Flask: sem tabelas, com corte de linhas longas e limite de 80 ou 90 itens.
 - Com centenas de documentos vinculados, a consulta de vínculos é feita em grupos de oito e leva alguns segundos.
 - O OCR de imagem e as categorias de IR continuam indisponíveis nesta versão; os avisos foram mantidos.
