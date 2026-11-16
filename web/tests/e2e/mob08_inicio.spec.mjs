@@ -9,7 +9,8 @@ import { expect, test } from '@playwright/test';
 const A = { email: process.env.CF_EMAIL_A || 'usuario.a@teste.local', senha: process.env.CF_SENHA_A };
 const EVIDENCIAS = process.env.CF_MOB08_EVIDENCIAS || '';
 const CELULAR = { width: 390, height: 844 };
-const ATALHOS = ['Receita', 'Despesa', 'Lançamento', 'Resumo', 'Pagamentos', 'Recorrências', 'Cartões', 'Contas'];
+// FIN-MOBILE-11/12: Documentos e Mobilidade na quinta linha da grade (mesmas medidas).
+const ATALHOS = ['Receita', 'Despesa', 'Lançamento', 'Resumo', 'Pagamentos', 'Recorrências', 'Cartões', 'Contas', 'Documentos', 'Mobilidade'];
 
 test.describe.configure({ mode: 'serial' });
 
@@ -88,7 +89,8 @@ test('celular: login leva a pagina principal mobile, com so Resumo, Cartoes, Rec
         await expect(atalhos.nth(i)).toBeVisible();
         const destino = { Resumo: 'despesas-mobile.html', Cartões: 'cartoes-mobile.html', Receita: 'receitas-mobile.html',
             Despesa: 'despesa-nova-mobile.html', Lançamento: 'lancamento-mobile.html', Contas: 'contas-mobile.html',
-            Pagamentos: 'pagamentos-mobile.html', Recorrências: 'recorrencias-mobile.html' }[ATALHOS[i]];
+            Pagamentos: 'pagamentos-mobile.html', Recorrências: 'recorrencias-mobile.html',
+            Documentos: 'documentos-mobile.html', Mobilidade: 'mobilidade-mobile.html' }[ATALHOS[i]];
         if (destino) {
             await expect(atalhos.nth(i)).not.toHaveAttribute('aria-disabled', 'true');
             await expect(atalhos.nth(i)).toHaveAttribute('href', `${destino}?mes=${mesAtual().chave}`);
@@ -106,7 +108,7 @@ test('celular: login leva a pagina principal mobile, com so Resumo, Cartoes, Rec
     // 2 colunas x 4 linhas
     const caixas = await atalhos.evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top)]; }));
     expect(new Set(caixas.map(([x]) => x)).size).toBe(2);
-    expect(new Set(caixas.map(([, y]) => y)).size).toBe(4);
+    expect(new Set(caixas.map(([, y]) => y)).size).toBe(5);
 
     const antes = page.url();
     // desabilitado: o clique (forcado, como o toque) nao navega. FIN-MVP-MOBILE-09: os 8 atalhos ativos; fica o sino.
@@ -215,7 +217,7 @@ for (const [nome, tamanho] of [['tablet', { width: 820, height: 1180 }], ['deskt
         if (nome === 'desktop') await evidencia(page, 'desktop-1366x900-contas');
         // a pagina mobile aberta direto no desktop fica centrada, sem quebrar
         await page.goto('/inicio.html');
-        await expect(page.locator('.mob-grade .mob-atalho')).toHaveCount(8);
+        await expect(page.locator('.mob-grade .mob-atalho')).toHaveCount(10);
         expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBe(0);
         if (nome === 'desktop') await evidencia(page, 'desktop-1366x900-inicio');
     });

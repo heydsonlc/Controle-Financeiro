@@ -318,6 +318,49 @@ test('codigo-fonte do frontend nao escreve em tabelas nem usa innerHTML', async 
     }
 });
 
+// FIN-MOBILE-11 e FIN-MOBILE-12: Documentos Fiscais e Mobilidade no celular, pelos servicos comuns ao desktop.
+for (const [modulo, titulo, classe, ids, servico, exigidos] of [
+    ['documentos', 'Documentos', 'mob-documentos',
+        ['mob-perfil', 'mob-filtros', 'mob-exportar', 'mob-visoes', 'mob-situacao', 'mob-busca', 'mob-somente-leitura', 'mob-resumo', 'mob-lista', 'mob-folha', 'mob-sair'],
+        'documentos-servico.js', ['responderDocumentos', 'configurarDocumentos(perfil)', "from './arquivo-comprovante.js'"]],
+    ['mobilidade', 'Mobilidade', 'mob-mobilidade',
+        ['mob-perfil', 'mob-abastecer', 'mob-somente-leitura', 'mob-lista', 'mob-folha', 'mob-sair'],
+        'mobilidade-servico.js', ['responderMobilidade', 'configurarMobilidade(perfil.id)', 'tipo=abastecimento&veiculo=']],
+]) {
+    test(`${modulo} mobile: protegida, sem moldura, CSS restrito e os dados so pelo servico comum ao desktop`, async () => {
+        const destino = await mkdtemp(path.join(os.tmpdir(), `cf-web-${modulo}-mobile-`));
+        const ler = (arquivo) => readFile(path.join(destino, 'js', arquivo), 'utf8');
+        try {
+            await construir({ url: URL_OK, chave: 'sb_publishable_abc123', destino });
+            const html = await readFile(path.join(destino, `${modulo}-mobile.html`), 'utf8');
+            assert.match(html, new RegExp(`<body class="mob mob-modulo ${classe}" data-protegido hidden>`));
+            assert.doesNotMatch(html, /\{\{|<script>|\sstyle=|\son[a-z]+=/i, 'sem marcador, script ou estilo inline');
+            assert.doesNotMatch(html, /app-sidebar|app-shell-body|css\/shared\//, 'sem moldura nem CSS do desktop');
+            assert.match(html, new RegExp(`<h1 class="mob-titulo">${titulo}</h1>`));
+            assert.match(html, /id="mob-voltar" href="inicio.html" data-inicio/, 'voltar a pagina principal');
+            for (const id of ids) assert.match(html, new RegExp(`id="${id}"`), id);
+            const barra = [...html.matchAll(/<(a|button) (?:type="button" )?class="mob-barra-item([^"]*)"([^>]*)>[\s\S]*?<span>([^<]+)<\/span>/g)].map((m) => m[4]);
+            assert.deepEqual(barra, ['Início', 'Lançar', 'Resumo', 'Mais'], 'barra inferior como a homologada, sem item novo');
+            const css = await readFile(path.join(destino, 'css', `${modulo}-mobile.css`), 'utf8');
+            for (const regra of css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/(^|\})\s*([^{}@]+)\{/g)) {
+                for (const seletor of regra[2].split(',')) assert.match(seletor.trim(), new RegExp(`^body\\.${classe}(\\[|\\s|$)`), `regra restrita: ${seletor.trim()}`);
+            }
+            const pagina = await ler(`${modulo}-mobile.js`);
+            assert.doesNotMatch(pagina, /\.rpc\s*\(|\.from\s*\(|supabase/, 'nenhuma consulta propria: so o servico do desktop');
+            assert.ok(pagina.includes(`from './${servico}'`));
+            for (const trecho of exigidos) assert.ok(pagina.includes(trecho), trecho);
+            // O servico e o mesmo do desktop: o adaptador so o registra na ponte; o servico nao tem tela.
+            const adaptador = await ler(modulo === 'documentos' ? 'documentos-fiscais-adaptador.js' : 'mobilidade-adaptador.js');
+            assert.ok(adaptador.includes(`from './${servico}'`) && /CF_REGISTRAR_ADAPTADOR\(responder(Documentos|Mobilidade)\)/.test(adaptador));
+            assert.doesNotMatch((await ler(servico)).replace(/^\s*\/\/.*$/gm, ''), /window\.CF_REGISTRAR|iniciarMoldura|document\./, 'servico sem tela');
+            assert.ok((await ler('sessao.js')).includes(`'${modulo}-mobile.html'`), 'pagina protegida');
+            assert.ok((await ler('mobile-comum.js')).includes(`'${modulo}'`), 'atalho ativo na pagina principal');
+        } finally {
+            await rm(destino, { recursive: true, force: true });
+        }
+    });
+}
+
 // FIN-MIGRACAO-FIDELIDADE-FASE-1: moldura do Flask montada no build.
 const MENU_DO_FLASK = [
     ['Dashboard', ['Dashboard']],
@@ -354,7 +397,8 @@ test('todas as paginas usam a moldura do Flask com o mesmo menu, sem pagina queb
             'lancamento-mobile.html',  // + FIN-MVP-MOBILE-06
             'contas-mobile.html',  // + FIN-MVP-MOBILE-07
             'pagamentos-mobile.html',  // + FIN-MVP-MOBILE-08
-            'recorrencias-mobile.html'].includes(a));  // + FIN-MVP-MOBILE-09
+            'recorrencias-mobile.html',  // + FIN-MVP-MOBILE-09
+            'documentos-mobile.html', 'mobilidade-mobile.html'].includes(a));  // + FIN-MOBILE-11 e FIN-MOBILE-12
         assert.equal(paginas.length, 16);  // + indexadores.html (FIN-PRE-PRODUCAO-1)
         for (const pagina of paginas) {
             const html = await readFile(path.join(destino, pagina), 'utf8');
@@ -402,7 +446,8 @@ test('montagem escapa titulos e falha com marcador nao resolvido', () => {
 // FIN-MVP-MOBILE-07: o atalho Contas navega, para as Contas mobile.
 // FIN-MVP-MOBILE-08: o atalho Pagamentos navega, para os Pagamentos mobile.
 // FIN-MVP-MOBILE-09: o atalho Recorrencias navega, para as Recorrencias mobile (os 8 atalhos ativos).
-test('pagina principal mobile: protegida, sem moldura, os 8 atalhos ativos (Recorrencias no MOBILE-09)', async () => {
+// FIN-MOBILE-11/12: mais dois atalhos, Documentos e Mobilidade (10 no total).
+test('pagina principal mobile: protegida, sem moldura, os 10 atalhos ativos (Documentos e Mobilidade no MOBILE-11/12)', async () => {
     const destino = await mkdtemp(path.join(os.tmpdir(), 'cf-web-mob08-'));
     try {
         await construir({ url: URL_OK, chave: 'sb_publishable_abc123', destino });
@@ -415,7 +460,10 @@ test('pagina principal mobile: protegida, sem moldura, os 8 atalhos ativos (Reco
         // No HTML todos comecam desabilitados e sem link; js/mobile-comum.js habilita os de MODULOS_ATIVOS.
         const atalhos = [...html.matchAll(/<a class="mob-atalho" data-modulo="(\w+)" data-destino="([\w.-]+)" aria-disabled="true">[\s\S]*?<span class="mob-atalho-nome">([^<]+)<\/span>/g)]
             .map((m) => [m[3], m[1], m[2]]);
-        assert.deepEqual(atalhos.map((a) => a[0]), ['Receita', 'Despesa', 'Lançamento', 'Resumo', 'Pagamentos', 'Recorrências', 'Cartões', 'Contas']);
+        assert.deepEqual(atalhos.map((a) => a[0]), ['Receita', 'Despesa', 'Lançamento', 'Resumo', 'Pagamentos', 'Recorrências', 'Cartões', 'Contas',
+            'Documentos', 'Mobilidade']);
+        assert.deepEqual(atalhos.find((a) => a[0] === 'Documentos'), ['Documentos', 'documentos', 'documentos-mobile.html']);
+        assert.deepEqual(atalhos.find((a) => a[0] === 'Mobilidade'), ['Mobilidade', 'mobilidade', 'mobilidade-mobile.html']);
         assert.deepEqual(atalhos.find((a) => a[0] === 'Resumo'), ['Resumo', 'resumo', 'despesas-mobile.html']);
         assert.deepEqual(atalhos.find((a) => a[0] === 'Cartões'), ['Cartões', 'cartoes', 'cartoes-mobile.html']);
         assert.deepEqual(atalhos.find((a) => a[0] === 'Receita'), ['Receita', 'receita', 'receitas-mobile.html']);
@@ -439,8 +487,8 @@ test('pagina principal mobile: protegida, sem moldura, os 8 atalhos ativos (Reco
         const script = await readFile(path.join(destino, 'js', 'inicio-mobile.js'), 'utf8');
         assert.doesNotMatch(script, /\.rpc\s*\(|\.from\s*\(|despesas-servico/, 'a pagina principal nao le nem grava dados');
         const comum = await readFile(path.join(destino, 'js', 'mobile-comum.js'), 'utf8');
-        assert.match(comum, /export const MODULOS_ATIVOS = new Set\(\['resumo', 'cartoes', 'receita', 'despesa', 'lancamento', 'lancar', 'contas', 'pagamentos',\s*'recorrencias'\]\);/,
-            'Resumo, Cartoes, Receita, Despesa, Lancamento, Lancar (FIN-MVP-MOBILE-06), Contas (FIN-MVP-MOBILE-07), Pagamentos (FIN-MVP-MOBILE-08) e Recorrencias (FIN-MVP-MOBILE-09) ativos');
+        assert.match(comum, /export const MODULOS_ATIVOS = new Set\(\['resumo', 'cartoes', 'receita', 'despesa', 'lancamento', 'lancar', 'contas', 'pagamentos',\s*'recorrencias', 'documentos', 'mobilidade'\]\);/,
+            'Resumo, Cartoes, Receita, Despesa, Lancamento, Lancar (FIN-MVP-MOBILE-06), Contas (FIN-MVP-MOBILE-07), Pagamentos (FIN-MVP-MOBILE-08), Recorrencias (FIN-MVP-MOBILE-09), Documentos (FIN-MOBILE-11) e Mobilidade (FIN-MOBILE-12) ativos');
         assert.doesNotMatch(comum, /\.rpc\s*\(|\.from\s*\(/);
         // FIN-MVP-MOBILE-05/06: so a permissao do perfil ativo (perfil.js): quem so le recebe Despesa, Lancamento e Lancar desabilitados.
         assert.ok(script.includes('ajustarCadastrosPelaPermissao(usuario.id)'));

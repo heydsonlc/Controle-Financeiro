@@ -128,7 +128,7 @@ body.mob-inicio .mob-menu-perfis .mob-menu-item[aria-checked="false"] svg {
     visibility: hidden;
 }
 
-/* Grade de modulos: 2 colunas x 4 linhas */
+/* Grade de modulos: 2 colunas x 5 linhas (FIN-MOBILE-11/12: Documentos e Mobilidade na quinta linha, mesmas medidas) */
 body.mob-inicio .mob-grade {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

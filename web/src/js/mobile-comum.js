@@ -17,8 +17,10 @@ import { sair } from './sessao.js';
 // FIN-MVP-MOBILE-07: o atalho Contas abre as Contas mobile (sem item novo na barra).
 // FIN-MVP-MOBILE-08: o atalho Pagamentos abre os Pagamentos mobile (sem item novo na barra; quem so le consulta).
 // FIN-MVP-MOBILE-09: o atalho Recorrencias abre as Recorrencias mobile (sem item novo na barra; quem so le consulta).
+// FIN-MOBILE-11: o atalho Documentos abre os Documentos Fiscais mobile (sem item novo na barra; quem so le consulta).
+// FIN-MOBILE-12: o atalho Mobilidade abre a Mobilidade mobile (sem item novo na barra; quem so le consulta).
 export const MODULOS_ATIVOS = new Set(['resumo', 'cartoes', 'receita', 'despesa', 'lancamento', 'lancar', 'contas', 'pagamentos',
-    'recorrencias']);
+    'recorrencias', 'documentos', 'mobilidade']);
 
 const $ = (id) => document.getElementById(id);
 

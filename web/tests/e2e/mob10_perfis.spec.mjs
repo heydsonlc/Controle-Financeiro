@@ -46,7 +46,7 @@ test('icone ao lado do sino, do mesmo tamanho; o restante do cabecalho e da pagi
     expect(Math.abs(p.y - s.y)).toBeLessThanOrEqual(1);
     await expect(sino).toHaveAttribute('aria-disabled', 'true');
     await expect(page.locator('h1.mob-titulo')).toHaveText('Financeiro');
-    await expect(page.locator('.mob-grade .mob-atalho')).toHaveCount(8);
+    await expect(page.locator('.mob-grade .mob-atalho')).toHaveCount(10);
     expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
 });
 
