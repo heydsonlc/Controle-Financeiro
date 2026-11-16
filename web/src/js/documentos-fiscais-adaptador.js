@@ -291,15 +291,16 @@ function gerar(montar, descricao) {
     }
 }
 
-// Lista completa do filtro (ir_comprovantes_tela nao pagina) com os vinculos ATIVOS de cada documento em ordem de id, como
-// o Flask os le; so quem tem vinculo e consultado, em grupos pequenos.
+// Lista completa do filtro (ir_comprovantes_tela nao pagina) com os vinculos ATIVOS de cada documento, o MAIS RECENTE
+// primeiro (a ordem de vinculos_documento_tela, a mesma da lista da tela); so quem tem vinculo e consultado, em grupos
+// pequenos. O primeiro e o vinculo que o relatorio mostra como natureza e situacao do lastro do documento.
 async function comprovantesDoRelatorio(filtros) {
     const r = await rpc((a) => supabase.rpc('ir_comprovantes_tela', a), { p_perfil_id: estado.perfilId, p_filtros: filtros, p_id: null });
     const documentos = (r && r.data) || [];
     const comVinculo = documentos.filter((c) => Number(c.vinculos_count) > 0);
     for (let i = 0; i < comVinculo.length; i += 8) {
         await Promise.all(comVinculo.slice(i, i + 8).map(async (c) => {
-            c.vinculos = [...(await vinculosAtivos(c.id) || [])].sort((x, y) => x.id - y.id);
+            c.vinculos = await vinculosAtivos(c.id) || [];
         }));
     }
     return documentos;

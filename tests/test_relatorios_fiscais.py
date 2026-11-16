@@ -98,13 +98,16 @@ def pelo_novo(pedidos):
     return json.loads(r.stdout)
 
 
-def comprovantes_do_novo(dsn, usuario, perfil, filtros):
-    """O que o adaptador da tela monta: a lista de ir_comprovantes_tela e, para quem tem vinculo, os vinculos ativos de
-    vinculos_documento_tela em ordem de id."""
+def comprovantes_do_novo(dsn, usuario, perfil, filtros, ordem='tela'):
+    """A lista de ir_comprovantes_tela e, para quem tem vinculo, os vinculos ativos de vinculos_documento_tela.
+    ordem='tela': como o adaptador monta (o vinculo ativo MAIS RECENTE primeiro, regra adotada em 15/11/2026).
+    ordem='flask': em ordem de id, a ordem em que o Flask le os vinculos; so para comparar o gerador com o relatorio do Flask
+    (a unica diferenca entre as duas e o vinculo mostrado em documento com mais de um vinculo ativo)."""
     lista = chamar(dsn, usuario, 'select financeiro.ir_comprovantes_tela(%s, %s::jsonb, null)', (perfil, json.dumps(filtros)))['data']
     for c in lista:
-        c['vinculos'] = sorted(chamar(dsn, usuario, 'select financeiro.vinculos_documento_tela(%s, %s)', (perfil, c['id'])),
-                               key=lambda v: v['id']) if c['vinculos_count'] else []
+        c['vinculos'] = chamar(dsn, usuario, 'select financeiro.vinculos_documento_tela(%s, %s)', (perfil, c['id'])) if c['vinculos_count'] else []
+        if ordem == 'flask':
+            c['vinculos'].sort(key=lambda v: v['id'])
     return lista
 
 
@@ -179,6 +182,8 @@ def base(tmp_path_factory):
                (EMPRESA, json.dumps({'tipo_entidade': 'CONTA', 'entidade_id': internet, 'comprovante_id': nf})))
         sql(dsn, "update public.ir_comprovante_vinculo set status_lastro = 'AGUARDANDO_CONTADOR', observacoes = 'conferir (ficticio)' "
                  'where comprovante_id = %s', (pix,))
+        sql(dsn, "update public.ir_comprovante_vinculo set status_lastro = 'PENDENTE', natureza = 'INVESTIMENTO', observacoes = 'vinculo mais recente' "
+                 'where comprovante_id = %s and entidade_id = %s', (nf, internet))
         chamar(dsn, USUARIO_D, 'select financeiro.marcar_status_saida(%s, %s::jsonb)',
                (EMPRESA, json.dumps({'tipo_entidade': 'CONTA', 'entidade_id': str(contador), 'status_lastro': 'AGUARDANDO_CONTADOR',
                                      'natureza': 'DESPESA_OPERACIONAL', 'observacoes': 'aguardando nota (ficticia)'})))
@@ -240,7 +245,7 @@ def test_relatorio_de_imposto_de_renda_igual_ao_flask(base, tipo):
     antes = resumo_tabelas(base)
     rotas, pedidos = [], []
     for filtros in CONSULTAS_IR[tipo]:
-        comprovantes = comprovantes_do_novo(base, usuario, perfil, filtros)
+        comprovantes = comprovantes_do_novo(base, usuario, perfil, filtros, ordem='flask')
         for formato, funcao in (('excel', 'excelIr'), ('pdf', 'pdfIr')):
             rotas.append(f'/api/ir/relatorios/{formato}{consulta(filtros)}')
             pedidos.append({'funcao': funcao, 'entrada': {'perfilNome': nome, 'empresa': tipo == 'EMPRESA', 'comprovantes': comprovantes,
@@ -337,3 +342,53 @@ def test_isolamento_entre_perfis_e_restricao_ao_perfil_empresa(base):
     assert e.value.diag.message_hint == 'NAO_ENCONTRADA'
     with pytest.raises(psycopg2.Error):  # documento inexistente
         chamar(base, USUARIO_D, 'select financeiro.vinculos_documento_tela(%s, %s)', (EMPRESA, 999999))
+
+
+def test_relatorio_usa_o_vinculo_ativo_mais_recente_como_a_lista_da_tela(base):
+    """Decisao do titular (15/11/2026): com mais de um vinculo ativo, o relatorio mostra o MAIS RECENTE, o mesmo que a lista em
+    tela mostra (status_lastro / natureza_fiscal de ir_comprovantes_tela). Os demais vinculos seguem na aba "Lastros"; nada e
+    alterado no banco."""
+    antes = resumo_tabelas(base)
+    filtros = {'ano': str(ANO)}
+    tela = comprovantes_do_novo(base, USUARIO_D, EMPRESA, filtros)
+    flask = comprovantes_do_novo(base, USUARIO_D, EMPRESA, filtros, ordem='flask')
+    nota = next(c for c in tela if c['vinculos_count'] == 2)
+    vinculos = sql(base, 'select id, natureza, status_lastro from public.ir_comprovante_vinculo where comprovante_id = %s and ativo '
+                         'order by created_at desc, id desc', (nota['id'],))
+    assert [v['id'] for v in nota['vinculos']] == [v['id'] for v in vinculos] and vinculos[0]['id'] > vinculos[1]['id']
+    assert (nota['status_lastro'], nota['natureza_fiscal']) == ('PENDENTE', 'INVESTIMENTO') == (vinculos[0]['status_lastro'], vinculos[0]['natureza'])
+
+    def gerar(comprovantes):
+        entrada = {'perfilNome': 'Empresa', 'empresa': True, 'comprovantes': comprovantes, 'filtros': filtros, 'agora': AGORA, 'anoAtual': 2031}
+        excel, pdf = pelo_novo([{'funcao': 'excelIr', 'entrada': entrada}, {'funcao': 'pdfIr', 'entrada': entrada}])
+        return planilha(excel['hex']), bytes.fromhex(pdf['hex']).decode('latin-1')
+
+    (novo, pdf_novo), (antigo, _) = gerar(tela), gerar(flask)
+    # Aba "Documentos": em TODOS os documentos, natureza e situacao do lastro iguais as da lista em tela.
+    linhas = novo['Documentos']['valores'][1:]
+    assert len(linhas) == len(tela) == 4
+    for linha, c in zip(linhas, tela):
+        assert (linha[7], linha[9]) == (c['natureza_fiscal'], c['status_lastro']), c['id']
+    da_nota = linhas[tela.index(nota)]
+    assert (da_nota[7], da_nota[9]) == ('INVESTIMENTO', 'PENDENTE')
+    # Com a ordem antiga a mesma linha mostraria o primeiro vinculo gravado: a regra muda so esse documento.
+    antiga = antigo['Documentos']['valores'][1:]
+    assert (antiga[tela.index(nota)][7], antiga[tela.index(nota)][9]) == ('DESPESA_OPERACIONAL', 'VALIDADO')
+    assert [l for i, l in enumerate(antiga) if i != tela.index(nota)] == [l for i, l in enumerate(linhas) if i != tela.index(nota)]
+    # Resumo por natureza, pendencias do PDF e filtros do relatorio seguem o mesmo vinculo.
+    assert ['Servicos tomados (ficticia)', 'INVESTIMENTO', 1, 300.0, 1, 0] in novo['Resumo']['valores']
+    # (a linha do PDF e cortada em 115 caracteres, como no Flask: confere-se o trecho que cabe)
+    pendencia = next(l for l in pdf_novo.split('Pendencias:')[1].splitlines() if 'Fornecedor Ficticio Ltda' in l)
+    assert '| VALIDADO | INVESTIMENTO | PEND' in pendencia and 'DESPESA_OPERACIONAL' not in pendencia
+    filtrado = pelo_novo([{'funcao': 'excelIr', 'entrada': {'perfilNome': 'Empresa', 'empresa': True, 'comprovantes': tela,
+                                                            'filtros': {**filtros, 'natureza': 'INVESTIMENTO'}, 'agora': AGORA, 'anoAtual': 2031}}])[0]
+    assert [l[2] for l in planilha(filtrado['hex'])['Documentos']['valores'][1:]] == ['Fornecedor Ficticio Ltda']
+    # Historico preservado: a aba "Lastros" continua com todos os vinculos ativos (o mais recente primeiro em cada documento).
+    lastros = novo['Lastros']['valores'][1:]
+    assert len(lastros) == 3 and sorted(l[7] for l in lastros) == ['AGUARDANDO_CONTADOR', 'PENDENTE', 'VALIDADO']
+    da_nota_lastros = [l for l in lastros if l[0] == 'nf-servico.pdf']
+    assert [(l[6], l[7]) for l in da_nota_lastros] == [('INVESTIMENTO', 'PENDENTE'), ('DESPESA_OPERACIONAL', 'VALIDADO')]
+    # O adaptador da tela usa a ordem da consulta (sem reordenar por id), e nada foi gravado.
+    adaptador = (ROOT / 'web' / 'src' / 'js' / 'documentos-fiscais-adaptador.js').read_text(encoding='utf-8')
+    assert 'c.vinculos = await vinculosAtivos(c.id) || [];' in adaptador and 'sort((x, y) => x.id - y.id)' not in adaptador
+    assert resumo_tabelas(base) == antes

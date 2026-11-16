@@ -4,9 +4,10 @@
 // So leitura e sem acesso a rede: as funcoes recebem o que as consultas ja publicadas devolvem (ir_comprovantes_tela,
 // vinculos_documento_tela, lastro_saidas_tela) e devolvem { nome, conteudo }. Nada e gravado.
 //
-// Entrada dos comprovantes: os dicionarios de ir_comprovantes_tela, cada um com `vinculos` = vinculos ATIVOS do documento
-// em ordem de id (a ordem em que o Flask os le em `comprovante.vinculos.filter_by(ativo=True)`; o primeiro e o "vinculo
-// principal" do relatorio).
+// Entrada dos comprovantes: os dicionarios de ir_comprovantes_tela, cada um com `vinculos` = vinculos ATIVOS do documento.
+// O PRIMEIRO da lista e o vinculo que o relatorio usa para a natureza e a situacao do lastro do documento. A tela passa o
+// ativo MAIS RECENTE primeiro (como a lista em tela e o indice do ZIP; decisao do titular em 15/11/2026). O Flask usava o
+// primeiro que o banco devolvesse, sem ordem definida: so ha diferenca em documento com mais de um vinculo ativo.
 
 import { gerarXlsx } from './exportacao-xlsx.js';
 import { pdfSimples } from './exportacao-pdf.js';

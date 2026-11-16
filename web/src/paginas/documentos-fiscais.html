@@ -230,13 +230,13 @@
                         <h2 id="ir-lista-titulo">Comprovantes</h2>
                         <p id="ir-lista-subtitulo">Nenhum comprovante carregado</p>
                     </div>
-                    <div class="ir-panel-actions ir-empresa-only" id="ir-filtros-avancados-shell" hidden>
-                        <div class="ir-advanced-filter-shell">
+                    <div class="ir-panel-actions" id="ir-filtros-avancados-shell">
+                        <div class="ir-advanced-filter-shell ir-empresa-only" hidden>
                             <button type="button" class="ir-secondary-btn ir-advanced-filter-trigger" id="ir-filtros-avancados-toggle" aria-expanded="false" aria-controls="ir-filtros-avancados-panel" data-ir-icon="filter">Filtros avancados</button>
                         </div>
                         <button type="button" class="ir-secondary-btn ir-report-btn" id="ir-btn-excel" title="Gerar Excel" aria-label="Gerar Excel" data-ir-icon="file-spreadsheet">Excel</button>
                         <button type="button" class="ir-secondary-btn ir-report-btn" id="ir-btn-pdf" title="Gerar relat&oacute;rio em PDF" aria-label="Gerar relat&oacute;rio em PDF" data-ir-icon="report-pdf">PDF</button>
-                        <button type="button" class="ir-secondary-btn ir-report-btn" id="ir-doc-btn-zip" title="Gerar pacote ZIP para contador com documentos filtrados e planilha indice" aria-label="Gerar pacote ZIP para contador" data-ir-icon="archive">ZIP</button>
+                        <button type="button" class="ir-secondary-btn ir-report-btn ir-empresa-only" id="ir-doc-btn-zip" hidden title="Gerar pacote ZIP para contador com documentos filtrados e planilha indice" aria-label="Gerar pacote ZIP para contador" data-ir-icon="archive">ZIP</button>
                     </div>
                 </div>
                 <div class="ir-advanced-filter-panel" id="ir-filtros-avancados-panel" hidden>

@@ -96,3 +96,10 @@
     color: var(--cf-danger, #dc2626);
     border-color: var(--cf-danger, #dc2626);
 }
+
+/* FIN-REG-03: "Excel" e "PDF" do painel da lista tambem no perfil Pessoal, com a mesma altura compacta que ja tem na
+   Empresa (.ir-doc-empresa ... .ir-secondary-btn). Na Empresa nada muda. */
+.ir-table-panel .ir-panel-header .ir-report-btn {
+    min-height: 32px;
+    height: 32px;
+}

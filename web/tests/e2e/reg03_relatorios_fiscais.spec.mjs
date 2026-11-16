@@ -48,6 +48,29 @@ async function baixar(page, seletor) {
 
 const ehXlsx = (conteudo) => conteudo.subarray(0, 2).toString('latin1') === 'PK' && conteudo.includes(Buffer.from('xl/workbook.xml'));
 const ehPdf = (conteudo) => conteudo.subarray(0, 8).toString('latin1') === '%PDF-1.4' && conteudo.subarray(-5).toString('latin1') === '%%EOF';
+// Geometria da area de acoes do painel da lista: botoes visiveis, tamanho, alinhamento e altura do cabecalho com e sem eles.
+const medidasDoPainel = (page) => page.evaluate(() => {
+    const grupo = document.getElementById('ir-filtros-avancados-shell');
+    const cabecalho = grupo.closest('.ir-panel-header');
+    const visiveis = [...grupo.querySelectorAll('button')].filter((b) => b.offsetParent !== null);
+    const caixas = visiveis.map((b) => b.getBoundingClientRect());
+    const relatorios = visiveis.filter((b) => b.classList.contains('ir-report-btn')).map((b) => b.getBoundingClientRect());
+    const c = cabecalho.getBoundingClientRect();
+    const titulo = cabecalho.querySelector('h2').getBoundingClientRect();
+    const altura = c.height;
+    grupo.hidden = true;
+    const alturaSem = cabecalho.getBoundingClientRect().height;
+    grupo.hidden = false;
+    return {
+        botoes: visiveis.map((b) => b.id),
+        tamanho: [...new Set(relatorios.map((r) => `${Math.round(r.width)}x${Math.round(r.height)}`))].join(','),
+        mesmaLinha: new Set(caixas.map((r) => Math.round(r.top + r.height / 2))).size === 1,
+        dentroDoCabecalho: caixas.every((r) => r.top >= c.top && r.bottom <= c.bottom && r.right <= c.right),
+        aDireitaDoTitulo: caixas.every((r) => r.left > titulo.right),
+        alturaIgualSemOsBotoes: altura === alturaSem,
+    };
+});
+
 async function pedirArquivo(page, rota) {
     const r = await page.evaluate(async (endereco) => {
         const resposta = await fetch(endereco);
@@ -75,14 +98,19 @@ test('Imposto de Renda (perfil pessoal): Exportar, Excel e PDF geram o relatorio
     for (const texto of ['Clinica E2E (ficticia)', 'Total de comprovantes', 'Categoria IR', 'Comprovantes']) {
         expect(exportar.conteudo.includes(Buffer.from(texto)), texto).toBe(true);
     }
-    // No perfil pessoal a tela original so mostra "Exportar" (os botoes Excel/PDF/ZIP do painel sao do modo Empresa): o PDF
-    // do IRPF e gerado pela mesma rota da tela.
-    for (const botao of ['#ir-btn-excel', '#ir-btn-pdf', '#ir-doc-btn-zip']) await expect(page.locator(botao)).toBeHidden();
-    const pdf = await pedirArquivo(page, `/api/ir/relatorios/pdf?ano=${ANO}`);
-    expect(pdf.nome).toContain(`IRPF_${ANO}_Perfil_B.pdf`);
-    expect(pdf.tipo).toBe('application/pdf');
+    // "Excel" e "PDF" do painel da lista tambem no perfil pessoal (autorizado em 15/11/2026): os mesmos botoes compactos da
+    // Empresa. "Filtros avancados" e "ZIP" continuam so na Empresa.
+    for (const botao of ['#ir-filtros-avancados-toggle', '#ir-doc-btn-zip']) await expect(page.locator(botao)).toBeHidden();
+    const excel = await baixar(page, '#ir-btn-excel');
+    expect(excel.nome).toBe(exportar.nome);
+    expect(ehXlsx(excel.conteudo)).toBe(true);
+    const pdf = await baixar(page, '#ir-btn-pdf');
+    expect(pdf.nome).toBe(`IRPF_${ANO}_Perfil_B.pdf`);
     expect(ehPdf(pdf.conteudo)).toBe(true);
     const texto = pdf.conteudo.toString('latin1');
+    // Posicao: botoes de 32 x 32, na mesma linha, a direita do titulo, sem aumentar a altura do cabecalho do painel.
+    expect(await medidasDoPainel(page)).toEqual({ botoes: ['ir-btn-excel', 'ir-btn-pdf'], tamanho: '32x32', mesmaLinha: true,
+        dentroDoCabecalho: true, aDireitaDoTitulo: true, alturaIgualSemOsBotoes: true });
     expect(texto).toContain('Relatorio de Comprovantes - Imposto de Renda');
     expect(texto).toContain('Perfil financeiro: Perfil B');
     expect(texto).toContain('Clinica E2E \\(ficticia\\)');
@@ -119,6 +147,11 @@ test('Imposto de Renda (perfil pessoal): Exportar, Excel e PDF geram o relatorio
 test('Empresa: relatorio de Documentos Fiscais e de Saidas sem documento em Excel e PDF', async ({ page }, testInfo) => {
     await abrirDocumentos(page, C);
     await expect(page.locator('#ir-saidas-sem-documento-panel')).toBeVisible();
+    // Na Empresa a area de acoes continua como era: filtros avancados, Excel, PDF e ZIP, na mesma linha, no cabecalho
+    // compacto de sempre (8 + 32 + 8 de altura; ali os botoes ja definiam a altura antes desta entrega).
+    expect(await medidasDoPainel(page)).toMatchObject({ botoes: ['ir-filtros-avancados-toggle', 'ir-btn-excel', 'ir-btn-pdf', 'ir-doc-btn-zip'],
+        tamanho: '32x32', mesmaLinha: true, dentroDoCabecalho: true, aDireitaDoTitulo: true });
+    expect(Math.round((await page.locator('.ir-table-panel > .ir-panel-header').first().boundingBox()).height)).toBe(49);
     const antes = page.url();
 
     const excel = await baixar(page, '#ir-btn-excel');
