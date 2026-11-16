@@ -93,7 +93,7 @@ def pelo_flask(dsn, perfil, rotas):
 def pelo_novo(pedidos):
     modulo = json.dumps((ROOT / 'web' / 'src' / 'js' / 'relatorio-fiscal.js').as_uri())
     r = subprocess.run(['node', '--input-type=module', '-e', _SCRIPT_NODE % modulo], cwd=ROOT, input=json.dumps(pedidos),
-                       capture_output=True, text=True, timeout=120)
+                       capture_output=True, text=True, encoding='utf-8', timeout=120)
     assert r.returncode == 0, r.stderr[-2000:]
     return json.loads(r.stdout)
 

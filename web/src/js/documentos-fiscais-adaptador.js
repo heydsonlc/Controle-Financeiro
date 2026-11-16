@@ -8,6 +8,8 @@
 // manual. Ainda nao disponiveis nesta versao: OCR de imagem e categorias IR.
 // FIN-REG-03: relatorios de Imposto de Renda / Documentos Fiscais e de Saidas sem documento (Excel e PDF), gerados no
 // navegador (js/relatorio-fiscal.js) com as consultas ja publicadas; so leitura, sem migration.
+// FIN-REG-04: pacote ZIP dos documentos da Empresa para o contador (js/zip-documentos.js), com indice e os arquivos
+// originais conferidos pelo SHA-256 gravado; so leitura, sem migration, nada sai do navegador.
 // FIN-MIGRACAO-LASTRO-EMPRESA-01 (migration 20261202090000): metadados empresariais (a revisao da tela original grava
 // tipo, categoria, numero, orgao, datas, situacao...), saidas sem documento (vincular documento e situacao manual) e
 // exclusao de documento pela lista (botao acrescentado; a tela original nao tinha), pelas funcoes do banco.
@@ -23,6 +25,7 @@ import { instalarAberturaDeArquivos } from './arquivo-comprovante.js';
 import { comprovanteDoPerfil, erroDeDocumento, responderDocumentoFinanceiro } from './documento-financeiro.js';
 import { iniciarMoldura } from './moldura.js';
 import { MIME_XLSX } from './exportacao-xlsx.js';
+import { divergencia, ERRO_PERFIL_ZIP, ERRO_SEM_DOCUMENTOS, montarPacote, normalizarFiltros, recusaPorVolume } from './zip-documentos.js';
 import { ERRO_PERFIL_LASTRO, excelIr, excelSaidas, filtrarComprovantes, pdfIr, pdfSaidas, resumoIr, validarFiltrosSaidas } from './relatorio-fiscal.js';
 
 const estado = { perfilId: null, perfil: null, filtrosDaLista: null };
@@ -326,7 +329,57 @@ async function relatorioSaidas(tipo, parametros) {
     return gerar(() => arquivo(tipo === 'pdf' ? pdfSaidas(entrada) : excelSaidas(entrada), tipo === 'pdf'), 'o relatório');
 }
 
+// ---- FIN-REG-04: pacote ZIP dos documentos da Empresa (so leitura) ----------------------------------------------------
+function bytesDoArquivo(dados) {
+    const binario = atob((dados && dados.conteudo_base64) || '');
+    const bytes = new Uint8Array(binario.length);
+    for (let i = 0; i < binario.length; i += 1) bytes[i] = binario.charCodeAt(i);
+    return bytes;
+}
+
+// GET /api/ir/documentos-empresa/exportar-zip (DocumentoZipService): so no perfil Empresa, com os filtros da tela. Qualquer
+// falha (consulta, arquivo ausente, divergencia de integridade, volume) devolve erro e NENHUM pacote, nem parcial.
+async function pacoteZip(parametros) {
+    if (estado.perfil.tipo !== 'EMPRESA') return falha(ERRO_PERFIL_ZIP, 403);
+    const filtros = normalizarFiltros(Object.fromEntries(parametros.entries()));
+    const r = await rpc((a) => supabase.rpc('ir_comprovantes_tela', a), { p_perfil_id: estado.perfilId, p_filtros: filtros, p_id: null });
+    const documentos = (r && r.data) || [];
+    if (!documentos.length) return falha(ERRO_SEM_DOCUMENTOS, 400);
+    const recusa = recusaPorVolume(documentos);
+    if (recusa) return falha(recusa, 413);
+    try {
+        const comVinculo = documentos.filter((c) => Number(c.vinculos_count) > 0);
+        for (let i = 0; i < comVinculo.length; i += 8) {
+            await Promise.all(comVinculo.slice(i, i + 8).map(async (c) => { c.vinculos = await vinculosAtivos(c.id) || []; }));
+        }
+        const comArquivo = documentos.filter((c) => c.arquivo);
+        for (let i = 0; i < comArquivo.length; i += 3) {  // poucos por vez: cada arquivo chega inteiro na memoria
+            const problemas = await Promise.all(comArquivo.slice(i, i + 3).map(async (c) => {
+                const dados = await rpc((a) => supabase.rpc('arquivo_comprovante_tela', a), { p_perfil_id: estado.perfilId, p_comprovante_id: c.id });
+                c.conteudo = bytesDoArquivo(dados);
+                const diferenca = await divergencia(c, c.conteudo);
+                return diferenca ? `O arquivo "${c.arquivo.nome_arquivo}" tem ${diferenca}. O pacote não foi gerado.` : null;
+            }));
+            const problema = problemas.find(Boolean);
+            if (problema) return falha(problema, 409);
+        }
+        const pacote = montarPacote({ perfilNome: estado.perfil.nome, documentos, filtros, ...momento(), quando: new Date() });
+        return { status: 200, arquivo: { conteudo: pacote.conteudo, nome: pacote.nome, mime: 'application/zip' } };
+    } catch (erro) {
+        if (erro instanceof RangeError) {
+            return falha('O pacote é grande demais para a memória deste navegador. Refine os filtros (ano, tipo ou categoria) e gere em partes.', 413);
+        }
+        if (erro && (erro.code || erro.hint)) throw erro;  // erro do banco: tratado como nas demais rotas (perfil, nao encontrado)
+        console.error('Pacote ZIP:', erro);
+        return falha(erro instanceof Error && /pacote não foi gerado/.test(erro.message) ? erro.message
+            : 'Não foi possível gerar o pacote ZIP. Nenhum arquivo foi gerado.', 500);
+    } finally {
+        for (const c of documentos) delete c.conteudo;  // libera a memoria dos arquivos
+    }
+}
+
 const ROTAS = [
+    ['GET', /^\/api\/ir\/documentos-empresa\/exportar-zip$/, (m, c, p) => pacoteZip(p)],
     ['GET', /^\/api\/ir\/relatorios\/(excel|pdf|resumo)$/, (m, c, p) => relatorioIr(m[1], p)],
     ['GET', /^\/api\/ir\/lastro\/saidas-sem-documento\/relatorio-(excel|pdf)$/, (m, c, p) => relatorioSaidas(m[1], p)],
     ['GET', /^\/api\/ir\/contexto$/, () => contexto()],

@@ -23,13 +23,17 @@ function crc32(bytes) {
     return (c ^ 0xffffffff) >>> 0;
 }
 
-function zip(arquivos) {
+// quando: Date (hora local) gravada nas entradas; sem ela, data fixa (o arquivo nao depende do relogio).
+function zip(arquivos, quando = null) {
     const partes = [];
     const central = [];
     let deslocamento = 0;
     const u16 = (v) => [v & 0xff, (v >>> 8) & 0xff];
     const u32 = (v) => [v & 0xff, (v >>> 8) & 0xff, (v >>> 16) & 0xff, (v >>> 24) & 0xff];
-    const [hora, data] = [0, (2020 - 1980) << 9 | 1 << 5 | 1];  // data fixa: o arquivo nao depende do relogio
+    const [hora, data] = quando
+        ? [quando.getHours() << 11 | quando.getMinutes() << 5 | quando.getSeconds() >> 1,
+           Math.max(quando.getFullYear() - 1980, 0) << 9 | (quando.getMonth() + 1) << 5 | quando.getDate()]
+        : [0, (2020 - 1980) << 9 | 1 << 5 | 1];
     for (const { nome, conteudo } of arquivos) {
         const n = enc.encode(nome);
         const crc = crc32(conteudo);
