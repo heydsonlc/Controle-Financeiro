@@ -8,7 +8,9 @@
 // (contas_do_mes, despesa_para_edicao, criar/editar/excluir_despesa, dados_pagamento_*, pagar_*, estornar_*).
 // Aqui so ha traducao de formato e as somas de apresentacao da barra lateral (o Flask tambem as fazia na rota).
 // O que a tela original oferece e o banco ainda nao atende responde "em migracao" (consorcios, documentos fiscais,
-// recorrencia no cartao, consolidacao de fatura). Recorrencia semanal e a cada 2 semanas: FIN-CATEGORIAS-RECORRENCIAS-2.
+// recorrencia no cartao). Recorrencia semanal e a cada 2 semanas: FIN-CATEGORIAS-RECORRENCIAS-2.
+// FIN-REG-07: a consolidacao manual de fatura foi retirada por decisao do titular (o botao sai em despesas-adaptacoes.js);
+// a rota que respondia "em migracao" deixou de existir.
 // FIN-PRE-PRODUCAO-1: "A partir de documento" (lista, sugestao e criacao da despesa) por js/documento-financeiro.js.
 
 import { supabase } from './cliente.js';
@@ -616,7 +618,6 @@ const ROTAS = [
     ['GET', /^\/api\/cartoes\/?$/, async () => emMigracao('Recorrência paga no cartão de crédito')],
     ['GET', /^\/api\/cartoes\/\d+\/categorias-limite$/, async () => emMigracao('Categoria do cartão')],
     ['GET', /^\/api\/categorias-cartao\/resolver$/, async () => emMigracao('Categoria do cartão')],
-    ['POST', /^\/api\/cartoes\/\d+\/faturas\/[^/]+\/consolidar$/, async () => emMigracao('Consolidação de fatura')],
     [null, /^\/api\/consorcios(\/|$)/, async () => emMigracao('Consórcios')],
     [null, /^\/api\/ir\//, async () => emMigracao('Documentos fiscais')],
 ];

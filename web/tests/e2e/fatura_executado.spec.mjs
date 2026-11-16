@@ -59,6 +59,28 @@ test('fatura so com fixas previstas: executado consolidado, Dashboard igual e ba
     await abrirDespesas(page, '2038-05');  // gera as 4 previsoes de 05/2038
     const fatura = despesa(page, `Fatura ${CARTAO} - 05/2038`);
     await expect(fatura.locator('.despesa-cell-valor')).toHaveText(/R\$ 729,60/);  // 329,60 fixas + 400 do limite
+    // FIN-REG-07: a linha da fatura nao tem "Consolidar fatura", nem outro controle no lugar: so detalhes, pagar e estornar. Nenhum
+    // botao de consolidar em nenhuma linha da lista.
+    await expect(page.locator('#despesas-lista [data-on-click^="consolidarFatura("]')).toHaveCount(0);
+    await expect(page.locator('[title="Consolidar fatura"], [aria-label="Consolidar fatura"]')).toHaveCount(0);
+    expect(await fatura.locator('.row-actions button').evaluateAll((bs) => bs.map((b) => b.title || b.getAttribute('aria-label'))))
+        .toEqual(['Ver detalhes da fatura', 'Pagar fatura', 'Sem pagamento para estornar']);
+    // Trava: se a tela original chegar a desenhar o botao (ela o desenha para fatura com situacao "ABERTA"), ele e
+    // retirado na hora. Simulado aqui com o mesmo marcador que a tela original usa.
+    await page.evaluate(() => {
+        const botao = document.createElement('button');
+        botao.className = 'row-action-button success';
+        botao.title = 'Consolidar fatura';
+        botao.setAttribute('data-on-click', "consolidarFatura(1, '2038-05')");
+        document.querySelector('#despesas-lista .row-actions').append(botao);
+    });
+    await expect(page.locator('[title="Consolidar fatura"]')).toHaveCount(0);
+    // A rota de consolidacao nao existe mais: qualquer chamada recebe a recusa generica, sem gravar nada.
+    const recusa = await page.evaluate(async () => {
+        const r = await fetch('/api/cartoes/1/faturas/2038-05/consolidar', { method: 'POST' });
+        return { status: r.status, sucesso: (await r.json()).success };
+    });
+    expect(recusa).toEqual({ status: 501, sucesso: false });
     await fatura.locator('[data-on-click^="toggleDetalhesFatura"]').click();
     // previsto | executado consolidado (antes: R$ 0,00)
     await expect(fatura.locator('.fatura-detalhes .fatura-totais .total-valor')).toHaveText([/R\$\s729,60/, /R\$\s329,60/]);

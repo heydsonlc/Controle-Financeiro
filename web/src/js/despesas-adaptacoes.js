@@ -30,6 +30,20 @@
         document.getElementById('despesas-lista').dataset.competenciaCarregada = competencia;
     };
 
+    // FIN-REG-07 (decisao do titular, 15/11/2026): a consolidacao manual de fatura foi retirada do aplicativo. A fatura ja
+    // chega consolidada pela administradora, na importacao. A tela original (despesas.js, sem alteracao) ainda desenha o
+    // botao "Consolidar fatura" na linha da fatura em aberto; aqui ele e removido assim que a lista e desenhada, sem outro
+    // controle no lugar. Detalhes, pagamento e estorno da fatura seguem como estao.
+    function retirarConsolidarFatura(raiz) {
+        raiz.querySelectorAll('[data-on-click^="consolidarFatura("]').forEach((botao) => botao.remove());
+    }
+    document.addEventListener('DOMContentLoaded', () => {
+        const lista = document.getElementById('despesas-lista');
+        if (!lista) return;
+        retirarConsolidarFatura(lista);
+        new MutationObserver(() => retirarConsolidarFatura(lista)).observe(lista, { childList: true, subtree: true });
+    });
+
     // 3. "A partir de documento": o seletor original (despesas.js) lista os documentos do perfil (FIN-PRE-PRODUCAO-1,
     //    js/documento-financeiro.js); nada a adaptar aqui.
 
