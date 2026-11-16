@@ -39,7 +39,10 @@ const soma = (lista, campo) => lista.reduce((s, a) => s + Number(a[campo] || 0),
 // ---------------------------------------------------------------------------------------------------------------
 // Indicadores de apresentacao (sobre o historico que o banco devolve)
 
-// Consumo medio e custo por km: so abastecimentos com os km rodados desde a leitura anterior (o banco os informa).
+// Consumo e custo por km: so abastecimentos com os km rodados desde a leitura anterior de hodometro (o banco os informa);
+// abastecimento sem essa referencia (o primeiro, ou anulado) nao entra em nenhum dos dois. Nenhum dado e alterado.
+// - Consumo (km/L) e ESTIMATIVA: supoe o tanque completado a cada abastecimento, o que o sistema nao registra.
+// - Custo por km (R$/km) e financeiro: o valor pago nesses abastecimentos pelos km rodados entre as leituras.
 export function indicadores(abastecimentos) {
     const comKm = validos(abastecimentos).filter((a) => Number(a.km_rodados) > 0 && Number(a.litros) > 0);
     const kmTotal = soma(comKm, 'km_rodados');
@@ -224,8 +227,8 @@ async function abrirResumo(v) {
     const q = textoDaQuilometragem(h.quilometragem || {});
     const corpo = detalhes([
         [`Gasto em ${rotuloCompetencia(estado.mes)}`, `${moeda(soma(mes, 'valor_total'))} (${mes.length} abastecimento${mes.length === 1 ? '' : 's'}, ${litros(soma(mes, 'litros'))})`],
-        ['Consumo médio', ind.consumo === null ? 'Sem dados suficientes' : `${numero(ind.consumo, 1)} km/L`],
-        ['Custo por km', ind.custoKm === null ? 'Sem dados suficientes' : `${Number(ind.custoKm).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/km`],
+        ['Consumo médio (estimado)', ind.consumo === null ? 'Sem dados suficientes' : `≈ ${numero(ind.consumo, 1)} km/L`],
+        ['Custo por km (combustível)', ind.custoKm === null ? 'Sem dados suficientes' : `${Number(ind.custoKm).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/km`],
         ['Quilometragem', `${q.valor} (${q.nota})`],
         ['Último abastecimento', ultimo ? `${dataCurta(ultimo.data_abastecimento)} · ${moeda(ultimo.valor_total)} · ${litros(ultimo.litros)}` : 'Nenhum'],
     ]);
@@ -236,8 +239,18 @@ async function abrirResumo(v) {
     caixaUltimos.id = 'mob-resumo-ultimos';
     caixaUltimos.append(listaDeAbastecimentos(todos.slice(0, 5), 'Nenhum abastecimento registrado.'));
     abrirFolha(`Resumo · ${v.nome}`, ...(h.erro ? [texto(h.erro, 'discreto')] : []), corpo, titulo, grafico(gastoPorMes(h.abastecimentos, estado.mes)), ultimos, caixaUltimos,
-        texto(`Consumo e custo por km consideram ${ind.leituras} abastecimento${ind.leituras === 1 ? '' : 's'} com os km rodados desde a leitura anterior `
-            + '(supõe o tanque completado a cada vez).', 'discreto'), fecharBotao());
+        notaDosIndicadores(ind), fecharBotao());
+}
+
+// O que cada indicador significa e de onde vem (o consumo e estimativa; o custo por km e o gasto pelos km rodados).
+function notaDosIndicadores(ind) {
+    const nota = texto(ind.leituras
+        ? `Consumo estimado: km rodados entre as leituras de hodômetro ÷ litros de ${ind.leituras} abastecimento${ind.leituras === 1 ? '' : 's'}. `
+            + 'É uma estimativa: supõe o tanque completado a cada abastecimento, o que não é registrado. '
+            + 'Custo por km: valor pago nesses abastecimentos ÷ km rodados. Abastecimento sem leitura anterior de hodômetro não entra na conta.'
+        : 'Consumo e custo por km aparecem a partir do segundo abastecimento com hodômetro (precisam dos km rodados entre duas leituras).', 'discreto');
+    nota.id = 'mob-resumo-nota';
+    return nota;
 }
 
 function trocarMes(delta) {

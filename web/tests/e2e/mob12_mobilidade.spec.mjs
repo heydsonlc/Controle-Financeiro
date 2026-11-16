@@ -166,8 +166,13 @@ test('veiculos, abastecer pelo formulario homologado, historico e resumo do veic
     const resumo = folha(page).locator('#mob-resumo-veiculo');
     await expect(resumo).toContainText('Gasto em Mar/2024');
     await expect(resumo).toContainText('R$ 420,00 (2 abastecimentos, 80,000 L)');
-    await expect(resumo).toContainText('10,0 km/L');     // 400 km com os 40 L do segundo abastecimento
-    await expect(resumo).toContainText('R$ 0,55/km');    // R$ 220 nos 400 km
+    // Consumo identificado como estimativa (supoe tanque completado); custo por km como indicador financeiro, a parte.
+    // So o segundo abastecimento tem leitura anterior de hodometro: 400 km com os 40 L dele; R$ 220 nos 400 km.
+    const linhaDe = (rotulo) => resumo.locator('dt', { hasText: rotulo }).locator('xpath=following-sibling::dd[1]');
+    await expect(linhaDe('Consumo médio (estimado)')).toHaveText('≈ 10,0 km/L');
+    await expect(linhaDe('Custo por km (combustível)')).toHaveText(/R\$\s0,55\/km/);
+    await expect(folha(page).locator('#mob-resumo-nota')).toContainText('É uma estimativa: supõe o tanque completado');
+    await expect(folha(page).locator('#mob-resumo-nota')).toContainText('1 abastecimento.');
     await expect(resumo).toContainText('20/03/2024 · R$ 220,00 · 40,000 L');
     await expect(folha(page).locator('#mob-resumo-ultimos .mob-abastecimento')).toHaveCount(2);
     await expect(folha(page).locator('.mob-grafico rect')).toHaveCount(6);
@@ -203,7 +208,7 @@ test('somente leitura: consulta veiculos, historico e resumo; sem abastecer', as
     await expect(folha(page).locator('.mob-abastecimento')).toHaveCount(antes.abastecimentos.length);
     await folha(page).locator('#mob-folha-fechar').click();
     await cartao(page, VEICULO).locator('[data-acao="resumo"]').click();
-    await expect(folha(page).locator('#mob-resumo-veiculo')).toContainText('Consumo médio');
+    await expect(folha(page).locator('#mob-resumo-veiculo')).toContainText('Consumo médio (estimado)');
     await folha(page).locator('#mob-folha-fechar').click();
     // O banco tambem recusa a gravacao do leitor, e nada mudou.
     const recusa = await chamarRpc(page, 'registrar_abastecimento', { p_perfil_id: PERFIL_G, p_chave: crypto.randomUUID(),

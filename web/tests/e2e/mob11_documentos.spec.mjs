@@ -23,6 +23,8 @@ const MES = HOJE.slice(0, 7);
 const CLINICA = 'Clinica E2E (ficticia)';
 const SAIDA = 'Saida mobile 11 (ficticia)';
 const SAIDA_JUSTIFICADA = 'Saida justificada mobile 11 (ficticia)';
+const PDF_C = gerarPdf([[[[50, 'Documento mobile 11 (ficticio) da Empresa C']], [[50, 'Documento interno, sem palavras de classificacao.']]]]);
+const DOCUMENTO_C = 'doc-mobile11-c.pdf';
 const PDF_G = gerarPdf([[[[50, 'Recibo mobile 11 (ficticio) do Perfil G']], [[50, 'Valor R$ 88,00 - somente para o teste de leitura']]]]);
 
 test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
@@ -206,14 +208,17 @@ test('Empresa: documentos, vinculo e lastro, saidas sem documento, situacao manu
         await rpc(page, 'criar_despesa', { p_perfil_id: perfil, p_chave: crypto.randomUUID(),
             p_dados: { nome, valor, categoria_id: categoria, data_vencimento: `${MES}-10`, recorrente: false } });
     }
+    // Um documento proprio deste teste, com arquivo e sem vinculo (outros testes deixam documentos e vinculos na Empresa C).
+    const enviado = await rpc(page, 'enviar_comprovante', { p_perfil_id: perfil, p_conteudo: PDF_C.toString('base64'), p_chave: crypto.randomUUID(),
+        p_dados: { nome_arquivo: DOCUMENTO_C, mime_type: 'application/pdf', ano_calendario: ANO, texto_extraido: null } });
     await page.goto(`/documentos-mobile.html?mes=${MES}`);
     await carregada(page);
     await expect(page.locator('#mob-lista-titulo')).toHaveText('Documentos da Empresa');
     await expect(page.locator('#mob-visoes button')).toHaveText(['Documentos', 'Saídas sem documento']);
     const doBanco = await documentos(page, perfil, { ano: String(ANO) });
     await expect(page.locator('#mob-lista .mob-linha')).toHaveCount(doBanco.length);
-    const documento = doBanco[0];
-    const nomeDoDocumento = documento.prestador_nome;
+    const documento = doBanco.find((d) => d.id === enviado.comprovante_id);
+    const nomeDoDocumento = DOCUMENTO_C;
     await semRolagemHorizontal(page, 'lista-empresa');
 
     // Saidas sem documento: resumo, lista do mes e detalhe.
@@ -268,7 +273,7 @@ test('Empresa: documentos, vinculo e lastro, saidas sem documento, situacao manu
     const lastro = folha(page).locator('#mob-detalhe-lastro');
     await expect(lastro.locator('.mob-doc-vinculos li')).toHaveCount(1);
     await expect(lastro).toContainText(SAIDA);
-    await expect(folha(page).locator('.mob-doc-acoes button')).toHaveText(['Lastro', 'Vincular', 'Revisar']);  // sem arquivo: sem "Baixar"
+    await expect(folha(page).locator('.mob-doc-acoes button')).toHaveText(['Baixar', 'Lastro', 'Vincular', 'Revisar']);
     await folha(page).locator('#mob-doc-vincular').click();
     await folha(page).locator('#mob-vinc-tipo').selectOption('OUTRO');
     await expect(folha(page).locator('#mob-vinc-entidade')).toBeDisabled();
@@ -318,6 +323,8 @@ test('Empresa: documentos, vinculo e lastro, saidas sem documento, situacao manu
 
     // Limpeza: o vinculo criado sai (historico preservado) e a saida volta a ficar sem documento.
     await rpc(page, 'remover_vinculo_documento', { p_perfil_id: perfil, p_comprovante_id: documento.id, p_vinculo_id: vinculos[0].id });
+    // O documento do teste continua guardado (com historico de vinculo, a exclusao e recusada, como no desktop): outros testes
+    // da Empresa C contam os documentos pela consulta, nao por numero fixo.
 });
 
 test('somente leitura: consulta, baixa e exporta; sem revisar, vincular ou registrar situacao', async ({ page, browser }) => {
