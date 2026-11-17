@@ -1,6 +1,8 @@
 # FIN-CATEGORIAS-REORGANIZACAO-01 — Reorganização de categorias e classificação financeira
 
-**Situação (17/11/2026):** Dashboard e Lista de Despesas mobile adaptados (seção 15) e suíte completa aprovada, tudo local.
+**Situação: PUBLICADO em 17/11/2026** (seção 16): migration `20261229090000` aplicada (69), reorganização executada e conferida, `main` em `040c3f1`, deploy `ce683825`. Histórico abaixo.
+
+Em 17/11/2026, antes da publicação: Dashboard e Lista de Despesas mobile adaptados (seção 15) e suíte completa aprovada, tudo local.
 **Desenvolvimento e ensaio local concluídos** em 16/11/2026, conforme o contrato final de execução: migration
 preparada (só funções e uma tabela vazia), roteiro de execução com prévia e reversão, testes e ensaio completo numa cópia fiel da
 produção (39/39). **Nada foi gravado em produção**: sem push, sem deploy, sem migration aplicada, nenhuma categoria criada ou
@@ -312,3 +314,26 @@ Arquivos: `web/src/js/naturezas.js` (contas, sem banco), `web/src/js/naturezas-s
 `web/src/css/mobile-modulo.css`. Testes: `web/tests/unit/naturezas.test.mjs` e `web/tests/e2e/naturezas_indicadores.spec.mjs`
 (marca uma categoria como aporte no banco descartável e confere que só a repartição muda).
 
+## 16. Publicação — 17/11/2026
+
+Autorizada pelo titular, limitada a este contrato, na sequência obrigatória.
+
+| Passo | Resultado |
+|---|---|
+| 1. Backup pré-migration | `cf-fzjmgekasjrgvmfdkdog-20261117_062526`, íntegro (SHA-256), duas cópias verificadas |
+| 2. Manifesto e impressão | 69 operações; impressão do estado em produção igual à do ensaio (prévia somente leitura, antes e depois da migration) |
+| 3. Migration | só a `20261229090000`; 68 → 69; conferido que, sozinha, não alterou nenhuma tabela de dados, saldo nem o Dashboard |
+| 4. Execução | uma transação: 4 categorias criadas, 1 incorporação (95 em 94), 25 itens (480 contas por herança) e 3 compras reclassificados, 5 naturezas, 13 palavras-chave desativadas e 16 criadas ou reativadas = 67 operações executadas + 2 linhas "não alterar" do manifesto |
+| 4. Conferências | 29, nenhuma falha: nenhuma tabela mudou além da coluna de categoria e do catálogo; saldos, totais, pagamentos, faturas, movimentos e Dashboard (nove meses) idênticos; consumo + aportes + outras saídas = total de saídas em todos os meses; exceções intactas; resultado por categoria e indicadores iguais aos do ensaio; importação sem Outros com confiança alta |
+| 5. Código | push `7e69f18..040c3f1` na `main` (avanço rápido); deploy Cloudflare `ce683825` |
+| 6. Produção | 248/248 arquivos servidos iguais ao build; 20 verificações sem login, nenhuma falha (telas levam ao login, módulo da repartição carrega sob a CSP real, Dashboard servido com "Total de saídas" e "Saldo final projetado", leituras novas recusadas sem sessão) |
+
+Nenhum lançamento financeiro foi criado para testar. Não conferido, por exigir a conta do titular: as telas com sessão real
+(Dashboard, lista mobile, Categorias) e uma importação real.
+
+**Reversão:** frontend para o deploy `a5d1099f` (commit `716d06e`); dados com `reorganizar_categorias.py reverter --feito <arquivo
+da execução, na pasta privada> --confirmo "REVERTER CATEGORIAS"`; depois, se for o caso,
+`supabase/reversao/20261229090000_categorias_reorganizacao_anterior.sql`; último recurso, restauração assistida do backup acima.
+
+Continuam pendentes e fora deste contrato: FIN-CARTOES-CONCILIACAO-HISTORICA-01 (718 e 719 e a diferença das faturas), consórcios
+inativos, empréstimo em Outros e compras de natureza não identificada.
