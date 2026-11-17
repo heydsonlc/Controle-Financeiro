@@ -16,11 +16,12 @@
 import { supabase } from './cliente.js';
 import { contaDoDebito, criarChaves, emMigracao, falha, mensagemDeErro, ok, textoBloqueio, valorTexto } from './adaptador-comum.js';
 import { confirmacoes } from './fechamento.js';
-import { cartoesAtivos, competenciaSugerida as sugerirCompetencia, gravarCompra, montarCompra, previaParcelas as previaDasParcelas,
+import { cartoesAtivos, competenciaSugerida as sugerirCompetencia, montarCompra, previaParcelas as previaDasParcelas,
     respostaDaCompra } from './compras-servico.js';
 import { responderDocumentoFinanceiro } from './documento-financeiro.js';
 import { dadosDaDespesaDireta, gravarLancamentoAbastecimento } from './abastecimento-servico.js';
 import { iniciarMoldura } from './moldura.js';
+import { integrarCadastroDeLancamentos } from './lancamentos-cadastro.js';
 
 const estado = { perfilId: null };
 const chaves = criarChaves();
@@ -118,15 +119,15 @@ async function criarCompra(cartaoId, corpo) {
         if (abastecimento.dados) return complementarCompra(Number(campoId.value), corpo, abastecimento.dados);
         return falha('Para corrigir uma compra no cartão, use a tela Cartões (editar lançamento). Salvar aqui criaria uma compra nova. Nada foi gravado.');
     }
+    // FIN-MVP-CADASTRO-UNIFICADO-01: por este formulario so a compra COM abastecimento (uma transacao); a compra comum e
+    // cadastrada pelo modal unico (js/cadastro-despesa.js -> js/compras-servico.js). Um so caminho para cada gravacao.
+    if (!abastecimento.dados) return falha(SO_ABASTECIMENTO);
     const montada = montarCompra(cartaoId, corpo);
     if (montada.erro) return falha(montada.erro);
     const { dados } = montada;
-    const operacao = abastecimento.dados ? `compra-abastecimento:${JSON.stringify({ dados, abastecimento: abastecimento.dados })}`
-        : `compra:${JSON.stringify(dados)}`;
+    const operacao = `compra-abastecimento:${JSON.stringify({ dados, abastecimento: abastecimento.dados })}`;
     if (Array.isArray(corpo.confirmar_consolidadas)) dados.confirmar_consolidadas = confirmacoes(corpo.confirmar_consolidadas);
-    const resultado = abastecimento.dados
-        ? await salvarComAbastecimento({ tipo: 'compra', dados }, abastecimento.dados, operacao)
-        : await gravarCompra(estado.perfilId, dados, chaves.de(operacao));
+    const resultado = await salvarComAbastecimento({ tipo: 'compra', dados }, abastecimento.dados, operacao);
     // Fatura consolidada: mesma pergunta do Flask (409 CONFIRMAR_FATURA_CONSOLIDADA), com os totais da previa do banco.
     return respostaDaCompra(estado.perfilId, dados, resultado, () => chaves.esquecer(operacao));
 }
@@ -172,6 +173,8 @@ async function excluirCompra(id) {
 // Despesa direta (as mesmas funcoes e recusas da tela de Despesas)
 // ---------------------------------------------------------------------------------------------------------------
 
+const SO_ABASTECIMENTO = 'Por este formulário só se lança despesa ou compra com abastecimento: escolha a categoria Combustível, o veículo, '
+    + 'o hodômetro e o preço por litro. Para as demais, use “Despesa direta” ou “Compra no cartão”. Nada foi gravado.';
 const PAGAR = 'Use a ação de pagamento em Despesas para marcar a despesa como paga: ela escolhe a conta bancária e registra o movimento. Nada foi gravado.';
 
 async function criarDespesa(corpo) {
@@ -180,18 +183,14 @@ async function criarDespesa(corpo) {
     if (abastecimento.erro) return avisar(abastecimento.erro);
     if (!(Number(corpo.valor) > 0)) return avisar('Informe um valor válido.');
     if (!corpo.data_vencimento) return avisar('Informe a data.');
+    // FIN-MVP-CADASTRO-UNIFICADO-01: por este formulario so a despesa COM abastecimento (uma transacao); a despesa comum e
+    // cadastrada pelo modal unico (js/cadastro-despesa.js -> js/despesas-servico.js).
+    if (!abastecimento.dados) return avisar(SO_ABASTECIMENTO);
     const dados = dadosDaDespesaDireta(corpo);
-    if (abastecimento.dados) {
-        const r = await salvarComAbastecimento({ tipo: 'despesa', dados }, abastecimento.dados,
-            `despesa-abastecimento:${JSON.stringify({ dados, abastecimento: abastecimento.dados })}`);
-        if (r.error) return avisar(mensagemDeErro(r.error));
-        return { status: 201, corpo: { success: true, message: 'Despesa e abastecimento salvos com sucesso' } };
-    }
-    const operacao = `despesa:${JSON.stringify(dados)}`;
-    const { error } = await supabase.rpc('criar_despesa', { p_perfil_id: estado.perfilId, p_dados: dados, p_chave: chaves.de(operacao) });
-    if (error) return avisar(mensagemDeErro(error));
-    chaves.esquecer(operacao);
-    return { status: 201, corpo: { success: true, message: 'Despesa criada com sucesso' } };
+    const r = await salvarComAbastecimento({ tipo: 'despesa', dados }, abastecimento.dados,
+        `despesa-abastecimento:${JSON.stringify({ dados, abastecimento: abastecimento.dados })}`);
+    if (r.error) return avisar(mensagemDeErro(r.error));
+    return { status: 201, corpo: { success: true, message: 'Despesa e abastecimento salvos com sucesso' } };
 }
 
 async function edicaoDespesa(id) {
@@ -310,6 +309,7 @@ if (contexto && contexto.perfil) {
     const { data: gere } = await supabase.rpc('pode_gerir_perfil', { p_perfil_id: estado.perfilId });
     document.body.classList.toggle('cf-somente-leitura', gere !== true);
     window.CF_REGISTRAR_ADAPTADOR(adaptador);
+    if (gere === true) integrarCadastroDeLancamentos(estado.perfilId);
 } else if (contexto) {
     window.CF_REGISTRAR_ADAPTADOR(async () => falha('Nenhum perfil financeiro autorizado para esta conta.', 403));
 }

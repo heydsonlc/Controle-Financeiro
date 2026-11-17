@@ -1,6 +1,8 @@
 // FIN-FIDELIDADE-DESPESAS-1 — apoio dos specs da tela original de Despesas (frontend/templates/despesas.html).
 import { expect } from '@playwright/test';
 
+import { confirmacao, modal, preencherCadastro } from './cadastro.mjs';
+
 export const normal = (texto) => (texto || '').replace(/\s+/g, ' ').trim();
 const competenciaBr = (mes) => `${mes.slice(5, 7)}/${mes.slice(0, 4)}`;
 
@@ -53,8 +55,20 @@ export async function primeiraCategoria(page, nome) {
     return opcao.getAttribute('value');
 }
 
-// Modal "Nova Despesa" do original. d: { nome, valor, categoria, vencimento, competencia, observacoes, recorrente, tipo }
+// d: { nome, valor, categoria, vencimento, competencia, observacoes, recorrente, tipo }
+// FIN-MVP-CADASTRO-UNIFICADO-01: o cadastro ("Nova despesa") e o do modal unico (cadastro.mjs); o modal original do Flask
+// continua para a edicao. O apoio preenche o que estiver aberto.
 export async function preencherDespesa(page, d) {
+    if (await modal(page).isVisible()) {
+        const comuns = { nome: d.nome, valor: d.valor, categoria: d.categoria, observacoes: d.observacoes };
+        if (d.recorrente) {
+            const frequencia = /^semanal/.test(d.tipo || '') ? 'semanal' : (d.tipo || 'mensal');
+            await preencherCadastro(page, { ...comuns, tipo: 'recorrente', inicio: d.vencimento, frequencia, dia: d.dia });
+        } else {
+            await preencherCadastro(page, { ...comuns, tipo: 'direta', vencimento: d.vencimento, competencia: d.competencia });
+        }
+        return;
+    }
     await page.fill('#nome', d.nome);
     if (d.observacoes !== undefined) await page.fill('#descricao', d.observacoes);
     await page.fill('#valor', String(d.valor));
@@ -70,8 +84,22 @@ export async function preencherDespesa(page, d) {
     if (d.competencia) await page.fill('#mes_competencia', d.competencia);
 }
 
+// No modal unico: salva e devolve o texto da confirmacao (ja concluida) ou, na recusa, a mensagem (o modal fica aberto).
 export async function salvarDespesa(page) {
+    if (await modal(page).isVisible()) {
+        await page.click('#cad-salvar');
+        await expect(page.locator('#cad-confirmacao, #cad-mensagem.erro, #cad-modal .mob-campo-erro:not([hidden])').first()).toBeVisible();
+        if (await confirmacao(page).isVisible()) {
+            const texto = normal(await confirmacao(page).innerText());
+            await page.click('#cad-concluir');
+            await expect(modal(page)).toHaveCount(0);
+            return texto;
+        }
+        const rodape = page.locator('#cad-mensagem.erro');
+        return normal(await (await rodape.isVisible() ? rodape : page.locator('#cad-modal .mob-campo-erro:not([hidden])').first()).innerText());
+    }
     await page.click('#form-despesa button[type=submit]');
+    return null;
 }
 
 export async function abrirPagamento(page, nome) {

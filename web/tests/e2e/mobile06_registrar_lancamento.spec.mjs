@@ -9,6 +9,8 @@ import path from 'node:path';
 
 import { expect, test } from '@playwright/test';
 
+import * as cad from './cadastro.mjs';
+
 import { chamarRpc } from './despesas.mjs';
 
 const G = { email: process.env.CF_EMAIL_G || 'usuario.g@teste.local', senha: process.env.CF_SENHA_G };
@@ -141,49 +143,44 @@ test('receita: o formulario das Receitas mobile; nasce prevista na competencia, 
     await expect(linha).not.toContainText('Recebida');
 });
 
-test('despesa e compra no cartao: o formulario da Nova Despesa, ja em conta a pagar ou no cartao; sem duplicidade', async ({ page }) => {
+// FIN-MVP-CADASTRO-UNIFICADO-01: Despesa e Compra no cartao abrem o modal unico (o mesmo de Despesas e Recorrencias), ja no
+// tipo escolhido na tela; ao fechar, volta-se a escolha do tipo desta pagina, na mesma competencia.
+test('despesa e compra no cartao: o modal unico, ja no tipo escolhido; sem duplicidade; fechar volta a escolha do tipo', async ({ page }) => {
     await entrar(page, G);
     const master = await idDoCartao(page, MASTER);
     await abrirLancamento(page);
     await escolher(page, 'despesa');
-    await expect(controle(page, 'Meio de pagamento')).toHaveValue('conta');
-    await expect(controle(page, 'Competência')).toHaveValue(MES);
-    await controle(page, 'Descrição').fill('Fibra G (lancamento)');
-    await controle(page, 'Valor').fill('99.90');
-    await controle(page, 'Categoria').selectOption({ label: 'Moradia' });
-    await controle(page, 'Vencimento').fill('2032-02-10');
-    await expect(controle(page, 'Competência')).toHaveValue('2032-01');  // regra do desktop: mes anterior ao vencimento
-    await page.locator('#mob-salvar').dblclick();
-    await expect(confirmacao(page)).toContainText('“Fibra G (lancamento)” cadastrada');
-    expect((await contasDoMes(page, MES, 'Fibra G (lancamento)')).map((c) => Number(c.valor))).toEqual([99.9]);
-    // "Novo lancamento" recomeca a mesma operacao, vazia.
-    await expect(page.locator('#mob-outra')).toHaveText('Novo lançamento');
-    await page.click('#mob-outra');
-    await expect(controle(page, 'Descrição')).toHaveValue('');
-    await expect(page.locator('.mob-tipo[data-tipo="despesa"]')).toHaveAttribute('aria-pressed', 'true');
+    await cad.esperarModal(page, 'direta');
+    await expect(page.locator('#cad-competencia-texto')).toHaveText('Competência: janeiro/2032');
+    await cad.preencherCadastro(page, { nome: 'Fibra G (lancamento)', valor: '99.90', categoria: 'Moradia', vencimento: '2032-02-10' });
+    await expect(page.locator('#cad-competencia-texto')).toHaveText('Competência: janeiro/2032');  // regra do desktop: mes anterior ao vencimento
+    await page.locator('#cad-salvar').dblclick();
+    await expect(cad.confirmacao(page)).toContainText('“Fibra G (lancamento)” cadastrada como pendente');
+    expect((await contasDoMes(page, MES, 'Fibra G (lancamento)')).map((c) => [Number(c.valor), c.status_pagamento])).toEqual([[99.9, 'Pendente']]);
+    // "Novo cadastro" recomeca a mesma operacao, vazia; "Concluir" volta a escolha do tipo (a origem), na mesma competencia.
+    await page.click('#cad-novo');
+    await expect(page.locator('#cad-nome')).toHaveValue('');
+    await expect(page.locator('#cad-tipo')).toHaveValue('DESPESA_DIRETA');
+    await cad.fecharCadastro(page);
+    await expect(page).toHaveURL(new RegExp(`lancamento-mobile\\.html\\?mes=${MES}$`));
+    await expect(page.locator('.mob-tipo[aria-pressed="true"]')).toHaveCount(0);
+    await expect(page.locator('#mob-cadastro')).toContainText('Escolha o tipo de lançamento.');
 
-    // Compra no cartao: o mesmo formulario, ja em "Cartao de credito"; parcelada, com a previa do banco.
+    // Compra no cartao: o mesmo modal, ja em "Compra no cartao"; parcelada, com a previa do banco.
     await escolher(page, 'cartao');
-    await expect(controle(page, 'Meio de pagamento')).toHaveValue('cartao');
-    await expect(page.locator('#mob-cartao')).toBeVisible();
-    await controle(page, 'Descrição').fill('Fone G');
-    await controle(page, 'Valor').fill('300.00');
-    await controle(page, 'Categoria').selectOption({ label: 'Moradia' });
-    await controle(page, 'Cartão').selectOption({ label: MASTER });
-    await controle(page, 'Data da compra').fill('2032-01-05');
-    await controle(page, 'Data da compra').dispatchEvent('change');
-    await controle(page, 'Parcelas').fill('2');
-    await expect(controle(page, 'Fatura')).toHaveValue('2032-01');
+    await cad.esperarModal(page, 'compra');
+    await cad.preencherCadastro(page, { nome: 'Fone G', valor: '300.00', categoria: 'Moradia', cartao: MASTER, data: '2032-01-05', parcelas: 2 });
+    await expect(page.locator('#cad-mes-fatura')).toHaveValue('2032-01');
     await expect(page.locator('#mob-previa-parcelas tbody tr')).toHaveText([/1\/201\/2032R\$\s150,00/, /2\/202\/2032R\$\s150,00/]);
     await evidencia(page, 'compra-cartao', false);
-    await page.locator('#mob-salvar').dblclick();
-    await expect(confirmacao(page)).toContainText(`Compra lançada em 2 parcelas no cartão ${MASTER}: faturas 01/2032 a 02/2032.`);
-    await expect(page.locator('#mob-ver-cartao')).toHaveAttribute('href', `cartoes-mobile.html?mes=2032-01&cartao=${master}`);
+    await page.locator('#cad-salvar').dblclick();
+    await expect(cad.confirmacao(page)).toContainText(`Compra lançada em 2 parcelas no cartão ${MASTER}: faturas 01/2032 a 02/2032.`);
+    await expect(page.locator('#cad-ver-registro')).toHaveAttribute('href', `cartoes-mobile.html?mes=2032-01&cartao=${master}`);
     for (const [mes, n] of [['2032-01', 1], ['2032-02', 2]]) {
         expect((await comprasDaFatura(page, master, mes, 'Fone G')).map((c) => [Number(c.valor), c.numero_parcela]), mes).toEqual([[150, n]]);
     }
     expect(await contasDoMes(page, MES, 'Fone G')).toEqual([]);  // so a compra, na fatura: nenhuma conta a pagar
-    await page.click('#mob-ver-cartao');
+    await page.click('#cad-ver-registro');
     await page.waitForURL(`**/cartoes-mobile.html?mes=2032-01&cartao=${master}`);
     await expect(page.locator('#mob-lista')).toContainText('Fone G');
 });
@@ -285,17 +282,20 @@ test('abastecimento: veiculo, combustivel do cadastro e litros; conta a pagar e 
 test('trocar de operacao com dados preenchidos pede confirmacao; cancelar e sair sem salvar nao gravam', async ({ page }) => {
     await entrar(page, G);
     await abrirLancamento(page, 'despesa');
-    await controle(page, 'Descrição').fill('Rascunho G');
-    // Recusar a troca: continua na despesa, com o que foi preenchido.
-    page.once('dialog', (d) => { expect(d.message()).toContain('Descartar o que foi preenchido em Despesa?'); d.dismiss(); });
-    await page.click('.mob-tipo[data-tipo="transferencia"]');
-    await expect(page.locator('.mob-tipo[data-tipo="despesa"]')).toHaveAttribute('aria-pressed', 'true');
-    await expect(controle(page, 'Descrição')).toHaveValue('Rascunho G');
-    // Aceitar: o formulario da transferencia, sem os valores da despesa.
-    page.once('dialog', (d) => d.accept());
-    await page.click('.mob-tipo[data-tipo="transferencia"]');
-    await expect(page.locator('.mob-tipo[data-tipo="transferencia"]')).toHaveAttribute('aria-pressed', 'true');
+    // FIN-MVP-CADASTRO-UNIFICADO-01: na despesa, a troca de tipo e dentro do modal; com algo so da despesa direta ja
+    // preenchido, o modal pergunta. "Manter" continua na despesa, com o que foi preenchido.
+    await cad.preencherCadastro(page, { nome: 'Rascunho G', valor: '10', categoria: 'Moradia', vencimento: '2032-02-10' });
+    await page.selectOption('#cad-tipo', 'DESPESA_RECORRENTE');
+    await expect(page.locator('#cad-troca')).toContainText('Trocar para “Despesa recorrente” descarta o que só existe em “Despesa direta”');
+    await page.click('#cad-troca-manter');
+    await expect(page.locator('#cad-tipo')).toHaveValue('DESPESA_DIRETA');
+    await expect(page.locator('#cad-nome')).toHaveValue('Rascunho G');
+    await expect(page.locator('#cad-vencimento')).toHaveValue('2032-02-10');
+    // Cancelar o cadastro: nada e gravado e volta-se a escolha do tipo; a transferencia abre sem os valores da despesa.
+    await cad.fecharCadastro(page);
+    await escolher(page, 'transferencia');
     await expect(campo(page, 'Conta de origem')).toBeVisible();
+    await expect(controle(page, 'Valor')).toHaveValue('');
     // Sair com dados: o navegador pergunta (recusar mantem a pagina); Cancelar e intencional e nao pergunta.
     await controle(page, 'Valor').fill('10');
     let perguntou = false;
@@ -346,10 +346,10 @@ test('larguras de 320 a 430: sem rolagem horizontal nem campos sobrepostos em ca
         await page.setViewportSize({ width: largura, height: 844 });
         for (const tipo of ['receita', 'despesa', 'cartao', 'transferencia', 'abastecimento']) {
             await abrirLancamento(page, tipo);
+            // Despesa e Compra no cartao: o modal unico, medido no lugar do formulario da pagina.
+            if (tipo === 'despesa') await cad.esperarModal(page, 'direta');
             if (tipo === 'cartao') {
-                await controle(page, 'Valor').fill('1234.56');
-                await controle(page, 'Cartão').selectOption({ label: MASTER });
-                await controle(page, 'Parcelas').fill('3');
+                await cad.preencherCadastro(page, { valor: '1234.56', categoria: false, cartao: MASTER, parcelas: 3 });
                 await expect(page.locator('#mob-previa-parcelas tbody tr')).toHaveCount(3);
             }
             if (tipo === 'abastecimento') {
@@ -357,13 +357,14 @@ test('larguras de 320 a 430: sem rolagem horizontal nem campos sobrepostos em ca
                 await controle(page, 'Cartão').selectOption({ label: MASTER });
             }
             const medidas = await page.evaluate(() => {
-                const caixas = [...document.querySelectorAll('#mob-cadastro .mob-campo, .mob-tipo')].filter((e) => e.offsetParent)
+                const noModal = Boolean(document.querySelector('#cad-modal'));
+                const caixas = [...document.querySelectorAll(noModal ? '#cad-modal .mob-campo' : '#mob-cadastro .mob-campo, .mob-tipo')].filter((e) => e.offsetParent)
                     .map((e) => e.getBoundingClientRect());
                 const sobrepostos = caixas.some((a, i) => caixas.some((b, j) => j > i && a.left < b.right - 0.5 && b.left < a.right - 0.5
                     && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5));
                 return {
                     rolagem: document.documentElement.scrollWidth > window.innerWidth,
-                    fora: [...document.querySelectorAll('#mob-cadastro *, #mob-tipos *, .mob-cabecalho *, .mob-barra-item')]
+                    fora: [...document.querySelectorAll(noModal ? '#cad-modal *' : '#mob-cadastro *, #mob-tipos *, .mob-cabecalho *, .mob-barra-item')]
                         .filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && (r.left < -0.5 || r.right > window.innerWidth + 0.5); }).length,
                     sobrepostos,
                 };

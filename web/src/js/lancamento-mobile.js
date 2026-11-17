@@ -14,10 +14,10 @@
 import { el } from './comum.js';
 import { configurarAbastecimento, responderAbastecimento } from './abastecimento-servico.js';
 import { montarFormularioAbastecimento } from './abastecimento-formulario.js';
-import { configurarCompras } from './compras-servico.js';
 import { configurarContas, responderContas } from './contas-servico.js';
-import { acoesDaConfirmacao, montarFormularioDespesa } from './despesa-formulario.js';
-import { configurarDespesas, podeGerirPerfil, responderDespesas } from './despesas-servico.js';
+import { acoesDaConfirmacao } from './despesa-formulario.js';
+import { TIPOS as TIPOS_DE_CADASTRO, abrirCadastroDespesa, destinosMobile, prepararCadastro } from './cadastro-despesa.js';
+import { podeGerirPerfil, responderDespesas } from './despesas-servico.js';
 import { formatarCompetencia } from './despesas-grupos.js';
 import { MODULOS_ATIVOS, ajustarCadastrosPelaPermissao, competenciaInicial, prepararMais, prepararModulos } from './mobile-comum.js';
 import { criarFila } from './mobile-formulario.js';
@@ -43,15 +43,6 @@ function ligarCompetencia(mes) {
 }
 
 // Leituras de cada operacao: so na primeira vez que ela e aberta.
-async function categorias() {
-    if (!estado.categorias) {
-        const r = await api('GET', '/api/categorias');
-        if (!r.success) mostrarAviso(r.error || 'Não foi possível carregar as categorias.', 'erro');
-        estado.categorias = r.success ? (r.data || []) : null;
-    }
-    return estado.categorias || [];
-}
-
 async function contas(recarregar = false) {
     if (!estado.contas || recarregar) {
         const r = await api('GET', '/api/contas?status=ATIVO', null, responderContas);
@@ -130,9 +121,19 @@ async function abrir(tipo, forcar = false) {
     cadastro.replaceChildren();
     mostrarAviso('');
     if (tipo === 'despesa' || tipo === 'cartao') {
-        const lista = await categorias();
-        if (pedido !== estado.pedido) return;
-        montarFormularioDespesa(cadastro, { ...opcoesComuns(), categorias: lista, meio: tipo === 'cartao' ? 'cartao' : 'conta' });
+        // FIN-MVP-CADASTRO-UNIFICADO-01: Despesa e Compra no cartao sao cadastradas pelo modal unico. Ao fechar, volta-se a
+        // escolha do tipo desta pagina (a origem), na mesma competencia.
+        cadastro.replaceChildren(texto('Escolha o tipo de lançamento.', 'discreto'));
+        abrirCadastroDespesa({ origem: 'lancamentos', mes: estado.mes, destinos: destinosMobile(),
+            tipoInicial: tipo === 'cartao' ? TIPOS_DE_CADASTRO.COMPRA_CARTAO : TIPOS_DE_CADASTRO.DESPESA_DIRETA,
+            aoFechar: () => {
+                if (estado.tipo !== tipo) return;
+                estado.tipo = null;
+                for (const b of document.querySelectorAll('.mob-tipo')) b.setAttribute('aria-pressed', 'false');
+                const semTipo = new URL(window.location.href);
+                semTipo.search = new URLSearchParams([...semTipo.searchParams].filter(([chave]) => chave !== 'tipo')).toString();
+                window.history.replaceState(null, '', semTipo);
+            } });
     } else if (tipo === 'receita') {
         const lista = await contas();
         if (pedido !== estado.pedido) return;
@@ -171,8 +172,7 @@ if (usuario) {
     const cadastro = $('mob-cadastro');
     if (perfil) {
         $('mob-perfil').textContent = perfil.nome || '';
-        configurarDespesas(perfil.id);
-        configurarCompras(perfil.id);
+        prepararCadastro(perfil.id);  // Despesas, compras e recorrencias: os servicos do modal unico
         configurarReceitas(perfil.id, { competencia: () => estado.mes });
         configurarContas(perfil.id);
         configurarAbastecimento(perfil.id);

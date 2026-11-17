@@ -1,8 +1,9 @@
 # FIN-MVP-CADASTRO-UNIFICADO-01 — Modal único e responsivo de cadastro de despesas
 
-**Situação:** **primeira entrega (Etapas 1 a 3)** no ramo local `cadastro-unificado-01`: diagnóstico, componente único funcional e
-prévia local dos seis cenários. **Os formulários das telas ainda não foram substituídos** (Etapa 4, só depois da homologação
-visual). Sem push, sem deploy, sem migration. Testes só no banco descartável, com dados fictícios.
+**Situação:** **Etapas 1 a 6 concluídas** no ramo local `cadastro-unificado-01`: diagnóstico, componente único, prévia dos seis
+cenários e, com as decisões do titular de 16/11/2026, a **integração local nos três módulos** (desktop e celular), com a suíte
+completa. **Sem push, sem deploy, sem migration.** Falta a homologação visual e funcional do titular na prévia. Testes só no banco
+descartável, com dados fictícios.
 
 Referência de produção: deploy `34264964` (16/11/2026), 68 migrations.
 
@@ -186,22 +187,96 @@ completa fica para a Etapa 6, depois da integração.
 ## 7. Funcionalidades preservadas
 
 Nada foi retirado das telas: listagens, edição, pagamento, estorno, exclusão, cancelamento, inativação, reativação, filtros,
-receitas, transferências, entrada/crédito, abastecimento e "A partir de documento" seguem como estão. O modal ainda não está
-ligado a nenhuma tela de produção.
+receitas, transferências, entrada/crédito, abastecimento e "A partir de documento" seguem como estão. Só o **cadastro** de
+despesa mudou de formulário (seção 9).
 
-## 8. Decisões pendentes para a integração (Etapa 4)
+## 8. Decisões do titular (16/11/2026)
 
-1. **Competência da despesa direta aberta por Lançamentos:** usar a regra de Despesas (mês anterior ao vencimento, ajustável),
-   como o modal faz, ou manter o mês da própria data, como o Lançamentos do desktop faz hoje?
-2. **Abastecimento em Lançamentos (desktop):** proposta — "Novo lançamento de despesa" abre o modal, e o formulário atual
-   continua para Entrada/crédito e para a despesa com abastecimento, que grava tudo numa transação.
-3. **Observações com 500 caracteres** (em vez dos 200 do modelo visual).
-4. **Consórcio no celular** e a partir de Despesas e Lançamentos: confirmar que deve ficar disponível nos três pontos de entrada.
+| Item | Decisão | Como ficou |
+|---|---|---|
+| Competência | Preservar as regras atuais de cada origem | Aberto por **Lançamentos (desktop)**, o modal usa o mês da própria data, mostra a competência calculada e não oferece ajuste manual (a tela nunca ofereceu). Em **Despesas** e no **celular**, a regra do vencimento (mês anterior) com "Alterar competência". A padronização entre as duas fica para análise separada |
+| Abastecimento | Exceção aprovada | O modal assume despesa comum e compra no cartão. O abastecimento continua no formulário especializado, numa única transação |
+| Observações | 500 caracteres | Limite visual de 500 nos quatro tipos |
+| Consórcio | Nos três módulos e no celular | Pelo serviço de consórcios existente, com parcelas, reajustes, contemplação e parcelas já pagas (P24), sem débito bancário |
 
-## 9. Próximas etapas
+## 9. Integração (Etapa 4)
 
-- Etapa 4: ligar o modal a Despesas, Lançamentos e Recorrências (desktop e celular), mantendo os formulários atuais para edição.
-- Etapa 5: especificações e2e do modal nas telas reais (lista da seção 14 do contrato).
-- Etapa 6: suíte completa. Etapa 7: relatório final, plano de publicação e de reversão.
+| Tela | Como abre | Tipo inicial | O formulário antigo |
+|---|---|---|---|
+| Despesas (desktop) | "Nova despesa" (`abrirModal`, `abrirModalRecorrencia`, `abrirModalConsorcio`) | Despesa direta (ou o do atalho) | `#modal-despesa` continua para **editar** |
+| Recorrências (desktop) | "Nova recorrência" | Despesa recorrente | O formulário lateral aparece **só na edição** e some ao salvar ou cancelar |
+| Lançamentos (desktop) | Painel "Novo lançamento": **Despesa direta**, **Compra no cartão**, **Abastecimento**, **Entrada / crédito** | O escolhido na tela | Continua para abastecimento, entrada/crédito e edição |
+| Nova Despesa (celular) | Atalho Despesa | Despesa direta | Removido (`montarFormularioDespesa`) |
+| Registrar Lançamento (celular) | Tipos Despesa e Compra no cartão | O escolhido na tela | Receita, Transferência e Abastecimento seguem nos formulários deles |
+| Recorrências (celular) | "+" | Despesa recorrente | O painel da página fica para **editar** |
 
-**Publicação e reversão:** só com autorização. Sem migration, a reversão é o deploy anterior (`34264964`).
+- **Origem e retorno:** fechar (Cancelar, X, Esc ou Concluir) volta à tela que abriu, na mesma competência. Nas páginas do celular
+  que só existem para cadastrar (Nova Despesa), volta-se à página principal na competência de origem. Depois de salvar, a lista
+  da tela de origem é recarregada.
+- **Um caminho por gravação:** em Lançamentos (desktop), o formulário do painel só cria despesa ou compra **com** abastecimento;
+  sem ele, o adaptador recusa e orienta a usar "Despesa direta" ou "Compra no cartão". O código que gravava a despesa e a compra
+  comuns por ali foi retirado.
+- **Recorrência a partir de Despesas:** passa pelo serviço de Recorrências (antes, `criar_despesa` pelo serviço de Despesas). A
+  função do banco é a mesma, com os mesmos dados; a geração continua a de Despesas.
+- **Consórcio e recorrência no cartão:** disponíveis em todos os pontos de entrada, pelos serviços que já existiam.
+- **Somente leitura:** os botões de cadastro continuam ocultos; em Lançamentos (desktop) o painel de cadastro também some.
+- **Aviso da operação:** `recorrencias-servico.js` expõe o último aviso (`ultimoAviso`), para o modal mostrá-lo na confirmação
+  sem tirar o aviso da tela que configurou o serviço.
+
+### Arquivos
+
+- Novos: `js/cadastro-despesa.js`, `css/cadastro-despesa.css`, `js/lancamentos-cadastro.js`, `tests/e2e/cadastro.mjs`,
+  `tests/e2e/cadastro_unificado.spec.mjs`, `previa/cadastro.*`.
+- Alterados (telas): `despesas-adaptador.js`, `recorrencias-adaptador.js`, `lancamentos-adaptador.js`, `despesa-nova-mobile.js`,
+  `lancamento-mobile.js`, `recorrencias-mobile.js`, `despesa-formulario.js` (ficaram só as confirmações usadas por Transferência e
+  Abastecimento), `css/lancamentos-adaptacoes.css`, as três páginas do desktop e as três do celular (folha de estilo do modal).
+- Alterados (apoio, sem mudar regra): `mobile-cartao.js`, `recorrencias-servico.js`.
+- **Sem migration e sem função nova no banco.**
+
+## 10. Testes da integração (Etapas 5 e 6)
+
+| Verificação | Resultado |
+|---|---|
+| Suíte e2e completa | **282/282** (antes da integração: 275; 6 do spec novo e 1 a mais no spec do celular) |
+| Unitários | 127/127 (os dois testes de estrutura do celular passaram a conferir o modal único) |
+| Spec novo `cadastro_unificado.spec.mjs` | 6/6 |
+
+Specs adaptados ao modal (o cadastro deixou de ser pelo formulário antigo): `despesas`, `movimentacoes`, `recorrencia`,
+`recorrencias_tela`, `consorcios_p24`, `lancamentos_tela`, `lancamentos_03_parcelas`, `lancamentos_abastecimento`, `cartoes_tela`,
+`mobile05_cadastro_despesas`, `mobile06_registrar_lancamento`, `mob09_recorrencias`, `mobile_final_integrado`.
+
+Cobertura da seção 14 do contrato:
+
+- **Despesa direta:** cadastro, vencimento e competência (as duas regras), pendente, sem movimento bancário, pagamento
+  posterior pelo fluxo existente, cancelamento sem gravação.
+- **Compra no cartão:** à vista, parcelada, fatura sugerida, prévia, fatura paga e consolidada (com confirmação), sem conta a
+  pagar duplicada.
+- **Recorrências:** mensal e anual em conta, semanal, a cada 2 semanas, mensal e anual no cartão, semanal/quinzenal
+  indisponíveis no cartão, débito automático com conta, cadastrada inativa, sem duplicar ocorrências.
+- **Consórcios:** contrato novo, em andamento com parcelas anteriores, prêmio, reajustes fixo e percentual, contemplação,
+  cronograma, nenhum movimento bancário; nome repetido recusado sem duplicar.
+- **Integração:** os três pontos de entrada no desktop e no celular, tipo inicial, troca de tipo, retorno ao cancelar,
+  confirmação, somente leitura, abastecimento, receitas e transferências preservados.
+- **Visual:** desktop 1366 e 1920, celular em 320, 375, 390 e 430; cabeçalho e rodapé fixos; prévia longa; erros junto ao campo.
+
+Não coberto por teste automático: teclado virtual real do celular (a altura do modal acompanha a área visível, mas isso só se
+confere num aparelho).
+
+## 11. Prévia da integração
+
+Com a prévia no ar (seção 4), entrar com `usuario.g@teste.local` e abrir, em cada tamanho:
+
+- Celular: `inicio.html` → atalhos **Despesa**, **Lançamento** e **Recorrências**.
+- Desktop: `contas.html` (Nova despesa), `lancamentos.html` (painel Novo lançamento) e `recorrencias.html` (Nova recorrência).
+
+A página de demonstração (`/__previa__/cadastro.html`) continua disponível para os seis cenários isolados.
+
+## 12. Publicação e reversão (plano, sem autorização)
+
+1. Homologação do titular na prévia.
+2. Avanço rápido de `main` para o ramo e push.
+3. Build de produção e deploy no Cloudflare Pages (`producao`). **Sem migration**: nenhum backup `PRE_MIGRATION` é exigido.
+4. Conferência dos arquivos servidos e das três telas, sem gravar dado real.
+5. Reversão: voltar ao deploy `34264964`. Nada no banco muda com este contrato.
+
+**Publicação:** só com autorização do titular.

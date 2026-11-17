@@ -79,7 +79,16 @@ async function atual(id) {
 }
 
 function avisar(texto) {
+    estado.ultimoAviso = texto;
     estado.avisar(texto);
+}
+
+// FIN-MVP-CADASTRO-UNIFICADO-01: o aviso da ultima operacao, para o modal unico mostrar na confirmacao (a tela que
+// configurou o servico continua recebendo o mesmo texto por `avisar`).
+export function ultimoAviso(limpar = false) {
+    const texto = estado.ultimoAviso || '';
+    if (limpar) estado.ultimoAviso = '';
+    return texto;
 }
 
 // tipo_recorrencia que o banco grava, como _normalizar_tipo_recorrencia do Flask: o formulario manda "semanal" com

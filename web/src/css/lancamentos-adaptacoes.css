@@ -111,3 +111,51 @@ body.cf-somente-leitura [data-on-click^="abrirModalConfirmarReceita("] {
     color: #b91c1c;
 }
 
+/* FIN-MVP-CADASTRO-UNIFICADO-01 — painel "Novo lancamento": a escolha do tipo (js/lancamentos-cadastro.js). Despesa direta
+   e compra no cartao abrem o modal unico; o formulario original aparece so para abastecimento, entrada/credito e edicao. */
+#painel-novo-lancamento[data-modo="escolha"] #form-lancamento,
+#painel-novo-lancamento[data-modo="escolha"] .lanc-panel-actions,
+#painel-novo-lancamento .cf-lanc-escolha[hidden],
+#painel-novo-lancamento .cf-lanc-modo-dica[hidden],
+body.cf-somente-leitura #painel-novo-lancamento {
+    display: none;
+}
+.cf-lanc-escolha {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 4px 0 8px;
+}
+.cf-lanc-escolha-botoes {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+.cf-lanc-escolha-botao {
+    min-height: 40px;
+    padding: 8px 10px;
+    border: 1px solid var(--border-color, #d5dae3);
+    border-radius: 8px;
+    background: #ffffff;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.cf-lanc-escolha-botao.primario {
+    border-color: #2563eb;
+    background: #2563eb;
+    color: #ffffff !important;
+}
+.cf-lanc-escolha-botao:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+.cf-lanc-escolha-texto,
+.cf-lanc-modo-dica {
+    margin: 0;
+    font-size: 12.5px;
+}
+.cf-lanc-modo-dica {
+    margin-bottom: 10px;
+}

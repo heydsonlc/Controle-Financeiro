@@ -65,8 +65,8 @@ test('abrir Despesas gera ate o mes seguinte, sem botao; reabrir, recarregar e t
     await page.click('.btn-nova-despesa');
     await preencherDespesa(page, { nome: AUTO, valor: '120', categoria: 'Moradia', vencimento: '2040-01-31',
         recorrente: true, tipo: 'mensal' });
-    await salvarDespesa(page);
-    await expect.poll(() => dialogos.at(-1)).toBe('Recorrência cadastrada. As contas são geradas automaticamente ao abrir a competência.');
+    // FIN-MVP-CADASTRO-UNIFICADO-01: cadastrada pelo modal unico (servico de Recorrencias); a geracao continua a de Despesas.
+    expect(await salvarDespesa(page)).toContain('Recorrência criada. As contas são geradas automaticamente ao abrir a competência em Despesas.');
     // A lista recarregada gera 01 a 04/2040 (lacunas ate o mes seguinte), sem confirmacao.
     await expect(resultado(page)).toHaveText('4 lançamentos recorrentes ou faturas gerados automaticamente até 04/2040.');
     await expect(page.locator('#gerar-contas')).toHaveCount(0);
@@ -266,8 +266,8 @@ test('recorrencia pela tela original: cadastrar, gerar, editar a conta, excluir 
     await page.click('.btn-nova-despesa');
     await preencherDespesa(page, { nome: 'Escola B', valor: '500', categoria: 'Moradia', vencimento: '2029-03-31',
         recorrente: true, tipo: 'mensal' });
-    await salvarDespesa(page);
-    await expect.poll(() => dialogos.at(-1)).toBe('Recorrência cadastrada. As contas são geradas automaticamente ao abrir a competência.');
+    // FIN-MVP-CADASTRO-UNIFICADO-01: cadastrada pelo modal unico (servico de Recorrencias); a geracao continua a de Despesas.
+    expect(await salvarDespesa(page)).toContain('Recorrência criada. As contas são geradas automaticamente ao abrir a competência em Despesas.');
     // A tela recarrega a lista depois de salvar: a geracao automatica (o mesmo motor) cria marco e abril.
     await expect(page.locator('#geracao-resultado')).toContainText('gerados automaticamente até 04/2029');
     for (const mes of ['2029-03', '2029-04']) {

@@ -52,8 +52,7 @@ test('despesa: pagar com juros justificados, estornar; movimentos e saldo do mes
     await page.click('.btn-nova-despesa');
     await preencherDespesa(page, { nome: 'Internet E2E', valor: '120', categoria: 'Moradia', vencimento: '2035-03-10',
         competencia: '2035-03' });
-    await salvarDespesa(page);
-    await expect.poll(() => dialogos.at(-1)).toBe('Despesa salva na competência 03/2035.');
+    expect(await salvarDespesa(page)).toContain('Despesa salva na competência 03/2035.');
     await expect(despesa(page, 'Internet E2E').locator('.status-badge')).toHaveText('Pendente');
 
     await abrirPagamento(page, 'Internet E2E');

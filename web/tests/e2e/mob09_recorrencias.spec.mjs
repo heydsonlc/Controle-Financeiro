@@ -7,6 +7,7 @@
 import { expect, test } from '@playwright/test';
 
 import { chamarRpc } from './despesas.mjs';
+import * as cad from './cadastro.mjs';
 
 const G = { email: process.env.CF_EMAIL_G || 'usuario.g@teste.local', senha: process.env.CF_SENHA_G };
 const H = { email: process.env.CF_EMAIL_H || 'usuario.h@teste.local', senha: process.env.CF_SENHA_H };
@@ -100,26 +101,24 @@ test('atalho da pagina principal abre as Recorrencias; lista, resumo e "+" para 
     await expect(page.locator('#mob-situacao button[aria-pressed="true"]')).toHaveText('Ativas');
 });
 
-test('cadastro: campos obrigatorios junto ao campo; mensal com boleto gravada como no desktop', async ({ page }) => {
+// FIN-MVP-CADASTRO-UNIFICADO-01: "+" abre o modal unico, ja em "Despesa recorrente"; o formulario desta pagina fica para a edicao.
+test('cadastro pelo modal unico: campos obrigatorios junto ao campo; mensal com boleto gravada como no desktop', async ({ page }) => {
     await entrar(page, G);
     await abrirRecorrencias(page);
     await page.click('#mob-nova');
-    await expect(page.locator('#mob-folha-titulo')).toHaveText('Nova recorrência');
-    await campo(page, 'Data inicial').fill('');
-    await page.click('#mob-rec-salvar');
-    await expect(erroDo(page, 'Nome')).toHaveText('Informe o nome.');
-    await expect(erroDo(page, 'Valor')).toHaveText('Informe um valor maior que zero.');
-    await expect(erroDo(page, 'Categoria')).toHaveText('Selecione a categoria.');
-    await expect(erroDo(page, 'Data inicial')).toHaveText('Informe a data do primeiro vencimento.');
+    await cad.esperarModal(page, 'recorrente');
+    await expect(page.locator('#mob-folha-fundo')).toBeHidden();
+    await page.fill('#cad-data-inicial', '');
+    await page.click('#cad-salvar');
+    await expect(cad.erroDoCampo(page, 'cad-nome')).toHaveText('Informe o nome.');
+    await expect(cad.erroDoCampo(page, 'cad-valor')).toHaveText('Informe um valor válido.');
+    await expect(cad.erroDoCampo(page, 'cad-categoria')).toHaveText('Selecione a categoria.');
+    await expect(cad.erroDoCampo(page, 'cad-data-inicial')).toHaveText('Informe a data do primeiro vencimento.');
     expect(await recorrencia(page, ALUGUEL)).toBeUndefined();
 
-    await campo(page, 'Nome').fill(ALUGUEL);
-    await campo(page, 'Valor').fill('1.250,00');
-    await campo(page, 'Categoria').selectOption({ index: 1 });
-    await campo(page, 'Data inicial').fill('2035-01-10');
-    await campo(page, 'Meio de pagamento').selectOption('boleto');
-    await campo(page, 'Observações').fill('Contrato ficticio');
-    await salvar(page);
+    const texto = await cad.cadastrar(page, { nome: ALUGUEL, valor: '1250', inicio: '2035-01-10', meio: 'boleto', observacoes: 'Contrato ficticio' });
+    expect(texto).toContain(`Recorrência “${ALUGUEL}” cadastrada`);
+    // Concluir volta a lista (a origem), recarregada, com o aviso da operacao.
     await expect(aviso(page)).toHaveText('Recorrência criada. As contas são geradas automaticamente ao abrir a competência em Despesas.');
     const r = await recorrencia(page, ALUGUEL);
     expect([r.tipo_recorrencia, Number(r.valor), r.data_vencimento, r.meio_pagamento, r.descricao, r.ativo])
@@ -132,17 +131,11 @@ test('cadastro a cada 2 semanas exige o dia da semana e grava semanal_2_D', asyn
     await entrar(page, G);
     await abrirRecorrencias(page);
     await page.click('#mob-nova');
-    await campo(page, 'Nome').fill(FAXINA);
-    await campo(page, 'Valor').fill('90');
-    await campo(page, 'Categoria').selectOption({ index: 1 });
-    await campo(page, 'Data inicial').fill('2035-01-10');
-    await campo(page, 'Frequência').selectOption('quinzenal');
-    await expect(campo(page, 'Dia da semana')).toBeVisible();
-    await page.click('#mob-rec-salvar');
-    await expect(erroDo(page, 'Dia da semana')).toHaveText('Selecione o dia da semana.');
-    await campo(page, 'Dia da semana').selectOption('3');
-    await campo(page, 'Meio de pagamento').selectOption('pix');
-    await salvar(page);
+    await cad.preencherCadastro(page, { nome: FAXINA, valor: '90', inicio: '2035-01-10', frequencia: 'quinzenal', meio: 'pix' });
+    await expect(page.locator('#cad-dia-semana')).toBeVisible();
+    await page.click('#cad-salvar');
+    await expect(cad.erroDoCampo(page, 'cad-dia-semana')).toHaveText('Selecione o dia da semana.');
+    await cad.cadastrar(page, { categoria: false, dia: 3 });
     const r = await recorrencia(page, FAXINA);
     expect([r.tipo_recorrencia, Number(r.valor), r.meio_pagamento]).toEqual(['semanal_2_3', 90, 'pix']);
     await expect(linha(page, FAXINA)).toContainText('A cada 2 semanas (quarta-feira)');
@@ -152,18 +145,17 @@ test('assinatura no cartao: so mensal ou anual; gravada pela funcao do cartao e 
     await entrar(page, G);
     await abrirRecorrencias(page);
     await page.click('#mob-nova');
-    await campo(page, 'Nome').fill(MUSICA);
-    await campo(page, 'Valor').fill('21,90');
-    await campo(page, 'Categoria').selectOption({ index: 1 });
-    await campo(page, 'Data inicial').fill('2035-01-08');
-    await campo(page, 'Meio de pagamento').selectOption('cartao');
-    await expect(campo(page, 'Frequência').locator('option[value="semanal"]')).toHaveAttribute('disabled', '');
-    await expect(campo(page, 'Frequência').locator('option[value="quinzenal"]')).toHaveAttribute('disabled', '');
-    await page.click('#mob-rec-salvar');
-    await expect(erroDo(page, 'Cartão')).toHaveText('Selecione o cartão.');
-    await campo(page, 'Cartão').selectOption({ label: MASTER });
-    await expect(folha(page).locator('.mob-ajuda', { hasText: 'Categoria do cartão:' })).toBeVisible();
-    await salvar(page);
+    await cad.preencherCadastro(page, { nome: MUSICA, valor: '21.90', inicio: '2035-01-08' });
+    await page.selectOption('#cad-meio-pagamento', 'cartao');
+    await expect(page.locator('#cad-frequencia option[value="semanal"]')).toHaveAttribute('disabled', '');
+    await expect(page.locator('#cad-frequencia option[value="quinzenal"]')).toHaveAttribute('disabled', '');
+    await expect(page.locator('#cad-cartao-recorrencia option')).toHaveCount(3);
+    await page.click('#cad-salvar');
+    await expect(cad.erroDoCampo(page, 'cad-cartao-recorrencia')).toHaveText('Selecione o cartão.');
+    await page.locator('#cad-cartao-recorrencia').selectOption({ label: MASTER });
+    await expect(page.locator('#cad-categoria-cartao')).toContainText('Categoria do cartão:');
+    const texto = await cad.salvarCadastro(page);
+    expect(texto).toContain('Recorrência no cartão criada.');
     await expect(aviso(page)).toContainText('Recorrência no cartão criada.');
     await expect(aviso(page)).toContainText('As compras entram na fatura do cartão.');
     const cartoes = await rpc(page, 'cartoes_do_perfil', { p_perfil_id: PERFIL_G });

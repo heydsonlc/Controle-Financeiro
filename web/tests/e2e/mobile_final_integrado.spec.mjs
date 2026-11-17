@@ -7,6 +7,7 @@
 import { expect, test } from '@playwright/test';
 
 import { chamarRpc } from './despesas.mjs';
+import * as cad from './cadastro.mjs';
 
 const G = { email: process.env.CF_EMAIL_G || 'usuario.g@teste.local', senha: process.env.CF_SENHA_G };
 const H = { email: process.env.CF_EMAIL_H || 'usuario.h@teste.local', senha: process.env.CF_SENHA_H };
@@ -95,17 +96,13 @@ test('cenario 1 (despesa): cadastrar, consultar na Lista, pagar, ver o movimento
     const saldo = centavos(contaG.saldo_atual);
     // Cadastro pela Nova Despesa (atalho Despesa).
     await page.goto(`/despesa-nova-mobile.html?mes=${MES}`);
-    await expect(page.locator('#mob-cadastro')).toHaveAttribute('aria-busy', 'false');
-    await campoCadastro(page, 'Descrição').fill('Integrada Luz G');
-    await campoCadastro(page, 'Valor').fill('271.37');
-    await campoCadastro(page, 'Categoria').selectOption({ label: 'Moradia' });
-    await campoCadastro(page, 'Vencimento').fill(`${MES}-20`);
-    await campoCadastro(page, 'Competência').fill(MES);
-    await page.locator('#mob-salvar').dblclick();
-    await expect(page.locator('#mob-confirmacao')).toContainText('“Integrada Luz G” cadastrada');
+    // FIN-MVP-CADASTRO-UNIFICADO-01: o cadastro e o do modal unico (despesa direta: pendente, sem pagamento).
+    await cad.preencherCadastro(page, { nome: 'Integrada Luz G', valor: '271.37', categoria: 'Moradia', vencimento: `${MES}-20`, competencia: MES });
+    await page.locator('#cad-salvar').dblclick();
+    await expect(cad.confirmacao(page)).toContainText('“Integrada Luz G” cadastrada como pendente');
     expect((await contasDoMes(page, MES, 'Integrada Luz G')).map((c) => [centavos(c.valor), c.status_pagamento])).toEqual([[27137, 'Pendente']]);
     // Consulta e pagamento pela Lista de Despesas mobile.
-    await page.click('#mob-ver-lista');
+    await page.click('#cad-ver-registro');
     await abrirLista(page, MES);
     await expect(linhaLista(page, 'Integrada Luz G')).toHaveCount(1);
     await linhaLista(page, 'Integrada Luz G').click();
@@ -160,18 +157,13 @@ test('cenario 3 (cartao): compra no cartao, na fatura certa; pagar a fatura; deb
     const master = await idDoCartao(page, MASTER);
     const saldo = centavos(contaG.saldo_atual);
     await page.goto(`/lancamento-mobile.html?mes=${MES}&tipo=cartao`);
-    await expect(page.locator('#mob-cadastro')).toHaveAttribute('aria-busy', 'false');
-    await campoCadastro(page, 'Descrição').fill('Integrada Fone G');
-    await campoCadastro(page, 'Valor').fill('345.60');
-    await campoCadastro(page, 'Categoria').selectOption({ label: 'Moradia' });
-    await campoCadastro(page, 'Cartão').selectOption({ label: MASTER });
-    await campoCadastro(page, 'Data da compra').fill(`${MES}-05`);
-    await campoCadastro(page, 'Data da compra').dispatchEvent('change');
-    await expect(campoCadastro(page, 'Fatura')).toHaveValue(MES);  // fecha dia 15: a fatura de 05/2033
-    await page.locator('#mob-salvar').dblclick();
-    await expect(page.locator('#mob-confirmacao')).toContainText(`Compra lançada na fatura 05/2033 do cartão ${MASTER}.`);
+    await cad.esperarModal(page, 'compra');
+    await cad.preencherCadastro(page, { nome: 'Integrada Fone G', valor: '345.60', categoria: 'Moradia', cartao: MASTER, data: `${MES}-05` });
+    await expect(page.locator('#cad-mes-fatura')).toHaveValue(MES);  // fecha dia 15: a fatura de 05/2033
+    await page.locator('#cad-salvar').dblclick();
+    await expect(cad.confirmacao(page)).toContainText(`Compra lançada na fatura 05/2033 do cartão ${MASTER}.`);
     // A fatura nos Cartoes mobile; pagamento pela conta.
-    await page.click('#mob-ver-cartao');
+    await page.click('#cad-ver-registro');
     await expect(page.locator('#mob-lista')).toHaveAttribute('data-carregado', `${MES}:${master}`);
     await expect(page.locator('#mob-lista')).toContainText('Integrada Fone G');
     await page.click('#mob-pagar-fatura');

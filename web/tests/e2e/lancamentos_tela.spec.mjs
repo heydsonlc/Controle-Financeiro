@@ -3,6 +3,8 @@
 // usuario A no perfil Empresa.
 import { expect, test } from '@playwright/test';
 
+import * as cad from './cadastro.mjs';
+
 import { chamarRpc, perfilAtivoId, registrarDialogos } from './despesas.mjs';
 import { trocarPerfil } from './moldura.mjs';
 
@@ -48,9 +50,14 @@ async function abrirTela(page) {
 
 const linha = (page, texto) => page.locator('#lista-lancamentos .tbl-row', { hasText: texto });
 
+// FIN-MVP-CADASTRO-UNIFICADO-01: o painel "Novo lancamento" oferece a escolha do tipo; Despesa direta e Compra no cartao
+// abrem o modal unico (cadastro.mjs); o formulario original fica para abastecimento, entrada/credito e edicao.
 async function novo(page, tipo) {
     await page.click('#btn-novo-lancamento');
-    await page.selectOption('#lancamento-tipo', tipo);
+    await expect(page.locator('#cf-lanc-escolha')).toBeVisible();
+    await expect(page.locator('#form-lancamento')).toBeHidden();
+    await page.click(tipo === 'cartao' ? '#cf-lanc-cartao' : '#cf-lanc-despesa');
+    await cad.esperarModal(page, tipo === 'cartao' ? 'compra' : 'direta');
 }
 
 async function salvar(page) {
@@ -66,43 +73,47 @@ test('despesa direta, compra no cartao, recusas e exclusoes como no Flask', asyn
     expect(criado.status).toBe(200);
     await abrirTela(page);
 
-    // Despesa direta (pendente).
+    // Despesa direta (pendente), pelo modal unico. A competencia continua a da tela Lancamentos: o mes da propria data,
+    // mostrada no modal e sem ajuste manual (a regra de Despesas, mes anterior ao vencimento, nao vale aqui).
     await novo(page, 'direto');
-    await page.fill('#lancamento-descricao', 'Padaria Lanc E2E');
-    await page.fill('#lancamento-valor', '23.40');
-    await page.fill('#lancamento-data', '2034-02-05');
-    await page.selectOption('#lancamento-categoria-geral', { index: 1 });
-    await salvar(page);
-    await expect.poll(() => dialogos.join('|')).toContain('Despesa direta salva com sucesso!');
+    await expect(page.locator('#cad-modal .mob-campo', { has: page.locator('#cad-vencimento') })).toContainText('Data *');
+    await cad.preencherCadastro(page, { nome: 'Padaria Lanc E2E', valor: '23.40', vencimento: '2034-02-05' });
+    await expect(page.locator('#cad-competencia-texto')).toHaveText('Competência: fevereiro/2034');
+    await expect(page.locator('#cad-alterar-competencia')).toBeHidden();
+    await expect(cad.modal(page)).not.toContainText(/já foi paga|Data de pagamento/i);  // "paga" na criacao nao existe mais
+    await page.locator('#cad-salvar').dblclick();
+    await expect(cad.confirmacao(page)).toContainText('“Padaria Lanc E2E” cadastrada como pendente');
+    await expect(cad.confirmacao(page)).toContainText('Despesa salva na competência 02/2034.');
+    await page.click('#cad-concluir');
+    await expect(cad.modal(page)).toHaveCount(0);
+    await expect(page).toHaveURL(/lancamentos\.html/);  // volta a origem
     await page.fill('#filtro-mes', '');
     await page.locator('#filtro-mes').dispatchEvent('change');
-    await expect(linha(page, 'Padaria Lanc E2E')).toBeVisible();
+    await expect(linha(page, 'Padaria Lanc E2E')).toHaveCount(1);  // toque duplo: uma despesa so
+    const doMes = async (mes) => (await chamarRpc(page, 'contas_do_mes', { p_perfil_id: perfil, p_mes: `${mes}-01` })).corpo
+        .filter((c) => c.nome === 'Padaria Lanc E2E').map((c) => c.status_pagamento);
+    expect(await doMes('2034-02')).toEqual(['Pendente']);
+    expect(await doMes('2034-01')).toEqual([]);
 
-    // "Paga" na criacao: recusada com o motivo (pagar escolhe a conta e registra o movimento); nada gravado.
-    await novo(page, 'direto');
-    await page.fill('#lancamento-descricao', 'Paga Lanc E2E');
-    await page.fill('#lancamento-valor', '10');
-    await page.fill('#lancamento-data', '2034-02-06');
-    await page.selectOption('#lancamento-categoria-geral', { index: 1 });
-    await page.check('#lancamento-pago');
-    await salvar(page);
+    // Um so caminho: o formulario do painel nao cria mais despesa nem compra comum (so com abastecimento); pedir por
+    // ele, mesmo "paga", e recusado sem gravar.
+    const recusa = await page.evaluate(async () => (await fetch('/api/despesas', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome: 'Paga Lanc E2E', valor: 10, categoria_id: 1, data_vencimento: '2034-02-06', pago: true }) })).json());
+    expect(recusa.success).toBe(false);
     await expect.poll(() => dialogos.join('|')).toContain('Use a ação de pagamento em Despesas');
+    const comum = await page.evaluate(async () => (await fetch('/api/despesas', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome: 'Paga Lanc E2E', valor: 10, categoria_id: 1, data_vencimento: '2034-02-06' }) })).json());
+    expect(comum.success).toBe(false);
+    await expect.poll(() => dialogos.join('|')).toContain('Por este formulário só se lança despesa ou compra com abastecimento');
     const despesas = await chamarRpc(page, 'despesas_diretas_tela', { p_perfil_id: perfil });
     expect(despesas.corpo.filter((d) => d.nome === 'Paga Lanc E2E')).toEqual([]);
 
-    // Compra parcelada no cartao (3 parcelas a partir de 02/2034).
+    // Compra parcelada no cartao (3 parcelas a partir de 02/2034), pelo modal unico.
     await page.reload();
     await abrirTela(page);
     await novo(page, 'cartao');
-    await page.selectOption('#lancamento-cartao', { label: CARTAO });
-    await page.selectOption('#lancamento-categoria-despesa-cartao', { index: 1 });
-    await page.fill('#lancamento-descricao', 'Fone Lanc E2E');
-    await page.fill('#lancamento-valor', '90');
-    await page.fill('#lancamento-data', '2034-02-05');
-    await page.fill('#lancamento-mes-fatura', '2034-02');
-    await page.fill('#lancamento-parcelas', '3');
-    await salvar(page);
-    await expect.poll(() => dialogos.join('|')).toContain('Lançamento em cartão salvo com sucesso!');
+    await cad.preencherCadastro(page, { cartao: CARTAO, nome: 'Fone Lanc E2E', valor: '90', data: '2034-02-05', fatura: '2034-02', parcelas: 3 });
+    expect(await cad.salvarCadastro(page)).toContain(`Compra lançada em 3 parcelas no cartão ${CARTAO}`);
     await page.fill('#filtro-mes', '');
     await page.locator('#filtro-mes').dispatchEvent('change');
     await expect(linha(page, 'Fone Lanc E2E')).toHaveCount(3);

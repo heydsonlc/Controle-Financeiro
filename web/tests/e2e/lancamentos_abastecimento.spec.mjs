@@ -60,6 +60,7 @@ const opcoes = (page, id) => page.locator(`#${id} option`).allTextContents();
 
 async function compraCombustivel(page, ctx, { descricao, valor }) {
     await page.click('#btn-novo-lancamento');
+    await page.click('#cf-lanc-abastecimento');  // FIN-MVP-CADASTRO-UNIFICADO-01: o formulario do painel fica para o abastecimento
     await page.selectOption('#lancamento-tipo', 'cartao');
     await page.selectOption('#lancamento-cartao', String(ctx.cartao));
     await expect(page.locator(`#lancamento-categoria-despesa-cartao option[value="${ctx.combustivel}"]`)).toHaveCount(1);
@@ -176,6 +177,7 @@ test('despesa direta com abastecimento; trocar a categoria pede a decisao e nao 
     const ctx = await contexto(page);
     const flex = ctx.veiculos['Flex E (ficticio)'];
     await page.click('#btn-novo-lancamento');
+    await page.click('#cf-lanc-abastecimento');  // FIN-MVP-CADASTRO-UNIFICADO-01: o formulario do painel fica para o abastecimento
     await page.selectOption('#lancamento-tipo', 'direto');
     await expect(page.locator(`#lancamento-categoria-geral option[value="${ctx.combustivel}"]`)).toHaveCount(1);
     await page.selectOption('#lancamento-categoria-geral', ctx.combustivel);

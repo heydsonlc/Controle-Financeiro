@@ -750,18 +750,28 @@ test('nova despesa mobile: protegida, sem moldura, CSS restrito e cadastro so pe
         const pagina = await readFile(path.join(destino, 'js', 'despesa-nova-mobile.js'), 'utf8');
         assert.doesNotMatch(pagina, /\.rpc\s*\(|\.from\s*\(|supabase/, 'nenhuma consulta propria: so o servico do desktop');
         assert.ok(pagina.includes("from './despesas-servico.js'"), 'servico de Despesas do desktop');
-        // FIN-MVP-MOBILE-06: o formulario e o comum (Nova Despesa e Registrar Lancamento), sem segunda copia.
-        assert.ok(pagina.includes("from './despesa-formulario.js'") && pagina.includes('montarFormularioDespesa(cadastro'));
-        const script = await readFile(path.join(destino, 'js', 'despesa-formulario.js'), 'utf8');
-        assert.doesNotMatch(script, /\.rpc\s*\(|\.from\s*\(|supabase/, 'formulario sem consulta propria');
-        assert.match(script, /api\('POST', '\/api\/despesas', corpo\)/, 'a mesma rota do formulario do desktop');
-        // O que o servico do desktop recusa nao e oferecido: despesa ja paga e consorcio; o cartao nunca vai a /api/despesas.
-        assert.match(script, /pago: false/);
-        assert.doesNotMatch(script, /e_consorcio|meio_pagamento = 'cartao'|meio_pagamento: 'cartao'/, 'sem consorcio nem conta a pagar no cartao');
-        // Ajuste final (Proposta A): "Cartao de credito" grava so pela compra da tela Lancamentos (criar_compra no servico comum).
-        assert.ok(script.includes("from './compras-servico.js'"), 'compra no cartao pelo servico comum a tela Lancamentos');
-        assert.match(script, /api\('POST', `\/api\/cartoes\/\$\{corpo\.cartao_id\}\/lancamentos`, corpo, responderCompras\)/);
-        assert.ok(script.includes('O cadastro de despesas recorrentes no cartão de crédito será disponibilizado em uma etapa posterior.'));
+        // FIN-MVP-CADASTRO-UNIFICADO-01: o cadastro e o do modal unico, o mesmo dos tres modulos no desktop e no celular.
+        assert.ok(pagina.includes("from './cadastro-despesa.js'") && pagina.includes('abrirCadastroDespesa({'));
+        assert.match(html, /href="css\/cadastro-despesa\.css"/);
+        const script = await readFile(path.join(destino, 'js', 'cadastro-despesa.js'), 'utf8');
+        const codigo = script.replace(/^\s*\/\/.*$/gm, '');
+        assert.doesNotMatch(codigo, /\.rpc\s*\(|\.from\s*\(|supabase|innerHTML/, 'modal sem consulta propria e sem innerHTML');
+        // Cada tipo de operacao pela rota do servico que ja existe (nenhuma rota nova).
+        assert.match(codigo, /api\('POST', '\/api\/despesas', corpo\)/, 'despesa direta: servico de Despesas');
+        assert.match(codigo, /api\('POST', `\/api\/cartoes\/\$\{corpo\.cartao_id\}\/lancamentos`, corpo, responderCompras\)/, 'compra: servico de compras');
+        assert.match(codigo, /api\('POST', '\/api\/recorrencias', corpo, responderRecorrencias\)/, 'recorrencia: servico de Recorrencias');
+        assert.match(codigo, /api\('POST', '\/api\/consorcios', corpo, responderRecorrencias\)/, 'consorcio: servico proprio');
+        // Cadastro e pagamento separados: nenhum corpo leva pagamento ("Despesa ja foi paga" nao existe).
+        assert.doesNotMatch(codigo, /\bpago\s*:|conta_pagamento|data_pagamento|ja foi paga|já foi paga/i, 'sem campos de pagamento');
+        // Um so componente: as seis telas de cadastro o importam, e o formulario antigo do celular saiu.
+        for (const tela of ['despesas-adaptador.js', 'lancamentos-cadastro.js', 'recorrencias-adaptador.js', 'despesa-nova-mobile.js',
+            'lancamento-mobile.js', 'recorrencias-mobile.js']) {
+            assert.ok((await readFile(path.join(destino, 'js', tela), 'utf8')).includes("from './cadastro-despesa.js'"), `${tela} usa o modal unico`);
+        }
+        assert.doesNotMatch(await readFile(path.join(destino, 'js', 'despesa-formulario.js'), 'utf8'), /montarFormularioDespesa/);
+        for (const pagina2 of ['contas.html', 'lancamentos.html', 'recorrencias.html', 'lancamento-mobile.html', 'recorrencias-mobile.html']) {
+            assert.match(await readFile(path.join(destino, pagina2), 'utf8'), /css\/cadastro-despesa\.css/, `${pagina2}: CSS do modal`);
+        }
         const compras = await readFile(path.join(destino, 'js', 'compras-servico.js'), 'utf8');
         assert.match(compras, /supabase\.rpc\('criar_compra'/);
         const lancamentos = await readFile(path.join(destino, 'js', 'lancamentos-adaptador.js'), 'utf8');
@@ -810,12 +820,12 @@ test('registrar lancamento mobile: protegido, sem moldura, CSS restrito, operaco
             assert.doesNotMatch(await ler(arquivo), /\.rpc\s*\(|\.from\s*\(|supabase/, `${arquivo}: so os servicos do desktop`);
         }
         const pagina = await ler('lancamento-mobile.js');
-        for (const modulo of ['despesa-formulario.js', 'receita-formulario.js', 'transferencia-formulario.js', 'abastecimento-formulario.js']) {
+        for (const modulo of ['cadastro-despesa.js', 'receita-formulario.js', 'transferencia-formulario.js', 'abastecimento-formulario.js']) {
             assert.ok(pagina.includes(`from './${modulo}'`), `formulario existente: ${modulo}`);
         }
         // Um formulario de cada: a Nova Despesa e as Receitas mobile usam os mesmos modulos.
         assert.ok((await ler('receitas-mobile.js')).includes("from './receita-formulario.js'"));
-        assert.ok((await ler('despesa-nova-mobile.js')).includes("from './despesa-formulario.js'"));
+        assert.ok((await ler('despesa-nova-mobile.js')).includes("from './cadastro-despesa.js'"));
         // Gravacoes so nos servicos comuns ao desktop (a tela do desktop chama o mesmo servico).
         assert.match(await ler('abastecimento-servico.js'), /supabase\.rpc\('salvar_lancamento_abastecimento'/);
         assert.ok(!/rpc\('salvar_lancamento_abastecimento'/.test(await ler('lancamentos-adaptador.js'))

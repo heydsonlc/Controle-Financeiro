@@ -2,6 +2,8 @@
 // grava nada e e exatamente o que fica gravado. Usuario E (Cartao E). Dados FICTICIOS; grava no banco descartavel.
 import { expect, test } from '@playwright/test';
 
+import * as cad from './cadastro.mjs';
+
 import { chamarRpc, perfilAtivoId, registrarDialogos } from './despesas.mjs';
 
 const E = { email: process.env.CF_EMAIL_E || 'usuario.e@teste.local', senha: process.env.CF_SENHA_E };
@@ -77,51 +79,53 @@ for (const largura of [1366, 1920]) {
         const nome = `NOTEBOOK P14 ${largura}`;
         await page.goto('/lancamentos.html');
         await expect(page.locator('#lista-lancamentos')).not.toContainText('Carregando');
-        await page.click('#btn-novo-lancamento');
-        await page.selectOption('#lancamento-tipo', 'cartao');
-        await page.selectOption('#lancamento-cartao', String(ctx.cartao));
-        await page.selectOption('#lancamento-categoria-despesa-cartao', String(ctx.categoria));
-        await page.fill('#lancamento-descricao', nome);
-        await page.fill('#lancamento-data', hoje());
-        await page.fill('#lancamento-mes-fatura', hoje().slice(0, 7));
-        await page.fill('#lancamento-valor', '100');
-        const previa = page.locator('#lancamento-previa-parcelas');
+        // FIN-MVP-CADASTRO-UNIFICADO-01: a compra e cadastrada pelo modal unico; a previa e a mesma (previa_compra no banco).
+        const abrirCompra = async (valor) => {
+            await page.click('#btn-novo-lancamento');
+            await page.click('#cf-lanc-cartao');
+            await cad.esperarModal(page, 'compra');
+            await expect.poll(() => page.locator('#cad-cartao option').count()).toBeGreaterThan(1);
+            await page.selectOption('#cad-cartao', String(ctx.cartao));
+            await page.selectOption('#cad-categoria', String(ctx.categoria));
+            await page.fill('#cad-nome', nome);
+            await page.fill('#cad-data-compra', hoje());
+            await page.locator('#cad-data-compra').dispatchEvent('change');
+            await page.fill('#cad-mes-fatura', hoje().slice(0, 7));
+            await page.fill('#cad-valor', valor);
+        };
+        await abrirCompra('100');
+        const previa = page.locator('#mob-previa-parcelas');
         await expect(previa).toBeHidden();  // a vista: sem previa
-        await page.fill('#lancamento-parcelas', '3');
+        await page.fill('#cad-parcelas', '3');
         await expect(previa.locator('tbody tr')).toHaveCount(3);
         const valores = (await previa.locator('tbody td:nth-child(3)').allTextContents()).map(normal);
         expect([...valores].sort()).toEqual([moeda(33.33), moeda(33.33), moeda(33.34)].sort());
         await expect(previa.locator('tfoot')).toContainText(moeda(100));
-        await page.fill('#lancamento-parcelas', '12');
+        await page.fill('#cad-parcelas', '12');
         await expect(previa.locator('tbody tr')).toHaveCount(12);
-        expect((await previa.locator('.lanc-previa-rolagem').boundingBox()).height).toBeLessThanOrEqual(170);  // rolagem limitada
-        await page.fill('#lancamento-valor', '500');
-        await page.fill('#lancamento-parcelas', '4');
+        // Previa longa: a rolagem e a do corpo do modal; cabecalho e rodape (Salvar) continuam visiveis.
+        const rodape = await page.locator('.cad-rodape').boundingBox();
+        expect(rodape.y + rodape.height).toBeLessThanOrEqual(page.viewportSize().height);
+        await page.fill('#cad-valor', '500');
+        await page.fill('#cad-parcelas', '4');
         await expect(previa.locator('tbody tr')).toHaveCount(4);
         await expect(previa.locator('tfoot')).toContainText(moeda(500));
         await previa.scrollIntoViewIfNeeded();
         if (EVIDENCIAS) await page.screenshot({ path: `${EVIDENCIAS}/p14_previa_${largura}.png` });
-        await page.fill('#lancamento-parcelas', '1');
+        await page.fill('#cad-parcelas', '1');
         await expect(previa).toBeHidden();
 
-        // Cancelar (limpar o formulario) nao grava nada
-        await page.click('.lanc-panel-action[title="Limpar formulario"]');
+        // Cancelar nao grava nada
+        await cad.fecharCadastro(page);
         expect(await compras(page, ctx, nome)).toEqual([]);
 
         // Confirmar: as parcelas gravadas sao as da previa
-        await page.click('#btn-novo-lancamento');
-        await page.selectOption('#lancamento-tipo', 'cartao');
-        await page.selectOption('#lancamento-cartao', String(ctx.cartao));
-        await page.selectOption('#lancamento-categoria-despesa-cartao', String(ctx.categoria));
-        await page.fill('#lancamento-descricao', nome);
-        await page.fill('#lancamento-data', hoje());
-        await page.fill('#lancamento-mes-fatura', hoje().slice(0, 7));
-        await page.fill('#lancamento-valor', '500');
-        await page.fill('#lancamento-parcelas', '4');
+        await abrirCompra('500');
+        await page.fill('#cad-parcelas', '4');
         await expect(previa.locator('tbody tr')).toHaveCount(4);
         const vistas = (await previa.locator('tbody tr').allTextContents()).map(normal);
-        await page.locator('#form-lancamento').evaluate((f) => f.requestSubmit());
-        await expect.poll(() => dialogos.at(-1)).toBe('Lançamento em cartão salvo com sucesso!');
+        expect(await cad.salvarCadastro(page)).toContain('Compra lançada em 4 parcelas');
+        expect(dialogos).toEqual([]);
         const gravadas = (await compras(page, ctx, nome)).sort((a, b) => a.numero_parcela - b.numero_parcela)
             .map((c) => normal(`${c.numero_parcela}/${c.total_parcelas}${String(c.mes_fatura).slice(5, 7)}/${String(c.mes_fatura).slice(0, 4)}${moeda(c.valor)}`));
         expect(gravadas).toEqual(vistas.map((v) => v.replace(/ \*/, '')));

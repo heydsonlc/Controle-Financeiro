@@ -16,7 +16,7 @@ import { deslocarMes, el, mesAtualBrasilia } from './comum.js';
 import { hojeBrasilia } from './adaptador-comum.js';
 import { configurarCompras, responderCompras } from './compras-servico.js';
 import { configurarDespesas, podeGerirPerfil, responderDespesas } from './despesas-servico.js';
-import { configurarRecorrencias, responderRecorrencias } from './recorrencias-servico.js';
+import { configurarRecorrencias, responderRecorrencias, ultimoAviso } from './recorrencias-servico.js';
 import { blocoCartao } from './mobile-cartao.js';
 import { campoComErro, criarFila, erroDoServico, mesAno, moeda, mostrarErros, perguntaConsolidada } from './mobile-formulario.js';
 import { entrada, mensagem, mostrarMensagem, seletor } from './mobile-ui.js';
@@ -30,13 +30,12 @@ const LIMITE_OBSERVACOES = 500;
 const FALHA = 'Falha ao salvar. Nada foi gravado.';
 
 const api = criarFila('Cadastro de despesa', responderDespesas);
-let avisoDaRecorrencia = '';  // texto do servico de Recorrencias sobre a ultima gravacao (quando o servico e configurado aqui)
 
 // Perfil em uso nos tres servicos. A tela que ja configurou um servico (com os ganchos dela) passa false para ele.
 export function prepararCadastro(perfilId, { despesas = true, compras = true, recorrencias = true } = {}) {
     if (despesas) configurarDespesas(perfilId);
     if (compras) configurarCompras(perfilId);
-    if (recorrencias) configurarRecorrencias(perfilId, { avisar: (texto) => { avisoDaRecorrencia = texto; } });
+    if (recorrencias) configurarRecorrencias(perfilId);
 }
 
 const competenciaPorExtenso = (mes) => {
@@ -127,15 +126,20 @@ const nota = (texto, classe = '') => inteiro(el('p', `cad-nota${classe ? ` cad-n
 // ---------------------------------------------------------------------------------------------------------------
 // 1. Despesa direta: obrigacao Pendente; o pagamento e depois, pela acao Pagar.
 
+// ctx.regra: 'vencimento' (Despesas: mes anterior ao vencimento, com ajuste manual) ou 'data' (Lancamentos do desktop: o
+// mes da propria data, sem ajuste manual, como a tela ja grava). O modal so mostra e envia; a regra de cada origem nao muda.
 function despesaDireta(ctx) {
     const { comum, categorias, mes, dados } = ctx;
+    const pelaData = ctx.regra === 'data';
+    const calcular = (data) => (pelaData ? data.slice(0, 7) : competenciaDoVencimento(data));
     const c = camposComuns(comum, categorias, { rotuloNome: 'Nome', exemplo: 'Ex.: Conta de luz, Aluguel, Mercado' });
-    const vencimento = entrada('date', dados.data || '');
+    const vencimento = entrada('date', dados.data || (pelaData ? hojeBrasilia() : ''));
     vencimento.id = 'cad-vencimento';
-    const cVencimento = campoComErro('Data de vencimento', vencimento, { obrigatorio: true });
+    const dataPadrao = vencimento.value;
+    const cVencimento = campoComErro(pelaData ? 'Data' : 'Data de vencimento', vencimento, { obrigatorio: true });
 
     // Competencia: informacao compacta; a alteracao manual continua possivel, por uma acao discreta.
-    const competencia = entrada('month', mes);
+    const competencia = entrada('month', pelaData ? '' : mes);
     competencia.id = 'cad-competencia';
     let manual = false;
     const textoCompetencia = el('span', 'cad-competencia-texto');
@@ -144,6 +148,7 @@ function despesaDireta(ctx) {
     alterar.id = 'cad-alterar-competencia';
     const resumo = el('div', 'cad-competencia');
     resumo.append(textoCompetencia, alterar);
+    alterar.hidden = pelaData;  // em Lancamentos a competencia nao e ajustada a mao (regra atual da tela)
     const cCompetencia = campoComErro('Competência', competencia, { ajuda: 'Mês do salário que pagará a despesa' });
     cCompetencia.hidden = true;
     const caixaCompetencia = meio(el('div', 'cad-competencia-caixa'));
@@ -158,10 +163,10 @@ function despesaDireta(ctx) {
     });
     competencia.addEventListener('input', () => { manual = true; mostrar(); });
     vencimento.addEventListener('change', () => {
-        if (vencimento.value && !manual) competencia.value = competenciaDoVencimento(vencimento.value);
+        if (vencimento.value && !manual) competencia.value = calcular(vencimento.value);
         mostrar();
     });
-    if (vencimento.value) competencia.value = competenciaDoVencimento(vencimento.value);
+    if (vencimento.value) competencia.value = calcular(vencimento.value);
     mostrar();
 
     const obs = campoObservacoes(comum);
@@ -169,11 +174,11 @@ function despesaDireta(ctx) {
         nos: [inteiro(c.cNome), c.cCategoria, c.cValor, meio(cVencimento), caixaCompetencia, obs.no,
             nota('O pagamento é registrado depois, pela ação Pagar: a despesa é cadastrada como pendente.', 'info')],
         foco: c.nome,
-        preenchidos: () => [vencimento.value && 'Data de vencimento', manual && 'Competência'].filter(Boolean),
+        preenchidos: () => [vencimento.value !== dataPadrao && (pelaData ? 'Data' : 'Data de vencimento'), manual && 'Competência'].filter(Boolean),
         validar() {
             const erros = c.erros();
-            if (!vencimento.value) erros.push([cVencimento, 'Informe a data de vencimento.']);
-            if (!/^\d{4}-\d{2}$/.test(competencia.value)) {
+            if (!vencimento.value) erros.push([cVencimento, pelaData ? 'Informe a data.' : 'Informe a data de vencimento.']);
+            else if (!/^\d{4}-\d{2}$/.test(competencia.value) && !pelaData) {
                 cCompetencia.hidden = false;
                 alterar.hidden = true;
                 erros.push([cCompetencia, 'Informe a competência.']);
@@ -187,7 +192,7 @@ function despesaDireta(ctx) {
                 mes_competencia: competencia.value };
             const r = await api('POST', '/api/despesas', corpo);
             if (!r.success) {
-                if (/compet/i.test(r.error || '')) { cCompetencia.hidden = false; alterar.hidden = true; }
+                if (/compet/i.test(r.error || '') && !pelaData) { cCompetencia.hidden = false; alterar.hidden = true; }
                 return { erro: r.error || FALHA, pares: [[/compet/i, cCompetencia], [/valor/i, c.cValor], [/categoria/i, c.cCategoria],
                     [/nome/i, c.cNome], [/vencimento/i, cVencimento]] };
             }
@@ -233,9 +238,14 @@ function compraCartao(ctx) {
                         consolidada.hidden = true;
                         resolver({ erro: 'Compra não salva: a inclusão na fatura consolidada não foi confirmada.', pares: [] });
                     },
-                    aoConfirmar: (confirmacoes) => { consolidada.hidden = true; resolver(gravar(confirmacoes)); },
+                    aoConfirmar: (confirmacoes) => {
+                        if (consolidada.hidden) return;  // toque duplo: uma gravacao so
+                        consolidada.hidden = true;
+                        ctx.aguardando(false);
+                        resolver(gravar(confirmacoes));
+                    },
                 });
-                ctx.aguardando();
+                ctx.aguardando(true);
             });
         }
         if (!r || !r.success) {
@@ -378,14 +388,14 @@ function despesaRecorrente(ctx) {
                 frequencia_semanas: frequencia.value === 'quinzenal' ? 2 : 1, dia_semana: semanal() ? dia.value : null,
                 meio_pagamento: pagamento.value || null, cartao_id: pagamento.value === 'cartao' ? cartao.value : null,
                 conta_bancaria_id: pagamento.value === 'debito_automatico' ? conta.value : null, ativo: !inativa.checked };
-            avisoDaRecorrencia = '';
+            ultimoAviso(true);
             const r = await api('POST', '/api/recorrencias', corpo, responderRecorrencias);
             if (!r || !r.success) {
                 return { erro: (r && r.error) || FALHA, pares: [[/dia da semana/i, cDia], [/cart[aã]o/i, cCartao], [/conta banc/i, cConta],
                     [/primeiro vencimento|data/i, cInicio], [/categoria/i, c.cCategoria], [/valor/i, c.cValor], [/nome/i, c.cNome]] };
             }
             return { titulo: `Recorrência “${corpo.nome}” cadastrada${corpo.ativo ? '' : ' (inativa)'}`,
-                linhas: [avisoDaRecorrencia || 'Recorrência criada. As contas são geradas automaticamente ao abrir a competência em Despesas.'],
+                linhas: [ultimoAviso() || 'Recorrência criada. As contas são geradas automaticamente ao abrir a competência em Despesas.'],
                 destino: { modulo: 'recorrencias', rotulo: 'Ver em Recorrências' }, registro: { tipo: TIPOS.DESPESA_RECORRENTE, corpo } };
         },
     };
@@ -502,6 +512,19 @@ function consorcio(ctx) {
     };
 }
 
+// Enderecos do registro em cada modulo, para o link da confirmacao. No desktop, o modulo de origem nao ganha link (a
+// propria tela e atualizada por aoSalvar).
+export const destinosMobile = () => ({
+    despesas: (mes) => `despesas-mobile.html?mes=${mes}`,
+    cartoes: (mes, cartaoId) => `cartoes-mobile.html?mes=${mes}&cartao=${cartaoId}`,
+    recorrencias: () => 'recorrencias-mobile.html',
+});
+export function destinosDesktop(origem) {
+    const todos = { despesas: () => 'contas.html', cartoes: () => 'cartoes.html', recorrencias: () => 'recorrencias.html' };
+    delete todos[origem];
+    return todos;
+}
+
 const MONTADORES = { DESPESA_DIRETA: despesaDireta, COMPRA_CARTAO: compraCartao, DESPESA_RECORRENTE: despesaRecorrente, CONSORCIO: consorcio };
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -513,6 +536,7 @@ let aberto = null;  // um cadastro por vez
 //   origem         'despesas' | 'lancamentos' | 'recorrencias' (so identifica quem abriu: volta-se sempre a ela)
 //   mes            competencia aberta na origem (AAAA-MM); padrao: mes atual
 //   tipoInicial    um de TIPOS; tipos: lista dos tipos oferecidos (padrao: os quatro)
+//   competencia    'vencimento' (padrao, regra de Despesas) ou 'data' (regra do Lancamentos do desktop) na despesa direta
 //   dados          pre-preenchimento: nome, valor, categoria_id, observacoes, data, cartao_id, meio_pagamento, frequencia
 //   destinos       { despesas(mes), cartoes(mes, cartaoId), recorrencias() } -> endereco do registro no modulo (opcional)
 //   aoSalvar(registro)  depois de cada gravacao confirmada (a tela atualiza a lista); aoFechar() ao sair
@@ -527,6 +551,7 @@ export function abrirCadastroDespesa(opcoes = {}) {
     let tipoAtual = tipos.includes(opcoes.tipoInicial) ? opcoes.tipoInicial : tipos[0];
     let secao = null;
     let enviando = false;
+    let perguntando = false;  // o servico pediu uma confirmacao (fatura consolidada): a gravacao espera a resposta
     let categorias = [];
     let salvou = false;
 
@@ -583,7 +608,7 @@ export function abrirCadastroDespesa(opcoes = {}) {
     let terminar;
     const fim = new Promise((resolver) => { terminar = resolver; });
     function encerrar() {
-        if (enviando) return;
+        if (enviando && !perguntando) return;
         document.removeEventListener('keydown', tecla, true);
         if (viewport) viewport.removeEventListener('resize', medir);
         fundo.remove();
@@ -602,7 +627,7 @@ export function abrirCadastroDespesa(opcoes = {}) {
         modal.dataset.tipo = tipo;
         mostrarMensagem(m, '');
         troca.hidden = true;
-        secao = MONTADORES[tipo]({ comum, categorias, mes, dados, aguardando: () => { enviando = false; mostrarMensagem(m, ''); } });
+        secao = MONTADORES[tipo]({ comum, categorias, mes, dados, regra: opcoes.competencia === 'data' ? 'data' : 'vencimento', aguardando: (sim) => { perguntando = sim; mostrarMensagem(m, sim ? '' : 'Salvando...'); } });
         grade.replaceChildren(...secao.nos);
         if (secao.aoMontar) secao.aoMontar();
         corpo.scrollTop = 0;
@@ -687,6 +712,7 @@ export function abrirCadastroDespesa(opcoes = {}) {
             resultado = { erro: FALHA, pares: [] };
         }
         enviando = false;
+        perguntando = false;
         cancelar.disabled = false;
         if (resultado.erro) {
             salvar.disabled = false;

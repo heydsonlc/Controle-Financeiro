@@ -6,6 +6,7 @@ import { expect, test } from '@playwright/test';
 
 import { abrirDespesas, chamarRpc, despesa, esperarMes, estornar, pagar, perfilAtivoId, registrarDialogos } from './despesas.mjs';
 import { irPeloMenu, itemDoMenu, trocarPerfil } from './moldura.mjs';
+import * as cad from './cadastro.mjs';
 
 const A = { email: process.env.CF_EMAIL_A || 'usuario.a@teste.local', senha: process.env.CF_SENHA_A };
 const B = { email: process.env.CF_EMAIL_B || 'usuario.b@teste.local', senha: process.env.CF_SENHA_B };
@@ -290,45 +291,45 @@ test('fechamento confirmado sugere a fatura; manual prevalece; consolidada so co
     await expect(page.locator('#cartao-compra-no-fechamento')).toHaveValue('PROXIMO');
 
     // MVP-FIN-AJUSTES-01 (P11): a compra nova fica em Lancamentos, com a mesma sugestao pelo fechamento.
+    // FIN-MVP-CADASTRO-UNIFICADO-01: cadastrada pelo modal unico (Compra no cartao), pelo mesmo servico de compras.
     const abrirCompra = async () => {
         await page.goto('/lancamentos.html');
         await expect(page.locator('#filtro-mes')).not.toHaveValue('');
         await page.click('#btn-novo-lancamento');
-        await page.selectOption('#lancamento-tipo', 'cartao');
-        await page.selectOption('#lancamento-cartao', { label: 'Cartao Lilas' });
+        await page.click('#cf-lanc-cartao');
+        await cad.preencherCadastro(page, { tipo: 'compra', cartao: 'Cartao Lilas', categoria: 'Moradia' });
     };
-    const data = async (valor) => { await page.fill('#lancamento-data', valor); await page.locator('#lancamento-data').dispatchEvent('change'); };
-    const sugestao = page.locator('#lancamento-fatura-sugestao');
-    const preencher = async (descricao, valor) => {
-        await page.fill('#lancamento-descricao', descricao);
-        await page.fill('#lancamento-valor', valor);
-        await page.selectOption('#lancamento-categoria-despesa-cartao', { label: 'Moradia' });
-        await page.locator('#form-lancamento').evaluate((f) => f.requestSubmit());
-    };
+    const data = async (valor) => { await page.fill('#cad-data-compra', valor); await page.locator('#cad-data-compra').dispatchEvent('change'); };
+    const sugestao = page.locator('#mob-fatura-sugestao');
     await abrirCompra();
     await data('2031-11-24');
-    await expect(page.locator('#lancamento-mes-fatura')).toHaveValue('2031-12');
-    await expect(sugestao).toHaveText('Sugerida pelo fechamento: fatura de 12/2031 (fecha 25/11, vence 05/12).');
+    await expect(page.locator('#cad-mes-fatura')).toHaveValue('2031-12');
+    await expect(sugestao).toHaveText('Sugerida pelo fechamento: fatura 12/2031 (fecha 25/11, vence 05/12).');
     await data('2031-11-25');
-    await expect(page.locator('#lancamento-mes-fatura')).toHaveValue('2032-01');
-    await page.fill('#lancamento-mes-fatura', '2032-02');
+    await expect(page.locator('#cad-mes-fatura')).toHaveValue('2032-01');
+    await page.fill('#cad-mes-fatura', '2032-02');
     await data('2031-11-24');
-    await expect(page.locator('#lancamento-mes-fatura')).toHaveValue('2032-02');
-    await expect(sugestao).toContainText('Mês escolhido manualmente: 02/2032.');
+    await expect(page.locator('#cad-mes-fatura')).toHaveValue('2032-02');
+    await expect(sugestao).toContainText('Mês escolhido: 02/2032.');
     await data('2031-11-26');
-    await page.click('#lancamento-usar-sugerida');
-    await expect(page.locator('#lancamento-mes-fatura')).toHaveValue('2032-01');
-    await preencher('Mesa E2E', '100');
-    await expect.poll(() => dialogos.join('|')).toContain('Lançamento em cartão salvo com sucesso!');
+    await page.click('#mob-usar-sugerida');
+    await expect(page.locator('#cad-mes-fatura')).toHaveValue('2032-01');
+    await cad.preencherCadastro(page, { nome: 'Mesa E2E', valor: '100', categoria: false });
+    expect(await cad.salvarCadastro(page, { confirmarConsolidada: false })).toContain('Compra lançada na fatura 01/2032 do cartão Cartao Lilas.');
 
     const consolidacao = await page.request.post('/__e2e__/consolidar', { data: { cartao: 'Cartao Lilas', competencia: '2032-01-01' } });
     expect(consolidacao.status()).toBe(200);
     await abrirCompra();
     await data('2031-11-27');
-    await expect(sugestao).toContainText('Essa fatura está consolidada: a inclusão pedirá confirmação.');
-    await preencher('Cadeira E2E', '10');
-    await expect.poll(() => dialogos.join('|')).toContain('Esta compra entra em fatura já consolidada');
-    await expect.poll(() => dialogos.filter((m) => m.includes('salvo com sucesso')).length).toBe(2);
+    await expect(sugestao).toContainText('Essa fatura está consolidada: a inclusão pede confirmação.');
+    await cad.preencherCadastro(page, { nome: 'Cadeira E2E', valor: '10', categoria: false });
+    // Consolidada: a pergunta com os totais; so a confirmacao explicita grava.
+    await page.click('#cad-salvar');
+    await expect(page.locator('#cad-consolidada')).toContainText('Incluir na fatura consolidada 01/2032');
+    await page.click('#mob-confirmar-inclusao');
+    await expect(cad.confirmacao(page)).toContainText('Compra lançada na fatura 01/2032 do cartão Cartao Lilas.');
+    await page.click('#cad-concluir');
+    expect(dialogos).toEqual([]);
     await abrirCartoes(page);
 
     // Na fatura consolidada nada muda por aqui (D6): edicao e exclusao recusadas.

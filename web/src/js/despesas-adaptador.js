@@ -8,8 +8,9 @@ import { definirCompetencia, iniciarMoldura } from './moldura.js';
 import { falha } from './adaptador-comum.js';
 import { mostrarGeracao } from './despesas-recorrencias.js';
 import { configurarDespesas, responderDespesas } from './despesas-servico.js';
+import { TIPOS, abrirCadastroDespesa, destinosDesktop, prepararCadastro } from './cadastro-despesa.js';
 
-const estado = { perfilId: null };
+const estado = { perfilId: null, mes: null };
 
 function exibirGeracao(mes, { geracao, dispensadas }) {
     // Quem so le o perfil nao ve as acoes de escrita da tela original (o banco recusaria de qualquer forma).
@@ -34,11 +35,21 @@ if (contexto && contexto.perfil) {
     configurarDespesas(estado.perfilId, {
         antesDeListar: (mes, trocou) => {
             if (trocou) document.getElementById('geracao-resultado').hidden = true;
+            estado.mes = mes;
             definirCompetencia(mes);
         },
         depoisDaGeracao: exibirGeracao,
     });
     window.CF_REGISTRAR_ADAPTADOR(responderDespesas);
+    // FIN-MVP-CADASTRO-UNIFICADO-01: "Nova despesa" abre o modal unico (js/cadastro-despesa.js). O modal original
+    // (#modal-despesa) continua para a edicao, que nao passa por abrirModal(). O servico de Despesas ja esta configurado
+    // acima, com os ganchos desta tela.
+    prepararCadastro(estado.perfilId, { despesas: false });
+    const novo = (tipoInicial) => () => abrirCadastroDespesa({ origem: 'despesas', mes: estado.mes, tipoInicial,
+        destinos: destinosDesktop('despesas'), aoSalvar: () => window.carregarDespesas() });
+    window.abrirModal = novo(TIPOS.DESPESA_DIRETA);
+    window.abrirModalRecorrencia = novo(TIPOS.DESPESA_RECORRENTE);
+    window.abrirModalConsorcio = novo(TIPOS.CONSORCIO);
 } else if (contexto) {
     // Sem perfil autorizado (o aviso da moldura ja aparece): a tela nao consulta nada.
     window.CF_REGISTRAR_ADAPTADOR(async () => falha('Nenhum perfil financeiro autorizado para esta conta.', 403));

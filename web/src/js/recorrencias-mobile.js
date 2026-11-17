@@ -27,6 +27,7 @@ import {
     recorrenciasDoPerfil, resolverCategoriaCartao, retomarRecorrencia,
 } from './recorrencias-servico.js';
 import { exigirUsuario } from './sessao.js';
+import { TIPOS, abrirCadastroDespesa, destinosMobile, prepararCadastro } from './cadastro-despesa.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -566,7 +567,20 @@ if (usuario) {
         estado.busca = $('mob-busca').value;
         desenhar();
     });
-    $('mob-nova').addEventListener('click', () => abrirFormulario(null));
+    // FIN-MVP-CADASTRO-UNIFICADO-01: "Nova" abre o modal unico; o formulario desta pagina (abrirFormulario) fica para a edicao.
+    $('mob-nova').addEventListener('click', () => {
+        const destinos = destinosMobile();
+        delete destinos.recorrencias;  // ja e esta pagina: a lista e recarregada
+        mostrarAviso('');
+        abrirCadastroDespesa({ origem: 'recorrencias', tipoInicial: TIPOS.DESPESA_RECORRENTE, destinos,
+            aoSalvar: async () => {
+                // A lista recarregada e o aviso da operacao, como depois de salvar pelo formulario desta pagina.
+                const conteudo = estado.ultimoAviso;
+                estado.ultimoAviso = '';
+                await carregar();
+                if (conteudo) mostrarAviso(conteudo, 'ok');
+            } });
+    });
     let perfil = null;
     try {
         const perfis = await carregarPerfis();
@@ -578,6 +592,7 @@ if (usuario) {
     if (perfil) {
         $('mob-perfil').textContent = perfil.nome || '';
         configurarRecorrencias(perfil.id, { avisar: (conteudo) => { estado.ultimoAviso = conteudo; } });
+        prepararCadastro(perfil.id, { recorrencias: false });
         // A permissao do perfil ativo (pode_gerir_perfil, a mesma do desktop): quem so le nao cadastra nem altera.
         estado.somenteLeitura = !(await podeGerirRecorrencias());
         $('mob-nova').hidden = estado.somenteLeitura;

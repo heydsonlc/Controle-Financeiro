@@ -7,6 +7,7 @@ import {
     abrirDespesas, chamarRpc, despesa, estornar, pagar, perfilAtivoId, registrarDialogos,
 } from './despesas.mjs';
 import { itemDoMenu, trocarPerfil } from './moldura.mjs';
+import * as cad from './cadastro.mjs';
 
 const A = { email: process.env.CF_EMAIL_A || 'usuario.a@teste.local', senha: process.env.CF_SENHA_A };
 const B = { email: process.env.CF_EMAIL_B || 'usuario.b@teste.local', senha: process.env.CF_SENHA_B };
@@ -54,7 +55,15 @@ async function abrirRecorrencias(page) {
 
 const linha = (page, nome) => page.locator('#recorrencias-lista .recorrencias-row', { has: page.locator('strong', { hasText: nome }) });
 
+// FIN-MVP-CADASTRO-UNIFICADO-01: o cadastro e o do modal unico ("Nova recorrencia"); o formulario lateral original aparece
+// so na edicao. O apoio preenche o que estiver em uso (d.cartao: nome do cartao, no cadastro pelo modal).
 async function preencher(page, d) {
+    if (!(await page.locator('#secao-formulario').isVisible())) {
+        if (!(await cad.modal(page).isVisible())) await page.click('#btn-nova-recorrencia');
+        await cad.preencherCadastro(page, { tipo: d.tipo, nome: d.nome, valor: d.valor, categoria: d.categoria === false ? false : undefined,
+            inicio: d.vencimento, frequencia: d.frequencia, dia: d.dia, meio: d.meio, cartao: d.cartao, observacoes: d.observacoes });
+        return;
+    }
     if (d.nome !== undefined) await page.fill('#nome', d.nome);
     if (d.valor !== undefined) await page.fill('#valor', String(d.valor));
     if (d.categoria !== false) {
@@ -68,7 +77,12 @@ async function preencher(page, d) {
     if (d.observacoes !== undefined) await page.fill('#observacoes', d.observacoes);
 }
 
-const salvar = (page) => page.click('button[type="submit"][form="form-recorrencia"]');
+// No modal unico: salva, conclui e devolve o texto da confirmacao. No formulario lateral (edicao): o botao original.
+async function salvar(page) {
+    if (await cad.modal(page).isVisible()) return cad.salvarCadastro(page);
+    await page.click('button[type="submit"][form="form-recorrencia"]');
+    return null;
+}
 
 // FIN-RECORRENCIAS-INATIVACAO-01 (P22): inativar e reativar mostram a previa (js/interrupcao-recorrencia.js) e so
 // gravam na confirmacao.
@@ -120,16 +134,27 @@ test('cadastrar, recusas sem gravar, editar e gerar em Despesas com nome, valor,
 
     // Pedidos que o novo aplicativo nao atende: recusados, nada e gravado. Semanal no cartao: o Flask so lanca compra
     // recorrente mensal ou anual (FIN-CATEGORIAS-RECORRENCIAS-2).
-    await preencher(page, { nome: NOME, valor: '99.90', vencimento: '2031-01-10', frequencia: 'semanal', dia: 1, meio: 'cartao' });
-    await salvar(page);
-    await expect.poll(() => dialogos.at(-1)).toMatch(/^Semanal e a cada 2 semanas não valem no cartão/);
-    await page.selectOption('#frequencia', 'mensal');
-    await salvar(page);
-    await expect.poll(() => dialogos.at(-1)).toBe('Selecione o cartão da recorrência.');  // FIN-FIDELIDADE-CARTOES-2: cartao obrigatorio
+    // No modal unico a combinacao invalida nem e oferecida, e o servico continua recusando-a (chamada direta abaixo).
+    await expect(page.locator('#secao-formulario')).toBeHidden();  // o formulario lateral so aparece na edicao
+    await preencher(page, { nome: NOME, valor: '99.90', vencimento: '2031-01-10', frequencia: 'semanal', dia: 1 });
+    await expect(page.locator('#cad-meio-pagamento option[value="cartao"]')).toHaveJSProperty('disabled', true);
+    await page.selectOption('#cad-frequencia', 'mensal');
+    await page.selectOption('#cad-meio-pagamento', 'cartao');
+    await expect(page.locator('#cad-frequencia option[value="semanal"]')).toHaveJSProperty('disabled', true);
+    await expect(page.locator('#cad-frequencia option[value="quinzenal"]')).toHaveJSProperty('disabled', true);
+    await expect.poll(() => page.locator('#cad-cartao-recorrencia option').count()).toBeGreaterThan(1);
+    await page.selectOption('#cad-cartao-recorrencia', '');
+    expect(await cad.salvarComErro(page)).toBe('Selecione o cartão.');  // FIN-FIDELIDADE-CARTOES-2: cartao obrigatorio
     await expect(page.locator('#recorrencias-lista .recorrencias-row')).toHaveCount(total);
+    const semanalNoCartao = await page.evaluate(async () => (await fetch('/api/recorrencias', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome: 'Semanal no cartao', valor: 10, categoria_id: 1, data_vencimento: '2031-01-10', tipo_recorrencia: 'semanal',
+            frequencia_semanas: 1, dia_semana: 1, meio_pagamento: 'cartao', cartao_id: 1 }) })).json());
+    expect(semanalNoCartao.error).toMatch(/^Semanal e a cada 2 semanas não valem no cartão/);
+    expect(dialogos).toEqual([]);
 
     await preencher(page, { categoria: false, meio: 'boleto', observacoes: 'Fibra' });
-    await salvar(page);
+    expect(await salvar(page)).toContain(`Recorrência “${NOME}” cadastrada`);
+    await expect(page.locator('#secao-formulario')).toBeHidden();
     await expect(page.locator('#recorrencias-resultado')).toContainText('Recorrência criada.');
     await expect(page.locator('#recorrencias-resultado')).toContainText('geradas automaticamente ao abrir a competência em Despesas');
     await expect(linha(page, NOME)).toContainText('R$ 99,90');
@@ -265,8 +290,7 @@ test('recorrencia no cartao: cadastrar, gerar a compra na fatura, editar e inati
         p_dados: { nome: 'Cartao Recorrente (tela)', dia_fechamento: 3, dia_vencimento: 12 } });
     expect(criado.status).toBe(200);
     await abrirRecorrencias(page);
-    await preencher(page, { nome: 'Musica no cartao (tela)', valor: '21.90', vencimento: '2032-03-12', meio: 'cartao' });
-    await page.selectOption('#cartao-id', { label: 'Cartao Recorrente (tela)' });
+    await preencher(page, { nome: 'Musica no cartao (tela)', valor: '21.90', vencimento: '2032-03-12', meio: 'cartao', cartao: 'Cartao Recorrente (tela)' });
     await salvar(page);
     await expect(page.locator('#recorrencias-resultado')).toContainText('Recorrência no cartão criada.');
     await expect(linha(page, 'Musica no cartao (tela)')).toContainText('R$ 21,90');
@@ -348,16 +372,16 @@ test('a cada 2 semanas: cadastrar, gerar uma conta por ocorrencia em Despesas e 
 
 // FIN-CONTRATOS-3: consorcio cadastrado pelo modal original (Perfil B, novo aplicativo), parcelas em Despesas e
 // inativacao (as despesas pendentes saem; nada pago e apagado). Em 2034, longe dos outros cenarios.
-test('consorcio: cadastrar pelo modal original, parcelas em Despesas e inativar', async ({ page }) => {
+test('consorcio: cadastrar pelo modal unico (servico de consorcios), parcelas em Despesas e inativar', async ({ page }) => {
     const dialogos = registrarDialogos(page);
     await entrar(page, B);
     await abrirRecorrencias(page);
     await page.click('#btn-nova-recorrencia');
-    await page.selectOption('#tipo-cadastro', 'consorcio');
-    await expect(page.locator('#data-vencimento')).toBeVisible();  // Data inicial visivel no modo consorcio (defeito do Flask corrigido)
-    await preencher(page, { nome: 'Consorcio Tela E2E', valor: 200, vencimento: '2034-05-05' });
-    await page.fill('#numero-parcelas', '3');
-    await salvar(page);
+    await cad.preencherCadastro(page, { tipo: 'consorcio', nome: 'Consorcio Tela E2E', valor: 200, parcelas: 3, inicio: '2034-05' });
+    await expect(page.locator('#cad-parcelas-anteriores')).toBeHidden();  // contrato novo (inicio futuro): sem parcelas anteriores
+    const cadastrado = await cad.salvarCadastro(page);
+    expect(cadastrado).toContain('Consórcio “Consorcio Tela E2E” cadastrado');
+    expect(cadastrado).toContain('3 parcelas geradas a partir de 05/2034.');
     await expect(linha(page, 'Consorcio Tela E2E')).toBeVisible();
     const perfil = await perfilAtivoId(page);
     const lista = (await chamarRpc(page, 'consorcios_tela', { p_perfil_id: perfil, p_id: null })).corpo;

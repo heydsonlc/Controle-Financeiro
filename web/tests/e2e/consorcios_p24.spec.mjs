@@ -6,6 +6,7 @@
 import { expect, test } from '@playwright/test';
 
 import { abrirDespesas, chamarRpc, despesa, perfilAtivoId, registrarDialogos } from './despesas.mjs';
+import * as cad from './cadastro.mjs';
 
 const E = { email: process.env.CF_EMAIL_E || 'usuario.e@teste.local', senha: process.env.CF_SENHA_E };
 const EVIDENCIAS = process.env.CF_EVIDENCIAS_DIR;
@@ -72,21 +73,21 @@ test('C: cadastro de consorcio em andamento com 4 parcelas pagas antes do cadast
     const antes = await saldos(page, perfil);
     await page.goto('/recorrencias.html');
     await expect(page.locator('#recorrencias-total')).toHaveText(/cadastros? no total/);
+    // FIN-MVP-CADASTRO-UNIFICADO-01: cadastrado pelo modal unico, pelo mesmo servico de consorcios (regras da P24).
     await page.click('#btn-nova-recorrencia');
-    await page.selectOption('#tipo-cadastro', 'consorcio');
-    await expect(page.locator('#parcelas-pagas-anteriores')).toBeVisible();
-    await page.fill('#nome', NOME);
-    await page.fill('#valor', '500');
-    const categoria = await page.locator('#categoria-id option:not([value=""])').first().getAttribute('value');
-    await page.selectOption('#categoria-id', categoria);
-    await page.fill('#data-vencimento', `${mes(-4)}-05`);
-    await page.fill('#numero-parcelas', '10');
-    await page.selectOption('#tipo-reajuste', 'fixo');
-    await page.fill('#valor-reajuste', '10');
-    await page.fill('#mes-contemplacao', mes(3));
-    await page.fill('#parcelas-pagas-anteriores', '4');
+    await cad.esperarModal(page, 'recorrente');
+    await cad.escolherTipo(page, 'consorcio');
+    await expect(page.locator('#cad-parcelas-anteriores')).toBeHidden();  // so para contrato em andamento
+    await cad.preencherCadastro(page, { nome: NOME, valor: '500', parcelas: 10, inicio: mes(-4), reajuste: 'fixo', valorReajuste: 10,
+        contemplacao: mes(3) });
+    await expect(page.locator('#cad-parcelas-anteriores')).toBeVisible();
+    await expect(page.locator('#cad-valor-premio')).toHaveText(/5\.700,00/);  // (500 + 7 x 10) x 10, a conta do banco
+    await cad.preencherCadastro(page, { categoria: false, anteriores: 4 });
     if (EVIDENCIAS) await page.screenshot({ path: `${EVIDENCIAS}/p24_cadastro_retroativo_1366.png` });
-    await page.click('button[type="submit"][form="form-recorrencia"]');
+    const cadastrado = await cad.salvarCadastro(page);
+    expect(cadastrado).toContain('10 parcelas geradas');
+    expect(cadastrado).toContain('4 parcela(s) anteriores registradas como pagas no histórico, sem débito bancário.');
+    expect(cadastrado).toMatch(/Prêmio previsto na contemplação: R\$\s5\.700,00\./);
     await expect(page.locator('#recorrencias-lista .recorrencias-row', { hasText: NOME })).toBeVisible();
 
     const contrato = (await rpcOk(page, 'consorcios_tela', { p_perfil_id: perfil, p_id: null })).find((c) => c.nome === NOME);

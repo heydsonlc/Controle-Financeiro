@@ -7,6 +7,7 @@ import {
     trocarCompetencia,
 } from './despesas.mjs';
 import { trocarPerfil } from './moldura.mjs';
+import { erroDoCampo, esperarModal, fecharCadastro, modal } from './cadastro.mjs';
 
 const A = { email: process.env.CF_EMAIL_A || 'usuario.a@teste.local', senha: process.env.CF_SENHA_A };
 const B = { email: process.env.CF_EMAIL_B || 'usuario.b@teste.local', senha: process.env.CF_SENHA_B };
@@ -37,35 +38,40 @@ async function entrar(page, conta) {
     await page.waitForURL('**/contas.html');
 }
 
-test('validacao do formulario original: nada e enviado sem os campos obrigatorios', async ({ page }) => {
+// FIN-MVP-CADASTRO-UNIFICADO-01: "Nova despesa" abre o modal unico (o modal original fica para a edicao).
+test('validacao do cadastro: nada e enviado sem os campos obrigatorios', async ({ page }) => {
     const dialogos = registrarDialogos(page);
     await entrar(page, A);
     await abrirDespesas(page, '2029-06');
     await page.click('.btn-nova-despesa');
-    await expect(page.locator('#modal-despesa')).toBeVisible();
-    await expect(page.locator('#modal-titulo')).toHaveText('Nova Despesa');
-    await salvarDespesa(page);
-    await expect(page.locator('#modal-despesa')).toBeVisible();  // required do HTML original
-    expect(dialogos).toEqual([]);
-    await page.locator('#modal-despesa [data-on-click="fecharModal()"]').first().click();
+    await esperarModal(page, 'direta');
+    await expect(page.locator('#cad-titulo')).toHaveText('Nova despesa');
     await expect(page.locator('#modal-despesa')).toBeHidden();
+    await expect(page.locator('#cad-competencia-texto')).toHaveText('Competência: junho/2029');  // a competencia aberta na tela
+    expect(await salvarDespesa(page)).toBe('Informe o nome.');
+    await expect(erroDoCampo(page, 'cad-valor')).toHaveText('Informe um valor válido.');
+    await expect(erroDoCampo(page, 'cad-categoria')).toHaveText('Selecione a categoria.');
+    await expect(erroDoCampo(page, 'cad-vencimento')).toHaveText('Informe a data de vencimento.');
+    expect(dialogos).toEqual([]);
+    await fecharCadastro(page);
+    await expect(page.locator('#despesas-lista')).toHaveAttribute('data-competencia-carregada', '06/2029');  // volta a origem
 });
 
 // FIN-ESCRITOR-UNICO-FINAL-1: o Pessoal segue no Flask; o cadastro pelo novo aplicativo e recusado, sem gravar.
-test('perfil ainda no Flask: cadastro pelo modal original recusado sem gravar', async ({ page }) => {
-    const dialogos = registrarDialogos(page);
+test('perfil ainda no Flask: cadastro recusado sem gravar', async ({ page }) => {
+    registrarDialogos(page);
     await entrar(page, A);
     await abrirDespesas(page, '2029-06');
     await page.click('.btn-nova-despesa');
     await preencherDespesa(page, { nome: 'Conserto recusado', valor: '10', categoria: 'Moradia', vencimento: '2029-07-05' });
-    await salvarDespesa(page);
-    await expect.poll(() => dialogos.at(-1)).toBe('Erro: Este perfil ainda não está habilitado para gravação no novo aplicativo. Nada foi gravado.');
+    expect(await salvarDespesa(page)).toBe('Este perfil ainda não está habilitado para gravação no novo aplicativo. Nada foi gravado.');
+    await expect(modal(page)).toBeVisible();  // a recusa fica no modal, com os dados preenchidos
     await abrirDespesas(page, '2029-06');
     await expect(despesa(page, 'Conserto recusado')).toHaveCount(0);
 });
 
 // FIN-ESCRITOR-UNICO-FINAL-1: o cadastro completo e no Perfil B (novo aplicativo).
-test('avulsa: cadastrar pelo modal original (competencia do Flask), editar e excluir', async ({ page }) => {
+test('avulsa: cadastrar pelo modal unico (competencia do Flask), editar e excluir pelo modal original', async ({ page }) => {
     const dialogos = registrarDialogos(page);
     await entrar(page, B);
     await abrirDespesas(page, '2029-06');
@@ -75,9 +81,10 @@ test('avulsa: cadastrar pelo modal original (competencia do Flask), editar e exc
     await page.click('.btn-nova-despesa');
     await preencherDespesa(page, { nome: 'Conserto geladeira', valor: '350.40', categoria: 'Moradia', vencimento: '2029-07-05',
         observacoes: 'Assistencia tecnica' });
-    await expect(page.locator('#mes_competencia')).toHaveValue('2029-06');  // regra do Flask: mes anterior ao vencimento
-    await salvarDespesa(page);
-    await expect.poll(() => dialogos.at(-1)).toBe('Despesa salva na competência 06/2029.');
+    await expect(page.locator('#cad-competencia-texto')).toHaveText('Competência: junho/2029');  // regra do Flask: mes anterior ao vencimento
+    const salva = await salvarDespesa(page);
+    expect(salva).toContain('“Conserto geladeira” cadastrada como pendente');
+    expect(salva).toContain('Despesa salva na competência 06/2029.');
     await expect(despesa(page, 'Conserto geladeira')).toBeVisible();
     await expect(despesa(page, 'Conserto geladeira').locator('.despesa-cell-detalhe')).toHaveText('Assistencia tecnica');
     await expect.poll(totalGeral).toBeCloseTo(antes + 350.40, 2);
@@ -169,12 +176,13 @@ test('pedidos do formulario que o novo aplicativo ainda nao atende: recusados co
     await abrirDespesas(page, '2029-08');
     await page.click('.btn-nova-despesa');
     await preencherDespesa(page, { nome: 'Faxina', valor: '120', categoria: 'Moradia', vencimento: '2029-08-10' });
-    await page.check('#pago');
-    await salvarDespesa(page);
-    await expect.poll(() => dialogos.at(-1))
-        .toBe('Erro: Use a ação de pagamento para marcar a despesa como paga: ela escolhe a conta bancária e registra o movimento.');
+    // FIN-MVP-CADASTRO-UNIFICADO-01: "Despesa ja foi paga" nao existe mais; o cadastro nao tem nenhum campo de pagamento.
+    await expect(modal(page).locator('input[type="checkbox"]')).toHaveCount(0);
+    await expect(modal(page)).not.toContainText(/já foi paga|Data de pagamento|Conta bancária/i);
+    await expect(modal(page)).toContainText('O pagamento é registrado depois, pela ação Pagar');
     // Semanal e a cada 2 semanas deixaram de ser recusadas (FIN-CATEGORIAS-RECORRENCIAS-2; ver recorrencias_tela.spec).
-    await page.locator('#modal-despesa [data-on-click="fecharModal()"]').first().click();
+    await fecharCadastro(page);
+    expect(dialogos).toEqual([]);
     // FIN-PRE-PRODUCAO-1: "A partir de documento" lista os documentos do perfil (o Pessoal de A nao tem nenhum).
     await page.click('.btn-doc-atalho-despesa');
     await expect(page.locator('#doc-desp-lista')).toHaveText('Nenhum documento encontrado.');
