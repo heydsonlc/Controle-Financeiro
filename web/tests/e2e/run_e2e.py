@@ -524,6 +524,28 @@ def main():
                                         (USUARIO_D['id'], bool(pedido['gestor']), *motivo))
                         elif acao == 'retrato':
                             return retrato_empresa_d(cur)
+                        elif acao == 'natureza_exemplo':
+                            # FIN-CATEGORIAS-REORGANIZACAO-01: categoria e mes do perfil com mais contas (fora faturas),
+                            # para o teste marcar como aporte e conferir a reparticao na tela.
+                            cur.execute("select i.categoria_id, to_char(date_trunc('month', c.mes_referencia), 'YYYY-MM'), "
+                                        "sum(c.valor)::text from public.conta c join public.item_despesa i on i.id = c.item_despesa_id "
+                                        "where c.perfil_financeiro_id = %s and c.is_fatura_cartao is not true and i.categoria_id is not null "
+                                        "and c.status_pagamento is distinct from 'Substituida' and c.status_pagamento is distinct from 'Dispensada' "
+                                        "and (%s::text is null or to_char(date_trunc('month', c.mes_referencia), 'YYYY-MM') = %s) "
+                                        "group by 1, 2 order by count(*) desc, 1, 2 limit 1",
+                                        (int(pedido['perfil']), pedido.get('mes'), pedido.get('mes')))
+                            linha = cur.fetchone()
+                            if not linha:
+                                raise ValueError('perfil sem contas com categoria')
+                            return {'categoria_id': linha[0], 'mes': linha[1], 'valor': linha[2]}
+                        elif acao == 'natureza':
+                            # Direto na tabela (dono do banco), so no banco descartavel: None volta ao padrao (consumo).
+                            cur.execute('delete from financeiro.categoria_natureza where categoria_id = %s', (int(pedido['categoria_id']),))
+                            if pedido.get('natureza'):
+                                cur.execute('insert into financeiro.categoria_natureza (categoria_id, natureza) values (%s, %s)',
+                                            (int(pedido['categoria_id']), str(pedido['natureza'])))
+                            conn.commit()
+                            return {'resultado': pedido.get('natureza')}
                         else:
                             raise ValueError('acao desconhecida')
                         return {'resultado': cur.fetchone()[0]}

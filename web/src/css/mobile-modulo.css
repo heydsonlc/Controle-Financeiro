@@ -266,7 +266,9 @@ body.mob-modulo .mob-total-valor {
     font-weight: 700;
 }
 
-body.mob-modulo .mob-total-detalhe {
+/* .mob-total-naturezas (FIN-CATEGORIAS-REORGANIZACAO-01): consumo e aportes, mesma linha discreta do detalhe */
+body.mob-modulo .mob-total-detalhe,
+body.mob-modulo .mob-total-naturezas {
     margin-top: 2px;
     color: var(--mob-cinza);
     font-size: 0.78rem;

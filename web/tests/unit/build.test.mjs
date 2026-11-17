@@ -180,6 +180,7 @@ const RPCS_DE_LEITURA = new Set(['meus_perfis', 'contas_bancarias_do_perfil', 'c
     'ir_documentos_empresa_tela', 'lastro_saidas_tela',  // Documentos da Empresa (so leitura)
     'arquivo_comprovante_tela',  // "Abrir arquivo" (so leitura)
     'dashboard_resumo_tela',  // FIN-FIDELIDADE-CONSOLIDACAO-1 (so leitura)
+    'indicadores_gerenciais', 'naturezas_das_categorias',  // FIN-CATEGORIAS-REORGANIZACAO-01 (so leitura: reparticao por natureza)
     // FIN-FIDELIDADE-PATRIMONIO-1 (Mobilidade, fase 1, so leitura)
     'mobilidade_categorias_tela', 'veiculos_tela', 'projecoes_mobilidade_tela', 'veiculo_uso_tela', 'veiculo_regras_km_tela',
     'registrar_abastecimento', 'corrigir_abastecimento', 'anular_abastecimento', 'abastecimentos_veiculo_tela', 'custos_veiculos_tela',

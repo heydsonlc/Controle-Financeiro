@@ -19,6 +19,8 @@ import {
 import { ajustarCadastrosPelaPermissao, aplicarCompetencia, competenciaInicial, prepararMais, prepararModulos } from './mobile-comum.js';
 import { carregarPerfis, escolherPerfilAtivo, salvarPerfilAtivo } from './perfil.js';
 import { exigirUsuario } from './sessao.js';
+import { repartirPorNatureza, textoDaReparticao } from './naturezas.js';
+import { carregarNaturezas } from './naturezas-servico.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -30,6 +32,7 @@ const estado = {
     somenteLeitura: true,
     contas: null,
     categorias: null,
+    naturezas: null,  // FIN-CATEGORIAS-REORGANIZACAO-01: categoria -> natureza gerencial (so apresentacao)
     pedido: 0,
 };
 
@@ -93,8 +96,9 @@ async function carregar() {
     estado.contas = null;
     const lista = $('mob-lista');
     lista.setAttribute('aria-busy', 'true');
-    const r = await api('GET', `/api/despesas?mes_referencia=${mes}`);
+    const [r, naturezas] = await Promise.all([api('GET', `/api/despesas?mes_referencia=${mes}`), carregarNaturezas()]);
     if (pedido !== estado.pedido) return;  // ja trocaram de competencia
+    estado.naturezas = naturezas;
     estado.despesas = r.success ? (r.data || []) : [];
     if (!r.success) mostrarAviso(r.error || 'Não foi possível carregar as despesas.', 'erro');
     desenhar();
@@ -169,6 +173,15 @@ function desenhar() {
         const linha = el('div', 'mob-total-linha');
         linha.append(el('span', 'mob-total-rotulo', 'Total'), el('span', 'mob-total-valor', reais(t.total)));
         caixa.append(linha, el('div', 'mob-total-detalhe', `Pendentes ${reais(t.pendentes)} · Pagas ${reais(t.pagas)}`));
+        // Consumo e aportes: reparticao do mesmo total (as faturas contam como consumo); nada sai do total.
+        if (estado.naturezas) {
+            const partes = repartirPorNatureza(visiveis, estado.naturezas, obterValorDespesa);
+            if (partes.consumo + partes.aportes + partes.outras === t.total) {
+                const detalhe = el('div', 'mob-total-naturezas', textoDaReparticao(partes));
+                detalhe.id = 'mob-total-naturezas';
+                caixa.append(detalhe);
+            }
+        }
     }
     caixa.hidden = !visiveis.length;
     $('mob-filtro-marca').hidden = !filtrosAtivos(estado.filtros);

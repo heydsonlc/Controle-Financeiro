@@ -48,6 +48,21 @@ async function abrirTela(page) {
     await page.locator('#filtro-mes').dispatchEvent('change');
 }
 
+// Cargas concluidas da lista (marcador de js/lancamentos-adaptacoes.js). Depois de salvar, a tela rele a lista sozinha:
+// o teste espera essa releitura terminar antes de mexer no filtro, em vez de depender da ordem entre as duas coisas.
+const cargas = async (page) => Number(await page.locator('#lista-lancamentos').getAttribute('data-cargas')) || 0;
+async function esperarRecarga(page, antes) {
+    await expect.poll(() => cargas(page), { timeout: 20 * 1000, message: 'a lista de Lancamentos nao foi relida depois de salvar' })
+        .toBeGreaterThan(antes);
+}
+// Diagnostico se a linha esperada nao aparecer: o que a tela e o banco tinham naquele momento.
+async function retrato(page, perfil, dialogos, nome) {
+    const banco = await chamarRpc(page, 'despesas_diretas_tela', { p_perfil_id: perfil });
+    return JSON.stringify({ cargas: await cargas(page), filtro_mes: await page.locator('#filtro-mes').inputValue(),
+        linhas_na_tela: await page.locator('#lista-lancamentos .tbl-row').count(), dialogos,
+        banco_status: banco.status, no_banco: Array.isArray(banco.corpo) ? banco.corpo.filter((d) => d.nome === nome).length : banco.corpo });
+}
+
 const linha = (page, texto) => page.locator('#lista-lancamentos .tbl-row', { hasText: texto });
 
 // FIN-MVP-CADASTRO-UNIFICADO-01: o painel "Novo lancamento" oferece a escolha do tipo; Despesa direta e Compra no cartao
@@ -81,15 +96,17 @@ test('despesa direta, compra no cartao, recusas e exclusoes como no Flask', asyn
     await expect(page.locator('#cad-competencia-texto')).toHaveText('Competência: fevereiro/2034');
     await expect(page.locator('#cad-alterar-competencia')).toBeHidden();
     await expect(cad.modal(page)).not.toContainText(/já foi paga|Data de pagamento/i);  // "paga" na criacao nao existe mais
+    const cargasAntes = await cargas(page);
     await page.locator('#cad-salvar').dblclick();
     await expect(cad.confirmacao(page)).toContainText('“Padaria Lanc E2E” cadastrada como pendente');
     await expect(cad.confirmacao(page)).toContainText('Despesa salva na competência 02/2034.');
     await page.click('#cad-concluir');
     await expect(cad.modal(page)).toHaveCount(0);
     await expect(page).toHaveURL(/lancamentos\.html/);  // volta a origem
+    await esperarRecarga(page, cargasAntes);
     await page.fill('#filtro-mes', '');
     await page.locator('#filtro-mes').dispatchEvent('change');
-    await expect(linha(page, 'Padaria Lanc E2E')).toHaveCount(1);  // toque duplo: uma despesa so
+    await expect(linha(page, 'Padaria Lanc E2E'), await retrato(page, perfil, dialogos, 'Padaria Lanc E2E')).toHaveCount(1);  // toque duplo: uma despesa so
     const doMes = async (mes) => (await chamarRpc(page, 'contas_do_mes', { p_perfil_id: perfil, p_mes: `${mes}-01` })).corpo
         .filter((c) => c.nome === 'Padaria Lanc E2E').map((c) => c.status_pagamento);
     expect(await doMes('2034-02')).toEqual(['Pendente']);
@@ -113,7 +130,9 @@ test('despesa direta, compra no cartao, recusas e exclusoes como no Flask', asyn
     await abrirTela(page);
     await novo(page, 'cartao');
     await cad.preencherCadastro(page, { cartao: CARTAO, nome: 'Fone Lanc E2E', valor: '90', data: '2034-02-05', fatura: '2034-02', parcelas: 3 });
+    const cargasCompra = await cargas(page);
     expect(await cad.salvarCadastro(page)).toContain(`Compra lançada em 3 parcelas no cartão ${CARTAO}`);
+    await esperarRecarga(page, cargasCompra);
     await page.fill('#filtro-mes', '');
     await page.locator('#filtro-mes').dispatchEvent('change');
     await expect(linha(page, 'Fone Lanc E2E')).toHaveCount(3);

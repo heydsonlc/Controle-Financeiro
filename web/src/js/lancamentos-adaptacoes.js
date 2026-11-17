@@ -13,8 +13,16 @@
         cartoes = Promise.resolve(carregarCartoes.apply(this, args)).catch(() => {});
         return cartoes;
     };
+    // FIN-CATEGORIAS-REORGANIZACAO-01 (teste intermitente de Lancamentos): cada carga concluida e contada em
+    // #lista-lancamentos[data-cargas], para quem precisa saber que a lista ja foi relida (os testes). So um marcador.
+    let cargas = 0;
     window.carregarLancamentos = async function (...args) {
         await cartoes;
-        return carregarLancamentos.apply(this, args);
+        try {
+            return await carregarLancamentos.apply(this, args);
+        } finally {
+            const lista = document.getElementById('lista-lancamentos');
+            if (lista) lista.dataset.cargas = String(++cargas);
+        }
     };
 }());

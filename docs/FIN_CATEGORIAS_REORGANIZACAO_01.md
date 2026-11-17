@@ -1,6 +1,7 @@
 # FIN-CATEGORIAS-REORGANIZACAO-01 — Reorganização de categorias e classificação financeira
 
-**Situação:** **desenvolvimento e ensaio local concluídos** em 16/11/2026, conforme o contrato final de execução: migration
+**Situação (17/11/2026):** Dashboard e Lista de Despesas mobile adaptados (seção 15) e suíte completa aprovada, tudo local.
+**Desenvolvimento e ensaio local concluídos** em 16/11/2026, conforme o contrato final de execução: migration
 preparada (só funções e uma tabela vazia), roteiro de execução com prévia e reversão, testes e ensaio completo numa cópia fiel da
 produção (39/39). **Nada foi gravado em produção**: sem push, sem deploy, sem migration aplicada, nenhuma categoria criada ou
 reclassificada. Ramo local `categorias-reorganizacao-01`. A publicação depende de autorização do titular (seção 12).
@@ -207,8 +208,8 @@ efetivamente paga. Ficam em Outros até a decisão.
 Criação de categorias, incorporação e palavras-chave usam as funções oficiais existentes (`criar_categoria`,
 `previa_incorporacao_categoria`, `incorporar_categoria`, `criar_palavra_chave`, `remover_palavra_chave`).
 
-**Sem mudança de tela.** O Dashboard não foi alterado: a comparação entre os indicadores atuais e os propostos está no relatório
-privado, para decisão do titular.
+**Telas:** a comparação dos indicadores foi aprovada pelo titular em 17/11/2026 e a apresentação está na seção 15 (linha de
+Consumo e Aportes sob o total de saídas, no Dashboard e na Lista de Despesas mobile). Nenhuma soma existente mudou.
 
 ### Roteiro `scripts/reorganizar_categorias.py`
 
@@ -237,33 +238,22 @@ reclassificação.
 | Testes da migration (`tests/test_supabase_categorias_reorganizacao.py`) | 7/7 |
 | Ensaio na cópia fiel da produção (`scripts/ensaio_categorias_reorganizacao.py`) | 39/39 |
 | Regressão de banco (19 arquivos: categorias, importação, cartões, recorrências, consórcios, financiamentos, Dashboard e integração) | 459 aprovados, 12 pulados, 0 falhas |
-| Unitários do frontend | 127/127 |
-| Suíte e2e completa | 280 aprovados, 1 falha intermitente e 1 não executado por causa dela (ver abaixo) |
+| Unitários do frontend | 131/131 (4 novos, da repartição por natureza) |
+| Suíte e2e completa | **284/284**, duas execuções completas seguidas em 17/11/2026 (2 testes novos); nenhum teste não executado |
 
-Falha registrada na e2e: `lancamentos_tela.spec.mjs` ("despesa direta, compra no cartão...") não encontrou, numa das execuções, a
-despesa recém-cadastrada na lista depois de limpar o filtro de mês; o segundo teste do arquivo não rodou por isso. Reexecutado
-isolado três vezes, o arquivo passou as três (2/2). É sincronismo do teste do cadastro unificado (duas recargas da lista em
-sequência), já presente na `main`, sem relação com esta migration; não foi alterado neste ramo.
+### Falha intermitente de `lancamentos_tela.spec.mjs` (investigada em 17/11/2026)
 
-### Ensaio na cópia fiel
+Na execução de 16/11/2026 o teste não encontrou, por 10 s, a despesa recém-cadastrada na lista depois de limpar o filtro de mês.
 
-Backup novo da produção (exportação somente leitura, pela rotina do FIN-REG-02), restaurado num PostgreSQL local descartável e
-homologado como idêntico ao backup. Sobre ele: migration, prévia, execução, medições e reversão. O banco descartável é removido
-ao final. Confirmado:
-
-- a migration, sozinha, não altera nenhum dado;
-- depois da execução, nenhuma tabela muda além da coluna de categoria e do catálogo (hash de todas as tabelas);
-- saldos, contas, valores, pagamentos, compras, faturas, movimentos, recorrências, consórcios e financiamento idênticos;
-- Dashboard idêntico em nove meses; fluxo dos indicadores igual ao do Dashboard, mês a mês; as partes por natureza somam o fluxo;
-- exceções intactas: lançamentos 718 e 719 e as faturas deles, a diferença entre compras e valor pago, consórcios inativos,
-  empréstimo em Outros, Serviços domésticos, categorias sistêmicas; não existe categoria "Ajustes de Saldo";
-- regenerar as parcelas de um consórcio mantém a categoria de aporte;
-- repetir o roteiro depois de feito é recusado na prévia;
-- reversão: banco idêntico ao inicial (fora a auditoria), catálogo e palavras-chave como antes, e a impressão do estado volta a
-  ser a da prévia.
-
-O ensaio encontrou uma divergência que os dados fictícios não mostravam: o Dashboard atual também exclui contas dispensadas. A
-função de indicadores foi corrigida e o caso entrou nos testes.
+- **Não se reproduziu:** 15 execuções isoladas seguidas e duas suítes completas (antes e depois da mudança abaixo), todas aprovadas.
+  Na suíte completa o teste leva cerca de 6 s, sem lentidão.
+- **Conferido no código:** a despesa é gravada antes de a tela reler a lista; as leituras da tela passam por uma fila única e em
+  ordem; não há cache nem paginação. A causa exata daquela ocorrência não foi determinada (o rastro da execução não existe mais).
+- **O que mudou:** o teste dependia da ordem entre duas coisas que correm juntas (a releitura automática da lista depois de salvar
+  e a limpeza do filtro feita pelo teste). Agora a tela marca cada carga concluída (`#lista-lancamentos[data-cargas]`, só um
+  marcador, em `js/lancamentos-adaptacoes.js`) e o teste espera a releitura terminar antes de mexer no filtro. Se a linha faltar de
+  novo, a falha passa a trazer o retrato do momento (cargas, filtro, linhas na tela, diálogos e o que o banco tinha).
+- Nenhuma regra financeira nem gravação foi alterada.
 
 ## 13. Pendências retiradas do escopo (registradas)
 
@@ -273,7 +263,7 @@ função de indicadores foi corrigida e o caso entrou nos testes.
 4. Empréstimo em Outros: natureza a esclarecer.
 5. Compras de natureza não identificada em Outros: fila de revisão manual.
 6. Natureza `TRANSFERENCIA_INTERNA`: disponível, não atribuída a nenhuma categoria.
-7. Tela para a natureza gerencial e mudança do Dashboard: dependem da aprovação da comparação.
+7. Tela para definir a natureza gerencial de uma categoria: não há; a natureza é gravada pelo roteiro (seção 11).
 8. Palavras genéricas restantes ("limpeza", "assinatura", "taxa"): mantidas.
 
 ## 14. Plano de publicação (não executado)
@@ -284,8 +274,41 @@ função de indicadores foi corrigida e o caso entrou nos testes.
 4. `scripts/reorganizar_categorias.py previa`: conferir a impressão do estado com a aprovada.
 5. `scripts/reorganizar_categorias.py executar --hash <impressão> --confirmo "REORGANIZAR CATEGORIAS" --saida <arquivo privado>`.
 6. Conferir: categorias criadas, registros no destino, exceções intactas, saldos e Dashboard iguais.
-7. Push do código. Não há mudança de tela nesta parte: o deploy do frontend não é necessário.
-8. Reversão: `reorganizar_categorias.py reverter`; depois, se for o caso, `supabase/reversao/20261229090000_*.sql` (recusada
-   enquanto houver natureza gravada ou reclassificação não revertida).
+7. Push do código e deploy do frontend (seção 15), **depois** da migration: a linha de Consumo e Aportes lê duas funções da
+   migration. Se o frontend chegar antes, a linha simplesmente não aparece e o restante da tela fica como hoje.
+8. Conferir em produção: total de saídas, saldo projetado e demais números do Dashboard iguais aos de antes; a linha soma o total.
+9. Reversão do frontend: voltar ao deploy anterior (`a5d1099f`). Reversão dos dados: `reorganizar_categorias.py reverter`;
+   depois, se for o caso, `supabase/reversao/20261229090000_*.sql` (recusada enquanto houver natureza gravada ou reclassificação
+   não revertida). O frontend novo funciona com ou sem a migration; o antigo não depende dela.
 
 **Nada disso é executado sem autorização expressa do titular.**
+
+## 15. Consumo e Aportes nas telas (aprovado em 17/11/2026)
+
+Estrutura pedida pelo titular: **Consumo** (despesas de consumo, sem aportes), **Aportes** (parcelas de Poupança Programada),
+**Total de saídas** (consumo + aportes + outras saídas) e **saldo** preservado pelas regras atuais. A separação é gerencial: as
+parcelas dos consórcios continuam no fluxo, nas listas e no total.
+
+| Tela | Antes | Depois |
+|---|---|---|
+| Dashboard, resumo do fluxo | "Despesas previstas" + valor | "Total de saídas" + **o mesmo valor** e, abaixo, uma linha pequena: `Consumo R$ … · Aportes R$ …` |
+| Lista de Despesas mobile, caixa do total | Total; Pendentes · Pagas | o mesmo, e mais uma linha pequena: `Consumo R$ … · Aportes R$ …` |
+
+- **Nada é recalculado.** O total de saídas, o gráfico, o saldo final projetado, os KPIs e os totais da lista continuam vindo das
+  mesmas leituras (`dashboard_resumo_tela` e a listagem de Despesas). A linha nova só reparte o total já exibido.
+- **Outras saídas:** o que está em categoria de natureza não definida (Outros), ajuste técnico ou transferência interna aparece
+  como `· Outras saídas R$ …`, só quando há valor. Consumo + Aportes + Outras saídas = total exibido, ao centavo.
+- **Trava:** se a repartição não fechar com o total da tela, ou se a leitura não estiver disponível, a linha não aparece (a tela
+  fica como antes). Nunca se mostra uma repartição que não soma o total.
+- **Dashboard:** repartição do banco (`indicadores_gerenciais`), o mesmo conjunto de "despesas previstas" (contas que não são
+  fatura + previsões). **Lista mobile:** repartição das despesas visíveis (respeita os filtros), pela natureza da categoria de
+  cada uma (`naturezas_das_categorias`); as faturas de cartão contam como consumo.
+- **Compacto:** uma linha no estilo da que já existe sob "Receitas previstas"; nenhum painel novo; a altura do painel do fluxo
+  não muda. No Dashboard em tela estreita a linha cabe sem rolagem horizontal.
+- O rótulo "Saldo final projetado" não mudou (é o saldo das contas + receitas − saídas do mês, pela regra atual).
+
+Arquivos: `web/src/js/naturezas.js` (contas, sem banco), `web/src/js/naturezas-servico.js` (duas leituras),
+`web/src/js/dashboard-adaptador.js`, `web/src/paginas/dashboard.html`, `web/src/js/despesas-mobile.js`,
+`web/src/css/mobile-modulo.css`. Testes: `web/tests/unit/naturezas.test.mjs` e `web/tests/e2e/naturezas_indicadores.spec.mjs`
+(marca uma categoria como aporte no banco descartável e confere que só a repartição muda).
+
