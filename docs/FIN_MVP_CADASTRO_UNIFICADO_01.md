@@ -1,11 +1,10 @@
 # FIN-MVP-CADASTRO-UNIFICADO-01 — Modal único e responsivo de cadastro de despesas
 
-**Situação:** **Etapas 1 a 6 concluídas** no ramo local `cadastro-unificado-01`: diagnóstico, componente único, prévia dos seis
-cenários e, com as decisões do titular de 16/11/2026, a **integração local nos três módulos** (desktop e celular), com a suíte
-completa. **Sem push, sem deploy, sem migration.** Falta a homologação visual e funcional do titular na prévia. Testes só no banco
-descartável, com dados fictícios.
+**Situação:** **PUBLICADO em 16/11/2026** (autorização do titular): push `afcafb0..716d06e` em `main`, deploy `a5d1099f`
+(Cloudflare Pages, `producao`), **sem migration**. Reversão: deploy `34264964` (commit `afcafb0`). Resultado na seção 13. Falta a
+conferência do titular com login em produção.
 
-Referência de produção: deploy `34264964` (16/11/2026), 68 migrations.
+Referência de produção antes deste contrato: deploy `34264964` (16/11/2026), 68 migrations (inalteradas).
 
 ## 1. Diagnóstico dos formulários atuais
 
@@ -274,12 +273,30 @@ Com a prévia no ar (seção 4), entrar com `usuario.g@teste.local` e abrir, em 
 
 A página de demonstração (`/__previa__/cadastro.html`) continua disponível para os seis cenários isolados.
 
-## 12. Publicação e reversão (plano, sem autorização)
+## 12. Plano de publicação e reversão
 
-1. Homologação do titular na prévia.
-2. Avanço rápido de `main` para o ramo e push.
-3. Build de produção e deploy no Cloudflare Pages (`producao`). **Sem migration**: nenhum backup `PRE_MIGRATION` é exigido.
-4. Conferência dos arquivos servidos e das três telas, sem gravar dado real.
-5. Reversão: voltar ao deploy `34264964`. Nada no banco muda com este contrato.
+1. Avanço rápido de `main` para o ramo e push.
+2. Build de produção e deploy no Cloudflare Pages (`producao`). **Sem migration**: nenhum backup `PRE_MIGRATION` é exigido.
+3. Conferência dos arquivos servidos e das telas, sem gravar dado real.
+4. Reversão: voltar ao deploy anterior. Nada no banco muda com este contrato.
 
-**Publicação:** só com autorização do titular.
+## 13. Publicação (16/11/2026, autorizada pelo titular)
+
+| Etapa | Resultado |
+|---|---|
+| Escopo | 42 arquivos, todos do cadastro unificado (telas, testes, prévia e documentação); nenhum em `supabase/`; nada do ramo `categorias-reorganizacao-01` |
+| Migration | Nenhuma: as 68 de produção ficam como estão |
+| Testes antes do push | e2e 282/282; unitários 127/127 |
+| Push | `afcafb0..716d06e` em `main`, por avanço rápido (o ramo já continha a `main` mais recente) |
+| Deploy | `a5d1099f` (22 arquivos novos ou alterados enviados); reversão: `34264964` |
+| Arquivos servidos | 246/246 iguais ao build (218 por SHA-256 e 28 páginas HTML, descontado o script de métricas da Cloudflare) |
+| Sem sessão | Despesas, Lançamentos, Recorrências e as quatro páginas do celular levam ao login, sem erro de carregamento |
+| Modal em produção | O módulo e a folha de estilo carregam sob a CSP real e o modal abre com 640 px no desktop e 390 px no celular; sem sessão, não oferece formulário nem Salvar |
+| Cache | HTML `max-age=0, must-revalidate`; 25 referências a JS/CSS com `?v=`, iguais depois de recarregar |
+| Banco | Consulta sem sessão recusada (HTTP 401); nenhum dado lido ou gravado na publicação |
+
+**Não conferido em produção, por exigir a conta do titular:** login e logout, os quatro tipos de cadastro com dados, a edição de
+uma despesa existente, o formulário de abastecimento e as listas de recorrências e consórcios. Esses pontos estão cobertos pela
+suíte no banco descartável; em produção, fica a conferência do titular, sem necessidade de gravar lançamentos de teste (abrir os
+formulários e cancelar basta).
+
