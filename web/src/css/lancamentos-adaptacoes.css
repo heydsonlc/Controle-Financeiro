@@ -124,7 +124,7 @@ body.cf-somente-leitura #painel-novo-lancamento {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    padding: 4px 0 8px;
+    padding: 14px 16px 16px;
 }
 .cf-lanc-escolha-botoes {
     display: grid;
@@ -157,5 +157,11 @@ body.cf-somente-leitura #painel-novo-lancamento {
     font-size: 12.5px;
 }
 .cf-lanc-modo-dica {
-    margin-bottom: 10px;
+    margin: 12px 16px 0;
+}
+
+/* "Despesa ja foi paga?" eliminada (decisao do titular): cadastro e pagamento sao operacoes separadas. O formulario original
+   continua para abastecimento e edicao, sem a caixa (o servico ja recusava a marcacao). */
+#campos-direto .form-group:has(#lancamento-pago) {
+    display: none;
 }
