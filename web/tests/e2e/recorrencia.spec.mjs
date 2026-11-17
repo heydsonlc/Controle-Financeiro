@@ -279,6 +279,13 @@ test('recorrencia pela tela original: cadastrar, gerar, editar a conta, excluir 
     // Editar a conta (so esta): o valor muda; mudar a recorrencia pelo formulario fica para a tela Recorrencias.
     await abrirEdicaoEscola(page);
     await expect(page.locator('#recorrente')).toBeChecked();
+    // FIN-MVP-CADASTRO-UNIFICADO-01: a edicao nao oferece "Despesa ja foi paga" nem data de pagamento; pagar e estornar
+    // continuam nas acoes da lista.
+    await expect(page.locator('#pago')).toBeHidden();
+    await expect(page.locator('#data_pagamento')).toBeHidden();
+    await expect(page.locator('#modal-despesa')).not.toContainText('Despesa já foi paga', { useInnerText: true });
+    await expect(page.locator('#data_vencimento')).toBeVisible();
+    await expect(escolaB(page).locator('[data-on-click^="marcarComoPago"]')).toHaveCount(1);
     await page.fill('#valor', '550');
     await salvarDespesa(page);
     await expect.poll(() => dialogos.at(-1)).toBe('Despesa atualizada com sucesso');

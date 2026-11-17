@@ -220,6 +220,9 @@ despesa mudou de formulário (seção 9).
   função do banco é a mesma, com os mesmos dados; a geração continua a de Despesas.
 - **Consórcio e recorrência no cartão:** disponíveis em todos os pontos de entrada, pelos serviços que já existiam.
 - **Somente leitura:** os botões de cadastro continuam ocultos; em Lançamentos (desktop) o painel de cadastro também some.
+- **"Despesa já foi paga" também fora da edição** (autorização de 16/11/2026): no modal de edição de Despesas, a caixa e a
+  "Data de Pagamento" ficam ocultas; no formulário de Lançamentos, a caixa também. Pagar e estornar continuam nas ações
+  próprias da lista, que escolhem a conta e registram o movimento.
 - **Aviso da operação:** `recorrencias-servico.js` expõe o último aviso (`ultimoAviso`), para o modal mostrá-lo na confirmação
   sem tirar o aviso da tela que configurou o serviço.
 

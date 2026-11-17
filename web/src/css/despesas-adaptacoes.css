@@ -86,3 +86,12 @@ body.cf-somente-leitura .despesa-actions .row-action-button:not([data-on-click^=
 #form-despesa .cf-aviso-cancelamento { margin: 0 0 12px; padding: 10px 12px; border-radius: 8px; background: #fff7ed;
     color: #9a3412; font-size: 0.9em; line-height: 1.45; }
 #form-despesa [data-cf-bloqueado] { opacity: 0.55; cursor: not-allowed; }
+
+/* FIN-MVP-CADASTRO-UNIFICADO-01 — "Despesa ja foi paga" e "Data de Pagamento" eliminadas tambem do modal de edicao (decisao
+   do titular): cadastro, edicao e pagamento sao operacoes separadas. O pagamento e o estorno continuam nas acoes proprias da
+   lista (Pagar e Estornar), que escolhem a conta e registram o movimento. Os campos seguem no HTML original, ocultos, com o
+   valor que a despesa ja tem (o servico recusa marcar como paga pela edicao). */
+#modal-despesa .form-group:has(#pago),
+#modal-despesa .form-group:has(#data_pagamento) {
+    display: none;
+}
