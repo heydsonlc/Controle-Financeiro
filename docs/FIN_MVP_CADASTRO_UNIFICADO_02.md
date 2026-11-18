@@ -1,8 +1,7 @@
 # FIN-MVP-CADASTRO-UNIFICADO-02 — Cadastro com pagamento imediato
 
-**Situação:** implementado e testado **localmente** em 17/11/2026, no ramo `cadastro-unificado-02` (a partir da `main`
-publicada). **Nada em produção:** sem push, sem deploy e a migration `20261230090000` **não aplicada**. A publicação depende de
-autorização do titular (seção 8).
+**Situação: PUBLICADO em 17/11/2026** (seção 9): migration `20261230090000` aplicada (70), `main` em `35d4d25`, deploy
+`b410bb33`. Reversão do frontend: deploy `ce683825` (commit `040c3f1`). Falta a homologação do titular com a conta real.
 
 ## 1. O que muda
 
@@ -109,3 +108,34 @@ a função; as despesas pagas por ela continuam válidas, com os registros de se
 5. Conferências em produção sem login; a conferência com pagamento real fica com o titular, numa despesa verdadeira.
 
 **Nada disso é executado sem autorização expressa do titular.**
+
+## 9. Publicação — 17/11/2026
+
+Autorizada pelo titular (contrato de execução, Etapa 1), na sequência definida.
+
+| Passo | Resultado |
+|---|---|
+| Verificações anteriores | `main` igual à remota e ramo sobre ela; produção com 69 migrations e só a `20261230090000` pendente; funções oficiais de cadastro e pagamento com a assinatura esperada; validação da conta bancária e da habilitação de pagamento internas ao banco; perfil com conta bancária ativa |
+| Meios de pagamento | nenhum meio novo: o pagamento debita uma **conta bancária** do perfil, como a ação Pagar. O texto de ajuda deixou de citar Pix, débito e dinheiro (commit `35d4d25`); testes reexecutados depois da mudança (unitários 131/131; 47/47 nos sete arquivos do cadastro) |
+| Conta de outro usuário ou perfil | recusada sem gravar nada (testes de banco: conta de outro perfil, conta inexistente, usuário sem permissão no perfil) |
+| Backup | `cf-fzjmgekasjrgvmfdkdog-20261117_221643` (PRE_MIGRATION), íntegro, duas cópias verificadas |
+| Migration | só a `20261230090000`; 69 → 70; função única, executável só por usuário autenticado, `security definer` com `search_path` vazio; nenhuma tabela de dados, saldo ou contagem alterados; funções oficiais inalteradas |
+| Código | push `b8c9709..35d4d25` na `main` (avanço rápido) |
+| Deploy | Cloudflare `b410bb33`; 248/248 arquivos servidos iguais ao build |
+| Produção, sem login | 32 verificações do modal (telas levam ao login, módulo carrega sob a CSP real no desktop e no celular, sem sessão não há formulário, sem erros) + 5 desta entrega (função recusada sem sessão, HTTP 401; modal servido com a opção e os dois rótulos; serviço servido chama a função única) |
+
+Nenhuma despesa, pagamento ou movimento foi criado em produção para testar.
+
+**Reversão**
+
+1. Frontend: voltar ao deploy `ce683825` (commit `040c3f1`).
+2. Antes de retirar a função, verificar se houve pagamentos reais por ela desde a publicação (operações `pagar_despesa` gravadas no
+   mesmo instante do `criar_despesa` da mesma despesa, em `financeiro.operacao_despesa`). **Esses registros são legítimos e não
+   são excluídos:** despesa, movimento e pagamento são os de sempre e continuam válidos sem a função; o estorno é o de sempre.
+3. Banco: `supabase/reversao/20261230090000_despesa_paga_no_cadastro_anterior.sql` (só retira a função).
+4. Último recurso: restauração assistida do backup acima.
+
+**Pendente de homologação com a conta real:** abrir o modal por Despesas e por Lançamentos, no desktop e no celular; conferir a
+opção desmarcada por padrão, a lista de contas e os rótulos do botão; registrar a primeira despesa paga verdadeira e conferir a
+despesa paga na lista, o movimento na conta e o saldo.
+
