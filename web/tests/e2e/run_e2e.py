@@ -162,6 +162,7 @@ def verificar_jwt(token, segredo):
 def criar_handler(dist, postgrest_url, segredo, headers_seguranca, consolidar=None, administrar=None, previa=None):
     refresh_tokens = {}
     recuperacoes = []  # e-mails pedidos em /auth/v1/recover (FIN-MULTIUSUARIO-ACESSO-01)
+    tokens_de_link = {}  # token_hash -> (conta, tipo), uso unico (FIN-MULTIUSUARIO-AJUSTES-FINAIS-01)
     trava = threading.Lock()
 
     def usuario_publico(conta):
@@ -301,6 +302,15 @@ def criar_handler(dist, postgrest_url, segredo, headers_seguranca, consolidar=No
                 with trava:
                     recuperacoes.append(str(dados.get('email', '')).lower())
                 return self._json(200, {})
+            # FIN-MULTIUSUARIO-AJUSTES-FINAIS-01: link no formato token_hash (uso unico): so e consumido aqui, quando a pagina
+            # confirma; abrir o endereco da pagina nao o gasta.
+            if metodo == 'POST' and rota == '/auth/v1/verify':
+                dados = json.loads(self._corpo() or b'{}')
+                with trava:
+                    alvo = tokens_de_link.pop(str(dados.get('token_hash', '')), None)
+                if not alvo or alvo[1] != str(dados.get('type', '')):
+                    return self._json(403, {'code': 403, 'error_code': 'otp_expired', 'msg': 'Email link is invalid or has expired'})
+                return self._json(200, sessao(alvo[0]))
             if metodo == 'PUT' and rota == '/auth/v1/user':
                 token = (self.headers.get('Authorization') or '').removeprefix('Bearer ').strip()
                 claims = verificar_jwt(token, segredo)
@@ -371,6 +381,11 @@ def criar_handler(dist, postgrest_url, segredo, headers_seguranca, consolidar=No
                         return self._json(200, {'fragmento': None, 'pedidos_de_recuperacao': pedidos})
                     criado = administrar({'acao': 'usuario_ficticio', 'email': email})
                     CONTAS[email] = {'id': criado['id'], 'email': email, 'senha': None}
+                if pedido.get('formato') == 'token_hash':
+                    token = secrets.token_urlsafe(32)
+                    with trava:
+                        tokens_de_link[token] = (CONTAS[email], tipo)
+                    return self._json(200, {'consulta': f'token_hash={token}&type={tipo}', 'pedidos_de_recuperacao': pedidos})
                 s = sessao(CONTAS[email])
                 if pedido.get('expirado'):
                     return self._json(200, {'fragmento': 'error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired',

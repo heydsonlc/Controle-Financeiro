@@ -1,7 +1,11 @@
 // FIN-MULTIUSUARIO-ACESSO-01 — definicao de senha pelo link de convite ou de recuperacao.
 //
-// O Supabase Auth valida o link (uso unico, com validade) e devolve a sessao no fragmento do endereco (#access_token=...).
-// O fragmento e lido uma vez e retirado do endereco e do historico antes de qualquer outra coisa; nada dele e guardado
+// Dois formatos de link, os dois do Supabase Auth (uso unico, com validade):
+//  (a) o padrao: o Supabase valida o link e devolve a sessao no fragmento do endereco (#access_token=...);
+//  (b) o recomendado (FIN-MULTIUSUARIO-AJUSTES-FINAIS-01): o e-mail aponta direto para esta pagina com ?token_hash=...&type=...
+//      e o link so e USADO quando a pessoa clica em "Continuar". Verificadores de links de provedores de e-mail abrem o
+//      endereco antes do destinatario; no formato (a) isso gasta o link, no (b) nao.
+// O que vem no endereco e lido uma vez e retirado do endereco e do historico antes de qualquer outra coisa; nada dele e guardado
 // pelo aplicativo alem da sessao do proprio Supabase. A senha e gravada pelo Supabase Auth (o aplicativo nao guarda senha).
 // Depois de salvar, as outras sessoes da conta sao encerradas e o usuario segue para o primeiro acesso (que decide se a
 // conta precisa ser ativada ou se vai direto para o aplicativo).
@@ -30,12 +34,34 @@ export function senhaAceita(senha) {
 }
 
 const fragmento = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+const consulta = new URLSearchParams(window.location.search);
 window.history.replaceState(null, '', window.location.pathname);  // o link nao fica no endereco nem no historico
 
+const TIPOS = new Set(['invite', 'recovery']);
 let pronto = false;
-const tipo = fragmento.get('type');
-if (fragmento.get('error') || fragmento.get('error_code')) {
+let tipo = fragmento.get('type');
+const tokenHash = consulta.get('token_hash');
+if (fragmento.get('error') || fragmento.get('error_code') || consulta.get('error') || consulta.get('error_code')) {
     linkInvalido();
+} else if (tokenHash && TIPOS.has(consulta.get('type')) && /^[A-Za-z0-9_-]{16,256}$/.test(tokenHash)) {
+    // formato (b): nada e consumido ate a pessoa confirmar
+    tipo = consulta.get('type');
+    $('ds-subtitulo').textContent = tipo === 'invite' ? 'Convite para o Controle Financeiro' : 'Recuperação de senha';
+    $('ds-continuar-bloco').hidden = false;
+    $('ds-continuar').focus();
+    $('ds-continuar').addEventListener('click', async () => {
+        $('ds-continuar').disabled = true;
+        let aceito = false;
+        try {
+            const { data, error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: tipo });
+            aceito = !error && Boolean(data && data.session);
+        } catch (_falha) {
+            aceito = false;
+        }
+        $('ds-continuar-bloco').hidden = true;
+        if (aceito) abrirFormulario();
+        else linkInvalido();
+    });
 } else if (fragmento.get('access_token') && fragmento.get('refresh_token') && (tipo === 'invite' || tipo === 'recovery')) {
     try {  // um link adulterado ou cortado pode fazer a biblioteca lancar em vez de devolver o erro
         const { data, error } = await supabase.auth.setSession({ access_token: fragmento.get('access_token'), refresh_token: fragmento.get('refresh_token') });
@@ -48,7 +74,9 @@ if (fragmento.get('error') || fragmento.get('error_code')) {
     linkInvalido();  // sem link valido nesta visita, a pagina nao troca a senha de uma sessao ja aberta
 }
 
-if (pronto) {
+if (pronto) abrirFormulario();
+
+function abrirFormulario() {
     $('ds-subtitulo').textContent = tipo === 'invite' ? 'Crie a senha da sua conta' : 'Crie uma nova senha';
     $('ds-form').hidden = false;
     $('ds-senha').focus();

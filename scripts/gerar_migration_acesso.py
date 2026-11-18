@@ -29,7 +29,7 @@ NA_ESTRUTURA = ['pode_acessar_perfil', 'pode_gerir_perfil', 'gere_perfil', 'meus
 # Funcoes expostas, em plpgsql, sem perfil: recebem "perform financeiro.exigir_conta_ativa();" como primeira instrucao.
 COM_EXIGENCIA = ['criar_perfil', 'criar_categoria', 'editar_categoria', 'excluir_categoria', 'definir_natureza_categoria', 'naturezas_das_categorias',
                  'criar_palavra_chave', 'remover_palavra_chave', 'criar_minha_palavra_chave', 'desligar_palavra_chave_padrao',
-                 'reassociar_palavra_chave_padrao', 'remover_minha_palavra_chave', 'restaurar_palavra_chave_padrao',
+                 'reassociar_palavra_chave_padrao', 'remover_minha_palavra_chave', 'restaurar_palavra_chave_padrao', 'alterar_categoria_da_palavra_chave',
                  'categorias_cartao_padrao_tela', 'manter_categoria_cartao_padrao', 'propagar_categorias_cartao_padrao',
                  'previa_reclassificacao_categorias', 'criar_tr', 'editar_tr', 'importar_tr', 'tr_faltantes', 'tr_oficial_tela']
 # Guarda interna do catalogo padrao (nao exposta): quem a chama primeiro (incorporar, reclassificar...) tambem fica coberto.

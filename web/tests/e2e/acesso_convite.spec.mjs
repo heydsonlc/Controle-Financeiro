@@ -285,6 +285,41 @@ test('recuperacao de senha: resposta igual com ou sem conta; a senha nova vale e
     await entrar(page, { email: NOVA.email, senha: NOVA.outra });
 });
 
+// FIN-MULTIUSUARIO-AJUSTES-FINAIS-01 — link no formato recomendado pelo Supabase (token_hash): verificadores de links de
+// provedores de e-mail abrem o endereco antes do destinatario; neste formato isso NAO gasta o link, so o clique em Continuar.
+test('link no formato com confirmacao: abrir o endereco nao gasta o link; o clique em Continuar sim, uma unica vez', async ({ page, request }) => {
+    const { consulta } = await link(request, NOVA.email, 'recovery', { formato: 'token_hash' });
+    for (let visita = 0; visita < 2; visita += 1) {  // o "verificador de links" abre a pagina e vai embora
+        await page.goto('about:blank');
+        await page.goto(`/definir-senha.html?${consulta}`);
+        await expect(page.locator('#ds-continuar')).toBeVisible();
+        await expect(page.locator('#ds-form')).toBeHidden();
+        expect(page.url()).not.toContain('token_hash');  // o link sai do endereco
+    }
+    await page.goto('about:blank');
+    await page.goto(`/definir-senha.html?${consulta}`);
+    await expect(page.locator('#ds-subtitulo')).toHaveText('Recuperação de senha');
+    await page.click('#ds-continuar');
+    await expect(page.locator('#ds-subtitulo')).toHaveText('Crie uma nova senha');
+    await definirSenha(page, NOVA.outra);
+    await page.waitForURL('**/contas.html');
+    await page.click('#app-logout-button');
+    await page.waitForURL('**/index.html');
+    // usado: nao serve de novo
+    await page.goto(`/definir-senha.html?${consulta}`);
+    await page.click('#ds-continuar');
+    await expect(page.locator('#ds-subtitulo')).toHaveText('Link inválido');
+    await expect(page.locator('#ds-form')).toBeHidden();
+    // adulterado ou de outro tipo: mesma mensagem
+    for (const ruim of ['token_hash=curto&type=recovery', 'token_hash=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&type=recovery', `${consulta.replace('recovery', 'signup')}`]) {
+        await page.goto('about:blank');
+        await page.goto(`/definir-senha.html?${ruim}`);
+        if (await page.locator('#ds-continuar').isVisible()) await page.click('#ds-continuar');
+        await expect(page.locator('#ds-subtitulo')).toHaveText('Link inválido');
+    }
+    await entrar(page, { email: NOVA.email, senha: NOVA.outra });
+});
+
 test('suspensao: a conta deixa de receber qualquer resposta, os dados ficam, e a reativacao devolve o acesso', async ({ browser, page, request }) => {
     await entrar(page, { email: NOVA.email, senha: NOVA.outra });
     const perfil = (await chamarRpc(page, 'meus_perfis', {})).corpo[0].id;

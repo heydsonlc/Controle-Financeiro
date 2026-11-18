@@ -19,6 +19,13 @@
         <div class="login-error" id="ds-erro" role="alert" hidden></div>
         <p class="login-info" id="ds-aviso" hidden></p>
 
+        <!-- FIN-MULTIUSUARIO-AJUSTES-FINAIS-01: link no formato recomendado (token_hash): o link so e usado quando a pessoa
+             confirma aqui, e nao quando um verificador de links do provedor de e-mail abre o endereco. -->
+        <div id="ds-continuar-bloco" hidden>
+            <p class="login-info">Confirme para continuar com a definição da senha.</p>
+            <button type="button" class="login-submit" id="ds-continuar">Continuar</button>
+        </div>
+
         <form id="ds-form" novalidate hidden>
             <div class="login-field">
                 <label for="ds-senha">Nova senha</label>
