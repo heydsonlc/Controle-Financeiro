@@ -19,6 +19,8 @@ const POR_DICA = {
     // FIN-MULTIUSUARIO-SEGURANCA-01: os indices de TR sao referencia de todos; so o administrador da plataforma os mantem.
     SO_ADMINISTRADOR: 'A manutenção dos índices oficiais é restrita ao administrador da plataforma. Nada foi gravado.',
     // FIN-CADASTROS-PADRAO-01: categoria de cartao copiada do modelo do aplicativo
+    // FIN-MULTIUSUARIO-ACESSO-01: conta suspensa ou nunca ativada (o banco recusa toda funcao)
+    CONTA_INATIVA: 'Esta conta não tem acesso liberado ao aplicativo. Fale com o administrador.',
     CATEGORIA_PADRAO: 'Categoria padrão do aplicativo: o nome e a situação não podem ser alterados. Nada foi gravado.',
     COM_DOCUMENTOS: 'Este financiamento tem documentos ou conferências da Caixa; a exclusão dele ainda não está disponível nesta versão do aplicativo. Nada foi gravado.',
 };

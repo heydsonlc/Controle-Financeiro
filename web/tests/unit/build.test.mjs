@@ -148,7 +148,9 @@ test('verificacao de dist detecta segredo injetado', async () => {
     }
 });
 
-const RPCS_DE_LEITURA = new Set(['meus_perfis', 'contas_bancarias_do_perfil', 'contas_do_mes',
+const RPCS_DE_LEITURA = new Set(['meus_perfis',
+    // FIN-MULTIUSUARIO-ACESSO-01: situacao da propria conta e telas da administracao da plataforma (so leitura)
+    'situacao_da_minha_conta', 'sou_administrador_plataforma', 'convites_tela', 'usuarios_tela', 'auditoria_acesso_tela', 'contas_bancarias_do_perfil', 'contas_do_mes',
     'lancamentos_da_fatura', 'mes_pode_estar_incompleto', 'previa_geracao', 'categorias_de_despesa',
     'despesa_para_edicao', 'receitas_do_mes', 'fontes_de_receita', 'receita_para_edicao', 'pode_gerir_perfil',
     'cartoes_do_perfil', 'faturas_do_mes', 'compras_da_fatura', 'compra_para_edicao', 'previa_compra',
@@ -375,8 +377,16 @@ const RPCS_DE_ESCRITA = new Map([
     ['salvar_preferencias', 'configuracoes.js'],
     // FIN-MIGRACAO-FIDELIDADE-FASE-1 (gestao de perfis; o banco exige pode_gerir do perfil). Camada unica: perfil.js
     ['criar_perfil', 'perfil.js'],
+    // FIN-MULTIUSUARIO-ACESSO-01: ativacao da propria conta (primeiro acesso) e administracao da plataforma (o banco
+    // exige o administrador em cada chamada)
+    ['ativar_minha_conta', 'primeiro-acesso.js'],
     // FIN-MULTIUSUARIO-AJUSTES-FINAIS-01: "Alterar categoria" da palavra-chave (so para a conta de quem pede)
     ['alterar_categoria_da_palavra_chave', 'categorias-adaptador.js'],
+    ['criar_convite', 'administracao.js'],
+    ['revogar_convite', 'administracao.js'],
+    ['registrar_reenvio_convite', 'administracao.js'],
+    ['suspender_usuario', 'administracao.js'],
+    ['reativar_usuario', 'administracao.js'],
     ['atualizar_perfil', 'perfil.js'],
     ['inativar_perfil', 'perfil.js'],
     ['reativar_perfil', 'perfil.js'],
@@ -453,16 +463,17 @@ const MENU_DO_FLASK = [
     ['Cadastros', ['Categorias', 'Mobilidade']],
     ['Ferramentas', ['Importar Cartão']],
     ['Sistema', ['Configurações e Preferências', 'Ajuda e Manual']],
+    ['Plataforma', ['Administração']],  // FIN-MULTIUSUARIO-ACESSO-01: secao escondida, mostrada so ao administrador da plataforma
 ];
 const MIGRADAS = { 'contas.html': 'Despesas', 'recorrencias.html': 'Recorrencias', 'receitas.html': 'Receitas', 'cartoes.html': 'Cartões',
     'categorias.html': 'Categorias', 'configuracoes.html': 'Configurações e Preferências', 'ajuda.html': 'Ajuda e Manual',
     'importar-cartao.html': 'Importar Cartão', 'contas-bancarias.html': 'Contas Bancárias',
     'lancamentos.html': 'Lançamentos', 'financiamentos.html': 'Financiamentos', 'patrimonio.html': 'Patrimônio',
     'documentos-fiscais.html': 'Documentos Fiscais', 'dashboard.html': 'Dashboard',
-    'mobilidade.html': 'Mobilidade' };
+    'mobilidade.html': 'Mobilidade', 'administracao.html': 'Administração' };
 
 function menuDe(html) {
-    return [...html.matchAll(/<div class="app-nav-section-title">([^<]+)<\/div>([\s\S]*?)<\/div>\s*(?=<div class="app-nav-section">|<\/nav>)/g)]
+    return [...html.matchAll(/<div class="app-nav-section-title">([^<]+)<\/div>([\s\S]*?)<\/div>\s*(?=<!--[^>]*-->\s*<div class="app-nav-section"|<div class="app-nav-section"|<\/nav>)/g)]
         .map(([, secao, corpo]) => [secao, [...corpo.matchAll(/<span class="app-nav-text">([^<]+)<\/span>/g)].map((m) => m[1])]);
 }
 
@@ -482,8 +493,9 @@ test('todas as paginas usam a moldura do Flask com o mesmo menu, sem pagina queb
             'contas-mobile.html',  // + FIN-MVP-MOBILE-07
             'pagamentos-mobile.html',  // + FIN-MVP-MOBILE-08
             'recorrencias-mobile.html',  // + FIN-MVP-MOBILE-09
-            'documentos-mobile.html', 'mobilidade-mobile.html'].includes(a));  // + FIN-MOBILE-11 e FIN-MOBILE-12
-        assert.equal(paginas.length, 16);  // + indexadores.html (FIN-PRE-PRODUCAO-1)
+            'documentos-mobile.html', 'mobilidade-mobile.html',  // + FIN-MOBILE-11 e FIN-MOBILE-12
+            'primeiro-acesso.html', 'recuperar-senha.html', 'definir-senha.html'].includes(a));  // + FIN-MULTIUSUARIO-ACESSO-01
+        assert.equal(paginas.length, 17);  // + indexadores.html (FIN-PRE-PRODUCAO-1) + administracao.html (FIN-MULTIUSUARIO-ACESSO-01)
         for (const pagina of paginas) {
             const html = await readFile(path.join(destino, pagina), 'utf8');
             assert.doesNotMatch(html, /\{\{|\{%|url_for|<script>|\sstyle=|\son[a-z]+=/i, `${pagina}: marcador, script ou estilo inline`);

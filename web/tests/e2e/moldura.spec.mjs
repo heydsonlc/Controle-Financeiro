@@ -62,7 +62,8 @@ async function entrar(page) {
 }
 
 async function menu(page) {
-    return page.locator('.app-nav-section').evaluateAll((secoes) => secoes.map((secao) => [
+    // FIN-MULTIUSUARIO-ACESSO-01: a secao Plataforma (so do administrador da plataforma) e conferida a parte
+    return page.locator('.app-nav-section:not(#app-nav-plataforma)').evaluateAll((secoes) => secoes.map((secao) => [
         secao.querySelector('.app-nav-section-title').textContent.trim(),
         [...secao.querySelectorAll('.app-nav-text')].map((t) => t.textContent.trim()),
     ]));
@@ -74,7 +75,10 @@ test.describe('computador', () => {
     test('menu, secoes, icones e barra superior do Flask; Despesas ativo e perfil padrao no topo', async ({ page }) => {
         await entrar(page);
         expect(await menu(page)).toEqual(MENU_DO_FLASK);
-        await expect(page.locator('.app-sidebar .app-icon svg')).toHaveCount(15);
+        await expect(page.locator('.app-sidebar .app-nav-section:not(#app-nav-plataforma) .app-icon svg')).toHaveCount(15);
+        // o usuario A e o administrador ficticio da plataforma: so ele ve o atalho da Administracao
+        await expect(page.locator('#app-nav-plataforma')).toBeVisible();
+        await expect(page.locator('#app-nav-plataforma .app-nav-text')).toHaveText('Administração');
         await expect(page.locator('.app-nav-link.active')).toHaveText(/Despesas/);
         await expect(page.locator('.app-topbar-title')).toHaveText('Gerenciamento de Despesas');
         await expect(perfilAtivo(page)).toHaveText('Pessoal');

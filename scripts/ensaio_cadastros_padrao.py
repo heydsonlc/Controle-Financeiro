@@ -99,7 +99,8 @@ def cartao(cur, perfil):
             'limites': consulta(cur, 'select id, cartao_id, categoria_cartao_id, ativo from public.cartao_categoria_limite where perfil_financeiro_id = %s order by id', (perfil,))}
 
 
-def ensaiar(saida, pessoais_texto, backup_id=None):
+def ensaiar(saida, pessoais_texto, backup_id=None, depois=None):
+    # depois: continuacao opcional sobre o mesmo banco descartavel (o ensaio da etapa seguinte parte do estado final deste)
     cfg = R.configuracao()
     ficha = R._escolher(cfg, backup_id)
     pasta = R._pasta_temporaria(cfg, 'ensaio-cadastros')
@@ -346,6 +347,9 @@ def ensaiar(saida, pessoais_texto, backup_id=None):
             conn.rollback()
             conferir('o titular nao consegue gravar despesa na categoria particular de outro usuario', usou != 'GRAVOU', usou)
             conn.close()
+            if depois:
+                depois({'dsn': dsn, 'conferir': conferir, 'rel': rel, 'titular': titular, 'perfis': perfis, 'abrir': abrir, 'outro': outro,
+                        'perfil_do_outro': novo, 'pasta': pasta})
         rel['banco_descartavel'] = 'removido'
     finally:
         for k, v in anteriores.items():

@@ -73,7 +73,7 @@ def _como_supabase(dsn):
         cur.execute('create table supabase_migrations.schema_migrations (version text primary key, statements text[], name text)')
         cur.execute("insert into supabase_migrations.schema_migrations (version, name) values ('20261020120000', 'base'), "
                     "('20261126090000', 'patrimonio')")
-        cur.execute('alter table auth.users add column email_confirmed_at timestamptz')
+        cur.execute('alter table auth.users add column if not exists email_confirmed_at timestamptz')
         cur.execute('update auth.users set email_confirmed_at = now()')
         cur.execute("create table auth.identities (id uuid primary key default gen_random_uuid(), provider text not null, "
                     "user_id uuid not null references auth.users (id) on delete cascade, identity_data jsonb not null, "

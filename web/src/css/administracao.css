@@ -1,0 +1,40 @@
+/* FIN-MULTIUSUARIO-ACESSO-01 — Administracao da Plataforma: telas compactas (lista de uma linha por item, botoes pequenos). */
+.adm-pagina { max-width: 960px; margin: 0 auto; padding: 16px; }
+.adm-abas { display: flex; gap: 4px; border-bottom: 1px solid #e5e7eb; margin-bottom: 12px; }
+.adm-aba { background: none; border: none; border-bottom: 2px solid transparent; padding: 8px 12px; font-size: 0.875rem; color: #4b5563; cursor: pointer; }
+.adm-aba.ativa { color: #1d4ed8; border-bottom-color: #2563eb; font-weight: 600; }
+.adm-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-bottom: 8px; }
+.adm-campo { display: flex; flex-direction: column; gap: 4px; font-size: 0.75rem; color: #4b5563; min-width: 110px; }
+.adm-campo-largo { flex: 1 1 220px; }
+.adm-campo input, .adm-campo select { padding: 7px 9px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.875rem; box-sizing: border-box; width: 100%; background: #fff; }
+.adm-botao { padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; font-size: 0.8125rem; cursor: pointer; white-space: nowrap; }
+.adm-botao:hover { background: #f3f4f6; }
+.adm-botao:disabled { opacity: 0.6; cursor: wait; }
+.adm-botao-primario { background: #2563eb; border-color: #2563eb; color: #fff; font-weight: 600; padding: 8px 12px; }
+.adm-botao-primario:hover { background: #1d4ed8; }
+.adm-botao-perigo { color: #b91c1c; border-color: #fecaca; }
+.adm-nota { font-size: 0.75rem; color: #6b7280; margin: 4px 0 12px; }
+.adm-alerta { padding: 8px 12px; border-radius: 6px; font-size: 0.8125rem; margin-bottom: 12px; background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+.adm-alerta[data-tipo="erro"] { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+.adm-lista { display: flex; flex-direction: column; border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; }
+.adm-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid #f3f4f6; }
+.adm-item:last-child { border-bottom: none; }
+.adm-item-texto { min-width: 0; }
+.adm-item-cabeca { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.adm-item-titulo { font-size: 0.875rem; font-weight: 600; overflow-wrap: anywhere; }
+.adm-item-detalhes { font-size: 0.75rem; color: #6b7280; overflow-wrap: anywhere; }
+.adm-item-acoes { display: flex; gap: 6px; flex-shrink: 0; }
+.adm-selo { font-size: 0.6875rem; padding: 1px 7px; border-radius: 999px; background: #e5e7eb; color: #374151; }
+.adm-selo[data-tipo="PENDENTE"], .adm-selo[data-tipo="ATIVA"] { background: #dbeafe; color: #1e40af; }
+.adm-selo[data-tipo="USADO"] { background: #d1fae5; color: #065f46; }
+.adm-selo[data-tipo="EXPIRADO"], .adm-selo[data-tipo="SUSPENSA"] { background: #fef3c7; color: #92400e; }
+.adm-selo[data-tipo="REVOGADO"] { background: #f3f4f6; color: #6b7280; }
+.adm-vazio { font-size: 0.8125rem; color: #6b7280; padding: 12px; margin: 0; }
+.adm-restrito { max-width: 480px; margin: 48px auto; text-align: center; color: #4b5563; font-size: 0.9375rem; }
+
+@media (max-width: 640px) {
+    .adm-pagina { padding: 12px; }
+    .adm-item { flex-direction: column; align-items: stretch; gap: 6px; }
+    .adm-item-acoes { justify-content: flex-end; }
+    .adm-botao-primario { width: 100%; }
+}

@@ -34,7 +34,7 @@ def cluster(tmp_path_factory):
         c.preparar()
         conn = c.conectar()
         with conn.cursor() as cur:
-            cur.execute('alter table auth.users add column email_confirmed_at timestamptz')  # como no Supabase
+            cur.execute('alter table auth.users add column if not exists email_confirmed_at timestamptz')  # como no Supabase (o auth simulado ja a tem)
             cur.execute('update auth.users set email_confirmed_at = now()')
             cur.execute('insert into auth.users (id, email, email_confirmed_at) values (%s, %s, now())', (TITULAR['id'], TITULAR['email']))
         conn.close()

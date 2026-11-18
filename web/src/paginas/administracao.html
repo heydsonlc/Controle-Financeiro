@@ -1,0 +1,47 @@
+<!-- moldura {"ativo": "administracao", "titulo": "Administração da Plataforma", "documento": "Administração da Plataforma - Controle Financeiro", "css": ["css/administracao.css"], "scripts": ["js/administracao.js"]} -->
+<!-- FIN-MULTIUSUARIO-ACESSO-01: convites, contas e auditoria de acesso. So o administrador da plataforma (conferido no
+     banco em cada operacao). Nenhum dado financeiro de usuario aparece aqui. -->
+<!-- conteudo -->
+<div class="adm-pagina" id="adm-pagina" hidden>
+    <div class="adm-alerta" id="adm-alerta" role="status" hidden></div>
+
+    <nav class="adm-abas" role="tablist" aria-label="Administração">
+        <button type="button" class="adm-aba ativa" role="tab" aria-selected="true" data-aba="convites">Convites</button>
+        <button type="button" class="adm-aba" role="tab" aria-selected="false" data-aba="usuarios">Usuários</button>
+        <button type="button" class="adm-aba" role="tab" aria-selected="false" data-aba="auditoria">Auditoria</button>
+    </nav>
+
+    <section class="adm-secao" id="adm-convites" data-secao="convites">
+        <form class="adm-form" id="adm-form-convite" novalidate>
+            <label class="adm-campo adm-campo-largo"><span>E-mail</span>
+                <input type="email" id="adm-convite-email" maxlength="254" autocomplete="off" required></label>
+            <label class="adm-campo"><span>Validade</span>
+                <select id="adm-convite-validade">
+                    <option value="3">3 dias</option>
+                    <option value="7" selected>7 dias</option>
+                    <option value="15">15 dias</option>
+                    <option value="30">30 dias</option>
+                </select></label>
+            <label class="adm-campo adm-campo-largo"><span>Observação (opcional)</span>
+                <input type="text" id="adm-convite-observacao" maxlength="200" autocomplete="off"></label>
+            <button type="submit" class="adm-botao adm-botao-primario" id="adm-convite-enviar">Registrar convite</button>
+        </form>
+        <p class="adm-nota">O convite autoriza o e-mail a ativar uma conta. O e-mail com o link é enviado pelo Supabase Auth
+            (painel do projeto, Authentication → Users → Invite user), para o mesmo endereço. Sem convite válido aqui, a conta não é ativada.</p>
+        <div class="adm-lista" id="adm-lista-convites" aria-live="polite"></div>
+    </section>
+
+    <section class="adm-secao" id="adm-usuarios" data-secao="usuarios" hidden>
+        <p class="adm-nota">Situação das contas. A administração não dá acesso aos dados financeiros de nenhum usuário.</p>
+        <div class="adm-lista" id="adm-lista-usuarios" aria-live="polite"></div>
+    </section>
+
+    <section class="adm-secao" id="adm-auditoria" data-secao="auditoria" hidden>
+        <p class="adm-nota">Últimos registros de convites, ativações e suspensões.</p>
+        <div class="adm-lista" id="adm-lista-auditoria" aria-live="polite"></div>
+    </section>
+</div>
+<div class="adm-restrito" id="adm-restrito" hidden>
+    <p>Esta área é restrita ao administrador da plataforma.</p>
+    <a href="contas.html">Voltar ao aplicativo</a>
+</div>

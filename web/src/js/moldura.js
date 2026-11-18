@@ -11,6 +11,7 @@
 // Elementos criados por DOM (sem innerHTML) e cor so por CSSOM: a CSP usa style-src 'self'.
 
 import { MES_VALIDO } from './comum.js';
+import { souAdministrador } from './conta.js';
 import { carregarPerfis, escolherPerfilAtivo, salvarPerfilAtivo } from './perfil.js';
 import { exigirUsuario, sair } from './sessao.js';
 
@@ -205,5 +206,7 @@ export async function iniciarMoldura() {
         return { usuario, perfil: null, perfis: [] };
     }
     if (!estado.perfis.length) mostrar('perfis-vazio');
+    // FIN-MULTIUSUARIO-ACESSO-01: atalho da administracao so para o administrador da plataforma (a permissao e do banco)
+    souAdministrador(usuario.id).then((sim) => { if (sim) mostrar('app-nav-plataforma'); }).catch(() => {});
     return { usuario, perfil: estado.ativo, perfis: estado.perfis };
 }

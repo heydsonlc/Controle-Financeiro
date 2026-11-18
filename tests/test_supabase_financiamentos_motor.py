@@ -676,4 +676,13 @@ def test_reversao_remove_o_motor_e_volta(cluster):  # noqa: F811
     assert {r['s']: r for r in sql(dsn, catalogo)} == com and len(sql(dsn, indices)) == 2
     executar(supabase / 'migrations' / '20261204090000_financeiro_tr_projetada.sql')
     executar(supabase / 'migrations' / '20261206090000_financeiro_precedencia_ajuste_saldo.sql')
-    assert {r['s']: r for r in sql(dsn, catalogo)} == completo
+    # Funcao destas migrations redefinida por migration POSTERIOR (ex.: criar_tr na 20270102, que acrescenta a exigencia de conta
+    # ativa): reaplicar so estas volta a definicao delas; na recuperacao real as seguintes sao reaplicadas depois.
+    import re
+    posteriores = {m.group(1) for p in sorted((supabase / 'migrations').glob('*.sql')) if p.name[:14] > '20261206090000'
+                   for m in re.finditer(r'create or replace function financeiro\.(\w+)\(', p.read_text(encoding='utf-8'), re.I)}
+    final = {r['s']: r for r in sql(dsn, catalogo)}
+    assert set(final) == set(completo)
+    diferentes = {s for s in final if final[s] != completo[s]}
+    assert {s.split('(')[0].split('.')[1] for s in diferentes} <= posteriores, diferentes
+    assert all(final[s]['a'] == completo[s]['a'] for s in diferentes)

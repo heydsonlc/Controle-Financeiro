@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
+    <!-- FIN-MULTIUSUARIO-ACESSO-01: destino do link de convite e do link de recuperacao (Supabase Auth): define a senha. -->
+    <link rel="icon" type="image/png" sizes="32x32" href="icones/icone-32.png?v=2">
+    <title>Definir senha — Controle Financeiro</title>
+    <link rel="stylesheet" href="css/shared/style.css">
+    <link rel="stylesheet" href="css/shared/theme-light.css">
+    <link rel="stylesheet" href="css/app.css">
+</head>
+<body class="login-body">
+    <main class="login-card">
+        <h1 class="login-title">Definir senha</h1>
+        <p class="login-subtitle" id="ds-subtitulo">Verificando o link…</p>
+
+        <div class="login-error" id="ds-erro" role="alert" hidden></div>
+        <p class="login-info" id="ds-aviso" hidden></p>
+
+        <form id="ds-form" novalidate hidden>
+            <div class="login-field">
+                <label for="ds-senha">Nova senha</label>
+                <input type="password" id="ds-senha" name="senha" autocomplete="new-password" minlength="10" required>
+            </div>
+            <div class="login-field">
+                <label for="ds-confirma">Repita a nova senha</label>
+                <input type="password" id="ds-confirma" name="confirma" autocomplete="new-password" minlength="10" required>
+            </div>
+            <p class="login-info">Use pelo menos 10 caracteres, com letras e números.</p>
+            <button type="submit" class="login-submit" id="ds-enviar">Salvar senha</button>
+        </form>
+
+        <p class="login-links" id="ds-links" hidden><a class="login-link" href="recuperar-senha.html">Pedir um novo link</a> · <a class="login-link" href="index.html">Entrar</a></p>
+    </main>
+
+    <script src="config.js"></script>
+    <script src="vendor/supabase.js"></script>
+    <script type="module" src="js/definir-senha.js"></script>
+</body>
+</html>

@@ -41,6 +41,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import uuid
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -160,6 +161,7 @@ def verificar_jwt(token, segredo):
 
 def criar_handler(dist, postgrest_url, segredo, headers_seguranca, consolidar=None, administrar=None, previa=None):
     refresh_tokens = {}
+    recuperacoes = []  # e-mails pedidos em /auth/v1/recover (FIN-MULTIUSUARIO-ACESSO-01)
     trava = threading.Lock()
 
     def usuario_publico(conta):
@@ -269,7 +271,7 @@ def criar_handler(dist, postgrest_url, segredo, headers_seguranca, consolidar=No
                 dados = json.loads(self._corpo() or b'{}')
                 if 'grant_type=password' in query:
                     conta = CONTAS.get(str(dados.get('email', '')).lower())
-                    if not conta or not hmac.compare_digest(conta['senha'], str(dados.get('password', ''))):
+                    if not conta or not conta.get('senha') or not hmac.compare_digest(conta['senha'], str(dados.get('password', ''))):
                         return self._json(400, {'code': 400, 'error_code': 'invalid_credentials',
                                                 'msg': 'Invalid login credentials'})
                     return self._json(200, sessao(conta))
@@ -292,6 +294,26 @@ def criar_handler(dist, postgrest_url, segredo, headers_seguranca, consolidar=No
                 self.send_response(204)
                 self.end_headers()
                 return
+            # FIN-MULTIUSUARIO-ACESSO-01: pedido de recuperacao (resposta igual exista ou nao a conta; o "e-mail" e o link
+            # devolvido por /__e2e__/link) e troca de senha da sessao (como o Supabase Auth; nada disto e do aplicativo).
+            if metodo == 'POST' and rota == '/auth/v1/recover':
+                dados = json.loads(self._corpo() or b'{}')
+                with trava:
+                    recuperacoes.append(str(dados.get('email', '')).lower())
+                return self._json(200, {})
+            if metodo == 'PUT' and rota == '/auth/v1/user':
+                token = (self.headers.get('Authorization') or '').removeprefix('Bearer ').strip()
+                claims = verificar_jwt(token, segredo)
+                conta = next((c for c in CONTAS.values() if claims and c['id'] == claims.get('sub')), None)
+                if not conta:
+                    return self._json(403, {'code': 403, 'error_code': 'bad_jwt', 'msg': 'invalid JWT'})
+                dados = json.loads(self._corpo() or b'{}')
+                senha = str(dados.get('password') or '')
+                if len(senha) < 10:
+                    return self._json(422, {'code': 422, 'error_code': 'weak_password', 'msg': 'Password should be at least 10 characters.'})
+                with trava:
+                    conta['senha'] = senha
+                return self._json(200, usuario_publico(conta))
             self._json(404, {'msg': 'rota de auth nao simulada'})
 
         # ---- REST: proxy para o PostgREST real ----
@@ -334,6 +356,30 @@ def criar_handler(dist, postgrest_url, segredo, headers_seguranca, consolidar=No
             except (KeyError, ValueError) as exc:
                 self._json(400, {'msg': str(exc)})
 
+        # ---- Gancho so de teste (FIN-MULTIUSUARIO-ACESSO-01): o link que o e-mail de convite ou de recuperacao do Supabase
+        # Auth traria. Cria o usuario ficticio no auth simulado se ele ainda nao existir (convite). Nenhum e-mail e enviado.
+        def _link(self):
+            try:
+                pedido = json.loads(self._dados or b'{}')
+                email, tipo = str(pedido['email']).lower(), str(pedido['tipo'])
+                if tipo not in ('invite', 'recovery'):
+                    raise ValueError('tipo invalido')
+                with trava:
+                    pedidos = list(recuperacoes)
+                if email not in CONTAS:
+                    if tipo != 'invite':
+                        return self._json(200, {'fragmento': None, 'pedidos_de_recuperacao': pedidos})
+                    criado = administrar({'acao': 'usuario_ficticio', 'email': email})
+                    CONTAS[email] = {'id': criado['id'], 'email': email, 'senha': None}
+                s = sessao(CONTAS[email])
+                if pedido.get('expirado'):
+                    return self._json(200, {'fragmento': 'error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired',
+                                            'pedidos_de_recuperacao': pedidos})
+                self._json(200, {'fragmento': f"access_token={s['access_token']}&expires_in=3600&refresh_token={s['refresh_token']}"
+                                              f"&token_type=bearer&type={tipo}", 'pedidos_de_recuperacao': pedidos})
+            except (KeyError, ValueError) as exc:
+                self._json(400, {'msg': str(exc)})
+
         def _despachar(self, metodo):
             # Le o corpo inteiro ANTES de responder: com keep-alive, bytes nao lidos
             # contaminariam a proxima requisicao da mesma conexao.
@@ -347,6 +393,8 @@ def criar_handler(dist, postgrest_url, segredo, headers_seguranca, consolidar=No
                 return self._consolidar()
             if metodo == 'POST' and self.path == '/__e2e__/admin' and administrar:
                 return self._administrar()
+            if metodo == 'POST' and self.path == '/__e2e__/link' and administrar:
+                return self._link()
             if previa and self.path.startswith('/__previa__'):
                 if self.path == '/__previa__':
                     self.send_response(302)
@@ -367,6 +415,9 @@ def criar_handler(dist, postgrest_url, segredo, headers_seguranca, consolidar=No
 
         def do_PATCH(self):
             self._despachar('PATCH')
+
+        def do_PUT(self):
+            self._despachar('PUT')
 
         def do_DELETE(self):
             self._despachar('DELETE')
@@ -533,6 +584,34 @@ def main():
                                 raise ValueError('usuario ficticio nao encontrado')
                             cur.execute('select financeiro.definir_administrador_plataforma(%s, %s, %s, %s)',
                                         (linha[0], bool(pedido['ativo']), *motivo))
+                        elif acao == 'usuario_ficticio':
+                            # FIN-MULTIUSUARIO-ACESSO-01: o usuario que o convite do Supabase Auth criaria (e-mail confirmado
+                            # pelo proprio link). So no auth simulado deste banco descartavel.
+                            novo = str(uuid.uuid4())
+                            cur.execute('insert into auth.users (id, email, email_confirmed_at) values (%s, %s, now()) '
+                                        'on conflict (email) do update set email = excluded.email returning id', (novo, str(pedido['email']).lower()))
+                            criado = str(cur.fetchone()[0])
+                            conn.commit()
+                            return {'id': criado}
+                        elif acao == 'expirar_convite':
+                            cur.execute("update financeiro.convite set expira_em = now() - interval '1 minute' "
+                                        "where email = %s and situacao = 'PENDENTE' returning id", (str(pedido['email']).lower(),))
+                            achou = cur.fetchone()
+                            conn.commit()
+                            return {'resultado': bool(achou)}
+                        elif acao == 'convite_antigo':
+                            # permite o reenvio sem esperar os 10 minutos reais
+                            cur.execute("update financeiro.convite set ultimo_envio_em = now() - interval '11 minutes' "
+                                        "where email = %s and situacao = 'PENDENTE' returning id", (str(pedido['email']).lower(),))
+                            achou = cur.fetchone()
+                            conn.commit()
+                            return {'resultado': bool(achou)}
+                        elif acao == 'retrato_acesso':
+                            cur.execute("select (select count(*) from financeiro.convite), (select count(*) from financeiro.usuario_plataforma), "
+                                        "(select count(*) from public.perfil_financeiro), (select count(*) from public.conta_bancaria), "
+                                        "(select count(*) from public.conta)")
+                            n = cur.fetchone()
+                            return {'convites': n[0], 'contas_da_plataforma': n[1], 'perfis': n[2], 'contas_bancarias': n[3], 'contas': n[4]}
                         elif acao == 'natureza_exemplo':
                             # FIN-CATEGORIAS-REORGANIZACAO-01: categoria e mes do perfil com mais contas (fora faturas),
                             # para o teste marcar como aporte e conferir a reparticao na tela.

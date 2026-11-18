@@ -383,7 +383,12 @@ SEM_GUARDA_DOCUMENTADA = {'criar_perfil', 'definir_perfil_padrao',
                           'criar_tr', 'editar_tr', 'importar_tr',
                           # FIN-PRE-PRODUCAO-1: preferencias por perfil/usuario so existem no novo aplicativo (o
                           # registro global do Flask e outra tabela); gravar as do perfil exige gerir o perfil.
-                          'salvar_preferencias'}
+                          'salvar_preferencias',
+                          # FIN-MULTIUSUARIO-ACESSO-01: conta da plataforma e convites (nao sao de perfil nenhum; o sistema
+                          # anterior nao os conhece). A ativacao de conta ja ativa so devolve o estado; as demais exigem o
+                          # administrador da plataforma e nao tocam dado de perfil.
+                          'ativar_minha_conta', 'criar_convite', 'revogar_convite', 'registrar_reenvio_convite',
+                          'suspender_usuario', 'reativar_usuario'}
 
 
 def funcoes_de_escrita(dsn):

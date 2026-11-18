@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- FIN-MULTIUSUARIO-ACESSO-01: primeiro acesso de quem foi convidado (ativacao da conta e primeiro perfil) e aviso
+         para a conta sem acesso liberado. -->
+    <link rel="icon" type="image/png" sizes="32x32" href="icones/icone-32.png?v=2">
+    <title>Primeiro acesso — Controle Financeiro</title>
+    <link rel="stylesheet" href="css/shared/style.css">
+    <link rel="stylesheet" href="css/shared/theme-light.css">
+    <link rel="stylesheet" href="css/app.css">
+</head>
+<body class="login-body" hidden>
+    <main class="login-card">
+        <h1 class="login-title">Controle Financeiro</h1>
+        <p class="login-subtitle" id="pa-subtitulo">Verificando a sua conta…</p>
+
+        <div class="login-error" id="pa-erro" role="alert" hidden></div>
+        <p class="login-info" id="pa-aviso" hidden></p>
+
+        <form id="pa-form" novalidate hidden>
+            <p class="login-info">Para começar, dê um nome ao seu primeiro perfil financeiro. Você poderá criar outros depois, em Configurações.</p>
+            <div class="login-field">
+                <label for="pa-nome">Nome do perfil</label>
+                <input type="text" id="pa-nome" name="nome" maxlength="60" value="Pessoal" required>
+            </div>
+            <div class="login-field">
+                <label for="pa-tipo">Tipo</label>
+                <select id="pa-tipo" name="tipo">
+                    <option value="PESSOAL" selected>Pessoal</option>
+                    <option value="EMPRESA">Empresa</option>
+                </select>
+            </div>
+            <button type="submit" class="login-submit" id="pa-enviar">Ativar minha conta</button>
+        </form>
+
+        <p class="login-links"><span id="pa-email"></span> <button type="button" class="login-link" id="pa-sair">Sair</button></p>
+    </main>
+
+    <script src="config.js"></script>
+    <script src="vendor/supabase.js"></script>
+    <script type="module" src="js/primeiro-acesso.js"></script>
+</body>
+</html>

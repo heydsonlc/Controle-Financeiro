@@ -26,7 +26,8 @@ grant usage on schema auth to anon, authenticated, service_role;
 
 create table auth.users (
     id    uuid primary key,
-    email text unique not null
+    email text unique not null,
+    email_confirmed_at timestamptz default now()  -- como no Supabase Auth: nulo enquanto o e-mail nao e confirmado
 );
 
 create function auth.uid() returns uuid

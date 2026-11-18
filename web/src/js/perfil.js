@@ -10,12 +10,16 @@
 // (perfil_acesso.pode_gerir) e devolvem o perfil no formato do Flask (to_dict).
 
 import { supabase } from './cliente.js';
+import { encaminharSemPerfil } from './conta.js';
 
 const chave = (usuarioId) => `cf-perfil-ativo:${usuarioId}`;
 
 export async function carregarPerfis() {
     const { data, error } = await supabase.rpc('meus_perfis');
     if (error) throw error;
+    // FIN-MULTIUSUARIO-ACESSO-01: sem perfil nenhum, a conta pode nao estar ativada (primeiro acesso) ou nao ter acesso
+    // liberado: a pagina de primeiro acesso explica. A promessa nao se resolve: a navegacao ja esta em curso.
+    if (!(data || []).length && await encaminharSemPerfil()) return new Promise(() => {});
     return data || [];
 }
 
