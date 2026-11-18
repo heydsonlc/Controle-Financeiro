@@ -258,6 +258,11 @@ class Carga:
                                "values (%s, %s, 'TITULAR', true)", (self.titular, did))
             self.mapa_perfis[pid] = did
             self.relatorio['perfis'][str(pid)] = {'destino_id': did, 'nome_destino': nome}
+            # FIN-MULTIUSUARIO-SEGURANCA-01: na origem (Flask), registro sem perfil era do perfil "Pessoal". No destino a
+            # posse e pela guarda explicita: a carga a aponta para o perfil correspondente, pelo identificador.
+            if nome == 'Pessoal':
+                self.d.execute('select financeiro.definir_guarda_sem_perfil(%s, %s, %s)',
+                               (did, 'carga_supabase', 'Perfil que guardava os registros sem perfil na origem'))
 
     def ordem(self):
         pendentes = set(self.linhas)

@@ -36,7 +36,32 @@ async function carregarAno(page, ano) {
     await page.click('button:has-text("Carregar TR")');
 }
 
-test('TR mensal pela tela: atalho em Financiamentos, cadastro, edicao, importacao, faltantes e competencia repetida', async ({ page }) => {
+// FIN-MULTIUSUARIO-SEGURANCA-01: os indices de TR sao referencia de todos; so o administrador da plataforma os mantem.
+// O usuario B comeca como usuario comum (recusado, com a mensagem da tela) e depois recebe a administracao pelo gancho de
+// teste /__e2e__/admin, como o ato administrativo real; no fim ela e retirada.
+async function administrador(request, ativo) {
+    const r = await request.post('/__e2e__/admin', { data: { acao: 'administrador', email: B.email, ativo } });
+    expect(r.status()).toBe(200);
+}
+
+test.afterAll(async ({ request }) => { await administrador(request, false); });
+
+test('usuario comum consulta a TR mas nao a altera: a tela mostra a recusa e nada e gravado', async ({ page, request }) => {
+    await administrador(request, false);
+    await entrar(page, B);
+    await page.goto('/indexadores.html');
+    await carregarAno(page, 2035);
+    await expect(page.locator('#tabelaTrOficial tr')).toHaveCount(12);  // leitura continua
+    await page.fill('#trCompetencia', '2037-01');
+    await page.fill('#trValorPercentual', '0,16');
+    await page.click('#formTrOficial button[type="submit"]');
+    await expect(page.locator('#alertContainer')).toContainText('A manutenção dos índices oficiais é restrita ao administrador da plataforma. Nada foi gravado.');
+    await carregarAno(page, 2037);
+    await expect(page.locator('#tabelaTrOficial tr', { hasText: '2037-01' })).toHaveCount(0);
+});
+
+test('TR mensal pela tela: atalho em Financiamentos, cadastro, edicao, importacao, faltantes e competencia repetida', async ({ page, request }) => {
+    await administrador(request, true);
     await entrar(page, B);
     await page.goto('/financiamentos.html');
     await page.click('.fin-atalho-indexadores a');

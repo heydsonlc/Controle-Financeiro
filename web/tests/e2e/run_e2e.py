@@ -524,6 +524,15 @@ def main():
                                         (USUARIO_D['id'], bool(pedido['gestor']), *motivo))
                         elif acao == 'retrato':
                             return retrato_empresa_d(cur)
+                        elif acao == 'administrador':
+                            # FIN-MULTIUSUARIO-SEGURANCA-01: concede ou retira a administracao da plataforma (indices de TR)
+                            # a um usuario ficticio, como o ato administrativo real (pelo dono do banco).
+                            cur.execute('select id from auth.users where email = %s', (str(pedido['email']),))
+                            linha = cur.fetchone()
+                            if not linha:
+                                raise ValueError('usuario ficticio nao encontrado')
+                            cur.execute('select financeiro.definir_administrador_plataforma(%s, %s, %s, %s)',
+                                        (linha[0], bool(pedido['ativo']), *motivo))
                         elif acao == 'natureza_exemplo':
                             # FIN-CATEGORIAS-REORGANIZACAO-01: categoria e mes do perfil com mais contas (fora faturas),
                             # para o teste marcar como aporte e conferir a reparticao na tela.

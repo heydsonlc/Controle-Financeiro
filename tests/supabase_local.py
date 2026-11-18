@@ -209,6 +209,11 @@ def semear_perfis(cur):
     for usuario, chave, papel, pode_gerir in VINCULOS:
         cur.execute('insert into financeiro.perfil_acesso (user_id, perfil_financeiro_id, papel, pode_gerir) '
                     'values (%s, %s, %s, %s)', (usuario['id'], PERFIS[chave]['id'], papel, pode_gerir))
+    # FIN-MULTIUSUARIO-SEGURANCA-01: os registros sem perfil do cenario sao do "Pessoal" por guarda explicita (nao pelo nome).
+    cur.execute('select financeiro.definir_guarda_sem_perfil(%s, %s, %s)',
+                (PERFIS['PESSOAL']['id'], 'cenario de teste', 'registros ficticios sem perfil do cenario'))
+    # ... e o usuario A, titular ficticio, e o administrador da plataforma (mantem os indices de TR), como o titular real.
+    cur.execute('select financeiro.definir_administrador_plataforma(%s, true, %s, %s)', (USUARIO_A['id'], 'cenario de teste', 'titular ficticio'))
     for nome, chave in CONTAS:
         cur.execute(
             "insert into public.conta_bancaria (perfil_financeiro_id, nome, instituicao, tipo, status, cor_display) "

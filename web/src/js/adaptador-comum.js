@@ -16,6 +16,8 @@ const POR_DICA = {
     SISTEMA_FLASK: PERFIL_NAO_HABILITADO,
     GERADOR_FLASK: 'A geração de recorrências deste perfil ainda não está habilitada no novo aplicativo. Nada foi gravado.',
     CATALOGO_FLASK: CATALOGO_NAO_HABILITADO,
+    // FIN-MULTIUSUARIO-SEGURANCA-01: os indices de TR sao referencia de todos; so o administrador da plataforma os mantem.
+    SO_ADMINISTRADOR: 'A manutenção dos índices oficiais é restrita ao administrador da plataforma. Nada foi gravado.',
     COM_DOCUMENTOS: 'Este financiamento tem documentos ou conferências da Caixa; a exclusão dele ainda não está disponível nesta versão do aplicativo. Nada foi gravado.',
 };
 // Textos do banco que ainda citam o sistema atual sem hint proprio.

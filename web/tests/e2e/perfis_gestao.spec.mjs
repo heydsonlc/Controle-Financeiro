@@ -96,8 +96,9 @@ test('criar, editar, tornar padrao, usar, inativar e reativar; isolamento dos da
     await expect(nomesDosPerfis(page)).toHaveText(['Pessoal', 'Empresa', NOVO]);
     await page.keyboard.press('Escape');
 
-    // Nome duplicado e nome reservado: mensagens do banco, nada muda.
-    await page.fill('#config-profile-nome', 'Empresa');
+    // Nome duplicado ENTRE OS PROPRIOS perfis (sem diferenca de maiusculas ou espacos): mensagem do banco, nada muda.
+    // FIN-MULTIUSUARIO-SEGURANCA-01: o nome e unico por dono; "Empresa", de outro dono, nao entra nessa conta.
+    await page.fill('#config-profile-nome', '  pessoal ');
     await salvar(page, 'Ja existe perfil financeiro com este nome');
     await cartao(page, 'Pessoal').click();
     await page.fill('#config-profile-nome', 'Minhas contas');
@@ -167,11 +168,12 @@ test('criar, editar, tornar padrao, usar, inativar e reativar; isolamento dos da
 test('outro usuario nao ve nem altera perfis de A, nem o padrao de A', async ({ page }) => {
     await entrar(page, B);
     await expect(page.locator('#config-profiles-list .config-profile-card strong')).toHaveText(['Perfil B']);
-    await page.click('#config-profile-new');
-    await page.fill('#config-profile-nome', 'B quer ser padrao');
+    // FIN-MULTIUSUARIO-SEGURANCA-01: o padrao e por dono. B torna padrao o proprio perfil; o de A (conferido no proximo
+    // login de A, pelos specs seguintes) nao e tocado.
+    await cartao(page, 'Perfil B').click();
     await page.check('#config-profile-padrao');
-    await salvar(page, 'O perfil padrao atual e gerido por outro titular');
-    await expect(page.locator('#config-profiles-list .config-profile-card strong')).toHaveText(['Perfil B']);  // nada criado
+    await salvar(page);
+    await expect(selos(page, 'Perfil B')).toContainText(['Padrão']);
 
     const status = await page.evaluate(async (idPessoal) => {
         const token = JSON.parse(localStorage.getItem('cf-financeiro-auth')).access_token;
@@ -193,4 +195,9 @@ test('outro usuario nao ve nem altera perfis de A, nem o padrao de A', async ({ 
         ];
     }, ID_PESSOAL);
     expect(status).toEqual([403, 403, 403]);
+});
+
+test('o padrao de A continua sendo o Pessoal depois de B escolher o dele', async ({ page }) => {
+    await entrar(page, A);
+    await expect(selos(page, 'Pessoal')).toHaveText(['Ativo', 'Padrão', 'Perfil em uso']);
 });

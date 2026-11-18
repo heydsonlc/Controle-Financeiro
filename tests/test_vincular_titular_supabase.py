@@ -57,6 +57,11 @@ def executar(dsn, email, confirmar, identidade=IDENTIDADE):
 
 def sem_acessos_previos(dsn):
     sql(dsn, 'delete from financeiro.perfil_acesso where perfil_financeiro_id = any(%s)', ([PESSOAL, EMPRESA],))
+    # FIN-MULTIUSUARIO-SEGURANCA-01: os perfis reais, antes do vinculo do titular, tambem nao tinham dono. O dono e fixo
+    # depois de definido; para montar esse estado inicial o cenario desliga o gatilho so nesta instrucao.
+    sql(dsn, 'alter table public.perfil_financeiro disable trigger perfil_financeiro_dono_fixo')
+    sql(dsn, 'update public.perfil_financeiro set user_id = null where id = any(%s)', ([PESSOAL, EMPRESA],))
+    sql(dsn, 'alter table public.perfil_financeiro enable trigger perfil_financeiro_dono_fixo')
 
 
 def test_recusas_antes_de_vincular(d):

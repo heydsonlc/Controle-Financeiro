@@ -134,7 +134,8 @@ def test_nenhuma_tabela_nova(conn):
     # FIN-PRE-PRODUCAO-1: preferencia_perfil (Preferencias, migration 20261201090000) nao e da gestao de perfis.
     cur.execute("select count(*) from information_schema.tables where table_schema = 'financeiro' and table_name like '%perfil%' "
                 "and table_name <> 'preferencia_perfil'")
-    assert cur.fetchone()[0] == 1  # so perfil_acesso
+    # FIN-MULTIUSUARIO-SEGURANCA-01: + guarda_sem_perfil e regularizacao_perfil (posse explicita dos registros sem perfil)
+    assert cur.fetchone()[0] == 3  # perfil_acesso, guarda_sem_perfil e regularizacao_perfil
 
 
 @pytest.mark.parametrize('sql', [
@@ -201,13 +202,26 @@ def test_criar_normaliza_tipo_cor_e_apelido(conn):
 @pytest.mark.parametrize('dados, mensagem', [
     ({'nome': '   '}, 'Nome do perfil financeiro e obrigatorio'),
     ({'nome': 'x' * 121}, 'Nome do perfil financeiro deve ter ate 120 caracteres'),
-    ({'nome': 'Empresa'}, 'Ja existe perfil financeiro com este nome'),
-    ({'nome': 'Perfil B'}, 'Ja existe perfil financeiro com este nome'),
-    ({'nome': 'Pessoal'}, 'O nome Pessoal e reservado ao perfil que guarda os registros sem perfil'),
+    # FIN-MULTIUSUARIO-SEGURANCA-01: o nome e unico POR DONO, sem diferenca de maiusculas ou de espacos
+    ({'nome': 'Pessoal'}, 'Ja existe perfil financeiro com este nome'),
+    ({'nome': '  pessoal '}, 'Ja existe perfil financeiro com este nome'),
+    ({'nome': 'PERFIL  INATIVO (A)'}, 'Ja existe perfil financeiro com este nome'),
 ])
 def test_criar_recusa_nome_invalido(conn, dados, mensagem):
     cur = _como(conn, USUARIO_A)
     assert _falha(cur, 'select financeiro.criar_perfil(%s::jsonb)', (json.dumps(dados),))[1] == mensagem
+
+
+@pytest.mark.parametrize('nome', ['Empresa', 'Perfil B'])
+def test_nome_usado_por_outro_dono_e_aceito_e_nao_revela_que_existe(conn, nome):
+    """FIN-MULTIUSUARIO-SEGURANCA-01: "Empresa" (de outro dono) e "Perfil B" (do usuario B) nao impedem A de usar o nome."""
+    cur = _como(conn, USUARIO_A)
+    perfil = _criar(cur, {'nome': nome})
+    assert perfil['nome'] == nome
+    cur = conn.cursor()
+    cur.execute('reset role')
+    cur.execute('select count(*), count(distinct user_id) from public.perfil_financeiro where nome = %s', (nome,))
+    assert cur.fetchone()[0] == 2
 
 
 def test_perfil_novo_nao_ve_registros_sem_perfil(conn):
@@ -226,15 +240,18 @@ def test_criar_como_padrao_transfere_o_padrao_do_proprio_usuario(conn):
 
 def test_padrao_de_outro_titular_nunca_e_alterado(conn):
     cur = _como(conn, USUARIO_B)
-    estado, mensagem = _falha(cur, 'select financeiro.criar_perfil(%s::jsonb)',
-                              (json.dumps({'nome': 'B quer padrao', 'padrao': True}),))
-    assert (estado, mensagem) == ('42501', 'O perfil padrao atual e gerido por outro titular')
+    # FIN-MULTIUSUARIO-SEGURANCA-01: o padrao e POR DONO. B define o dele; o de A (Pessoal) nao e tocado.
+    perfil = _criar(cur, {'nome': 'B quer padrao', 'padrao': True})
+    assert perfil['padrao'] is True
+    assert _linha(conn, ID['PESSOAL'])[6] is True
+    cur = _como(conn, USUARIO_B)
+    assert _chamar(cur, 'select financeiro.definir_perfil_padrao(%s)', (ID['PERFIL_B'],))['padrao'] is True
     assert _linha(conn, ID['PESSOAL'])[6] is True
     cur = conn.cursor()
-    cur.execute("select count(*) from public.perfil_financeiro where nome = 'B quer padrao'")
-    assert cur.fetchone()[0] == 0  # tudo desfeito
+    cur.execute('select user_id, count(*) from public.perfil_financeiro where padrao group by 1 having count(*) > 1')
+    assert cur.fetchall() == []  # nunca mais de um padrao por dono
     cur = _como(conn, USUARIO_B)
-    assert _falha(cur, 'select financeiro.definir_perfil_padrao(%s)', (ID['PERFIL_B'],))[0] == '42501'
+    assert _falha(cur, 'select financeiro.definir_perfil_padrao(%s)', (ID['PESSOAL'],))[0] == '42501'  # o de outro dono, nunca
 
 
 # ---------------------------------------------------------------------------
@@ -260,14 +277,27 @@ def test_editar_nome_e_tipo_de_perfil_gerido(conn):
 
 
 @pytest.mark.parametrize('perfil, dados, mensagem', [
-    ('PESSOAL', {'nome': 'Minhas contas'}, 'O perfil Pessoal nao pode ser renomeado: ele guarda os registros sem perfil'),
-    ('INATIVO_A', {'nome': 'Pessoal'}, 'O nome Pessoal e reservado ao perfil que guarda os registros sem perfil'),
-    ('INATIVO_A', {'nome': 'Perfil B'}, 'Ja existe perfil financeiro com este nome'),
+    # FIN-MULTIUSUARIO-SEGURANCA-01: unico por dono; "Pessoal" e um nome como outro qualquer
+    ('INATIVO_A', {'nome': 'Pessoal'}, 'Ja existe perfil financeiro com este nome'),
+    ('INATIVO_A', {'nome': ' PESSOAL'}, 'Ja existe perfil financeiro com este nome'),
     ('INATIVO_A', {'nome': ''}, 'Nome do perfil financeiro e obrigatorio'),
 ])
 def test_editar_recusa_nome_invalido(conn, perfil, dados, mensagem):
     cur = _como(conn, USUARIO_A)
     assert _falha(cur, 'select financeiro.atualizar_perfil(%s, %s::jsonb)', (ID[perfil], json.dumps(dados)))[1] == mensagem
+
+
+def test_renomear_o_perfil_que_guarda_registros_sem_perfil_nao_muda_a_posse_deles(conn):
+    """FIN-MULTIUSUARIO-SEGURANCA-01: a posse e pela guarda (identificador), nao pelo nome."""
+    cur = _como(conn, USUARIO_A)
+    antes = _chamar(cur, "select coalesce(json_agg(x.nome order by x.nome), '[]'::json) from financeiro.contas_bancarias_do_perfil(%s) x", (ID['PESSOAL'],))
+    assert 'Carteira legado sem perfil' in antes
+    cur = _como(conn, USUARIO_A)
+    assert _chamar(cur, 'select financeiro.atualizar_perfil(%s, %s::jsonb)', (ID['PESSOAL'], json.dumps({'nome': 'Minhas contas'})))['nome'] == 'Minhas contas'
+    cur = _como(conn, USUARIO_A)
+    assert _chamar(cur, "select coalesce(json_agg(x.nome order by x.nome), '[]'::json) from financeiro.contas_bancarias_do_perfil(%s) x", (ID['PESSOAL'],)) == antes
+    cur = _como(conn, USUARIO_A)
+    assert _chamar(cur, 'select financeiro.atualizar_perfil(%s, %s::jsonb)', (ID['INATIVO_A'], json.dumps({'nome': 'Perfil B'})))['nome'] == 'Perfil B'
 
 
 @pytest.mark.parametrize('usuario, perfil', [(USUARIO_A, 'EMPRESA'), (USUARIO_A, 'PERFIL_B'),
