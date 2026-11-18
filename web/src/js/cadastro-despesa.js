@@ -177,7 +177,7 @@ function despesaDireta(ctx) {
 
     // FIN-MVP-CADASTRO-UNIFICADO-02: pagamento imediato, opcional e desmarcado por padrao. Marcado, pede a conta e a data
     // e o servico grava despesa + pagamento juntos (a operacao do botao Pagar, pelo valor integral).
-    const SEM_PAGAMENTO = 'Para pagamento que já aconteceu (Pix, débito, dinheiro). Sem marcar, a despesa fica pendente e é paga depois, pela ação Pagar.';
+    const SEM_PAGAMENTO = 'Para pagamento que já aconteceu, debitado de uma conta bancária. Sem marcar, a despesa fica pendente e é paga depois, pela ação Pagar.';
     const COM_PAGAMENTO = 'O pagamento é registrado agora, pelo valor integral, na conta escolhida: o saldo da conta é atualizado, como na ação Pagar.';
     const paga = entrada('checkbox', '1');
     paga.id = 'cad-paga';
