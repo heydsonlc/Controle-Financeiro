@@ -18,6 +18,8 @@ const POR_DICA = {
     CATALOGO_FLASK: CATALOGO_NAO_HABILITADO,
     // FIN-MULTIUSUARIO-SEGURANCA-01: os indices de TR sao referencia de todos; so o administrador da plataforma os mantem.
     SO_ADMINISTRADOR: 'A manutenção dos índices oficiais é restrita ao administrador da plataforma. Nada foi gravado.',
+    // FIN-CADASTROS-PADRAO-01: categoria de cartao copiada do modelo do aplicativo
+    CATEGORIA_PADRAO: 'Categoria padrão do aplicativo: o nome e a situação não podem ser alterados. Nada foi gravado.',
     COM_DOCUMENTOS: 'Este financiamento tem documentos ou conferências da Caixa; a exclusão dele ainda não está disponível nesta versão do aplicativo. Nada foi gravado.',
 };
 // Textos do banco que ainda citam o sistema atual sem hint proprio.

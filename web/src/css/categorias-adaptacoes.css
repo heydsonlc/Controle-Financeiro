@@ -168,3 +168,104 @@ body.cf-catalogo-bloqueado [data-action="remover-palavra-chave"] {
         grid-template-areas: "titulo" "nome" "descricao" "cor" "icone" "ativo";
     }
 }
+
+/* FIN-CADASTROS-PADRAO-01 — catalogo padrao x personalizacoes, sem painel novo: selos pequenos e marcas nas palavras. */
+.cf-selo-catalogo {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 0 6px;
+    border-radius: 999px;
+    font-size: 0.66rem;
+    font-weight: 600;
+    line-height: 1.5;
+    letter-spacing: 0.01em;
+    vertical-align: middle;
+}
+
+.cf-selo-catalogo.padrao {
+    background: #eef2f7;
+    color: #475569;
+}
+
+.cf-selo-catalogo.minha {
+    background: #e7f0ff;
+    color: #1d4ed8;
+}
+
+/* Categoria padrao: editar e excluir so no modo "catalogo padrao" (de quem administra o catalogo). */
+body:not(.cf-modo-catalogo-padrao) #categoria-despesa-detalhe[data-padrao="sim"] [data-action="editar-despesa"],
+body:not(.cf-modo-catalogo-padrao) #categoria-despesa-detalhe[data-padrao="sim"] [data-action="excluir-despesa"],
+body.cf-modo-catalogo-padrao #categoria-despesa-detalhe[data-padrao="nao"] [data-action="editar-despesa"],
+body.cf-modo-catalogo-padrao #categoria-despesa-detalhe[data-padrao="nao"] [data-action="excluir-despesa"],
+#categoria-cartao-detalhe[data-padrao="sim"] [data-action="toggle-status"] {
+    display: none !important;
+}
+
+/* Quem so le o perfil nao tem acoes de cadastro. */
+body.cf-somente-leitura #btn-nova-categoria-despesa,
+body.cf-somente-leitura [data-action="editar-despesa"],
+body.cf-somente-leitura [data-action="excluir-despesa"],
+body.cf-somente-leitura #form-palavra-chave,
+body.cf-somente-leitura [data-action="remover-palavra-chave"] {
+    display: none !important;
+}
+
+/* Palavras-chave: propria (ponto azul), reassociada (ponto cinza), padrao desligada so para o usuario (riscada). */
+.keyword-chip[data-origem="PROPRIA"]::before,
+.keyword-chip[data-origem="REASSOCIADA"]::before {
+    content: "";
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-right: 5px;
+    border-radius: 50%;
+    background: #2563eb;
+}
+
+.keyword-chip[data-origem="REASSOCIADA"]::before {
+    background: #64748b;
+}
+
+.keyword-chip[data-origem="DESLIGADA"] {
+    opacity: 0.6;
+    text-decoration: line-through;
+}
+
+.keyword-chip[data-origem="DESLIGADA"] button {
+    text-decoration: none;
+}
+
+/* Modo catalogo padrao: interruptor pequeno, so para quem administra o catalogo. */
+.cf-modo-catalogo {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 8px;
+    padding: 4px 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 999px;
+    background: #ffffff;
+    color: #475569;
+    font-size: 0.78rem;
+    cursor: pointer;
+}
+
+.cf-modo-catalogo input {
+    width: 14px;
+    height: 14px;
+    margin: 0;
+}
+
+body.cf-modo-catalogo-padrao .cf-modo-catalogo {
+    border-color: #f59e0b;
+    background: #fffbeb;
+    color: #92400e;
+}
+
+.cf-natureza-campo small {
+    display: block;
+    margin-top: 4px;
+    color: #64748b;
+    font-size: 0.75rem;
+}
+

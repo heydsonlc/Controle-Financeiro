@@ -39,27 +39,36 @@ if (typeof atualizarLogoOriginal === 'function') {
     };
 }
 travarLogo();
-// Ate a situacao do catalogo chegar, as acoes das categorias de despesa ficam escondidas (nunca aparecem e depois somem).
-document.body.classList.add('cf-catalogo-bloqueado');
+// FIN-CADASTROS-PADRAO-01: o catalogo PADRAO e do aplicativo (so quem o administra altera, no "modo catalogo padrao"); todo
+// usuario cria categorias PARTICULARES e ajusta as PROPRIAS palavras-chave. A tela nao bloqueia mais o cadastro inteiro: o
+// que e fixo aparece com o selo "Padrao", sem editar nem excluir (js/categorias-adaptacoes.js + css).
+const modoPadrao = () => document.body.classList.contains('cf-modo-catalogo-padrao');
+
+// Interruptor do modo catalogo padrao: so existe para quem administra o catalogo, comeca desligado.
+function oferecerModoCatalogo() {
+    const antes = document.querySelector('.categorias-page');
+    if (!antes || document.getElementById('cf-modo-catalogo')) return;
+    const rotulo = document.createElement('label');
+    rotulo.className = 'cf-modo-catalogo';
+    rotulo.title = 'Ligado: o que você criar, editar ou remover vale para todos os usuários (catálogo padrão do aplicativo).';
+    const caixa = document.createElement('input');
+    caixa.type = 'checkbox';
+    caixa.id = 'cf-modo-catalogo';
+    const texto = document.createElement('span');
+    texto.textContent = 'Editar catálogo padrão do aplicativo';
+    rotulo.append(caixa, texto);
+    antes.before(rotulo);
+    caixa.addEventListener('change', () => {
+        document.body.classList.toggle('cf-modo-catalogo-padrao', caixa.checked);
+        if (typeof window.CF_REDESENHAR_CATEGORIAS === 'function') window.CF_REDESENHAR_CATEGORIAS();
+    });
+}
 
 async function aplicarSituacaoCatalogo() {
     const { data, error } = await supabase.rpc('situacao_catalogo_categorias');
     const habilitado = !error && data && data.escritor === 'NOVO';
     const gestor = habilitado && data.gestor === true;
-    document.body.classList.toggle('cf-catalogo-bloqueado', !gestor);
-    if (gestor) return;
-    const aviso = document.createElement('p');
-    aviso.id = 'cf-aviso-catalogo';
-    aviso.className = 'categorias-aviso-catalogo';
-    aviso.setAttribute('role', 'note');
-    aviso.textContent = error ? 'Não foi possível verificar a permissão no catálogo: cadastro, edição, exclusão e palavras-chave '
-        + 'das categorias de despesa ficam indisponíveis. Recarregue a página para tentar de novo.'
-        : (habilitado ? 'Esta conta não administra o catálogo de categorias de despesa: cadastro, edição, exclusão e '
-            + 'palavras-chave ficam indisponíveis.'
-            : 'O catálogo de categorias de despesa ainda não está habilitado para gravação nesta versão: cadastro, edição, '
-            + 'exclusão e palavras-chave ficam indisponíveis.');
-    // FIN-UX-SIMPLIFICACAO-CATEGORIAS-01: o aviso de fase saiu; este so aparece para quem nao pode editar o catalogo.
-    document.querySelector('.categorias-page')?.closest('.container')?.before(aviso);
+    if (gestor) oferecerModoCatalogo();
 }
 
 async function rpc(funcao, args) {
@@ -89,7 +98,9 @@ async function categoria(id) {
 
 async function palavrasChave(id) {
     estado.palavras = estado.palavras || rpc((a) => supabase.rpc('palavras_chave_tela', a), { p_perfil_id: estado.perfilId });
-    const lista = (await estado.palavras)[String(id)] || [];
+    // A tela original so desenha as palavras "ativas": a padrao que o usuario desligou vai marcada (origem DESLIGADA), para
+    // aparecer riscada com a acao de restaurar (js/categorias-adaptacoes.js).
+    const lista = ((await estado.palavras)[String(id)] || []).map((p) => ({ ...p, ativo: true, desligada: p.origem === 'DESLIGADA' }));
     return ok({ data: lista, total: lista.length });
 }
 
@@ -117,16 +128,28 @@ async function escrever(chamada, args) {
 }
 
 // Catalogo global (sem perfil): respostas no formato do Flask; palavras-chave relidas na proxima consulta.
+// Natureza escolhida no formulario (campo acrescentado por js/categorias-adaptacoes.js).
+const naturezaDoFormulario = () => (document.getElementById('cf-natureza') || {}).value || null;
+
 async function criarCategoria(corpo) {
-    const operacao = `categoria:${JSON.stringify(corpo)}`;
-    const r = await rpc((a) => supabase.rpc('criar_categoria', a), { p_dados: corpo, p_chave: chaves.de(operacao) });
+    // Particular por padrao (de quem cria); padrao do aplicativo so no modo catalogo padrao (o banco confere quem pede).
+    const dados = { ...corpo, padrao: modoPadrao(), natureza: naturezaDoFormulario() };
+    const operacao = `categoria:${JSON.stringify(dados)}`;
+    const r = await rpc((a) => supabase.rpc('criar_categoria', a), { p_dados: dados, p_chave: chaves.de(operacao) });
     chaves.esquecer(operacao);
     const { corpo: lida } = await categoria(r.categoria_id);
     return { status: 201, corpo: { success: true, message: 'Categoria criada com sucesso', data: lida.data } };
 }
 
 async function editarCategoria(id, corpo) {
+    const { corpo: antes } = await categoria(id);
     await rpc((a) => supabase.rpc('editar_categoria', a), { p_categoria_id: id, p_dados: corpo });
+    const natureza = naturezaDoFormulario();
+    if (natureza && antes.data && natureza !== antes.data.natureza) {
+        const operacao = `natureza:${id}:${natureza}`;
+        await rpc((a) => supabase.rpc('definir_natureza_categoria', a), { p_categoria_id: id, p_natureza: natureza, p_chave: chaves.de(operacao) });
+        chaves.esquecer(operacao);
+    }
     const { corpo: lida } = await categoria(id);
     return ok({ message: 'Categoria atualizada com sucesso', data: lida.data });
 }
@@ -137,14 +160,26 @@ async function excluirCategoria(id) {
     return ok({ message: 'Categoria deletada com sucesso' });
 }
 
+// Palavras-chave: no uso comum, tudo e ajuste do PROPRIO usuario (nada toca o catalogo do aplicativo nem outro usuario).
+// id > 0 = palavra padrao; id < 0 = ajuste do usuario (palavras_chave_tela).
 async function criarPalavra(id, corpo) {
-    const r = await rpc((a) => supabase.rpc('criar_palavra_chave', a), { p_categoria_id: id, p_palavra: (corpo || {}).palavra ?? '' });
+    const palavra = (corpo || {}).palavra ?? '';
+    const r = modoPadrao()
+        ? await rpc((a) => supabase.rpc('criar_palavra_chave', a), { p_categoria_id: id, p_palavra: palavra })
+        : await rpc((a) => supabase.rpc('criar_minha_palavra_chave', a), { p_categoria_id: id, p_palavra: palavra });
     estado.palavras = null;
-    return { status: r.created ? 201 : 200, corpo: { success: true, data: r, created: r.created } };
+    return { status: r.created ? 201 : 200, corpo: { success: true, data: r, created: Boolean(r.created) } };
 }
 
 async function removerPalavra(id, palavraId) {
-    const r = await rpc((a) => supabase.rpc('remover_palavra_chave', a), { p_categoria_id: id, p_palavra_id: palavraId });
+    let r;
+    if (palavraId < 0) {  // ajuste do usuario: a propria some; a desligada ou reassociada volta ao padrao
+        r = await rpc((a) => supabase.rpc('remover_minha_palavra_chave', a), { p_ajuste_id: -palavraId });
+    } else if (modoPadrao()) {
+        r = await rpc((a) => supabase.rpc('remover_palavra_chave', a), { p_categoria_id: id, p_palavra_id: palavraId });
+    } else {  // palavra padrao: desligada so para este usuario
+        r = await rpc((a) => supabase.rpc('desligar_palavra_chave_padrao', a), { p_palavra_id: palavraId });
+    }
     estado.palavras = null;
     return ok({ data: r });
 }
@@ -170,7 +205,7 @@ const ROTAS = [
     ['PUT', /^\/api\/categorias\/(\d+)$/, (m, corpo) => editarCategoria(Number(m[1]), corpo || {})],
     ['DELETE', /^\/api\/categorias\/(\d+)$/, (m) => excluirCategoria(Number(m[1]))],
     ['POST', /^\/api\/categorias\/(\d+)\/palavras-chave$/, (m, corpo) => criarPalavra(Number(m[1]), corpo)],
-    ['DELETE', /^\/api\/categorias\/(\d+)\/palavras-chave\/(\d+)$/, (m) => removerPalavra(Number(m[1]), Number(m[2]))],
+    ['DELETE', /^\/api\/categorias\/(\d+)\/palavras-chave\/(-?\d+)$/, (m) => removerPalavra(Number(m[1]), Number(m[2]))],
     [null, /^\/api\/categorias\/\d+\/logo$/, async () => falha(`${LOGO_INDISPONIVEL} Nada foi gravado.`)],
 ];
 

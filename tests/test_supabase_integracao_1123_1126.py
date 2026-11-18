@@ -440,7 +440,8 @@ def test_i3_toda_escrita_do_novo_aplicativo_recusa_perfil_do_flask_sem_gravar(ba
                 resultado[f['nome']] = e.diag.message_hint or f'{e.pgcode}: {e.diag.message_primary}'
             if resultado[f['nome']] in RECUSAS_DO_ESCRITOR:
                 break
-    assert resumo_tabelas(banco) == antes  # nenhuma gravacao, nem parcial
+    sem_recusa = sorted(n for n, r in resultado.items() if r == 'SEM_RECUSA')  # para o diagnostico, se algo gravar
+    assert resumo_tabelas(banco) == antes, sem_recusa  # nenhuma gravacao, nem parcial
     assert set(resultado) >= SEM_GUARDA_DOCUMENTADA
     inesperadas = {n: r for n, r in resultado.items() if r not in RECUSAS_DO_ESCRITOR | {'EXCECAO_DOCUMENTADA'}}
     assert inesperadas == {}, inesperadas

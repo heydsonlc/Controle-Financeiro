@@ -468,6 +468,9 @@ def digest_catalogo(dsn):
 
 
 def cat(dsn, funcao, *args, usuario=USUARIO_A):
+    # FIN-CADASTROS-PADRAO-01: estes testes sao do catalogo PADRAO (de quem o administra); sem a marca, a categoria seria particular
+    if funcao == 'criar_categoria' and isinstance(args[0], dict) and 'padrao' not in args[0]:
+        args = ({**args[0], 'padrao': True}, *args[1:])
     valores = [json.dumps(a) if isinstance(a, dict) else a for a in args]
     marcadores = ', '.join('%s::jsonb' if isinstance(a, dict) else '%s' for a in args)
     return chamar(dsn, usuario, f'select financeiro.{funcao}({marcadores})', valores)

@@ -165,6 +165,9 @@ def sistemicas(dsn):
 
 
 def catalogo(dsn, funcao, *args, usuario=USUARIO_D):
+    # FIN-CADASTROS-PADRAO-01: catalogo PADRAO (sem a marca, a categoria criada seria particular de quem cria)
+    if funcao == 'criar_categoria' and isinstance(args[0], dict) and 'padrao' not in args[0]:
+        args = ({**args[0], 'padrao': True}, *args[1:])
     marcadores = ', '.join('%s::jsonb' if isinstance(a, dict) else '%s' for a in args)
     valores = [json.dumps(a) if isinstance(a, dict) else a for a in args]
     return chamar(dsn, usuario, f'select financeiro.{funcao}({marcadores})', valores)

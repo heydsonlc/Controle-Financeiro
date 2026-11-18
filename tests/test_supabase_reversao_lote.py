@@ -26,7 +26,7 @@ REVERSAO = SUPABASE / 'reversao' / 'lote_20261106_20261118.sql'
 LOTE = [p for p in sorted((SUPABASE / 'migrations').glob('*.sql')) if '20261106' <= p.name[:8] <= '20261118']
 VERSOES = [p.name.split('_', 1)[0] for p in LOTE]
 POSTERIORES = {m.group(1) for p in sorted((SUPABASE / 'migrations').glob('*.sql')) if p.name[:8] > '20261118'
-               for m in re.finditer(r'create or replace function financeiro\.(\w+)\(', p.read_text(encoding='utf-8'))}
+               for m in re.finditer(r'create or replace function financeiro\.(\w+)\(', p.read_text(encoding='utf-8'), re.I)}  # as geradas vem em maiusculas
 SUBSTITUIDAS = {'financeiro.analisar_importacao_cartao(integer,integer,date,jsonb)': 'analisar_importacao_cartao',
                 'financeiro.plano_recorrencia(integer,date)': 'plano_recorrencia'}  # como regprocedure::text
 

@@ -47,9 +47,12 @@ test('tela original: categorias de despesa, palavras-chave, Categorias do Cartao
     await entrar(page, B);
     await abrir(page);
     await expect(page.locator('.module-actionbar.categorias-toolbar')).toBeVisible();
-    // FIN-UX-SIMPLIFICACAO-CATEGORIAS-01: sem o aviso de fase; o do catalogo so para quem nao o administra (B nao e gestor).
+    // FIN-CADASTROS-PADRAO-01: sem avisos de bloqueio. O que e do aplicativo aparece com o selo "Padrao"; o modo de edicao do
+    // catalogo padrao so existe para quem o administra (B e usuario comum).
     await expect(page.locator('.categorias-aviso-fase')).toHaveCount(0);
-    await expect(page.locator('#cf-aviso-catalogo')).toBeVisible();
+    await expect(page.locator('#cf-aviso-catalogo')).toHaveCount(0);
+    await expect(page.locator('#cf-modo-catalogo')).toHaveCount(0);
+    await expect(despesa(page, 'Moradia').first().locator('.cf-selo-catalogo')).toHaveText('Padrão');
     await despesa(page, 'Moradia').first().click();
     await expect(page.locator('#categoria-despesa-detalhe')).toContainText('padaria');
     await page.click('#tab-cartao');
@@ -147,33 +150,33 @@ test('Perfil B: criar, editar, vincular, desvincular, desativar e reativar Categ
     expect((await lida()).ativo).toBe(false);
 });
 
-// FIN-MIGRACAO-P0P1-01: com o catalogo ainda nao habilitado (padrao, sem escritor), as acoes das categorias de despesa nem
-// aparecem e o aviso diz o motivo (antes o formulario era preenchido e so o salvar recusava, citando o Flask). Uma chamada
-// direta continua recusada pelo banco, sem gravar. O caminho do gestor esta em migracao_p0p1.spec.mjs.
-test('catalogo ainda nao habilitado: acoes das categorias de despesa escondidas, com o motivo, e nada gravado', async ({ page }) => {
+// FIN-CADASTROS-PADRAO-01: a categoria PADRAO e do aplicativo. O usuario comum nao a edita nem exclui (as acoes nem
+// aparecem) e nao cria categoria padrao (o banco recusa); o cadastro dele e de categorias PARTICULARES, que nao dependem de o
+// catalogo padrao estar habilitado para gravacao. O caminho de quem administra o catalogo esta em migracao_p0p1.spec.mjs.
+test('usuario comum: categoria padrao sem editar nem excluir; criar categoria padrao e recusado e nada e gravado', async ({ page }) => {
     await entrar(page, B);
     await abrir(page);
-    await expect(page.locator('#cf-aviso-catalogo'))
-        .toHaveText(/^O catálogo de categorias de despesa ainda não está habilitado para gravação nesta versão/);
-    await expect(page.locator('#btn-nova-categoria-despesa')).toBeHidden();
     await despesa(page, 'Moradia').first().click();
     await expect(page.locator('#categoria-despesa-detalhe')).toContainText('padaria');
-    await expect(page.locator('#form-palavra-chave')).toBeHidden();
+    await expect(page.locator('#categoria-despesa-detalhe .detail-identity .cf-selo-catalogo')).toHaveText('Padrão');
     await expect(page.locator('[data-action="editar-despesa"]')).toBeHidden();
     await expect(page.locator('[data-action="excluir-despesa"]')).toBeHidden();
-    await expect(page.locator('[data-action="remover-palavra-chave"]').first()).toBeHidden();
-    expect(await page.locator('#cf-aviso-catalogo').innerText()).not.toMatch(/Flask|sistema atual/i);
+    await expect(page.locator('#btn-nova-categoria-despesa')).toBeVisible();   // categoria particular
+    await expect(page.locator('#form-palavra-chave')).toBeVisible();           // palavra-chave propria
 
-    const antes = (await chamarRpc(page, 'categorias_tela', { p_perfil_id: await perfilAtivoId(page), p_ativo: null })).corpo;
-    const r = await page.evaluate(async () => {
-        const resposta = await fetch('/api/categorias', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                                          body: JSON.stringify({ nome: 'Categoria Global E2E' }) });
-        return { status: resposta.status, corpo: await resposta.json() };
-    });
-    expect(r).toEqual({ status: 400, corpo: { success: false,
-        error: 'O catálogo de categorias de despesa ainda não está habilitado para gravação no novo aplicativo. Nada foi gravado.' } });
-    const depois = (await chamarRpc(page, 'categorias_tela', { p_perfil_id: await perfilAtivoId(page), p_ativo: null })).corpo;
-    expect(depois).toEqual(antes);
+    const perfil = await perfilAtivoId(page);
+    const antes = (await chamarRpc(page, 'categorias_tela', { p_perfil_id: perfil, p_ativo: null })).corpo;
+    const moradia = antes.find((c) => c.nome === 'Moradia');
+    const tentativas = [
+        await chamarRpc(page, 'criar_categoria', { p_dados: { nome: 'Categoria Global E2E', padrao: true }, p_chave: crypto.randomUUID() }),
+        await chamarRpc(page, 'editar_categoria', { p_categoria_id: moradia.id, p_dados: { nome: 'Tomada' } }),
+        await chamarRpc(page, 'excluir_categoria', { p_categoria_id: moradia.id }),
+        await chamarRpc(page, 'definir_natureza_categoria', { p_categoria_id: moradia.id, p_natureza: 'APORTE', p_chave: crypto.randomUUID() }),
+        await chamarRpc(page, 'criar_palavra_chave', { p_categoria_id: moradia.id, p_palavra: 'global e2e' }),
+    ];
+    expect(tentativas.map((t) => t.status)).toEqual([400, 400, 400, 400, 400]);  // catalogo padrao nao habilitado para gravacao neste cenario
+    for (const t of tentativas) expect(t.corpo.message).toMatch(/catalogo de categorias/i);
+    expect((await chamarRpc(page, 'categorias_tela', { p_perfil_id: perfil, p_ativo: null })).corpo).toEqual(antes);
 });
 
 test('perfil ainda no Flask (Pessoal) nao grava Categoria do Cartao; quem so le (Empresa) nao ve acoes', async ({ page }) => {

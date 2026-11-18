@@ -159,7 +159,7 @@ def executar(cur, e):
     feito = {'impressao': imp, 'categorias': {}, 'palavras_desativadas': [], 'palavras_criadas': [], 'naturezas': [], 'chaves': {}}
     # 1. categorias novas
     for k, nome, descricao, _ in NOVAS:
-        feito['categorias'][k] = rpc(cur, 'criar_categoria', {'nome': nome, 'descricao': descricao}, chave(imp, f'criar/{k}'))['categoria_id']
+        feito['categorias'][k] = rpc(cur, 'criar_categoria', {'nome': nome, 'descricao': descricao, 'padrao': True}, chave(imp, f'criar/{k}'))['categoria_id']
     alvo = lambda x: feito['categorias'][x] if isinstance(x, str) else x  # noqa: E731
     # 2. Servicos gerais: palavras genericas desativadas e incorporacao oficial em Manutencao residencial
     ativa = {(p['categoria_id'], p['palavra']): p['id'] for p in e['palavras'] if p['ativo']}

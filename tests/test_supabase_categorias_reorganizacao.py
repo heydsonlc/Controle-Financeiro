@@ -216,13 +216,13 @@ def test_natureza_gerencial_indicadores_e_poupanca_programada(banco, cen):  # no
     c = cen
     # sem linha: CONSUMO (como hoje); sem categoria: NAO_DEFINIDO; nunca pelo nome
     naturezas = {n['categoria_id']: n for n in rpc(banco, 'naturezas_das_categorias')}
-    assert naturezas[c['outros']] == {'categoria_id': c['outros'], 'nome': 'Outros', 'ativo': True, 'natureza': 'CONSUMO', 'definida': False}
+    assert naturezas[c['outros']] == {'categoria_id': c['outros'], 'nome': 'Outros', 'ativo': True, 'natureza': 'CONSUMO', 'definida': False, 'padrao': True}
     antes = rpc(banco, 'indicadores_gerenciais', PESSOAL, '2031-03')
     dashboard = rpc(banco, 'dashboard_resumo_tela', PESSOAL, '2031-03')['fluxo_caixa']['resumo']['despesas_previstas']
     assert Decimal(str(antes['fluxo_total'])) == Decimal(str(dashboard))  # o mesmo conjunto do Dashboard
     assert antes['aportes'] == 0 and antes['nao_definido'] == 2500  # o financiamento sem categoria
     # categoria nova de aporte, parcelas dos dois consorcios vigentes nela e Outros como NAO_DEFINIDO
-    poupanca = rpc(banco, 'criar_categoria', {'nome': 'Poupança Programada'}, chave())['categoria_id']
+    poupanca = rpc(banco, 'criar_categoria', {'nome': 'Poupança Programada', 'padrao': True}, chave())['categoria_id']
     k = chave()
     assert rpc(banco, 'definir_natureza_categoria', poupanca, 'APORTE', k) == {
         'categoria_id': poupanca, 'natureza': 'APORTE', 'natureza_anterior': None, 'tinha_linha': False}

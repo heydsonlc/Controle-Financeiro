@@ -148,10 +148,13 @@ def main(argv=None):
                 raise SystemExit(f'Ainda ha registros sem perfil: {restam}. A guarda fica como esta. Nada alterado.')
             # O catalogo de categorias (global, sem perfil) ainda e lido pela guarda em tela fiscal: enquanto ele nao tiver
             # dono proprio (FIN-CADASTROS-PADRAO-01), retirar a guarda mudaria o que o titular ve.
-            cur.execute('select count(*) n from public.categoria where perfil_financeiro_id is null')
-            if cur.fetchone()['n']:
-                raise SystemExit('O catalogo de categorias ainda depende da guarda (categorias sem perfil). A guarda fica como esta ate o '
-                                 'FIN-CADASTROS-PADRAO-01. Nada alterado.')
+            # Com o FIN-CADASTROS-PADRAO-01 aplicado, o catalogo tem regra propria (padrao ou do dono) e nao e mais lido pela guarda.
+            cur.execute("select to_regprocedure('financeiro.categoria_visivel(uuid, integer)') is not null ok")
+            if not cur.fetchone()['ok']:
+                cur.execute('select count(*) n from public.categoria where perfil_financeiro_id is null')
+                if cur.fetchone()['n']:
+                    raise SystemExit('O catalogo de categorias ainda depende da guarda (categorias sem perfil). A guarda fica como esta ate o '
+                                     'FIN-CADASTROS-PADRAO-01. Nada alterado.')
             anterior = todos(cur, 'select perfil_financeiro_id p from financeiro.guarda_sem_perfil')
             cur.execute('select financeiro.definir_guarda_sem_perfil(null, %s, %s)', (a.por, 'Nenhum registro sem perfil: guarda retirada'))
             resultado = {'guarda_anterior': anterior[0]['p'] if anterior else None, 'guarda_atual': None}

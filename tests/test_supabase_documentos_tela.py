@@ -188,8 +188,19 @@ def leituras(cluster):
 def test_mesmas_respostas_que_o_flask(leituras):
     flask, novo = leituras['flask'], leituras['novo']
     assert set(flask) == set(novo)
-    diferencas = {n: (novo[n], flask[n]) for n in flask if (novo[n][0], normal(novo[n][1])) != (flask[n][0], normal(flask[n][1]))}
+    # FIN-CADASTROS-PADRAO-01: o catalogo de categorias de despesa passou a valer em todos os perfis (no Flask so aparecia no
+    # perfil que guardava os registros sem perfil). E a unica diferenca admitida, conferida a parte logo abaixo.
+    def sem_catalogo(nome, corpo):
+        corpo = normal(corpo)
+        if nome.startswith('sugestao_') and isinstance(corpo.get('data'), dict) and 'opcoes' in corpo['data']:
+            corpo = {**corpo, 'data': {**corpo['data'], 'opcoes': {k: v for k, v in corpo['data']['opcoes'].items() if k != 'categorias_despesa'}}}
+        return corpo
+
+    diferencas = {n: (novo[n], flask[n]) for n in flask if (novo[n][0], sem_catalogo(n, novo[n][1])) != (flask[n][0], sem_catalogo(n, flask[n][1]))}
     assert diferencas == {}
+    com_opcoes = [c['data']['opcoes']['categorias_despesa'] for n, (st, c) in novo.items()
+                  if n.startswith('sugestao_') and st == 200 and 'opcoes' in c['data']]
+    assert com_opcoes and all(lista and lista == com_opcoes[0] for lista in com_opcoes)  # o catalogo padrao, igual em todas
 
 
 def test_o_cenario_cobre_os_casos(leituras):

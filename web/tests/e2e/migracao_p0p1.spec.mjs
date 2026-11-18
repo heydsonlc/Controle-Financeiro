@@ -167,17 +167,16 @@ test('catalogo no novo aplicativo: conta nao gestora nao ve as acoes e e recusad
     await admin(request, { acao: 'catalogo', escritor: 'NOVO' });
     await entrar(page);
     await abrirCategorias(page);
-    await expect(page.locator('#cf-aviso-catalogo')).toHaveText(/^Esta conta não administra o catálogo de categorias de despesa/);
-    await expect(page.locator('#btn-nova-categoria-despesa')).toBeHidden();
+    // FIN-CADASTROS-PADRAO-01: sem aviso de bloqueio e sem o modo "catalogo padrao" (so de quem administra o catalogo). A
+    // categoria padrao nao tem editar nem excluir; criar categoria PADRAO e recusado pelo banco.
+    await expect(page.locator('#cf-aviso-catalogo')).toHaveCount(0);
+    await expect(page.locator('#cf-modo-catalogo')).toHaveCount(0);
     await despesa(page, 'Moradia').first().click();
-    await expect(page.locator('#form-palavra-chave')).toBeHidden();
     await expect(page.locator('[data-action="editar-despesa"]')).toBeHidden();
-    const r = await page.evaluate(async () => {
-        const resposta = await fetch('/api/categorias', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                                          body: JSON.stringify({ nome: 'Nao grava D' }) });
-        return { status: resposta.status, corpo: await resposta.json() };
-    });
-    expect(r).toEqual({ status: 403, corpo: { success: false, error: 'Esta conta não administra o catálogo de categorias. Nada foi gravado.' } });
+    await expect(page.locator('[data-action="excluir-despesa"]')).toBeHidden();
+    const r = await chamarRpc(page, 'criar_categoria', { p_dados: { nome: 'Nao grava D', padrao: true }, p_chave: crypto.randomUUID() });
+    expect(r.status).toBe(403);
+    expect(r.corpo.message).toBe('Esta conta nao administra o catalogo de categorias');
     expect(await lerCategoria(page, 'Nao grava D')).toBeUndefined();
 });
 
@@ -190,6 +189,9 @@ test('gestor do catalogo: criar, editar, palavras-chave, protecoes e excluir pel
     await abrirCategorias(page);
     await expect(page.locator('#cf-aviso-catalogo')).toHaveCount(0);
     await expect(page.locator('.categorias-aviso-fase')).toHaveCount(0);  // FIN-UX-SIMPLIFICACAO-CATEGORIAS-01: aviso de fase saiu
+    // FIN-CADASTROS-PADRAO-01: quem administra o catalogo liga o modo "catalogo padrao" para mexer no que e de todos.
+    await expect(page.locator('#cf-modo-catalogo')).not.toBeChecked();
+    await page.check('#cf-modo-catalogo');
 
     // Criar: nome, descricao, cor, icone e ativa. O painel de logo fica desabilitado, com o aviso.
     await page.click('#btn-nova-categoria-despesa');

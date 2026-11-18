@@ -313,6 +313,11 @@ const RPCS_DE_ESCRITA = new Map([
     ['excluir_categoria', 'categorias-adaptador.js'],
     ['criar_palavra_chave', 'categorias-adaptador.js'],
     ['remover_palavra_chave', 'categorias-adaptador.js'],
+    // FIN-CADASTROS-PADRAO-01: ajustes do proprio usuario (nada toca o catalogo padrao) e natureza da categoria
+    ['criar_minha_palavra_chave', 'categorias-adaptador.js'],
+    ['desligar_palavra_chave_padrao', 'categorias-adaptador.js'],
+    ['remover_minha_palavra_chave', 'categorias-adaptador.js'],
+    ['definir_natureza_categoria', 'categorias-adaptador.js'],
     // FIN-PATRIMONIO-2 (caixinhas, transferencias e bens da Empresa; escritor unico do perfil no banco)
     ['criar_caixinha', 'patrimonio-adaptador.js'],
     ['editar_caixinha', 'patrimonio-adaptador.js'],
