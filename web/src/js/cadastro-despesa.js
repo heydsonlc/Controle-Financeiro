@@ -6,7 +6,10 @@
 //                                                            criar_recorrencia_cartao)
 //   CONSORCIO          -> POST /api/consorcios              (js/recorrencias-servico.js -> criar_consorcio)
 // Nenhuma regra financeira aqui: validacoes, competencia, fatura, parcelas, geracao e idempotencia sao as dos servicos.
-// - Cadastro e pagamento separados: nao existe "Despesa ja foi paga"; nenhum corpo leva pago, data ou conta de pagamento.
+// - Cadastro e pagamento separados, com uma excecao (FIN-MVP-CADASTRO-UNIFICADO-02): na DESPESA DIRETA, a opcao
+//   "Registrar esta despesa como paga" (desmarcada por padrao) envia, junto com o cadastro, a conta e a data do
+//   pagamento; o servico grava a despesa e o pagamento numa so transacao, pela mesma operacao do botao Pagar. Os outros
+//   tipos nao levam pagamento: compra no cartao e paga pela fatura; recorrencia e consorcio, ocorrencia a ocorrencia.
 // - Cada troca de tipo reconstroi os campos do tipo: nada de um tipo viaja no corpo de outro (so nome, valor, categoria e
 //   observacoes passam adiante).
 // - So cadastro: a edicao continua nas telas de cada modulo.
@@ -19,6 +22,7 @@ import { configurarDespesas, podeGerirPerfil, responderDespesas } from './despes
 import { configurarRecorrencias, responderRecorrencias, ultimoAviso } from './recorrencias-servico.js';
 import { blocoCartao } from './mobile-cartao.js';
 import { campoComErro, criarFila, erroDoServico, mesAno, moeda, mostrarErros, perguntaConsolidada } from './mobile-formulario.js';
+import { opcoesDeConta } from './mobile-pagamento.js';
 import { entrada, mensagem, mostrarMensagem, seletor } from './mobile-ui.js';
 
 export const TIPOS = Object.freeze({
@@ -170,13 +174,61 @@ function despesaDireta(ctx) {
     mostrar();
 
     const obs = campoObservacoes(comum);
+
+    // FIN-MVP-CADASTRO-UNIFICADO-02: pagamento imediato, opcional e desmarcado por padrao. Marcado, pede a conta e a data
+    // e o servico grava despesa + pagamento juntos (a operacao do botao Pagar, pelo valor integral).
+    const SEM_PAGAMENTO = 'Para pagamento que já aconteceu (Pix, débito, dinheiro). Sem marcar, a despesa fica pendente e é paga depois, pela ação Pagar.';
+    const COM_PAGAMENTO = 'O pagamento é registrado agora, pelo valor integral, na conta escolhida: o saldo da conta é atualizado, como na ação Pagar.';
+    const paga = entrada('checkbox', '1');
+    paga.id = 'cad-paga';
+    const marcar = el('label', 'cad-opcao');
+    marcar.append(paga, el('span', null, 'Registrar esta despesa como paga'));
+    const dataPagamento = entrada('date', hojeBrasilia());
+    dataPagamento.id = 'cad-data-pagamento';
+    const cDataPagamento = campoComErro('Data do pagamento', dataPagamento, { obrigatorio: true });
+    let contaPagamento = seletor([['', 'Carregando...']], '');
+    contaPagamento.id = 'cad-conta-pagamento';
+    const cContaPagamento = campoComErro('Conta bancária', contaPagamento, { obrigatorio: true });
+    const camposPagamento = el('div', 'cad-pagamento-campos');
+    camposPagamento.append(cContaPagamento, cDataPagamento);
+    camposPagamento.hidden = true;
+    const ajudaPagamento = el('p', 'cad-nota', SEM_PAGAMENTO);
+    const caixaPagamento = inteiro(el('div', 'cad-pagamento'));
+    caixaPagamento.id = 'cad-pagamento';
+    caixaPagamento.append(marcar, ajudaPagamento, camposPagamento);
+    let contasCarregadas = false;
+    async function carregarContas() {
+        if (contasCarregadas) return;
+        contasCarregadas = true;
+        const r = await api('GET', '/api/contas?status=ATIVO');
+        const contas = r.success ? (r.data || []) : [];
+        const novo = opcoesDeConta(contas, contas.length === 1 ? contas[0].id : null);  // uma conta so: ja vem escolhida
+        novo.id = contaPagamento.id;
+        contaPagamento.replaceWith(novo);
+        contaPagamento = novo;
+        camposPagamento.dataset.contas = String(contas.length);
+        if (!contas.length) cContaPagamento.erro('Nenhuma conta bancária ativa neste perfil: desmarque a opção e cadastre a despesa como pendente.');
+    }
+    const aplicarPagamento = () => {
+        camposPagamento.hidden = !paga.checked;
+        ajudaPagamento.textContent = paga.checked ? COM_PAGAMENTO : SEM_PAGAMENTO;
+        ctx.rotuloSalvar(paga.checked ? 'Salvar como paga' : 'Salvar despesa pendente');
+        if (paga.checked) carregarContas();
+    };
+    paga.addEventListener('change', aplicarPagamento);
+
     return {
-        nos: [inteiro(c.cNome), c.cCategoria, c.cValor, meio(cVencimento), caixaCompetencia, obs.no,
-            nota('O pagamento é registrado depois, pela ação Pagar: a despesa é cadastrada como pendente.', 'info')],
+        nos: [inteiro(c.cNome), c.cCategoria, c.cValor, meio(cVencimento), caixaCompetencia, obs.no, caixaPagamento],
         foco: c.nome,
-        preenchidos: () => [vencimento.value !== dataPadrao && (pelaData ? 'Data' : 'Data de vencimento'), manual && 'Competência'].filter(Boolean),
+        aoMontar: aplicarPagamento,
+        preenchidos: () => [vencimento.value !== dataPadrao && (pelaData ? 'Data' : 'Data de vencimento'), manual && 'Competência',
+            paga.checked && 'Pagamento'].filter(Boolean),
         validar() {
             const erros = c.erros();
+            if (paga.checked) {
+                if (!contaPagamento.value) erros.push([cContaPagamento, 'Selecione a conta bancária do pagamento.']);
+                if (!dataPagamento.value) erros.push([cDataPagamento, 'Informe a data do pagamento.']);
+            }
             if (!vencimento.value) erros.push([cVencimento, pelaData ? 'Informe a data.' : 'Informe a data de vencimento.']);
             else if (!/^\d{4}-\d{2}$/.test(competencia.value) && !pelaData) {
                 cCompetencia.hidden = false;
@@ -186,15 +238,22 @@ function despesaDireta(ctx) {
             return erros;
         },
         async salvar() {
-            // So os campos da despesa direta: sem pago, data de pagamento ou conta (a despesa nasce Pendente).
+            // So os campos da despesa direta. Sem a opcao marcada, a despesa nasce Pendente e nada de pagamento e enviado.
             const corpo = { nome: c.nome.value.trim(), descricao: obs.area.value.trim(), valor: numero(c.valor),
                 categoria_id: Number(c.categoria.value), data_vencimento: vencimento.value, recorrente: false,
                 mes_competencia: competencia.value };
+            const comPagamento = paga.checked;
+            if (comPagamento) corpo.pagamento = { conta_bancaria_id: Number(contaPagamento.value), data_pagamento: dataPagamento.value };
             const r = await api('POST', '/api/despesas', corpo);
             if (!r.success) {
                 if (/compet/i.test(r.error || '') && !pelaData) { cCompetencia.hidden = false; alterar.hidden = true; }
-                return { erro: r.error || FALHA, pares: [[/compet/i, cCompetencia], [/valor/i, c.cValor], [/categoria/i, c.cCategoria],
-                    [/nome/i, c.cNome], [/vencimento/i, cVencimento]] };
+                return { erro: r.error || FALHA, pares: [[/compet/i, cCompetencia], [/conta banc/i, cContaPagamento], [/data do pagamento/i, cDataPagamento],
+                    [/valor/i, c.cValor], [/categoria/i, c.cCategoria], [/nome/i, c.cNome], [/vencimento/i, cVencimento]] };
+            }
+            if (comPagamento) {
+                return { titulo: `“${corpo.nome}” cadastrada e paga`, linhas: [r.message || 'Despesa salva e paga.',
+                    'Se for preciso desfazer, use a ação Estornar na Lista de Despesas.'],
+                    destino: { modulo: 'despesas', mes: competencia.value, rotulo: 'Ver na Lista de Despesas' }, registro: { tipo: TIPOS.DESPESA_DIRETA, corpo } };
             }
             return { titulo: `“${corpo.nome}” cadastrada como pendente`, linhas: [r.message || 'Despesa salva.',
                 'Para registrar o pagamento, use a ação Pagar na Lista de Despesas.'],
@@ -627,7 +686,9 @@ export function abrirCadastroDespesa(opcoes = {}) {
         modal.dataset.tipo = tipo;
         mostrarMensagem(m, '');
         troca.hidden = true;
-        secao = MONTADORES[tipo]({ comum, categorias, mes, dados, regra: opcoes.competencia === 'data' ? 'data' : 'vencimento', aguardando: (sim) => { perguntando = sim; mostrarMensagem(m, sim ? '' : 'Salvando...'); } });
+        salvar.textContent = 'Salvar';  // a despesa direta troca o rotulo conforme a opcao de pagamento
+        secao = MONTADORES[tipo]({ comum, categorias, mes, dados, regra: opcoes.competencia === 'data' ? 'data' : 'vencimento',
+            rotuloSalvar: (texto) => { salvar.textContent = texto; }, aguardando: (sim) => { perguntando = sim; mostrarMensagem(m, sim ? '' : 'Salvando...'); } });
         grade.replaceChildren(...secao.nos);
         if (secao.aoMontar) secao.aoMontar();
         corpo.scrollTop = 0;

@@ -206,6 +206,7 @@ const RPCS_DE_ESCRITA = new Map([
     // FIN-FIDELIDADE-DESPESAS-1: a tela original de Despesas chama pelo adaptador; FIN-MVP-MOB-01: as chamadas ficam no servico
     // comum ao desktop e a Lista de Despesas mobile (despesas-servico.js), sem funcao nova
     ['criar_despesa', ['despesas-servico.js', 'recorrencias-servico.js', 'lancamentos-adaptador.js']],
+    ['criar_despesa_paga', 'despesas-servico.js'],  // FIN-MVP-CADASTRO-UNIFICADO-02: despesa direta + pagamento numa transacao
     ['editar_despesa', ['despesas-servico.js', 'lancamentos-adaptador.js']],
     ['excluir_despesa', ['despesas-servico.js', 'lancamentos-adaptador.js']],
     ['inativar_recorrencia', 'recorrencias-servico.js'],
@@ -762,8 +763,14 @@ test('nova despesa mobile: protegida, sem moldura, CSS restrito e cadastro so pe
         assert.match(codigo, /api\('POST', `\/api\/cartoes\/\$\{corpo\.cartao_id\}\/lancamentos`, corpo, responderCompras\)/, 'compra: servico de compras');
         assert.match(codigo, /api\('POST', '\/api\/recorrencias', corpo, responderRecorrencias\)/, 'recorrencia: servico de Recorrencias');
         assert.match(codigo, /api\('POST', '\/api\/consorcios', corpo, responderRecorrencias\)/, 'consorcio: servico proprio');
-        // Cadastro e pagamento separados: nenhum corpo leva pagamento ("Despesa ja foi paga" nao existe).
-        assert.doesNotMatch(codigo, /\bpago\s*:|conta_pagamento|data_pagamento|ja foi paga|já foi paga/i, 'sem campos de pagamento');
+        // "Despesa ja foi paga" (campo solto, sem movimento) nao existe. FIN-MVP-CADASTRO-UNIFICADO-02: o unico pagamento
+        // no cadastro e o da despesa direta, com conta e data, num objeto proprio que o servico grava junto com a despesa.
+        assert.doesNotMatch(codigo, /\bpago\s*:|conta_pagamento|ja foi paga|já foi paga/i, 'sem o campo solto de pagamento');
+        assert.equal((codigo.match(/corpo\.pagamento\s*=/g) || []).length, 1, 'pagamento no cadastro: so na despesa direta');
+        assert.match(codigo, /if \(comPagamento\) corpo\.pagamento = \{ conta_bancaria_id: Number\(contaPagamento\.value\), data_pagamento: dataPagamento\.value \}/);
+        const servico = await readFile(path.join(destino, 'js', 'despesas-servico.js'), 'utf8');
+        assert.match(servico, /if \(corpo\.pago && !corpo\.pagamento\)/, 'campo solto continua recusado no servico');
+        assert.match(servico, /rpc\('criar_despesa_paga'/, 'despesa + pagamento numa so chamada ao banco');
         // Um so componente: as seis telas de cadastro o importam, e o formulario antigo do celular saiu.
         for (const tela of ['despesas-adaptador.js', 'lancamentos-cadastro.js', 'recorrencias-adaptador.js', 'despesa-nova-mobile.js',
             'lancamento-mobile.js', 'recorrencias-mobile.js']) {

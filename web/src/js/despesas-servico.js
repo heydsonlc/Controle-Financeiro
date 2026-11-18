@@ -252,8 +252,15 @@ async function obter(id) {
 
 // Pedidos do formulario original que o novo aplicativo ainda nao atende (sem registro incompleto).
 function recusaDoFormulario(corpo) {
-    if (corpo.pago) {
+    // FIN-MVP-CADASTRO-UNIFICADO-02: "paga" so com o pagamento completo (conta e data), pelo modal unico; o campo solto do
+    // formulario original continua recusado (ele marcava a despesa sem movimento financeiro).
+    if (corpo.pago && !corpo.pagamento) {
         return 'Use a ação de pagamento para marcar a despesa como paga: ela escolhe a conta bancária e registra o movimento.';
+    }
+    if (corpo.pagamento) {
+        if (corpo.recorrente) return 'Pagamento no cadastro: só para despesa direta. As ocorrências da recorrência são pagas uma a uma.';
+        if (!Number(corpo.pagamento.conta_bancaria_id)) return 'Selecione a conta bancária do pagamento.';
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(corpo.pagamento.data_pagamento || '')) return 'Informe a data do pagamento.';
     }
     // Semanal e a cada 2 semanas: o formulario original ja manda semanal_N_D (N = 1 ou 2; D = 0 domingo a 6 sabado).
     const tipo = String(corpo.tipo_recorrencia || '');
@@ -262,6 +269,23 @@ function recusaDoFormulario(corpo) {
     if (!corpo.data_vencimento) return 'Informe a data de vencimento.';
     if (!(Number(corpo.valor) > 0)) return 'Informe um valor válido.';
     return null;
+}
+
+// FIN-MVP-CADASTRO-UNIFICADO-02: despesa direta cadastrada e paga numa so transacao no banco (criar_despesa_paga chama o
+// cadastro e o pagamento oficiais; se o pagamento for recusado, a despesa tambem nao e gravada). Pagamento integral.
+async function criarPaga(dados, pagamento) {
+    const p = { conta_bancaria_id: Number(pagamento.conta_bancaria_id), data_pagamento: pagamento.data_pagamento };
+    const operacao = `criar-paga:${JSON.stringify(dados)}:${JSON.stringify(p)}`;
+    const { data, error } = await supabase.rpc('criar_despesa_paga', { p_perfil_id: estado.perfilId, p_dados: dados, p_pagamento: p,
+        p_chave: chaves.de(operacao) });
+    if (error) {
+        const texto = mensagemDeErro(error);  // a despesa tambem nao foi gravada: o usuario precisa saber
+        return falha(/Nada foi gravado/i.test(texto) ? texto : `${texto.replace(/\.$/, '')}. Nada foi gravado.`);
+    }
+    chaves.esquecer(operacao);
+    const pg = data.pagamento;
+    return ok({ paga: true, message: `Despesa salva na competência ${String(data.competencia).slice(5, 7)}/${String(data.competencia).slice(0, 4)} e paga: `
+        + `${reais(centavos(pg.valor_pago))} debitados de ${pg.conta_nome}. Saldo da conta: ${reais(centavos(pg.saldo_conta))}.` });
 }
 
 async function criar(corpo) {
@@ -278,6 +302,7 @@ async function criar(corpo) {
     };
     if (corpo.recorrente) Object.assign(dados, { recorrente: true, tipo_recorrencia: corpo.tipo_recorrencia });
     else if (MES.test(corpo.mes_competencia || '')) dados.competencia = `${corpo.mes_competencia}-01`;
+    if (corpo.pagamento) return criarPaga(dados, corpo.pagamento);
     const operacao = `criar:${JSON.stringify(dados)}`;
     const { data, error } = await supabase.rpc('criar_despesa', { p_perfil_id: estado.perfilId, p_dados: dados, p_chave: chaves.de(operacao) });
     if (error) return falha(mensagemDeErro(error));

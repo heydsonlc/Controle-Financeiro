@@ -176,10 +176,13 @@ test('pedidos do formulario que o novo aplicativo ainda nao atende: recusados co
     await abrirDespesas(page, '2029-08');
     await page.click('.btn-nova-despesa');
     await preencherDespesa(page, { nome: 'Faxina', valor: '120', categoria: 'Moradia', vencimento: '2029-08-10' });
-    // FIN-MVP-CADASTRO-UNIFICADO-01: "Despesa ja foi paga" nao existe mais; o cadastro nao tem nenhum campo de pagamento.
-    await expect(modal(page).locator('input[type="checkbox"]')).toHaveCount(0);
-    await expect(modal(page)).not.toContainText(/já foi paga|Data de pagamento|Conta bancária/i);
-    await expect(modal(page)).toContainText('O pagamento é registrado depois, pela ação Pagar');
+    // FIN-MVP-CADASTRO-UNIFICADO-02: o unico campo de pagamento do cadastro e a opcao da despesa direta, desmarcada por
+    // padrao; conta e data so aparecem com ela marcada (cadastro_pagamento_imediato.spec). "Despesa ja foi paga" nao existe.
+    await expect(modal(page).locator('input[type="checkbox"]')).toHaveCount(1);
+    await expect(page.locator('#cad-paga')).not.toBeChecked();
+    await expect(page.locator('.cad-pagamento-campos')).toBeHidden();
+    await expect(modal(page)).not.toContainText(/já foi paga/i);
+    await expect(modal(page)).toContainText('Sem marcar, a despesa fica pendente e é paga depois, pela ação Pagar');
     // Semanal e a cada 2 semanas deixaram de ser recusadas (FIN-CATEGORIAS-RECORRENCIAS-2; ver recorrencias_tela.spec).
     await fecharCadastro(page);
     expect(dialogos).toEqual([]);
