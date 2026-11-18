@@ -123,6 +123,111 @@ test('usuario comum: categoria particular com natureza, palavra propria, palavra
     expect(catalogo).not.toContain(PARTICULAR);
 });
 
+// FIN-MULTIUSUARIO-AJUSTES-FINAIS-01 — "Alterar categoria": selecionar a palavra, escolher a acao, escolher o destino,
+// confirmar e ver a palavra na nova categoria. Vale so para o usuario; o teste seguinte confere que nada chegou ao usuario A.
+test('alterar categoria da palavra-chave: a padrao vira personalizacao, a propria muda de categoria e restaurar volta ao padrao', async ({ page }) => {
+    test.setTimeout(90 * 1000);
+    const dialogos = registrarDialogos(page);
+    await entrar(page, B);
+    const cats = await categorias(page);
+    const moradia = cats.find((c) => c.nome === 'Moradia');
+    const pets = cats.find((c) => c.nome === PARTICULAR);
+    const barra = page.locator('#cf-acoes-palavra');
+    const modal = page.locator('#cf-modal-palavra');
+    const selecionar = (palavra) => chip(page, palavra).click({ position: { x: 8, y: 8 } });  // no texto, fora do botao do chip
+    const titulo = page.locator('#categoria-despesa-detalhe .detail-identity h2');
+
+    await despesa(page, 'Moradia').first().click();
+    await chip(page, 'padaria').locator('button').click();  // estava desligada (teste anterior): restaura
+    await expect(chip(page, 'padaria')).toHaveAttribute('data-origem', 'PADRAO');
+    const padrao = (await palavrasDe(page, moradia.id)).find((x) => x.palavra === 'padaria');
+
+    // 1. selecionar a palavra: as acoes dela aparecem, em botoes pequenos
+    await expect(barra).toHaveCount(0);
+    await selecionar('padaria');
+    await expect(chip(page, 'padaria')).toHaveAttribute('data-selecionada', 'sim');
+    await expect(barra).toContainText('padaria');
+    await expect(barra).toContainText('palavra padrão do aplicativo');
+    await expect(barra.getByRole('button')).toHaveText([/Alterar categoria/, /Desativar para mim/]);
+    const caixa = await barra.getByRole('button', { name: 'Alterar categoria' }).boundingBox();
+    expect(caixa.height).toBeLessThanOrEqual(32);
+
+    // 2. alterar categoria: modal simples, so com as categorias que o usuario pode usar
+    await barra.getByRole('button', { name: 'Alterar categoria' }).click();
+    await expect(modal).toBeVisible();
+    await expect(page.locator('#cf-modal-palavra-texto')).toContainText('padaria');
+    const opcoes = await page.locator('#cf-palavra-destino option').allTextContents();
+    expect(opcoes).toContain(`${PARTICULAR} (minha)`);
+    expect(await page.locator(`#cf-palavra-destino option[value="${moradia.id}"]`).count()).toBe(0);  // a propria categoria nao e destino
+    await page.click('#cf-modal-palavra-confirmar');
+    await expect(page.locator('#cf-modal-palavra-erro')).toHaveText('Selecione a nova categoria.');
+    await page.click('#cf-modal-palavra-cancelar');
+    await expect(modal).toBeHidden();
+    expect((await palavrasDe(page, moradia.id)).find((x) => x.palavra === 'padaria')).toMatchObject({ id: padrao.id, origem: 'PADRAO' });
+    await barra.getByRole('button', { name: 'Alterar categoria' }).click();
+    await page.selectOption('#cf-palavra-destino', String(pets.id));
+    await evidencia(page, 'categorias-5-alterar-categoria-modal');
+    await page.click('#cf-modal-palavra-confirmar');
+    await expect(modal).toBeHidden();
+
+    // 3. a tela vai para a categoria de destino, com a palavra la, marcada como personalizada
+    await expect(titulo).toContainText(PARTICULAR);
+    await expect(chip(page, 'padaria')).toHaveAttribute('data-origem', 'REASSOCIADA');
+    await expect(chip(page, 'padaria')).toHaveAttribute('data-selecionada', 'sim');
+    await expect(barra).toContainText('padrão: Moradia');
+    await expect(barra.getByRole('button')).toHaveText([/Alterar categoria/, /Restaurar padrão/]);
+    await evidencia(page, 'categorias-6-palavra-reassociada');
+    expect((await palavrasDe(page, pets.id)).find((x) => x.palavra === 'padaria')).toMatchObject({ origem: 'REASSOCIADA', ativo: true, categoria_padrao_id: moradia.id });
+    // na categoria de origem ela aparece riscada, so com a acao de restaurar
+    await despesa(page, 'Moradia').first().click();
+    await expect(chip(page, 'padaria')).toHaveAttribute('data-origem', 'MOVIDA');
+    expect((await palavrasDe(page, moradia.id)).find((x) => x.palavra === 'padaria')).toMatchObject({ origem: 'MOVIDA', ativo: false, categoria_destino_id: pets.id });
+    await selecionar('padaria');
+    await expect(barra).toContainText(`levou para outra categoria: ${PARTICULAR}`);
+    await expect(barra.getByRole('button')).toHaveText([/Restaurar padrão/]);
+
+    // 4. palavra PROPRIA: muda de categoria (e volta)
+    await selecionar('condominio do b');
+    await expect(barra).toContainText('palavra sua');
+    await expect(barra.getByRole('button')).toHaveText([/Alterar categoria/, /Remover/]);
+    await barra.getByRole('button', { name: 'Alterar categoria' }).click();
+    await page.selectOption('#cf-palavra-destino', String(pets.id));
+    await page.click('#cf-modal-palavra-confirmar');
+    await expect(titulo).toContainText(PARTICULAR);
+    await expect(chip(page, 'condominio do b')).toHaveAttribute('data-origem', 'PROPRIA');
+    expect((await palavrasDe(page, moradia.id)).map((x) => x.palavra)).not.toContain('condominio do b');
+    await barra.getByRole('button', { name: 'Alterar categoria' }).click();  // a palavra continua selecionada no destino
+    await page.selectOption('#cf-palavra-destino', String(moradia.id));
+    await page.click('#cf-modal-palavra-confirmar');
+    await expect(titulo).toContainText('Moradia');
+    await expect(chip(page, 'condominio do b')).toHaveAttribute('data-origem', 'PROPRIA');
+    expect((await palavrasDe(page, pets.id)).map((x) => x.palavra)).not.toContain('condominio do b');
+
+    // 5. restaurar a associacao padrao (pelo botao do chip, na categoria de origem)
+    await chip(page, 'padaria').locator('button').click();
+    await expect(chip(page, 'padaria')).toHaveAttribute('data-origem', 'PADRAO');
+    expect((await palavrasDe(page, moradia.id)).find((x) => x.palavra === 'padaria')).toMatchObject({ id: padrao.id, origem: 'PADRAO', ativo: true });
+    expect((await palavrasDe(page, pets.id)).map((x) => x.palavra)).not.toContain('padaria');
+    // ... e tambem escolhendo de novo a categoria padrao no modal
+    await selecionar('padaria');
+    await barra.getByRole('button', { name: 'Alterar categoria' }).click();
+    await page.selectOption('#cf-palavra-destino', String(pets.id));
+    await page.click('#cf-modal-palavra-confirmar');
+    await expect(chip(page, 'padaria')).toHaveAttribute('data-origem', 'REASSOCIADA');
+    await barra.getByRole('button', { name: 'Alterar categoria' }).click();
+    expect(await page.locator(`#cf-palavra-destino option[value="${moradia.id}"]`).textContent()).toContain('categoria padrão (restaura)');
+    await page.selectOption('#cf-palavra-destino', String(moradia.id));
+    await page.click('#cf-modal-palavra-confirmar');
+    await expect(titulo).toContainText('Moradia');
+    await expect(chip(page, 'padaria')).toHaveAttribute('data-origem', 'PADRAO');
+
+    // deixa como o teste seguinte espera: a padrao desligada so para B (pela acao da barra)
+    await expect(chip(page, 'padaria')).toHaveAttribute('data-selecionada', 'sim');  // segue selecionada depois da alteracao
+    await barra.getByRole('button', { name: 'Desativar para mim' }).click();
+    await expect(chip(page, 'padaria')).toHaveAttribute('data-origem', 'DESLIGADA');
+    expect(dialogos.filter((m) => /Erro/.test(m))).toEqual([]);
+});
+
 test('o outro usuario nao ve a categoria particular, nem as palavras, nem a palavra desligada', async ({ page }) => {
     await entrar(page, A);
     expect((await categorias(page)).map((c) => c.nome)).not.toContain(PARTICULAR);

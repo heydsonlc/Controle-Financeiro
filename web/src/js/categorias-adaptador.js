@@ -100,7 +100,7 @@ async function palavrasChave(id) {
     estado.palavras = estado.palavras || rpc((a) => supabase.rpc('palavras_chave_tela', a), { p_perfil_id: estado.perfilId });
     // A tela original so desenha as palavras "ativas": a padrao que o usuario desligou vai marcada (origem DESLIGADA), para
     // aparecer riscada com a acao de restaurar (js/categorias-adaptacoes.js).
-    const lista = ((await estado.palavras)[String(id)] || []).map((p) => ({ ...p, ativo: true, desligada: p.origem === 'DESLIGADA' }));
+    const lista = ((await estado.palavras)[String(id)] || []).map((p) => ({ ...p, ativo: true, desligada: p.origem === 'DESLIGADA' || p.origem === 'MOVIDA' }));
     return ok({ data: lista, total: lista.length });
 }
 
@@ -171,6 +171,16 @@ async function criarPalavra(id, corpo) {
     return { status: r.created ? 201 : 200, corpo: { success: true, data: r, created: Boolean(r.created) } };
 }
 
+// FIN-MULTIUSUARIO-AJUSTES-FINAIS-01: "Alterar categoria" da palavra-chave, so para a conta de quem pede (a palavra padrao
+// vira uma personalizacao; a propria muda de categoria; voltar a categoria padrao restaura). O banco confere tudo.
+async function alterarCategoriaDaPalavra(palavraId, corpo) {
+    const destino = Number((corpo || {}).categoria_id);
+    if (!Number.isInteger(destino) || destino <= 0) return falha('Selecione a nova categoria.', 400);
+    const r = await rpc((a) => supabase.rpc('alterar_categoria_da_palavra_chave', a), { p_id: palavraId, p_categoria_id: destino });
+    estado.palavras = null;
+    return ok({ data: r });
+}
+
 async function removerPalavra(id, palavraId) {
     let r;
     if (palavraId < 0) {  // ajuste do usuario: a propria some; a desligada ou reassociada volta ao padrao
@@ -206,6 +216,7 @@ const ROTAS = [
     ['DELETE', /^\/api\/categorias\/(\d+)$/, (m) => excluirCategoria(Number(m[1]))],
     ['POST', /^\/api\/categorias\/(\d+)\/palavras-chave$/, (m, corpo) => criarPalavra(Number(m[1]), corpo)],
     ['DELETE', /^\/api\/categorias\/(\d+)\/palavras-chave\/(-?\d+)$/, (m) => removerPalavra(Number(m[1]), Number(m[2]))],
+    ['PUT', /^\/api\/categorias\/\d+\/palavras-chave\/(-?\d+)\/categoria$/, (m, corpo) => alterarCategoriaDaPalavra(Number(m[1]), corpo)],
     [null, /^\/api\/categorias\/\d+\/logo$/, async () => falha(`${LOGO_INDISPONIVEL} Nada foi gravado.`)],
 ];
 

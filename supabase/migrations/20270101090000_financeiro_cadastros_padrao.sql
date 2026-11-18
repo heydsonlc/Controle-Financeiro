@@ -597,13 +597,19 @@ begin
                                                                        else (select financeiro.iso_python((u.criado_em at time zone 'utc')::timestamp) from financeiro.palavra_chave_usuario u where u.id = -y.id) end,
                                                     'updated_at', case when y.id > 0 then (select financeiro.iso_python(p.updated_at) from public.categoria_palavra_chave p where p.id = y.id)
                                                                        else (select financeiro.iso_python((u.atualizado_em at time zone 'utc')::timestamp) from financeiro.palavra_chave_usuario u where u.id = -y.id) end)
+                                 -- FIN-MULTIUSUARIO-AJUSTES-FINAIS-01: so quando ha reassociacao (as demais linhas ficam como eram)
+                                 || case when y.categoria_padrao_id is not null then jsonb_build_object('categoria_padrao_id', y.categoria_padrao_id) else '{}'::jsonb end
+                                 || case when y.categoria_destino_id is not null then jsonb_build_object('categoria_destino_id', y.categoria_destino_id) else '{}'::jsonb end
                                  order by y.palavra, y.id) palavras
-                  from (select e.categoria_id, coalesce(e.padrao_id::bigint, -e.ajuste_id) id, e.palavra, true ativo, e.origem
+                  from (select e.categoria_id, coalesce(e.padrao_id::bigint, -e.ajuste_id) id, e.palavra, true ativo, e.origem,
+                               case when e.origem = 'REASSOCIADA' then (select u.categoria_padrao_id from financeiro.palavra_chave_usuario u where u.id = e.ajuste_id) end categoria_padrao_id,
+                               null::integer categoria_destino_id
                           from financeiro.palavras_efetivas(v_dono) e
                         union all
-                        select u.categoria_padrao_id, -u.id, u.palavra, false, 'DESLIGADA'
+                        select u.categoria_padrao_id, -u.id, u.palavra, false, case u.tipo when 'DESLIGADA' then 'DESLIGADA' else 'MOVIDA' end, null::integer,
+                               case when u.tipo = 'REASSOCIADA' then u.categoria_id end
                           from financeiro.palavra_chave_usuario u
-                         where u.user_id = v_dono and u.tipo = 'DESLIGADA'
+                         where u.user_id = v_dono and u.tipo in ('DESLIGADA', 'REASSOCIADA')
                            and exists (select 1 from public.categoria_palavra_chave p
                                         where p.categoria_id = u.categoria_padrao_id and p.ativo and lower(btrim(p.palavra)) = u.palavra)) y
                  group by y.categoria_id) x), '{}'::jsonb);
@@ -806,12 +812,97 @@ begin
     return jsonb_build_object('id', v_p.id, 'categoria_id', v_p.categoria_id, 'palavra', lower(btrim(v_p.palavra)), 'restaurada', v_n > 0);
 end
 $$;
+-- FIN-MULTIUSUARIO-AJUSTES-FINAIS-01 — acao "Alterar categoria" da tela. Vale so para a conta de quem pede: palavra padrao ->
+-- ajuste REASSOCIADA do usuario (o catalogo padrao nao muda); palavra propria -> muda a categoria dela; voltar a categoria de
+-- origem restaura o padrao. Repetir a mesma alteracao nao duplica nem falha. Na tela (palavras_chave_tela) a reassociada
+-- informa a categoria padrao de origem, e a categoria de origem mostra a palavra que saiu dela (inativa, origem MOVIDA).
+-- p_id > 0: palavra PADRAO (o id dela). p_id < 0: ajuste do usuario (o id que palavras_chave_tela devolve, negativo).
+create function financeiro.alterar_categoria_da_palavra_chave(p_id bigint, p_categoria_id integer)
+    returns jsonb
+    language plpgsql
+    volatile
+    security definer
+    set search_path = ''
+as $$
+declare
+    v_usuario uuid := (select auth.uid());
+    v_p       public.categoria_palavra_chave;
+    v_u       financeiro.palavra_chave_usuario;
+    v_palavra text;
+    v_origem  integer;   -- categoria padrao de origem (nula na palavra propria)
+    v_atual   integer;   -- categoria em que a palavra vale hoje para o usuario
+begin
+    perform financeiro.exigir_catalogo_no_novo();
+    if v_usuario is null then
+        raise exception 'Sessao obrigatoria' using errcode = '42501';
+    end if;
+    if p_id is null or p_id = 0 then
+        raise exception 'Palavra-chave nao encontrada' using errcode = 'P0001', hint = 'NAO_ENCONTRADA';
+    end if;
+    perform pg_advisory_xact_lock(hashtextextended('palavra_chave_usuario:' || v_usuario::text, 20270101));
+    if p_id > 0 then
+        select * into v_p from public.categoria_palavra_chave p where p.id = p_id and p.ativo;
+        if not found then
+            raise exception 'Palavra-chave nao encontrada' using errcode = 'P0001', hint = 'NAO_ENCONTRADA';
+        end if;
+        v_palavra := lower(btrim(v_p.palavra));
+        v_origem := v_p.categoria_id;
+        select * into v_u from financeiro.palavra_chave_usuario u
+         where u.user_id = v_usuario and u.tipo <> 'NOVA' and u.categoria_padrao_id = v_origem and u.palavra = v_palavra for update;
+        v_atual := case when v_u.id is null then v_origem when v_u.tipo = 'REASSOCIADA' then v_u.categoria_id end;
+    else
+        -- o ajuste de outro usuario responde como inexistente
+        select * into v_u from financeiro.palavra_chave_usuario u where u.id = -p_id and u.user_id = v_usuario for update;
+        if not found then
+            raise exception 'Palavra-chave nao encontrada' using errcode = 'P0001', hint = 'NAO_ENCONTRADA';
+        end if;
+        v_palavra := v_u.palavra;
+        v_origem := v_u.categoria_padrao_id;
+        v_atual := v_u.categoria_id;
+    end if;
+    -- destino: categoria ativa, padrao ou do proprio usuario (a particular de outro responde como inexistente)
+    if p_categoria_id is null or not exists (select 1 from public.categoria c where c.id = p_categoria_id and coalesce(c.ativo, true)
+                                                and (c.user_id is null or c.user_id = v_usuario)) then
+        raise exception 'Categoria de Despesa nao encontrada' using errcode = 'P0001', hint = 'NAO_ENCONTRADA';
+    end if;
+    if v_atual is not distinct from p_categoria_id then  -- repeticao: ja esta la
+        return jsonb_build_object('id', case when v_u.id is null then p_id else -v_u.id end, 'categoria_id', p_categoria_id, 'palavra', v_palavra,
+                                  'origem', case when v_u.id is null then 'PADRAO' when v_u.tipo = 'NOVA' then 'PROPRIA' else 'REASSOCIADA' end,
+                                  'alterada', false);
+    end if;
+    if v_origem is not null and p_categoria_id = v_origem then
+        -- de volta a categoria padrao: o ajuste deixa de existir (restaura a regra do aplicativo)
+        delete from financeiro.palavra_chave_usuario u where u.id = v_u.id;
+        return jsonb_build_object('id', (select p.id from public.categoria_palavra_chave p
+                                          where p.categoria_id = v_origem and p.ativo and lower(btrim(p.palavra)) = v_palavra order by p.id limit 1),
+                                  'categoria_id', v_origem, 'palavra', v_palavra, 'origem', 'PADRAO', 'alterada', true, 'restaurada', true);
+    end if;
+    -- sem duas regras iguais na mesma categoria para o usuario
+    if exists (select 1 from financeiro.palavras_efetivas(v_usuario) e where e.categoria_id = p_categoria_id and e.palavra = v_palavra) then
+        raise exception 'Palavra-chave ja cadastrada para esta categoria' using errcode = '22023', hint = 'JA_EXISTE';
+    end if;
+    if v_u.id is null then
+        insert into financeiro.palavra_chave_usuario (user_id, tipo, palavra, categoria_id, categoria_padrao_id)
+        values (v_usuario, 'REASSOCIADA', v_palavra, p_categoria_id, v_origem)
+        returning * into v_u;
+    elsif v_u.tipo = 'NOVA' then
+        update financeiro.palavra_chave_usuario u set categoria_id = p_categoria_id, atualizado_em = now() where u.id = v_u.id returning * into v_u;
+    else  -- DESLIGADA ou REASSOCIADA: passa a valer na categoria escolhida
+        update financeiro.palavra_chave_usuario u set tipo = 'REASSOCIADA', categoria_id = p_categoria_id, atualizado_em = now()
+         where u.id = v_u.id returning * into v_u;
+    end if;
+    return jsonb_build_object('id', -v_u.id, 'categoria_id', v_u.categoria_id, 'categoria_padrao_id', v_u.categoria_padrao_id, 'palavra', v_palavra,
+                              'origem', case when v_u.tipo = 'NOVA' then 'PROPRIA' else 'REASSOCIADA' end, 'alterada', true);
+end
+$$;
 revoke execute on function financeiro.criar_minha_palavra_chave(integer, text) from public, anon;
 revoke execute on function financeiro.desligar_palavra_chave_padrao(integer) from public, anon;
 revoke execute on function financeiro.reassociar_palavra_chave_padrao(integer, integer) from public, anon;
 revoke execute on function financeiro.remover_minha_palavra_chave(bigint) from public, anon;
 revoke execute on function financeiro.restaurar_palavra_chave_padrao(integer) from public, anon;
 grant execute on function financeiro.criar_minha_palavra_chave(integer, text) to authenticated;
+revoke execute on function financeiro.alterar_categoria_da_palavra_chave(bigint, integer) from public, anon;
+grant execute on function financeiro.alterar_categoria_da_palavra_chave(bigint, integer) to authenticated;
 grant execute on function financeiro.desligar_palavra_chave_padrao(integer) to authenticated;
 grant execute on function financeiro.reassociar_palavra_chave_padrao(integer, integer) to authenticated;
 grant execute on function financeiro.remover_minha_palavra_chave(bigint) to authenticated;
@@ -1272,5 +1363,47 @@ begin
      where cc.id = v_c.id
     returning * into v_c;
     return financeiro.categoria_cartao_flask(v_c);
+end
+$function$;
+
+-- vincular_despesa_categoria_cartao: definicao vigente + categoria visivel ao dono do perfil (1 trecho).
+CREATE OR REPLACE FUNCTION financeiro.vincular_despesa_categoria_cartao(p_perfil_id integer, p_categoria_cartao_id integer, p_categoria_id integer, p_ativo boolean)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+    v_c      public.categoria_cartao;
+    v_ativo  boolean := coalesce(p_ativo, true);
+    v_v      public.categoria_cartao_despesa;
+    v_criado boolean := false;
+begin
+    perform financeiro.exigir_escrita_categoria_cartao(p_perfil_id);
+    v_c := financeiro.travar_categoria_cartao(p_perfil_id, p_categoria_cartao_id);
+    if p_categoria_id is null or not exists (select 1 from public.categoria c where c.id = p_categoria_id
+                                                and financeiro.categoria_visivel(c.user_id, p_perfil_id)) then
+        raise exception 'Categoria de despesa nao encontrada' using errcode = '22023';
+    end if;
+    if v_ativo and exists (select 1 from public.categoria_cartao_despesa v
+                            where v.categoria_id = p_categoria_id and v.ativo and v.categoria_cartao_id <> v_c.id
+                              and financeiro.pertence_ao_perfil(v.perfil_financeiro_id, p_perfil_id)) then
+        raise exception 'Categoria de despesa ja vinculada a outra Categoria do Cartao ativa' using errcode = '22023';
+    end if;
+    select * into v_v from public.categoria_cartao_despesa v
+     where v.categoria_cartao_id = v_c.id and v.categoria_id = p_categoria_id and v.perfil_financeiro_id = p_perfil_id
+       for update;
+    if found then
+        update public.categoria_cartao_despesa v set ativo = v_ativo, updated_at = now() at time zone 'utc'
+         where v.id = v_v.id
+        returning * into v_v;
+    else
+        insert into public.categoria_cartao_despesa (perfil_financeiro_id, categoria_cartao_id, categoria_id, ativo,
+                                                     created_at, updated_at)
+        values (p_perfil_id, v_c.id, p_categoria_id, v_ativo, now() at time zone 'utc', now() at time zone 'utc')
+        returning * into v_v;
+        v_criado := true;
+    end if;
+    return financeiro.categoria_cartao_despesa_flask(v_v) || jsonb_build_object('created', v_criado);
 end
 $function$;

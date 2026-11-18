@@ -553,6 +553,46 @@ begin
 end
 $function$;
 
+CREATE OR REPLACE FUNCTION financeiro.vincular_despesa_categoria_cartao(p_perfil_id integer, p_categoria_cartao_id integer, p_categoria_id integer, p_ativo boolean)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+    v_c      public.categoria_cartao;
+    v_ativo  boolean := coalesce(p_ativo, true);
+    v_v      public.categoria_cartao_despesa;
+    v_criado boolean := false;
+begin
+    perform financeiro.exigir_escrita_categoria_cartao(p_perfil_id);
+    v_c := financeiro.travar_categoria_cartao(p_perfil_id, p_categoria_cartao_id);
+    if p_categoria_id is null or not exists (select 1 from public.categoria c where c.id = p_categoria_id) then
+        raise exception 'Categoria de despesa nao encontrada' using errcode = '22023';
+    end if;
+    if v_ativo and exists (select 1 from public.categoria_cartao_despesa v
+                            where v.categoria_id = p_categoria_id and v.ativo and v.categoria_cartao_id <> v_c.id
+                              and financeiro.pertence_ao_perfil(v.perfil_financeiro_id, p_perfil_id)) then
+        raise exception 'Categoria de despesa ja vinculada a outra Categoria do Cartao ativa' using errcode = '22023';
+    end if;
+    select * into v_v from public.categoria_cartao_despesa v
+     where v.categoria_cartao_id = v_c.id and v.categoria_id = p_categoria_id and v.perfil_financeiro_id = p_perfil_id
+       for update;
+    if found then
+        update public.categoria_cartao_despesa v set ativo = v_ativo, updated_at = now() at time zone 'utc'
+         where v.id = v_v.id
+        returning * into v_v;
+    else
+        insert into public.categoria_cartao_despesa (perfil_financeiro_id, categoria_cartao_id, categoria_id, ativo,
+                                                     created_at, updated_at)
+        values (p_perfil_id, v_c.id, p_categoria_id, v_ativo, now() at time zone 'utc', now() at time zone 'utc')
+        returning * into v_v;
+        v_criado := true;
+    end if;
+    return financeiro.categoria_cartao_despesa_flask(v_v) || jsonb_build_object('created', v_criado);
+end
+$function$;
+
 do $$
 declare
     r record;
@@ -573,6 +613,7 @@ drop index public.categoria_cartao_padrao_por_perfil_uq;
 alter table public.categoria_cartao drop column padrao_id;
 drop table financeiro.categoria_cartao_padrao_despesa;
 drop table financeiro.categoria_cartao_padrao;
+drop function financeiro.alterar_categoria_da_palavra_chave(bigint, integer);
 drop function financeiro.restaurar_palavra_chave_padrao(integer);
 drop function financeiro.remover_minha_palavra_chave(bigint);
 drop function financeiro.reassociar_palavra_chave_padrao(integer, integer);

@@ -26,7 +26,7 @@ ANTERIORES = sorted(p for p in MIG.glob('*.sql') if p.name < VERSAO)
 SUBSTITUIDAS = ['categorias_de_despesa', 'categorias_tela', 'mobilidade_categorias_tela', 'naturezas_das_categorias', 'validar_nome_categoria',
                 'criar_categoria', 'editar_categoria', 'excluir_categoria', 'definir_natureza_categoria', 'criar_palavra_chave', 'palavras_chave_tela',
                 'sugestao_categoria_importacao', 'ir_categorias_despesa_tela', 'criar_perfil', 'editar_categoria_cartao', 'desativar_categoria_cartao',
-                'categorias_cartao_tela']
+                'categorias_cartao_tela', 'vincular_despesa_categoria_cartao']
 
 
 def carregar():
@@ -112,6 +112,14 @@ s = vigente('desativar_categoria_cartao')
 s = trocar(s, r"(    v_c := financeiro\.travar_categoria_cartao\(p_perfil_id, p_id\);\n)", lambda m: m.group(1) + PROTECAO.format(condicao='true'), 'desativar_categoria_cartao')
 gerado.append('-- desativar_categoria_cartao: definicao vigente + protecao da categoria padrao (1 trecho).\n' + s)
 
+# FIN-MULTIUSUARIO-AJUSTES-FINAIS-01: a categoria de despesa particular de OUTRO usuario responde exatamente como a inexistente
+# (a gravacao ja era recusada pela rede de protecao, mas com outra mensagem)
+s = vigente('vincular_despesa_categoria_cartao')
+s = trocar(s, r"not exists \(select 1 from public\.categoria c where c\.id = p_categoria_id\)",
+           "not exists (select 1 from public.categoria c where c.id = p_categoria_id\n"
+           "                                                and financeiro.categoria_visivel(c.user_id, p_perfil_id))", 'vincular_despesa_categoria_cartao')
+gerado.append('-- vincular_despesa_categoria_cartao: definicao vigente + categoria visivel ao dono do perfil (1 trecho).\n' + s)
+
 ESTRUTURA = (RAIZ / 'scripts' / 'cadastros_padrao_estrutura.sql').read_text(encoding='utf-8')
 texto = ESTRUTURA.rstrip('\n') + """
 
@@ -167,6 +175,7 @@ drop index public.categoria_cartao_padrao_por_perfil_uq;
 alter table public.categoria_cartao drop column padrao_id;
 drop table financeiro.categoria_cartao_padrao_despesa;
 drop table financeiro.categoria_cartao_padrao;
+drop function financeiro.alterar_categoria_da_palavra_chave(bigint, integer);
 drop function financeiro.restaurar_palavra_chave_padrao(integer);
 drop function financeiro.remover_minha_palavra_chave(bigint);
 drop function financeiro.reassociar_palavra_chave_padrao(integer, integer);

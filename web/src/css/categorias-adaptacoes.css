@@ -226,13 +226,110 @@ body.cf-somente-leitura [data-action="remover-palavra-chave"] {
     background: #64748b;
 }
 
-.keyword-chip[data-origem="DESLIGADA"] {
+.keyword-chip[data-origem="DESLIGADA"],
+.keyword-chip[data-origem="MOVIDA"] {
     opacity: 0.6;
     text-decoration: line-through;
 }
 
-.keyword-chip[data-origem="DESLIGADA"] button {
+.keyword-chip[data-origem="DESLIGADA"] button,
+.keyword-chip[data-origem="MOVIDA"] button {
     text-decoration: none;
+}
+
+/* FIN-MULTIUSUARIO-AJUSTES-FINAIS-01 — palavra selecionada e as acoes dela (linha compacta, botoes pequenos com icone e texto). */
+.keyword-chip[role="button"] {
+    cursor: pointer;
+}
+
+.keyword-chip[data-selecionada="sim"] {
+    outline: 2px solid #2563eb;
+    outline-offset: 1px;
+}
+
+.cf-acoes-palavra {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin: 8px 0 4px;
+    padding: 6px 8px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #f8fafc;
+    font-size: 0.8125rem;
+}
+
+.cf-acoes-palavra-rotulo {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 160px;
+    min-width: 0;
+}
+
+.cf-acoes-palavra-rotulo strong {
+    overflow-wrap: anywhere;
+}
+
+.cf-acoes-palavra-rotulo small {
+    color: #64748b;
+    font-size: 0.6875rem;
+}
+
+.cf-acao-palavra {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #fff;
+    color: #334155;
+    font-size: 0.75rem;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.cf-acao-palavra:hover {
+    background: #f1f5f9;
+}
+
+.cf-acao-palavra.principal {
+    border-color: #2563eb;
+    color: #1d4ed8;
+    font-weight: 600;
+}
+
+.cf-acao-palavra.perigo {
+    border-color: #fecaca;
+    color: #b91c1c;
+}
+
+.cf-modal-palavra-texto {
+    margin: 0 0 12px;
+    font-size: 0.875rem;
+    overflow-wrap: anywhere;
+}
+
+.cf-modal-palavra-nota {
+    display: block;
+    margin: 4px 0 12px;
+    color: #64748b;
+    font-size: 0.75rem;
+}
+
+.cf-modal-palavra-erro {
+    margin-bottom: 12px;
+    padding: 8px 10px;
+    border: 1px solid #fecaca;
+    border-radius: 6px;
+    background: #fef2f2;
+    color: #b91c1c;
+    font-size: 0.8125rem;
+}
+
+#cf-form-palavra select {
+    width: 100%;
 }
 
 /* Modo catalogo padrao: interruptor pequeno, so para quem administra o catalogo. */

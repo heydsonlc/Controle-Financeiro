@@ -44,8 +44,12 @@ async function abrirTela(page) {
     await expect(page.locator('#filtro-mes')).not.toHaveValue('');  // inicializarFiltros ja rodou
     await expect(page.locator('#lista-lancamentos')).not.toContainText('Carregando');
     // Todos os meses (o Flask abre no mes atual).
+    const antes = await cargas(page);
     await page.fill('#filtro-mes', '');
     await page.locator('#filtro-mes').dispatchEvent('change');
+    // A troca do filtro rele a lista. Sem esperar essa releitura, uma acao feita logo em seguida (ex.: excluir) podia ser
+    // sobrescrita na tela pela resposta atrasada da leitura anterior: era a falha intermitente deste arquivo.
+    await esperarRecarga(page, antes);
 }
 
 // Cargas concluidas da lista (marcador de js/lancamentos-adaptacoes.js). Depois de salvar, a tela rele a lista sozinha:

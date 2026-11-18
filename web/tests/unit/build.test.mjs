@@ -375,6 +375,8 @@ const RPCS_DE_ESCRITA = new Map([
     ['salvar_preferencias', 'configuracoes.js'],
     // FIN-MIGRACAO-FIDELIDADE-FASE-1 (gestao de perfis; o banco exige pode_gerir do perfil). Camada unica: perfil.js
     ['criar_perfil', 'perfil.js'],
+    // FIN-MULTIUSUARIO-AJUSTES-FINAIS-01: "Alterar categoria" da palavra-chave (so para a conta de quem pede)
+    ['alterar_categoria_da_palavra_chave', 'categorias-adaptador.js'],
     ['atualizar_perfil', 'perfil.js'],
     ['inativar_perfil', 'perfil.js'],
     ['reativar_perfil', 'perfil.js'],

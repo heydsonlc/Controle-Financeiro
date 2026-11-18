@@ -195,7 +195,9 @@ def test_ajuste_de_um_usuario_nao_alcanca_o_outro_e_nada_classificado_muda(c):
     rpc(dsn, 'reassociar_palavra_chave_padrao', pid, casa_b, usuario=USUARIO_B)
     assert sugestao(dsn, pb, 'xptoloja 123')['categoria_id'] == casa_b
     assert sugestao(dsn, pa, 'xptoloja 123')['categoria_id'] == MORADIA
-    assert 'xptoloja' not in palavras(dsn, USUARIO_B, pb, MORADIA)
+    # FIN-MULTIUSUARIO-AJUSTES-FINAIS-01: na categoria de origem a palavra aparece INATIVA, como MOVIDA, para poder ser restaurada
+    movida = palavras(dsn, USUARIO_B, pb, MORADIA)['xptoloja']
+    assert (movida['ativo'], movida['origem']) == (False, 'MOVIDA') and movida['categoria_destino_id'] is not None
     assert palavras(dsn, USUARIO_B, pb, casa_b)['xptoloja']['origem'] == 'REASSOCIADA'
     # A nao reassocia para a categoria particular de B
     assert erro(rpc, dsn, 'reassociar_palavra_chave_padrao', pid, casa_b, usuario=USUARIO_A).diag.message_primary == 'Categoria de Despesa nao encontrada'

@@ -29,6 +29,7 @@ from pathlib import Path
 import pytest
 
 from tests import isolamento_cenario as I
+from tests import isolamento_dirigido as D
 from tests.test_supabase_cartoes import rpc, tabela
 from tests.test_supabase_categorias_recorrencias import CATEGORIA, banco, erro  # noqa: F401
 from tests.test_supabase_recorrencia import ID, PG_BIN, USUARIO_A, USUARIO_B, atribuir, cluster, sql  # noqa: F401
@@ -152,7 +153,11 @@ def test_registro_de_outro_usuario_nunca_e_devolvido_nem_alterado_e_a_cobertura_
     assert not vazamentos, f'RESPOSTA COM DADO DE OUTRO USUARIO: {vazamentos[:10]}'
     assert I.retrato(conn, todos_perfis) == antes  # as chamadas sao desfeitas; nada pode ter mudado
 
-    sem = sorted(f'{n}({p})' for (n, p), vs in por_funcao.items() if not any(vs))
+    # FIN-MULTIUSUARIO-AJUSTES-FINAIS-01: as combinacoes que a sonda generica nao alcanca tem sonda DIRIGIDA (teste seguinte) ou
+    # estao classificadas, com motivo, como nao aplicaveis. O que sobrar e lacuna a avaliar antes de publicar.
+    sem_generica = sorted(f'{n}({p})' for (n, p), vs in por_funcao.items() if not any(vs))
+    gravar_relatorio('2_sem_cobertura_generica.json', sem_generica)
+    sem = sorted(f'{n}({p})' for (n, p), vs in por_funcao.items() if not any(vs) and (n, p) not in D.CASOS and (n, p) not in D.NAO_APLICAVEIS)
     gravar_relatorio('2_sem_cobertura_efetiva.json', sem)
     # No repositorio fica so a impressao (SHA-256) de cada entrada: a lista legivel vai para o relatorio privado.
     impressao = lambda x: hashlib.sha256(x.encode()).hexdigest()  # noqa: E731
@@ -162,6 +167,38 @@ def test_registro_de_outro_usuario_nunca_e_devolvido_nem_alterado_e_a_cobertura_
     novas = sorted(x for x in sem if impressao(x) not in conhecidas)
     assert not novas, (f'{len(novas)} funcao(oes) sem cobertura efetiva de registro alheio que nao estao em {SEM_COBERTURA.name}: {novas[:15]}. '
                        'Avalie cada uma (teste especifico ou registro na lista) antes de publicar.')
+
+
+def test_sondas_dirigidas_dao_cobertura_efetiva_ao_que_a_sonda_generica_nao_alcanca(cenario):
+    """Para cada combinacao funcao x parametro com sonda dirigida, nos dois sentidos (A contra B e B contra A): o registro
+    proprio e encontrado, e o do outro usuario responde EXATAMENTE como um inexistente, sem alterar nada do dono."""
+    conn = cenario['conn']
+    fs = {f['nome']: f for f in I.funcoes_expostas(conn)}
+    for d in 'AB':
+        for semeador in cenario['semeados'][d].values():
+            D.semear_dirigido(semeador)
+    faltas = {f'{d}/{n}': {k: v for k, v in sem.falhas.items() if k.startswith('dirigido:')} for d in 'AB' for n, sem in cenario['semeados'][d].items()}
+    assert not any(faltas.values()), f'registros dirigidos nao semeados: {faltas}'
+    # as listas nao podem ficar com entrada velha: toda combinacao citada existe como parametro de funcao exposta
+    for nome, parametro in [*D.CASOS, *D.NAO_APLICAVEIS]:
+        assert nome in fs and parametro in (fs[nome]['nomes'] or [])[:fs[nome]['n']], f'{nome}({parametro}) nao existe mais'
+    assert not set(D.CASOS) & set(D.NAO_APLICAVEIS)
+    relatorio, ruins = [], []
+    for (nome, parametro), caso in D.CASOS.items():
+        tipo = caso.get('perfil', 'Pessoal')
+        for atacante in 'AB':
+            vitima = OUTRO[atacante]
+            r = D.sondar(conn, fs[nome], parametro, caso, atacante, USUARIO[atacante], cenario['semeados'][atacante][tipo].alvos(),
+                         cenario['semeados'][vitima][tipo].alvos(), cenario['perfis'][atacante][tipo], list(cenario['perfis'][vitima].values()), CATEGORIA)
+            relatorio.append({'funcao': nome, 'parametro': parametro, 'atacante': atacante, **r})
+            if r['conclusao'] != 'EFETIVA':
+                ruins.append((nome, parametro, atacante, r['conclusao'], r.get('motivo')))
+    gravar_relatorio('2b_sondas_dirigidas.json', relatorio)
+    gravar_relatorio('2c_nao_aplicaveis.json', [{'funcao': n, 'parametro': p, 'motivo': m} for (n, p), m in D.NAO_APLICAVEIS.items()])
+    falhas = [x for x in ruins if x[3] == 'FALHA']
+    assert not falhas, f'REGISTRO DE OUTRO USUARIO ALCANCADO OU DISTINGUIDO: {falhas}'
+    assert not ruins, f'sondas dirigidas sem conclusao (a logica de posse nao foi alcancada): {ruins}'
+    assert len(relatorio) == 2 * len(D.CASOS) >= 80
 
 
 # =====================================================================================================================

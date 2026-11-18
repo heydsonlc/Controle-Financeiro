@@ -172,7 +172,7 @@ class Semeador:
             return None
         return self.ids[tabela]
 
-    def clonar(self, tabela, origem, **mudancas):
+    def clonar(self, tabela, id_de_origem, /, **mudancas):  # posicional: "origem" tambem e nome de coluna
         """Copia um registro ja semeado, trocando alguns campos (ex.: a despesa comum vira cartao)."""
         pk = self.e.pk[tabela]
         self.seq += 1
@@ -182,7 +182,7 @@ class Semeador:
         esq, nome = tabela.split('.')
         with self.conn.cursor() as cur:
             cur.execute(f'insert into {esq}."{nome}" ({", ".join(chr(34) + c + chr(34) for c in cols)}) overriding system value '
-                        f'select {", ".join(expr)} from {esq}."{nome}" where "{pk}" = %s', args + [origem])
+                        f'select {", ".join(expr)} from {esq}."{nome}" where "{pk}" = %s', args + [id_de_origem])
         return self.seq
 
     def tudo(self):
